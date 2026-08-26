@@ -23,11 +23,18 @@ vi.mock('../../utils/serviceWorkerUpdate', () => ({
   reloadForNewVersion: () => mockReloadForNewVersion() as Promise<void>,
 }));
 
+// Pinned rather than inherited from the runner's TZ: the component formats
+// the release date in the *department's* timezone, and a test that agreed with
+// UTC only because CI happens to run in UTC would prove nothing.
+vi.mock('../../hooks/useTimezone', () => ({ useTimezone: () => 'America/New_York' }));
+
+let mockBuildTime: string | undefined;
 vi.mock('../../utils/appVersion', async () => {
   const actual = await vi.importActual<typeof import('../../utils/appVersion')>('../../utils/appVersion');
   return {
     ...actual,
     getCurrentBuildId: () => 'local-build-1234567890',
+    getCurrentBuildTime: () => mockBuildTime,
     fetchServerBuildId: () => mockFetchServerBuildId() as Promise<string | null>,
   };
 });
@@ -48,6 +55,7 @@ beforeEach(() => {
   mockReloadForNewVersion.mockResolvedValue(undefined);
   mockPurgeAppCaches.mockResolvedValue(undefined);
   mockCanReachServer.mockResolvedValue(true);
+  mockBuildTime = '2026-08-25T19:14:00Z';
   // updateRecovery persists its escalation ladder, which would otherwise leak
   // between tests.
   localStorage.clear();
@@ -61,6 +69,21 @@ describe('AppVersionSection', () => {
   it('shows the running build so a member can quote it to support', () => {
     renderWithRouter(<AppVersionSection />);
     // formatBuildId truncates to the first 12 characters.
+    expect(screen.getByText('local-build-')).toBeInTheDocument();
+  });
+
+  // The build id is random hex: on its own it cannot tell a member — or the
+  // officer helping them over the phone — whether they are one deployment
+  // behind or twenty.
+  it('dates the running build in the department timezone', () => {
+    renderWithRouter(<AppVersionSection />);
+    expect(screen.getByText(/^Released Aug 25, 2026, 3:14 PM$/)).toBeInTheDocument();
+  });
+
+  it('omits the release date when the build was not stamped with one', () => {
+    mockBuildTime = undefined;
+    renderWithRouter(<AppVersionSection />);
+    expect(screen.queryByText(/Released/)).not.toBeInTheDocument();
     expect(screen.getByText('local-build-')).toBeInTheDocument();
   });
 

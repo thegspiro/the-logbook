@@ -23,6 +23,12 @@ export interface ErrorLog {
   troubleshootingSteps: string[];
   context: Record<string, unknown>;
   userId?: string | undefined;
+  /**
+   * Who the failure happened to, resolved by the backend. Absent on a report
+   * whose account has since been deleted, where the id is all that is left.
+   */
+  userName?: string | undefined;
+  userUsername?: string | undefined;
   eventId?: string | undefined;
 }
 
@@ -36,6 +42,8 @@ function mapApiError(record: ErrorLogRecord): ErrorLog {
     troubleshootingSteps: record.troubleshooting_steps || [],
     context: record.context || {},
     userId: record.user_id,
+    userName: record.user_name ?? undefined,
+    userUsername: record.user_username ?? undefined,
     eventId: record.event_id,
   };
 }

@@ -31,6 +31,7 @@ from app.services.legal_service import (
     PUBLIC_PATH,
     SETTINGS_KEY,
     LegalDocumentService,
+    effective_date_for,
 )
 
 router = APIRouter()
@@ -110,7 +111,9 @@ async def get_legal_documents(
                 using_platform_default=live_body is None,
                 published_body=live_body,
                 published_effective_date=(
-                    legal_settings.get("last_updated") if live_body else None
+                    effective_date_for(legal_settings, document_type)
+                    if live_body
+                    else None
                 ),
                 published_at=published.published_at if published else None,
                 published_by_name=(

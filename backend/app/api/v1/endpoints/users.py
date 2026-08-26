@@ -5,6 +5,7 @@ Endpoints for user management and listing.
 """
 
 from datetime import datetime, timezone
+from typing import Optional
 from uuid import UUID
 
 from fastapi import (
@@ -20,7 +21,7 @@ from fastapi import (
 )
 from fastapi.responses import JSONResponse
 from loguru import logger
-from sqlalchemy import func, or_, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -61,6 +62,10 @@ from app.services.admin_continuity_service import (
     LastAdministratorError,
     assert_not_last_administrator,
     assert_positions_retain_administrator,
+)
+from app.services.operational_rank_service import (
+    OperationalRankService,
+    rank_not_configured_message,
 )
 from app.services.organization_service import OrganizationService
 from app.services.security_monitoring import report_privilege_escalation_attempt
@@ -250,8 +255,11 @@ async def create_member(
     # a client-chosen rank must clear the same ceiling as a granted role — a
     # bare users.create/members.manage holder must not mint a member at a rank
     # that outranks their own permissions.
+    canonical_rank = await _canonical_rank_or_400(
+        user_data.rank, str(current_user.organization_id), db
+    )
     await _enforce_rank_grant_ceiling(
-        current_user, user_data.rank, db, get_client_ip(request)
+        current_user, canonical_rank, db, get_client_ip(request)
     )
 
     # Auto-generate membership number if not provided and auto-generation is on
@@ -280,7 +288,8 @@ async def create_member(
         date_of_birth=user_data.date_of_birth,
         hire_date=user_data.hire_date,
         # Department info
-        rank=user_data.rank,
+        # Canonical spelling, not the caller's — see _canonical_rank_or_400.
+        rank=canonical_rank,
         station=user_data.station,
         platoon=user_data.platoon,
         # Address
@@ -708,6 +717,43 @@ async def _enforce_role_grant_ceiling(
                         "beyond your own."
                     ),
                 )
+
+
+async def _canonical_rank_or_400(
+    rank: Optional[str], organization_id: str, db: AsyncSession
+) -> Optional[str]:
+    """Refuse a rank the organization does not have; return the one it does.
+
+    ``User.rank`` is a plain ``String(100)`` with no foreign key, so until now
+    any string at all could be stored — and a typo does not fail loudly. It
+    resolves to no eligible seats and no default permissions, so the member
+    silently cannot sign up for anything, which reads as the application being
+    broken rather than as a mistyped rank.
+
+    The codebase already knew: ``OperationalRankService.validate_ranks``
+    exists to *report* members whose stored rank matches no configured one.
+    This asks the same question one step earlier, where it can still be
+    answered by refusing the write.
+
+    **Callers must store the value this returns, not the one they passed in.**
+    Checking a normalized string and then persisting the caller's original
+    re-creates the exact failure being guarded against — ``" firefighter "``
+    would clear the check and then match no dictionary key downstream, leaving
+    the member with no permissions and no seats.
+
+    Clearing a rank stays allowed — an empty value is "no rank", not a bad one
+    — and comes back as ``None`` so the caller writes the cleared value.
+    """
+    if rank is None or not str(rank).strip():
+        return None
+    service = OperationalRankService(db)
+    canonical = await service.resolve_rank_code(organization_id, str(rank))
+    if canonical is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=rank_not_configured_message(str(rank)),
+        )
+    return canonical
 
 
 async def _enforce_rank_grant_ceiling(
@@ -1404,6 +1450,12 @@ async def update_user_profile(
         "station",
         "platoon",
         "membership_number",
+        # Membership classification decides who is in the operational body and
+        # therefore who receives which ballot. Left out of this set, any holder
+        # of the broader users.edit grant could move themselves from social or
+        # administrative into operational and vote on what they liked.
+        "member_class",
+        "member_status",
     }
     has_restricted = restricted_fields & update_data.keys()
     if has_restricted:
@@ -1420,8 +1472,8 @@ async def update_user_profile(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=(
                     "Only leadership, the secretary, or the membership coordinator "
-                    "can update hire date, rank, station, platoon, or membership "
-                    "number"
+                    "can update hire date, rank, station, platoon, membership "
+                    "number, or membership class and status"
                 ),
             )
 
@@ -1429,8 +1481,14 @@ async def update_user_profile(
         # permissions — so a rank change must also clear the permission-grant
         # ceiling, or a secretary could self-promote to a chief rank and gain
         # settings.manage/security.manage. Only enforced on an actual change.
-        if "rank" in update_data and update_data["rank"] != user.rank:
-            await _enforce_rank_grant_ceiling(perm_user, update_data["rank"], db, None)
+        if "rank" in update_data:
+            update_data["rank"] = await _canonical_rank_or_400(
+                update_data["rank"], str(current_user.organization_id), db
+            )
+            if update_data["rank"] != user.rank:
+                await _enforce_rank_grant_ceiling(
+                    perm_user, update_data["rank"], db, None
+                )
 
     # Handle emergency_contacts separately (needs serialization)
     if "emergency_contacts" in update_data:
@@ -2133,6 +2191,8 @@ _AUDIT_EVENT_DESCRIPTIONS = {
     "leave_of_absence_created": "Leave of absence created",
     "leave_of_absence_updated": "Leave of absence updated",
     "leave_of_absence_deleted": "Leave of absence deactivated",
+    "admin_mfa_reset": "Two-factor authentication reset by administrator",
+    "compliance_exemption_changed": "Compliance exemption changed",
 }
 
 # The audit page's Event Type dropdown speaks a coarser vocabulary than the
@@ -2213,8 +2273,22 @@ async def get_member_audit_history(
                 AuditLog.event_data["updated_user_id"].as_string() == user_id_str,
                 AuditLog.event_data["deleted_user_id"].as_string() == user_id_str,
                 AuditLog.event_data["viewed_user_id"].as_string() == user_id_str,
-                # User performed the action on themselves
-                AuditLog.user_id == user_id_str,
+                # User performed a self-inherent action (no separate target
+                # recorded at all — e.g. updating their own profile). This
+                # must NOT fire whenever the user merely acted as the actor:
+                # an event with one of the target keys above pointing at
+                # someone else is already correctly included or excluded by
+                # those clauses on its own merits, and including it here too
+                # would leak that other member's event_data into this
+                # member's history under their name.
+                and_(
+                    AuditLog.user_id == user_id_str,
+                    AuditLog.event_data["target_user_id"].as_string().is_(None),
+                    AuditLog.event_data["new_user_id"].as_string().is_(None),
+                    AuditLog.event_data["updated_user_id"].as_string().is_(None),
+                    AuditLog.event_data["deleted_user_id"].as_string().is_(None),
+                    AuditLog.event_data["viewed_user_id"].as_string().is_(None),
+                ),
             )
         )
         .order_by(AuditLog.timestamp.desc())
@@ -2388,6 +2462,63 @@ async def get_my_consents(
     from app.services.consent_service import ConsentService
 
     return await ConsentService(db).list_for_user(current_user)
+
+
+@router.get("/consents/photo-use")
+async def get_photo_use_roster(
+    include_inactive: bool = Query(
+        False, description="Include members who are not currently active"
+    ),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        # NOT users.view. That reads as a narrow grant and is not one: 25 of
+        # the 30 default positions carry it, the EMS Supply Officer and
+        # Apparatus Officer among them. Gating a whole-department list of who
+        # agreed to be photographed on it would have made this endpoint a
+        # *weaker* gate than the per-member ``/{user_id}/consents`` beside it
+        # (users.edit or members.manage) while returning strictly more.
+        #
+        # users.view_consents exists because the Historian and Public Outreach
+        # positions have a real claim on this page — a historian curates the
+        # photo archive — and share nothing with each other but broad grants
+        # (users.view, members.view, events.view). Widening to any of those
+        # would have reopened exactly what the paragraph above closed, so the
+        # grant they needed had to be one that means only this.
+        require_permission(
+            "users.view_consents",
+            "notifications.manage",
+            "members.manage",
+            "users.edit",
+        )
+    ),
+):
+    """
+    Every member's photo-use standing, for the PIO / communications officer
+    choosing images for a newsletter, social post, or press release.
+
+    The consent is collected in User Settings and was, until this endpoint,
+    only readable one member at a time — which is not a workable check for
+    somebody selecting from a folder of incident photos. Read-only: a
+    member's consent is theirs to set, so there is no admin write counterpart
+    here, for the same reason ``/{user_id}/consents`` has none.
+
+    Deliberately carries **no contact fields**. The member directory gates
+    email behind the organization's contact-visibility setting; rather than
+    reimplement that here (and drift from it), this returns only what
+    identifies a member on a photo call sheet — name, rank, station, and
+    membership number.
+
+    **Permissions required:** users.view_consents, notifications.manage,
+    members.manage, or users.edit
+    """
+    from app.models.consent import ConsentType
+    from app.services.consent_service import ConsentService
+
+    return await ConsentService(db).roster(
+        organization_id=str(current_user.organization_id),
+        consent_type=ConsentType.PHOTO_USE,
+        include_inactive=include_inactive,
+    )
 
 
 @router.get("/{user_id}/consents")

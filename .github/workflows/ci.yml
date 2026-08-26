@@ -115,9 +115,16 @@ jobs:
       # head revisions", after the merge, for everyone. It happened twice in a
       # single day on 2026-08-16. This is the check that sees it, and it needs
       # no database.
+      # --strict because the one thing this script reports as a *warning* —
+      # a forked chain, two heads sharing a parent — is the thing that breaks
+      # `alembic upgrade head` for everyone after the merge. Two branches each
+      # adding a migration from the same parent is how that happens, and it is
+      # silent: both PRs go green, and only the next person to migrate finds
+      # out. Multiple heads is currently the script's only warning class, so
+      # this promotes exactly that case and nothing else.
       - name: Validate migration chain
         if: "!cancelled()"
-        run: python scripts/validate_migrations.py
+        run: python scripts/validate_migrations.py --strict
 
       # Repo-root Python (generate_registry.py, scripts/) is outside the
       # backend working-directory and was linted by nothing, which let five

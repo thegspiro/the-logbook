@@ -60,6 +60,7 @@ from app.schemas.apparatus import (
     ApparatusUpdate,
 )
 from app.utils.org_scoping import assert_in_org
+from app.utils.sql_search import LIKE_ESCAPE_CHAR, like_pattern
 
 
 class ApparatusService:
@@ -525,24 +526,20 @@ class ApparatusService:
             if filters.year_max:
                 conditions.append(Apparatus.year <= filters.year_max)
             if filters.make:
-                safe_make = (
-                    filters.make.replace("\\", "\\\\")
-                    .replace("%", "\\%")
-                    .replace("_", "\\_")
+                conditions.append(
+                    Apparatus.make.ilike(
+                        like_pattern(filters.make), escape=LIKE_ESCAPE_CHAR
+                    )
                 )
-                conditions.append(Apparatus.make.ilike(f"%{safe_make}%"))
             if filters.search:
-                safe_search = (
-                    filters.search.replace("\\", "\\\\")
-                    .replace("%", "\\%")
-                    .replace("_", "\\_")
-                )
-                search_term = f"%{safe_search}%"
+                search_term = like_pattern(filters.search)
                 conditions.append(
                     or_(
-                        Apparatus.unit_number.ilike(search_term),
-                        Apparatus.name.ilike(search_term),
-                        Apparatus.vin.ilike(search_term),
+                        Apparatus.unit_number.ilike(
+                            search_term, escape=LIKE_ESCAPE_CHAR
+                        ),
+                        Apparatus.name.ilike(search_term, escape=LIKE_ESCAPE_CHAR),
+                        Apparatus.vin.ilike(search_term, escape=LIKE_ESCAPE_CHAR),
                     )
                 )
 

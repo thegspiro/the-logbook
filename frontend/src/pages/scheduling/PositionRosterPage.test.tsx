@@ -142,6 +142,97 @@ describe('PositionRosterPage', () => {
     expect(await screen.findByText(/open-position list/i)).toBeInTheDocument();
   });
 
+  it('styles a held-position source differently from a rank source', async () => {
+    // Both resolve through the same slug vocabulary, so their labels can be
+    // identical. An unmapped source type falls back to the rank badge, which
+    // rendered a position as an indistinguishable second rank chip.
+    mockGetPositionRoster.mockResolvedValue({
+      ...roster,
+      members: [
+        {
+          ...certifiedDriver,
+          // Nulled so the only "Lieutenant" / "Engineer" on screen are the two
+          // source badges being compared.
+          rank_display_name: null,
+          sources: [
+            { type: 'rank', label: 'Lieutenant' },
+            { type: 'position', label: 'Engineer' },
+          ],
+        },
+      ],
+    });
+    renderPage();
+
+    const rankBadge = await screen.findByText('Lieutenant');
+    const positionBadge = screen.getByText('Engineer');
+    expect(rankBadge.className).not.toEqual(positionBadge.className);
+  });
+
+  it('shows a qualification source with the date it lapses', async () => {
+    mockGetPositionRoster.mockResolvedValue({
+      position: 'paramedic',
+      members: [
+        {
+          ...certifiedDriver,
+          rank_display_name: null,
+          sources: [{ type: 'qualification', label: 'Paramedic', expires_on: '2029-12-31' }],
+        },
+      ],
+      excluded_membership_types: [],
+      is_open_position: false,
+    });
+    renderPage();
+
+    // The date is the point: a medic cleared today may not be cleared for the
+    // shift being staffed next month.
+    expect(await screen.findByText(/exp Dec 31, 2029/)).toBeInTheDocument();
+  });
+
+  it('flags a qualification that lapses inside the warning window', async () => {
+    // Rendered in the same amber as the EVOC warning rather than as one more
+    // green tick, so an imminent lapse reads as the caution it is.
+    const soon = new Date();
+    soon.setDate(soon.getDate() + 14);
+    const soonISO = `${soon.getFullYear()}-${String(soon.getMonth() + 1).padStart(2, '0')}-${String(
+      soon.getDate()
+    ).padStart(2, '0')}`;
+
+    mockGetPositionRoster.mockResolvedValue({
+      position: 'paramedic',
+      members: [
+        {
+          ...certifiedDriver,
+          rank_display_name: null,
+          sources: [
+            { type: 'qualification', label: 'Paramedic', expires_on: soonISO },
+            { type: 'qualification', label: 'Firefighter I', expires_on: null },
+          ],
+        },
+      ],
+      excluded_membership_types: [],
+      is_open_position: false,
+    });
+    renderPage();
+
+    // Matched by title rather than label: the Position dropdown also offers a
+    // "Paramedic" option now, and only a badge with an expiry carries a title.
+    const expiring = await screen.findByTitle(/^Expires/);
+    expect(expiring.className).toContain('amber');
+
+    // The non-expiring card keeps the ordinary qualification styling.
+    expect(screen.getByText('Firefighter I').className).not.toContain('amber');
+  });
+
+  it('offers Paramedic as a position distinct from EMT', async () => {
+    renderPage();
+    await screen.findByText('Alice Adams');
+
+    // Two separate options, not one EMS bucket: a department staffing an ALS
+    // unit has to be able to say a medic is required.
+    expect(screen.getByRole('option', { name: 'Paramedic' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'EMT' })).toBeInTheDocument();
+  });
+
   it('does not show EVOC warnings for non-driving positions', async () => {
     mockGetPositionRoster.mockResolvedValue({
       position: 'officer',

@@ -34,13 +34,13 @@ here.
 
 ## Authentication & Security
 
-| Item                                                               | Status                            | Detail                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
-| ------------------------------------------------------------------ | --------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **CSRF "no csrf cookie → allow" branch**                           | ✅ Resolved (verified 2026-08-07) | The branch was tightened and this row had not been updated. `verify_csrf_token` now splits the no-cookie case: a request carrying an `access_token` cookie but no `csrf_token` is **rejected** (403 "Missing CSRF token") as anomalous, and only a request with no session cookie at all — unauthenticated, or a Bearer client whose header browsers never auto-send and which is therefore not CSRF-exploitable — is allowed through. `SameSite=Strict` remains the primary defense. (`security_middleware.py`.)                                                                                                                               |
-| **Two logins by the same user in the same second fail with a 500** | ✅ Resolved (verified 2026-08-12) | `create_access_token` includes a random 128-bit `jti`, so otherwise identical logins no longer collide with the unique `sessions.token` index. `test_access_tokens_created_in_same_second_are_unique` now pins both distinct encoded tokens and distinct decoded IDs.                                                                                                                                                                                                                                                                                                                                                                           |
-| **`is_rate_limited` window write-before-check**                    | ✅ Resolved (verified 2026-08-12) | The implementation cleans the window, checks `len(requests) >= max_requests`, rejects and locks the first request over the allowance, and records only allowed requests afterward. The existing `test_exceeding_limit_triggers_lockout` pins five allowed requests and rejection of the sixth, so there is no write-before-check or off-by-one defect.                                                                                                                                                                                                                                                                                          |
-| **OAuth login does not check organization `active`**               | Open (MED — found 2026-08-12)     | The 2026-08-12 fix made **password** login join on `organizations.active IS TRUE` (both the canonical-org resolution and the cross-org fallback), so members of a deactivated org can no longer log in with a password. The **OAuth** path was not covered: `oauth_service.py` scopes to the earliest-created org with no `active` filter and rejects only inactive _users_ (`error=inactive`). A member of a deactivated org whose account is OAuth-linked can still sign in with Google/Microsoft. Also true of both paths: deactivating an org does not revoke existing sessions — they simply expire. (`app/services/oauth_service.py:50`.) |
-| **`REFRESH_ROTATION_GRACE_SECONDS` is inert**                      | Open (LOW — cleanup, 2026-08-12)  | The refresh-token rotation grace window was removed (a stale token now revokes all sessions as replay — see CHANGELOG 2026-08-12), but the setting (`config.py:140`, default `30`, with a now-stale comment) and the `user_sessions.previous_refresh_token` column (`user.py:714`, indexed) remain. Nothing reads either; the column is actively nulled on each rotation. Remove the setting, the column, and its index in a follow-up migration rather than leaving a knob that gates nothing.                                                                                                                                                 |
+| Item                                                               | Status                                           | Detail                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| ------------------------------------------------------------------ | ------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **CSRF "no csrf cookie → allow" branch**                           | ✅ Resolved (verified 2026-08-07)                | The branch was tightened and this row had not been updated. `verify_csrf_token` now splits the no-cookie case: a request carrying an `access_token` cookie but no `csrf_token` is **rejected** (403 "Missing CSRF token") as anomalous, and only a request with no session cookie at all — unauthenticated, or a Bearer client whose header browsers never auto-send and which is therefore not CSRF-exploitable — is allowed through. `SameSite=Strict` remains the primary defense. (`security_middleware.py`.) |
+| **Two logins by the same user in the same second fail with a 500** | ✅ Resolved (verified 2026-08-12)                | `create_access_token` includes a random 128-bit `jti`, so otherwise identical logins no longer collide with the unique `sessions.token` index. `test_access_tokens_created_in_same_second_are_unique` now pins both distinct encoded tokens and distinct decoded IDs.                                                                                                                                                                                                                                             |
+| **`is_rate_limited` window write-before-check**                    | ✅ Resolved (verified 2026-08-12)                | The implementation cleans the window, checks `len(requests) >= max_requests`, rejects and locks the first request over the allowance, and records only allowed requests afterward. The existing `test_exceeding_limit_triggers_lockout` pins five allowed requests and rejection of the sixth, so there is no write-before-check or off-by-one defect.                                                                                                                                                            |
+| **OAuth login does not check organization `active`**               | ✅ Resolved (2026-08-25, security review AUTH-1) | `_link_existing_user` (`oauth_service.py`) now filters the org lookup on `Organization.active.is_(True)` and fails closed (`"no_account"`) when no active org is found, mirroring the password-login path exactly instead of dropping the org filter when the lookup comes back empty. Both auth paths now agree. Still true of both paths: deactivating an org does not revoke existing sessions — they simply expire.                                                                                           |
+| **`REFRESH_ROTATION_GRACE_SECONDS` is inert**                      | Open (LOW — cleanup, 2026-08-12)                 | The refresh-token rotation grace window was removed (a stale token now revokes all sessions as replay — see CHANGELOG 2026-08-12), but the setting (`config.py:140`, default `30`, with a now-stale comment) and the `user_sessions.previous_refresh_token` column (`user.py:714`, indexed) remain. Nothing reads either; the column is actively nulled on each rotation. Remove the setting, the column, and its index in a follow-up migration rather than leaving a knob that gates nothing.                   |
 
 ## Dependencies
 
@@ -329,7 +329,7 @@ Per-module docs under `docs/module-audit/` carry the full lower-severity list.
 | **Finance: dues administration has no UI — every write is API-only**                                          | Open (MED, missing feature)                                 | `DuesManagementPage` is read-only: schedule filter, status tabs, summary cards and the member dues list. The store exposes only `fetchDuesSchedules` / `fetchMemberDues` / `fetchDuesSummary`, and `duesService` has no `unwaive` or payment-history call at all. So creating a schedule, generating member dues, recording a payment, waiving, reversing a waiver and reading the payment ledger are all reachable only through the API, despite every one of them being an endpoint. `docs/training/11-finance.md` documents the click-paths as the intended UI and now carries a callout saying so; the YouTube shorts for the dues fixes (8m/8n) are written but on hold because there is nothing to film. Closing this is a frontend build-out, not a fix.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | **Finance: reimbursement/payee records readable by any `finance.view` holder**                                | ✅ Resolved for reimbursements (owner decision, 2026-08-09) | Expense reports (member reimbursements: amounts owed + payee detail) were `finance.view` with no owner scoping. **Fix:** `list_expense_reports`/`get_expense_report` take `restrict_to_user`; the endpoints pass the caller's id unless they hold `finance.manage`, so a plain `finance.view` holder now sees only their own reimbursement submissions while treasurers keep the full org queue. Check-requests and purchase-requests are procurement records (vendor payees, not member out-of-pocket reimbursement) and are left at `finance.view` intentionally. Covered by `tests/test_read_permission_gates.py`. (FIN-5)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 | **Finance: `record_dues_payment` has no idempotency and overwrites waives**                                   | ✅ Resolved (2026-08-04)                                    | All three defects had one cause: `MemberDues` was the only record of payment — one `amount_paid` total plus one set of detail columns, overwritten by whichever payment was entered last, so a retry was indistinguishable from a second installment. A `dues_payments` ledger (migration `20260802_0001`, backfilled) now holds one row per payment and the columns on `MemberDues` are a projection of it: `amount_paid` is re-derived as the sum of the ledger rather than accumulated, so a double-credit would require a duplicate ledger row, which the uniqueness constraint on `(member_dues_id, transaction_reference)` refuses. Unreferenced cash is deliberately never deduplicated — two identical cash amounts are two payments. `WAIVED`/`EXEMPT` records refuse payment outright, and `POST /finance/dues/{id}/unwaive` (`finance.manage`, reason required) is the deliberate reversal that replaces the old silent one, carrying the erased waive reason into a `finance.dues_waiver_reversed` audit event. `GET /finance/dues/{id}/payments` (`finance.view`) exposes the ledger. (FIN-6)                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
-| **Finance: correctness/DoS polish (export, pagination, request numbers, float aggregates)**                   | Partially resolved (LOW/MED)                                | **Fixed:** `add_expense_line_item` recomputes the report total from a fresh `SUM(amount)` aggregate instead of `sum(loaded_collection) + item.amount` (which could double-count/drift). **Still flagged (behavior/schema-change):** `_generate_request_number` `count()+1` race needs a unique-constraint migration + retry; float money math is a module-wide Decimal refactor; unbounded export + in-memory pagination is a DoS-surface refactor touching many endpoints; no overspend guard on spend posting; `get_pending_approvals` returns the org-wide queue rather than the caller's assigned steps. (FIN-7)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| **Finance: correctness/DoS polish (export, pagination, request numbers, float aggregates)**                   | Partially resolved (LOW/MED)                                | **Fixed:** `add_expense_line_item` recomputes the report total from a fresh `SUM(amount)` aggregate instead of `sum(loaded_collection) + item.amount` (which could double-count/drift). **Still flagged (behavior/schema-change):** `_generate_request_number` `count()+1` race needs a unique-constraint migration + retry; float money math is a module-wide Decimal refactor; unbounded export + in-memory pagination is a DoS-surface refactor touching many endpoints; no overspend guard on spend posting; `get_pending_approvals` returns the org's whole approval queue rather than filtering to the caller's own assigned steps — a behavior change, not a scoping bug (the query itself is now confined to the caller's organization; see FIN-9 in `docs/security-review/FIN-05-finance-approvals.md`, which corrected the org-scoping half of this claim — it had actually been platform-wide with no organization filter at all, not merely org-wide). (FIN-7)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | **Scheduling: swap accept-path lacks re-validation & self-approval guard; finalize trusts manual_hours**      | Open (LOW/MED, needs design)                                | When a shift swap is _accepted_ by the counterparty (vs. manager approval), the target shift's capacity/cancellation/finalization is not re-validated at accept time and the approver-identity check is looser than the manual-review path. Separately, `finalize_shift` trusts a client-supplied `manual_hours` override with no bound. Both are behavior changes deferred for an owner decision. (SCH-5/6)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | **Recurring: create/update paths trust client-supplied FK ids without an org check (XC-1)**                   | Open (LOW, systemic)                                        | The dominant cross-cutting pattern — create/update methods store `user_id`/`category_id`/`assignee_id`/etc. without verifying the referenced row is in-org. Individually low impact (org-stamped writes → dangling/mis-attributed FKs, not disclosure), but pervasive. Best closed by a shared `assert_in_org(db, Model, id, org_id)` helper rolled out per module. Full instances in [`docs/module-audit/CROSS-CUTTING.md`](./module-audit/CROSS-CUTTING.md) (XC-1/2/3).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 
@@ -340,7 +340,7 @@ Owner-decision items from the feature-by-feature review under
 
 | Limitation                                                                                       | Status                                                                 | Detail                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 | ------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Documents: folder ACL is per-folder, not hierarchical**                                        | Open (LOW, needs product decision)                                     | `can_access_folder` checks only a folder's own `visibility`/`allowed_roles`, never its ancestors. Apparatus/facility per-item child folders are created `ORGANIZATION`-visibility with no `allowed_roles` even though their parent roots are `LEADERSHIP`, so any `documents.view` holder can read those child folders directly — and the apparatus docstring's "allowed_roles restricted" claim is not actually coded. May be intended (crews seeing their rig's manuals is reasonable); if leadership-only was meant, the fix is a hierarchical ACL that walks the parent chain (perf implications on every folder check). Member personal folders are unaffected (`OWNER`-visibility). Decide intent, then fix either the code or the docstring. (DOC-5)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| **Documents: folder ACL is per-folder, not hierarchical**                                        | Open (LOW, needs product decision)                                     | `can_access_folder` checks only a folder's own `visibility`/`allowed_roles`, never its ancestors. Apparatus/facility per-item child folders are created `ORGANIZATION`-visibility with no `allowed_roles` even though their parent roots are `LEADERSHIP`, so any `documents.view` holder can read those child folders directly — and the apparatus docstring's "allowed_roles restricted" claim is not actually coded. May be intended (crews seeing their rig's manuals is reasonable); if leadership-only was meant, the fix is a hierarchical ACL that walks the parent chain (perf implications on every folder check). Member personal folders are unaffected (`OWNER`-visibility). Decide intent, then fix either the code or the docstring. **Confirmed (security review DOC-10, 2026-08-25):** `ensure_facility_folder` was added since this was first flagged and creates its own sub-folders the identical way — same gap, same shape, not a new one. (DOC-5)                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | **Money disbursement: separation of duties**                                                     | ✅ Resolved (owner decision, option (a), 2026-08-09)                   | The owner chose the cheap `assert_different_person` guard over a new disburse permission tier. A `storefront.manage` holder can no longer mark their _own_ order paid / waive / refund it, and a `finance.manage` holder can no longer mark their _own_ purchase request or expense report paid, issue a check for their own request, or waive their own dues — each compares the actor against the order's member / the request's `requested_by` / the dues member and refuses on a match (mirrors AH-4). The out-of-band reconciliation path (`actor_id=None`) is exempt. Not the broader requester≠disburser tier of option (b); a dedicated `finance.disburse`/`storefront.disburse` permission remains a future enhancement if the department wants to separate the roles generally rather than just block self-dealing. (`storefront_service.py`, `finance_service.py`; `test_money_separation_of_duties.py`.)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 | **Storefront: `auto_apply_payments` defaults on**                                                | Open (LOW, product decision)                                           | When a PayPal integration's config omits `auto_apply_payments`, it defaults to `True`, so an exact-amount capture settles an order with no human in the loop. Well-guarded (amount must equal the balance exactly; anything else is recorded `AMBIGUOUS`), but it is an implicit default on a money path and should be an explicit choice in the integration setup UI. (SF future-dev #4)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | **Storefront: no reconciliation backfill**                                                       | Open (MED, robustness)                                                 | If PayPal's verify-webhook-signature API is unreachable, the webhook returns 401 and PayPal eventually stops retrying — the capture is then absent from the ledger with no way to re-ingest it. The Transaction Search API (rejected in the service docstring for its multi-hour lag) is the natural backfill source for exactly this case. (SF future-dev #1)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
@@ -1700,6 +1700,111 @@ contain. That is a compatibility decision with an owner, not a correctness fix.
 Nothing is at risk in the meantime; the failure mode is a misleading 201, not a
 leak.
 
+## Elections — Saved Ballot Templates Have No List Bound or Creation Cap (2026-08-25)
+
+`GET /elections/templates/saved-ballots` (`list_saved_ballot_templates`)
+returns every template in the caller's organization with no pagination or
+limit, and `POST /elections/templates/saved-ballots` (`save_ballot_template`)
+imposes no per-org cap on how many can exist. Access control is sound —
+both are `elections.manage`-gated and org-scoped, and each template is
+already bounded per-item (250 ballot items, 2,000-character description,
+200-character name) — so this is a scaling concern, not a leak: an org that
+accumulates many templates over time pays a growing cost on every Ballot
+Builder load, with no ceiling.
+
+Not fixed because both remedies are behavior changes needing an owner
+decision: pagination changes the response envelope (this codebase's
+established `PaginationParams` + slice pattern, e.g. `finance.py`'s
+`list_member_dues`, is a drop-in for the backend but a frontend contract
+change for the Ballot Builder's template list); a creation cap needs an
+actual number picked by a human, the same kind of open-ended limit left to
+an owner decision elsewhere (FIN-7's export cap, the various CS-config
+thresholds). (Security review ELEC-12,
+`docs/security-review/ELEC-06-elections-ballots.md`.)
+
+## Users: Roster/Archive/Leave Lists Are Unbounded, Not Just Un-Paginated (2026-08-25)
+
+`list_users_with_roles` (`users.py:601`) and `get_archived_members`
+(`member_status.py:723`) return every matching row in the org with no
+pagination; `leave_widget_summary` (`member_leaves.py:50`) materializes every
+`active` leave to compute its counts, and `MemberLeaveService.list_leaves`
+(`member_leave_service.py`) runs an unbounded query before its two callers in
+`member_leaves.py` apply an in-memory slice. All four are `members.manage`-gated
+and org-scoped — not a leak.
+
+The reason this isn't self-limiting the way it first looks: `archive_member`
+changes `User.status` without deleting the row, so archived accounts
+accumulate for the organization's entire lifetime rather than being bounded
+by current headcount, and leave records aren't deleted either (`end_date`
+passing doesn't clear the `active` flag on its own — the deactivate endpoint
+does, and only when called). A department open for years pays a growing cost
+on every roster and leave-widget load, with no ceiling.
+
+Not fixed for the same reason as the saved-ballot-templates item above:
+pagination changes the response envelope for callers that currently expect
+the full list (the Members admin page, the leave dashboard widget), which is
+a frontend-affecting decision, not a drop-in. (Security review USR-5,
+`docs/security-review/USR-07-users-organizations.md`.)
+
+## Membership Pipeline — Election Packages Have No List Bound or Creation Cap (2026-08-25)
+
+`GET /prospective-members/election-packages` (`list_election_packages`) runs
+`.scalars().all()` with no pagination or limit, and `POST
+/prospects/{id}/election-package` (`create_election_package`) imposes no
+per-prospect or per-organization cap — there is no unique constraint on
+`ProspectElectionPackage.prospect_id` and no "already has a ready package"
+check, so every call inserts a new row. Access control is sound — both are
+org-scoped and permission-gated (`elections.manage` / `prospective_members.*`)
+— so this is the same scaling concern as the two entries above, not a leak:
+repeated legitimate package regeneration (e.g. after editing coordinator
+notes) accumulates rows, each carrying a PII-bearing snapshot (documents,
+coordinator notes, config), without bound.
+
+Not fixed for the same reason as the two entries above: enforcing one ready
+package per prospect is a behavior change that could break an intended
+"regenerate before the vote" workflow, and pagination on the list endpoint is
+a response-envelope/frontend-contract change, not a drop-in. (Security review
+MP-10, `docs/security-review/MP-08-membership-pipeline.md`.)
+
+## Medical Screening — Requirement and Record Lists Are Unbounded (2026-08-06, mirrored 2026-08-25)
+
+`list_requirements`/`list_records` (`medical_screening_service.py`) run
+`.all()` with no SQL `LIMIT`/`OFFSET`; the endpoints slice the result in
+Python, and `get_compliance_status`/`get_expiring_soon` build on the same
+unbounded calls internally. Access control is sound — both are org-scoped
+and `medical_screening.view`/`.manage`-gated — so this is the same scaling
+concern as the entries above, not a leak: an organization with years of
+screening history pays a growing per-request cost on every records,
+compliance, and expiring-soon load, with no ceiling.
+
+First flagged in `docs/app-review/medical-screening.md` pass 3 (2026-08-06)
+as "Future dev"; not fixed for the same reason as the entries above —
+SQL-level pagination is a response-envelope/frontend-contract change, not a
+drop-in. Mirrored here for the first time in this security review pass.
+(Security review MS-6, `docs/security-review/MS-09-medical-screening.md`.)
+
+## Inventory — Two Cross-Member Reads Sit Behind the Baseline `.view` Grant (2026-08-26)
+
+`GET /allowances/check/{user_id}/{category_id}` (allowance usage count) and
+`GET /members/{user_id}/size-preferences` (stored uniform/PPE measurements)
+both let any authenticated member look up another named member's data by id
+using only `inventory.view` — the permission every seeded Member position
+holds. This is the same class of gap the `ccea2576`/`d7be097b` commits closed
+across most of this module (item history, active/overdue checkouts, the
+members-inventory roster) and that this review's own INV-7 finding closed on
+the departure-clearance-by-id route, but these two were not part of either
+sweep.
+
+Not fixed here because, unlike INV-7, this module has no established
+precedent for what the intended gate is: INV-7 had an identically-shaped
+sibling route (`/users/{user_id}/clearance`) already gated
+self-or-quartermaster, making the fix mechanical. Allowance usage and size
+data may be legitimately visible to more roles than clearance/checkout
+detail (e.g. an officer approving an allowance request, or a future
+supply-ordering workflow needing a colleague's size) — narrowing the gate is
+a product decision about who should see it, not a mechanical match. (Security
+review INV-8/INV-9, `docs/security-review/INV-11-inventory.md`.)
+
 ## Membership — Department Email Generation Has No Settings Screen (2026-08-12)
 
 The backend implements department email generation end to end.
@@ -1876,36 +1981,13 @@ draft. Until then the guides carry the caution explicitly (see
 
 ## Medical Screening — The Route Has No Permission Gate (2026-08-16)
 
-**Status: open, needs an owner decision.** Severity: low as a disclosure risk,
-moderate as a UX and defence-in-depth gap.
-
-`getMedicalScreeningRoutes()` returns a bare `<Route path="/medical-screening">`.
-Every other module wraps its routes in `<ProtectedRoute requiredPermission=…>`,
-and `APPLICATION_PAGES.md` claimed this one required `medical_screening.view`
-until the claim was checked. Found by `scripts/check_route_permissions.py` on the
-run that introduced it.
-
-**This is not an open door to PHI.** The route still sits inside the app-layout
-`<ProtectedRoute>`, so it requires a session, and the API enforces
-`medical_screening.view` on every read behind it. A member without the permission
-gets an empty or erroring screen, not records — the same server-side-redaction
-pattern the skills-testing print routes rely on deliberately.
-
-What it costs is the clean refusal. A member who lands there sees a page that
-looks broken rather than one that says they are not authorized, and the module
-handles PHI, which is the worst category in which to have a screen whose
-behaviour depends on an API call failing the right way.
-
-The decision is whether to add the gate:
-
-| Option                                                             | Consequence                                                                                                                                  |
-| ------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| Add `<ProtectedRoute requiredPermission="medical_screening.view">` | Matches every other module; the URL refuses cleanly. Changes who can _reach_ the URL, so anyone currently relying on partial access loses it |
-| Leave it                                                           | The API remains the only enforcement point, which is where it has to be correct anyway                                                       |
-
-Not resolved here because it changes runtime access, which is an owner's call
-rather than a documentation fix. The page reference now describes what the route
-actually does.
+**✅ Resolved (2026-08-24, verified by security review MS-4, 2026-08-25).**
+`getMedicalScreeningRoutes()` (`frontend/src/modules/medical-screening/routes.tsx`)
+now wraps the route in `<ProtectedRoute requiredPermission="medical_screening.view">`,
+closed incidentally alongside 20 other officer pages by "Stop seeding
+compliance.view to everyone; gate 21 officer pages" (`05b8275b`) — a change
+this entry was never updated to reflect. Re-verified directly against the
+current file rather than inferred from the commit message.
 
 ## DASH-1 — The Main Widget Registry Is Mostly Unread (2026-08-23)
 
@@ -1976,6 +2058,143 @@ migration. Two things make it worth recording rather than ignoring:
 2. **The downgrade is not symmetric.** Each `downgrade()` narrows the column
    back to `VARCHAR(200)`. **A downgrade past both will truncate deep
    compartment paths** — the exact data the widening was added to hold.
+
+## Documents — Legal Revision History Is Unbounded (2026-08-25)
+
+`LegalDocumentService.list_revisions` (`legal_service.py`) runs `.all()` with
+no pagination or limit, and `GET /legal-documents` (`get_legal_documents`,
+`legal_documents.py`) returns every draft and every archived revision's full
+body (capped at 100,000 characters each) and change note, for both document
+types, on every load of the Governance -> Legal Documents screen. Access
+control is sound — org-scoped, `legal.propose`/`legal.publish`/
+`settings.manage`-gated — so this is the same scaling concern as the entries
+below, not a leak: a department with years of proposal history, or a
+`legal.propose` holder repeatedly creating drafts (there is no per-user or
+per-org cap on draft creation), pays a growing query and response cost on
+every load, with no ceiling.
+
+Not fixed for the same reason as the entries below: pagination changes the
+response envelope this screen currently expects (full `drafts`/`history`
+arrays inline per document type), a frontend-contract change rather than a
+drop-in. (Security review DOC-8, `docs/security-review/DOC-10-documents-legal.md`.)
+
+## Documents — Folder Listing Is Unbounded and N+1 (2026-08-25)
+
+`get_folders` (`documents_service.py`) loads every folder at a given level
+(root, or under one `parent_id`) with no `LIMIT`, then issues one additional
+`func.count` query per folder to populate its document count — N+1, not just
+unpaginated. Access control is sound — org-scoped and filtered through the
+same folder-visibility rules the listing enforces — so this is a scaling
+concern, not a leak: any `documents.manage` holder can create folders with no
+per-org cap, so both the row count and the query count grow with however many
+folders a department has created, with no ceiling.
+
+Not fixed for the same reason as the entries above and below: pagination is a
+response-envelope/frontend-contract change, not a drop-in. (Security review
+DOC-9, `docs/security-review/DOC-10-documents-legal.md`.)
+
+## Equipment Checks — `get_item_deployments` Gates on `.view`, Its Sibling on `.manage` (2026-08-26)
+
+`GET .../deployments` (`get_item_deployments` — which checklist positions
+carry a given inventory item) is gated on `inventory.view`, while
+`update_deployed_lot`'s equivalent write on the same deployed-lot data
+requires `inventory.manage`. Both belong to the same request; a caller who
+can only view inventory can still read a full cross-checklist deployment
+map, one tier looser than the write it feeds.
+
+Not fixed here: unlike the mechanical INV-7 fix, this pairing has no
+identically-shaped sibling already gated the tighter way to copy from, and
+tightening a read gate is a behavior change — an existing `inventory.view`
+holder's screen would start 403ing — that a security review does not make
+unilaterally. `tests/test_permission_gate_composition.py`'s `ALLOWED` dict
+already records this pairing as deliberately unadjudicated, for the same
+reason. (Security review EC-14 residual,
+`docs/security-review/EC-14-equipment-check-shifts.md`.)
+
+## Outbound Integration Requests — The DNS-Rebinding TOCTOU Is Narrowed, Not Closed (2026-08-26)
+
+`assert_outbound_url_safe()` (`app/utils/url_validator.py`) re-resolves an
+org-configured integration URL's hostname via `socket.getaddrinfo()`
+immediately before an outbound request, to catch a hostname that was
+repointed at an internal address since it was saved. **Seven** call sites
+share the gap, across three distinct transports:
+
+- **Five** go through the shared `create_integration_client()` (plain
+  `httpx.AsyncClient`) and share one remediation:
+  `integration_services/{teams,webhook,slack,discord,calcom}_service.py`.
+- **`audit_ship_service.py`** constructs its own `httpx.AsyncClient`
+  directly rather than going through `create_integration_client` — a
+  `create_integration_client` fix alone would not reach it; it needs either
+  migrating onto the shared client or its own equivalent fix.
+- **`push_service.py`** doesn't use `httpx` at all — `_send_one` dispatches
+  through `pywebpush.webpush()`, a synchronous library with its own
+  connection handling. Pinning a resolved address here needs a
+  transport-specific approach, not the httpx-level fix the other six share;
+  it would remain vulnerable if a fix were scoped only to
+  `create_integration_client`.
+
+In every one of the seven, the actual request performs its **own**
+independent DNS resolution when it connects, separate from the
+`assert_outbound_url_safe` check. A hostname that resolves to a public IP
+for the check and an internal one moments later (classic DNS rebinding)
+passes the check and still reaches the internal address. The function's own
+docstring says it "shrink[s] the rebinding window... versus
+save-time-to-send" — narrows, not closes — which is accurate; a security
+review draft that read this as "closed," and then first wrote it up as six
+files sharing one fix, was corrected twice (SCH-10, then a Codex review of
+that correction itself).
+
+Not fixed: closing it means pinning the address `assert_outbound_url_safe`
+resolved for the actual connection (while preserving the original Host
+header / SNI), separately for each of the three transports above — not one
+shared-infrastructure change, and not a fix scoped to any single file. Needs
+a dedicated cross-cutting pass (the shape SEC-00 exists for) that accounts
+for all three transports, not a unilateral fix inside a feature-scoped
+review. (Security review SCH-10, `docs/security-review/SCH-15-scheduling.md`.)
+
+## Training — Bulk/Historical-Import Enum Fields Have No Request-Level Validators (2026-08-26)
+
+`BulkTrainingRecordEntry.training_type`/`.status`,
+`HistoricalImportConfirmRequest.default_status`/`.default_training_type`,
+and `CourseMappingEntry.new_training_type` have no `@field_validator`,
+unlike the single-record `TrainingRecordCreate`/`TrainingRecordUpdate`
+schemas, which do. All three are DB-level `Enum` columns on
+`TrainingRecord`, so a bad value still reaches the database layer instead
+of 422ing at the Pydantic boundary.
+
+Not currently a crash risk: both bulk paths wrap each row's insert in its
+own error boundary (`create_records_bulk` flushes per row inside a
+try/except; `confirm_historical_import` runs each row in its own
+`db.begin_nested()`), so an invalid enum value fails only that one row with
+a sanitized message — the rest of the batch still imports.
+
+Not fixed: adding a `@field_validator` to a `List[...]`-carried field
+changes the failure mode from per-row partial success to whole-request
+rejection, since Pydantic validates the full payload before the endpoint
+runs at all. Whether that's the right trade-off for a bulk-import UX (fail
+the whole file on one bad row vs. import what's valid and report the rest)
+is a product decision, not a drive-by fix. (Security review TR-17 residual,
+`docs/security-review/TR-17-training-core.md`.)
+
+## Training — `enroll_member`'s Duplicate-Active-Enrollment Guard Is a Race (2026-08-26)
+
+`TrainingProgramService.enroll_member` checks for an existing ACTIVE
+enrollment (SELECT), then inserts a new `ProgramEnrollment` row — with no
+unique constraint or row lock backing the check. Two concurrent enroll
+calls for the same (user, program) pair can both pass the SELECT before
+either commits, producing two ACTIVE enrollment rows for the same member on
+the same program.
+
+Data-integrity, not a tenant-isolation or capacity-abuse issue — no
+cross-org effect, and the practical impact is a duplicate enrollment record
+rather than anything security-relevant.
+
+Not fixed: closing it needs a schema change (a partial unique index on
+`(user_id, program_id)` where `status = 'active'`, or an equivalent
+row-locking guard matching CLAUDE.md Pitfall #27's shape), which this
+rotation's process reserves for a flagged item rather than a drive-by
+fix inside an unrelated finding. (Security review TR-17 residual,
+`docs/security-review/TR-17-training-core.md`.)
 
 ## Process
 

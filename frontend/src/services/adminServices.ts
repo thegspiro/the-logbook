@@ -200,6 +200,9 @@ export interface ErrorLogRecord {
   troubleshooting_steps: string[];
   context: Record<string, unknown>;
   user_id?: string;
+  /** Resolved server-side from user_id; null once the account is deleted. */
+  user_name?: string | null;
+  user_username?: string | null;
   event_id?: string;
   created_at: string;
 }

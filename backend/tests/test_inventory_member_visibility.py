@@ -127,6 +127,7 @@ def test_a_quartermaster_sees_who_holds_what():
         ("/items/{item_id}/issuances", "GET"),
         ("/checkout/active", "GET"),
         ("/checkout/overdue", "GET"),
+        ("/clearances/{clearance_id}", "GET"),
     ],
 )
 def test_reads_that_name_the_holder_require_quartermaster(path, method):
@@ -134,8 +135,12 @@ def test_reads_that_name_the_holder_require_quartermaster(path, method):
 
     Gating only the per-member routes left these as equivalent ways to ask the
     same question: an item's chain of custody, the members issued units of a
-    pool item, and the outstanding-checkout lists (which take a user_id filter)
-    all name members.
+    pool item, the outstanding-checkout lists (which take a user_id filter),
+    and a departure clearance's full line-item detail (item names, serials,
+    values, disposition, and the departing member's id) — a colleague could
+    look up a member's clearance by id even though the identically-shaped
+    ``/users/{user_id}/clearance`` sibling route already required
+    self-or-quartermaster — all name members.
     """
     permissions = _permission_set(path, method)
 

@@ -31,7 +31,8 @@ import {
 import toast from 'react-hot-toast';
 import { OnboardingHeader, ProgressIndicator, BackButton, AutoSaveNotification } from '../components';
 import { useOnboardingStore } from '../store';
-import { MODULE_REGISTRY, type ModuleDefinition } from '../config';
+import type { OrganizationType } from '../store';
+import { MODULE_REGISTRY, applyAgencyVocabulary, isAgencyFilteredOut, type ModuleDefinition } from '../config';
 import { apiClient } from '../services/api-client';
 import { getErrorMessage } from '@/utils/errorHandling';
 
@@ -133,8 +134,44 @@ const generateRolePermissions = (
 /**
  * Build position templates dynamically using the module registry.
  * This ensures new modules are included in position permissions automatically.
+ *
+ * `organizationType` narrows the operational ranks to the ones this kind of
+ * agency has, and renames the two that are fire-specific. Everything else is
+ * administrative or universal and is offered to everyone.
  */
-const buildPositionTemplates = (modules: ModuleDefinition[]) => ({
+/**
+ * Positions the members category used to offer, which are really a member's
+ * class and status rather than a job they hold. They are set on the member
+ * record now, and migration c3d4e5f6a7b8 recovers the standing of anyone who
+ * already holds one.
+ *
+ * Kept as a named list because an in-flight onboarding session persists its
+ * position picks to localStorage: without this, resuming a session started
+ * before the change re-creates exactly what the migration just retired.
+ */
+const RETIRED_STANDING_SLUGS = new Set([
+  'probationary_member',
+  'junior_member',
+  'life_member',
+  'administrative_member',
+  'social_member',
+  'exempt_member',
+]);
+
+export const buildPositionTemplates = (
+  modules: ModuleDefinition[],
+  organizationType: OrganizationType = 'fire_department'
+) => {
+  const templates = buildAllPositionTemplates(modules);
+  return Object.fromEntries(
+    Object.entries(templates).map(([key, category]) => [
+      key,
+      { ...category, positions: applyAgencyVocabulary(category.positions, organizationType) },
+    ])
+  ) as typeof templates;
+};
+
+const buildAllPositionTemplates = (modules: ModuleDefinition[]) => ({
   system: {
     name: 'System / Special',
     description: 'System administration and IT management positions',
@@ -402,9 +439,21 @@ const buildPositionTemplates = (modules: ModuleDefinition[]) => ({
       },
     ],
   },
+  // One entry, deliberately. This category used to offer Probationary,
+  // Junior, Life, Administrative, Social and Exempt "positions" too — but
+  // those are a member's *class* and *status*, not a job they hold, and
+  // creating them here wrote a permission-bearing position for each. That
+  // contradicted the taxonomy the User model documents ("membership types
+  // carry no permissions") and left a member's standing recorded in two
+  // unconnected places: `member_class`/`member_status` on the member, and a
+  // held position nothing on the backend reads.
+  //
+  // Standing is set on the member record now. "Regular Member" stays, because
+  // it is the genuine baseline position every member holds — it is in the
+  // backend's DEFAULT_POSITIONS and carries the day-one grant set.
   members: {
     name: 'Member Positions',
-    description: 'Standard and special member access levels',
+    description: 'The baseline access every member holds',
     positions: [
       {
         id: 'member',
@@ -413,54 +462,6 @@ const buildPositionTemplates = (modules: ModuleDefinition[]) => ({
         icon: Users,
         priority: 10,
         permissions: generateRolePermissions(modules, 'member'),
-      },
-      {
-        id: 'probationary_member',
-        name: 'Probationary Member',
-        description: 'New members with limited access during their trial period',
-        icon: UserPlus,
-        priority: 5,
-        permissions: generateRolePermissions(modules, 'probationary'),
-      },
-      {
-        id: 'junior_member',
-        name: 'Junior Member',
-        description: 'Youth or junior participants with restricted access',
-        icon: Users,
-        priority: 5,
-        permissions: generateRolePermissions(modules, 'probationary'),
-      },
-      {
-        id: 'life_member',
-        name: 'Life Member',
-        description: 'Long-serving members with honorary status',
-        icon: BadgeCheck,
-        priority: 10,
-        permissions: generateRolePermissions(modules, 'member'),
-      },
-      {
-        id: 'administrative_member',
-        name: 'Administrative Member',
-        description: 'Members focused on administrative and support duties',
-        icon: Briefcase,
-        priority: 8,
-        permissions: generateRolePermissions(modules, 'member'),
-      },
-      {
-        id: 'social_member',
-        name: 'Social / Associate Member',
-        description: 'Non-operational members involved socially',
-        icon: Users,
-        priority: 5,
-        permissions: generateRolePermissions(modules, 'probationary'),
-      },
-      {
-        id: 'exempt_member',
-        name: 'Exempt / Retired Member',
-        description: 'Former active members with limited access',
-        icon: BadgeCheck,
-        priority: 5,
-        permissions: generateRolePermissions(modules, 'probationary'),
       },
     ],
   },
@@ -511,28 +512,73 @@ const PositionSetup: React.FC = () => {
   const lastSaved = useOnboardingStore((state) => state.lastSaved);
   const savedPositionsConfig = useOnboardingStore((state) => state.positionsConfig);
   const setPositionsConfig = useOnboardingStore((state) => state.setPositionsConfig);
+  const organizationType = useOnboardingStore((state) => state.organizationType);
 
   // Build permission categories and position templates from the module registry
   // This ensures new modules automatically appear in position configuration
   const permissionCategories = useMemo(() => buildPermissionCategories(MODULE_REGISTRY), []);
-  const positionTemplates = useMemo(() => buildPositionTemplates(MODULE_REGISTRY), []);
+  const positionTemplates = useMemo(
+    () => buildPositionTemplates(MODULE_REGISTRY, organizationType),
+    [organizationType]
+  );
+
+  // Flattened view of the agency-filtered templates, for reconciling a restored
+  // config against them. A custom position an admin invented has no template
+  // and is kept as-is.
+  const templatesById = useMemo(
+    () =>
+      new Map(
+        Object.values(positionTemplates).flatMap((category) =>
+          category.positions.map((position) => [position.id, position] as const)
+        )
+      ),
+    [positionTemplates]
+  );
 
   // Selected positions - restore from Zustand store if available, otherwise use defaults
   const [selectedPositions, setSelectedPositions] = useState<Record<string, RoleConfig>>(() => {
-    // Restore from persisted store if available
+    // Restore from persisted store if available.
+    //
+    // The restored map goes through the same agency filter as a fresh one, and
+    // has to. It is read from localStorage, so it can predate this filter
+    // existing — an EMS department that reached this step on an earlier build
+    // has `firefighter` sitting in its saved config, ticked. Submitting it does
+    // not merely show a position in error: `save_session_roles` finds no system
+    // position with that slug and *creates* one, putting back exactly the row
+    // the backend declined to seed. Names are refreshed from the template for
+    // the same reason, so a config saved as "Fire Chief" reads "Chief".
     if (savedPositionsConfig) {
       const restored: Record<string, RoleConfig> = {};
       for (const [posId, saved] of Object.entries(savedPositionsConfig)) {
+        // Two independent reasons a saved pick must not come back, and both
+        // have to run. Dropped by slug rather than by "not in the current
+        // templates", which would also discard the custom positions a
+        // department built in this very session.
+        //
+        // 1. A membership standing, which is no longer a position at all: this
+        //    restore is what would put one back, because handleContinue
+        //    submits whatever is here — recreating the permission-bearing row
+        //    *after* the recovery migration has already reclassified those
+        //    members.
+        if (RETIRED_STANDING_SLUGS.has(posId)) continue;
+        // 2. A discipline position this agency does not have. Same mechanism,
+        //    different cause: the config predates the agency filter, so an EMS
+        //    service resuming an older session still has `firefighter` ticked.
+        const template = templatesById.get(posId);
+        if (!template && isAgencyFilteredOut(posId, organizationType)) continue;
         restored[posId] = {
           ...saved,
+          ...(template ? { name: template.name } : {}),
           icon: ICON_MAP[saved.icon || 'UserCog'] || UserCog,
         };
       }
       return restored;
     }
 
-    // Build templates for initial state
-    const templates = buildPositionTemplates(MODULE_REGISTRY);
+    // Build templates for initial state. The store default is the full fire
+    // set, so a wizard resumed with a cleared store offers one position too
+    // many rather than silently hiding one.
+    const templates = buildPositionTemplates(MODULE_REGISTRY, organizationType);
 
     // Pre-select essential positions
     const initial: Record<string, RoleConfig> = {};

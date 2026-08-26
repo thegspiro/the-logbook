@@ -30,12 +30,23 @@ const seat = (userId: string, position: string, name = 'A Member') => ({
   status: 'assigned',
 });
 
+// `isShiftOpen` and `firstClaimableSeat` default their `today` argument to a
+// real `new Date()`, and a shift is closed to signups the day after it runs.
+// A hardcoded fixture date is therefore a time bomb: '2026-08-25' was today
+// when this file was written, and the next morning every default-fixture
+// shift read as "already run" — 27 tests across this file and
+// ShiftSeatList's went red on a commit that touched neither. Anchor the
+// fixture to today so it stays an open shift for good. Tests that pin an
+// explicit `today` (see TODAY below) keep their literal dates on purpose.
+const TODAY_KEY = toDateKey(new Date());
+const TOMORROW_KEY = toDateKey(new Date(Date.now() + 24 * 60 * 60 * 1000));
+
 const shift = (overrides: Partial<ShiftRecord> = {}): ShiftRecord => ({
   id: 's1',
   organization_id: 'org',
-  shift_date: '2026-08-25',
-  start_time: '2026-08-25T22:00:00Z',
-  end_time: '2026-08-26T10:00:00Z',
+  shift_date: TODAY_KEY,
+  start_time: `${TODAY_KEY}T22:00:00Z`,
+  end_time: `${TOMORROW_KEY}T10:00:00Z`,
   positions: [
     { position: 'officer', required: true },
     { position: 'driver', required: true },

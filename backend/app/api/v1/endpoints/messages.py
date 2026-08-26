@@ -291,6 +291,29 @@ async def get_unread_count(
     return {"unread_count": count}
 
 
+@router.get("/inbox/{message_id}", response_model=InboxMessage)
+async def get_inbox_message(
+    message_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Get one message from the current user's inbox (member view).
+
+    Declared after /inbox/unread-count so that literal path still wins, and
+    kept separate from the admin GET /{message_id} because this one is
+    targeting-scoped rather than permission-scoped.
+    """
+    service = MessagingService(db)
+    return ensure_found(
+        await service.get_inbox_message(
+            organization_id=current_user.organization_id,
+            user_id=current_user.id,
+            message_id=message_id,
+        ),
+        "Message",
+    )
+
+
 @router.get("/{message_id}", response_model=MessageResponse)
 async def get_message(
     message_id: str,

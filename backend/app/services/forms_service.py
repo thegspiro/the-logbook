@@ -31,6 +31,7 @@ from app.models.forms import (
     IntegrationType,
 )
 from app.models.user import Organization, User, UserStatus
+from app.utils.sql_search import LIKE_ESCAPE_CHAR, like_pattern
 
 if TYPE_CHECKING:
     from app.models.membership_pipeline import ProspectiveMember
@@ -535,14 +536,11 @@ class FormsService:
             )
 
         if search:
-            safe_search = (
-                search.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-            )
-            search_term = f"%{safe_search}%"
+            search_term = like_pattern(search)
             query = query.where(
                 or_(
-                    Form.name.ilike(search_term),
-                    Form.description.ilike(search_term),
+                    Form.name.ilike(search_term, escape=LIKE_ESCAPE_CHAR),
+                    Form.description.ilike(search_term, escape=LIKE_ESCAPE_CHAR),
                 )
             )
 
@@ -2490,20 +2488,19 @@ class FormsService:
         self, organization_id: UUID, query: str, limit: int = 20
     ) -> List[Dict[str, Any]]:
         """Search members by name, membership number, or email for member_lookup fields"""
-        safe_query = query.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-        search_term = f"%{safe_query}%"
+        search_term = like_pattern(query)
         result = await self.db.execute(
             select(User)
             .where(User.organization_id == str(organization_id))
             .where(User.status == UserStatus.ACTIVE)
             .where(
                 or_(
-                    User.first_name.ilike(search_term),
-                    User.last_name.ilike(search_term),
-                    User.email.ilike(search_term),
-                    User.membership_number.ilike(search_term),
+                    User.first_name.ilike(search_term, escape=LIKE_ESCAPE_CHAR),
+                    User.last_name.ilike(search_term, escape=LIKE_ESCAPE_CHAR),
+                    User.email.ilike(search_term, escape=LIKE_ESCAPE_CHAR),
+                    User.membership_number.ilike(search_term, escape=LIKE_ESCAPE_CHAR),
                     func.concat(User.first_name, " ", User.last_name).ilike(
-                        search_term
+                        search_term, escape=LIKE_ESCAPE_CHAR
                     ),
                 )
             )

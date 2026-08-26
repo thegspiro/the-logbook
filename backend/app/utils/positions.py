@@ -11,9 +11,60 @@ Readers cannot tell those apart without help, and one of them did not try: the
 templates screen rendered each entry straight into a span, so a department with
 a template saved by the current form got React error #31 instead of the page.
 Writers settle the shape here so readers do not have to.
+
+The seat *name* is settled here for the same reason. The apparatus editor wrote
+the EMT seat as ``"EMT"`` while every other writer used ``"ems"``, and because
+``POSITION_LABELS`` renders ``EMT``/``EMS``/``ems`` identically, the two looked
+like one seat on screen and were two different tokens in the database. Nothing
+grants ``"EMT"`` — not a rank, a held position, or a completed program — and
+``ShiftPosition`` has no such member, so the API could not even name that seat.
+An ambulance built from the defaults therefore had an EMT seat no EMT could
+sign up for, and no setting could unblock it (see CHANGELOG 2026-08-26).
 """
 
 from typing import Any, Dict, List
+
+# The seat vocabulary the rest of the system speaks: ``ShiftPosition`` on the
+# wire, ``operational_ranks.eligible_positions`` in config, and the rank
+# editor's own button list. ``tests/test_position_slots.py`` asserts this set
+# against ShiftPosition so the two cannot drift apart again.
+CANONICAL_POSITIONS = frozenset(
+    {
+        "officer",
+        "driver",
+        "firefighter",
+        "ems",
+        "paramedic",
+        "captain",
+        "lieutenant",
+        "probationary",
+        "volunteer",
+        "other",
+    }
+)
+
+# Spellings that mean a canonical seat but are not one. Keyed casefolded.
+_POSITION_ALIASES = {"emt": "ems"}
+
+
+def canonical_position(name: str) -> str:
+    """Settle one seat name onto the vocabulary the signup API speaks.
+
+    A known seat is case-folded and de-aliased, so ``"EMT"``, ``"EMS"`` and
+    ``" ems "`` all become ``"ems"``. Anything else is a department's own
+    custom position and is returned trimmed but otherwise verbatim — its value
+    is chosen by an admin and has to round-trip exactly, so case-folding it
+    would rename their seat.
+    """
+    cleaned = name.strip()
+    if not cleaned:
+        return ""
+    folded = cleaned.casefold()
+    if folded in _POSITION_ALIASES:
+        return _POSITION_ALIASES[folded]
+    if folded in CANONICAL_POSITIONS:
+        return folded
+    return cleaned
 
 
 def normalize_stored_positions(positions: Any) -> Any:
@@ -37,11 +88,11 @@ def normalize_stored_positions(positions: Any) -> Any:
     slots: List[Dict[str, Any]] = []
     for entry in positions:
         if isinstance(entry, str):
-            name = entry.strip()
+            name = canonical_position(entry)
             if name:
                 slots.append({"position": name, "required": True})
         elif isinstance(entry, dict):
-            name = str(entry.get("position") or "").strip()
+            name = canonical_position(str(entry.get("position") or ""))
             if name:
                 # Only an explicit False makes a seat optional, matching the
                 # frontend's `required !== false`. A missing or null flag is a

@@ -570,7 +570,9 @@ class NfcTagService:
                     occurred_at=entry.clock_in_at,
                 )
             entry = await service.clock_out_by_category(
-                category_id=str(category_id), user_id=str(user.id)
+                category_id=str(category_id),
+                user_id=str(user.id),
+                organization_id=str(organization_id),
             )
             return self._result(
                 NfcCheckInStatus.CHECKED_OUT,

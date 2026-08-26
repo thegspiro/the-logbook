@@ -7,6 +7,664 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### The chief was missing from every notification meant to include them (2026-08-26)
+
+**Fixed**
+
+- **Role groups named position slugs no department is ever given.**
+  `LEADERSHIP_ROLE_SLUGS`, `ADMIN_NOTIFY_ROLE_SLUGS` and
+  `TRAINING_OFFICER_ROLE_SLUGS` are matched against `Position.slug`, and every
+  one of them named `"chief"`. The seeded chief's slug is `fire_chief`. So the
+  chief was silently absent from election rollback and deletion alerts, member
+  drop and auto-archive notices, the overdue-property report, and the store's
+  admin heads-up — and the election path reported a recipient count to whoever
+  rolled the election back that quietly excluded them. `"admin"`, which two of
+  the lists also named, has never been a position at all.
+
+  The groups now name **office keys**, expanded through `OFFICE_CATALOG` by a
+  new `position_slugs_for_offices`. That catalog's chief entry already knew
+  `fire_chief` and `chief` were one office; nothing else did. Expanding rather
+  than replacing matters: `chief` stays reachable, because an admin who names a
+  custom position "Chief" gets exactly that slug from `slugify` — which is why
+  this worked on some installations and not others, and so was never reported.
+  `"admin"` becomes `it_manager`, the System Owner position that actually
+  carries the authority these groups reach for.
+
+- **An officer check that could never be true.** `training_module_config`
+  compared `TRAINING_OFFICER_ROLE_SLUGS` against `Position.name` — the seeded
+  names are "Training Officer" and "Fire Chief" — so `is_officer` was
+  unconditionally `False` on every installation. A training officer opening
+  their own training page got the plain member's visibility policy: their own
+  history, hours and narrative hidden from them. Two independent defects in one
+  expression, both closed.
+
+- **`ROLE_CHIEF` is gone.** It was `"chief"`, a single slug. No single slug
+  answers "the chief", so the replacement is `CHIEF_POSITION_SLUGS`. Its
+  sharpest call site was `cert_alert_service`: an admin turning on "CC the chief
+  on escalation" got a toggle that could not do anything.
+
+- **Leadership members were emailed once per position held.**
+  `_notify_leadership` joined `User.roles` without `distinct`, so a member
+  holding `president` and the auto-assigned `member` came back twice — emailed
+  twice, and counted twice in the "N leadership members have been notified"
+  message. Pre-existing, and fixed here because making the chief match would
+  have added them to it. The join bought nothing: the positions were already
+  eager-loaded and the filter runs in Python.
+
+- **An EMS-only service was offered a fire department's apparatus.** The
+  scheduling defaults seated engine, ladder, tanker, brush, tower and hazmat for
+  every organization, and the settings panel unioned its own hardcoded copy of
+  that list over whatever the server sent — so those six were shown regardless,
+  with no control to remove them. They are now withheld from an EMS-only
+  agency, which keeps ambulance, rescue, boat, chief and utility. **Nothing is
+  invented**: no new apparatus type, no new staffing number.
+
+  The vehicle picker's fallback (`GET /scheduling/apparatus-options`) carried a
+  _second_ copy of the same eleven strings. `DEFAULT_APPARATUS_TYPES` is deleted
+  and the fallback reads the staffing templates directly — otherwise one of the
+  two would have been made agency-aware and the other not, and a new EMS
+  department would still have been offered Engine and Ladder as its entire
+  picker.
+
+**Scope**
+
+- **The scheduling change reaches existing organizations immediately.** Unlike
+  the rank and position seeds, nothing writes these defaults to a row —
+  `get_settings` reads the built-ins live on every request and folds a stored
+  row over them, and a row exists only once an admin has saved the panel. So
+  every organization that has never saved sees this on deploy; one that has
+  saved keeps what it saved. Templates already built are unaffected, because
+  their seats were copied at creation.
+- **Crew seats are untouched.** `"firefighter"` inside an apparatus default is a
+  `ShiftPosition` — a seat on a rig, a different namespace from rank codes and
+  position slugs — persisted verbatim into three untyped JSON columns and
+  cross-referenced by every organization's `eligible_positions`. Renaming one
+  would orphan those rows the way the `EMT`/`ems` divergence did, and would buy
+  nothing: an EMT is already eligible for a `firefighter` seat.
+- **Offline still shows the full set.** The frontend keeps the complete
+  fire-shaped copy as its offline and cold-cache fallback, because the browser
+  has no notion of the organization's agency type; the narrowing happens
+  server-side, where it is known.
+- **`compliance_officer` still resolves to nobody**, and `assistant_training_officer`
+  with it. Both are fallbacks behind `cert_alert_config`, which a department
+  fills in with its own slugs, so naming a position it may reasonably have
+  invented is the point. Recorded in `tests/test_role_group_slugs.py` as an
+  explicit exemption rather than left to be rediscovered.
+
+`tests/test_role_group_slugs.py` asserts every slug a role group produces is one
+a department can actually hold, and `tests/test_shift_settings_parity.py` closes
+the "kept in lockstep with the frontend" comment that nothing had been enforcing.
+
+### An EMS-only agency was seeded a fire department's positions (2026-08-26)
+
+**Fixed**
+
+- **Positions now follow the agency, as ranks already did.** `_create_default_roles`
+  wrote all 28 `DEFAULT_POSITIONS` to every organization regardless of
+  `organization_type`, so an EMS-only service was handed a **Firefighter**
+  position it can never fill, and read "Chief" in its rank list beside "Fire
+  Chief" in the position list. Positions are the primary source of permissions,
+  so this was the half of the vocabulary that mattered more — and the gap the
+  rank change had recorded in this file rather than closed.
+
+  An EMS-only service is now seeded no Firefighter, a Chief rather than a Fire
+  Chief, and a Driver / Operator rather than an Engineer. **Slugs are
+  untouched** — `fire_chief` still keys the permission registry, the office
+  catalog and the shift-eligibility fallback, so it must mean the same thing for
+  every agency. Only the selection and the wording vary.
+
+- **The onboarding wizard follows too, because otherwise the fix is cosmetic.**
+  `RoleSetup.tsx` carries its own copy of the position list and never fetches
+  one, and `save_session_roles` _creates_ a system position for any id it does
+  not already know. So a wizard that kept offering Firefighter to an EMS
+  department would put back the exact row the seed left out — with grants built
+  from two checkboxes instead of from `DEFAULT_POSITIONS`, because the create
+  branch does not apply `_merge_default_permissions`. The restored
+  `positionsConfig` goes through the same filter for the same reason: it is read
+  from `localStorage` and can predate this change.
+
+  The wizard's half of the rule lives in `config/agencyPositions.ts` rather than
+  in the screen, so the contract test that keeps the two languages honest —
+  `test_onboarding_position_template_parity.py`, which reads it as text — has a
+  small stable file to read instead of a 1,100-line component. It asserts both
+  directions: the wizard never offers a discipline position the backend declined
+  to seed, and it renames exactly what the backend renames.
+
+**Changed**
+
+- **One selection rule for ranks and positions**, in `core.permissions` beside
+  both registries: `DISCIPLINE_CODES_BY_ORG_TYPE`, `is_seeded_for` and
+  `label_for`. `default_ranks_for` was rewritten onto it and
+  `_COMMAND_RANK_CODES`, `RANK_CODES_BY_ORG_TYPE` and `RANK_LABELS_BY_ORG_TYPE`
+  are gone. Two copies of "an EMS-only agency calls this Chief" is the drift
+  this branch has spent its life deleting.
+
+  **Only disciplines are enumerated**, so officer rungs are universal by
+  construction. That also closes a hazard the review of the rank change flagged:
+  a rung added to `DEFAULT_RANKS` and left out of `_COMMAND_RANK_CODES` used to
+  be dropped from every seed silently. The failure direction is now the
+  recoverable one — a code nobody classifies reaches every agency — and the
+  golden sets in `tests/test_agency_position_seeding.py` are what force the
+  classification.
+
+- `_create_default_roles` takes the agency type as a **required** argument, so a
+  second caller has to decide rather than inherit a fire department by omission.
+  `RoleManagementService.initialize_default_roles` — uncalled, and previously
+  agency-blind — requires it too: an unwired seeder that hands every agency a
+  fire ladder is how this comes back. `core/seed.py` routes through
+  `default_positions_for("fire_department")`, the agency it builds.
+
+- The frontend's `OrganizationType` union is defined once, in the onboarding
+  store, rather than re-declared per screen. `test_enum_consistency.py` now
+  scans `.ts` as well as `.tsx` to find it — globbing `.tsx` alone had made "the
+  frontend does not define this type" and "it is defined somewhere sensible"
+  indistinguishable.
+
+- The onboarding status record keeps the **coerced** agency type.
+  `create_organization` silently falls back to `fire_department` for a type it
+  does not recognise, but the status row kept the raw argument — two answers to
+  the same question, and the status row is what a resumed wizard reads back.
+
+- Seeded positions no longer persist the registry's list **by reference**. The
+  seven rank-mirroring entries alias the rank registry's list object (pitfall
+  #23), so the row held a module constant behind a database column, one in-place
+  edit away from rewriting every other department's seed for the life of the
+  process.
+
+**Scope**
+
+- **New organizations only; no migration.** The seed runs once inside
+  `create_organization`, which rejects a second organization. An EMS service
+  already onboarded keeps the positions it was given — members are assigned to
+  those rows, and renaming or deleting one rewrites their record.
+- **Discipline positions confer nothing either way.** The auto-assigned `member`
+  position is a strict superset of the `firefighter` position's grants (18 vs
+  17, adding `equipment_check.submit`), so dropping Firefighter for an EMS
+  agency costs no permissions, and the asymmetry — fire keeps a discipline
+  position, EMS has none — is a naming matter, not an access one. The symmetric
+  alternative is a `DEFAULT_POSITIONS["emt"]` entry aliasing the EMT rank's
+  list; it is deliberately not added here, since it would seed a row that grants
+  strictly less than one every member already holds.
+- **`ems_supply_officer` stays universal.** Most fire departments run EMS, and
+  withholding it would be the mirror of the bug this closes.
+- **`DEFAULT_RANK_LABELS`** in `shift_eligibility_service` is still built from
+  the unfiltered `DEFAULT_RANKS` — deliberately, so a code with no stored row
+  still resolves — so an ineligibility message can still say "Fire Chief" to an
+  EMS agency that deleted that rank. Cosmetic, and left alone rather than made
+  agency-aware, because that map exists precisely to answer for codes the
+  organization was never seeded.
+- **`scripts/seed_test_users.py`** keeps its own hand-written position list,
+  which had already drifted from the registry before this change. It is a dev
+  fixture, not a source of truth.
+
+### The medic seat nobody could fill, three source badges that looked identical, and a writer for member qualifications (2026-08-26)
+
+**Fixed**
+
+- **A Paramedic could not fill the Paramedic seat.** The medic seat was added
+  to `ShiftPosition` while the Paramedic qualification still cleared only
+  `ems`, so the seat could be put on a shift and nothing cleared anybody for
+  it — the unfillable-seat failure of #1833 from the member's side.
+  `test_qualification_service.py` guarded the forward direction (every seat a
+  qualification grants is one the API can name) but not the reverse; it now
+  asserts every seat is reachable from a rank or a qualification, so a seat
+  cannot again exist with nothing granting it.
+- **Three eligibility sources rendered as the same badge.** The roster emits
+  `rank`, `position`, `qualification`, `training` and `open`, and the page had
+  styles for only three. `position` and `qualification` both fell back to the
+  rank badge's icon and colour, so a Lieutenant who also held the Lieutenant
+  position and an EMT card showed three identical violet chips. Each source
+  now has its own icon and colour.
+- The roster listed a member's rank twice. Onboarding gives
+  every member the system position mirroring their rank, and rank codes
+  share a slug vocabulary with position slugs, so a Lieutenant resolved
+  "lieutenant" on both the rank and held-position branches and each emitted
+  a badge. The frontend had no style for the held-position source, so it
+  fell back to the rank badge's icon and colour and the two were
+  indistinguishable. The roster now credits each slug once, and a genuine
+  held position renders distinctly. A qualification held independently of
+  rank — a Lieutenant who is also an EMT — still reports both.
+
+**Added**
+
+- **Completing a course now grants the qualification it certifies.**
+  `member_qualifications` is read by shift eligibility and had nothing writing
+  to it: a training officer recorded the class that happened, then had to grant
+  the qualification again on a different screen, and the second entry is the
+  one that gets forgotten — leaving a member certified on paper and
+  unqualified in the scheduler. `training_courses.grants_qualification` names
+  the code a course certifies, and `TrainingRecord` — which already carries the
+  completion date, the expiry, the certificate number and the issuing agency —
+  becomes the single place the fact is entered. Wired into all five paths that
+  write a training record, including CSV and historical import.
+
+  Backfilling an old class never pulls a live card's expiry backwards, so
+  importing history adds records without lapsing the certification a member is
+  actually working under. Set it per course under Training → Course Library
+  ("Certifies"); until a training officer does, completing a course grants
+  nothing and eligibility behaves exactly as before.
+
+- A qualification on the roster now carries the date it lapses, and turns amber
+  inside 60 days. The roster answers as of today, so without the date a card
+  expiring next week reads exactly like one good for another five years.
+- **Paramedic is a shift position distinct from EMT.** Both previously
+  collapsed into one `ems` bucket, so a department staffing an ALS unit
+  could not say a medic was required, and "was a paramedic, still an EMT"
+  was not a state the system could represent. This is the counterpart to the
+  EMT seat fix below: `EMT` and `EMS` really are one seat and now settle onto
+  one token, while a medic is a genuinely different seat and gets its own.
+  `paramedic` joins `CANONICAL_POSITIONS` and `ShiftPosition` together, so the
+  vocabularies stay the identical set `tests/test_position_slots.py` asserts,
+  and `20260826_1400_e2c8f5a71d40` folds a stored custom "Paramedic" seat onto
+  it — a department that needed a medic seat before there was one had no
+  option but to hand-roll it, and that seat was grantable by nothing. "Medic"
+  and other spellings a department chose are deliberately left alone: they stay
+  custom seats, and renaming one is what custom positions exist to prevent.
+
+  No rank seeds the medic seat: a licence is not something stripes confer, and
+  granting it by rank would have put every chief on the medic roster with no
+  card behind them. It is earned only by holding the Paramedic qualification.
+  Enable the seat per department under Scheduling Settings → Position Names.
+
+- The roster shows a certification's expiry beside the member, and switches
+  the badge to amber within 60 days of it — an officer staffing next month
+  sees the medic whose card runs out in three weeks rather than discovering
+  it when the roster silently shortens.
+
+### Membership standing stops being a "position", and three silent refusals get a reason (2026-08-26)
+
+**Changed**
+
+- **Onboarding no longer offers membership standing as a position.** The role
+  setup screen listed Probationary, Junior, Life, Administrative, Social and
+  Exempt beside Regular Member, and creating one wrote a permission-bearing
+  `positions` row. Those are a member's _class_ and _status_ — what kind of
+  member they are and where they sit on the ladder — not a job they hold, and
+  the User model's own taxonomy has always said so.
+
+  The cost was not cosmetic. A department that used them recorded standing in
+  two unconnected places: `member_class` / `member_status` on the member, which
+  every backend gate reads, and a held position that none of them do. Changing
+  one left the other stale, with nothing to reconcile them. And because the
+  position carried real grants, "reclassify this member" and "change what they
+  can see" were one action with no indication they were.
+
+  Regular Member stays — it is the genuine baseline position, it is in the
+  backend's `DEFAULT_POSITIONS`, and it carries the day-one grant set.
+
+  A migration recovers the standing from the installs that already have these
+  positions, taking the most specific one where a member holds several. It
+  **does not delete the positions**: each carries the `member` or
+  `probationary` grant template, and a member whose only position was
+  `life_member` would lose everything it gave them. Reclassifying somebody is
+  not a reason to cut their access, so the rows stay and a department can
+  retire them from the position editor once it is satisfied the standing is
+  right. Only members reading as plainly `operational` / `regular` are
+  touched, so anything more specific already on the member wins, and members
+  left deliberately unclassified by the previous migration (a custom
+  membership tier id) stay that way.
+
+**Fixed**
+
+- **A mistyped rank is refused at the write instead of failing three screens
+  later.** `User.rank` is a plain `String(100)` with no foreign key, so any
+  string at all could be stored — and `fire_cheif` does not fail loudly. It
+  matches no configured rank, so it resolves to no eligible seats and no
+  default permissions, and the member simply cannot sign up for anything. What
+  they see is "you are not qualified for this position", which reads as the
+  application being broken.
+
+  The codebase already knew about this class of problem:
+  `OperationalRankService.validate_ranks` exists to _report_ members whose
+  stored rank matches nothing. The same question is now asked one step earlier,
+  where it can still be answered by refusing the write with a message naming
+  the value and where to add it. Clearing a rank stays allowed — an empty value
+  is "no rank", not a bad one.
+
+  All three write paths refuse it in the same words — creating a member,
+  updating a profile, and transferring a prospect to full membership. The third
+  is the one that matters most: nobody watches a brand-new record fail to
+  appear on a shift roster, and the department has no reason to suspect the
+  rank field.
+
+  A rank counts as configured if the organization has a stored row for it **or**
+  it is one of the built-in seed codes. The second half is load-bearing:
+  seeding only ever fires into an empty table, so a department onboarded before
+  a code joined `DEFAULT_RANKS` has no row for it while shift eligibility still
+  honours it. Validating against stored rows alone would refuse a rank the rest
+  of the system treats as valid — which is the shape of the EMT seat bug fixed
+  earlier today.
+
+- **A retired, suspended or dropped member could still take a shift seat.**
+  `User.status` (the account and roster lifecycle) and `membership_type` (the
+  membership ladder) are separate axes that share three spellings, and nothing
+  reconciles them — correctly, since a probationary member has an active
+  account and a member on leave is still a regular member. But retiring
+  somebody through the members screen writes `status` and never touches
+  `membership_type`, so every rule that consulted only membership saw them as a
+  regular operational member.
+
+  Self-signup was one of those rules. `get_position_roster` already filtered on
+  the account being active, which made the roster _stricter_ than the endpoint
+  it exists to mirror: a department could see a member absent from the roster
+  and still watch them take a seat. Logging in was blocked either way, but a
+  session opened before the status change outlives it.
+
+  Account status is now checked ahead of everything else, including the
+  open-to-all bypass. "Open to all members" waives the membership-type and rank
+  checks; it does not make a dropped account a member again — and an open shift
+  is where a department is least likely to notice one on the roster.
+
+### Member class, member status, and qualifications become separate facts (2026-08-26)
+
+**Added**
+
+- **`member_class` and `member_status` on every member.** `membership_type`
+  held two independent facts in one column: what kind of member somebody is
+  (operational / administrative / social) and where they sit on the membership
+  ladder (prospective → probationary → regular → life → retired). Because they
+  shared a field, neither could be stated without losing the other — there was
+  no way to record a _probationary treasurer_, and nothing said whether a _life
+  member_ still rides.
+
+  The clearest symptom was in elections. `ElectionService` could only answer
+  "is this member operational" as `membership_type == "active"`, because that
+  was the one value that meant it — so a bylaws question put to the operational
+  members never reached anyone who had earned life membership, or anyone still
+  on probation. It now reads the member's **class**, and every operational
+  standing counts. "regular", "life" and "probationary" stay **status** checks,
+  because they name a status.
+
+  `membership_type` is kept and kept correct: ~160 call sites read it, and it
+  is now derived from the pair by `app/utils/membership.py`, reconciled on
+  every flush by a listener on `User`. Whichever side a caller writes wins, so
+  existing code is unchanged. The derivation is lossy in one direction on
+  purpose — the legacy vocabulary cannot express an administrative probationer
+  — and the two new columns are the authority when they disagree.
+
+  `honorary` backfills to the **social** class. That is not a new judgement
+  about honorary members; it is what the system already did with them, since
+  `honorary` has always sat in `DEFAULT_EXCLUDED_MEMBERSHIP_TYPES` beside
+  administrative and retired. Mapping them anywhere else would have widened
+  shift access on upgrade.
+
+  Neither column takes a database default, deliberately. A DDL default is
+  applied to raw-SQL inserts that name only `membership_type`, and would be
+  wrong for exactly the members who are not plain operational regulars —
+  silently promoting an administrative member into the operational class. NULL
+  means "nobody has set this" and readers derive from the legacy field; ORM
+  writes never leave it NULL.
+
+- **`member_qualifications` — what a member is certified to do.** Rank says
+  where a member sits in the chain of command; a qualification says what they
+  are trained to do. `User.rank` is one string, so a **Captain who is also a
+  Paramedic** — an entirely ordinary member of a volunteer department — had
+  nowhere to be recorded as both.
+
+  The standards already draw the line: Firefighter I/II is NFPA 1001,
+  apparatus operator is NFPA 1002, the officer ladder is NFPA 1021, and
+  EMT/Paramedic are EMS credentials on a separate track again.
+
+  Qualifications expire and ranks do not, which is the other half of why they
+  cannot share a column. Shift eligibility reads `expires_on` **as of the shift
+  date**, not as of today — the rule EVOC certifications already use for
+  drivers, and for the same reason: a card that is current when the roster is
+  built and expired when the truck rolls qualifies nobody to be on it. The
+  bulk path resolves this per distinct shift date rather than once per member,
+  since that is the one eligibility source that is not shift-independent.
+
+  The table starts empty. Nothing is inferred from existing rank or position
+  rows: a department that recorded somebody as an EMT _rank_ has said where
+  they sit, not which card they hold or when it expires, and inventing an
+  expiry date would be worse than having none.
+
+**Note**
+
+Ranks are unchanged. An EMS-only agency keeps EMT as its line rank, and a
+department that models EMT as a rank can carry on doing so — `emt` is now both
+a rank code and a qualification code, meaning two different things on purpose.
+Neither implies the other, and a department may use either or both.
+
+Admin screens for entering qualifications are not in this change; the model,
+the service and the eligibility reader are.
+
+### An EMT rank granted nothing, and EMS-only agencies were seeded firefighters (2026-08-26)
+
+**Fixed**
+
+- **A seeded rank that conferred no permissions at all.** Operational ranks
+  are seeded from `DEFAULT_RANKS` but resolve their permissions from a
+  separate registry, `OPERATIONAL_RANKS`, and the two had drifted: `emt` was
+  in the first and missing from the second. `get_rank_default_permissions("emt")`
+  answered `[]`, so a member whose only standing was the EMT rank held
+  nothing.
+
+  Unlike Firefighter there is no mirroring entry in `DEFAULT_POSITIONS`, so
+  nothing made up the difference — every other seeded rank had that backstop,
+  which is why the gap stayed invisible. EMT now carries the same
+  rank-and-file grants as Firefighter, from one shared list rather than two
+  that can drift.
+
+  **Firefighter and EMT are independent ranks, not a progression.** Plenty of
+  firefighters never certify as EMTs and plenty of EMTs never ride the engine;
+  neither implies the other. They share a permission list only because
+  standing at the bottom of the operational ladder is what decides what a
+  member may _see_, and that is the same question for both.
+
+- **An EMS-only agency was seeded a fire department's rank ladder.**
+  `seed_defaults` wrote the same eight ranks to every organization regardless
+  of `organization_type`, so an EMS-only service was handed "Fire Chief",
+  "Engineer" and "Firefighter" — a rank nobody there can ever hold. The seed
+  only ever fires into an empty table, so whatever it wrote on day one was
+  what the department lived with.
+
+  Ranks are now chosen by agency type: every agency gets the full officer
+  ladder, an EMS-only service gets EMT without Firefighter, and its
+  fire-specific labels are renamed (Chief, Driver / Operator). The rank
+  _codes_ stay shared across agency types deliberately — they key the
+  permission registry and the shift-eligibility fallback, so a code must mean
+  the same thing everywhere — and only the selection and labels vary. An
+  unknown or missing type falls back to the full set, because a department
+  seeded one rank too many can delete it while one seeded too few has no
+  indication anything is absent.
+
+  **This reaches new organizations only, and there is no migration.** The seed
+  fires solely into an empty table, so an EMS service already onboarded keeps
+  the fire ladder it was given and can edit the list by hand. Rewriting a
+  department's existing ranks would rename rows its members are already filed
+  under, which is worse than the wrong label. Note the contrast with the EMT
+  fix above: rank grants resolve from code at request time, so that one takes
+  effect for every existing installation the moment this deploys.
+
+  **Positions are not agency-aware, and were not changed here.** Onboarding
+  still seeds every `DEFAULT_POSITIONS` entry to every organization, so an
+  EMS-only department is still given "Fire Chief", "Engineer" and
+  "Firefighter" _positions_ — and positions, not ranks, are the primary source
+  of permissions. Until that is settled the two lists disagree on screen: the
+  rank reads "Chief" where the position beside it reads "Fire Chief". The
+  position registry is aliased into the rank registry (pitfall #23) and is
+  seeded once per organization at onboarding, so changing it is a data
+  migration rather than a registry edit, and it is left for its own change.
+
+- **A custom rank silently conferred nothing.** Rank defaults resolve from a
+  code-level registry keyed by `rank_code`, so a rank a department invents for
+  itself — Battalion Chief, Firefighter II — grants no permissions. That is
+  the intended design (positions are the primary source), but the editor
+  rendered a custom rank identically to a seeded one, leaving an admin to
+  discover it from a member who could not see anything. `RankResponse` now
+  reports `default_permission_count` and the rank editor marks a rank that
+  grants none.
+
+**Changed**
+
+- **Who may assign the EMT rank has narrowed, as a consequence of the fix.**
+  `_assert_rank_within_caller_ceiling` refuses to let anyone set a rank that
+  grants more than they hold themselves. While `emt` resolved to an empty list
+  that check passed trivially for everybody; it now requires all seventeen
+  grants. Of the seeded positions that can manage members, Fire Chief, Deputy
+  Chief, Assistant Chief, Captain, IT Manager and President are unaffected,
+  while Vice President, Secretary, Assistant Secretary and Membership
+  Coordinator can no longer assign it — and get a logged privilege-escalation
+  attempt when they try. This is the same ceiling those positions already hit
+  on `firefighter`, so EMT now behaves like every other line rank rather than
+  being the one that slipped through; a department that wants its membership
+  coordinator to file EMTs should grant that position the rank's view
+  permissions.
+
+**Removed**
+
+- `OPERATIONAL_ROLE_SLUGS` and `ADMINISTRATIVE_ROLE_SLUGS` from
+  `core.constants`. Each had exactly one reference in the codebase — its own
+  definition. They were not harmless: they read as a third authority on the
+  rank vocabulary and agreed with neither real one, listing `chief` where the
+  seed writes `fire_chief`, and offering `driver` and `paramedic`, which are
+  not ranks at all and grant nothing. The two documentation tables that still
+  listed them — in `docs/ENUM_CONVENTIONS.md` and `docs/TROUBLESHOOTING.md`,
+  the latter under an instruction to import them — go with them.
+
+`tests/test_rank_registry_agreement.py` now asserts the seed and the
+permission registry describe the same set in both directions, so a rank cannot
+again be offered to departments while conferring nothing.
+`tests/test_operational_rank_service.py` and
+`RanksSettingsSection.test.tsx` cover the reported count and the badge it
+drives, including the stale-response case where the field is absent — the
+count must fall through to no badge rather than warning about every rank.
+
+### Embroidery and engraving are not the same job (2026-08-26)
+
+**Fixed**
+
+- **`alembic upgrade head` could not run at all.** Three migrations took
+  `c4a91b7e2f08` as their parent — the size-order settle (#1819), a second
+  storefront grant backfill, and the notifications.view revoke (#1829) — so the
+  chain had three heads and every database job on `main` failed before a test
+  ran. Relinearized rather than merged, because the order changes the outcome:
+  the two storefront backfills guard each other, and running them the other way
+  round leaves `storefront.manage` off the Quartermaster on every existing
+  department.
+
+- **An engraved item was sent to the vendor as gold thread.** Personalization
+  was modelled as one process. A cloth item is embroidered and the thread has a
+  colour; a metal item is engraved and there is none. With only a thread colour
+  on the model, a challenge coin reached the purchase order and the CSV export
+  reading "Gold" — an instruction the engraver cannot follow — and the member's
+  preview stitched a coin in gold. Products now carry a personalization method,
+  set per item by the quartermaster, and thread belongs to embroidery alone.
+
+- **The Command Palette offered the store where the route would refuse it.**
+  `My Store Orders` carried no gate at all while `/store/orders` requires
+  `storefront.view` and the storefront module, so it answered Access Denied to
+  every member without the grant and to every department with the store
+  switched off. `Department Store` was permission-gated but not module-gated.
+  `navGateIntegrity.test.ts` now covers the storefront paths; it existed for
+  this class of defect but listed only `/medical-supplies` and `/inventory`.
+
+- **Thirteen corporate positions could not reach the store.** Treasurer,
+  secretary, board of directors, EMS supply officer, public outreach,
+  communications officer, historian, membership coordinator, training officer,
+  fundraising chair, assistant secretary, scheduling officer and meeting hall
+  coordinator held no storefront grant. The store is a member amenity, not an
+  officer tool. The omission hid because permissions union across positions and
+  every operational rank grants the store, so it only bit a member whose sole
+  position was one of these and who had no rank recorded.
+
+### An EMT could not sign up for the EMT seat on an ambulance (2026-08-26)
+
+**Fixed**
+
+- **The apparatus editor wrote a seat name nothing in the system grants.**
+  `ApparatusBasicPage` offered the EMT seat as the literal string `"EMT"`, and
+  built every ambulance from `['driver', 'EMT']`. Every other writer — the
+  shift template form, the scheduling settings, `ShiftPosition` on the wire,
+  `operational_ranks.eligible_positions`, the rank editor — spells that seat
+  `"ems"`.
+
+  Nothing grants `"EMT"`: not a rank, not a held position, not a completed
+  training program. `ShiftEligibilityService` intersects the member's granted
+  seats with the shift's own seats case-sensitively, so the intersection was
+  always empty and `POST /scheduling/shifts/{id}/signup` answered 403. An
+  ambulance created from the defaults had an EMT seat that no EMT could take.
+
+  **No setting could unblock it.** Adding `EMT` to the org's `open_positions`,
+  or marking the shift `open_to_all_members` — the flag that bypasses the rank
+  and membership-type checks entirely — both put `"EMT"` into the eligible set
+  and still failed, because `ShiftPosition` has no `EMT` member and the client
+  can only ever send `ems`. The seat was unnameable by the API that had to
+  fill it.
+
+  It was invisible on screen, which is why it read as the application being
+  broken rather than as a configuration problem: `POSITION_LABELS` maps `EMT`,
+  `EMS` and `ems` all to the label "EMT", so the seat rendered normally. The
+  label was also where the bad value came from — the editor built its option
+  text by capitalising the raw value, so `'ems'` would have displayed as "Ems"
+  and someone stored the label as the value to fix the display.
+
+  The seat _name_ is now settled on write by `canonical_position` in
+  `app/utils/positions.py`, alongside the seat _shape_ that helper already
+  owned, so no writer can reintroduce a spelling the signup API cannot name.
+  `ApparatusBasicPage` stores canonical values and takes its option text from
+  the shared `POSITION_LABELS`. `20260826_1200_d7a4e9c31b60` settles the rows
+  already stored across `basic_apparatus.positions`, `shifts.positions`,
+  `shift_templates.positions` and `apparatus.crew_positions` — the half a
+  write-side fix cannot do, since an ambulance created last month keeps its
+  unfillable seat until its row is rewritten. A department's own custom seat
+  round-trips verbatim; only known spellings fold.
+
+  `tests/test_position_slots.py` asserts the canonical set is exactly
+  `ShiftPosition` and parses `ApparatusBasicPage.tsx` for a non-canonical seat
+  value, so the two vocabularies cannot drift apart again.
+
+### Documents could be uploaded but never downloaded, and a dozen other Documents/Legal fixes (2026-08-26)
+
+**Added**
+
+- A Download action is now available wherever a document is listed —
+  members with `documents.manage` could previously upload and delete a
+  file but never open or download what was uploaded. It is hidden on
+  generated documents (published meeting minutes, property returns) that
+  have no separate file to download, and it applies the same folder access
+  rules as viewing the document.
+- A document uploaded with no folder previously had no way to be seen,
+  downloaded, or managed afterward — the upload succeeded, but the file
+  vanished from the page. An "All Documents" view now lists every document
+  the caller can see, including ones with no folder.
+
+**Fixed**
+
+- A malformed folder or document id in a request returned a server error
+  instead of a clean rejection.
+- Editing a folder to clear its parent, its owner, or a document's folder
+  reported success but silently left the old value in place. Clearing now
+  actually clears.
+- A folder could be moved into itself or one of its own sub-folders,
+  making it disappear from folder navigation. This is now rejected with a
+  clear error.
+- Clearing a folder's color or icon to blank could leave it in a state
+  that broke every later attempt to list or view it. Both fields now
+  require a value, matching how every folder already has one.
+- Uploading a document with the Document Name field left blank
+  (advertised in the UI as optional) returned an error instead of
+  defaulting to the file name, as promised.
+- A failed receipt-printer connection returned the printer's configured
+  network address to whoever triggered the print, including staff with no
+  access to printer settings. It now returns a generic message.
+- Publishing two proposed revisions of the same legal document (privacy
+  policy or terms of service) at nearly the same time could leave both
+  marked live, with the public page showing whichever write happened to
+  land last. Publishing is now serialized.
+- A department publishing custom privacy-policy and terms-of-service text
+  with different revision dates could have publishing one silently change
+  the date shown on the other. Each document keeps its own date, and an
+  org that migrated from the old shared-date format no longer has a stale
+  date resurface after it republishes.
+- The public legal-text endpoint keeps returning its original `lastUpdated`
+  field alongside the newer per-document dates, so an external client built
+  against the documented shape does not lose a field it may still rely on.
+- A tampered or corrupted document record could theoretically resolve to a
+  file outside the caller's own organization's upload directory; the
+  download endpoint now confines every resolved path to that directory.
+- Downloading a document is now recorded in the audit log.
+
 ### Admin hours: reading another member's requirement progress returned a 500 (2026-08-25)
 
 **Fixed**
@@ -23,6 +681,452 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   dependency populated, so the endpoint answered correctly for anyone who
   tried it on themselves. No screen calls it for another member yet, so this
   is an API fix rather than a visible one.
+
+### Every member could read every other member's notifications (2026-08-25)
+
+**Fixed**
+
+- **The Send Log is no longer part of the day-one grant set.** Three admin
+  tabs on the Notifications screen — Notification Rules, Email Templates and
+  Send Log — hang off `notifications.view`, and that permission was seeded to
+  the `member` position and to the Firefighter and Engineer ranks. Every
+  member had it.
+
+  The Send Log is the one that matters. `GET /notifications/logs` filters on
+  `organization_id` and nothing else, and each row carries the recipient's
+  email address, the subject and the full message body. So any member could
+  page through every notification the department had ever sent anyone else.
+
+  `notifications.view` is revoked at all three seed sites, and by
+  `20260825_2015_a1f7c34e9b02` on departments that have already onboarded —
+  the registry alone would not have done it, because
+  `DEFAULT_POSITIONS[rank]["permissions"]` _is_ the rank's list, so onboarding
+  writes those grants into system `positions` rows. The migration is scoped to
+  `is_system = True`; a position a department has customized is left as they
+  set it.
+
+  **Members lose nothing they can act on.** Their own inbox is
+  `GET /notifications/my`, which is gated on being signed in and no permission
+  at all, and the navigation entry points at `?tab=inbox`. What changes is
+  that Notifications now opens on their notifications, with no admin tabs
+  beside them.
+
+- **The Email Templates tab is gated on the permission it actually needs.**
+  The tab holds no editor — its only control navigates to
+  `/communications/email-templates`, which is behind `settings.manage`. Anyone
+  holding `notifications.view` alone was shown the tab, read a description of
+  what they could customize, clicked the button and landed on Access Denied.
+  It now follows `settings.manage`, on the `?tab=templates` deep link as well
+  as the button.
+
+### Photo-use consent is readable in one place, by the people who publish (2026-08-25)
+
+Every member can allow or refuse the use of their photo from their own
+settings, and the department has been collecting that answer for months. It
+was only ever readable one member at a time, from that member's profile —
+which is not a check anyone performs while choosing images for a newsletter,
+so in practice the answer was collected and never consulted.
+
+**Added**
+
+- **Photo Use Consent** (`/communications/photo-use-consent`, under Forms &
+  Comms) lists every member's answer in one place, with counts, a status
+  filter and a search. Members who **declined** and members who **never
+  answered** are counted separately: both mean "do not publish", but only one
+  of them describes somebody who can still be asked, so the second column
+  doubles as the follow-up list. Inactive members are hidden behind a toggle,
+  because a retired member's photo can still be in the archive.
+
+- **`users.view_consents`**, a permission that means only "read members'
+  privacy answers". It is seeded to the Communications Officer / PIO, the
+  Historian and Public Outreach positions, and backfilled onto existing
+  departments by `20260825_1900_c4a91b7e2f08`. The Historian and Public
+  Outreach share nothing with each other but broad grants like `users.view`,
+  which most officer positions hold — so letting them in on an existing
+  permission would have opened the roster to most of the department.
+
+The page **shows** consent; it does not enforce it. Nothing in the app
+publishes member photos on its own, so whoever publishes still has to look
+first. Anything built later that publishes photos from inside the app must
+check the consent itself.
+
+### Clearing certain medical-screening fields could crash the request (2026-08-25)
+
+**Fixed**
+
+- Editing a screening record or requirement and explicitly clearing its
+  status, screening type, or (for a requirement) its name returned a server
+  error instead of a clean rejection — those fields can't actually be
+  cleared, but the request used to fail with a raw database error rather
+  than a readable message. It now returns a normal validation error.
+
+### A membership applicant's file could reach a signer who could not otherwise view it (2026-08-25)
+
+**Fixed**
+
+- `POST /prospects/{id}/approve-step`, the endpoint a role holder (chief,
+  president, ...) uses to record one sign-off on a multi-approval pipeline
+  stage, returned the applicant's full record — date of birth, address,
+  coordinator notes and all — as its response, even to a signer who held no
+  view permission on applicants at all. It now returns only whether the
+  stage completed.
+- `PUT`/`DELETE /interviews/{id}` were not covered by the check that stops a
+  member from acting on their own prospective-membership file, because those
+  routes identify the interview by its own id rather than the applicant's —
+  so a coordinator who had once been an applicant themselves could alter or
+  delete the interview record from their own vetting. Both routes are now
+  covered.
+- Editing a prospective member's profile (`PUT /prospects/{id}`) silently
+  ignored an explicit request to clear a field — sending "no phone number"
+  returned success while the old value stayed on file. It now actually
+  clears the field, the same way every other edit path in the app does.
+- That same edit endpoint could also be used to mark an applicant
+  "transferred" (become a member) without them actually being converted, or
+  to un-transfer an existing member back onto the applicant board — a gap in
+  a different endpoint that a related fix had already closed elsewhere. Both
+  are now refused here too.
+
+### A member's audit history could show unrelated actions performed on someone else (2026-08-25)
+
+**Fixed**
+
+- `GET /users/{id}/audit-history` included any event where the viewed member
+  was merely the _actor_, even when that event's real target was a different
+  member — so viewing officer A's history could surface "A reset B's MFA"
+  entries naming B, under a page described as A's own record. Now only
+  includes an actor-only event when it has no separate target recorded at
+  all (a genuine self-action); events with a target are decided solely by
+  whether that target is the viewed member.
+- Two real audit event types — an administrator resetting a member's
+  two-factor authentication, and a compliance exemption being granted or
+  revoked — were being recorded but were invisible in this history because
+  neither was in the endpoint's event-type allowlist. Both now appear.
+
+### Leave-of-absence changes left no audit trail (2026-08-25)
+
+**Fixed**
+
+- Creating, editing, or deactivating a member's leave of absence never wrote
+  an audit event, despite the audit-history system having supported these
+  event types since it shipped. All three actions are now recorded, each
+  naming the affected member.
+
+### The finance approvals queue scanned every organization's pending steps (2026-08-25)
+
+**Fixed**
+
+- `GET /finance/approvals/pending` (`get_pending_approvals`) carried no
+  organization filter on its underlying query, scanning every tenant's
+  pending purchase-request/expense-report/check-request approval steps and
+  running two follow-up queries per record before a later, org-scoped check
+  discarded anything that wasn't the caller's. No data ever leaked across
+  organizations, but the query cost of loading one department's approvals
+  inbox scaled with the whole platform's pending-approval volume. Now
+  resolves each organization's own pending entities first, so the scan and
+  its per-record follow-up queries are confined to the caller's organization;
+  the returned results are unchanged.
+
+### A storefront manager could settle their own order's payment (2026-08-25)
+
+**Fixed**
+
+- `record_payment` — the method `mark_order_paid`, `waive_order_payment`, and
+  `refund_order` all delegate to for the actual ledger mutation, and also
+  directly reachable via `POST /orders/{order_id}/payments` — had no
+  separation-of-duties check, unlike those three. A `storefront.manage`
+  holder who also owned the target order could record a payment against it
+  (including settling it in full) with no guard, bypassing the same control
+  the other three payment actions already enforce. Now blocked the same way,
+  unless the call comes from the automated reconciliation path (no human
+  actor to conflict with).
+
+### A finance approval token could be used to approve your own request (2026-08-25)
+
+**Fixed**
+
+- The public token-based finance approval link (`approve_by_token`) never
+  checked whether the approver and the requester were the same person, for
+  an email-addressed approval step. If a chain step's approver email
+  happened to match the request's own submitter (plausible in a small
+  department, or by misconfiguration), that person could approve their own
+  purchase/expense/check request with no guard at all — contradicting the
+  documented invariant that self-approval is prevented by default at every
+  step. Now blocked unless the step explicitly sets `allow_self_approval`.
+
+### The Salesforce inbound webhook now caps how many records one request can carry (2026-08-25)
+
+**Fixed**
+
+- A validly-signed Salesforce webhook request had no limit on the number of
+  `records` it could carry, and each record costs 1-2 DB queries. The
+  endpoint is rate-limited per-request (30/min), not per-record, so a single
+  oversized request — from anyone holding a valid or leaked webhook secret —
+  could drive an effectively unbounded amount of DB work inside that budget.
+  A request over the cap is also no longer marked as a "seen" delivery
+  before it's validated, so a provider's retry of a corrected, smaller batch
+  isn't mistaken for a duplicate of the rejected one.
+  Requests over 500 records now get a 422 before any sync work runs.
+
+### Rank validation now matches its own permission gate, and a first-load race no longer 500s (2026-08-25)
+
+**Fixed**
+
+- **`GET /operational-ranks/validate` had no server-side permission check.**
+  Its only caller is the Settings rank screen, which is gated
+  `settings.manage` on the frontend — but the endpoint itself depended only on
+  `get_current_user`, so any authenticated member could call it directly and
+  see which members have a misconfigured rank. Now requires `settings.manage`,
+  matching its CRUD siblings in the same router.
+- **A brand-new organization's first rank-list load could 500 under
+  concurrency.** Two admins opening Settings at nearly the same moment could
+  both pass the "no ranks seeded yet" check and both attempt to seed the
+  defaults; the loser's insert hit the unique constraint and raised an
+  uncaught error instead of simply loading the ranks the winner had just
+  created. The seeding path now treats that race the same as "already
+  seeded."
+
+### OAuth login now honors a deactivated organization (2026-08-25)
+
+**Fixed**
+
+- **A member of a deactivated organization could still sign in via Google or
+  Microsoft.** The 2026-08-12 fix made password login require
+  `organizations.active IS TRUE`, but `oauth_service._link_existing_user`
+  still scoped to the earliest-created org with no `active` filter, and — if
+  no org matched — silently dropped the org filter entirely rather than
+  failing closed. It now filters on `Organization.active.is_(True)` and
+  returns the same indistinguishable `"no_account"` error the password path
+  uses when no active org exists, so a deactivated org's OAuth-linked members
+  are rejected the same way password users already are.
+
+### Reopening a finalized event returned 500, and error reports named nobody (2026-08-25)
+
+**Fixed**
+
+- **`POST /events/{id}/reopen-attendance` returned 500 for any event that has
+  a location.** `reopen_event_attendance` fetched the event with no eager
+  loads, and the endpoint serializes what it returns through
+  `_build_event_response`, whose first read is `event.location_obj`. Under the
+  async session that lazy load is IO outside the greenlet context, so it
+  raised `MissingGreenlet` — and it did so _after_ the reopen had committed,
+  so the lock was actually cleared while the chief saw a failure and the event
+  quietly stayed open. Events with no `location_id` short-circuit on the NULL
+  foreign key and never reach the load, which is why the endpoint passed
+  testing and failed on a real event. Every other path that builds an
+  `EventResponse` already carried the eager load; reopen was the one that did
+  not.
+
+**Changed**
+
+- **Error Monitoring names the affected member.** The detail block identified
+  them by the first eight characters of their UUID, which cannot be searched
+  for and does not answer the first question asked of a report — one member's
+  session, or the whole department. The list, stats and export endpoints now
+  resolve the stored id in a single batched, org-scoped query (pitfall #14a:
+  the id arrives from stored data, so the filter is what stops a stale row
+  naming another department's member) and return the member's name and
+  username. The page shows those with the full id beneath — full, because a
+  truncated one cannot be matched to a support ticket — and says
+  "Account not found" when the account has since been deleted, rather than
+  leaving an unexplained blank.
+
+### Every LIKE pattern is escaped in one place, and the database is told so (2026-08-25)
+
+**Fixed**
+
+- **Two search boxes interpolated raw user input into a SQL `LIKE` pattern.**
+  Typing `%` into the department-message admin search
+  (`messaging_service.py:124`) or the message-history search
+  (`message_history.py:80`) matched every row: the filter silently stopped
+  filtering, and the list's count query scanned the whole org's table behind
+  it. Both queries were correctly org-scoped, so this widened a result set
+  rather than crossing a tenant boundary — but a member searching `a_c` also
+  got `abc` back with nothing to indicate the term had been read as a pattern.
+
+- **The inventory barcode search reported the wrong matched field.** After
+  querying with the escaped pattern, `search_items_by_code` re-scanned the
+  results in Python against the _escaped_ string instead of the raw input, so
+  scanning an asset tag containing `%`, `_` or `\` fell through to the
+  `matched_field = "name"` default — the item was still found, it was just
+  attributed to the wrong field. Pre-existing; surfaced by the `flake8` run
+  the cleanup below forced.
+
+**Changed**
+
+- **All 76 `like` / `ilike` calls now declare `escape=LIKE_ESCAPE_CHAR`.**
+  Forty-seven escaped their input and then emitted `LIKE` with no `ESCAPE`
+  clause. MySQL's default escape character depends on `sql_mode`, so under
+  `NO_BACKSLASH_ESCAPES` the escaping is inert and every wildcard returns —
+  across all forty-seven at once, invisibly, because the escaping _looks_
+  present in review. The four system-generated patterns (`"ORD-2026-%"` and
+  friends) carry the kwarg too: it is inert for them, and covering them is what
+  leaves the invariant with no exceptions.
+
+- **The wildcard-escaping transform has one implementation again.**
+  `app/utils/sql_search.py` was written to own it — its docstring names the
+  seven modules it had been copy-pasted into — but only `storefront_service.py`
+  ever imported it. Fifteen files carried their own copy, which is why
+  forty-seven of them forgot the `escape=` kwarg. All fifteen now call
+  `like_pattern()`.
+
+**Added**
+
+- **`backend/tests/test_like_escaping.py`** fails on reintroduction of either
+  half: a `like`/`ilike` call without the escape kwarg, or a second copy of the
+  transform. No allowlist, so it cannot go stale.
+
+- **`docs/security-review/`** — an application-wide, feature-by-feature security
+  rotation (35 iterations, ordered by risk) with a per-iteration checklist,
+  findings template, and a `/security-review` command that opens one pull
+  request per feature and tends it to green before starting the next.
+
+### Attendance finalization: the lock is atomic, and reopening reconciles what it undoes (2026-08-24)
+
+Follow-ups to #1791, which shipped the lock itself. Both were raised in review
+there and deferred deliberately as too large to bolt on.
+
+**Fixed**
+
+- **Finalizing is an atomic transition, not a check followed by a hope.**
+  Finalize, reopen and every attendance writer now take a `SELECT … FOR UPDATE`
+  row lock on the event, and finalize commits the close in the same transaction
+  that holds it. Previously a check-in could commit between finalize's roster
+  snapshot and the close, leaving that member checked in, uncredited and behind
+  a lock with nothing on screen to explain it. A writer arriving mid-finalize
+  now blocks and then finds the event closed, which is the 409 it should always
+  have got. Crediting runs inside that same lock; an earlier draft of this
+  change ran it after the commit on the reasoning that a frozen roster needs no
+  lock, which is wrong — see the crediting bullet below.
+- **Reopening a training session serializes against its pending approval.**
+  Both `reopen_training_session` and `submit_training_approval` lock the
+  approval row, so an officer holding a page loaded before a reopen can no
+  longer commit an approval against a session a leader has just opened for
+  correction. Whichever transaction reaches the row first wins and the other
+  sees its outcome.
+- **Corrected hours reach the pipeline.** The progress ledger is idempotent per
+  (progress, source, source id), so re-finalizing a reopened session applied no
+  delta at all: the training record moved to the corrected figure while
+  certification and phase totals kept the original. `apply_requirement_credit`
+  takes a `restate` flag that reverses the recorded credit through the normal
+  reversal path and applies the new one; identical hours stay a no-op.
+- **An attendee removed during a reopen loses the credit.** Re-finalization
+  wrote records for whoever was on the roster and said nothing about anyone
+  dropped from it, so a member taken off a session kept both the completed
+  training record and the pipeline credit. Re-finalizing now diffs the new
+  roster against the previous approval's and revokes what the earlier finalize
+  gave. The training record is reverted to not-completed rather than deleted —
+  nothing on `TrainingRecord` records which session created it, and the
+  check-in auto-create path writes one before finalization ever runs, so
+  deleting could destroy a record this session never authored.
+- **A corrected category reaches the record.** Re-finalizing copies the
+  session's current category and course onto an existing training record, which
+  is what makes reopening to fix a mis-filed session actually take effect
+  instead of reporting success and leaving the old value in place.
+- **The series paths hold the rows they check.** `update_future_events`,
+  `cancel_series` and `delete_event_series` read the finalized state without
+  locking, so a bulk retime, cancel or delete could pass its check and then act
+  after a concurrent finalization committed — leaving credited hours attached
+  to event data that contradicts them.
+- **Crediting runs inside the event's row lock, not after it.** Committing the
+  close first released the lock while the credit loop was still working from a
+  captured roster, so a reopen landing mid-loop let stale writes overwrite a
+  correction, or recreate credit on an event since cancelled. One commit now
+  covers the close and every credit.
+- **A completed enrollment is no longer skipped.** Both the correction and the
+  revocation looked up enrollments with an `ACTIVE`-only filter, so when the
+  session's own credit was what carried a member past 100% — moving the
+  enrollment to `COMPLETED` — neither found anything to act on. Completed
+  enrollments are included; the progress updater already reactivates one whose
+  progress falls back below 100%.
+- **Credit left at a destination the session no longer feeds is reversed.**
+  Restating only the current destinations was not enough on a re-finalize: a
+  corrected program, requirement or category linkage moves the credit to
+  different requirement rows with different ledger keys, leaving the old ones
+  standing and the member counted twice, and a member corrected down to zero
+  hours is never queued for crediting at all, so their earlier credit survived
+  untouched. `reverse_credits_for_source_except` reconciles every ledger row
+  for the session against the destinations it now feeds.
+- **A failed pipeline update is no longer read as a revocation.** The sweep
+  above reverses every credit outside the set of destinations just credited, so
+  an update that _errored_ was indistinguishable from one the session no longer
+  feeds — and an `events.manage` caller without `training.manage` hits that
+  deterministically on every attendee they do not own, turning one refused
+  correction into a wholesale revocation of hours already earned. The feed now
+  reports whether each destination was resolved, and one unresolved answer
+  aborts the sweep for that session: stale credit left standing is visible and
+  corrects itself on the next re-finalize, whereas credit deleted on a guess
+  is silent and gone.
+- **A re-enrolled member is credited again.** Widening the enrollment lookup to
+  include `COMPLETED` made it ambiguous, because `enroll_member` rejects only an
+  _active_ enrollment — a member who finished a program and enrolled again holds
+  both rows, and the single-row fetch raised `MultipleResultsFound` into the
+  swallowing except clause. Enrollment selection is now explicit: the one
+  already carrying this session's credit wins (a re-finalize restates its own
+  earlier figure, which lives where it was first applied), then the active one,
+  then the most recent completed one.
+- **A pending confirmation no longer wipes the previous approval's credit.**
+  Reopening a session that requires an officer's confirmation queues no pipeline
+  updates by design — nothing is approved yet — but the reconciliation sweep ran
+  against that empty set anyway and reversed everything the _previous_ approval
+  had earned, before anyone confirmed what replaced it. If the officer never
+  submitted, the hours stayed gone. The sweep is now deferred to
+  `submit_training_approval`, which is the point at which the destination set is
+  real.
+
+### Three guards drawn from what #1795 got wrong (2026-08-24)
+
+**Changed**
+
+- **A forked migration chain now fails CI.** `validate_migrations.py` reported
+  two heads sharing a parent as a _warning_, so the one condition that breaks
+  `alembic upgrade head` for everyone after a merge went green — silently, with
+  both PRs passing and only the next person to migrate finding out. #1795 hit
+  exactly that when `main` landed a migration from the same parent. `--strict` is now implemented (the script had no argument parsing at all,
+  so the flag alone was inert — caught in review) and the CI step passes it.
+  Verified by forking the chain on purpose: exit 1 under `--strict`, exit 0
+  without.
+
+**Added**
+
+- **`tests/test_permission_gate_composition.py` checks gate _shape_, not
+  names.** `compliance.view` was not a badly-named permission — it opened no
+  page of its own, and only ever appeared as one alternative inside
+  `require_permission(...)`. The tell was the composition: a grant every member
+  holds, OR'd with an officer grant from a **different module**. Same-module
+  `x.view` OR `x.manage` is the intended pattern and is used at some seventy
+  endpoints; cross-module pairing is the anomaly. Review found the first draft
+  too narrow in two ways, both fixed: the elevated set is now derived from the
+  registry rather than matched on a `.manage` suffix, which was blind to
+  `events.edit`, `scheduling.assign`, `members.manage_id_cards` and
+  `inventory.manage_medical`; and the scan reads route-decorator
+  `dependencies=[...]` gates as well as signature ones, having previously
+  reached 1201 of 1202 while its own floor assertion looked healthy.
+
+  The rule exempts a gate that already names a baseline grant from the officer
+  grant's own module — `equipment_check.submit` beside `equipment_check.view`
+  means the endpoint is deliberately crew-facing. It flagged one endpoint on
+  introduction, recorded in `ALLOWED` as unadjudicated rather than quietly
+  waved through: `/supply/item-deployments` accepts `inventory.view` where the
+  sibling its docstring calls "the reverse" of it requires `inventory.manage`.
+
+**Documented**
+
+- **Pitfall 23 — a seeded rank grant reaches the database through a position.**
+  `operational_ranks` has no permissions column, which makes "ranks resolve at
+  runtime, so no migration is needed" sound obviously true. It is false:
+  `DEFAULT_POSITIONS["firefighter"]["permissions"]` _is_ the rank's list, and
+  onboarding writes a system position carrying a copy. That aliasing also
+  defeats naive analysis — a survey looking for `SOMETHING.name` literals sees
+  an empty list, because the entry is a reference, which is how the gap was
+  missed before review caught it.
+- **Pitfall 24 — do not reuse a branch name after its PR merges.** Correlated
+  with GitHub not firing `pull_request` workflows at all: on #1795 no workflow
+  ran for the first two commits over 45 minutes while `main` built normally.
+  GitHub also back-associates the old branch's runs with the new PR, so the
+  checks tab looks populated while nothing has run the new code. Causation
+  unproven and not reproducible on demand; a distinct branch name costs
+  nothing. Includes what to check when CI has not started, and the two ways
+  not to kick it.
 
 ### Community outreach requests: the settings now do what they say, and a confirmed date reaches the schedule (2026-08-24)
 

@@ -1,11 +1,15 @@
 # Module Audit — Elections
 
 **Files:** `app/api/v1/endpoints/elections.py` (2,721 L, 46 endpoints incl. 5
-public token endpoints), `app/services/election_service.py` (4,616 L),
+public token endpoints at iteration-5 audit time; **3,809 L, 65 endpoints incl.
+4 public token endpoints as of security-review 06, 2026-08-25** — see that
+iteration's write-up for what accounts for the growth), `app/services/election_service.py`
+(4,616 L at iteration-5 audit time; **7,962 L as of 2026-08-25**),
 `app/services/quorum_service.py` (139 L), model `app/models/election.py`,
 frontend `modules/elections`.
 **Audited:** iteration 5 (security-critical — voting integrity, ballot secrecy,
-token security, tenant isolation, tally/quorum correctness).
+token security, tenant isolation, tally/quorum correctness); re-verified against
+current code by security-review 06 (`docs/security-review/ELEC-06-elections-ballots.md`).
 
 ## Verified good ✅
 

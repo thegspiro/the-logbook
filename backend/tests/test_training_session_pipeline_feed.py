@@ -26,6 +26,12 @@ def _one(obj):
     return MagicMock(scalar_one_or_none=MagicMock(return_value=obj))
 
 
+def _all(items):
+    result = MagicMock()
+    result.scalars.return_value.all.return_value = items
+    return result
+
+
 class RecordingSession:
     def __init__(self, results=None):
         self._results = list(results or [])
@@ -74,7 +80,7 @@ class TestApplyPipelineProgress:
     async def test_routes_through_credit_ledger(self, monkeypatch):
         enrollment = SimpleNamespace(id="enr-1")
         progress = SimpleNamespace(id="rp-1", progress_value=5.0)
-        db = RecordingSession([_one(enrollment), _one(progress)])
+        db = RecordingSession([_all([enrollment]), _one(progress)])
         svc = TrainingSessionService(db)
 
         mock_credit = AsyncMock(return_value=(SimpleNamespace(), None))
@@ -108,7 +114,7 @@ class TestApplyPipelineProgress:
         assert kwargs["can_manage"] is True
 
     async def test_noop_without_active_enrollment(self, monkeypatch):
-        db = RecordingSession([_one(None)])
+        db = RecordingSession([_all([])])
         svc = TrainingSessionService(db)
         mock_credit = AsyncMock()
         monkeypatch.setattr(
@@ -122,7 +128,7 @@ class TestApplyPipelineProgress:
 
     async def test_noop_without_progress_row(self, monkeypatch):
         enrollment = SimpleNamespace(id="enr-1")
-        db = RecordingSession([_one(enrollment), _one(None)])
+        db = RecordingSession([_all([enrollment]), _one(None)])
         svc = TrainingSessionService(db)
         mock_credit = AsyncMock()
         monkeypatch.setattr(
@@ -137,7 +143,7 @@ class TestApplyPipelineProgress:
     async def test_updater_failure_is_swallowed(self, monkeypatch):
         enrollment = SimpleNamespace(id="enr-1")
         progress = SimpleNamespace(id="rp-1", progress_value=0.0)
-        db = RecordingSession([_one(enrollment), _one(progress)])
+        db = RecordingSession([_all([enrollment]), _one(progress)])
         svc = TrainingSessionService(db)
         monkeypatch.setattr(
             TrainingProgramService,
@@ -154,7 +160,7 @@ class TestApplyPipelineProgress:
 class TestApplyPipelineUpdates:
     async def test_iterates_every_update(self):
         svc = TrainingSessionService(RecordingSession())
-        svc._apply_pipeline_progress = AsyncMock()
+        svc._apply_pipeline_progress = AsyncMock(return_value=(None, True))
 
         org, officer = uuid4(), uuid4()
         updates = [

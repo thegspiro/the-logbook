@@ -37,6 +37,7 @@ import { useProspectiveMembersStore } from '../store/prospectiveMembersStore';
 import { applicantService } from '../services/api';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { useOverlaySurface } from '../../../hooks/useOverlaySurface';
+import { DialogPortal } from '../../../components/DialogPortal';
 import { formatDate, formatDateTime } from '../../../utils/dateFormatting';
 import { toDisplayString } from '../../../utils/displayValue';
 import { ApplicantStatus, StageType as StageTypeEnum } from '../../../constants/enums';
@@ -93,6 +94,19 @@ interface ApplicantDetailDrawerProps {
   isLastStage: boolean;
   isFirstStage: boolean;
 }
+
+/**
+ * Read one string out of an activity entry's `details`.
+ *
+ * `details` is unvalidated JSON written by whatever recorded the entry, so
+ * every shape is possible and none is guaranteed — a bad value degrades to
+ * "no detail to show" rather than taking the drawer down.
+ */
+const detailText = (details: unknown, key: string): string | undefined => {
+  if (!details || typeof details !== 'object') return undefined;
+  const value = (details as Record<string, unknown>)[key];
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined;
+};
 
 export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
   applicant,
@@ -232,7 +246,7 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
   const maskValue = (value: string) => (showPii ? value : '••••••••');
 
   return (
-    <>
+    <DialogPortal>
       {/* Overlay */}
       <div className="modal-overlay z-40" onClick={onClose} />
 
@@ -1021,18 +1035,38 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
                     ) : activityLog.length === 0 ? (
                       <p className="text-theme-text-muted py-2 text-xs">No activity recorded yet.</p>
                     ) : (
-                      activityLog.map((entry) => (
-                        <div key={entry.id} className="flex items-start gap-2 text-xs">
-                          <div className="bg-theme-text-muted mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full" />
-                          <div className="min-w-0">
-                            <span className="text-theme-text-secondary font-medium">{entry.action}</span>
-                            {entry.performer_name && (
-                              <span className="text-theme-text-muted"> by {entry.performer_name}</span>
-                            )}
-                            <div className="text-theme-text-muted">{formatDateTime(entry.created_at, tz)}</div>
+                      activityLog.map((entry) => {
+                        const from = detailText(entry.details, 'from');
+                        const to = detailText(entry.details, 'to');
+                        const reason = detailText(entry.details, 'reason');
+                        return (
+                          <div key={entry.id} className="flex items-start gap-2 text-xs">
+                            <div className="bg-theme-text-muted mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full" />
+                            <div className="min-w-0">
+                              <span className="text-theme-text-secondary font-medium">
+                                {entry.action.replace(/_/g, ' ')}
+                              </span>
+                              {from && to && (
+                                <span className="text-theme-text-muted">
+                                  {' '}
+                                  ({from.replace(/_/g, ' ')} → {to.replace(/_/g, ' ')})
+                                </span>
+                              )}
+                              {entry.performer_name && (
+                                <span className="text-theme-text-muted"> by {entry.performer_name}</span>
+                              )}
+                              <div className="text-theme-text-muted">{formatDateTime(entry.created_at, tz)}</div>
+                              {/* The reason a coordinator gave for a rejection,
+                                  hold or withdrawal. It is recorded here rather
+                                  than in the notes field, which it used to
+                                  overwrite, so this is the only place it shows. */}
+                              {reason && (
+                                <p className="text-theme-text-secondary mt-0.5 break-words italic">“{reason}”</p>
+                              )}
+                            </div>
                           </div>
-                        </div>
-                      ))
+                        );
+                      })
                     )}
                   </div>
                 )}
@@ -1063,6 +1097,6 @@ export const ApplicantDetailDrawer: React.FC<ApplicantDetailDrawerProps> = ({
           </>
         )}
       </div>
-    </>
+    </DialogPortal>
   );
 };

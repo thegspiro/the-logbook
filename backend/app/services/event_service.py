@@ -552,6 +552,7 @@ class EventService:
             .where(Event.id == str(event_id))
             .where(Event.organization_id == str(organization_id))
             .options(selectinload(Event.location_obj))
+            .with_for_update()
         )
         event = result.scalar_one_or_none()
 
@@ -693,7 +694,8 @@ class EventService:
 
         # Query all events in the series with start_datetime >= anchor's start
         result = await self.db.execute(
-            select(Event).where(
+            select(Event)
+            .where(
                 Event.organization_id == str(organization_id),
                 Event.is_cancelled.is_(False),
                 or_(
@@ -702,6 +704,7 @@ class EventService:
                 ),
                 Event.start_datetime >= anchor.start_datetime,
             )
+            .with_for_update()
         )
         future_events = result.scalars().all()
 
@@ -763,6 +766,7 @@ class EventService:
             .where(Event.id == str(event_id))
             .where(Event.organization_id == str(organization_id))
             .options(selectinload(Event.location_obj), selectinload(Event.rsvps))
+            .with_for_update()
         )
         event = result.scalar_one_or_none()
 
@@ -836,7 +840,9 @@ class EventService:
             )
         )
 
-        result = await self.db.execute(select(Event).where(*conditions))
+        result = await self.db.execute(
+            select(Event).where(*conditions).with_for_update()
+        )
         events = result.scalars().all()
 
         # Same door as delete_event_series: cancelling a closed occurrence
@@ -948,6 +954,7 @@ class EventService:
             select(Event)
             .where(Event.id == str(event_id))
             .where(Event.organization_id == str(organization_id))
+            .with_for_update()
         )
         event = result.scalar_one_or_none()
 
@@ -998,7 +1005,9 @@ class EventService:
         if delete_future_only:
             conditions.append(Event.start_datetime >= datetime.now(dt_timezone.utc))
 
-        result = await self.db.execute(select(Event).where(*conditions))
+        result = await self.db.execute(
+            select(Event).where(*conditions).with_for_update()
+        )
         events = result.scalars().all()
 
         if not events:
@@ -1204,9 +1213,12 @@ class EventService:
             )
             self.db.add(rsvp)
 
-        # Check capacity if user is going (event row is locked, so this
-        # count is consistent — no other transaction can commit a new
-        # "going" RSVP for this event until we release the lock)
+        # Check capacity if user is going. The event row lock serializes the
+        # decision, but it does NOT make a plain count current: under InnoDB's
+        # default REPEATABLE READ a non-locking SELECT answers from the
+        # snapshot taken at this transaction's first read, so it can still
+        # report the tally from before the RSVP that beat us committed. The
+        # count below is a locking read for that reason.
         old_status_was_going = (
             existing_rsvp and existing_rsvp.status == RSVPStatus.GOING
         )
@@ -1218,6 +1230,7 @@ class EventService:
             )
             if existing_rsvp:
                 capacity_query = capacity_query.where(EventRSVP.id != existing_rsvp.id)
+            capacity_query = capacity_query.with_for_update()
 
             # no_autoflush: the new RSVP was just add()ed as "going", and a
             # Query-invoked autoflush would insert it before the count runs —
@@ -1355,11 +1368,14 @@ class EventService:
         if attendance_is_finalized(event):
             return None
 
-        # Verify there is actually capacity before promoting
+        # Verify there is actually capacity before promoting. Locking read:
+        # the event row lock does not refresh this transaction's REPEATABLE
+        # READ snapshot, so a plain count can miss an RSVP committed since.
         going_count_result = await self.db.execute(
             select(func.count(EventRSVP.id))
             .where(EventRSVP.event_id == str(event_id))
             .where(EventRSVP.status == RSVPStatus.GOING)
+            .with_for_update()
         )
         going_count = going_count_result.scalar() or 0
 
@@ -1539,6 +1555,7 @@ class EventService:
             select(Event)
             .where(Event.id == str(event_id))
             .where(Event.organization_id == str(organization_id))
+            .with_for_update()
         )
         event = event_result.scalar_one_or_none()
 
@@ -1633,6 +1650,7 @@ class EventService:
             select(Event)
             .where(Event.id == str(event_id))
             .where(Event.organization_id == str(organization_id))
+            .with_for_update()
         )
         event = event_result.scalar_one_or_none()
 
@@ -1708,6 +1726,7 @@ class EventService:
             select(Event)
             .where(Event.id == str(event_id))
             .where(Event.organization_id == str(organization_id))
+            .with_for_update()
         )
         event = event_result.scalar_one_or_none()
 
@@ -1760,6 +1779,7 @@ class EventService:
             select(Event)
             .where(Event.id == str(event_id))
             .where(Event.organization_id == str(organization_id))
+            .with_for_update()
         )
         event = event_result.scalar_one_or_none()
 
@@ -1910,6 +1930,7 @@ class EventService:
             .where(Event.id == str(event_id))
             .where(Event.organization_id == str(organization_id))
             .options(selectinload(Event.location_obj))
+            .with_for_update()
         )
         event = event_result.scalar_one_or_none()
 
@@ -2007,6 +2028,7 @@ class EventService:
             select(Event)
             .where(Event.id == str(event_id))
             .where(Event.organization_id == str(organization_id))
+            .with_for_update()
         )
         event = event_result.scalar_one_or_none()
 
@@ -2105,7 +2127,22 @@ class EventService:
                 if training_record is not None:
                     training_record.hours_completed = round(duration_minutes / 60.0, 2)
 
-        await self.db.commit()
+        # Close the event and credit the hours in the SAME transaction that
+        # holds its row lock. Every attendance writer takes that lock too, so
+        # one arriving mid-finalize blocks and then finds the event closed —
+        # rather than committing a check-in between the roster snapshot above
+        # and the close, which left an attendee checked in, uncredited, and
+        # behind a lock nobody could see a reason for.
+        #
+        # Crediting is inside the lock rather than after it, which is a
+        # correction to the first cut of this: committing the close first
+        # released the lock while the credit loop was still running off a
+        # captured roster, so a reopen could land mid-loop and the stale writes
+        # would then overwrite a correction — or recreate credit on an event
+        # that had since been cancelled. Per-RSVP failures are already caught
+        # and logged below, and a hard failure now rolls the whole finalize
+        # back and leaves the event open, which is the honest outcome.
+        self._stamp_attendance_finalized(event, finalized_by)
 
         # Auto-credit event hours to admin hours categories via mappings
         admin_hours_service = AdminHoursService(self.db)
@@ -2136,8 +2173,10 @@ class EventService:
                 )
             except Exception:
                 logger.exception("Failed to credit admin hours for RSVP {}", rsvp.id)
-        await self.db.commit()
 
+        # One commit closes the event and lands every credit together, then
+        # releases the row lock. _record_attendance_finalized re-stamps (a
+        # no-op), commits, and archives the validation prompt.
         await self._record_attendance_finalized(event, organization_id, finalized_by)
 
         return updated_count, None
@@ -2159,6 +2198,34 @@ class EventService:
         for rsvp_id in rsvp_result.scalars().all():
             await admin_hours.delete_event_attendance_entries(str(rsvp_id))
 
+    @staticmethod
+    def _stamp_attendance_finalized(
+        event: Event,
+        finalized_by: Optional[UUID] = None,
+    ) -> None:
+        """Mark the event closed, in memory only.
+
+        Deliberately does not commit: the caller decides the transaction
+        boundary, and for finalize that boundary matters. The close has to land
+        in the same transaction that holds the event's row lock, or the lock is
+        released before the state it was protecting is written and a concurrent
+        check-in slips into the gap.
+        """
+        # Deep copy before reassigning: a shallow copy of a JSON column shares
+        # nested references with SQLAlchemy's committed state, which can make
+        # the reassignment a silent no-op (see CLAUDE.md pitfall #12).
+        custom = copy.deepcopy(event.custom_fields or {})
+        if not custom.get("attendance_finalized"):
+            custom["attendance_finalized"] = True
+            event.custom_fields = custom
+        if event.attendance_finalized_at is None:
+            event.attendance_finalized_at = datetime.now(dt_timezone.utc)
+        # A finalize path with no acting user (the auto-finalize inside
+        # record_actual_times, when it is reached without one) leaves the actor
+        # NULL rather than attributing the close to nobody in particular.
+        if finalized_by is not None and event.attendance_finalized_by is None:
+            event.attendance_finalized_by = str(finalized_by)
+
     async def _record_attendance_finalized(
         self,
         event: Event,
@@ -2177,23 +2244,8 @@ class EventService:
         # Deep copy before reassigning: a shallow copy of a JSON column shares
         # nested references with SQLAlchemy's committed state, which can make
         # the reassignment a silent no-op (see CLAUDE.md pitfall #12).
-        custom = copy.deepcopy(event.custom_fields or {})
-        dirty = False
-        if not custom.get("attendance_finalized"):
-            custom["attendance_finalized"] = True
-            event.custom_fields = custom
-            dirty = True
-        if event.attendance_finalized_at is None:
-            event.attendance_finalized_at = datetime.now(dt_timezone.utc)
-            dirty = True
-        # A finalize path with no acting user (the auto-finalize inside
-        # record_actual_times, when it is reached without one) leaves the actor
-        # NULL rather than attributing the close to nobody in particular.
-        if finalized_by is not None and event.attendance_finalized_by is None:
-            event.attendance_finalized_by = str(finalized_by)
-            dirty = True
-        if dirty:
-            await self.db.commit()
+        self._stamp_attendance_finalized(event, finalized_by)
+        await self.db.commit()
 
         await NotificationsService(self.db).archive_related_notifications(
             organization_id,
@@ -2234,6 +2286,7 @@ class EventService:
             select(Event)
             .where(Event.id == str(event_id))
             .where(Event.organization_id == str(organization_id))
+            .with_for_update()
         )
         event = result.scalar_one_or_none()
 
@@ -2268,7 +2321,25 @@ class EventService:
         event.updated_at = datetime.now(dt_timezone.utc)
 
         await self.db.commit()
-        await self.db.refresh(event)
+
+        # Re-read rather than refresh(): the endpoint serializes what this
+        # returns through _build_event_response, which reads location_obj, and
+        # the fetch above carries no eager loads on purpose — the row lock is
+        # for the event row alone. Left lazy, that read is IO outside the
+        # greenlet context and raises MissingGreenlet, which surfaced as a 500
+        # on reopening any event that has a location; events with no
+        # location_id short-circuit on the NULL FK and appeared to work.
+        reloaded = await self.db.execute(
+            select(Event)
+            .where(Event.id == str(event_id))
+            .where(Event.organization_id == str(organization_id))
+            .options(selectinload(Event.location_obj))
+        )
+        event = reloaded.scalar_one_or_none()
+        if not event:
+            # Deleted between the commit and this read. The reopen stands;
+            # there is simply nothing left to serialize.
+            return None, "Event not found"
 
         return event, None
 
@@ -2292,6 +2363,7 @@ class EventService:
             .where(Event.id == str(event_id))
             .where(Event.organization_id == str(organization_id))
             .options(selectinload(Event.location_obj))
+            .with_for_update()
         )
         event = event_result.scalar_one_or_none()
 
@@ -2646,6 +2718,7 @@ class EventService:
             select(Event)
             .where(Event.id == str(event_id))
             .where(Event.organization_id == str(organization_id))
+            .with_for_update()
         )
         event = event_result.scalar_one_or_none()
 
@@ -3273,6 +3346,14 @@ class EventService:
                 event_data["location_id"], str(organization_id)
             ):
                 return [], "Location not found"
+
+        # Same XC-1 shape as location_id above: a client-supplied template_id
+        # must belong to the caller's org before it's stored on every
+        # occurrence. (EventCreate, the plain single-event schema, has no
+        # template_id field at all, so only this recurring path can set it.)
+        if event_data.get("template_id"):
+            if not await self.get_template(event_data["template_id"], organization_id):
+                return [], "Template not found"
 
         # Generate occurrence dates
         occurrences = self._generate_recurrence_dates(

@@ -24,7 +24,8 @@ describe('LegalPage', () => {
         organizationName: 'Falls Church VFD',
         privacyPolicy: null,
         termsOfService: null,
-        lastUpdated: null,
+        privacyPolicyLastUpdated: null,
+        termsOfServiceLastUpdated: null,
       },
     });
   });
@@ -70,7 +71,8 @@ describe('LegalPage', () => {
         organizationName: 'Falls Church VFD',
         privacyPolicy: 'Our very own policy.\n\nSecond paragraph.',
         termsOfService: null,
-        lastUpdated: 'March 3, 2026',
+        privacyPolicyLastUpdated: 'March 3, 2026',
+        termsOfServiceLastUpdated: null,
       },
     });
     renderAt('/privacy');
@@ -86,13 +88,32 @@ describe('LegalPage', () => {
         organizationName: 'Falls Church VFD',
         privacyPolicy: 'Our very own policy.',
         termsOfService: null,
-        lastUpdated: null,
+        privacyPolicyLastUpdated: null,
+        termsOfServiceLastUpdated: null,
       },
     });
     renderAt('/privacy');
     expect(await screen.findByText('Our very own policy.')).toBeInTheDocument();
     // The built-in date describes the built-in text; showing it above a
     // department's own wording would misdate that wording.
+    expect(screen.queryByText(/^Last updated:/)).not.toBeInTheDocument();
+  });
+
+  it('does not misdate terms with the privacy policy date', async () => {
+    // Regression for DOC-10 finding #3: the two documents' dates were once
+    // one shared settings key, so publishing privacy alone could leak its
+    // date onto the terms page.
+    mockGet.mockResolvedValue({
+      data: {
+        organizationName: 'Falls Church VFD',
+        privacyPolicy: null,
+        termsOfService: 'Our own terms.',
+        privacyPolicyLastUpdated: 'March 3, 2026',
+        termsOfServiceLastUpdated: null,
+      },
+    });
+    renderAt('/terms');
+    expect(await screen.findByText('Our own terms.')).toBeInTheDocument();
     expect(screen.queryByText(/^Last updated:/)).not.toBeInTheDocument();
   });
 

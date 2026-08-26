@@ -14,6 +14,7 @@ vi.mock('../services/api', () => ({
 
 // Import the store AFTER the mocks are in place
 import { computeCartTotals, useStorefrontStore } from './storefrontStore';
+import { EmbroideryThreadColor, PersonalizationMethod } from '../types';
 import type { StorefrontProductOffer } from '../types';
 
 const offer = (overrides: Partial<StorefrontProductOffer> = {}): StorefrontProductOffer => ({
@@ -26,6 +27,9 @@ const offer = (overrides: Partial<StorefrontProductOffer> = {}): StorefrontProdu
   personalizationRequired: false,
   personalizationMaxLength: 30,
   personalizationPrice: '0',
+  personalizationThreadColor: EmbroideryThreadColor.GOLD,
+  personalizationThreadColorHex: '#c8a02c',
+  personalizationMethod: PersonalizationMethod.EMBROIDERY,
   isAvailable: true,
   variants: [],
   ...overrides,

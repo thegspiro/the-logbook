@@ -21,6 +21,7 @@ from app.core.database import get_db
 from app.core.utils import utc_isoformat
 from app.models.audit import AuditLog
 from app.models.user import User
+from app.utils.sql_search import LIKE_ESCAPE_CHAR, like_pattern
 
 router = APIRouter()
 
@@ -76,12 +77,11 @@ async def list_audit_logs(
     if search:
         # Escape LIKE metacharacters so a caller-supplied % / _ is matched
         # literally rather than acting as a wildcard.
-        escaped = search.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-        like = f"%{escaped}%"
+        like = like_pattern(search)
         filters.append(
             or_(
-                AuditLog.username.ilike(like, escape="\\"),
-                AuditLog.event_type.ilike(like, escape="\\"),
+                AuditLog.username.ilike(like, escape=LIKE_ESCAPE_CHAR),
+                AuditLog.event_type.ilike(like, escape=LIKE_ESCAPE_CHAR),
             )
         )
 

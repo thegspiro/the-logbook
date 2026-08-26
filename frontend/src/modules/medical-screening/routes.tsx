@@ -12,7 +12,11 @@ export function getMedicalScreeningRoutes() {
       <Route
         path="/medical-screening"
         element={
-          <ProtectedRoute requiredPermission="medical_screening.view">
+          <ProtectedRoute
+            requiredPermission="medical_screening.view"
+            requiredModule="medical_screening"
+            moduleLabel="Medical Screening"
+          >
             <MedicalScreeningPage />
           </ProtectedRoute>
         }

@@ -114,6 +114,9 @@ from app.services.integration_services.notification_dispatch import (
     notify_entity_created,
     notify_summary,
 )
+from app.services.scheduling_module_config_service import (
+    apparatus_type_defaults_for_org,
+)
 from app.services.scheduling_service import SchedulingService
 from app.services.scheduling_widget_service import (
     MAX_WIDGET_WINDOW_DAYS,
@@ -1316,6 +1319,12 @@ async def _available_widget_filters(db: AsyncSession, organization_id):
     return stations, platoons
 
 
+# Department-wide staffing reporting: coverage gaps, incomplete closeouts and
+# workload balance across every member, plus per-user filter defaults for them.
+# `scheduling.view` is a baseline member grant (it is what lets a firefighter
+# read their own schedule), so these three endpoints require scheduling.manage
+# instead — the dashboard block they feed is leadership reporting, not a
+# member's own shifts.
 @router.get("/dashboard/widgets", response_model=SchedulingWidgetSummary)
 async def get_scheduling_widget_summary(
     start_date: date,
@@ -1325,7 +1334,7 @@ async def get_scheduling_widget_summary(
     shift_type: str | None = Query(None, max_length=50),
     position: str | None = Query(None, max_length=50),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("scheduling.view")),
+    current_user: User = Depends(require_permission("scheduling.manage")),
 ):
     """Return purpose-built staffing totals for one bounded, scoped window."""
     if end_date < start_date or (end_date - start_date).days >= MAX_WIDGET_WINDOW_DAYS:
@@ -1351,7 +1360,7 @@ async def get_scheduling_widget_summary(
 @router.get("/dashboard/widget-preferences", response_model=SchedulingWidgetPreferences)
 async def get_scheduling_widget_preferences(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("scheduling.view")),
+    current_user: User = Depends(require_permission("scheduling.manage")),
 ):
     """Return saved defaults, dropping resources that are no longer accessible."""
     stations, platoons = await _available_widget_filters(
@@ -1377,7 +1386,7 @@ async def get_scheduling_widget_preferences(
 async def save_scheduling_widget_preferences(
     payload: SchedulingWidgetPreferences,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("scheduling.view")),
+    current_user: User = Depends(require_permission("scheduling.manage")),
 ):
     """Save only filters that still resolve inside the caller's organization."""
     unknown = set(payload.widgets) - WIDGET_KEYS
@@ -2573,9 +2582,17 @@ async def signup_for_shift(
         shift_id=str(shift_id),
     )
     if not eligible:
+        # Name the two things an admin can actually change. The bare
+        # "not eligible" this used to return sent members to a scheduling
+        # admin who had no more information than they did.
         raise HTTPException(
             status_code=403,
-            detail="You are not eligible to sign up for this shift.",
+            detail=(
+                "You are not eligible to sign up for this shift. None of its "
+                "positions are covered by your rank, the positions you hold, "
+                "or your completed training. Ask a scheduling admin to review "
+                "your rank and positions, or the positions on this shift."
+            ),
         )
     if position_value not in eligible:
         raise HTTPException(
@@ -2850,19 +2867,11 @@ async def end_standing_shift(
 # ============================================
 
 
-DEFAULT_APPARATUS_TYPES = [
-    "engine",
-    "ladder",
-    "ambulance",
-    "rescue",
-    "tanker",
-    "brush",
-    "tower",
-    "hazmat",
-    "boat",
-    "chief",
-    "utility",
-]
+# DEFAULT_APPARATUS_TYPES was removed on 2026-08-26. It was a second copy of
+# the eleven strings in DEFAULT_APPARATUS_TYPE_DEFAULTS, and the vehicle
+# picker's fallback below is its only consumer — so making one agency-aware and
+# not the other would have left a new EMS department offered Engine and Ladder
+# as its entire picker. The fallback now reads the staffing templates directly.
 
 
 @router.get("/apparatus-options", response_model=ApparatusOptionsResponse)
@@ -2943,9 +2952,15 @@ async def list_apparatus_options(
                 )
             source = "basic"
 
-    # 3. Fall back to hardcoded defaults
+    # 3. Fall back to hardcoded defaults, narrowed to what this kind of agency
+    #    runs. An EMS-only service that has not entered its vehicles was
+    #    otherwise offered Engine, Ladder, Tanker, Brush, Tower and Hazmat as
+    #    its entire picker.
     if not options:
-        for t in DEFAULT_APPARATUS_TYPES:
+        agency_defaults = await apparatus_type_defaults_for_org(
+            db, str(current_user.organization_id)
+        )
+        for t in agency_defaults:
             options.append(
                 ApparatusOption(
                     name=t.capitalize(),

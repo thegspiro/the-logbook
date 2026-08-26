@@ -698,5 +698,134 @@ class TestValidateTargeting:
         db.execute.assert_not_called()
 
 
+class TestGetInboxMessage:
+    """The member-facing detail fetch runs through the same fail-closed
+    visibility gate as read/acknowledge — opening a message by id must not
+    reveal one the inbox list would have filtered out."""
+
+    def _live_message(self):
+        return SimpleNamespace(
+            id="m1",
+            title="New Building Code",
+            body="Effective September 1.",
+            priority="important",
+            target_type="all",
+            target_roles=None,
+            target_statuses=None,
+            target_member_ids=None,
+            is_pinned=True,
+            is_persistent=False,
+            requires_acknowledgment=True,
+            posted_by="author-1",
+            created_at=None,
+            expires_at=None,
+            deleted_at=None,
+        )
+
+    async def test_returns_none_when_message_is_not_visible(self):
+        db = MagicMock()
+        db.execute = AsyncMock(
+            return_value=MagicMock(scalar_one_or_none=MagicMock(return_value=None))
+        )
+
+        entry = await MessagingService(db).get_inbox_message("org-1", "u1", "m1")
+
+        assert entry is None
+
+    async def test_returns_none_when_message_is_not_targeted_at_caller(self):
+        message = self._live_message()
+        message.target_type = "roles"
+        message.target_roles = ["chief"]
+        user = SimpleNamespace(
+            roles=[SimpleNamespace(id="officer", name="officer")],
+            status=SimpleNamespace(value="active"),
+        )
+        db = MagicMock()
+        db.execute = AsyncMock(
+            side_effect=[
+                MagicMock(scalar_one_or_none=MagicMock(return_value=message)),
+                MagicMock(scalar_one_or_none=MagicMock(return_value=user)),
+            ]
+        )
+
+        entry = await MessagingService(db).get_inbox_message("org-1", "u1", "m1")
+
+        assert entry is None
+
+    async def test_returns_entry_with_read_state_and_author(self):
+        message = self._live_message()
+        user = SimpleNamespace(roles=[], status=SimpleNamespace(value="active"))
+        acknowledged_at = datetime(2026, 8, 21, 18, 0, tzinfo=timezone.utc)
+        read = SimpleNamespace(
+            message_id="m1",
+            read_at=datetime(2026, 8, 21, 17, 0, tzinfo=timezone.utc),
+            acknowledged_at=acknowledged_at,
+        )
+        authors_result = MagicMock(
+            all=MagicMock(
+                return_value=[
+                    SimpleNamespace(
+                        id="author-1", first_name="Shelly", last_name="Hernandez"
+                    )
+                ]
+            )
+        )
+        db = MagicMock()
+        db.execute = AsyncMock(
+            side_effect=[
+                MagicMock(scalar_one_or_none=MagicMock(return_value=message)),
+                MagicMock(scalar_one_or_none=MagicMock(return_value=user)),
+                MagicMock(scalar_one_or_none=MagicMock(return_value=read)),
+                authors_result,
+            ]
+        )
+
+        entry = await MessagingService(db).get_inbox_message("org-1", "u1", "m1")
+
+        assert entry is not None
+        assert entry["id"] == "m1"
+        assert entry["title"] == "New Building Code"
+        assert entry["author_name"] == "Shelly Hernandez"
+        assert entry["is_read"] is True
+        assert entry["is_acknowledged"] is True
+        assert entry["acknowledged_at"] == acknowledged_at.isoformat()
+
+    async def test_author_lookup_is_scoped_to_the_organization(self):
+        message = self._live_message()
+        user = SimpleNamespace(roles=[], status=SimpleNamespace(value="active"))
+        authors_result = MagicMock(all=MagicMock(return_value=[]))
+        db = MagicMock()
+        db.execute = AsyncMock(
+            side_effect=[
+                MagicMock(scalar_one_or_none=MagicMock(return_value=message)),
+                MagicMock(scalar_one_or_none=MagicMock(return_value=user)),
+                MagicMock(scalar_one_or_none=MagicMock(return_value=None)),
+                authors_result,
+            ]
+        )
+
+        entry = await MessagingService(db).get_inbox_message("org-1", "u1", "m1")
+
+        assert entry is not None
+        assert entry["is_read"] is False
+        assert entry["author_name"] == "Unknown"
+        author_query = db.execute.await_args_list[3].args[0]
+        assert "users.organization_id = :organization_id_1" in str(author_query)
+
+
+class TestInboxDetailRoute:
+    def test_detail_route_is_declared_before_the_admin_by_id_route(self):
+        """/inbox/{message_id} must not be shadowed, and the literal
+        /inbox/unread-count must still win over it."""
+        paths = [
+            route.path
+            for route in messages_endpoint.router.routes
+            if getattr(route, "path", None)
+        ]
+
+        assert "/inbox/{message_id}" in paths
+        assert paths.index("/inbox/unread-count") < paths.index("/inbox/{message_id}")
+
+
 if __name__ == "__main__":  # pragma: no cover
     raise SystemExit(pytest.main([__file__, "-v"]))

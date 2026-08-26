@@ -272,13 +272,22 @@ class AdminHoursService:
         return entry
 
     async def clock_out_by_category(
-        self, category_id: str, user_id: str
+        self, category_id: str, user_id: str, organization_id: str
     ) -> AdminHoursEntry:
-        """Clock out from a specific category (used when scanning same QR again)."""
+        """Clock out from a specific category (used when scanning same QR again).
+
+        `user_id`-scoping alone happens to make this safe today (an entry's
+        `category_id` is always org-consistent, since `clock_in` validates the
+        category is in-org before creating it) — but the query itself carried
+        no org anchor, which is the letter of CLAUDE.md Pitfall #14a regardless
+        of whether today's callers exploit it. Filtering explicitly costs
+        nothing for a valid call and closes the gap on the query itself.
+        """
         result = await self.db.execute(
             select(AdminHoursEntry).where(
                 AdminHoursEntry.category_id == category_id,
                 AdminHoursEntry.user_id == user_id,
+                AdminHoursEntry.organization_id == str(organization_id),
                 AdminHoursEntry.status == AdminHoursEntryStatus.ACTIVE,
             )
         )

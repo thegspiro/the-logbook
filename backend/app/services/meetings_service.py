@@ -23,6 +23,7 @@ from app.models.meeting import (
 )
 from app.models.user import User
 from app.utils.org_scoping import assert_in_org
+from app.utils.sql_search import LIKE_ESCAPE_CHAR, like_pattern
 
 
 class MeetingsService:
@@ -137,15 +138,12 @@ class MeetingsService:
                 pass
 
         if search:
-            safe_search = (
-                search.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-            )
-            search_term = f"%{safe_search}%"
+            search_term = like_pattern(search)
             query = query.where(
                 or_(
-                    Meeting.title.ilike(search_term, escape="\\"),
-                    Meeting.notes.ilike(search_term, escape="\\"),
-                    Meeting.agenda.ilike(search_term, escape="\\"),
+                    Meeting.title.ilike(search_term, escape=LIKE_ESCAPE_CHAR),
+                    Meeting.notes.ilike(search_term, escape=LIKE_ESCAPE_CHAR),
+                    Meeting.agenda.ilike(search_term, escape=LIKE_ESCAPE_CHAR),
                 )
             )
 

@@ -61,6 +61,13 @@ export const documentsService = {
     return response.data;
   },
 
+  async downloadDocument(documentId: string): Promise<Blob> {
+    const response = await api.get<Blob>(`/documents/${documentId}/download`, {
+      responseType: 'blob',
+    });
+    return response.data;
+  },
+
   async updateDocument(
     documentId: string,
     data: Partial<{ name: string; description: string; folder_id: string; tags: string; status: string }>

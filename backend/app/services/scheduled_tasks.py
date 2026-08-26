@@ -113,6 +113,7 @@ from app.services.call_tracking_service import CallTrackingService
 from app.services.email_service import _redact_email
 from app.services.shift_eligibility_service import ShiftEligibilityService
 from app.utils.hours import hours_from_minutes
+from app.utils.sql_search import LIKE_ESCAPE_CHAR
 
 
 def _resolve_event_reminder_target(event: Any) -> str:
@@ -5056,7 +5057,9 @@ async def run_event_request_reminders(db: AsyncSession) -> Dict[str, Any]:
                         await db.execute(
                             select(EventRequestActivity.action).where(
                                 EventRequestActivity.request_id == event_request.id,
-                                EventRequestActivity.action.like("reminder_sent:%"),
+                                EventRequestActivity.action.like(
+                                    "reminder_sent:%", escape=LIKE_ESCAPE_CHAR
+                                ),
                             )
                         )
                     )

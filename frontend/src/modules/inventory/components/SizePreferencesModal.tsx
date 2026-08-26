@@ -7,6 +7,17 @@
  *
  * Quartermasters use these when issuing gear, so capturing them is the whole
  * point of the size-preferences feature.
+ *
+ * The nine stored fields are not equally useful for the member filling this
+ * in. Shirt, pants, jacket and boots are what a member actually knows off the
+ * top of their head and what a uniform order needs; shirt style, boot width,
+ * glove and hat sizes are fitting details a quartermaster usually settles at
+ * issue. Presenting all nine as one flat wall made the common case — "record
+ * my uniform sizes" — read as a nine-field questionnaire, which is what stops
+ * members completing it. The detail fields are still here, still stored, and
+ * still feed the impact planner (which reports on all six garment types) —
+ * they just sit behind a disclosure, opened automatically when the member
+ * already has values there so nothing saved earlier is hidden.
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
@@ -16,6 +27,7 @@ import type { MemberSizePreferencesCreate } from '../types';
 import { STANDARD_SIZES, SHOE_SIZES, GARMENT_STYLES } from '../types';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { Modal } from '../../../components/Modal';
+import { Collapsible } from '../../../components/ux';
 import toast from 'react-hot-toast';
 
 interface SizePreferencesModalProps {
@@ -50,6 +62,11 @@ const EMPTY: FormState = {
   hat_size: '',
 };
 
+/** Fields kept behind the "Additional sizes" disclosure. */
+const DETAIL_FIELDS = ['shirt_style', 'boot_width', 'glove_size', 'hat_size'] as const;
+
+const hasDetailValues = (state: FormState): boolean => DETAIL_FIELDS.some((field) => state[field].trim() !== '');
+
 const labelClass = 'form-label-sm';
 const inputClass = 'form-input w-full';
 
@@ -57,6 +74,9 @@ export const SizePreferencesModal: React.FC<SizePreferencesModalProps> = ({ isOp
   const [form, setForm] = useState<FormState>(EMPTY);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  // Captured at load time, not derived from `form`: deriving it live would
+  // re-key the disclosure mid-edit and throw away what is being typed.
+  const [detailsPrefilled, setDetailsPrefilled] = useState(false);
 
   const set = (key: keyof FormState, value: string) => setForm((prev) => ({ ...prev, [key]: value }));
 
@@ -66,7 +86,7 @@ export const SizePreferencesModal: React.FC<SizePreferencesModalProps> = ({ isOp
       const prefs = userId
         ? await inventoryService.getMemberSizePreferences(userId)
         : await inventoryService.getMySizePreferences();
-      setForm({
+      const loaded: FormState = {
         shirt_size: prefs.shirt_size ?? '',
         shirt_style: prefs.shirt_style ?? '',
         pant_waist: prefs.pant_waist ?? '',
@@ -76,10 +96,13 @@ export const SizePreferencesModal: React.FC<SizePreferencesModalProps> = ({ isOp
         boot_width: prefs.boot_width ?? '',
         glove_size: prefs.glove_size ?? '',
         hat_size: prefs.hat_size ?? '',
-      });
+      };
+      setForm(loaded);
+      setDetailsPrefilled(hasDetailValues(loaded));
     } catch {
       // No preferences yet (404) is expected — start from a blank form.
       setForm(EMPTY);
+      setDetailsPrefilled(false);
     } finally {
       setLoading(false);
     }
@@ -137,6 +160,10 @@ export const SizePreferencesModal: React.FC<SizePreferencesModalProps> = ({ isOp
         </div>
       ) : (
         <div className="space-y-4">
+          <p className="text-theme-text-secondary text-sm">
+            Fill in what you know — every field is optional, and you can update them any time.
+          </p>
+
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div>
               <label className={labelClass}>Shirt Size</label>
@@ -149,18 +176,13 @@ export const SizePreferencesModal: React.FC<SizePreferencesModalProps> = ({ isOp
               </select>
             </div>
             <div>
-              <label className={labelClass}>Shirt Style</label>
+              <label className={labelClass}>Jacket Size</label>
               <select
-                value={form.shirt_style}
-                onChange={(e) => set('shirt_style', e.target.value)}
+                value={form.jacket_size}
+                onChange={(e) => set('jacket_size', e.target.value)}
                 className={inputClass}
               >
-                <option value="">--</option>
-                {GARMENT_STYLES.map((g) => (
-                  <option key={g.value} value={g.value}>
-                    {g.label}
-                  </option>
-                ))}
+                {sizeOptions}
               </select>
             </div>
             <div>
@@ -184,26 +206,6 @@ export const SizePreferencesModal: React.FC<SizePreferencesModalProps> = ({ isOp
               />
             </div>
             <div>
-              <label className={labelClass}>Jacket Size</label>
-              <select
-                value={form.jacket_size}
-                onChange={(e) => set('jacket_size', e.target.value)}
-                className={inputClass}
-              >
-                {sizeOptions}
-              </select>
-            </div>
-            <div>
-              <label className={labelClass}>Glove Size</label>
-              <select
-                value={form.glove_size}
-                onChange={(e) => set('glove_size', e.target.value)}
-                className={inputClass}
-              >
-                {sizeOptions}
-              </select>
-            </div>
-            <div>
               <label className={labelClass}>Boot Size</label>
               <select value={form.boot_size} onChange={(e) => set('boot_size', e.target.value)} className={inputClass}>
                 <option value="">--</option>
@@ -214,27 +216,64 @@ export const SizePreferencesModal: React.FC<SizePreferencesModalProps> = ({ isOp
                 ))}
               </select>
             </div>
-            <div>
-              <label className={labelClass}>Boot Width</label>
-              <input
-                type="text"
-                value={form.boot_width}
-                onChange={(e) => set('boot_width', e.target.value)}
-                className={inputClass}
-                placeholder="e.g. D, EE"
-              />
-            </div>
-            <div>
-              <label className={labelClass}>Hat Size</label>
-              <input
-                type="text"
-                value={form.hat_size}
-                onChange={(e) => set('hat_size', e.target.value)}
-                className={inputClass}
-                placeholder="e.g. 7 1/4"
-              />
-            </div>
           </div>
+
+          {/* Re-keyed on the loaded record so a member who already has detail
+              sizes sees them expanded — `defaultOpen` alone is read once, and
+              the record arrives after this component first renders. */}
+          <Collapsible
+            key={detailsPrefilled ? 'details-prefilled' : 'details-empty'}
+            title="Additional sizes (optional)"
+            defaultOpen={detailsPrefilled}
+          >
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div>
+                <label className={labelClass}>Shirt Style</label>
+                <select
+                  value={form.shirt_style}
+                  onChange={(e) => set('shirt_style', e.target.value)}
+                  className={inputClass}
+                >
+                  <option value="">--</option>
+                  {GARMENT_STYLES.map((g) => (
+                    <option key={g.value} value={g.value}>
+                      {g.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className={labelClass}>Boot Width</label>
+                <input
+                  type="text"
+                  value={form.boot_width}
+                  onChange={(e) => set('boot_width', e.target.value)}
+                  className={inputClass}
+                  placeholder="e.g. D, EE"
+                />
+              </div>
+              <div>
+                <label className={labelClass}>Glove Size</label>
+                <select
+                  value={form.glove_size}
+                  onChange={(e) => set('glove_size', e.target.value)}
+                  className={inputClass}
+                >
+                  {sizeOptions}
+                </select>
+              </div>
+              <div>
+                <label className={labelClass}>Hat Size</label>
+                <input
+                  type="text"
+                  value={form.hat_size}
+                  onChange={(e) => set('hat_size', e.target.value)}
+                  className={inputClass}
+                  placeholder="e.g. 7 1/4"
+                />
+              </div>
+            </div>
+          </Collapsible>
 
           <div className="flex flex-col-reverse items-stretch justify-end gap-2 pt-2 sm:flex-row sm:items-center">
             <button onClick={onClose} className="btn-secondary btn-md">

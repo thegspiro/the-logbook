@@ -163,10 +163,24 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
     detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
   },
   {
+    path: '/communications/photo-use-consent',
+    source: 'src/modules/communications/routes.tsx',
+    coverage: 'exempt',
+    detail:
+      'admin roster behind notifications.manage; its table reflows to cards via rwd-table and every control comes from the shared 44px form utilities, so /messages remains the module representative',
+  },
+  {
     path: '/messages',
     source: 'src/modules/communications/routes.tsx',
     coverage: 'ratchet',
     detail: 'fast route-level mobile presentation ratchet',
+  },
+  {
+    path: '/messages/:messageId',
+    source: 'src/modules/communications/routes.tsx',
+    coverage: 'exempt',
+    detail:
+      'parameterized detail view of one message; every message renders the same single-column card at max-w-3xl, its back link and acknowledge button carry max-md:min-h-[44px], and the chrome is the shared card utility — so /messages stays the representative route',
   },
   {
     path: '/documents',

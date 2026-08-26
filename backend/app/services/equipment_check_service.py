@@ -42,6 +42,7 @@ from app.utils.apparatus_ref import resolve_apparatus_labels, resolve_apparatus_
 from app.utils.model_updates import apply_updates
 from app.utils.name_matching import best_matches
 from app.utils.org_scoping import is_in_org
+from app.utils.sql_search import LIKE_ESCAPE_CHAR, like_pattern
 
 
 class EquipmentCheckConflictError(ValueError):
@@ -2676,10 +2677,25 @@ class EquipmentCheckService:
         wrong, and a negative count is not a fact about any truck.
         """
         item, template_id = await self._get_item_with_template(
-            template_item_id, organization_id
+            template_item_id, organization_id, for_update=True
         )
         if item is None:
             return None
+
+        # Same lock-order as swap_item_lot (position first, always in that
+        # order): a read-modify-write on this item's deployed-lot quantities
+        # follows, so two crews reporting use of the same item at once must
+        # be serialized here too, or both read the same starting quantity and
+        # both decrement it independently -- the count ends up one use short
+        # instead of two.
+        await self.db.execute(
+            select(CheckItemDeployedLot.id)
+            .where(
+                CheckItemDeployedLot.template_item_id == item.id,
+                CheckItemDeployedLot.organization_id == organization_id,
+            )
+            .with_for_update()
+        )
 
         before = self._on_truck(item)
         if quantity_used:
@@ -2790,12 +2806,18 @@ class EquipmentCheckService:
         lot the truck carries, and an empty row would keep contributing its
         date to the position's soonest-expiry reading forever.
 
-        ``allow_metadata_change=False`` (a submit-only caller) still permits
-        quantity edits and lot removal; it only refuses a ``lot_number`` /
-        ``expiration_date`` value that actually *differs* from what the row
-        holds. Keying the refusal off the payload merely containing those keys
-        broke every quantity-only save from the check form, which round-trips
-        the metadata it was shown.
+        ``allow_metadata_change=False`` (a submit-only caller) still permits a
+        quantity *decrease* or lot removal — the ordinary "we used one" or
+        "we found fewer than the record said" corrections. A quantity
+        *increase* requires the elevated permission too: this figure is what
+        ``swap_item_lot``'s submitter cap trusts as the ceiling on how much
+        real stock a submit-only caller may draw when replacing this lot, so
+        letting a submitter inflate it here would let them set their own
+        cap. It also refuses a ``lot_number`` / ``expiration_date`` value
+        that actually *differs* from what the row holds. Keying the metadata
+        refusal off the payload merely containing those keys broke every
+        quantity-only save from the check form, which round-trips the
+        metadata it was shown.
         """
         quantity = updates.get("quantity")
         if quantity is None or quantity < 0:
@@ -2813,6 +2835,11 @@ class EquipmentCheckService:
         )
         if target is None:
             return None
+
+        if not allow_metadata_change and quantity > target.quantity:
+            raise PermissionError(
+                "Increasing a deployed lot's quantity requires a manage " "permission"
+            )
 
         # Metadata is only applied on the quantity > 0 path below, so removal
         # (quantity == 0) never needs the elevated permission.
@@ -4299,11 +4326,10 @@ class EquipmentCheckService:
         if item_name:
             # Escape LIKE wildcards so a literal % or _ in the filter doesn't
             # act as a wildcard (declare the escape char so it's honored).
-            safe_item = (
-                item_name.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-            )
             base_q = base_q.where(
-                ShiftEquipmentCheckItem.item_name.ilike(f"%{safe_item}%", escape="\\")
+                ShiftEquipmentCheckItem.item_name.ilike(
+                    like_pattern(item_name), escape=LIKE_ESCAPE_CHAR
+                )
             )
 
         # Count

@@ -2027,11 +2027,14 @@ async def import_program(
         )
 
     service = TrainingProgramService(db)
-    program = await service.import_program_from_json(
-        payload,
-        current_user.organization_id,
-        current_user.id,
-    )
+    try:
+        program = await service.import_program_from_json(
+            payload,
+            current_user.organization_id,
+            current_user.id,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
     await log_audit_event(
         db,

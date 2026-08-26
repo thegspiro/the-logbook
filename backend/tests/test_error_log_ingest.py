@@ -16,6 +16,8 @@ from app.api.v1.endpoints.error_logs import (
     ERROR_LOG_RATE_LIMIT,
     ERROR_LOG_RATE_WINDOW_SECONDS,
     ErrorLogCreate,
+    _affected_users,
+    _serialize_error,
     log_error,
 )
 from app.services.retention_service import RECORD_CLASSES
@@ -126,3 +128,74 @@ class TestErrorLogRetention:
         rc = next(r for r in RECORD_CLASSES if r.key == "error_logs")
 
         assert rc.min_days >= 30
+
+
+class TestAffectedUserResolution:
+    """A report names the member it happened to.
+
+    The stored ``user_id`` alone answers nothing an administrator can act on:
+    a truncated UUID cannot be searched for, and it does not distinguish one
+    member's broken session from an outage hitting the whole department.
+    """
+
+    @staticmethod
+    def _rows(*rows):
+        result = Mock()
+        result.all.return_value = list(rows)
+        return result
+
+    async def test_ids_resolve_to_a_name_and_username(self):
+        db = AsyncMock()
+        db.execute.return_value = self._rows(("user-1", "Dana", "Reyes", "dreyes"))
+        errors = [Mock(user_id="user-1"), Mock(user_id="user-1")]
+
+        resolved = await _affected_users(db, "org-1", errors)
+
+        assert resolved["user-1"] == {"name": "Dana Reyes", "username": "dreyes"}
+        # One batched query for the page, not one per row.
+        db.execute.assert_awaited_once()
+
+    async def test_the_lookup_is_org_scoped(self):
+        """Pitfall #14a: the id comes from stored data, so the org filter is
+        what keeps a stale row from naming another department's member."""
+        db = AsyncMock()
+        db.execute.return_value = self._rows()
+
+        await _affected_users(db, "org-1", [Mock(user_id="user-1")])
+
+        compiled = str(
+            db.execute.await_args.args[0].compile(
+                compile_kwargs={"literal_binds": True}
+            )
+        ).lower()
+        assert "organization_id" in compiled
+
+    async def test_rows_without_a_user_skip_the_query_entirely(self):
+        db = AsyncMock()
+
+        assert await _affected_users(db, "org-1", [Mock(user_id=None)]) == {}
+        db.execute.assert_not_awaited()
+
+    async def test_a_nameless_account_falls_back_to_its_username(self):
+        db = AsyncMock()
+        db.execute.return_value = self._rows(("user-1", None, None, "dreyes"))
+
+        resolved = await _affected_users(db, "org-1", [Mock(user_id="user-1")])
+
+        assert resolved["user-1"]["name"] == "dreyes"
+
+    def test_a_deleted_account_leaves_the_id_and_reports_no_name(self):
+        """Nulls rather than a fabricated label: the reader decides how to
+        present an id whose account is gone."""
+        error = Mock(
+            user_id="user-gone",
+            troubleshooting_steps=None,
+            context=None,
+            created_at=None,
+        )
+
+        row = _serialize_error(error, {})
+
+        assert row["user_id"] == "user-gone"
+        assert row["user_name"] is None
+        assert row["user_username"] is None

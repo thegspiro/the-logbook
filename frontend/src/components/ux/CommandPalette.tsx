@@ -49,6 +49,19 @@ interface CommandItem {
    * navigation's behavior.
    */
   hideWhenModuleOn?: string;
+  /**
+   * Hide this command unless the named module is enabled — the mirror of
+   * `hideWhenModuleOn`, for a page whose route carries `requiredModule`.
+   * Permissive while the config is unconfigured or still loading, matching
+   * `isModuleOn` and every navigation bar.
+   *
+   * Now that every module's routes carry that gate, an untagged command is
+   * the last surface still offering a retired module, and the offer lands on
+   * the "module is not enabled" refusal rather than on a page. So a command
+   * whose destination belongs to a module gets tagged here, not only the
+   * ones that would also fail on a permission.
+   */
+  requiresModule?: string;
 }
 
 const COMMANDS: CommandItem[] = [
@@ -72,6 +85,7 @@ const COMMANDS: CommandItem[] = [
   },
   {
     id: 'training',
+    requiresModule: 'training',
     label: 'My Training',
     path: '/training/my-training',
     icon: GraduationCap,
@@ -80,6 +94,7 @@ const COMMANDS: CommandItem[] = [
   },
   {
     id: 'inventory',
+    requiresModule: 'inventory',
     label: 'Inventory',
     path: '/inventory',
     icon: Package,
@@ -96,10 +111,17 @@ const COMMANDS: CommandItem[] = [
     path: '/store',
     icon: Package,
     section: 'Navigation',
+    // Same reasoning as Gear & Uniforms above: the route requires
+    // storefront.view, so offering it ungated makes the palette a route to
+    // Access Denied. The route carries `requiredModule` too, so a department
+    // with the store switched off must not be offered it either.
+    permission: 'storefront.view',
+    requiresModule: 'storefront',
     keywords: ['storefront', 'shop', 'merch', 'apparel', 'order'],
   },
   {
     id: 'scheduling',
+    requiresModule: 'scheduling',
     label: 'Scheduling',
     path: '/scheduling',
     icon: Clock,
@@ -108,6 +130,7 @@ const COMMANDS: CommandItem[] = [
   },
   {
     id: 'facilities',
+    requiresModule: 'facilities',
     label: 'Facilities',
     path: '/facilities',
     icon: Building2,
@@ -144,6 +167,7 @@ const COMMANDS: CommandItem[] = [
   },
   {
     id: 'elections',
+    requiresModule: 'elections',
     label: 'Elections',
     path: '/elections',
     icon: Vote,
@@ -152,6 +176,7 @@ const COMMANDS: CommandItem[] = [
   },
   {
     id: 'minutes',
+    requiresModule: 'minutes',
     label: 'Meeting Minutes',
     path: '/minutes',
     icon: ClipboardList,
@@ -160,6 +185,7 @@ const COMMANDS: CommandItem[] = [
   },
   {
     id: 'notifications',
+    requiresModule: 'notifications',
     label: 'Notifications',
     path: '/notifications',
     icon: Bell,
@@ -186,13 +212,33 @@ const COMMANDS: CommandItem[] = [
   },
   {
     id: 'submit-training',
+    requiresModule: 'training',
     label: 'Submit Training',
     path: '/training/submit',
     icon: GraduationCap,
     section: 'Actions',
   },
-  { id: 'my-equipment', label: 'My Issued Gear', path: '/inventory/my-equipment', icon: Package, section: 'Actions' },
-  { id: 'my-store-orders', label: 'My Store Orders', path: '/store/orders', icon: Package, section: 'Actions' },
+  {
+    id: 'my-equipment',
+    requiresModule: 'inventory',
+    label: 'My Issued Gear',
+    path: '/inventory/my-equipment',
+    icon: Package,
+    section: 'Actions',
+  },
+  {
+    id: 'my-store-orders',
+    label: 'My Store Orders',
+    path: '/store/orders',
+    icon: Package,
+    section: 'Actions',
+    // /store/orders carries the same route gate as /store. This entry had
+    // neither, so it offered Access Denied to every member without the grant
+    // and to every department with the store switched off. ('My Issued Gear'
+    // above is genuinely ungated — its route has no ProtectedRoute at all.)
+    permission: 'storefront.view',
+    requiresModule: 'storefront',
+  },
 
   // Admin
   {
@@ -205,6 +251,7 @@ const COMMANDS: CommandItem[] = [
   },
   {
     id: 'reports',
+    requiresModule: 'reports',
     label: 'Reports',
     path: '/reports',
     icon: BarChart3,
@@ -232,7 +279,11 @@ export const CommandPalette: React.FC = () => {
         (!cmd.permission || checkPermission(cmd.permission)) &&
         (!cmd.anyPermission || cmd.anyPermission.some(checkPermission)) &&
         // enabledModules is null while loading/unconfigured — hide nothing then
-        !(cmd.hideWhenModuleOn && enabledModules?.has(cmd.hideWhenModuleOn))
+        !(cmd.hideWhenModuleOn && enabledModules?.has(cmd.hideWhenModuleOn)) &&
+        // Same rule as `isModuleOn`, read off the state rather than the
+        // helper: the helper is rebuilt every render, so depending on it here
+        // would recompute this memo every render too.
+        (!cmd.requiresModule || enabledModules === null || enabledModules.has(cmd.requiresModule))
     );
 
     if (!query.trim()) return accessible;

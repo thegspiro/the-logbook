@@ -389,7 +389,7 @@ describe('EventSelfCheckInPage', () => {
       renderWithRouter(<EventSelfCheckInPage />);
 
       await waitFor(() => {
-        expect(screen.getByText(/This event was ended early by the event manager/)).toBeInTheDocument();
+        expect(screen.getByText(/This event was ended early by the event officer/)).toBeInTheDocument();
       });
     });
 

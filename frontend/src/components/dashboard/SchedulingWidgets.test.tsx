@@ -60,10 +60,12 @@ describe('SchedulingWidgets', () => {
     saveWidgetPreferences.mockResolvedValue({ widgets: {} });
   });
 
-  it('renders all operational totals and the configured timezone', async () => {
+  it('renders all operational totals without exposing the raw timezone identifier', async () => {
     renderWidget();
-    expect(await screen.findByText('America/New_York', { exact: false })).toBeInTheDocument();
     expect(await screen.findByLabelText('Today’s Staffing: 11. View filtered schedule.')).toBeInTheDocument();
+    // The organization timezone still drives which day "today" is; it is not
+    // copy for the member to read.
+    expect(screen.queryByText('America/New_York', { exact: false })).not.toBeInTheDocument();
     expect(screen.getByLabelText('Special Operations: 7. View filtered schedule.')).toBeInTheDocument();
     expect(getWidgetSummary).toHaveBeenCalledTimes(7);
   });

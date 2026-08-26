@@ -20,6 +20,7 @@ from app.models.notification import (
     MessageTargetType,
 )
 from app.models.user import Role, User, UserStatus
+from app.utils.sql_search import LIKE_ESCAPE_CHAR, like_pattern
 
 
 class MessagingService:
@@ -121,11 +122,11 @@ class MessagingService:
             if not include_deleted:
                 q = q.where(DepartmentMessage.deleted_at.is_(None))
             if search and search.strip():
-                pattern = f"%{search.strip()}%"
+                pattern = like_pattern(search.strip())
                 q = q.where(
                     or_(
-                        DepartmentMessage.title.ilike(pattern),
-                        DepartmentMessage.body.ilike(pattern),
+                        DepartmentMessage.title.ilike(pattern, escape=LIKE_ESCAPE_CHAR),
+                        DepartmentMessage.body.ilike(pattern, escape=LIKE_ESCAPE_CHAR),
                     )
                 )
             if priority:
@@ -379,73 +380,109 @@ class MessagingService:
             resolved = is_acknowledged if msg.requires_acknowledgment else is_read
             if not include_read and resolved and not msg.is_persistent:
                 continue
-            enriched.append(
-                {
-                    "id": msg.id,
-                    "title": msg.title,
-                    "body": msg.body,
-                    "priority": (
-                        msg.priority.value
-                        if hasattr(msg.priority, "value")
-                        else str(msg.priority)
-                    ),
-                    "target_type": (
-                        msg.target_type.value
-                        if hasattr(msg.target_type, "value")
-                        else str(msg.target_type)
-                    ),
-                    "is_pinned": msg.is_pinned,
-                    "is_persistent": msg.is_persistent,
-                    "requires_acknowledgment": msg.requires_acknowledgment,
-                    "posted_by": msg.posted_by,
-                    "author_name": None,  # Filled below
-                    "created_at": (
-                        msg.created_at.isoformat() if msg.created_at else None
-                    ),
-                    "expires_at": (
-                        msg.expires_at.isoformat() if msg.expires_at else None
-                    ),
-                    "is_read": is_read,
-                    "read_at": (
-                        read_record.read_at.isoformat()
-                        if read_record and read_record.read_at
-                        else None
-                    ),
-                    "is_acknowledged": (
-                        read_record.acknowledged_at is not None
-                        if read_record
-                        else False
-                    ),
-                    "acknowledged_at": (
-                        read_record.acknowledged_at.isoformat()
-                        if read_record and read_record.acknowledged_at
-                        else None
-                    ),
-                }
-            )
+            enriched.append(self._inbox_entry(msg, read_record))
 
         # Paginate before resolving authors so a small preview never loads names
         # for messages that will not be returned.
         enriched = enriched[skip : skip + limit]
 
-        author_ids = list({m["posted_by"] for m in enriched if m["posted_by"]})
-        if author_ids:
-            authors_result = await self.db.execute(
-                select(User.id, User.first_name, User.last_name).where(
-                    User.id.in_(author_ids),
-                    User.organization_id == organization_id,
-                )
-            )
-            author_map = {
-                row.id: (
-                    f"{row.first_name or ''} {row.last_name or ''}".strip() or "Unknown"
-                )
-                for row in authors_result.all()
-            }
-            for m in enriched:
-                m["author_name"] = author_map.get(m["posted_by"], "Unknown")
+        await self._attach_author_names(enriched, organization_id)
 
         return enriched
+
+    async def get_inbox_message(
+        self, organization_id: str, user_id: str, message_id: str
+    ) -> Optional[Dict[str, Any]]:
+        """Get a single inbox message, or None when it is not the caller's.
+
+        Backs the member-facing message detail screen. Visibility runs through
+        the same fail-closed gate as read/acknowledge, so a member cannot open
+        a message by id that the inbox list would not have shown them.
+        """
+        message = await self._visible_message_or_none(
+            message_id, user_id, organization_id
+        )
+        if not message:
+            return None
+
+        read_result = await self.db.execute(
+            select(DepartmentMessageRead).where(
+                DepartmentMessageRead.message_id == message.id,
+                DepartmentMessageRead.user_id == user_id,
+            )
+        )
+        entry = self._inbox_entry(message, read_result.scalar_one_or_none())
+        await self._attach_author_names([entry], organization_id)
+        return entry
+
+    @staticmethod
+    def _inbox_entry(
+        msg: DepartmentMessage, read_record: Optional[DepartmentMessageRead]
+    ) -> Dict[str, Any]:
+        """Shape one message + the caller's read record into an inbox entry.
+
+        author_name is left None for _attach_author_names to fill, so callers
+        resolve author names in one query rather than per message.
+        """
+        return {
+            "id": msg.id,
+            "title": msg.title,
+            "body": msg.body,
+            "priority": (
+                msg.priority.value
+                if hasattr(msg.priority, "value")
+                else str(msg.priority)
+            ),
+            "target_type": (
+                msg.target_type.value
+                if hasattr(msg.target_type, "value")
+                else str(msg.target_type)
+            ),
+            "is_pinned": msg.is_pinned,
+            "is_persistent": msg.is_persistent,
+            "requires_acknowledgment": msg.requires_acknowledgment,
+            "posted_by": msg.posted_by,
+            "author_name": None,
+            "created_at": (msg.created_at.isoformat() if msg.created_at else None),
+            "expires_at": (msg.expires_at.isoformat() if msg.expires_at else None),
+            "is_read": read_record is not None,
+            "read_at": (
+                read_record.read_at.isoformat()
+                if read_record and read_record.read_at
+                else None
+            ),
+            "is_acknowledged": (
+                read_record.acknowledged_at is not None if read_record else False
+            ),
+            "acknowledged_at": (
+                read_record.acknowledged_at.isoformat()
+                if read_record and read_record.acknowledged_at
+                else None
+            ),
+        }
+
+    async def _attach_author_names(
+        self, entries: List[Dict[str, Any]], organization_id: str
+    ) -> None:
+        """Fill author_name on inbox entries in place, in a single query."""
+        author_ids = list({m["posted_by"] for m in entries if m["posted_by"]})
+        if not author_ids:
+            return
+        authors_result = await self.db.execute(
+            select(User.id, User.first_name, User.last_name).where(
+                User.id.in_(author_ids),
+                User.organization_id == organization_id,
+            )
+        )
+        author_map = {
+            row.id: (
+                f"{row.first_name or ''} {row.last_name or ''}".strip() or "Unknown"
+            )
+            for row in authors_result.all()
+        }
+        for m in entries:
+            if m["posted_by"]:
+                m["author_name"] = author_map.get(m["posted_by"], "Unknown")
 
     async def get_unread_count(self, organization_id: str, user_id: str) -> int:
         """Get count of unresolved (pending) messages for a user.

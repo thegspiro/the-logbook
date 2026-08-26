@@ -1,8 +1,8 @@
 """
 Eligible positions for many shifts, computed once.
 
-The member-side half of the answer — membership type, rank, completed
-training, the org's open positions — does not vary by shift. Asking per shift
+The member-side half of the answer — membership type, rank, held positions,
+completed training, the org's open positions — does not vary by shift. Asking per shift
 re-ran all of it each time; a station running six apparatus paid six times for
 one answer.
 """
@@ -32,13 +32,31 @@ class _Session:
         )
 
 
-def _service(shifts, *, rank=(), training=(), open_positions=(), excluded=()):
+def _service(
+    shifts,
+    *,
+    rank=(),
+    held=(),
+    grants=None,
+    training=(),
+    qualifications=(),
+    open_positions=(),
+    excluded=(),
+):
+    """``rank`` is what USER's rank code ("ff") grants; ``grants`` adds slugs."""
     service = ShiftEligibilityService(_Session(shifts))
     service._get_org = AsyncMock(return_value=SimpleNamespace(id=ORG, settings={}))
     service.get_excluded_membership_types = lambda _org: list(excluded)
     service.get_open_positions = lambda _org: list(open_positions)
-    service._get_rank_positions = AsyncMock(return_value=list(rank))
+    slug_map = {"ff": list(rank)}
+    slug_map.update(grants or {})
+    service._get_slug_eligibility_map = AsyncMock(return_value=slug_map)
+    service._get_held_position_slugs = AsyncMock(return_value=list(held))
     service._get_training_positions = AsyncMock(return_value=list(training))
+    # Qualifications are the one source resolved per shift *date* rather than
+    # once per member, because a certification can lapse between two shifts in
+    # the same query.
+    service._get_qualification_positions = AsyncMock(return_value=set(qualifications))
     return service
 
 
@@ -60,8 +78,19 @@ class TestBulkEligibility:
             "s3": ["firefighter"],
         }
         # The expensive lookups run once, not once per shift.
-        assert service._get_rank_positions.await_count == 1
+        assert service._get_slug_eligibility_map.await_count == 1
+        assert service._get_held_position_slugs.await_count == 1
         assert service._get_training_positions.await_count == 1
+
+    async def test_a_held_position_counts_the_same_as_a_rank(self):
+        # The board must offer the seat the signup endpoint will accept.
+        service = _service(
+            [_shift("s1", positions=[{"position": "ems"}])],
+            held=["emt"],
+            grants={"emt": ["ems", "firefighter"]},
+        )
+        answers = await service.get_eligible_positions_bulk(USER, ORG, ["s1"])
+        assert answers["s1"] == ["ems"]
 
     async def test_narrows_to_each_shift_s_own_seats(self):
         shifts = [

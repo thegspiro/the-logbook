@@ -200,9 +200,23 @@ const RanksSettingsSection: React.FC<RanksSettingsSectionProps> = ({
               </div>
               <GripVertical className="text-theme-text-muted/40 h-4 w-4 shrink-0" />
               <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <p className="text-theme-text-primary text-sm font-medium">{rank.display_name}</p>
                   <p className="text-theme-text-muted text-xs">({rank.rank_code})</p>
+                  {/* Rank defaults resolve from a code-level registry keyed by
+                      rank_code, so a rank a department adds itself confers no
+                      permissions. That is the intended design — positions are
+                      the primary source — but it used to be invisible here,
+                      which left admins to discover it from a member who could
+                      not see anything. */}
+                  {rank.default_permission_count === 0 && (
+                    <span
+                      title="This rank grants no permissions on its own. Assign a position to give these members access."
+                      className="bg-theme-surface border-theme-surface-border text-theme-text-muted rounded border px-1.5 py-0.5 text-[10px] font-medium"
+                    >
+                      No default permissions
+                    </span>
+                  )}
                 </div>
                 {/* Eligible shift positions — display mode */}
                 {editingPositionsRankId !== rank.id && (

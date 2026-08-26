@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**254 tables · 4351 columns · 823 foreign keys**
+**256 tables · 4373 columns · 827 foreign keys**
 
 ---
 
@@ -448,6 +448,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 | Table | Model | Columns | Purpose |
 |---|---|---|---|
+| [`org_chart_node_holders`](#org_chart_node_holders) | `OrgChartNodeHolder` | 6 | One person leadership listed in a seat by hand. |
 | [`org_chart_nodes`](#org_chart_nodes) | `OrgChartNode` | 14 | One seat on the department's organizational chart. |
 
 ### Organization_Officer
@@ -468,6 +469,14 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`public_portal_api_keys`](#public_portal_api_keys) | `PublicPortalAPIKey` | 12 | API keys for accessing the public portal. |
 | [`public_portal_config`](#public_portal_config) | `PublicPortalConfig` | 9 | Configuration for the public portal module. |
 | [`public_portal_data_whitelist`](#public_portal_data_whitelist) | `PublicPortalDataWhitelist` | 8 | Whitelist of data fields that can be exposed via the public portal. |
+
+### Qualification
+
+<sub>`app/models/qualification.py`</sub>
+
+| Table | Model | Columns | Purpose |
+|---|---|---|---|
+| [`member_qualifications`](#member_qualifications) | `MemberQualification` | 9 | One qualification held by one member. |
 
 ### Scheduling_Module_Config
 
@@ -502,13 +511,13 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | Table | Model | Columns | Purpose |
 |---|---|---|---|
 | [`store_order_events`](#store_order_events) | `StoreOrderEvent` | 11 | Timeline entry on an order — the member-visible "order updates" feed |
-| [`store_order_items`](#store_order_items) | `StoreOrderItem` | 14 | A line item on an order. |
+| [`store_order_items`](#store_order_items) | `StoreOrderItem` | 16 | A line item on an order. |
 | [`store_order_windows`](#store_order_windows) | `StoreOrderWindow` | 28 | A time-boxed ordering period ("order window") |
 | [`store_orders`](#store_orders) | `StoreOrder` | 33 | A member order placed against an order window |
 | [`store_payment_events`](#store_payment_events) | `StorePaymentEvent` | 19 | A payment a provider says it received, and what we did about it. |
 | [`store_product_images`](#store_product_images) | `StoreProductImage` | 9 | Uploaded product photo, stored out of line from the catalog row. |
 | [`store_product_variants`](#store_product_variants) | `StoreProductVariant` | 11 | A size/color option on a product (e.g. "L / Navy") |
-| [`store_products`](#store_products) | `StoreProduct` | 26 | A sellable item in the department catalog |
+| [`store_products`](#store_products) | `StoreProduct` | 28 | A sellable item in the department catalog |
 | [`store_settings`](#store_settings) | `StoreSettings` | 43 | Per-organization storefront configuration (one row per org). |
 | [`store_window_products`](#store_window_products) | `StoreWindowProduct` | 9 | Which catalog products a window offers, with per-window overrides |
 
@@ -558,7 +567,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`standing_shift_claims`](#standing_shift_claims) | `StandingShiftClaim` | 14 | A member's recurring claim on a shift — "every Tuesday night". |
 | [`training_approvals`](#training_approvals) | `TrainingApproval` | 15 | Training Approval model |
 | [`training_categories`](#training_categories) | `TrainingCategory` | 14 | Training Category model |
-| [`training_courses`](#training_courses) | `TrainingCourse` | 19 | Training Course model |
+| [`training_courses`](#training_courses) | `TrainingCourse` | 20 | Training Course model |
 | [`training_effectiveness_evaluations`](#training_effectiveness_evaluations) | `TrainingEffectivenessEvaluation` | 20 | Training Effectiveness Evaluation model |
 | [`training_module_configs`](#training_module_configs) | `TrainingModuleConfig` | 45 | Training Module Configuration model |
 | [`training_programs`](#training_programs) | `TrainingProgram` | 23 | Training Program model |
@@ -582,7 +591,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`prospects`](#prospects) | `Prospect` | 17 | Prospective member – someone who has expressed interest in joining |
 | [`sessions`](#sessions) | `Session` | 12 | User session model for tracking active sessions |
 | [`user_positions`](#user_positions) | _(association table)_ | 4 |  |
-| [`users`](#users) | `User` | 55 | User model with comprehensive authentication and profile support. |
+| [`users`](#users) | `User` | 57 | User model with comprehensive authentication and profile support. |
 
 ---
 
@@ -6269,6 +6278,25 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 ## Org_Chart
 
+### `org_chart_node_holders`
+
+**OrgChartNodeHolder** · `app/models/org_chart.py`
+
+> One person leadership listed in a seat by hand. These are stored; the people a seat gets from its link are not. Persisting the linked ones here as well would give the chart its own copy of the roster to go stale against the membership screen it is meant to follow — the whole point of the link is that there is one answer to "who is the Chief", not two.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `node_id` | VARCHAR(36) | no | FK, IDX |  | → `org_chart_nodes.id` ON DELETE CASCADE |
+| `user_id` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `display_name` | VARCHAR(200) | yes |  |  |  |
+| `sort_order` | INTEGER | no |  | `0` |  |
+| `created_at` | DATETIME | no |  | `now()` |  |
+
+**Indexes**
+
+- `ix_org_chart_node_holders_node` (`node_id`, `sort_order`)
+
 ### `org_chart_nodes`
 
 **OrgChartNode** · `app/models/org_chart.py`
@@ -6282,8 +6310,8 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `parent_id` | VARCHAR(36) | yes | FK |  | → `org_chart_nodes.id` ON DELETE SET NULL |
 | `title` | VARCHAR(150) | no |  |  |  |
 | `responsibility` | TEXT | yes |  |  |  |
-| `user_id` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
-| `display_name` | VARCHAR(200) | yes |  |  |  |
+| `position_id` | VARCHAR(36) | yes | FK |  | → `positions.id` ON DELETE SET NULL |
+| `rank_code` | VARCHAR(100) | yes |  |  |  |
 | `contact_email` | VARCHAR(320) | yes |  |  |  |
 | `contact_phone` | VARCHAR(50) | yes |  |  |  |
 | `sort_order` | INTEGER | no |  | `0` |  |
@@ -6429,6 +6457,35 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 - `idx_whitelist_category` (`data_category`)
 - `idx_whitelist_enabled` (`is_enabled`)
 - UNIQUE `idx_whitelist_unique` (`organization_id`, `data_category`, `field_name`)
+
+## Qualification
+
+### `member_qualifications`
+
+**MemberQualification** · `app/models/qualification.py`
+
+> One qualification held by one member. Rows are per organization as well as per user: the same person can only be a member of one department here, but scoping the row means every read is org-filterable without a join back through ``users`` (CLAUDE.md pitfall #14).
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `user_id` | VARCHAR(36) | no | FK |  | → `users.id` ON DELETE CASCADE |
+| `qualification_code` | VARCHAR(50) | no |  |  |  |
+| `granted_on` | DATE | yes |  |  |  |
+| `expires_on` | DATE | yes | IDX |  |  |
+| `notes` | TEXT | yes |  |  |  |
+| `created_at` | DATETIME | no |  | `now()` |  |
+| `updated_at` | DATETIME | no |  | `now()` |  |
+
+**Indexes**
+
+- `ix_member_qual_org_code` (`organization_id`, `qualification_code`)
+- `ix_member_qualifications_expires_on` (`expires_on`)
+
+**Constraints**
+
+- UNIQUE `uq_member_qualification` (`user_id`, `qualification_code`)
 
 ## Scheduling_Module_Config
 
@@ -6651,6 +6708,8 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `variant_label` | VARCHAR(120) | yes |  |  |  |
 | `sku` | VARCHAR(100) | yes |  |  |  |
 | `personalization_text` | VARCHAR(200) | yes |  |  |  |
+| `personalization_thread_color` | VARCHAR(30) | yes |  |  |  |
+| `personalization_method` | VARCHAR(20) | yes |  |  |  |
 | `unit_price` | NUMERIC(10, 2) | no |  | `0` |  |
 | `quantity` | INTEGER | no |  | `1` |  |
 | `line_total` | NUMERIC(10, 2) | no |  | `0` |  |
@@ -6871,6 +6930,8 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `personalization_label` | VARCHAR(120) | yes |  |  |  |
 | `personalization_max_length` | INTEGER | no |  | `30` |  |
 | `personalization_price` | NUMERIC(10, 2) | no |  | `0` |  |
+| `personalization_thread_color` | VARCHAR(30) | yes |  |  |  |
+| `personalization_method` | VARCHAR(20) | yes |  |  |  |
 | `track_stock` | BOOL | no |  | `0` |  |
 | `stock_quantity` | INTEGER | yes |  |  |  |
 | `requires_variant` | BOOL | no |  | `0` |  |
@@ -8284,6 +8345,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `credit_hours` | FLOAT | yes |  |  |  |
 | `prerequisites` | JSON | yes |  |  |  |
 | `expiration_months` | INTEGER | yes |  |  |  |
+| `grants_qualification` | VARCHAR(50) | yes | IDX |  |  |
 | `instructor` | VARCHAR(255) | yes |  |  |  |
 | `max_participants` | INTEGER | yes |  |  |  |
 | `materials_required` | JSON | yes |  |  |  |
@@ -8298,6 +8360,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 - `idx_course_org_code` (`organization_id`, `code`)
 - `ix_training_courses_active` (`active`)
+- `ix_training_courses_grants_qualification` (`grants_qualification`)
 
 ### `training_effectiveness_evaluations`
 
@@ -8952,6 +9015,8 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `emergency_contacts` | JSON | yes |  | `list()` |  |
 | `notification_preferences` | JSON | yes |  | `dict()` |  |
 | `membership_type` | VARCHAR(50) | yes |  | `'active'` |  |
+| `member_class` | VARCHAR(20) | yes | IDX |  |  |
+| `member_status` | VARCHAR(20) | yes | IDX |  |  |
 | `membership_type_changed_at` | DATETIME | yes |  |  |  |
 | `status` | ENUM(`active`, `inactive`, `suspended`, `probationary`, `leave`, `retired`, `dropped_voluntary`, `dropped_involuntary`, `archived`) | yes | IDX | `'active'` |  |
 | `status_changed_at` | DATETIME | yes |  |  |  |
@@ -8986,6 +9051,8 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 - UNIQUE `idx_user_org_username` (`organization_id`, `username`)
 - `ix_users_calendar_feed_token` (`calendar_feed_token`)
 - `ix_users_email` (`email`)
+- `ix_users_member_class` (`member_class`)
+- `ix_users_member_status` (`member_status`)
 - `ix_users_oauth_subject` (`oauth_subject`)
 - `ix_users_password_reset_token` (`password_reset_token`)
 - `ix_users_status` (`status`)
@@ -8996,7 +9063,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 Every foreign key in the schema, grouped by the table it points at — the map of which id lives where.
 
-### → `users` (308 references)
+### → `users` (309 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -9187,6 +9254,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `member_dues` | `waived_by` | SET NULL | yes |
 | `member_leaves_of_absence` | `granted_by` | NO ACTION | yes |
 | `member_leaves_of_absence` | `user_id` | CASCADE | no |
+| `member_qualifications` | `user_id` | CASCADE | no |
 | `member_size_preferences` | `user_id` | CASCADE | no |
 | `membership_pipelines` | `created_by` | NO ACTION | yes |
 | `message_history` | `sent_by` | SET NULL | yes |
@@ -9201,8 +9269,8 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `notification_logs` | `recipient_id` | SET NULL | yes |
 | `notification_rules` | `created_by` | NO ACTION | yes |
 | `org_calls` | `created_by` | SET NULL | yes |
+| `org_chart_node_holders` | `user_id` | SET NULL | yes |
 | `org_chart_nodes` | `updated_by` | SET NULL | yes |
-| `org_chart_nodes` | `user_id` | SET NULL | yes |
 | `organization_officers` | `updated_by` | SET NULL | yes |
 | `organization_officers` | `user_id` | SET NULL | yes |
 | `password_history` | `user_id` | CASCADE | no |
@@ -9309,7 +9377,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `votes` | `voter_id` | SET NULL | yes |
 | `xapi_statements` | `user_id` | SET NULL | yes |
 
-### → `organizations` (202 references)
+### → `organizations` (203 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -9435,6 +9503,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `member_competencies` | `organization_id` | CASCADE | no |
 | `member_dues` | `organization_id` | CASCADE | no |
 | `member_leaves_of_absence` | `organization_id` | CASCADE | no |
+| `member_qualifications` | `organization_id` | CASCADE | no |
 | `member_size_preferences` | `organization_id` | CASCADE | no |
 | `membership_pipelines` | `organization_id` | CASCADE | no |
 | `message_history` | `organization_id` | CASCADE | yes |
@@ -9890,6 +9959,14 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `inventory_vendor_contacts` | `vendor_id` | CASCADE | no |
 | `reorder_requests` | `vendor_id` | SET NULL | yes |
 
+### → `positions` (3 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `issuance_allowances` | `role_id` | CASCADE | yes |
+| `org_chart_nodes` | `position_id` | SET NULL | yes |
+| `user_positions` | `position_id` | CASCADE | no |
+
 ### → `program_enrollments` (3 references)
 
 | From table | Column | On delete | Nullable |
@@ -10027,12 +10104,12 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `meeting_motions` | `minutes_id` | CASCADE | no |
 | `minutes_action_items` | `minutes_id` | CASCADE | no |
 
-### → `positions` (2 references)
+### → `org_chart_nodes` (2 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
-| `issuance_allowances` | `role_id` | CASCADE | yes |
-| `user_positions` | `position_id` | CASCADE | no |
+| `org_chart_node_holders` | `node_id` | CASCADE | no |
+| `org_chart_nodes` | `parent_id` | SET NULL | yes |
 
 ### → `shift_equipment_checks` (2 references)
 
@@ -10259,12 +10336,6 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 |---|---|---|---|
 | `org_call_responses` | `call_id` | CASCADE | no |
 
-### → `org_chart_nodes` (1 references)
-
-| From table | Column | On delete | Nullable |
-|---|---|---|---|
-| `org_chart_nodes` | `parent_id` | SET NULL | yes |
-
 ### → `public_portal_api_keys` (1 references)
 
 | From table | Column | On delete | Nullable |
@@ -10353,6 +10424,7 @@ These tables are not directly tenant-scoped. Each must reach its organization th
 | `minutes_action_items` | `meeting_minutes`, `users` |
 | `onboarding_sessions` | — _(root table)_ |
 | `onboarding_status` | — _(root table)_ |
+| `org_chart_node_holders` | `org_chart_nodes`, `users` |
 | `organizations` | — _(root table)_ |
 | `password_history` | `users` |
 | `program_milestones` | `program_phases`, `training_programs` |
