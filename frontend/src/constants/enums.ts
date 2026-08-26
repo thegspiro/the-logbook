@@ -377,6 +377,19 @@ export type RequestStatus = (typeof RequestStatus)[keyof typeof RequestStatus];
  */
 export const DRIVER_NOT_QUALIFIED_CODE = 'LB-SCHED-001';
 
+// What a course's certification can qualify its holder to fill. These are the
+// values the backend's TRAINING_POSITION_MAP resolves; it also accepts the
+// legacy aliases `ems` and `aic`, which are deliberately not offered here
+// because each duplicates an entry below.
+export const COURSE_TARGET_POSITIONS: { value: string; label: string }[] = [
+  { value: 'firefighter', label: 'Firefighter' },
+  { value: 'driver_candidate', label: 'Driver/Operator' },
+  { value: 'emt', label: 'EMT' },
+  { value: 'paramedic', label: 'Paramedic' },
+  { value: 'officer', label: 'Officer' },
+  { value: 'probationary', label: 'Probationary' },
+];
+
 export const POSITION_LABELS: Record<string, string> = {
   officer: 'Officer',
   driver: 'Driver/Operator',
@@ -384,6 +397,7 @@ export const POSITION_LABELS: Record<string, string> = {
   EMS: 'EMT',
   ems: 'EMT',
   EMT: 'EMT',
+  paramedic: 'Paramedic',
   captain: 'Captain',
   lieutenant: 'Lieutenant',
   probationary: 'Probationary',

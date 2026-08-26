@@ -264,8 +264,14 @@ export interface SchedulingEligibilitySettings {
 /** Why a member holds a position: their rank, a completed program, or an
  *  org-wide open position. `label` names the specific rank or program. */
 export interface PositionEligibilitySource {
-  type: 'rank' | 'position' | 'training' | 'open';
+  type: 'rank' | 'position' | 'training' | 'certification' | 'open';
   label: string;
+  /**
+   * Calendar date the certification lapses. Set only for `certification`, and
+   * only when that card expires at all — a credential like Firefighter I has
+   * no expiry, which is not the same as having lapsed.
+   */
+  expires_on?: string | null;
 }
 
 export interface RosterApparatusClearance {

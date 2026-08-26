@@ -1,4 +1,16 @@
-"""Canonical form for the crew-seat lists stored in JSON columns.
+"""The shift-position vocabulary, and the canonical form of a stored seat list.
+
+Two concerns, both about what a "position" is, kept together so a reader
+looking for one finds the other:
+
+* ``TRAINING_POSITION_MAP`` — which seat a program or course qualifies its
+  holder to fill. Lives at this layer rather than beside its reader so the
+  schema layer can validate a ``target_position`` against the same vocabulary
+  the eligibility service resolves it through; a value the API accepts and the
+  resolver does not understand would be a seat grant that silently does
+  nothing.
+* ``normalize_stored_positions`` — the canonical shape of a stored seat list.
+
 
 ``shifts.positions``, ``shift_templates.positions`` and
 ``basic_apparatus.positions`` are untyped JSON, and three writers filled them
@@ -14,6 +26,20 @@ Writers settle the shape here so readers do not have to.
 """
 
 from typing import Any, Dict, List
+
+# Program / course ``target_position`` values -> the shift position they
+# unlock. Identity for a value that already names a seat; the rest are the
+# pipeline names departments actually type ("driver_candidate", "aic").
+TRAINING_POSITION_MAP: Dict[str, str] = {
+    "driver_candidate": "driver",
+    "officer": "officer",
+    "probationary": "probationary",
+    "firefighter": "firefighter",
+    "ems": "ems",
+    "emt": "ems",
+    "paramedic": "paramedic",
+    "aic": "officer",
+}
 
 
 def normalize_stored_positions(positions: Any) -> Any:

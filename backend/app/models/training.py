@@ -227,6 +227,17 @@ class TrainingCourse(Base):
         Integer
     )  # How long before recertification needed (null = doesn't expire)
 
+    # The shift position a current certification in this course qualifies the
+    # holder to fill -- the credential-side counterpart to
+    # TrainingProgram.target_position. Null for a course that teaches something
+    # without conferring a seat (most continuing education).
+    #
+    # This is what separates "was a paramedic" from "is a paramedic": the seat
+    # follows the member's own certification record and its expiration_date, so
+    # a lapsed card stops conferring the position on its expiry with nobody
+    # having to remember to revoke anything.
+    target_position = Column(String(100), index=True)
+
     # Course Details
     instructor = Column(String(255))
     max_participants = Column(Integer)

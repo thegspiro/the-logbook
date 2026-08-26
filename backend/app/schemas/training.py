@@ -17,6 +17,7 @@ from app.models.training import TrainingType as ModelTrainingType
 from app.schemas.base import UTCResponseBase
 from app.schemas.checklist import ChecklistItem, coerce_checklist_items
 from app.schemas.enum_validation import validate_enum_value
+from app.utils.positions import TRAINING_POSITION_MAP
 
 _response_config = ConfigDict(from_attributes=True)
 
@@ -101,6 +102,26 @@ class TrainingCategoryResponse(TrainingCategoryBase, UTCResponseBase):
 # Training Course Schemas
 
 
+def _validate_target_position(v: Optional[str]) -> Optional[str]:
+    """Reject a target_position the eligibility service cannot resolve.
+
+    An unrecognised value is not a harmless typo: it is stored, shown back on
+    the course as though it were configured, and confers nothing -- a seat
+    grant that silently does nothing, which is worse than no field at all
+    because the training officer believes the seat is wired. Blank is coerced
+    to None so an emptied form field clears the grant rather than storing "".
+    """
+    if v is None:
+        return None
+    cleaned = v.strip().lower()
+    if not cleaned:
+        return None
+    if cleaned not in TRAINING_POSITION_MAP:
+        allowed = ", ".join(sorted(TRAINING_POSITION_MAP))
+        raise ValueError(f"target_position must be one of: {allowed}")
+    return cleaned
+
+
 class TrainingCourseBase(BaseModel):
     """Base training course schema"""
 
@@ -116,11 +137,19 @@ class TrainingCourseBase(BaseModel):
     max_participants: Optional[int] = Field(None, ge=1)
     materials_required: Optional[List[str]] = None
     category_ids: Optional[List[str]] = None  # Categories this course belongs to
+    # The shift position a *current* certification in this course qualifies its
+    # holder to fill. Null for a course that confers no seat.
+    target_position: Optional[str] = Field(None, max_length=100)
 
     @field_validator("training_type")
     @classmethod
     def _validate_training_type(cls, v: str) -> str:
         return validate_enum_value(v, ModelTrainingType, "training_type")
+
+    @field_validator("target_position")
+    @classmethod
+    def _validate_target_position(cls, v: Optional[str]) -> Optional[str]:
+        return _validate_target_position(v)
 
 
 class TrainingCourseCreate(TrainingCourseBase):
@@ -142,12 +171,18 @@ class TrainingCourseUpdate(BaseModel):
     max_participants: Optional[int] = Field(None, ge=1)
     materials_required: Optional[List[str]] = None
     category_ids: Optional[List[str]] = None
+    target_position: Optional[str] = Field(None, max_length=100)
     active: Optional[bool] = None
 
     @field_validator("training_type")
     @classmethod
     def _validate_training_type(cls, v: Optional[str]) -> Optional[str]:
         return validate_enum_value(v, ModelTrainingType, "training_type")
+
+    @field_validator("target_position")
+    @classmethod
+    def _validate_target_position(cls, v: Optional[str]) -> Optional[str]:
+        return _validate_target_position(v)
 
 
 class TrainingCourseResponse(TrainingCourseBase, UTCResponseBase):

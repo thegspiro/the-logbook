@@ -7,6 +7,51 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### A lapsed certification no longer keeps conferring a shift seat, and Paramedic is its own position (2026-08-26)
+
+**Fixed**
+
+- The qualification roster listed a member's rank twice. Onboarding gives
+  every member the system position mirroring their rank, and rank codes
+  share a slug vocabulary with position slugs, so a Lieutenant resolved
+  "lieutenant" on both the rank and held-position branches and each emitted
+  a badge. The frontend had no style for the held-position source, so it
+  fell back to the rank badge's icon and colour and the two were
+  indistinguishable. The roster now credits each slug once, and a genuine
+  held position renders distinctly. A qualification held independently of
+  rank — a Lieutenant who is also an EMT — still reports both.
+
+**Added**
+
+- **A certification now confers a shift position, and stops conferring it
+  when it expires.** Eligibility previously came from rank, a held
+  position, a completed program, or the org's open-position list, and none
+  of those four expire — so a member who completed a paramedic program in
+  2019 stayed eligible for a medic seat forever unless an admin had
+  switched on `recert_enabled` for that program, which defaults to false.
+  `TrainingRecord` already held the department's real record of clearance
+  (`expiration_date`, `certification_number`, `issuing_agency`) and the
+  eligibility service never read it. A new
+  `training_courses.target_position` names the seat a current certification
+  in that course qualifies its holder to fill, and the record's own expiry
+  decides whether it still counts — on the same test the certification
+  alerts and the compliance hub already apply, so the three cannot
+  disagree. Set it per course under Training → Course Library ("Qualifies
+  For"); until a training officer sets it, certifications confer nothing
+  and eligibility behaves exactly as before.
+- **Paramedic is a shift position distinct from EMT.** Both previously
+  collapsed into one `ems` bucket, so a department staffing an ALS unit
+  could not say a medic was required, and "was a paramedic, still an EMT"
+  was not a state the system could represent. No rank seeds the medic seat:
+  a licence is not something stripes confer, and granting it by rank would
+  have put every chief on the medic roster with no card behind them. It is
+  earned only by a current certification. Enable it per department under
+  Scheduling Settings → Position Names.
+- The roster shows a certification's expiry beside the member, and switches
+  the badge to amber within 60 days of it — an officer staffing next month
+  sees the medic whose card runs out in three weeks rather than discovering
+  it when the roster silently shortens.
+
 ### Documents could be uploaded but never downloaded, and a dozen other Documents/Legal fixes (2026-08-26)
 
 **Added**
@@ -57,6 +102,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   file outside the caller's own organization's upload directory; the
   download endpoint now confines every resolved path to that directory.
 - Downloading a document is now recorded in the audit log.
+
 ### Every member could read every other member's notifications (2026-08-25)
 
 **Fixed**
