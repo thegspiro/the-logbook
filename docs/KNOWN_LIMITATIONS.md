@@ -1566,7 +1566,7 @@ member-facing equipment lists render a "Permanent Assignments" group and a
 
 - `ItemDetailPage` is the only UI caller of `inventoryService.assignItem`, and
   it passes no options, so the API default (`permanent`) always applies.
-- `batch_checkout` — the bulk flow the guide pictured issuing six SCBA units —
+- `distribute_items` — the bulk flow the guide pictured issuing six SCBA units —
   hardcodes `AssignmentType.PERMANENT`.
 
 Fixed in passing, because it was losing data rather than merely missing a
@@ -1578,7 +1578,7 @@ temporary and stores the date; two tests in `test_inventory_gaps.py` pin both
 outcomes.
 
 Still missing is any control letting an officer choose Temporary directly on an
-assign or batch-checkout form, which is what
+assign or distribute-items form, which is what
 `docs/training/02-training.md` described. That placeholder is retired. Needs an
 owner decision on whether the control should exist.
 

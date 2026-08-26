@@ -27,8 +27,8 @@ import type {
   CategoryPresetApplyResponse,
   InventoryCategoryCreate,
   ScanLookupResponse,
-  BatchCheckoutRequest,
-  BatchCheckoutResponse,
+  DistributeItemsRequest,
+  DistributeItemsResponse,
   BatchReturnRequest,
   BatchReturnResponse,
   LabelFormat,
@@ -336,6 +336,31 @@ export const inventoryService = {
     return response.data;
   },
 
+  async getDepartureClearances(params?: { status?: string }): Promise<{
+    clearances: Array<{
+      id: string;
+      user_id: string;
+      status: string;
+      items_outstanding: number;
+      initiated_at: string;
+      return_deadline?: string;
+    }>;
+    total: number;
+  }> {
+    const response = await api.get('/inventory/clearances', { params });
+    return response.data as {
+      clearances: Array<{
+        id: string;
+        user_id: string;
+        status: string;
+        items_outstanding: number;
+        initiated_at: string;
+        return_deadline?: string;
+      }>;
+      total: number;
+    };
+  },
+
   async getLowStockItems(): Promise<LowStockAlert[]> {
     const response = await api.get<LowStockAlert[]>('/inventory/low-stock');
     return asArray(response.data);
@@ -499,14 +524,8 @@ export const inventoryService = {
     return response.data;
   },
 
-  async batchCheckout(data: BatchCheckoutRequest): Promise<BatchCheckoutResponse> {
-    const response = await api.post<BatchCheckoutResponse>('/inventory/batch-checkout', data);
-    return response.data;
-  },
-
-  /** Distribute a mixed scanned batch into assignments, temporary loans, and issuances. */
-  async distributeItems(data: BatchCheckoutRequest): Promise<BatchCheckoutResponse> {
-    const response = await api.post<BatchCheckoutResponse>('/inventory/batch-checkout', data);
+  async distributeItems(data: DistributeItemsRequest): Promise<DistributeItemsResponse> {
+    const response = await api.post<DistributeItemsResponse>('/inventory/distribute-items', data);
     return response.data;
   },
 

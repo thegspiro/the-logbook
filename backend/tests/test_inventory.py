@@ -560,7 +560,7 @@ class TestPoolIssuance:
 class TestBatchOperations:
 
     @pytest.mark.asyncio
-    async def test_batch_checkout(self, db_session, setup_org_and_user):
+    async def test_distribute_items(self, db_session, setup_org_and_user):
         org_id, user_id, _ = setup_org_and_user
         svc = InventoryService(db_session)
 
@@ -576,9 +576,15 @@ class TestBatchOperations:
                 },
                 created_by=uuid.UUID(user_id),
             )
-            items_data.append({"code": f"BC-{i:04d}", "quantity": 1})
+            items_data.append(
+                {
+                    "code": f"BC-{i:04d}",
+                    "quantity": 1,
+                    "operation": "permanent_assignment",
+                }
+            )
 
-        result = await svc.batch_checkout(
+        result = await svc.distribute_items(
             user_id=uuid.UUID(user_id),
             organization_id=uuid.UUID(org_id),
             performed_by=uuid.UUID(user_id),
@@ -590,7 +596,9 @@ class TestBatchOperations:
         assert result["failed"] == 0
 
     @pytest.mark.asyncio
-    async def test_batch_checkout_partial_failure(self, db_session, setup_org_and_user):
+    async def test_distribute_items_partial_failure(
+        self, db_session, setup_org_and_user
+    ):
         org_id, user_id, _ = setup_org_and_user
         svc = InventoryService(db_session)
 
@@ -605,13 +613,17 @@ class TestBatchOperations:
             created_by=uuid.UUID(user_id),
         )
 
-        result = await svc.batch_checkout(
+        result = await svc.distribute_items(
             user_id=uuid.UUID(user_id),
             organization_id=uuid.UUID(org_id),
             performed_by=uuid.UUID(user_id),
             items=[
-                {"code": "BC-REAL", "quantity": 1},
-                {"code": "BC-NONEXISTENT", "quantity": 1},
+                {"code": "BC-REAL", "quantity": 1, "operation": "permanent_assignment"},
+                {
+                    "code": "BC-NONEXISTENT",
+                    "quantity": 1,
+                    "operation": "permanent_assignment",
+                },
             ],
         )
 
