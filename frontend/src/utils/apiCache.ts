@@ -91,6 +91,7 @@ const UNCACHEABLE_PREFIXES = [
   '/facilities/occupants', // facility occupant PII
   '/facilities/access-keys', // physical building access-key inventory
   '/admin-hub/', // module attention queues: medical-screening lapses, applicant backlogs (PHI/PII-adjacent)
+  '/equipment-checks', // reporter/member names, free-text restock notes, deployed-lot detail (PII)
 ] as const;
 
 /**

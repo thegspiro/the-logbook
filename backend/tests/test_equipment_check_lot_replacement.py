@@ -15,6 +15,7 @@ removal is unconditional and the disposition is recorded rather than assumed.
 Mocked session — no MySQL.
 """
 
+import inspect
 from datetime import date, timedelta
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
@@ -436,3 +437,22 @@ class TestToppingUpIsUnchanged:
                 replaced_deployed_lot_id="dl-same",
                 disposition="discarded",
             )
+
+
+class TestReportItemUsedIsLocked:
+    """Two crews reporting use of the same item at once must be serialized,
+    or both read the same starting quantity and both decrement it
+    independently -- the count ends up one use short instead of two."""
+
+    def test_the_item_row_is_locked(self):
+        source = inspect.getsource(EquipmentCheckService.report_item_used)
+        assert "for_update=True" in source
+
+    def test_the_deployed_lots_are_locked_before_the_read_modify_write(self):
+        source = inspect.getsource(EquipmentCheckService.report_item_used)
+        assert "with_for_update()" in source
+        # The lock must be acquired before quantities are read/consumed, not
+        # after -- a lock taken post-read guards nothing.
+        assert source.index("with_for_update()") < source.index(
+            "self._consume_deployed"
+        )
