@@ -129,7 +129,9 @@ constraint, so nothing else would have caught it.
 **Where:** `app/services/meetings_service.py`, `create_from_event`.
 **Fix:** the `Event` fetch is now a locking read (`.with_for_update()`),
 serializing concurrent bridge attempts for the same event so the second
-call's existence check sees the first's committed `Meeting` row.
+call's existence check sees the first's committed `Meeting` row. **Revised
+after Codex review** — see below; the `Meeting` existence check is now
+also a locking read, not just the `Event` fetch.
 
 ### MM-4 — MED — quorum recalculation had the same read-then-write race, on the quorum status itself — ✅ FIXED
 
@@ -201,6 +203,41 @@ FastAPI/Pydantic reject a malformed value with a clean 422 before the
 handler body runs — the same pattern already used for every other UUID path
 parameter in this file.
 
+## Revised after Codex review
+
+Codex reviewed PR #1906 and surfaced two real findings on this pass's own
+fixes, both mechanical, both fixed in a follow-up commit:
+
+- **P1 — lock-completeness gap in the MM-3 fix.** The original fix locked
+  only the `Event` fetch, reasoning that since it would be the
+  transaction's first query, the plain `Meeting` existence-check SELECT
+  that follows would establish its own accurate REPEATABLE READ snapshot
+  at that point. Codex correctly identified this as unsafe in production:
+  an authenticated request has typically already run other queries on the
+  same DB session before `create_from_event` is ever called (e.g.
+  `get_current_user` resolving the caller), which can establish the
+  snapshot first — so the "event fetch is first" assumption doesn't hold
+  in general, and the existence check could still miss a concurrently
+  committed row. Fixed by making the `Meeting` existence check a
+  `.with_for_update()` locking read as well, matching every other Pitfall
+  #27 fix in this codebase: lock the parent/uniqueness row **and**
+  separately make the check itself a locking read, never rely on query
+  ordering. `TestCreateFromEventLocking` now asserts `FOR UPDATE` on both
+  captured queries, not just the first.
+- **P2 — audit-log inaccuracy in the MM-6 fix.** `update_action_item`'s new
+  `action_item_updated` audit event logged `changed_fields` from the raw
+  client payload, but `minute_service.update_action_item` silently
+  restricts the applied fields to `{status, completion_notes}` when the
+  parent minutes are `APPROVED` — so a client sending `description` on
+  approved minutes would have it no-opped by the service while the audit
+  log still claimed it changed. Fixed by having the service set a
+  non-mapped `item.applied_fields` attribute (the post-filter field set,
+  same convention as `MeetingsService.attach_creator_names`) and having the
+  endpoint log that instead of re-deriving from the raw payload.
+
+Both fixes verified via the same completion gate below (lint clean, full
+suite green) before being pushed and the review threads resolved.
+
 ## Confirmed still open — nothing needing a product decision
 
 Everything this pass surfaced had a mechanical fix available and was
@@ -217,8 +254,8 @@ None — every fix is service/endpoint-layer only.
     nullable-field-clears test (`notes`).
   - `TestUpdateActionItem` — added a reassignment-to-foreign-user rejection
     test and a `description` nullability guard.
-  - `TestCreateFromEventLocking` (new) — asserts the `Event` fetch renders
-    `FOR UPDATE`.
+  - `TestCreateFromEventLocking` (new) — asserts both the `Event` fetch and
+    the `Meeting` existence check render `FOR UPDATE`.
 - `tests/test_minute_service.py`:
   - `TestUpdateMinutes` — added a `title` nullability guard.
   - `TestUpdateMotion` — added a `motion_text` nullability guard.
@@ -239,4 +276,4 @@ None — every fix is service/endpoint-layer only.
 | `isort --check-only` (changed files)                  | clean                                |
 | `python3 scripts/validate_migrations.py --strict`     | PASSED (no migrations)               |
 | backend tests, scope (`meeting or minutes or quorum`) | 203 passed, 1 skipped (pre-existing) |
-| backend tests, full suite                             | 8908 passed, 22 skipped              |
+| backend tests, full suite                             | 8910 passed, 22 skipped              |
