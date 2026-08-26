@@ -1,6 +1,6 @@
 # Security Review 12 — Facilities
 
-**Prefix:** `FAC` · **Iteration:** 12 · **Reviewed:** 2026-08-26 · **PR:** (opened this iteration)
+**Prefix:** `FAC` · **Iteration:** 12 · **Reviewed:** 2026-08-26 · **PR:** [#1836](https://github.com/thegspiro/the-logbook/pull/1836)
 
 **Backend:** `api/v1/endpoints/facilities.py` (98 routes), `services/facilities_service.py`
 (~3,290 L), model `app/models/facilities.py`
