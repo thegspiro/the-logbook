@@ -327,3 +327,186 @@ class TestSyncFromTrainingRecord:
         assert granted.expires_on == date(2030, 1, 1)
         # One row, not two -- uq_member_qualification renews in place.
         assert len(await service.list_for_member(user_id, org_id)) == 1
+
+
+@pytest.mark.integration
+class TestGrantsFollowCorrections:
+    """A grant is recomputed from the records, not written once and forgotten.
+
+    Records get corrected. An officer who marks a completion failed, cancels it
+    or voids it has said the member is not certified, and a grant left standing
+    would keep clearing them for a safety-critical seat on the strength of a
+    record that no longer says so.
+    """
+
+    async def _fixture(self, db, *, grants="paramedic", months=None):
+        import uuid
+
+        from sqlalchemy import text
+
+        from app.models.training import TrainingCourse, TrainingType
+
+        org_id, user_id = str(uuid.uuid4()), str(uuid.uuid4())
+        await db.execute(
+            text("INSERT INTO organizations (id, name, slug) VALUES (:i, :n, :s)"),
+            {"i": org_id, "n": "Corr Org", "s": "corr-" + org_id[:8]},
+        )
+        await db.execute(
+            text(
+                "INSERT INTO users (id, organization_id, username, email) "
+                "VALUES (:i, :o, :u, :e)"
+            ),
+            {
+                "i": user_id,
+                "o": org_id,
+                "u": "m-" + user_id[:8],
+                "e": user_id[:8] + "@example.test",
+            },
+        )
+        course = TrainingCourse(
+            id=str(uuid.uuid4()),
+            organization_id=org_id,
+            name="Paramedic Academy",
+            training_type=TrainingType.CERTIFICATION,
+            grants_qualification=grants,
+            expiration_months=months,
+        )
+        db.add(course)
+        await db.flush()
+        return org_id, user_id, course
+
+    @staticmethod
+    def _record(org_id, user_id, course, *, status, passed=None, expiry=None):
+        import uuid
+
+        from app.models.training import TrainingRecord, TrainingType
+
+        return TrainingRecord(
+            id=str(uuid.uuid4()),
+            organization_id=org_id,
+            user_id=user_id,
+            course_id=course.id,
+            course_name=course.name,
+            training_type=TrainingType.CERTIFICATION,
+            hours_completed=40.0,
+            status=status,
+            passed=passed,
+            completion_date=date(2026, 1, 5),
+            expiration_date=expiry,
+        )
+
+    async def test_a_failed_completion_grants_nothing(self, db_session):
+        """``passed`` is an independent column from ``status``.
+
+        The historical-import path defaults every row to COMPLETED, so a CSV
+        recording a failure arrives as completed-and-not-passed. Certifying
+        that member for a medic seat is the failure mode worth refusing.
+        """
+        from app.models.training import TrainingStatus
+        from app.services.qualification_service import QualificationService
+
+        org_id, user_id, course = await self._fixture(db_session)
+        rec = self._record(
+            org_id, user_id, course, status=TrainingStatus.COMPLETED, passed=False
+        )
+        db_session.add(rec)
+        await db_session.flush()
+
+        assert (
+            await QualificationService(db_session).sync_from_training_record(rec)
+        ) is None
+        assert (
+            await QualificationService(db_session).get_member_codes(user_id, org_id)
+            == []
+        )
+
+    async def test_correcting_a_completion_to_failed_revokes_the_grant(
+        self, db_session
+    ):
+        from app.models.training import TrainingStatus
+        from app.services.qualification_service import QualificationService
+
+        org_id, user_id, course = await self._fixture(db_session)
+        svc = QualificationService(db_session)
+        rec = self._record(org_id, user_id, course, status=TrainingStatus.COMPLETED)
+        db_session.add(rec)
+        await db_session.flush()
+        await svc.sync_from_training_record(rec)
+        assert await svc.get_member_codes(user_id, org_id) == ["paramedic"]
+
+        # The officer corrects it: the class was failed after all.
+        rec.passed = False
+        await db_session.flush()
+        await svc.sync_from_training_record(rec)
+
+        assert (
+            await svc.get_member_codes(user_id, org_id) == []
+        ), "a corrected record left the member clearing the medic seat"
+
+    async def test_another_standing_record_keeps_the_grant(self, db_session):
+        # Voiding one course's record must not revoke what a second, still
+        # valid completion of the same qualification supports.
+        from app.models.training import TrainingStatus
+        from app.services.qualification_service import QualificationService
+
+        org_id, user_id, course = await self._fixture(db_session)
+        svc = QualificationService(db_session)
+        first = self._record(org_id, user_id, course, status=TrainingStatus.COMPLETED)
+        second = self._record(org_id, user_id, course, status=TrainingStatus.COMPLETED)
+        db_session.add_all([first, second])
+        await db_session.flush()
+        await svc.sync_from_training_record(first)
+
+        first.status = TrainingStatus.CANCELLED
+        await db_session.flush()
+        await svc.sync_from_training_record(first)
+
+        assert await svc.get_member_codes(user_id, org_id) == ["paramedic"]
+
+    async def test_an_officers_own_grant_is_never_auto_revoked(self, db_session):
+        """A manual grant says something the records do not know about.
+
+        A card from a previous department, or state reciprocity. Recomputation
+        removes only what it granted, which is why the marker exists.
+        """
+        from app.models.training import TrainingStatus
+        from app.services.qualification_service import QualificationService
+
+        org_id, user_id, course = await self._fixture(db_session)
+        svc = QualificationService(db_session)
+        await svc.grant(
+            user_id=user_id,
+            organization_id=org_id,
+            qualification_code="paramedic",
+            notes="Reciprocity — card issued by a previous department.",
+        )
+
+        rec = self._record(org_id, user_id, course, status=TrainingStatus.CANCELLED)
+        db_session.add(rec)
+        await db_session.flush()
+        await svc.sync_from_training_record(rec)
+
+        assert await svc.get_member_codes(user_id, org_id) == ["paramedic"]
+
+    async def test_expiry_is_derived_from_the_course_when_the_record_lacks_one(
+        self, db_session
+    ):
+        """The update path never populated expiration_date.
+
+        Only the create paths derive it, so a record PATCHed to completed would
+        confer a permanent credential. Derived here so every write path agrees.
+        """
+        from app.models.training import TrainingStatus
+        from app.services.qualification_service import QualificationService
+
+        org_id, user_id, course = await self._fixture(db_session, months=24)
+        rec = self._record(
+            org_id, user_id, course, status=TrainingStatus.COMPLETED, expiry=None
+        )
+        db_session.add(rec)
+        await db_session.flush()
+
+        granted = await QualificationService(db_session).sync_from_training_record(rec)
+        assert granted.expires_on == date(
+            2028, 1, 5
+        ), "a completion with no explicit expiry conferred a permanent card"

@@ -13,6 +13,7 @@ that, so this list cannot drift out of the seat vocabulary the way the
 apparatus editor's did (#1833).
 """
 
+from calendar import monthrange
 from datetime import date
 from typing import Any, Dict, List, Optional, Sequence, Set
 
@@ -192,29 +193,63 @@ class QualificationService:
         )
         return list(result.scalars().all())
 
+    #: Stamped on a grant this service derived from a training record, so a
+    #: later correction can tell those apart from one an officer entered by
+    #: hand. Recomputation only ever removes its own.
+    RECORD_SOURCED_NOTE = "Granted from a completed training record."
+
+    @staticmethod
+    def _course_expiry(completion, months):
+        """When a certification completed on ``completion`` lapses.
+
+        Calendar-month arithmetic, clamped to the length of the landing month
+        so a 31st completion on a 24-month cycle does not roll into the next
+        month.
+        """
+        if not completion or not months:
+            return None
+        month = completion.month - 1 + months
+        year = completion.year + month // 12
+        month = month % 12 + 1
+        return date(year, month, min(completion.day, monthrange(year, month)[1]))
+
     async def sync_from_training_record(
         self,
         record: Any,
     ) -> Optional[MemberQualification]:
-        """Grant the qualification a completed course confers, if it confers one.
+        """Recompute the qualification this record's course confers.
 
         The writer half of this table. A training officer records the class
         that actually happened; the course already knows what it certifies and
         the record already knows when it was completed and when it expires. So
         the qualification follows from the record rather than being entered a
-        second time, which is the entry that gets forgotten and leaves a member
-        certified on paper and unqualified in the scheduler.
+        second time -- the second entry is the one that gets forgotten, leaving
+        a member certified on paper and unqualified in the scheduler.
 
-        Does nothing unless the record is COMPLETED and its course names a
-        qualification. A record that is scheduled, cancelled or failed has
-        certified nobody, and re-recording an older completion must not pull a
-        current card's expiry backwards -- ``grant`` renews in place, so this
-        keeps whichever expiry is further out.
+        A **recompute**, not a one-way grant, because records are corrected. An
+        officer who marks a completion failed, cancels it or voids it has said
+        the member is not certified, and a grant left standing would keep
+        clearing them for an EMT, medic, driver or firefighter seat on the
+        strength of a record that no longer says so. So the answer is derived
+        from every record that still supports the code, and when none does the
+        grant is removed.
+
+        Only grants this service made are removed -- they carry
+        ``RECORD_SOURCED_NOTE``. A qualification an officer entered by hand
+        says something the records do not know about (a card from a previous
+        department, a state reciprocity), and a correction to an unrelated
+        record must not silently delete it.
+
+        ``passed is False`` disqualifies a record however its status reads. The
+        two are independent columns and the historical-import path defaults
+        every row to COMPLETED, so a CSV that records a failure would otherwise
+        certify the member for a safety-critical seat.
         """
-        from app.models.training import TrainingCourse, TrainingStatus
+        from app.models.training import TrainingCourse, TrainingRecord, TrainingStatus
 
-        if getattr(record, "status", None) != TrainingStatus.COMPLETED:
-            return None
+        organization_id = str(record.organization_id)
+        user_id = str(record.user_id)
+
         course_id = getattr(record, "course_id", None)
         if not course_id:
             return None
@@ -222,37 +257,89 @@ class QualificationService:
         result = await self.db.execute(
             select(TrainingCourse.grants_qualification).where(
                 TrainingCourse.id == str(course_id),
-                TrainingCourse.organization_id == str(record.organization_id),
+                TrainingCourse.organization_id == organization_id,
             )
         )
         code = result.scalar_one_or_none()
         if not code or code not in QUALIFICATIONS:
             return None
 
+        # Every record still standing behind this code, across every course
+        # that certifies it -- a member may hold EMT from either of two
+        # courses, and voiding one must not revoke what the other supports.
+        supporting = await self.db.execute(
+            select(
+                TrainingRecord.completion_date,
+                TrainingRecord.expiration_date,
+                TrainingCourse.expiration_months,
+            )
+            .join(TrainingCourse, TrainingRecord.course_id == TrainingCourse.id)
+            .where(
+                TrainingRecord.user_id == user_id,
+                TrainingRecord.organization_id == organization_id,
+                TrainingCourse.organization_id == organization_id,
+                TrainingCourse.grants_qualification == code,
+                TrainingRecord.status == TrainingStatus.COMPLETED,
+                or_(
+                    TrainingRecord.passed.is_(None),
+                    TrainingRecord.passed.is_(True),
+                ),
+            )
+        )
+        rows = supporting.all()
+
         existing = await self.db.execute(
             select(MemberQualification).where(
-                MemberQualification.user_id == str(record.user_id),
-                MemberQualification.organization_id == str(record.organization_id),
+                MemberQualification.user_id == user_id,
+                MemberQualification.organization_id == organization_id,
                 MemberQualification.qualification_code == code,
             )
         )
         held = existing.scalar_one_or_none()
-        expires_on = getattr(record, "expiration_date", None)
-        if held is not None:
-            # Never move a live card's expiry earlier. Backfilling an old class
-            # is routine, and it must not lapse the certification the member is
-            # actually working under.
-            if held.expires_on is None:
-                expires_on = None
-            elif expires_on is not None and expires_on < held.expires_on:
-                expires_on = held.expires_on
+
+        if not rows:
+            # Nothing supports it any more. Remove only what this service
+            # granted; an officer's own entry is theirs to withdraw.
+            if held is not None and held.notes == self.RECORD_SOURCED_NOTE:
+                await self.db.delete(held)
+                await self.db.flush()
+            return None
+
+        # The furthest-out expiry wins, and a record with no expiry at all
+        # means the credential does not lapse. An expiry the record does not
+        # carry is derived from the course's own cycle: only the create paths
+        # populate expiration_date, so a record PATCHed to completed would
+        # otherwise confer a permanent card.
+        best_completion = None
+        best_expiry = None
+        never_expires = False
+        for completion, expiry, months in rows:
+            resolved = expiry or self._course_expiry(completion, months)
+            if resolved is None:
+                never_expires = True
+            elif best_expiry is None or resolved > best_expiry:
+                best_expiry = resolved
+            if completion and (best_completion is None or completion > best_completion):
+                best_completion = completion
+
+        # Do not relabel an officer's own grant as record-sourced. ``grant``
+        # overwrites notes, so stamping unconditionally would hand this service
+        # permission to delete an entry it did not make the next time a record
+        # is voided. A row already carrying the marker, or one being created
+        # here, is ours; anything else keeps whatever the officer wrote.
+        note = (
+            self.RECORD_SOURCED_NOTE
+            if held is None or held.notes == self.RECORD_SOURCED_NOTE
+            else held.notes
+        )
 
         return await self.grant(
-            user_id=str(record.user_id),
-            organization_id=str(record.organization_id),
+            user_id=user_id,
+            organization_id=organization_id,
             qualification_code=code,
-            granted_on=getattr(record, "completion_date", None),
-            expires_on=expires_on,
+            granted_on=best_completion,
+            expires_on=None if never_expires else best_expiry,
+            notes=note,
         )
 
     async def grant(

@@ -357,6 +357,71 @@ class TestSeatVocabularyMatchesTheWire:
     def test_canonical_set_is_exactly_the_signup_enum(self):
         assert CANONICAL_POSITIONS == {p.value for p in ShiftPosition}
 
+    def test_the_stored_enum_matches_the_wire_enum(self):
+        """A third copy of this vocabulary backs the ENUM columns.
+
+        ``app.models.training.ShiftPosition`` is what SQLAlchemy emits into the
+        MySQL ``ENUM(...)`` DDL for ``shift_assignments.position`` and
+        ``standing_shift_claims.position``. It is a separate class from the
+        request-schema enum asserted above, and the two had drifted: the medic
+        seat was added to the schema and to ``CANONICAL_POSITIONS`` while this
+        one still listed nine values.
+
+        The failure that causes is invisible until the write. A paramedic
+        signup passes request validation, passes the eligibility union, and
+        then fails when the ORM flushes a label the column does not allow --
+        so the seat looks fillable everywhere except where it counts.
+        """
+        from app.models.training import ShiftPosition as StoredShiftPosition
+
+        assert {p.value for p in StoredShiftPosition} == {
+            p.value for p in ShiftPosition
+        }, (
+            "the stored enum backing the position ENUM columns has drifted "
+            "from the one the signup API accepts"
+        )
+
+    def test_every_enum_backed_position_column_is_normalized_at_startup(self):
+        """Adding a seat widens the ENUM DDL only for listed columns.
+
+        ``enum_normalization`` compares each listed column's labels against its
+        model enum and rewrites the DDL when they differ. That is this
+        deployment's delivery mechanism for existing databases, since schema is
+        built by ``create_all`` and Alembic is stamped rather than upgraded. A
+        ``Enum(ShiftPosition)`` column missing from that list keeps the older
+        label set forever, and the seat stays unwritable on exactly the
+        installations that already exist.
+        """
+        import re
+        from pathlib import Path as _Path
+
+        from app.utils.enum_normalization import _TARGET_COLUMNS
+
+        model_source = (
+            _Path(__file__).resolve().parents[1] / "app" / "models" / "training.py"
+        ).read_text()
+
+        # Tables declaring a column typed Enum(ShiftPosition).
+        backed = set()
+        table = None
+        for line in model_source.splitlines():
+            match = re.search(r'__tablename__\s*=\s*"([^"]+)"', line)
+            if match:
+                table = match.group(1)
+            if "Enum(ShiftPosition" in line and table:
+                backed.add(table)
+
+        assert backed, "no Enum(ShiftPosition) column found — did the type move?"
+        listed = {
+            spec.table
+            for spec in _TARGET_COLUMNS
+            if spec.enum_class.__name__ == "ShiftPosition"
+        }
+        assert backed <= listed, (
+            "these tables have an Enum(ShiftPosition) column that startup "
+            f"normalization never widens: {sorted(backed - listed)}"
+        )
+
     def test_apparatus_page_seat_values_are_all_canonical(self):
         # The frontend list that caused this bug, asserted from source so a
         # non-canonical seat value cannot be reintroduced there unnoticed.

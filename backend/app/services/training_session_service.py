@@ -6,7 +6,7 @@ Business logic for training session management, approval workflows, and notifica
 
 import secrets
 from datetime import datetime, timedelta, timezone
-from typing import List, Optional, Tuple
+from typing import Any, List, Optional, Tuple
 from uuid import UUID
 
 from loguru import logger
@@ -1294,6 +1294,7 @@ class TrainingSessionService:
         ``_apply_pipeline_updates`` after its own approval+records commit.
         """
         pipeline_updates: List[Tuple[str, str, str, float, str]] = []
+        completed_records: List[Any] = []
 
         # Get training session details
         session_result = await self.db.execute(
@@ -1400,6 +1401,7 @@ class TrainingSessionService:
                 existing_record.hours_completed = hours_completed
                 existing_record.completion_date = event_date
                 existing_record.status = "completed"
+                completed_records.append(existing_record)
                 # Carry the session's current links across too. Reopening is
                 # what makes this reachable: a leader corrects a session filed
                 # against the wrong category, re-finalizes, and the screen says
@@ -1446,6 +1448,7 @@ class TrainingSessionService:
                     created_by=str(approved_by),
                 )
                 self.db.add(training_record)
+                completed_records.append(training_record)
 
             # Queue pipeline progress updates to apply AFTER this transaction
             # commits (the real updater commits internally). Only positive hours
@@ -1478,6 +1481,24 @@ class TrainingSessionService:
                                 str(training_session.id),
                             )
                         )
+
+        # Grant the qualifications these completions certify. Approving
+        # attendance is the ordinary way a scheduled class becomes a completed
+        # record, so a course carrying ``grants_qualification`` has to confer it
+        # here too -- otherwise the credential is recorded and the member is
+        # still not cleared for the seat it qualifies them for.
+        #
+        # Flushed rather than committed, and no exception is swallowed: this
+        # runs inside the caller's approval+records transaction, and a failure
+        # here should roll the whole thing back rather than finalize attendance
+        # against a half-written qualification.
+        if completed_records:
+            from app.services.qualification_service import QualificationService
+
+            await self.db.flush()
+            qualifications = QualificationService(self.db)
+            for completed in completed_records:
+                await qualifications.sync_from_training_record(completed)
 
         # NOTE: Callers are responsible for commit/rollback to keep approval +
         # record creation atomic; they apply the returned pipeline updates only

@@ -954,6 +954,22 @@ async def update_record(
     for field, value in update_fields.items():
         setattr(record, field, value)
 
+    # Derive the expiry the create paths derive. A record PATCHed to completed
+    # with a completion date and no explicit expiration would otherwise keep a
+    # null expiration_date, which reads as "never lapses" to the certification
+    # alerts, the compliance hub and shift eligibility alike -- so a credential
+    # completed through this workflow would clear its seats indefinitely.
+    if not record.expiration_date and record.course_id and record.completion_date:
+        course_result = await db.execute(
+            select(TrainingCourse.expiration_months).where(
+                TrainingCourse.id == str(record.course_id),
+                TrainingCourse.organization_id == str(current_user.organization_id),
+            )
+        )
+        record.expiration_date = QualificationService._course_expiry(
+            record.completion_date, course_result.scalar_one_or_none()
+        )
+
     await db.commit()
     await db.refresh(record)
 

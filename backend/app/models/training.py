@@ -3101,12 +3101,22 @@ class ShiftCall(Base):
 
 
 class ShiftPosition(str, enum.Enum):
-    """Position/role within a shift"""
+    """Position/role within a shift.
+
+    Must stay the same set as ``ShiftPosition`` in app/schemas/scheduling.py and
+    ``CANONICAL_POSITIONS`` in app/utils/positions.py. This one is the *stored*
+    vocabulary -- it backs the MySQL ENUM DDL on ``shift_assignments.position``
+    and ``standing_shift_claims.position`` -- so a seat the request schema
+    accepts and this enum omits passes validation and eligibility and then
+    fails when the ORM flushes it. ``tests/test_position_slots.py`` asserts all
+    three agree.
+    """
 
     OFFICER = "officer"
     DRIVER = "driver"
     FIREFIGHTER = "firefighter"
     EMS = "ems"
+    PARAMEDIC = "paramedic"
     CAPTAIN = "captain"
     LIEUTENANT = "lieutenant"
     PROBATIONARY = "probationary"
