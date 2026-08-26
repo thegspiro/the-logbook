@@ -111,6 +111,8 @@ from app.schemas.inventory import (
     InventoryLotUpdate,
     InventorySetupStatus,
     InventorySummary,
+    InventoryTransferRequest,
+    InventoryTransferResponse,
     InventoryVendorContactCreate,
     InventoryVendorContactResponse,
     InventoryVendorContactUpdate,
@@ -3025,6 +3027,24 @@ async def batch_checkout_items(
             {"user_id": str(request.user_id), "successful": result["successful"]},
         )
 
+    return result
+
+
+@router.post("/transfer", response_model=InventoryTransferResponse)
+async def transfer_inventory_item(
+    request: InventoryTransferRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """Explicitly transfer custody; stale confirmations fail rather than overwrite."""
+    service = InventoryService(db)
+    result, error = await service.transfer_item_holding(
+        **request.model_dump(),
+        organization_id=current_user.organization_id,
+        performed_by=current_user.id,
+    )
+    if error:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=error)
     return result
 
 

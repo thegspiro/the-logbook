@@ -29,6 +29,7 @@ import type {
   ScanLookupResponse,
   BatchCheckoutRequest,
   BatchCheckoutResponse,
+  InventoryTransferRequest,
   BatchReturnRequest,
   BatchReturnResponse,
   LabelFormat,
@@ -463,6 +464,10 @@ export const inventoryService = {
   async batchCheckout(data: BatchCheckoutRequest): Promise<BatchCheckoutResponse> {
     const response = await api.post<BatchCheckoutResponse>('/inventory/batch-checkout', data);
     return response.data;
+  },
+
+  async transferItem(data: InventoryTransferRequest): Promise<void> {
+    await api.post('/inventory/transfer', data);
   },
 
   async batchReturn(data: BatchReturnRequest): Promise<BatchReturnResponse> {

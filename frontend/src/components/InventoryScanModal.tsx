@@ -32,6 +32,7 @@ import { useScanFeedback } from '../hooks/useScanFeedback';
 import { ScanSuccessFlash } from './ux/ScanSuccessFlash';
 import { FlashlightToggle } from './ux/FlashlightToggle';
 import { trackSupportsFlashlight, setTrackFlashlight } from '../utils/cameraTorch';
+import { useAuthStore } from '../stores/authStore';
 import {
   HAS_BARCODE_DETECTOR,
   BARCODE_SCAN_CONFIG,
@@ -58,11 +59,13 @@ interface ScannedItem {
 }
 
 type ResultItem = {
+  item_id?: string;
   code: string;
   item_name: string;
   action: string;
   success: boolean;
   error?: string;
+  conflict?: import('../services/api').InventoryHoldingConflict;
 };
 
 type ActiveScanner = 'native' | 'html5' | null;
@@ -98,6 +101,12 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
   const [submitting, setSubmitting] = useState(false);
   const [results, setResults] = useState<ResultItem[] | null>(null);
   const [showConfirm, setShowConfirm] = useState(false);
+  const [transferResult, setTransferResult] = useState<ResultItem | null>(null);
+  const [transferCondition, setTransferCondition] = useState('good');
+  const [transferReason, setTransferReason] = useState('');
+  const [transferImmediate, setTransferImmediate] = useState(true);
+  const [holderConfirmed, setHolderConfirmed] = useState(false);
+  const canTransfer = useAuthStore((state) => state.checkPermission)('inventory.manage');
   const [searchResults, setSearchResults] = useState<ScanLookupResult[]>([]);
   const [showDropdown, setShowDropdown] = useState(false);
   const [searchLoading, setSearchLoading] = useState(false);
@@ -350,6 +359,7 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
       setManualCode('');
       setLookupError(null);
       setResults(null);
+      setTransferResult(null);
       setSearchResults([]);
       setShowDropdown(false);
       setActiveDropdownIndex(-1);
@@ -608,6 +618,28 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
     }
   };
 
+  const handleTransfer = async () => {
+    const conflict = transferResult?.conflict;
+    if (!conflict || !transferResult?.item_id || !holderConfirmed || !transferReason.trim()) return;
+    setSubmitting(true);
+    try {
+      await inventoryService.transferItem({
+        item_id: transferResult.item_id, new_holder_id: userId,
+        current_holder_id: conflict.holder_id, current_record_id: conflict.record_id,
+        holding_type: conflict.holding_type, return_condition: transferCondition,
+        transfer_reason: transferReason.trim(), immediate: transferImmediate,
+      });
+      setResults((current) => current?.map((item) => {
+        if (item !== transferResult) return item;
+        const { error: _error, conflict: _conflict, ...completed } = item;
+        return { ...completed, success: true, action: 'transferred' };
+      }) ?? null);
+      setTransferResult(null);
+    } catch {
+      setLookupError('Transfer failed because custody changed or the operation could not be completed. Rescan the item.');
+    } finally { setSubmitting(false); }
+  };
+
   // ── Render ───────────────────────────────────────────────────
 
   const title = mode === 'checkout' ? 'Assign Items' : 'Return Items';
@@ -661,7 +693,7 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
                         : 'border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-900/20'
                     }`}
                   >
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-start gap-2">
                       {r.success ? (
                         <Check className="h-4 w-4 text-green-600 dark:text-green-400" />
                       ) : (
@@ -674,6 +706,19 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
                         >
                           {r.success ? r.action.replace(/_/g, ' ') : r.error}
                         </p>
+                        {r.conflict && (
+                          <div role="alert" className="mt-2 rounded-md border-2 border-red-500 bg-red-100 p-3 text-sm text-red-950 dark:bg-red-950 dark:text-red-100">
+                            <p className="font-bold">Already held — standard assignment was blocked</p>
+                            <p>Current holder: <strong>{r.conflict.holder_name}</strong></p>
+                            <p>{r.conflict.holding_type} since {new Date(r.conflict.held_since).toLocaleString()}</p>
+                            {r.conflict.expected_return_date && <p>Expected return: {new Date(r.conflict.expected_return_date).toLocaleString()}</p>}
+                            {canTransfer && (
+                              <button type="button" className="btn-secondary mt-2" onClick={() => setTransferResult(r)}>
+                                Transfer item
+                              </button>
+                            )}
+                          </div>
+                        )}
                       </div>
                     </div>
                     <span className="text-theme-text-muted font-mono text-xs">{r.code}</span>
@@ -973,6 +1018,19 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
                   Confirm
                 </button>
               </div>
+            </DialogPanel>
+          </div>
+        )}
+        {transferResult?.conflict && (
+          <div className="absolute inset-0 z-20 flex items-center justify-center rounded-lg bg-black/50">
+            <DialogPanel onClose={() => setTransferResult(null)} className="mx-4 max-w-md space-y-3 p-5">
+              <h4 className="text-theme-text-primary font-bold">Confirm custody transfer</h4>
+              <label className="flex gap-2 text-sm"><input type="checkbox" checked={holderConfirmed} onChange={(e) => setHolderConfirmed(e.target.checked)} />
+                I confirm the current holder is {transferResult.conflict.holder_name}</label>
+              <label className="block text-sm">Return condition<select className="form-input mt-1 w-full" value={transferCondition} onChange={(e) => setTransferCondition(e.target.value)}>{RETURN_CONDITION_OPTIONS.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}</select></label>
+              <label className="block text-sm">Transfer reason<textarea className="form-input mt-1 w-full" required value={transferReason} onChange={(e) => setTransferReason(e.target.value)} /></label>
+              <label className="flex gap-2 text-sm"><input type="checkbox" checked={transferImmediate} onChange={(e) => setTransferImmediate(e.target.checked)} /> Transfer is immediate</label>
+              <div className="flex justify-end gap-2"><button className="btn-secondary" onClick={() => setTransferResult(null)}>Cancel</button><button className="btn-primary" disabled={!holderConfirmed || !transferReason.trim() || submitting} onClick={() => void handleTransfer()}>Confirm transfer</button></div>
             </DialogPanel>
           </div>
         )}

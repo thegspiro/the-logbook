@@ -619,6 +619,42 @@ class TestBatchOperations:
         assert result["successful"] == 1
         assert result["failed"] == 1
 
+    @pytest.mark.asyncio
+    async def test_stale_scanner_cannot_reassign_an_already_held_item(
+        self, db_session, setup_org_and_user
+    ):
+        """A second scanner submission loses the custody race without writing."""
+        org_id, user_id, _ = setup_org_and_user
+        svc = InventoryService(db_session)
+        item, _ = await svc.create_item(
+            organization_id=uuid.UUID(org_id),
+            item_data={
+                "name": "Race Helmet",
+                "barcode": "RACE-1",
+                "condition": "good",
+                "status": "available",
+            },
+            created_by=uuid.UUID(user_id),
+        )
+        first = await svc.batch_checkout(
+            user_id=uuid.UUID(user_id),
+            organization_id=uuid.UUID(org_id),
+            performed_by=uuid.UUID(user_id),
+            items=[{"code": "RACE-1"}],
+        )
+        stale = await svc.batch_checkout(
+            user_id=uuid.UUID(user_id),
+            organization_id=uuid.UUID(org_id),
+            performed_by=uuid.UUID(user_id),
+            items=[{"code": "RACE-1"}],
+        )
+        assert first["successful"] == 1
+        assert stale["successful"] == 0
+        assert stale["results"][0]["conflict"]["holder_id"] == user_id
+        assert stale["results"][0]["conflict"]["holding_type"] == "assignment"
+        refreshed = await svc.get_item_by_id(uuid.UUID(item.id), uuid.UUID(org_id))
+        assert str(refreshed.assigned_to_user_id) == user_id
+
 
 # ── Maintenance Tests ────────────────────────────────────────────────
 

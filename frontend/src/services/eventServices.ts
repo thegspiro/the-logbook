@@ -1535,6 +1535,27 @@ export interface BatchCheckoutResultItem {
   action: string;
   success: boolean;
   error?: string;
+  conflict?: InventoryHoldingConflict;
+}
+
+export interface InventoryHoldingConflict {
+  holder_id: string;
+  holder_name: string;
+  holding_type: 'assignment' | 'checkout';
+  record_id: string;
+  held_since: string;
+  expected_return_date?: string;
+}
+
+export interface InventoryTransferRequest {
+  item_id: string;
+  new_holder_id: string;
+  current_holder_id: string;
+  current_record_id: string;
+  holding_type: 'assignment' | 'checkout';
+  return_condition: string;
+  transfer_reason: string;
+  immediate: boolean;
 }
 
 export interface BatchCheckoutResponse {

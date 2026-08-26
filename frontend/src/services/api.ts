@@ -74,6 +74,8 @@ export type {
   BatchCheckoutRequest,
   BatchCheckoutResultItem,
   BatchCheckoutResponse,
+  InventoryHoldingConflict,
+  InventoryTransferRequest,
   BatchReturnItem,
   BatchReturnRequest,
   BatchReturnResultItem,
