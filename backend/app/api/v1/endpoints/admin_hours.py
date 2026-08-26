@@ -286,6 +286,7 @@ async def clock_out_by_category(
         entry = await service.clock_out_by_category(
             category_id=category_id,
             user_id=str(current_user.id),
+            organization_id=str(current_user.organization_id),
         )
         category = await service.get_category(
             category_id, str(current_user.organization_id)
