@@ -630,6 +630,13 @@ class MinuteService:
             allowed = {"status", "completion_notes"}
             update_data = {k: v for k, v in update_data.items() if k in allowed}
 
+        # Non-mapped attribute (same convention as MeetingsService's
+        # attach_creator_names): the endpoint's audit log needs to record
+        # what was actually applied, not what the client sent — on approved
+        # minutes those differ, since the filter above silently drops
+        # everything but status/completion_notes.
+        item.applied_fields = set(update_data.keys())
+
         # MM-4 (XC-1): a reassigned owner must be in-org, same as
         # add_action_item's existing check.
         if "assignee_id" in update_data:

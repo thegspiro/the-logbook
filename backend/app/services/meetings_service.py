@@ -543,8 +543,7 @@ class MeetingsService:
         # nearly the same instant would otherwise both read "no meeting yet"
         # below and both insert one (Pitfall #27 — a TOCTOU race on the
         # uniqueness check, not a capacity check, but the same shape). The
-        # lock serializes them; the second one's existence check below then
-        # sees the first's committed row rather than a stale snapshot.
+        # lock serializes them on the event row.
         result = await self.db.execute(
             select(Event)
             .where(
@@ -557,12 +556,21 @@ class MeetingsService:
         if not event:
             return None, "Event not found"
 
-        # Check if meeting already exists for this event
+        # Check if meeting already exists for this event. This must ALSO be a
+        # locking read, not just the Event fetch above: under REPEATABLE READ,
+        # a plain SELECT answers from the snapshot taken at the transaction's
+        # first *consistent* read, and a locking read doesn't reliably start
+        # that snapshot — an earlier query elsewhere in the same session (e.g.
+        # get_current_user resolving the caller) may already have established
+        # it before this method even runs. Relying on "the Event fetch is
+        # first" is not safe; the existence check has to lock too.
         existing = await self.db.execute(
-            select(Meeting).where(
+            select(Meeting)
+            .where(
                 Meeting.event_id == str(event_id),
                 Meeting.organization_id == str(organization_id),
             )
+            .with_for_update()
         )
         if existing.scalar_one_or_none():
             return None, "Meeting already exists for this event"

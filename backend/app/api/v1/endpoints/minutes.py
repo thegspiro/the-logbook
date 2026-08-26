@@ -617,7 +617,11 @@ async def update_action_item(
         event_data={
             "minutes_id": minutes_id,
             "action_item_id": item_id,
-            "changed_fields": sorted(data.model_dump(exclude_unset=True).keys()),
+            # Codex (PR #1906 review): on approved minutes the service
+            # silently drops every field but status/completion_notes — log
+            # what was actually applied, not the raw client payload, or a
+            # dropped `description` reads as a change that never happened.
+            "changed_fields": sorted(getattr(item, "applied_fields", set())),
         },
         user_id=str(current_user.id),
     )

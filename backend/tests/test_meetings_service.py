@@ -95,10 +95,13 @@ class TestCreateFromEvent:
 class TestCreateFromEventLocking:
     """Pitfall #27 (TOCTOU shape): two coordinators bridging the same event
     concurrently must not both pass the "no meeting yet" check and both
-    insert one. Locking the event row serializes them so the second one's
-    existence check sees the first's committed meeting."""
+    insert one. Both the event fetch and the meeting existence check must be
+    locking reads — locking only the event fetch isn't sufficient, since an
+    earlier query elsewhere in the same session can already have established
+    the REPEATABLE READ snapshot before this method runs, leaving a plain
+    existence-check SELECT free to answer from a stale snapshot."""
 
-    async def test_event_fetch_is_locked_before_the_existence_check(self):
+    async def test_event_fetch_and_existence_check_are_both_locked(self):
         captured = []
 
         async def execute(stmt, *_a, **_kw):
@@ -122,6 +125,8 @@ class TestCreateFromEventLocking:
         assert len(captured) >= 2
         assert "FOR UPDATE" in str(captured[0])
         assert "events" in str(captured[0]).lower()
+        assert "FOR UPDATE" in str(captured[1])
+        assert "meetings" in str(captured[1]).lower()
 
 
 class TestAddAttendee:
