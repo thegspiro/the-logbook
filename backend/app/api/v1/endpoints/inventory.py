@@ -6557,11 +6557,14 @@ async def update_item_lot(
 ):
     """Update a stock lot (quantity, expiration, lot number, notes)."""
     service = InventoryService(db)
-    lot = await service.update_lot(
-        lot_id=lot_id,
-        organization_id=str(current_user.organization_id),
-        data=data.model_dump(exclude_unset=True),
-    )
+    try:
+        lot = await service.update_lot(
+            lot_id=lot_id,
+            organization_id=str(current_user.organization_id),
+            data=data.model_dump(exclude_unset=True),
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
     if lot is None:
         raise HTTPException(status_code=404, detail="Lot not found")
     return lot
