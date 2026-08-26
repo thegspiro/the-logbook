@@ -444,6 +444,8 @@ class ShiftEligibilityService:
         accept. Qualifications are resolved as of **today**, since a
         department-wide roster is not asked about any particular shift; the
         per-shift narrowing is deliberately not applied for the same reason.
+        Each one carries its expiry, because resolving as of today would
+        otherwise show a card that lapses next week as an unqualified grant.
         """
         org = await self._get_org(organization_id)
         if not org:
@@ -472,7 +474,7 @@ class ShiftEligibilityService:
         held_map = await self._get_held_position_map(organization_id)
         training_map = await self._get_training_program_map(organization_id, position)
         operator_map = await self._get_operator_map(organization_id)
-        qualification_map = await QualificationService(self.db).get_codes_by_member(
+        qualification_map = await QualificationService(self.db).get_current_by_member(
             organization_id
         )
 
@@ -483,6 +485,14 @@ class ShiftEligibilityService:
                 continue
 
             sources: List[Dict[str, Any]] = []
+
+            # A rank code and a held position's slug share one vocabulary (see
+            # _get_slug_eligibility_map), and onboarding gives every member the
+            # system position mirroring their rank -- a Lieutenant holds the
+            # "lieutenant" position too. Both branches below then resolve the
+            # same slug through the same map, so crediting each independently
+            # reported one grant twice, under the same label.
+            credited_slugs: Set[str] = set()
 
             rank_code = user.rank or ""
             rank_entry = rank_map.get(rank_code)
@@ -497,18 +507,31 @@ class ShiftEligibilityService:
                         ),
                     }
                 )
+                credited_slugs.add(rank_code)
 
             for held in held_map.get(str(user.id), []):
+                if held["slug"] in credited_slugs:
+                    continue
                 if position in slug_map.get(held["slug"], []):
                     sources.append({"type": "position", "label": held["name"]})
+                    credited_slugs.add(held["slug"])
 
-            for code in qualification_map.get(str(user.id), []):
+            for qualification in qualification_map.get(str(user.id), []):
+                code = qualification["code"]
                 if position in positions_for_qualifications([code]):
                     sources.append(
-                        {"type": "qualification", "label": qualification_label(code)}
+                        {
+                            "type": "qualification",
+                            "label": qualification_label(code),
+                            "expires_on": qualification["expires_on"],
+                        }
                     )
 
+            seen_programs: Set[str] = set()
             for program_name in training_map.get(str(user.id), []):
+                if program_name in seen_programs:
+                    continue
+                seen_programs.add(program_name)
                 sources.append({"type": "training", "label": program_name})
 
             if is_open:

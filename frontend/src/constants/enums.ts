@@ -377,6 +377,23 @@ export type RequestStatus = (typeof RequestStatus)[keyof typeof RequestStatus];
  */
 export const DRIVER_NOT_QUALIFIED_CODE = 'LB-SCHED-001';
 
+// The qualification a course certifies its holder in. Values must match
+// QUALIFICATIONS in backend/app/services/qualification_service.py — a course
+// that names a code the backend does not know grants nothing, so a test parses
+// this list and asserts the two agree rather than letting it 422 on save.
+//
+// These are qualifications, not shift seats: which seats a qualification
+// clears is the backend's business (a Paramedic clears both the medic seat and
+// the EMS one), and duplicating that mapping here is how the two drift.
+export const COURSE_QUALIFICATIONS: { value: string; label: string }[] = [
+  { value: 'firefighter_i', label: 'Firefighter I' },
+  { value: 'firefighter_ii', label: 'Firefighter II' },
+  { value: 'driver_operator', label: 'Driver / Operator' },
+  { value: 'emt', label: 'EMT' },
+  { value: 'aemt', label: 'Advanced EMT' },
+  { value: 'paramedic', label: 'Paramedic' },
+];
+
 export const POSITION_LABELS: Record<string, string> = {
   officer: 'Officer',
   driver: 'Driver/Operator',
@@ -384,6 +401,7 @@ export const POSITION_LABELS: Record<string, string> = {
   EMS: 'EMT',
   ems: 'EMT',
   EMT: 'EMT',
+  paramedic: 'Paramedic',
   captain: 'Captain',
   lieutenant: 'Lieutenant',
   probationary: 'Probationary',

@@ -87,7 +87,7 @@ class TestSeedDefaults:
         assert "emt" in codes
 
     async def test_seeded_chief_ranks_do_not_alias_positions(self):
-        # Regression: the chief ranks shared the same _ALL_POSITIONS list.
+        # Regression: the chief ranks shared the same _CHIEF_POSITIONS list.
         db = _seed_db()
         out = await OperationalRankService(db).seed_defaults("org-1")
         by_code = {r.rank_code: r for r in out}
@@ -254,6 +254,42 @@ class TestValidateRanks:
             ]
         )
         assert await OperationalRankService(db).validate_ranks("org-1") == []
+
+
+class TestParamedicIsNotARankGrant:
+    """A medic seat is earned by a licence, not conferred by stripes.
+
+    Promoting an officer does not make them a paramedic. Granting the seat from
+    a rank would put every holder of that rank on the medic roster with no card
+    behind them -- the "cleared on paper" problem the certification path exists
+    to close -- so ``paramedic`` appears in the position vocabulary and in no
+    rank's default grant.
+
+    Asserted against DEFAULT_RANKS rather than through ``seed_defaults`` on
+    purpose: this is a property of the registry, true for every agency type and
+    independent of how the seed reads or filters it.
+    """
+
+    def test_no_seeded_rank_confers_the_medic_seat(self):
+        offenders = {
+            code: positions
+            for code, _label, _order, positions in DEFAULT_RANKS
+            if "paramedic" in (positions or [])
+        }
+        assert offenders == {}, (
+            "these ranks would confer a paramedic seat with no certification "
+            f"behind it: {sorted(offenders)}"
+        )
+
+    def test_the_ems_seat_is_still_rank_grantable(self):
+        # The counterpart: EMS *is* something a rank confers -- the change is
+        # about the medic licence specifically, not about narrowing EMS.
+        granting = {
+            code
+            for code, _label, _order, positions in DEFAULT_RANKS
+            if "ems" in (positions or [])
+        }
+        assert granting, "no rank grants the EMS seat any more"
 
 
 if __name__ == "__main__":  # pragma: no cover

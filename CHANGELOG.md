@@ -7,6 +7,80 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### The medic seat nobody could fill, three source badges that looked identical, and a writer for member qualifications (2026-08-26)
+
+**Fixed**
+
+- **A Paramedic could not fill the Paramedic seat.** The medic seat was added
+  to `ShiftPosition` while the Paramedic qualification still cleared only
+  `ems`, so the seat could be put on a shift and nothing cleared anybody for
+  it — the unfillable-seat failure of #1833 from the member's side.
+  `test_qualification_service.py` guarded the forward direction (every seat a
+  qualification grants is one the API can name) but not the reverse; it now
+  asserts every seat is reachable from a rank or a qualification, so a seat
+  cannot again exist with nothing granting it.
+- **Three eligibility sources rendered as the same badge.** The roster emits
+  `rank`, `position`, `qualification`, `training` and `open`, and the page had
+  styles for only three. `position` and `qualification` both fell back to the
+  rank badge's icon and colour, so a Lieutenant who also held the Lieutenant
+  position and an EMT card showed three identical violet chips. Each source
+  now has its own icon and colour.
+- The roster listed a member's rank twice. Onboarding gives
+  every member the system position mirroring their rank, and rank codes
+  share a slug vocabulary with position slugs, so a Lieutenant resolved
+  "lieutenant" on both the rank and held-position branches and each emitted
+  a badge. The frontend had no style for the held-position source, so it
+  fell back to the rank badge's icon and colour and the two were
+  indistinguishable. The roster now credits each slug once, and a genuine
+  held position renders distinctly. A qualification held independently of
+  rank — a Lieutenant who is also an EMT — still reports both.
+
+**Added**
+
+- **Completing a course now grants the qualification it certifies.**
+  `member_qualifications` is read by shift eligibility and had nothing writing
+  to it: a training officer recorded the class that happened, then had to grant
+  the qualification again on a different screen, and the second entry is the
+  one that gets forgotten — leaving a member certified on paper and
+  unqualified in the scheduler. `training_courses.grants_qualification` names
+  the code a course certifies, and `TrainingRecord` — which already carries the
+  completion date, the expiry, the certificate number and the issuing agency —
+  becomes the single place the fact is entered. Wired into all five paths that
+  write a training record, including CSV and historical import.
+
+  Backfilling an old class never pulls a live card's expiry backwards, so
+  importing history adds records without lapsing the certification a member is
+  actually working under. Set it per course under Training → Course Library
+  ("Certifies"); until a training officer does, completing a course grants
+  nothing and eligibility behaves exactly as before.
+
+- A qualification on the roster now carries the date it lapses, and turns amber
+  inside 60 days. The roster answers as of today, so without the date a card
+  expiring next week reads exactly like one good for another five years.
+- **Paramedic is a shift position distinct from EMT.** Both previously
+  collapsed into one `ems` bucket, so a department staffing an ALS unit
+  could not say a medic was required, and "was a paramedic, still an EMT"
+  was not a state the system could represent. This is the counterpart to the
+  EMT seat fix below: `EMT` and `EMS` really are one seat and now settle onto
+  one token, while a medic is a genuinely different seat and gets its own.
+  `paramedic` joins `CANONICAL_POSITIONS` and `ShiftPosition` together, so the
+  vocabularies stay the identical set `tests/test_position_slots.py` asserts,
+  and `20260826_1400_e2c8f5a71d40` folds a stored custom "Paramedic" seat onto
+  it — a department that needed a medic seat before there was one had no
+  option but to hand-roll it, and that seat was grantable by nothing. "Medic"
+  and other spellings a department chose are deliberately left alone: they stay
+  custom seats, and renaming one is what custom positions exist to prevent.
+
+  No rank seeds the medic seat: a licence is not something stripes confer, and
+  granting it by rank would have put every chief on the medic roster with no
+  card behind them. It is earned only by holding the Paramedic qualification.
+  Enable the seat per department under Scheduling Settings → Position Names.
+
+- The roster shows a certification's expiry beside the member, and switches
+  the badge to amber within 60 days of it — an officer staffing next month
+  sees the medic whose card runs out in three weeks rather than discovering
+  it when the roster silently shortens.
+
 ### Membership standing stops being a "position", and three silent refusals get a reason (2026-08-26)
 
 **Changed**

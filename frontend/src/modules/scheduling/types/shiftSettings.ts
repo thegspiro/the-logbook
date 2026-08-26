@@ -17,6 +17,10 @@ export const BUILTIN_POSITIONS: PositionOption[] = [
   { value: 'driver', label: 'Driver/Operator' },
   { value: 'firefighter', label: 'Firefighter' },
   { value: 'ems', label: 'EMT' },
+  // Offered but not enabled by default: a BLS department never staffs a medic
+  // seat, and a seat nobody can fill is worse than one they tick on. Turning
+  // it on is one checkbox in Position Names.
+  { value: 'paramedic', label: 'Paramedic' },
   { value: 'probationary', label: 'Probationary' },
   { value: 'volunteer', label: 'Volunteer' },
 ];

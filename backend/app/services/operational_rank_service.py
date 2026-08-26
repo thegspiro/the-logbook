@@ -26,12 +26,14 @@ _INACTIVE_STATUSES = {
 }
 
 
-# All shift position values for reference.
+# Every shift position value in the vocabulary. Kept in step with
+# ``ShiftPosition`` in app/schemas/scheduling.py.
 _ALL_POSITIONS = [
     "officer",
     "driver",
     "firefighter",
     "ems",
+    "paramedic",
     "captain",
     "lieutenant",
     "probationary",
@@ -39,12 +41,23 @@ _ALL_POSITIONS = [
     "other",
 ]
 
+# What the three chief ranks are seeded with -- everything a rank can confer.
+#
+# Deliberately NOT _ALL_POSITIONS. ``paramedic`` is a licence a member holds,
+# not something a chief's stripes confer: promoting an officer does not make
+# them a paramedic, and seeding it here would have put every chief on the
+# paramedic roster with no card behind it -- the exact "cleared on paper"
+# problem the credential path exists to close. Paramedic is earned only by a
+# current certification (TrainingCourse.target_position), so it appears in the
+# vocabulary above and in no rank's default grant.
+_CHIEF_POSITIONS = [p for p in _ALL_POSITIONS if p != "paramedic"]
+
 # Default ranks seeded for new organizations.
 # Format: (rank_code, display_name, sort_order, eligible_positions)
 DEFAULT_RANKS = [
-    ("fire_chief", "Fire Chief", 0, _ALL_POSITIONS),
-    ("deputy_chief", "Deputy Chief", 1, _ALL_POSITIONS),
-    ("assistant_chief", "Assistant Chief", 2, _ALL_POSITIONS),
+    ("fire_chief", "Fire Chief", 0, _CHIEF_POSITIONS),
+    ("deputy_chief", "Deputy Chief", 1, _CHIEF_POSITIONS),
+    ("assistant_chief", "Assistant Chief", 2, _CHIEF_POSITIONS),
     (
         "captain",
         "Captain",
@@ -191,7 +204,7 @@ class OperationalRankService:
                 rank_code=code,
                 display_name=label,
                 sort_order=order,
-                # Copy: the three chief ranks share the _ALL_POSITIONS list
+                # Copy: the three chief ranks share the _CHIEF_POSITIONS list
                 # object, so persisting the reference directly would alias them
                 # (and the module constant) to one mutable list.
                 eligible_positions=list(positions),
