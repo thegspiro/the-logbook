@@ -118,7 +118,7 @@ const MyEquipmentPage: React.FC = () => {
   const [reqSearch, setReqSearch] = useState('');
   const [reqResults, setReqResults] = useState<InventoryItem[]>([]);
   const [reqSelected, setReqSelected] = useState<InventoryItem | null>(null);
-  const [reqType, setReqType] = useState<'checkout' | 'assignment'>('checkout');
+  const [reqType, setReqType] = useState<'checkout' | 'issuance'>('checkout');
   const [reqQty, setReqQty] = useState(1);
   const [reqReason, setReqReason] = useState('');
   const [reqSearching, setReqSearching] = useState(false);
@@ -657,6 +657,7 @@ const MyEquipmentPage: React.FC = () => {
                           setReqSelected(item);
                           setReqSearch(item.name);
                           setReqResults([]);
+                          setReqType(item.tracking_type === 'pool' ? 'issuance' : 'checkout');
                         }}
                         className="hover:bg-theme-surface-secondary/50 text-theme-text-primary w-full px-3 py-2 text-left text-sm"
                       >
@@ -679,15 +680,25 @@ const MyEquipmentPage: React.FC = () => {
 
             <div>
               <div>
-                <label className={labelClass}>Request Type</label>
-                <select
-                  value={reqType}
-                  onChange={(e) => setReqType(e.target.value as 'checkout' | 'assignment')}
-                  className={selectClass}
-                >
-                  <option value="checkout">Checkout</option>
-                  <option value="assignment">Assignment</option>
-                </select>
+                <label className={labelClass}>Request Intent</label>
+                {reqSelected?.tracking_type === 'pool' ? (
+                  <div className="text-theme-text-secondary text-sm">
+                    <p className="font-medium">Quantity issue</p>
+                    <p className="text-theme-text-muted mt-1 text-xs">
+                      Pool stock is issued by quantity and handled under your department&apos;s return policy.
+                    </p>
+                  </div>
+                ) : (
+                  <select
+                    value={reqType}
+                    onChange={(e) => setReqType(e.target.value as 'checkout' | 'issuance')}
+                    className={selectClass}
+                    disabled={!reqSelected}
+                  >
+                    <option value="checkout">Temporary checkout</option>
+                    <option value="issuance">Permanent assignment</option>
+                  </select>
+                )}
               </div>
             </div>
 

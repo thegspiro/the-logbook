@@ -222,4 +222,27 @@ describe('MyEquipmentPage', () => {
       request_type: 'checkout',
     });
   });
+
+  it('only offers quantity issuance for pool stock', async () => {
+    mockGetItems.mockResolvedValue({
+      items: [{ ...availableItem, id: 'pool-1', name: 'Work Gloves', tracking_type: 'pool', quantity: 12 }],
+      total: 1,
+    });
+    const user = userEvent.setup();
+    renderWithRouter(<MyEquipmentPage />);
+    await user.click(await screen.findByRole('button', { name: /Request Equipment/ }));
+    await user.type(await screen.findByPlaceholderText('Search available items...'), 'Gloves');
+    await user.click(await screen.findByRole('button', { name: /Work Gloves/ }));
+
+    expect(screen.getByText('Quantity issue')).toBeInTheDocument();
+    expect(screen.getByText(/handled under your department's return policy/i)).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: /checkout/i })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /Submit Request/ }));
+
+    await waitFor(() =>
+      expect(mockCreateEquipmentRequest).toHaveBeenCalledWith(
+        expect.objectContaining({ item_id: 'pool-1', request_type: 'issuance' })
+      )
+    );
+  });
 });

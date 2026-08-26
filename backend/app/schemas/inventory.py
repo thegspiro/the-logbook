@@ -1389,6 +1389,7 @@ class EquipmentRequestFulfill(BaseModel):
     quantity: Optional[int] = Field(default=None, ge=1)
     expected_return_at: Optional[datetime] = None
     override_allowance: bool = False
+    fulfillment_type: Optional[Literal["issuance", "checkout", "assignment"]] = None
 
 
 # ============================================

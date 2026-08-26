@@ -633,6 +633,7 @@ export const inventoryService = {
       quantity?: number | undefined;
       expected_return_at?: string | undefined;
       override_allowance?: boolean;
+      fulfillment_type?: 'issuance' | 'checkout' | 'assignment';
     }
   ): Promise<{
     id: string;

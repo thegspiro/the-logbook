@@ -244,6 +244,7 @@ describe('EquipmentRequestsPage', () => {
         quantity: 2,
         expected_return_at: undefined,
         override_allowance: false,
+        fulfillment_type: 'assignment',
       });
     });
     expect(mockToastSuccess).toHaveBeenCalledWith('Request fulfilled');
