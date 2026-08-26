@@ -96,6 +96,10 @@ const COMMANDS: CommandItem[] = [
     path: '/store',
     icon: Package,
     section: 'Navigation',
+    // Same reasoning as Gear & Uniforms above: the route requires
+    // storefront.view, so offering it ungated makes the palette a route to
+    // Access Denied.
+    permission: 'storefront.view',
     keywords: ['storefront', 'shop', 'merch', 'apparel', 'order'],
   },
   {

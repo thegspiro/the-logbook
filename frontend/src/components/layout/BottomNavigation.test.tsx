@@ -36,7 +36,8 @@ function renderBar(props: { hidden?: boolean } = {}, initialPath = '/dashboard')
 describe('BottomNavigation', () => {
   beforeEach(() => {
     mockEnabled = null;
-    mockPermissions = new Set();
+    // The baseline every seeded member holds — the Store tab is gated on it.
+    mockPermissions = new Set(['storefront.view']);
     localStorage.clear();
     vi.clearAllMocks();
   });
@@ -83,10 +84,26 @@ describe('BottomNavigation', () => {
     expect(screen.getByRole('button', { name: 'Settings' })).toBeInTheDocument();
     unmount();
 
-    mockPermissions.clear();
+    mockPermissions = new Set(['storefront.view']);
     renderBar();
     expect(screen.queryByRole('button', { name: 'Settings' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Schedule' })).toBeInTheDocument();
+  });
+
+  // /store requires storefront.view, and a department seeded before the
+  // storefront module shipped carries a member position without it. The tab
+  // used to render anyway and land the member on Access Denied.
+  it('drops the Store tab when the member lacks storefront.view', () => {
+    mockPermissions = new Set();
+    renderBar();
+    expect(screen.queryByRole('button', { name: 'Store' })).not.toBeInTheDocument();
+    expect(screen.getAllByRole('button').map((button) => button.textContent)).toEqual([
+      'Home',
+      'Events',
+      'Schedule',
+      'Documents',
+      'More',
+    ]);
   });
 
   it('never renders more than five slots', () => {
