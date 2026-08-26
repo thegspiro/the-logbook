@@ -63,6 +63,7 @@ from app.schemas.training_program import ProgramEnrollmentCreate
 from app.schemas.training_session import TrainingSessionCreate
 from app.services.event_service import EventService
 from app.services.location_service import LocationService
+from app.utils.model_updates import apply_updates
 from app.utils.org_scoping import assert_in_org
 from app.utils.scheduling_dates import (
     DEFAULT_TIMEZONE,
@@ -124,14 +125,18 @@ class CourseCohortService:
         return result.scalar_one_or_none()
 
     async def _get_cohort_class(
-        self, cohort_class_id: UUID, organization_id: UUID
+        self,
+        cohort_class_id: UUID,
+        organization_id: UUID,
+        cohort_id: Optional[UUID] = None,
     ) -> Optional[CourseCohortClass]:
-        result = await self.db.execute(
-            select(CourseCohortClass).where(
-                CourseCohortClass.id == str(cohort_class_id),
-                CourseCohortClass.organization_id == str(organization_id),
-            )
-        )
+        conditions = [
+            CourseCohortClass.id == str(cohort_class_id),
+            CourseCohortClass.organization_id == str(organization_id),
+        ]
+        if cohort_id is not None:
+            conditions.append(CourseCohortClass.cohort_id == str(cohort_id))
+        result = await self.db.execute(select(CourseCohortClass).where(*conditions))
         return result.scalar_one_or_none()
 
     async def _syllabus(
@@ -705,9 +710,12 @@ class CourseCohortService:
         data: CohortClassReschedule,
         organization_id: UUID,
         actor_id: UUID,
+        cohort_id: Optional[UUID] = None,
     ) -> CourseCohortClass:
         """Move one class. The linked event moves with it; RSVPs are untouched."""
-        cohort_class = await self._get_cohort_class(cohort_class_id, organization_id)
+        cohort_class = await self._get_cohort_class(
+            cohort_class_id, organization_id, cohort_id=cohort_id
+        )
         if not cohort_class:
             raise ValueError("Class not found")
         if cohort_class.status == CohortClassStatus.CANCELLED:
@@ -765,13 +773,16 @@ class CourseCohortService:
         reason: str,
         organization_id: UUID,
         actor_id: UUID,
+        cohort_id: Optional[UUID] = None,
     ) -> CourseCohortClass:
         """Cancel one class.
 
         The event is *cancelled*, not deleted, so members who RSVP'd see the
         cancellation on their calendar instead of the class silently vanishing.
         """
-        cohort_class = await self._get_cohort_class(cohort_class_id, organization_id)
+        cohort_class = await self._get_cohort_class(
+            cohort_class_id, organization_id, cohort_id=cohort_id
+        )
         if not cohort_class:
             raise ValueError("Class not found")
 
@@ -956,17 +967,22 @@ class CourseCohortService:
             )
 
         updates = data.model_dump(exclude_unset=True)
-        for field, value in updates.items():
-            if field == "status" and value:
-                setattr(cohort, field, CohortStatus(value))
-            elif field == "location_id":
-                setattr(cohort, field, str(value) if value else None)
-            elif field == "blackout_dates":
-                # Plain JSON columns do not track in-place mutation; assigning a
-                # fresh list is what makes SQLAlchemy issue the UPDATE.
-                setattr(cohort, field, copy.deepcopy(value) if value else None)
-            else:
-                setattr(cohort, field, value)
+        if updates.get("status"):
+            updates["status"] = CohortStatus(updates["status"])
+        if "location_id" in updates:
+            updates["location_id"] = (
+                str(updates["location_id"]) if updates["location_id"] else None
+            )
+        if "blackout_dates" in updates:
+            # Plain JSON columns do not track in-place mutation; assigning a
+            # fresh list is what makes SQLAlchemy issue the UPDATE.
+            updates["blackout_dates"] = (
+                copy.deepcopy(updates["blackout_dates"])
+                if updates["blackout_dates"]
+                else None
+            )
+
+        apply_updates(cohort, updates)
 
         await self.db.commit()
         await self.db.refresh(cohort)
