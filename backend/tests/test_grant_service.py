@@ -29,6 +29,7 @@ def _application(
     start=date(2026, 1, 1),
     end=date(2026, 12, 31),
     category=None,
+    already_generated=False,
 ):
     return SimpleNamespace(
         id="app-1",
@@ -36,14 +37,14 @@ def _application(
         grant_start_date=start,
         grant_end_date=end,
         opportunity=SimpleNamespace(category=category) if category else None,
+        compliance_tasks_generated=already_generated,
     )
 
 
-async def _generate(application, existing_task_count=0):
+async def _generate(application):
     """Run the generator and return the objects added to the session."""
     db = MagicMock()
     db.add = MagicMock()
-    db.execute = AsyncMock(return_value=_scalar(existing_task_count))
     await GrantService(db)._generate_compliance_tasks(application, "user-1")
     return [c.args[0] for c in db.add.call_args_list]
 
@@ -111,15 +112,30 @@ class TestComplianceTaskGeneration:
         assert len(reports) == 3
         assert "quarterly" in reports[0].description
 
-    async def test_skips_regeneration_when_auto_generated_tasks_already_exist(self):
+    async def test_skips_regeneration_on_a_second_award(self):
         # An awarded -> active -> awarded round-trip re-enters this method.
-        # If any of its own task types already exist for the application,
-        # it must add nothing rather than appending a duplicate set.
+        # If it already ran for this application, it must add nothing
+        # rather than appending a duplicate set.
         added = await _generate(
-            _application(freq="quarterly", category="equipment"),
-            existing_task_count=1,
+            _application(freq="quarterly", category="equipment", already_generated=True)
         )
         assert added == []
+
+    async def test_manually_created_task_of_the_same_type_does_not_suppress_generation(
+        self,
+    ):
+        # Codex (PR #1904 review): task_type is fully client-chosen on manual
+        # creation, with no application-status restriction — an officer's
+        # own pre-award "performance_report" task must not be mistaken for
+        # a prior run of this method. Only the dedicated flag gates it.
+        app = _application(freq="quarterly")
+        added = await _generate(app)
+        assert len(_by_type(added, "performance_report")) == 3
+
+    async def test_sets_the_flag_after_generating(self):
+        app = _application(freq="quarterly")
+        await _generate(app)
+        assert app.compliance_tasks_generated is True
 
 
 class TestUpdateBudgetItemSpent:
@@ -140,6 +156,72 @@ class TestUpdateBudgetItemSpent:
         # Should not raise, and must not attempt the SUM query.
         await GrantService(db)._update_budget_item_spent("b1", "org-1")
         db.execute.assert_awaited_once()
+
+
+class TestExpenditureBudgetItemLockOrdering:
+    """Codex (PR #1904 review): GrantExpenditure.budget_item_id is a FK
+    column, so inserting/updating an expenditure before locking its budget
+    item takes an implicit shared FK-check lock on the parent ahead of the
+    exclusive FOR UPDATE lock the recompute takes — two concurrent
+    expenditures against the same budget item deadlock. The budget item
+    lock must happen before the expenditure is added to the session."""
+
+    async def test_create_locks_budget_item_before_adding_expenditure(self):
+        order = []
+
+        async def execute(stmt, *_a, **_kw):
+            order.append(("execute", str(stmt)))
+            result = MagicMock()
+            result.scalar_one_or_none.return_value = "ok"
+            return result
+
+        db = MagicMock()
+        db.execute = execute
+        db.add = MagicMock(side_effect=lambda obj: order.append(("add", obj)))
+        db.flush = AsyncMock(side_effect=lambda: order.append(("flush", None)))
+        db.refresh = AsyncMock()
+
+        svc = GrantService(db)
+        svc.get_application = AsyncMock(return_value=SimpleNamespace(id="app-1"))
+        svc._budget_item_in_application = AsyncMock(return_value=True)
+        svc._update_budget_item_spent = AsyncMock()
+
+        await svc.create_expenditure(
+            "app-1", "org-1", {"budget_item_id": "b1", "amount": 100}, "user-1"
+        )
+
+        add_index = next(i for i, (kind, _) in enumerate(order) if kind == "add")
+        lock_calls = [stmt for kind, stmt in order[:add_index] if kind == "execute"]
+        assert len(lock_calls) == 1
+        assert "FOR UPDATE" in lock_calls[0]
+        assert "grant_budget_items" in lock_calls[0].lower()
+
+    async def test_update_locks_old_and_new_budget_items_before_flush(self):
+        expenditure = SimpleNamespace(
+            id="e1", application_id="app-1", budget_item_id="bOLD", amount=50
+        )
+        order = []
+
+        async def execute(stmt, *_a, **_kw):
+            order.append(str(stmt))
+            result = MagicMock()
+            result.scalar_one_or_none.return_value = expenditure
+            return result
+
+        db = MagicMock()
+        db.execute = execute
+        db.flush = AsyncMock(side_effect=lambda: order.append("FLUSH"))
+        svc = GrantService(db)
+        svc._budget_item_in_application = AsyncMock(return_value=True)
+        svc._update_budget_item_spent = AsyncMock()
+
+        await svc.update_expenditure("e1", {"budget_item_id": "bNEW"}, "org-1")
+
+        flush_index = order.index("FLUSH")
+        pre_flush = order[:flush_index]
+        lock_stmts = [s for s in pre_flush if "FOR UPDATE" in s]
+        assert len(lock_stmts) == 2
+        assert all("grant_budget_items" in s.lower() for s in lock_stmts)
 
 
 class TestSubresourceOrgScoping:

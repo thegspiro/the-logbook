@@ -411,6 +411,15 @@ class GrantApplication(Base):
     next_report_due = Column(Date, nullable=True)
     final_report_due = Column(Date, nullable=True)
 
+    # Set once `_generate_compliance_tasks` has generated the standard
+    # report/closeout/inventory task set for this application (GF-14) — not
+    # inferable from the tasks table's own contents, since `task_type` on a
+    # manually-created task is fully client-chosen and can collide with the
+    # auto-generated set's types.
+    compliance_tasks_generated = Column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
+
     # Assignment
     assigned_to = Column(
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True

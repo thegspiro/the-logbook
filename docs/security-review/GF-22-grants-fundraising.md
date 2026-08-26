@@ -6,8 +6,9 @@
 `app/services/grant_service.py` (1,135 L), `app/services/fundraising_service.py`
 (651 L), model `app/models/grant.py`.
 **Frontend:** not reviewed this pass — backend only, per rotation scope.
-**Migrations:** none — GF-13's fix is an ORM-relationship-only change; the
-underlying FK/column already existed correctly.
+**Migrations:** `472a1e34aa84` adds `grant_applications.compliance_tasks_generated`
+(added during Codex review, see below). GF-13's fix itself is an
+ORM-relationship-only change and needed none.
 
 ---
 
@@ -89,12 +90,10 @@ with no check for tasks it already created. An application moved from
 performance-report tasks, closeout report, and equipment-inventory task, with
 the same titles and due dates as the first set.
 **Where:** `app/services/grant_service.py`, `_generate_compliance_tasks`.
-**Fix:** added an idempotency guard — a class attribute
-`_AUTO_GENERATED_TASK_TYPES` naming this method's three task types, and a
-`SELECT COUNT(*)` at the top of the method that returns early if any of them
-already exist for the application. Scoped to just those three types (not
-"any compliance task") so a task an officer added by hand before the first
-award doesn't suppress the auto-generated set. This is a narrow,
+**Fix:** a dedicated `compliance_tasks_generated` boolean on
+`GrantApplication`, set the first time this method runs and checked at the
+top on every call — see "Revised after Codex review" below for why this
+replaced the first version's task-type-based check. This is a narrow,
 self-contained slice of GF-7's broader question — it does not decide whether
 `AWARDED` applications should stay editable at all, only that re-entering
 this specific method must not duplicate its own output.
@@ -119,6 +118,11 @@ campaign/donor/budget-item fetch), and make the aggregate SUM itself a
 locking read too — under InnoDB's default REPEATABLE READ, a plain SELECT
 answers from the transaction's first-read snapshot even after a lock is
 acquired elsewhere, so the row lock alone would not make the SUM current.
+**Revised after Codex review:** the first version left `create_donation`/
+`create_expenditure` (and the reassignment paths in `update_donation`/
+`update_expenditure`) inserting or updating the child row _before_ this
+locking fetch ran. See "Revised after Codex review" below — that ordering
+is itself a deadlock.
 
 ### GF-16 — MED — ten update methods used blind `setattr` loops instead of `apply_updates` — ✅ FIXED
 
@@ -187,10 +191,63 @@ which already had it in scope.
   framing (Decimal migration across the reporting path is a larger,
   deliberate change).
 
+## Revised after Codex review
+
+Codex's automated review on PR #1904 caught two real issues in the first
+version of GF-14 and GF-15's fixes, both fixed in the same PR before merge.
+
+**GF-15 — lock the parent before flushing the child, not after (P1).** The
+first version's `create_donation`/`create_expenditure` (and the reassignment
+branches of `update_donation`/`update_expenditure`) inserted or updated the
+child row (`Donation`/`GrantExpenditure`) _before_ calling
+`_update_campaign_total`/`_update_donor_stats`/`_update_budget_item_spent`,
+which only then acquired the `FOR UPDATE` lock on the parent. But
+`campaign_id`/`donor_id`/`budget_item_id` are FK columns — InnoDB's own FK
+check on an INSERT (or an UPDATE that changes the FK column) takes a
+**shared** lock on the referenced parent row, held for the rest of the
+transaction. Two concurrent completed donations to the same campaign would
+each hold a shared lock from their own FK check, then both try to upgrade to
+the exclusive `FOR UPDATE` lock the recompute takes — a lock-upgrade
+deadlock InnoDB resolves by killing one transaction, surfaced as an
+unhandled 500 (deadlocks are not retried). Fixed by acquiring the parent
+lock(s) _first_, before the child row is added/flushed — new
+`_lock_campaign`/`_lock_donor` (`fundraising_service.py`) and
+`_lock_budget_item` (`grant_service.py`) helpers, called on the full set of
+parents an insert or update could touch (both the old and, if reassigned,
+the new parent) ahead of the child flush. `delete_donation`/
+`delete_expenditure` were not affected — a DELETE on the child never takes a
+lock on the FK's parent.
+
+**GF-14 — the idempotency check itself could misfire on a manually created
+task (P2).** The first version guarded `_generate_compliance_tasks` by
+counting existing `GrantComplianceTask` rows whose `task_type` matched the
+three auto-generated types. But `task_type` is a fully client-settable field
+on manual task creation (`create_compliance_task` has no application-status
+restriction), and its allowed values include the same three strings
+(`performance_report`, `closeout_report`, `equipment_inventory`). An officer
+who created, say, a pre-award "performance_report" task for their own
+tracking would make the guard believe generation had already run — and the
+application's actual first award would generate nothing at all, silently.
+Fixed by replacing the query-based check with a dedicated
+`compliance_tasks_generated` boolean on `GrantApplication` itself
+(migration `472a1e34aa84`), set only by `_generate_compliance_tasks` and
+meaning exactly "has this method run for this application" — not inferable
+from, or confusable with, anything in the tasks table.
+
+Both fixes verified: `black`/`isort`/`flake8` clean, migration applies
+cleanly against the live test database (`alembic upgrade head`), full
+backend suite re-run green (see Completion gate).
+
 ## Schema & migration notes
 
-None. GF-13's fix is a relationship-attribute change only — the FK/column
-were already correct in the schema.
+- `472a1e34aa84` adds `grant_applications.compliance_tasks_generated`
+  (`BOOLEAN NOT NULL DEFAULT false`) — see "Revised after Codex review"
+  above. No backfill: every existing application defaults to `false`, which
+  is correct (none has run through the new guarded path yet), so the next
+  award any of them sees regenerates the compliance task set exactly as it
+  would have before this change.
+- GF-13's fix is a relationship-attribute change only — the FK/column were
+  already correct in the schema, no migration needed for that finding.
 
 ## Guard tests added
 
@@ -201,15 +258,24 @@ were already correct in the schema.
   entirely in how SQLAlchemy's unit-of-work interprets the relationship
   cascade, invisible to a mocked session.
 - `tests/test_grant_service.py`:
-  - `TestComplianceTaskGeneration::test_skips_regeneration_when_auto_generated_tasks_already_exist`
-    — GF-14.
+  - `TestComplianceTaskGeneration::test_skips_regeneration_on_a_second_award`,
+    `::test_manually_created_task_of_the_same_type_does_not_suppress_generation`,
+    `::test_sets_the_flag_after_generating` — GF-14, the last two added for
+    the Codex-caught P2 (the flag-based guard doesn't misfire on a manually
+    created same-typed task the way the query-based one did).
   - `TestUpdateBudgetItemSpent` — GF-15/GF-18: asserts the item lock happens
     before the SUM read, and that a missing/out-of-org item is a no-op that
     never attempts the SUM query.
+  - `TestExpenditureBudgetItemLockOrdering` (new) — the Codex-caught P1:
+    asserts the budget item lock happens before the expenditure is added
+    (create) or before the update flush (update, old+new budget item).
 - `tests/test_fundraising_service.py`:
   - `TestUpdateCampaignTotal` / `TestUpdateDonorStats` — GF-15: asserts the
     parent-row lock happens before the aggregate read, and that a missing
     campaign/donor is a no-op that never attempts the aggregate query.
+  - `TestDonationParentLockOrdering` (new) — the same P1, for donations:
+    asserts the campaign/donor locks happen before the donation is added
+    (create) or before the update flush (update, old+new campaign).
 
 ## Completion gate
 
@@ -218,7 +284,8 @@ were already correct in the schema.
 | `flake8` (changed files)                                           | clean                   |
 | `black --check` (changed files)                                    | clean                   |
 | `isort --check-only` (changed files)                               | clean                   |
-| `python3 scripts/validate_migrations.py --strict`                  | PASSED (no migrations)  |
-| backend tests, scope (`grant_service` + `fundraising_service`)     | 45 passed               |
+| `python3 scripts/validate_migrations.py --strict`                  | PASSED                  |
+| `alembic upgrade head` (live test database)                        | applied cleanly         |
+| backend tests, scope (`grant_service` + `fundraising_service`)     | 52 passed               |
 | backend tests, integration (`test_grant_opportunity_delete_db.py`) | 1 passed                |
 | backend tests, full suite                                          | 8849 passed, 22 skipped |

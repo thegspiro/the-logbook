@@ -261,6 +261,24 @@ class FundraisingService:
         # otherwise skip the campaign/donor total update.
         if not donation.payment_status:
             donation.payment_status = PaymentStatus.COMPLETED
+
+        # Lock the campaign/donor parents *before* inserting the donation
+        # below. Donation.campaign_id / donor_id are FK columns — InnoDB's
+        # own FK check on the INSERT takes a shared lock on the referenced
+        # parent row, held until this transaction ends. If that happened
+        # first, two concurrent completed donations to the same campaign (or
+        # donor) would each hold a shared lock from their own FK check, then
+        # both try to upgrade to the exclusive FOR UPDATE lock
+        # `_update_campaign_total`/`_update_donor_stats` take below — a
+        # lock-upgrade deadlock InnoDB resolves by killing one transaction
+        # (an unhandled 500, not retried). Locking first, in the same order
+        # the recompute below will need, avoids that.
+        if donation.payment_status == PaymentStatus.COMPLETED:
+            if donation.campaign_id:
+                await self._lock_campaign(donation.campaign_id, organization_id)
+            if donation.donor_id:
+                await self._lock_donor(donation.donor_id, organization_id)
+
         self.db.add(donation)
         await self.db.flush()
 
@@ -310,6 +328,16 @@ class FundraisingService:
         ):
             raise ValueError("Donor not found")
 
+        # Lock every campaign/donor this update could touch — old and
+        # (if reassigned) new — before the update flush below, for the same
+        # reason create_donation locks them before its insert.
+        new_campaign_id = data.get("campaign_id", old_campaign_id)
+        new_donor_id = data.get("donor_id", old_donor_id)
+        for cid in {old_campaign_id, new_campaign_id} - {None}:
+            await self._lock_campaign(cid, organization_id)
+        for did in {old_donor_id, new_donor_id} - {None}:
+            await self._lock_donor(did, organization_id)
+
         apply_updates(donation, data, skip={"organization_id", "id"})
         await self.db.flush()
 
@@ -320,6 +348,37 @@ class FundraisingService:
             await self._update_donor_stats(did, organization_id)
 
         return donation
+
+    async def _lock_campaign(self, campaign_id: str, organization_id: str) -> None:
+        """Acquire a FOR UPDATE lock on a campaign ahead of a child insert/update.
+
+        Called before `create_donation`/`update_donation` flush a `Donation`
+        row whose `campaign_id` FK would otherwise be the first thing to
+        lock this row this transaction (see the callers for the deadlock
+        this avoids).
+        """
+        await self.db.execute(
+            select(FundraisingCampaign.id)
+            .where(
+                FundraisingCampaign.id == campaign_id,
+                FundraisingCampaign.organization_id == organization_id,
+            )
+            .with_for_update()
+        )
+
+    async def _lock_donor(self, donor_id: str, organization_id: str) -> None:
+        """Acquire a FOR UPDATE lock on a donor ahead of a child insert/update.
+
+        Same reasoning as `_lock_campaign` above, for `Donation.donor_id`.
+        """
+        await self.db.execute(
+            select(Donor.id)
+            .where(
+                Donor.id == donor_id,
+                Donor.organization_id == organization_id,
+            )
+            .with_for_update()
+        )
 
     async def _update_campaign_total(
         self, campaign_id: str, organization_id: str

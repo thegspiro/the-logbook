@@ -364,12 +364,6 @@ class GrantService:
         await self.db.flush()
         return application
 
-    _AUTO_GENERATED_TASK_TYPES = (
-        "performance_report",
-        "closeout_report",
-        "equipment_inventory",
-    )
-
     async def _generate_compliance_tasks(
         self, application: GrantApplication, user_id: str
     ) -> None:
@@ -379,21 +373,17 @@ class GrantService:
         no transition guard — that is GF-7's broader, still-open question),
         so an awarded -> active -> awarded round-trip would otherwise
         re-enter this method and append a second full set of tasks with the
-        same titles and due dates. Guarded here, independent of whatever
-        GF-7 eventually decides about editability: if any of this method's
-        own task types already exist for this application, skip
-        regeneration entirely. Scoped to just those three types (not "any
-        compliance task") so a task an officer added by hand before the
-        first award doesn't suppress the auto-generated set.
+        same titles and due dates. Guarded by `compliance_tasks_generated` on
+        the application itself, not by inspecting the tasks table: an
+        earlier version of this guard matched on `task_type`, but that field
+        is fully client-chosen on manual task creation (no application-status
+        restriction), so an officer's own pre-award "performance_report" task
+        would have made the guard believe generation already happened and
+        suppress the real thing. A dedicated flag has no such ambiguity.
         """
-        existing_result = await self.db.execute(
-            select(func.count()).where(
-                GrantComplianceTask.application_id == application.id,
-                GrantComplianceTask.task_type.in_(self._AUTO_GENERATED_TASK_TYPES),
-            )
-        )
-        if (existing_result.scalar() or 0) > 0:
+        if application.compliance_tasks_generated:
             return
+        application.compliance_tasks_generated = True
 
         tasks_to_create = []
 
@@ -658,6 +648,20 @@ class GrantService:
             data["budget_item_id"], application_id
         ):
             raise ValueError("Budget item not found")
+
+        # Lock the budget item *before* inserting the expenditure below.
+        # GrantExpenditure.budget_item_id is a FK — InnoDB's own FK check on
+        # the INSERT takes a shared lock on the referenced budget item row,
+        # held until this transaction ends. If that happened first, two
+        # concurrent expenditures against the same budget item would each
+        # hold a shared lock from their own FK check, then both try to
+        # upgrade to the exclusive FOR UPDATE lock `_update_budget_item_spent`
+        # takes below — a lock-upgrade deadlock InnoDB resolves by killing
+        # one transaction (an unhandled 500, not retried). Locking first
+        # gives every transaction the same acquisition order.
+        if data.get("budget_item_id"):
+            await self._lock_budget_item(data["budget_item_id"])
+
         expenditure = GrantExpenditure(
             application_id=application_id,
             created_by=user_id,
@@ -702,6 +706,14 @@ class GrantService:
         ):
             raise ValueError("Budget item not found")
         old_budget_item_id = expenditure.budget_item_id
+        new_budget_item_id = data.get("budget_item_id", old_budget_item_id)
+        # Lock both the old and (if reassigned) new budget item before the
+        # update flush below — see create_expenditure for why: an UPDATE
+        # that changes budget_item_id takes the same FK-check shared lock an
+        # INSERT does, ahead of the exclusive FOR UPDATE lock the recompute
+        # takes below.
+        for bid in {old_budget_item_id, new_budget_item_id} - {None}:
+            await self._lock_budget_item(bid)
         apply_updates(expenditure, data, skip={"application_id", "id"})
         await self.db.flush()
 
@@ -741,6 +753,22 @@ class GrantService:
         if budget_item_id:
             await self._update_budget_item_spent(budget_item_id, organization_id)
         return True
+
+    async def _lock_budget_item(self, budget_item_id: str) -> None:
+        """Acquire a FOR UPDATE lock on a budget item ahead of a child insert/update.
+
+        Called before `create_expenditure`/`update_expenditure` flush a
+        `GrantExpenditure` row whose `budget_item_id` FK would otherwise be
+        the first thing to lock this row this transaction (see the callers
+        for the deadlock this avoids). Not org-scoped — the id has already
+        been validated in-org via `_budget_item_in_application` by the time
+        either caller reaches this.
+        """
+        await self.db.execute(
+            select(GrantBudgetItem.id)
+            .where(GrantBudgetItem.id == budget_item_id)
+            .with_for_update()
+        )
 
     async def _update_budget_item_spent(
         self, budget_item_id: str, organization_id: str
