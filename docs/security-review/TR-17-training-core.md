@@ -1,6 +1,6 @@
 # Security Review 17 — Training Core
 
-**Prefix:** `TR` · **Iteration:** 17 · **Reviewed:** 2026-08-26 · **PR:** TBD
+**Prefix:** `TR` · **Iteration:** 17 · **Reviewed:** 2026-08-26 · **PR:** [#1851](https://github.com/thegspiro/the-logbook/pull/1851)
 
 **Backend:** `api/v1/endpoints/training.py` (3,162 L),
 `api/v1/endpoints/training_programs.py` (2,142 L),
