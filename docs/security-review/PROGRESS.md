@@ -16,7 +16,7 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-PR #1904 (feature 22, grants & fundraising) — open, awaiting CI/review.
+None — PR #1904 (feature 22, grants & fundraising) merged. Next iteration starts feature 23 (medical supplies).
 
 ---
 
@@ -66,7 +66,7 @@ data-carrying modules, then the supporting infrastructure.
 | 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3723 L)                                                                                                          | ✅ #1901        |
 | 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ✅ #1902        |
 | 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ✅ #1903        |
-| 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ⏳              |
+| 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ✅              |
 | 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ⬜              |
 | 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ⬜              |
 | 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ⬜              |
@@ -826,3 +826,25 @@ re-runs the whole-codebase sweeps against whatever has landed since.
   8849/8849 full backend suite pass. Findings doc:
   `docs/security-review/GF-22-grants-fundraising.md`. PR #1904 opened and
   subscribed. Next: 23 medical supplies, once #1904 merges.
+- **22 Grants & fundraising ✅ merged** — PR #1904 merged 2026-08-26.
+  Codex review caught two real issues before merge, both fixed in the same
+  PR: (P1) the parent-lock fixes for GF-15 left `create_donation`/
+  `create_expenditure` (and the reassignment branches of
+  `update_donation`/`update_expenditure`) inserting/updating the
+  FK-carrying child row _before_ locking the parent — InnoDB's own FK
+  check on that insert takes a shared lock on the parent, so two
+  concurrent writes to the same parent could each hold a shared lock and
+  then both try to upgrade to the exclusive FOR UPDATE lock the recompute
+  takes, deadlocking; fixed by acquiring the parent lock(s) first, via new
+  `_lock_campaign`/`_lock_donor`/`_lock_budget_item` helpers. (P2) the
+  GF-14 idempotency guard matched on `task_type`, which is fully
+  client-settable on manual task creation with no status restriction — an
+  officer's own pre-award task of the same type could make the guard
+  believe generation had already run and silently skip the real thing;
+  replaced with a dedicated `compliance_tasks_generated` boolean on
+  `GrantApplication` (migration `472a1e34aa84`). Both fixes replied to and
+  resolved on their review threads. CI also caught the generated
+  `docs/DATABASE_SCHEMA.md` going stale after the new column — regenerated
+  and pushed. Full local completion gate re-verified green (8855/8855 full
+  suite) before the final push; CI came back green with no further
+  comments. Next: 23 medical supplies.
