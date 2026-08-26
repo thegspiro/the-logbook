@@ -264,7 +264,7 @@ export interface SchedulingEligibilitySettings {
 /** Why a member holds a position: their rank, a completed program, or an
  *  org-wide open position. `label` names the specific rank or program. */
 export interface PositionEligibilitySource {
-  type: 'rank' | 'training' | 'open';
+  type: 'rank' | 'position' | 'training' | 'open';
   label: string;
 }
 

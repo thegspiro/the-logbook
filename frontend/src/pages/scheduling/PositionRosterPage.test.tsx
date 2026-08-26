@@ -142,6 +142,32 @@ describe('PositionRosterPage', () => {
     expect(await screen.findByText(/open-position list/i)).toBeInTheDocument();
   });
 
+  it('styles a held-position source differently from a rank source', async () => {
+    // Both resolve through the same slug vocabulary, so their labels can be
+    // identical. An unmapped source type falls back to the rank badge, which
+    // rendered a position as an indistinguishable second rank chip.
+    mockGetPositionRoster.mockResolvedValue({
+      ...roster,
+      members: [
+        {
+          ...certifiedDriver,
+          // Nulled so the only "Lieutenant" / "Engineer" on screen are the two
+          // source badges being compared.
+          rank_display_name: null,
+          sources: [
+            { type: 'rank', label: 'Lieutenant' },
+            { type: 'position', label: 'Engineer' },
+          ],
+        },
+      ],
+    });
+    renderPage();
+
+    const rankBadge = await screen.findByText('Lieutenant');
+    const positionBadge = screen.getByText('Engineer');
+    expect(rankBadge.className).not.toEqual(positionBadge.className);
+  });
+
   it('does not show EVOC warnings for non-driving positions', async () => {
     mockGetPositionRoster.mockResolvedValue({
       position: 'officer',

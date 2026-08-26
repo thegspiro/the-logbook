@@ -1167,9 +1167,12 @@ class SchedulingEligibilitySettingsResponse(BaseModel):
 class PositionEligibilitySource(BaseModel):
     """One reason a member holds a position.
 
-    ``type`` is ``rank``, ``training``, or ``open``; ``label`` names the
-    specific rank or completed program so an officer can see *why* without
-    cross-referencing the settings screens.
+    ``type`` is ``rank``, ``position``, ``training``, or ``open``; ``label``
+    names the specific rank, held position, or completed program so an officer
+    can see *why* without cross-referencing the settings screens. Every type
+    here needs a matching entry in the roster page's ``SOURCE_STYLES`` — an
+    unmapped one renders with the rank badge's icon and colour, which reads as
+    a duplicate rank rather than as a distinct source.
     """
 
     type: str

@@ -517,6 +517,71 @@ class TestPositionRoster:
         out = await ShiftEligibilityService(db).get_position_roster("org-1", "ems")
         assert out["members"][0]["sources"] == [{"type": "position", "label": "EMT"}]
 
+    async def test_rank_mirroring_position_is_not_reported_twice(self):
+        # Onboarding gives every member the system position mirroring their
+        # rank, and rank codes share a vocabulary with position slugs, so a
+        # Lieutenant resolves "lieutenant" through slug_map on both branches.
+        # That is one grant, and the roster listed it as two identical badges.
+        db = self._db_for(
+            users=[_member("u1", rank="lieutenant")],
+            ranks=[("lieutenant", "Lieutenant", ["driver", "officer"])],
+            training=[],
+            operators=[],
+            held=[("u1", "lieutenant", "Lieutenant"), ("u1", "member", "Member")],
+        )
+        out = await ShiftEligibilityService(db).get_position_roster("org-1", "driver")
+
+        assert out["members"][0]["sources"] == [{"type": "rank", "label": "Lieutenant"}]
+
+    async def test_position_distinct_from_rank_still_reported(self):
+        # The dedupe keys on the slug, not on "a rank source exists" -- a
+        # position that grants the seat for its own reason is a real second
+        # source and must survive.
+        db = self._db_for(
+            users=[_member("u1", rank="lieutenant")],
+            ranks=[
+                ("lieutenant", "Lieutenant", ["driver"]),
+                ("engineer", "Engineer", ["driver"]),
+            ],
+            training=[],
+            operators=[],
+            held=[("u1", "lieutenant", "Lieutenant"), ("u1", "engineer", "Engineer")],
+        )
+        out = await ShiftEligibilityService(db).get_position_roster("org-1", "driver")
+
+        assert out["members"][0]["sources"] == [
+            {"type": "rank", "label": "Lieutenant"},
+            {"type": "position", "label": "Engineer"},
+        ]
+
+    async def test_duplicate_held_position_rows_report_once(self):
+        db = self._db_for(
+            users=[_member("u1", rank="")],
+            ranks=[("emt", "EMT", ["ems"])],
+            training=[],
+            operators=[],
+            held=[("u1", "emt", "EMT"), ("u1", "emt", "EMT")],
+        )
+        out = await ShiftEligibilityService(db).get_position_roster("org-1", "ems")
+
+        assert out["members"][0]["sources"] == [{"type": "position", "label": "EMT"}]
+
+    async def test_duplicate_completed_enrollments_report_the_program_once(self):
+        db = self._db_for(
+            users=[_member("u1", rank="firefighter")],
+            ranks=[("firefighter", "Firefighter", ["firefighter"])],
+            training=[
+                ("u1", "Driver Operator Pipeline", "driver_candidate"),
+                ("u1", "Driver Operator Pipeline", "driver_candidate"),
+            ],
+            operators=[],
+        )
+        out = await ShiftEligibilityService(db).get_position_roster("org-1", "driver")
+
+        assert out["members"][0]["sources"] == [
+            {"type": "training", "label": "Driver Operator Pipeline"}
+        ]
+
     async def test_rank_without_a_stored_row_uses_the_seed_label(self):
         db = self._db_for(
             users=[_member("u1", rank="emt")],

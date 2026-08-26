@@ -389,6 +389,14 @@ class ShiftEligibilityService:
 
             sources: List[Dict[str, Any]] = []
 
+            # A rank code and a held position's slug share one vocabulary (see
+            # _get_slug_eligibility_map), and onboarding gives every member the
+            # system position mirroring their rank -- a Lieutenant holds the
+            # "lieutenant" position too. Both branches below then resolve the
+            # same slug through the same map, so crediting each independently
+            # reported one grant twice, under the same label.
+            credited_slugs: Set[str] = set()
+
             rank_code = user.rank or ""
             rank_entry = rank_map.get(rank_code)
             if position in slug_map.get(rank_code, []):
@@ -402,12 +410,20 @@ class ShiftEligibilityService:
                         ),
                     }
                 )
+                credited_slugs.add(rank_code)
 
             for held in held_map.get(str(user.id), []):
+                if held["slug"] in credited_slugs:
+                    continue
                 if position in slug_map.get(held["slug"], []):
                     sources.append({"type": "position", "label": held["name"]})
+                    credited_slugs.add(held["slug"])
 
+            seen_programs: Set[str] = set()
             for program_name in training_map.get(str(user.id), []):
+                if program_name in seen_programs:
+                    continue
+                seen_programs.add(program_name)
                 sources.append({"type": "training", "label": program_name})
 
             if is_open:

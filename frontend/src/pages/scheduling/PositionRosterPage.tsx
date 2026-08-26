@@ -4,10 +4,10 @@
  * "Who is cleared to drive?" — answered in one screen instead of opening each
  * apparatus's operator tab in turn.
  *
- * Eligibility for a shift position comes from three independent sources OR'd
- * together (rank, completed training, the org's open-position list), so a
- * member can hold a position for a reason that is not obvious from their
- * profile. This page shows the sources alongside each name, and pairs them
+ * Eligibility for a shift position comes from four independent sources OR'd
+ * together (rank, a held position, completed training, the org's open-position
+ * list), so a member can hold a position for a reason that is not obvious from
+ * their profile. This page shows the sources alongside each name, and pairs them
  * with the member's EVOC standing so the gap that matters is visible: someone
  * whose rank lets them sign up as a driver with no EVOC certification behind
  * it.
@@ -16,7 +16,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router';
 import toast from 'react-hot-toast';
-import { AlertTriangle, GraduationCap, Loader2, Search, Shield, Truck, Unlock, Users } from 'lucide-react';
+import { AlertTriangle, Briefcase, GraduationCap, Loader2, Search, Shield, Truck, Unlock, Users } from 'lucide-react';
 import { schedulingService } from '../../modules/scheduling/services/api';
 import type { PositionRosterMember, PositionRosterResponse } from '../../modules/scheduling/types';
 import { POSITION_LABELS } from '../../constants/enums';
@@ -36,8 +36,12 @@ const TABS = [
 
 type TabId = (typeof TABS)[number]['id'];
 
+// One entry per source type the roster endpoint emits. A type with no entry
+// here falls back to the rank styling, which is how a held-position source
+// spent its life masquerading as a second rank badge.
 const SOURCE_STYLES: Record<string, { icon: React.ElementType; className: string }> = {
   rank: { icon: Shield, className: 'bg-violet-500/15 text-violet-700 dark:text-violet-400' },
+  position: { icon: Briefcase, className: 'bg-indigo-500/15 text-indigo-700 dark:text-indigo-400' },
   training: { icon: GraduationCap, className: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400' },
   open: { icon: Unlock, className: 'bg-sky-500/15 text-sky-700 dark:text-sky-400' },
 };
