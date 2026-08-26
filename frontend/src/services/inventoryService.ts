@@ -297,6 +297,31 @@ export const inventoryService = {
     return response.data;
   },
 
+  async getDepartureClearances(params?: { status?: string }): Promise<{
+    clearances: Array<{
+      id: string;
+      user_id: string;
+      status: string;
+      items_outstanding: number;
+      initiated_at: string;
+      return_deadline?: string;
+    }>;
+    total: number;
+  }> {
+    const response = await api.get('/inventory/clearances', { params });
+    return response.data as {
+      clearances: Array<{
+        id: string;
+        user_id: string;
+        status: string;
+        items_outstanding: number;
+        initiated_at: string;
+        return_deadline?: string;
+      }>;
+      total: number;
+    };
+  },
+
   async getLowStockItems(): Promise<LowStockAlert[]> {
     const response = await api.get<LowStockAlert[]>('/inventory/low-stock');
     return asArray(response.data);
