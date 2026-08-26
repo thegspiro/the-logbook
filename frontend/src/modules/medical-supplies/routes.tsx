@@ -26,7 +26,11 @@ export const getMedicalSuppliesRoutes = () => {
       <Route
         path="/medical-supplies"
         element={
-          <ProtectedRoute requiredAnyPermission={MEDICAL_VIEW_PERMISSIONS}>
+          <ProtectedRoute
+            requiredModule="medical_supplies"
+            moduleLabel="Medical Supplies"
+            requiredAnyPermission={MEDICAL_VIEW_PERMISSIONS}
+          >
             <Suspense fallback={null}>
               <MedicalSuppliesPage />
             </Suspense>
@@ -37,7 +41,11 @@ export const getMedicalSuppliesRoutes = () => {
       <Route
         path="/medical-supplies/categories"
         element={
-          <ProtectedRoute requiredAnyPermission={MEDICAL_VIEW_PERMISSIONS}>
+          <ProtectedRoute
+            requiredModule="medical_supplies"
+            moduleLabel="Medical Supplies"
+            requiredAnyPermission={MEDICAL_VIEW_PERMISSIONS}
+          >
             <Suspense fallback={null}>
               <MedicalCategoriesPage />
             </Suspense>

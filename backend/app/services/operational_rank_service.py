@@ -27,12 +27,14 @@ _INACTIVE_STATUSES = {
 }
 
 
-# All shift position values for reference.
+# Every shift position value in the vocabulary. Kept in step with
+# ``ShiftPosition`` in app/schemas/scheduling.py.
 _ALL_POSITIONS = [
     "officer",
     "driver",
     "firefighter",
     "ems",
+    "paramedic",
     "captain",
     "lieutenant",
     "probationary",
@@ -40,12 +42,23 @@ _ALL_POSITIONS = [
     "other",
 ]
 
+# What the three chief ranks are seeded with -- everything a rank can confer.
+#
+# Deliberately NOT _ALL_POSITIONS. ``paramedic`` is a licence a member holds,
+# not something a chief's stripes confer: promoting an officer does not make
+# them a paramedic, and seeding it here would have put every chief on the
+# paramedic roster with no card behind it -- the exact "cleared on paper"
+# problem the credential path exists to close. Paramedic is earned only by a
+# current certification (TrainingCourse.target_position), so it appears in the
+# vocabulary above and in no rank's default grant.
+_CHIEF_POSITIONS = [p for p in _ALL_POSITIONS if p != "paramedic"]
+
 # Default ranks seeded for new organizations.
 # Format: (rank_code, display_name, sort_order, eligible_positions)
 DEFAULT_RANKS = [
-    ("fire_chief", "Fire Chief", 0, _ALL_POSITIONS),
-    ("deputy_chief", "Deputy Chief", 1, _ALL_POSITIONS),
-    ("assistant_chief", "Assistant Chief", 2, _ALL_POSITIONS),
+    ("fire_chief", "Fire Chief", 0, _CHIEF_POSITIONS),
+    ("deputy_chief", "Deputy Chief", 1, _CHIEF_POSITIONS),
+    ("assistant_chief", "Assistant Chief", 2, _CHIEF_POSITIONS),
     (
         "captain",
         "Captain",
@@ -62,6 +75,34 @@ DEFAULT_RANKS = [
     ("firefighter", "Firefighter", 6, ["firefighter", "ems"]),
     ("emt", "EMT", 7, ["ems", "firefighter"]),
 ]
+
+#: Every code the seed knows, whatever agency type it is written for.
+#:
+#: A rank is accepted on write if it is a stored row for the organization *or*
+#: one of these. The second half matters: the seed only fires into an empty
+#: table, so a department onboarded before a code joined DEFAULT_RANKS has no
+#: row for it while the eligibility fallback still honours it. Validating
+#: against stored rows alone would refuse a rank the rest of the system treats
+#: as valid — the shape of the EMT bug in #1833.
+#:
+#: Note it spans every agency type on purpose, unlike ``default_ranks_for``
+#: below: what a department may *hold* is broader than what it is seeded.
+DEFAULT_RANK_CODES = frozenset(code for code, _l, _o, _p in DEFAULT_RANKS)
+
+
+def rank_not_configured_message(rank: str) -> str:
+    """The refusal every write path gives for an unknown rank.
+
+    One wording, because a member told "not configured" by one screen and
+    something else by another has no way to tell they are the same problem.
+    It has to name the value — a typo is invisible until it is quoted back —
+    and say where to fix it.
+    """
+    return (
+        f"'{rank}' is not a rank this department has configured. "
+        "Add it under Settings → Ranks first, or pick an existing one."
+    )
+
 
 # Which ranks an agency of each type is seeded, and what it calls them, are one
 # decision shared with the position registry — ``app/core/permissions`` owns it
@@ -135,7 +176,7 @@ class OperationalRankService:
                 rank_code=code,
                 display_name=label,
                 sort_order=order,
-                # Copy: the three chief ranks share the _ALL_POSITIONS list
+                # Copy: the three chief ranks share the _CHIEF_POSITIONS list
                 # object, so persisting the reference directly would alias them
                 # (and the module constant) to one mutable list.
                 eligible_positions=list(positions),
@@ -305,6 +346,63 @@ class OperationalRankService:
     # ------------------------------------------------------------------
     # Validation
     # ------------------------------------------------------------------
+
+    async def resolve_rank_code(
+        self, organization_id: str, rank_code: str
+    ) -> Optional[str]:
+        """The canonical code for ``rank_code``, or ``None`` if it is not a rank.
+
+        Resolves two ways, and the second matters: a stored
+        ``operational_ranks`` row, **or** one of the built-in seed codes. The
+        seed only ever fires into an empty table, so a department onboarded
+        before a code joined ``DEFAULT_RANKS`` has no row for it while the
+        eligibility fallback still honours it. Rejecting those would refuse a
+        rank the rest of the system treats as valid — the exact shape of the
+        EMT bug in #1833.
+
+        **It returns the canonical spelling rather than a yes/no, and callers
+        must persist what it returns.** Every downstream consumer of
+        ``User.rank`` is an exact dictionary lookup —
+        ``OPERATIONAL_RANKS.get(rank)`` for default permissions, the slug map
+        keyed by ``rank_code`` for eligible seats — so a value that differs by
+        case or surrounding whitespace resolves to no permissions and no seats.
+        Validating a normalized string and storing the caller's original would
+        therefore wave through the very failure this check exists to prevent:
+        ``" firefighter "`` passes, stores with its spaces, and grants nothing.
+
+        Matching is deliberately case-insensitive on both paths. The prospect
+        conversion UI suggests display-cased values like ``Firefighter``, and
+        MySQL's default collation would have matched a stored row that way
+        regardless — so the choice is between accepting those and canonicalizing
+        them, or accepting them and storing something inert. ``lower()`` is
+        applied in SQL rather than relying on the server's collation, so the
+        answer does not change with database configuration. The per-org rank
+        table holds a dozen rows behind an ``organization_id`` filter, so
+        losing the index on that column costs nothing.
+        """
+        code = (rank_code or "").strip()
+        if not code:
+            return None
+        folded = code.lower()
+        for seeded in DEFAULT_RANK_CODES:
+            if seeded == folded:
+                return seeded
+        result = await self.db.execute(
+            select(OperationalRank.rank_code).where(
+                OperationalRank.organization_id == organization_id,
+                func.lower(OperationalRank.rank_code) == folded,
+            )
+        )
+        return result.scalar_one_or_none()
+
+    async def is_known_rank(self, organization_id: str, rank_code: str) -> bool:
+        """Whether ``rank_code`` names a rank this organization has.
+
+        The predicate form of :meth:`resolve_rank_code`. Prefer that one on any
+        path that goes on to *store* the rank — this answers whether the value
+        is acceptable, not what should be written.
+        """
+        return await self.resolve_rank_code(organization_id, rank_code) is not None
 
     async def validate_ranks(
         self,

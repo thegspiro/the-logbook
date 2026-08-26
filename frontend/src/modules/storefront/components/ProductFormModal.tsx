@@ -13,9 +13,13 @@ import { blankToNull, numberOrNull } from '../../../utils/formValues';
 import { storefrontService } from '../services/api';
 import {
   DEFAULT_EMBROIDERY_THREAD_COLOR,
+  DEFAULT_PERSONALIZATION_METHOD,
   EMBROIDERY_THREAD_COLORS,
+  PERSONALIZATION_METHODS,
+  usesThreadColor,
   StoreProductStatus,
   type EmbroideryThreadColor,
+  type PersonalizationMethod,
   type StoreProduct,
   type StoreProductInput,
   type StoreProductVariantInput,
@@ -48,6 +52,7 @@ interface FormState {
   personalizationMaxLength: string;
   personalizationPrice: string;
   personalizationThreadColor: EmbroideryThreadColor;
+  personalizationMethod: PersonalizationMethod;
   sortOrder: string;
   internalNotes: string;
 }
@@ -72,6 +77,7 @@ const emptyForm: FormState = {
   personalizationMaxLength: '30',
   personalizationPrice: '0',
   personalizationThreadColor: DEFAULT_EMBROIDERY_THREAD_COLOR,
+  personalizationMethod: DEFAULT_PERSONALIZATION_METHOD,
   sortOrder: '0',
   internalNotes: '',
 };
@@ -142,6 +148,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({ isOpen, prod
         personalizationMaxLength: String(product.personalizationMaxLength ?? 30),
         personalizationPrice: String(product.personalizationPrice ?? '0'),
         personalizationThreadColor: product.personalizationThreadColor ?? DEFAULT_EMBROIDERY_THREAD_COLOR,
+        personalizationMethod: product.personalizationMethod ?? DEFAULT_PERSONALIZATION_METHOD,
         sortOrder: String(product.sortOrder),
         internalNotes: product.internalNotes ?? '',
       });
@@ -217,6 +224,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({ isOpen, prod
       personalizationMaxLength: Number(form.personalizationMaxLength || 30),
       personalizationPrice: Number(form.personalizationPrice || 0),
       personalizationThreadColor: form.personalizationThreadColor,
+      personalizationMethod: form.personalizationMethod,
       sortOrder: Number(form.sortOrder || 0),
       internalNotes: blankToNull(form.internalNotes),
       variants: variantPayload,
@@ -493,41 +501,76 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({ isOpen, prod
                 </div>
               </div>
               <div>
-                <span className="form-label" id="product-pers-thread">
-                  Thread color
+                <span className="form-label" id="product-pers-method">
+                  How is it applied?
                 </span>
                 <p className="text-theme-text-secondary mb-2 text-xs">
-                  What the vendor embroiders this item in. Members see their name previewed in it.
+                  Cloth is stitched; metal is cut. This decides what the vendor sheet asks for.
                 </p>
-                <div className="flex flex-wrap gap-2" role="radiogroup" aria-labelledby="product-pers-thread">
-                  {EMBROIDERY_THREAD_COLORS.map((color) => {
-                    const selected = form.personalizationThreadColor === color.value;
+                <div className="flex flex-wrap gap-2" role="radiogroup" aria-labelledby="product-pers-method">
+                  {PERSONALIZATION_METHODS.map((method) => {
+                    const selected = form.personalizationMethod === method.value;
                     return (
                       <button
-                        key={color.value}
+                        key={method.value}
                         type="button"
                         role="radio"
                         aria-checked={selected}
-                        onClick={() => update('personalizationThreadColor', color.value)}
-                        className={`focus-visible:ring-theme-focus-ring mobile-touch-target inline-flex items-center gap-2 rounded-lg border px-2.5 py-1.5 text-[13px] transition-colors focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-hidden ${
+                        onClick={() => update('personalizationMethod', method.value)}
+                        className={`focus-visible:ring-theme-focus-ring mobile-touch-target flex flex-col items-start rounded-lg border px-3 py-2 text-left transition-colors focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-hidden ${
                           selected
-                            ? 'border-2 border-red-800 bg-red-50 font-bold text-red-900 dark:border-red-600 dark:bg-red-500/15 dark:text-red-200'
+                            ? 'border-2 border-red-800 bg-red-50 text-red-900 dark:border-red-600 dark:bg-red-500/15 dark:text-red-200'
                             : 'border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover bg-theme-surface'
                         }`}
                       >
-                        {/* Ringed rather than bare: the white and silver
-                            swatches vanish into a light surface otherwise. */}
-                        <span
-                          aria-hidden="true"
-                          className="h-4 w-4 shrink-0 rounded-full ring-1 ring-slate-400/60"
-                          style={{ backgroundColor: color.hex }}
-                        />
-                        {color.label}
+                        <span className="text-[13px] font-bold">{method.label}</span>
+                        <span className="text-theme-text-muted text-[11px]">{method.hint}</span>
                       </button>
                     );
                   })}
                 </div>
               </div>
+
+              {/* Thread belongs to embroidery alone — an engraver has none, and
+                  offering the picker would put a colour on the vendor sheet. */}
+              {usesThreadColor(form.personalizationMethod) && (
+                <div>
+                  <span className="form-label" id="product-pers-thread">
+                    Thread color
+                  </span>
+                  <p className="text-theme-text-secondary mb-2 text-xs">
+                    What the vendor embroiders this item in. Members see their name previewed in it.
+                  </p>
+                  <div className="flex flex-wrap gap-2" role="radiogroup" aria-labelledby="product-pers-thread">
+                    {EMBROIDERY_THREAD_COLORS.map((color) => {
+                      const selected = form.personalizationThreadColor === color.value;
+                      return (
+                        <button
+                          key={color.value}
+                          type="button"
+                          role="radio"
+                          aria-checked={selected}
+                          onClick={() => update('personalizationThreadColor', color.value)}
+                          className={`focus-visible:ring-theme-focus-ring mobile-touch-target inline-flex items-center gap-2 rounded-lg border px-2.5 py-1.5 text-[13px] transition-colors focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-hidden ${
+                            selected
+                              ? 'border-2 border-red-800 bg-red-50 font-bold text-red-900 dark:border-red-600 dark:bg-red-500/15 dark:text-red-200'
+                              : 'border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover bg-theme-surface'
+                          }`}
+                        >
+                          {/* Ringed rather than bare: the white and silver
+                            swatches vanish into a light surface otherwise. */}
+                          <span
+                            aria-hidden="true"
+                            className="h-4 w-4 shrink-0 rounded-full ring-1 ring-slate-400/60"
+                            style={{ backgroundColor: color.hex }}
+                          />
+                          {color.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
 
               <div className="form-grid-2">
                 <div>

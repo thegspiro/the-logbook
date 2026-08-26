@@ -340,6 +340,7 @@ export interface StoreProduct {
   personalizationPrice: string;
   personalizationThreadColor: EmbroideryThreadColor;
   personalizationThreadColorHex: string;
+  personalizationMethod: PersonalizationMethod;
   sortOrder: number;
   internalNotes?: string | null;
   hasImage: boolean;
@@ -368,6 +369,7 @@ export interface StoreProductInput {
   personalizationMaxLength: number;
   personalizationPrice: number;
   personalizationThreadColor: EmbroideryThreadColor;
+  personalizationMethod: PersonalizationMethod;
   sortOrder: number;
   internalNotes?: string | null;
   variants: StoreProductVariantInput[];
@@ -452,6 +454,7 @@ export interface StorefrontProductOffer {
   personalizationThreadColor: EmbroideryThreadColor;
   /** Resolved server-side so the member's preview and the vendor sheet agree. */
   personalizationThreadColorHex: string;
+  personalizationMethod: PersonalizationMethod;
   availableQuantity?: number | null;
   isAvailable: boolean;
   variants: StorefrontVariantOption[];
@@ -517,6 +520,7 @@ export interface StoreOrderItem {
   /** Frozen at order time — the product may be switched to another thread later. */
   personalizationThreadColor?: EmbroideryThreadColor | null;
   personalizationThreadColorHex?: string | null;
+  personalizationMethod?: PersonalizationMethod | null;
   unitPrice: string;
   quantity: number;
   lineTotal: string;
@@ -612,6 +616,7 @@ export interface StoreWindowProductTally {
   sku?: string | null;
   personalizationText?: string | null;
   personalizationThreadColor?: EmbroideryThreadColor | null;
+  personalizationMethod?: PersonalizationMethod | null;
   quantity: number;
   unitPrice: string;
   lineTotal: string;
@@ -692,6 +697,51 @@ export interface StorePermissions {
   can_order: boolean;
   can_manage: boolean;
 }
+
+/** How a product's personalization is applied to the goods.
+ *
+ *  Mirrors `PersonalizationMethod` in `backend/app/utils/embroidery.py`.
+ *  Cloth is stitched and carries a thread colour; metal is cut and carries
+ *  none — so this decides whether the thread colour means anything at all.
+ */
+export const PersonalizationMethod = {
+  EMBROIDERY: 'embroidery',
+  ENGRAVING: 'engraving',
+} as const;
+export type PersonalizationMethod = (typeof PersonalizationMethod)[keyof typeof PersonalizationMethod];
+
+/** Label, material hint and default member prompt per method, in offer order. */
+export const PERSONALIZATION_METHODS: ReadonlyArray<{
+  value: PersonalizationMethod;
+  label: string;
+  hint: string;
+  prompt: string;
+}> = [
+  {
+    value: PersonalizationMethod.EMBROIDERY,
+    label: 'Embroidered',
+    hint: 'Stitched into cloth — shirts, polos, caps',
+    prompt: 'Add name embroidery',
+  },
+  {
+    value: PersonalizationMethod.ENGRAVING,
+    label: 'Engraved',
+    hint: 'Cut into metal — coins, badges, plaques',
+    prompt: 'Add name engraving',
+  },
+];
+
+/** What a product that never chose a method is treated as. */
+export const DEFAULT_PERSONALIZATION_METHOD: PersonalizationMethod = PersonalizationMethod.EMBROIDERY;
+
+/** True when the method involves thread — the one place that decides. */
+export const usesThreadColor = (method: PersonalizationMethod | null | undefined): boolean =>
+  (method ?? DEFAULT_PERSONALIZATION_METHOD) === PersonalizationMethod.EMBROIDERY;
+
+/** The member-facing prompt for a method, when the product names none. */
+export const personalizationPrompt = (method: PersonalizationMethod | null | undefined): string =>
+  PERSONALIZATION_METHODS.find((m) => m.value === (method ?? DEFAULT_PERSONALIZATION_METHOD))?.prompt ??
+  'Add name embroidery';
 
 /** Thread colors a personalized store product can be embroidered in.
  *

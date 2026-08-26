@@ -53,16 +53,18 @@ export const getSchedulingRoutes = () => {
       <Route
         path="/scheduling"
         element={
-          <Suspense fallback={null}>
-            <SchedulingPage />
-          </Suspense>
+          <ProtectedRoute requiredModule="scheduling" moduleLabel="Scheduling">
+            <Suspense fallback={null}>
+              <SchedulingPage />
+            </Suspense>
+          </ProtectedRoute>
         }
       />
       <Route
         path="/scheduling/templates"
         element={
           <Suspense fallback={null}>
-            <ProtectedRoute requiredPermission="scheduling.manage">
+            <ProtectedRoute requiredModule="scheduling" moduleLabel="Scheduling" requiredPermission="scheduling.manage">
               <SchedulingTemplatesPage />
             </ProtectedRoute>
           </Suspense>
@@ -72,7 +74,7 @@ export const getSchedulingRoutes = () => {
         path="/scheduling/patterns"
         element={
           <Suspense fallback={null}>
-            <ProtectedRoute requiredPermission="scheduling.manage">
+            <ProtectedRoute requiredModule="scheduling" moduleLabel="Scheduling" requiredPermission="scheduling.manage">
               <SchedulingPatternsPage />
             </ProtectedRoute>
           </Suspense>
@@ -82,7 +84,7 @@ export const getSchedulingRoutes = () => {
         path="/scheduling/reports"
         element={
           <Suspense fallback={null}>
-            <ProtectedRoute requiredPermission="scheduling.manage">
+            <ProtectedRoute requiredModule="scheduling" moduleLabel="Scheduling" requiredPermission="scheduling.manage">
               <SchedulingAdminReportsPage />
             </ProtectedRoute>
           </Suspense>
@@ -92,7 +94,7 @@ export const getSchedulingRoutes = () => {
         path="/scheduling/settings"
         element={
           <Suspense fallback={null}>
-            <ProtectedRoute requiredPermission="scheduling.manage">
+            <ProtectedRoute requiredModule="scheduling" moduleLabel="Scheduling" requiredPermission="scheduling.manage">
               <SchedulingSettingsPage />
             </ProtectedRoute>
           </Suspense>
@@ -102,7 +104,11 @@ export const getSchedulingRoutes = () => {
         path="/scheduling/qualifications"
         element={
           <Suspense fallback={null}>
-            <ProtectedRoute requiredAnyPermission={['scheduling.manage', 'training.view_all', 'training.manage']}>
+            <ProtectedRoute
+              requiredModule="scheduling"
+              moduleLabel="Scheduling"
+              requiredAnyPermission={['scheduling.manage', 'training.view_all', 'training.manage']}
+            >
               <PositionRosterPage />
             </ProtectedRoute>
           </Suspense>
@@ -112,7 +118,7 @@ export const getSchedulingRoutes = () => {
         path="/scheduling/platoons"
         element={
           <Suspense fallback={null}>
-            <ProtectedRoute requiredPermission="scheduling.manage">
+            <ProtectedRoute requiredModule="scheduling" moduleLabel="Scheduling" requiredPermission="scheduling.manage">
               <SchedulingPlatoonsPage />
             </ProtectedRoute>
           </Suspense>
@@ -122,7 +128,7 @@ export const getSchedulingRoutes = () => {
         path="/scheduling/equipment-check-templates/new"
         element={
           <Suspense fallback={null}>
-            <ProtectedRoute requiredPermission="scheduling.manage">
+            <ProtectedRoute requiredModule="scheduling" moduleLabel="Scheduling" requiredPermission="scheduling.manage">
               <EquipmentCheckTemplateBuilder />
             </ProtectedRoute>
           </Suspense>
@@ -132,7 +138,7 @@ export const getSchedulingRoutes = () => {
         path="/scheduling/equipment-check-templates/:templateId"
         element={
           <Suspense fallback={null}>
-            <ProtectedRoute requiredPermission="scheduling.manage">
+            <ProtectedRoute requiredModule="scheduling" moduleLabel="Scheduling" requiredPermission="scheduling.manage">
               <EquipmentCheckTemplateBuilder />
             </ProtectedRoute>
           </Suspense>
@@ -142,7 +148,7 @@ export const getSchedulingRoutes = () => {
         path="/scheduling/equipment-check-reports"
         element={
           <Suspense fallback={null}>
-            <ProtectedRoute requiredPermission="scheduling.manage">
+            <ProtectedRoute requiredModule="scheduling" moduleLabel="Scheduling" requiredPermission="scheduling.manage">
               <EquipmentCheckReportsPage />
             </ProtectedRoute>
           </Suspense>
@@ -152,7 +158,11 @@ export const getSchedulingRoutes = () => {
         path="/scheduling/supply/expiring"
         element={
           <Suspense fallback={null}>
-            <ProtectedRoute requiredAnyPermission={['scheduling.manage', 'equipment_check.view', 'inventory.manage']}>
+            <ProtectedRoute
+              requiredModule="scheduling"
+              moduleLabel="Scheduling"
+              requiredAnyPermission={['scheduling.manage', 'equipment_check.view', 'inventory.manage']}
+            >
               <SupplyExpiringPage />
             </ProtectedRoute>
           </Suspense>
@@ -165,6 +175,8 @@ export const getSchedulingRoutes = () => {
             {/* Crew-level, not officer-level: recording what you just used is
                 the whole point, so the default member permission opens it. */}
             <ProtectedRoute
+              requiredModule="scheduling"
+              moduleLabel="Scheduling"
               requiredAnyPermission={['equipment_check.submit', 'equipment_check.view', 'inventory.view']}
             >
               <ApparatusInventoryPage />
@@ -179,7 +191,11 @@ export const getSchedulingRoutes = () => {
         path="/scheduling/equipment"
         element={
           <Suspense fallback={null}>
-            <ProtectedRoute requiredAnyPermission={['equipment_check.view', 'scheduling.manage']}>
+            <ProtectedRoute
+              requiredModule="scheduling"
+              moduleLabel="Scheduling"
+              requiredAnyPermission={['equipment_check.view', 'scheduling.manage']}
+            >
               <FleetBoardPage />
             </ProtectedRoute>
           </Suspense>
@@ -193,6 +209,8 @@ export const getSchedulingRoutes = () => {
                 equipment_check.view to their own checks rather than 403ing,
                 so the route opens for anyone who can submit one. */}
             <ProtectedRoute
+              requiredModule="scheduling"
+              moduleLabel="Scheduling"
               requiredAnyPermission={['equipment_check.submit', 'equipment_check.view', 'scheduling.manage']}
             >
               <CheckLogPage />
@@ -204,7 +222,11 @@ export const getSchedulingRoutes = () => {
         path="/scheduling/equipment/:apparatusId"
         element={
           <Suspense fallback={null}>
-            <ProtectedRoute requiredAnyPermission={['equipment_check.view', 'scheduling.manage']}>
+            <ProtectedRoute
+              requiredModule="scheduling"
+              moduleLabel="Scheduling"
+              requiredAnyPermission={['equipment_check.view', 'scheduling.manage']}
+            >
               <ApparatusDetailPage />
             </ProtectedRoute>
           </Suspense>
@@ -213,25 +235,31 @@ export const getSchedulingRoutes = () => {
       <Route
         path="/scheduling/checkin"
         element={
-          <Suspense fallback={null}>
-            <ShiftCheckInPage />
-          </Suspense>
+          <ProtectedRoute requiredModule="scheduling" moduleLabel="Scheduling">
+            <Suspense fallback={null}>
+              <ShiftCheckInPage />
+            </Suspense>
+          </ProtectedRoute>
         }
       />
       <Route
         path="/scheduling/checkin/print"
         element={
-          <Suspense fallback={null}>
-            <ShiftCheckInPrintPage />
-          </Suspense>
+          <ProtectedRoute requiredModule="scheduling" moduleLabel="Scheduling">
+            <Suspense fallback={null}>
+              <ShiftCheckInPrintPage />
+            </Suspense>
+          </ProtectedRoute>
         }
       />
       <Route
         path="/scheduling/shift-reports/print"
         element={
-          <Suspense fallback={null}>
-            <ShiftReportPrintPage />
-          </Suspense>
+          <ProtectedRoute requiredModule="scheduling" moduleLabel="Scheduling">
+            <Suspense fallback={null}>
+              <ShiftReportPrintPage />
+            </Suspense>
+          </ProtectedRoute>
         }
       />
     </React.Fragment>

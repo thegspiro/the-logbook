@@ -3,7 +3,7 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 import { StoreProductCard } from './StoreProductCard';
-import { EmbroideryThreadColor } from '../types';
+import { EmbroideryThreadColor, PersonalizationMethod } from '../types';
 import type { StorefrontProductOffer } from '../types';
 
 const offer = (overrides: Partial<StorefrontProductOffer> = {}): StorefrontProductOffer => ({
@@ -23,6 +23,7 @@ const offer = (overrides: Partial<StorefrontProductOffer> = {}): StorefrontProdu
   personalizationPrice: '8.00',
   personalizationThreadColor: EmbroideryThreadColor.GOLD,
   personalizationThreadColorHex: '#c8a02c',
+  personalizationMethod: PersonalizationMethod.EMBROIDERY,
   availableQuantity: null,
   isAvailable: true,
   variants: [
@@ -143,6 +144,44 @@ describe('StoreProductCard', () => {
     await user.type(screen.getByRole('textbox', { name: /Add name embroidery/ }), 'J. SMITH');
 
     expect(screen.getByText('J. SMITH', { selector: 'span' })).toHaveStyle({ color: '#c8a02c' });
+  });
+
+  it('asks a metal item to be engraved, not embroidered', () => {
+    render(
+      <StoreProductCard
+        offer={offer({
+          personalizationEnabled: true,
+          personalizationMethod: PersonalizationMethod.ENGRAVING,
+        })}
+        onAdd={onAdd}
+      />
+    );
+
+    // The prompt names the process: a challenge coin is cut, not stitched.
+    expect(screen.getByRole('checkbox', { name: /Add name engraving/ })).toBeInTheDocument();
+    expect(screen.queryByRole('checkbox', { name: /embroidery/i })).not.toBeInTheDocument();
+  });
+
+  it('previews an engraved item without a thread colour', async () => {
+    const user = userEvent.setup();
+    render(
+      <StoreProductCard
+        offer={offer({
+          personalizationEnabled: true,
+          personalizationMethod: PersonalizationMethod.ENGRAVING,
+          // The product still stores a colour; engraving must ignore it rather
+          // than stitch a coin in gold.
+          personalizationThreadColor: EmbroideryThreadColor.GOLD,
+          personalizationThreadColorHex: '#c8a02c',
+        })}
+        onAdd={onAdd}
+      />
+    );
+
+    await user.click(screen.getByRole('checkbox', { name: /Add name engraving/ }));
+    await user.type(screen.getByRole('textbox', { name: /Add name engraving/ }), 'J. SMITH');
+
+    expect(screen.getByText('J. SMITH', { selector: 'span' })).not.toHaveStyle({ color: '#c8a02c' });
   });
 
   it('renders the size chips in the order the API served them', () => {

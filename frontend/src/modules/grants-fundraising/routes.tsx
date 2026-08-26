@@ -40,7 +40,11 @@ export const getGrantsFundraisingRoutes = () => {
       <Route
         path="/grants"
         element={
-          <ProtectedRoute requiredPermission="fundraising.view">
+          <ProtectedRoute
+            requiredModule="grants"
+            moduleLabel="Grants & Fundraising"
+            requiredPermission="fundraising.view"
+          >
             <GrantsDashboardPage />
           </ProtectedRoute>
         }
@@ -50,7 +54,11 @@ export const getGrantsFundraisingRoutes = () => {
       <Route
         path="/grants/opportunities"
         element={
-          <ProtectedRoute requiredPermission="fundraising.view">
+          <ProtectedRoute
+            requiredModule="grants"
+            moduleLabel="Grants & Fundraising"
+            requiredPermission="fundraising.view"
+          >
             <GrantOpportunitiesPage />
           </ProtectedRoute>
         }
@@ -60,7 +68,11 @@ export const getGrantsFundraisingRoutes = () => {
       <Route
         path="/grants/applications"
         element={
-          <ProtectedRoute requiredPermission="fundraising.view">
+          <ProtectedRoute
+            requiredModule="grants"
+            moduleLabel="Grants & Fundraising"
+            requiredPermission="fundraising.view"
+          >
             <GrantApplicationsPage />
           </ProtectedRoute>
         }
@@ -68,7 +80,11 @@ export const getGrantsFundraisingRoutes = () => {
       <Route
         path="/grants/applications/new"
         element={
-          <ProtectedRoute requiredPermission="fundraising.manage">
+          <ProtectedRoute
+            requiredModule="grants"
+            moduleLabel="Grants & Fundraising"
+            requiredPermission="fundraising.manage"
+          >
             <GrantApplicationFormPage />
           </ProtectedRoute>
         }
@@ -76,7 +92,11 @@ export const getGrantsFundraisingRoutes = () => {
       <Route
         path="/grants/applications/:id"
         element={
-          <ProtectedRoute requiredPermission="fundraising.view">
+          <ProtectedRoute
+            requiredModule="grants"
+            moduleLabel="Grants & Fundraising"
+            requiredPermission="fundraising.view"
+          >
             <GrantDetailPage />
           </ProtectedRoute>
         }
@@ -84,7 +104,11 @@ export const getGrantsFundraisingRoutes = () => {
       <Route
         path="/grants/applications/:id/edit"
         element={
-          <ProtectedRoute requiredPermission="fundraising.manage">
+          <ProtectedRoute
+            requiredModule="grants"
+            moduleLabel="Grants & Fundraising"
+            requiredPermission="fundraising.manage"
+          >
             <GrantApplicationFormPage />
           </ProtectedRoute>
         }
@@ -94,7 +118,11 @@ export const getGrantsFundraisingRoutes = () => {
       <Route
         path="/grants/campaigns"
         element={
-          <ProtectedRoute requiredPermission="fundraising.view">
+          <ProtectedRoute
+            requiredModule="grants"
+            moduleLabel="Grants & Fundraising"
+            requiredPermission="fundraising.view"
+          >
             <CampaignsPage />
           </ProtectedRoute>
         }
@@ -104,7 +132,11 @@ export const getGrantsFundraisingRoutes = () => {
       <Route
         path="/grants/donors"
         element={
-          <ProtectedRoute requiredPermission="fundraising.view">
+          <ProtectedRoute
+            requiredModule="grants"
+            moduleLabel="Grants & Fundraising"
+            requiredPermission="fundraising.view"
+          >
             <DonorsPage />
           </ProtectedRoute>
         }
@@ -114,7 +146,11 @@ export const getGrantsFundraisingRoutes = () => {
       <Route
         path="/grants/donations"
         element={
-          <ProtectedRoute requiredPermission="fundraising.view">
+          <ProtectedRoute
+            requiredModule="grants"
+            moduleLabel="Grants & Fundraising"
+            requiredPermission="fundraising.view"
+          >
             <DonationsPage />
           </ProtectedRoute>
         }
@@ -124,7 +160,11 @@ export const getGrantsFundraisingRoutes = () => {
       <Route
         path="/grants/reports"
         element={
-          <ProtectedRoute requiredPermission="fundraising.view">
+          <ProtectedRoute
+            requiredModule="grants"
+            moduleLabel="Grants & Fundraising"
+            requiredPermission="fundraising.view"
+          >
             <GrantsReportsPage />
           </ProtectedRoute>
         }

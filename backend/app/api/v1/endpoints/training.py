@@ -20,6 +20,7 @@ from fastapi import (
     UploadFile,
     status,
 )
+from loguru import logger
 from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -73,6 +74,7 @@ from app.services.integration_services.notification_dispatch import (
     notify_entity_created,
     notify_summary,
 )
+from app.services.qualification_service import QualificationService
 from app.services.training_compliance import (
     _load_compliance_config,
     evaluate_member_requirement,
@@ -505,6 +507,30 @@ async def update_course(
 # Training Records
 
 
+async def _sync_qualifications(db: AsyncSession, records) -> None:
+    """Grant the qualifications these completed records confer.
+
+    Called after the records themselves are committed. A course that names a
+    ``grants_qualification`` is the department saying "completing this
+    certifies the member", so the grant follows from the record rather than
+    needing a second, forgettable entry on another screen.
+
+    Failures are logged and swallowed: a qualification that did not get written
+    is a scheduling inconvenience, and raising here would fail the request that
+    recorded training which did happen and is already saved.
+    """
+    service = QualificationService(db)
+    wrote = False
+    for record in records:
+        try:
+            if await service.sync_from_training_record(record):
+                wrote = True
+        except Exception as e:  # pragma: no cover - defensive
+            logger.error(f"Failed to sync qualification from training record: {e}")
+    if wrote:
+        await db.commit()
+
+
 @router.get("/records", response_model=list[TrainingRecordResponse])
 async def list_records(
     user_id: UUID | None = None,
@@ -643,6 +669,8 @@ async def create_record(
     await db.commit()
     await db.refresh(new_record)
 
+    await _sync_qualifications(db, [new_record])
+
     await log_audit_event(
         db=db,
         event_type="training_record_created",
@@ -752,6 +780,7 @@ async def create_records_bulk(
     duplicate_warnings: list[DuplicateWarning] = []
     errors: list[str] = []
     created_ids: list[str] = []
+    created_records: list[TrainingRecord] = []
 
     # Pre-fetch members (scoped to this org) for rank/station and to validate
     # that every record targets an in-org member — never trust client user_ids.
@@ -836,12 +865,15 @@ async def create_records_bulk(
             db.add(new_record)
             await db.flush()
             created_ids.append(str(new_record.id))
+            created_records.append(new_record)
             created += 1
         except Exception as e:
             errors.append(f"Row {idx + 1}: {safe_error_detail(e)}")
             failed += 1
 
     await db.commit()
+
+    await _sync_qualifications(db, created_records)
 
     if created > 0:
         await log_audit_event(
@@ -922,8 +954,26 @@ async def update_record(
     for field, value in update_fields.items():
         setattr(record, field, value)
 
+    # Derive the expiry the create paths derive. A record PATCHed to completed
+    # with a completion date and no explicit expiration would otherwise keep a
+    # null expiration_date, which reads as "never lapses" to the certification
+    # alerts, the compliance hub and shift eligibility alike -- so a credential
+    # completed through this workflow would clear its seats indefinitely.
+    if not record.expiration_date and record.course_id and record.completion_date:
+        course_result = await db.execute(
+            select(TrainingCourse.expiration_months).where(
+                TrainingCourse.id == str(record.course_id),
+                TrainingCourse.organization_id == str(current_user.organization_id),
+            )
+        )
+        record.expiration_date = QualificationService._course_expiry(
+            record.completion_date, course_result.scalar_one_or_none()
+        )
+
     await db.commit()
     await db.refresh(record)
+
+    await _sync_qualifications(db, [record])
 
     event_data = {
         "record_id": str(record_id),
@@ -2265,6 +2315,7 @@ async def confirm_historical_import(
     skipped = 0
     failed = 0
     errors = []
+    imported_records: list[TrainingRecord] = []
 
     # Validate every targeted user is a member of this org — the client-supplied
     # row.user_id must never be trusted on confirm.
@@ -2345,12 +2396,18 @@ async def confirm_historical_import(
                     created_by=current_user.id,
                 )
                 db.add(record)
+                imported_records.append(record)
             imported += 1
         except Exception as e:
             failed += 1
             errors.append(f"Row {row.row_number}: {safe_error_detail(e)}")
 
     await db.commit()
+
+    # A backfilled certification confers the same qualification a freshly
+    # recorded one does; sync_from_training_record never pulls a live card's
+    # expiry backwards, so importing history cannot lapse a current one.
+    await _sync_qualifications(db, imported_records)
 
     await log_audit_event(
         db=db,
@@ -2959,6 +3016,7 @@ async def import_training_csv(
 
     successes = 0
     failures: list[dict] = []
+    imported_records: list[TrainingRecord] = []
 
     for row_num, row in enumerate(reader, start=2):  # row 1 is header
         try:
@@ -3091,6 +3149,7 @@ async def import_training_csv(
                 notes=notes,
             )
             db.add(record)
+            imported_records.append(record)
             successes += 1
 
         except Exception as e:
@@ -3098,5 +3157,6 @@ async def import_training_csv(
 
     if successes > 0:
         await db.commit()
+        await _sync_qualifications(db, imported_records)
 
     return {"success": successes, "failed": len(failures), "errors": failures}

@@ -197,6 +197,237 @@ the "kept in lockstep with the frontend" comment that nothing had been enforcing
   which had already drifted from the registry before this change. It is a dev
   fixture, not a source of truth.
 
+### The medic seat nobody could fill, three source badges that looked identical, and a writer for member qualifications (2026-08-26)
+
+**Fixed**
+
+- **A Paramedic could not fill the Paramedic seat.** The medic seat was added
+  to `ShiftPosition` while the Paramedic qualification still cleared only
+  `ems`, so the seat could be put on a shift and nothing cleared anybody for
+  it — the unfillable-seat failure of #1833 from the member's side.
+  `test_qualification_service.py` guarded the forward direction (every seat a
+  qualification grants is one the API can name) but not the reverse; it now
+  asserts every seat is reachable from a rank or a qualification, so a seat
+  cannot again exist with nothing granting it.
+- **Three eligibility sources rendered as the same badge.** The roster emits
+  `rank`, `position`, `qualification`, `training` and `open`, and the page had
+  styles for only three. `position` and `qualification` both fell back to the
+  rank badge's icon and colour, so a Lieutenant who also held the Lieutenant
+  position and an EMT card showed three identical violet chips. Each source
+  now has its own icon and colour.
+- The roster listed a member's rank twice. Onboarding gives
+  every member the system position mirroring their rank, and rank codes
+  share a slug vocabulary with position slugs, so a Lieutenant resolved
+  "lieutenant" on both the rank and held-position branches and each emitted
+  a badge. The frontend had no style for the held-position source, so it
+  fell back to the rank badge's icon and colour and the two were
+  indistinguishable. The roster now credits each slug once, and a genuine
+  held position renders distinctly. A qualification held independently of
+  rank — a Lieutenant who is also an EMT — still reports both.
+
+**Added**
+
+- **Completing a course now grants the qualification it certifies.**
+  `member_qualifications` is read by shift eligibility and had nothing writing
+  to it: a training officer recorded the class that happened, then had to grant
+  the qualification again on a different screen, and the second entry is the
+  one that gets forgotten — leaving a member certified on paper and
+  unqualified in the scheduler. `training_courses.grants_qualification` names
+  the code a course certifies, and `TrainingRecord` — which already carries the
+  completion date, the expiry, the certificate number and the issuing agency —
+  becomes the single place the fact is entered. Wired into all five paths that
+  write a training record, including CSV and historical import.
+
+  Backfilling an old class never pulls a live card's expiry backwards, so
+  importing history adds records without lapsing the certification a member is
+  actually working under. Set it per course under Training → Course Library
+  ("Certifies"); until a training officer does, completing a course grants
+  nothing and eligibility behaves exactly as before.
+
+- A qualification on the roster now carries the date it lapses, and turns amber
+  inside 60 days. The roster answers as of today, so without the date a card
+  expiring next week reads exactly like one good for another five years.
+- **Paramedic is a shift position distinct from EMT.** Both previously
+  collapsed into one `ems` bucket, so a department staffing an ALS unit
+  could not say a medic was required, and "was a paramedic, still an EMT"
+  was not a state the system could represent. This is the counterpart to the
+  EMT seat fix below: `EMT` and `EMS` really are one seat and now settle onto
+  one token, while a medic is a genuinely different seat and gets its own.
+  `paramedic` joins `CANONICAL_POSITIONS` and `ShiftPosition` together, so the
+  vocabularies stay the identical set `tests/test_position_slots.py` asserts,
+  and `20260826_1400_e2c8f5a71d40` folds a stored custom "Paramedic" seat onto
+  it — a department that needed a medic seat before there was one had no
+  option but to hand-roll it, and that seat was grantable by nothing. "Medic"
+  and other spellings a department chose are deliberately left alone: they stay
+  custom seats, and renaming one is what custom positions exist to prevent.
+
+  No rank seeds the medic seat: a licence is not something stripes confer, and
+  granting it by rank would have put every chief on the medic roster with no
+  card behind them. It is earned only by holding the Paramedic qualification.
+  Enable the seat per department under Scheduling Settings → Position Names.
+
+- The roster shows a certification's expiry beside the member, and switches
+  the badge to amber within 60 days of it — an officer staffing next month
+  sees the medic whose card runs out in three weeks rather than discovering
+  it when the roster silently shortens.
+
+### Membership standing stops being a "position", and three silent refusals get a reason (2026-08-26)
+
+**Changed**
+
+- **Onboarding no longer offers membership standing as a position.** The role
+  setup screen listed Probationary, Junior, Life, Administrative, Social and
+  Exempt beside Regular Member, and creating one wrote a permission-bearing
+  `positions` row. Those are a member's _class_ and _status_ — what kind of
+  member they are and where they sit on the ladder — not a job they hold, and
+  the User model's own taxonomy has always said so.
+
+  The cost was not cosmetic. A department that used them recorded standing in
+  two unconnected places: `member_class` / `member_status` on the member, which
+  every backend gate reads, and a held position that none of them do. Changing
+  one left the other stale, with nothing to reconcile them. And because the
+  position carried real grants, "reclassify this member" and "change what they
+  can see" were one action with no indication they were.
+
+  Regular Member stays — it is the genuine baseline position, it is in the
+  backend's `DEFAULT_POSITIONS`, and it carries the day-one grant set.
+
+  A migration recovers the standing from the installs that already have these
+  positions, taking the most specific one where a member holds several. It
+  **does not delete the positions**: each carries the `member` or
+  `probationary` grant template, and a member whose only position was
+  `life_member` would lose everything it gave them. Reclassifying somebody is
+  not a reason to cut their access, so the rows stay and a department can
+  retire them from the position editor once it is satisfied the standing is
+  right. Only members reading as plainly `operational` / `regular` are
+  touched, so anything more specific already on the member wins, and members
+  left deliberately unclassified by the previous migration (a custom
+  membership tier id) stay that way.
+
+**Fixed**
+
+- **A mistyped rank is refused at the write instead of failing three screens
+  later.** `User.rank` is a plain `String(100)` with no foreign key, so any
+  string at all could be stored — and `fire_cheif` does not fail loudly. It
+  matches no configured rank, so it resolves to no eligible seats and no
+  default permissions, and the member simply cannot sign up for anything. What
+  they see is "you are not qualified for this position", which reads as the
+  application being broken.
+
+  The codebase already knew about this class of problem:
+  `OperationalRankService.validate_ranks` exists to _report_ members whose
+  stored rank matches nothing. The same question is now asked one step earlier,
+  where it can still be answered by refusing the write with a message naming
+  the value and where to add it. Clearing a rank stays allowed — an empty value
+  is "no rank", not a bad one.
+
+  All three write paths refuse it in the same words — creating a member,
+  updating a profile, and transferring a prospect to full membership. The third
+  is the one that matters most: nobody watches a brand-new record fail to
+  appear on a shift roster, and the department has no reason to suspect the
+  rank field.
+
+  A rank counts as configured if the organization has a stored row for it **or**
+  it is one of the built-in seed codes. The second half is load-bearing:
+  seeding only ever fires into an empty table, so a department onboarded before
+  a code joined `DEFAULT_RANKS` has no row for it while shift eligibility still
+  honours it. Validating against stored rows alone would refuse a rank the rest
+  of the system treats as valid — which is the shape of the EMT seat bug fixed
+  earlier today.
+
+- **A retired, suspended or dropped member could still take a shift seat.**
+  `User.status` (the account and roster lifecycle) and `membership_type` (the
+  membership ladder) are separate axes that share three spellings, and nothing
+  reconciles them — correctly, since a probationary member has an active
+  account and a member on leave is still a regular member. But retiring
+  somebody through the members screen writes `status` and never touches
+  `membership_type`, so every rule that consulted only membership saw them as a
+  regular operational member.
+
+  Self-signup was one of those rules. `get_position_roster` already filtered on
+  the account being active, which made the roster _stricter_ than the endpoint
+  it exists to mirror: a department could see a member absent from the roster
+  and still watch them take a seat. Logging in was blocked either way, but a
+  session opened before the status change outlives it.
+
+  Account status is now checked ahead of everything else, including the
+  open-to-all bypass. "Open to all members" waives the membership-type and rank
+  checks; it does not make a dropped account a member again — and an open shift
+  is where a department is least likely to notice one on the roster.
+
+### Member class, member status, and qualifications become separate facts (2026-08-26)
+
+**Added**
+
+- **`member_class` and `member_status` on every member.** `membership_type`
+  held two independent facts in one column: what kind of member somebody is
+  (operational / administrative / social) and where they sit on the membership
+  ladder (prospective → probationary → regular → life → retired). Because they
+  shared a field, neither could be stated without losing the other — there was
+  no way to record a _probationary treasurer_, and nothing said whether a _life
+  member_ still rides.
+
+  The clearest symptom was in elections. `ElectionService` could only answer
+  "is this member operational" as `membership_type == "active"`, because that
+  was the one value that meant it — so a bylaws question put to the operational
+  members never reached anyone who had earned life membership, or anyone still
+  on probation. It now reads the member's **class**, and every operational
+  standing counts. "regular", "life" and "probationary" stay **status** checks,
+  because they name a status.
+
+  `membership_type` is kept and kept correct: ~160 call sites read it, and it
+  is now derived from the pair by `app/utils/membership.py`, reconciled on
+  every flush by a listener on `User`. Whichever side a caller writes wins, so
+  existing code is unchanged. The derivation is lossy in one direction on
+  purpose — the legacy vocabulary cannot express an administrative probationer
+  — and the two new columns are the authority when they disagree.
+
+  `honorary` backfills to the **social** class. That is not a new judgement
+  about honorary members; it is what the system already did with them, since
+  `honorary` has always sat in `DEFAULT_EXCLUDED_MEMBERSHIP_TYPES` beside
+  administrative and retired. Mapping them anywhere else would have widened
+  shift access on upgrade.
+
+  Neither column takes a database default, deliberately. A DDL default is
+  applied to raw-SQL inserts that name only `membership_type`, and would be
+  wrong for exactly the members who are not plain operational regulars —
+  silently promoting an administrative member into the operational class. NULL
+  means "nobody has set this" and readers derive from the legacy field; ORM
+  writes never leave it NULL.
+
+- **`member_qualifications` — what a member is certified to do.** Rank says
+  where a member sits in the chain of command; a qualification says what they
+  are trained to do. `User.rank` is one string, so a **Captain who is also a
+  Paramedic** — an entirely ordinary member of a volunteer department — had
+  nowhere to be recorded as both.
+
+  The standards already draw the line: Firefighter I/II is NFPA 1001,
+  apparatus operator is NFPA 1002, the officer ladder is NFPA 1021, and
+  EMT/Paramedic are EMS credentials on a separate track again.
+
+  Qualifications expire and ranks do not, which is the other half of why they
+  cannot share a column. Shift eligibility reads `expires_on` **as of the shift
+  date**, not as of today — the rule EVOC certifications already use for
+  drivers, and for the same reason: a card that is current when the roster is
+  built and expired when the truck rolls qualifies nobody to be on it. The
+  bulk path resolves this per distinct shift date rather than once per member,
+  since that is the one eligibility source that is not shift-independent.
+
+  The table starts empty. Nothing is inferred from existing rank or position
+  rows: a department that recorded somebody as an EMT _rank_ has said where
+  they sit, not which card they hold or when it expires, and inventing an
+  expiry date would be worse than having none.
+
+**Note**
+
+Ranks are unchanged. An EMS-only agency keeps EMT as its line rank, and a
+department that models EMT as a rank can carry on doing so — `emt` is now both
+a rank code and a qualification code, meaning two different things on purpose.
+Neither implies the other, and a department may use either or both.
+
+Admin screens for entering qualifications are not in this change; the model,
+the service and the eligibility reader are.
+
 ### An EMT rank granted nothing, and EMS-only agencies were seeded firefighters (2026-08-26)
 
 **Fixed**
@@ -298,6 +529,44 @@ again be offered to departments while conferring nothing.
 `RanksSettingsSection.test.tsx` cover the reported count and the badge it
 drives, including the stale-response case where the field is absent — the
 count must fall through to no badge rather than warning about every rank.
+
+### Embroidery and engraving are not the same job (2026-08-26)
+
+**Fixed**
+
+- **`alembic upgrade head` could not run at all.** Three migrations took
+  `c4a91b7e2f08` as their parent — the size-order settle (#1819), a second
+  storefront grant backfill, and the notifications.view revoke (#1829) — so the
+  chain had three heads and every database job on `main` failed before a test
+  ran. Relinearized rather than merged, because the order changes the outcome:
+  the two storefront backfills guard each other, and running them the other way
+  round leaves `storefront.manage` off the Quartermaster on every existing
+  department.
+
+- **An engraved item was sent to the vendor as gold thread.** Personalization
+  was modelled as one process. A cloth item is embroidered and the thread has a
+  colour; a metal item is engraved and there is none. With only a thread colour
+  on the model, a challenge coin reached the purchase order and the CSV export
+  reading "Gold" — an instruction the engraver cannot follow — and the member's
+  preview stitched a coin in gold. Products now carry a personalization method,
+  set per item by the quartermaster, and thread belongs to embroidery alone.
+
+- **The Command Palette offered the store where the route would refuse it.**
+  `My Store Orders` carried no gate at all while `/store/orders` requires
+  `storefront.view` and the storefront module, so it answered Access Denied to
+  every member without the grant and to every department with the store
+  switched off. `Department Store` was permission-gated but not module-gated.
+  `navGateIntegrity.test.ts` now covers the storefront paths; it existed for
+  this class of defect but listed only `/medical-supplies` and `/inventory`.
+
+- **Thirteen corporate positions could not reach the store.** Treasurer,
+  secretary, board of directors, EMS supply officer, public outreach,
+  communications officer, historian, membership coordinator, training officer,
+  fundraising chair, assistant secretary, scheduling officer and meeting hall
+  coordinator held no storefront grant. The store is a member amenity, not an
+  officer tool. The omission hid because permissions union across positions and
+  every operational rank grants the store, so it only bit a member whose sole
+  position was one of these and who had no rank recorded.
 
 ### An EMT could not sign up for the EMT seat on an ambulance (2026-08-26)
 

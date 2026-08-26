@@ -2437,6 +2437,32 @@ class MembershipPipelineService:
     ) -> Dict[str, Any]:
         """Internal method to perform the actual transfer"""
 
+        # A rank that matches nothing the department has configured resolves to
+        # no eligible seats and no default permissions, so the new member is
+        # created unable to sign up for anything with nothing to explain why.
+        # Refused here rather than reported later, in the same words the user
+        # endpoints use.
+        if rank and str(rank).strip():
+            from app.services.operational_rank_service import (
+                OperationalRankService,
+                rank_not_configured_message,
+            )
+
+            rank_service = OperationalRankService(self.db)
+            canonical = await rank_service.resolve_rank_code(
+                str(prospect.organization_id), str(rank)
+            )
+            if canonical is None:
+                return {
+                    "success": False,
+                    "message": rank_not_configured_message(str(rank)),
+                }
+            # Store the canonical spelling, not the caller's. The conversion UI
+            # suggests display-cased values ("Firefighter"), which would match
+            # no dictionary key downstream and leave the new member with no
+            # permissions and no eligible seats.
+            rank = canonical
+
         # Check for existing users with the same email (prevents duplicates)
         existing_matches = await self.check_existing_members(
             organization_id=prospect.organization_id,

@@ -591,6 +591,16 @@ describe('apiCache', () => {
       expect(isCacheable('/facilities/access-keys')).toBe(false);
     });
 
+    it('returns false for equipment-check reporter/restock PII (EC-14)', () => {
+      // ApparatusInventoryResponse and the check-log carry a reporter's full
+      // name and a free-text restock note; a caller whose equipment-check
+      // permission is later revoked must not keep reading them from cache.
+      expect(isCacheable('/equipment-checks/apparatus/123/inventory')).toBe(false);
+      expect(isCacheable('/equipment-checks/log')).toBe(false);
+      expect(isCacheable('/equipment-checks/items/1/deployed-lots')).toBe(false);
+      expect(isCacheable('/equipment-checks/supply/expiring-items')).toBe(false);
+    });
+
     it('excludes event roster sub-resources but still caches event list/detail', () => {
       // Parent paths remain cacheable...
       expect(isCacheable('/events')).toBe(true);

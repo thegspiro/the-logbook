@@ -70,9 +70,11 @@ ONBOARDING_OFFERED_MODULES = [
 # where it belongs fails rather than quietly landing off-by-default.
 ONBOARDING_SETTINGS_ONLY_MODULES = [
     "communications",
+    "finance",
     "grants",
     "hr_payroll",
     "incidents",
+    "medical_screening",
     "public_info",
 ]
 
@@ -1256,7 +1258,18 @@ class OnboardingService:
         configurable_keys = list(ModuleSettings.model_fields.keys())
         # Normalize hyphenated IDs (e.g. "hr-payroll") to snake_case
         normalized = {mid.replace("-", "_") for mid in final_modules}
-        modules_dict = {k: k in normalized for k in configurable_keys}
+        # Setup only decides the modules it actually put in front of somebody.
+        # Writing False for the rest turns "the wizard never asked" into "the
+        # department said no" — which is how public_info came to be stored off
+        # on every fresh install despite defaulting on, and would do the same
+        # to Finance and Medical Screening. Settings-only modules keep their
+        # declared default and are changed from Settings → Modules.
+        asked_about = set(ONBOARDING_CORE_MODULES) | set(ONBOARDING_OFFERED_MODULES)
+        defaults = ModuleSettings()
+        modules_dict = {
+            key: (key in normalized) if key in asked_about else getattr(defaults, key)
+            for key in configurable_keys
+        }
 
         result = await self.db.execute(
             select(Organization).order_by(Organization.created_at.asc()).limit(1)

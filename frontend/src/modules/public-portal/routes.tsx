@@ -17,7 +17,11 @@ export const getPublicPortalRoutes = () => {
       <Route
         path="/admin/public-portal"
         element={
-          <ProtectedRoute requiredPermission="settings.manage">
+          <ProtectedRoute
+            requiredModule="public_info"
+            moduleLabel="Public Information"
+            requiredPermission="settings.manage"
+          >
             <Suspense fallback={null}>
               <PublicPortalAdmin />
             </Suspense>

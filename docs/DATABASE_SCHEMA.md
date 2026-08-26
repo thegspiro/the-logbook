@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**255 tables · 4359 columns · 825 foreign keys**
+**256 tables · 4373 columns · 827 foreign keys**
 
 ---
 
@@ -470,6 +470,14 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`public_portal_config`](#public_portal_config) | `PublicPortalConfig` | 9 | Configuration for the public portal module. |
 | [`public_portal_data_whitelist`](#public_portal_data_whitelist) | `PublicPortalDataWhitelist` | 8 | Whitelist of data fields that can be exposed via the public portal. |
 
+### Qualification
+
+<sub>`app/models/qualification.py`</sub>
+
+| Table | Model | Columns | Purpose |
+|---|---|---|---|
+| [`member_qualifications`](#member_qualifications) | `MemberQualification` | 9 | One qualification held by one member. |
+
 ### Scheduling_Module_Config
 
 <sub>`app/models/scheduling_module_config.py`</sub>
@@ -503,13 +511,13 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | Table | Model | Columns | Purpose |
 |---|---|---|---|
 | [`store_order_events`](#store_order_events) | `StoreOrderEvent` | 11 | Timeline entry on an order — the member-visible "order updates" feed |
-| [`store_order_items`](#store_order_items) | `StoreOrderItem` | 15 | A line item on an order. |
+| [`store_order_items`](#store_order_items) | `StoreOrderItem` | 16 | A line item on an order. |
 | [`store_order_windows`](#store_order_windows) | `StoreOrderWindow` | 28 | A time-boxed ordering period ("order window") |
 | [`store_orders`](#store_orders) | `StoreOrder` | 33 | A member order placed against an order window |
 | [`store_payment_events`](#store_payment_events) | `StorePaymentEvent` | 19 | A payment a provider says it received, and what we did about it. |
 | [`store_product_images`](#store_product_images) | `StoreProductImage` | 9 | Uploaded product photo, stored out of line from the catalog row. |
 | [`store_product_variants`](#store_product_variants) | `StoreProductVariant` | 11 | A size/color option on a product (e.g. "L / Navy") |
-| [`store_products`](#store_products) | `StoreProduct` | 27 | A sellable item in the department catalog |
+| [`store_products`](#store_products) | `StoreProduct` | 28 | A sellable item in the department catalog |
 | [`store_settings`](#store_settings) | `StoreSettings` | 43 | Per-organization storefront configuration (one row per org). |
 | [`store_window_products`](#store_window_products) | `StoreWindowProduct` | 9 | Which catalog products a window offers, with per-window overrides |
 
@@ -559,7 +567,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`standing_shift_claims`](#standing_shift_claims) | `StandingShiftClaim` | 14 | A member's recurring claim on a shift — "every Tuesday night". |
 | [`training_approvals`](#training_approvals) | `TrainingApproval` | 15 | Training Approval model |
 | [`training_categories`](#training_categories) | `TrainingCategory` | 14 | Training Category model |
-| [`training_courses`](#training_courses) | `TrainingCourse` | 19 | Training Course model |
+| [`training_courses`](#training_courses) | `TrainingCourse` | 20 | Training Course model |
 | [`training_effectiveness_evaluations`](#training_effectiveness_evaluations) | `TrainingEffectivenessEvaluation` | 20 | Training Effectiveness Evaluation model |
 | [`training_module_configs`](#training_module_configs) | `TrainingModuleConfig` | 45 | Training Module Configuration model |
 | [`training_programs`](#training_programs) | `TrainingProgram` | 23 | Training Program model |
@@ -583,7 +591,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`prospects`](#prospects) | `Prospect` | 17 | Prospective member – someone who has expressed interest in joining |
 | [`sessions`](#sessions) | `Session` | 12 | User session model for tracking active sessions |
 | [`user_positions`](#user_positions) | _(association table)_ | 4 |  |
-| [`users`](#users) | `User` | 55 | User model with comprehensive authentication and profile support. |
+| [`users`](#users) | `User` | 57 | User model with comprehensive authentication and profile support. |
 
 ---
 
@@ -6450,6 +6458,35 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 - `idx_whitelist_enabled` (`is_enabled`)
 - UNIQUE `idx_whitelist_unique` (`organization_id`, `data_category`, `field_name`)
 
+## Qualification
+
+### `member_qualifications`
+
+**MemberQualification** · `app/models/qualification.py`
+
+> One qualification held by one member. Rows are per organization as well as per user: the same person can only be a member of one department here, but scoping the row means every read is org-filterable without a join back through ``users`` (CLAUDE.md pitfall #14).
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `user_id` | VARCHAR(36) | no | FK |  | → `users.id` ON DELETE CASCADE |
+| `qualification_code` | VARCHAR(50) | no |  |  |  |
+| `granted_on` | DATE | yes |  |  |  |
+| `expires_on` | DATE | yes | IDX |  |  |
+| `notes` | TEXT | yes |  |  |  |
+| `created_at` | DATETIME | no |  | `now()` |  |
+| `updated_at` | DATETIME | no |  | `now()` |  |
+
+**Indexes**
+
+- `ix_member_qual_org_code` (`organization_id`, `qualification_code`)
+- `ix_member_qualifications_expires_on` (`expires_on`)
+
+**Constraints**
+
+- UNIQUE `uq_member_qualification` (`user_id`, `qualification_code`)
+
 ## Scheduling_Module_Config
 
 ### `scheduling_module_configs`
@@ -6672,6 +6709,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `sku` | VARCHAR(100) | yes |  |  |  |
 | `personalization_text` | VARCHAR(200) | yes |  |  |  |
 | `personalization_thread_color` | VARCHAR(30) | yes |  |  |  |
+| `personalization_method` | VARCHAR(20) | yes |  |  |  |
 | `unit_price` | NUMERIC(10, 2) | no |  | `0` |  |
 | `quantity` | INTEGER | no |  | `1` |  |
 | `line_total` | NUMERIC(10, 2) | no |  | `0` |  |
@@ -6893,6 +6931,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `personalization_max_length` | INTEGER | no |  | `30` |  |
 | `personalization_price` | NUMERIC(10, 2) | no |  | `0` |  |
 | `personalization_thread_color` | VARCHAR(30) | yes |  |  |  |
+| `personalization_method` | VARCHAR(20) | yes |  |  |  |
 | `track_stock` | BOOL | no |  | `0` |  |
 | `stock_quantity` | INTEGER | yes |  |  |  |
 | `requires_variant` | BOOL | no |  | `0` |  |
@@ -8306,6 +8345,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `credit_hours` | FLOAT | yes |  |  |  |
 | `prerequisites` | JSON | yes |  |  |  |
 | `expiration_months` | INTEGER | yes |  |  |  |
+| `grants_qualification` | VARCHAR(50) | yes | IDX |  |  |
 | `instructor` | VARCHAR(255) | yes |  |  |  |
 | `max_participants` | INTEGER | yes |  |  |  |
 | `materials_required` | JSON | yes |  |  |  |
@@ -8320,6 +8360,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 - `idx_course_org_code` (`organization_id`, `code`)
 - `ix_training_courses_active` (`active`)
+- `ix_training_courses_grants_qualification` (`grants_qualification`)
 
 ### `training_effectiveness_evaluations`
 
@@ -8974,6 +9015,8 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `emergency_contacts` | JSON | yes |  | `list()` |  |
 | `notification_preferences` | JSON | yes |  | `dict()` |  |
 | `membership_type` | VARCHAR(50) | yes |  | `'active'` |  |
+| `member_class` | VARCHAR(20) | yes | IDX |  |  |
+| `member_status` | VARCHAR(20) | yes | IDX |  |  |
 | `membership_type_changed_at` | DATETIME | yes |  |  |  |
 | `status` | ENUM(`active`, `inactive`, `suspended`, `probationary`, `leave`, `retired`, `dropped_voluntary`, `dropped_involuntary`, `archived`) | yes | IDX | `'active'` |  |
 | `status_changed_at` | DATETIME | yes |  |  |  |
@@ -9008,6 +9051,8 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 - UNIQUE `idx_user_org_username` (`organization_id`, `username`)
 - `ix_users_calendar_feed_token` (`calendar_feed_token`)
 - `ix_users_email` (`email`)
+- `ix_users_member_class` (`member_class`)
+- `ix_users_member_status` (`member_status`)
 - `ix_users_oauth_subject` (`oauth_subject`)
 - `ix_users_password_reset_token` (`password_reset_token`)
 - `ix_users_status` (`status`)
@@ -9018,7 +9063,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 Every foreign key in the schema, grouped by the table it points at — the map of which id lives where.
 
-### → `users` (308 references)
+### → `users` (309 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -9209,6 +9254,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `member_dues` | `waived_by` | SET NULL | yes |
 | `member_leaves_of_absence` | `granted_by` | NO ACTION | yes |
 | `member_leaves_of_absence` | `user_id` | CASCADE | no |
+| `member_qualifications` | `user_id` | CASCADE | no |
 | `member_size_preferences` | `user_id` | CASCADE | no |
 | `membership_pipelines` | `created_by` | NO ACTION | yes |
 | `message_history` | `sent_by` | SET NULL | yes |
@@ -9331,7 +9377,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `votes` | `voter_id` | SET NULL | yes |
 | `xapi_statements` | `user_id` | SET NULL | yes |
 
-### → `organizations` (202 references)
+### → `organizations` (203 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -9457,6 +9503,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `member_competencies` | `organization_id` | CASCADE | no |
 | `member_dues` | `organization_id` | CASCADE | no |
 | `member_leaves_of_absence` | `organization_id` | CASCADE | no |
+| `member_qualifications` | `organization_id` | CASCADE | no |
 | `member_size_preferences` | `organization_id` | CASCADE | no |
 | `membership_pipelines` | `organization_id` | CASCADE | no |
 | `message_history` | `organization_id` | CASCADE | yes |

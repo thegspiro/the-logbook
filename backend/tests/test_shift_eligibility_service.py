@@ -30,9 +30,31 @@ def _rows(rows):
     return MagicMock(all=MagicMock(return_value=rows))
 
 
+def _empty_result():
+    """A result that reads as empty however the caller unwraps it."""
+    r = MagicMock()
+    r.all.return_value = []
+    r.scalar_one_or_none.return_value = None
+    r.scalars.return_value.all.return_value = []
+    return r
+
+
 def _db(side_effect):
+    """Fake session answering a declared sequence of results, then empties.
+
+    Padding the tail keeps a test to the queries it actually cares about, so
+    adding a term to the eligibility union does not mean editing every test in
+    the file. Ordering is still pinned for everything a test *does* declare: a
+    new query inserted ahead of a declared one consumes its result and the
+    assertion fails, which is the regression worth catching.
+    """
+    queue = list(side_effect)
+
+    async def _execute(*_args, **_kwargs):
+        return queue.pop(0) if queue else _empty_result()
+
     db = MagicMock()
-    db.execute = AsyncMock(side_effect=side_effect)
+    db.execute = AsyncMock(side_effect=_execute)
     db.commit = AsyncMock()
     db.refresh = AsyncMock()
     return db
@@ -65,9 +87,20 @@ def _rank_rows(entries):
     )
 
 
+def _qual_rows(codes=()):
+    """Qualification codes, as _get_qualification_positions selects them."""
+    return _rows([(code,) for code in codes])
+
+
 def _held_rows(slugs):
     """The member's own position slugs, as _get_held_position_slugs sees them."""
     return _rows([(slug,) for slug in slugs])
+
+
+def _qual_row(row):
+    """Pad a (user_id, code) fixture row to the (user_id, code, expires_on)
+    shape the roster query selects."""
+    return row if len(row) == 3 else (row[0], row[1], None)
 
 
 def _member(user_id, rank="ff", membership_type="active", platoon=None):
@@ -135,6 +168,7 @@ class TestGetEligiblePositions:
                 _one(org),
                 _rank_rows([("ff", ["driver"])]),
                 _held_rows([]),
+                _qual_rows(),
                 _rows([("officer",)]),
             ]
         )
@@ -151,6 +185,7 @@ class TestGetEligiblePositions:
                 _one(org),
                 _rank_rows([("emt", ["ems", "firefighter"])]),
                 _held_rows(["emt", "member"]),
+                _qual_rows(),
                 _rows([]),
             ]
         )
@@ -163,7 +198,9 @@ class TestGetEligiblePositions:
         # An org onboarded before "emt" joined DEFAULT_RANKS has no row for it
         # — seed_defaults only fires on an empty table — so the built-in
         # default answers rather than leaving the member with nothing.
-        db = _db([_one(_org()), _rank_rows([]), _held_rows(["emt"]), _rows([])])
+        db = _db(
+            [_one(_org()), _rank_rows([]), _held_rows(["emt"]), _qual_rows(), _rows([])]
+        )
         out = await ShiftEligibilityService(db).get_eligible_positions(
             _user(rank=None), "org-1"
         )
@@ -176,6 +213,7 @@ class TestGetEligiblePositions:
                 _one(_org()),
                 _rank_rows([("emt", ["ems"])]),
                 _held_rows(["emt"]),
+                _qual_rows(),
                 _rows([]),
             ]
         )
@@ -191,6 +229,7 @@ class TestGetEligiblePositions:
                 _one(_org()),
                 _rank_rows([("emt", ["ems", "firefighter"], False)]),
                 _held_rows(["emt"]),
+                _qual_rows(),
                 _rows([]),
             ]
         )
@@ -206,6 +245,7 @@ class TestGetEligiblePositions:
                 _one(_org()),
                 _rank_rows([]),
                 _held_rows(["treasurer", "member"]),
+                _qual_rows(),
                 _rows([]),
             ]
         )
@@ -223,6 +263,7 @@ class TestGetEligiblePositions:
                 _one(shift),
                 _rank_rows([("ff", ["driver"])]),
                 _held_rows([]),
+                _qual_rows(),
                 _rows([("officer",)]),
             ]
         )
@@ -244,6 +285,7 @@ class TestGetEligiblePositions:
                 _one(shift),
                 _rank_rows([("ff", ["driver"])]),
                 _held_rows([]),
+                _qual_rows(),
                 _rows([]),
             ]
         )
@@ -350,9 +392,22 @@ class TestPositionRoster:
     roster that disagrees with what signup enforces is worse than none.
     """
 
-    def _db_for(self, users, ranks, training, operators, org=None, held=None):
+    def _db_for(
+        self,
+        users,
+        ranks,
+        training,
+        operators,
+        org=None,
+        held=None,
+        qualifications=None,
+    ):
         # ranks feeds two queries: the display-name map (active rows only) and
         # the slug->positions map the eligibility decision reads.
+        # ``qualifications`` is (user_id, qualification_code, expires_on)
+        # rows, as QualificationService.get_current_by_member selects them.
+        # A bare (user_id, code) pair is padded with a null expiry, since
+        # most tests are not about when the card lapses.
         return _db(
             [
                 _one(org if org is not None else _org()),
@@ -362,8 +417,48 @@ class TestPositionRoster:
                 _rows(held or []),
                 _rows(training),
                 _rows(operators),
+                _rows([_qual_row(q) for q in (qualifications or [])]),
             ]
         )
+
+    async def test_a_qualification_only_member_appears_on_the_roster(self):
+        """The roster must not list a different set of people than signup accepts.
+
+        A member whose only basis for a seat is a current qualification — a
+        Captain who is also a Paramedic, say — is accepted by
+        ``get_eligible_positions``. If the roster omitted them, an officer
+        looking for cover would not be offered somebody the signup endpoint
+        would happily take, and ``SchedulingService.get_trade_candidates``
+        reads the same roster.
+        """
+        db = self._db_for(
+            users=[_member("u1", rank="unranked")],
+            ranks=[],
+            training=[],
+            operators=[],
+            qualifications=[("u1", "paramedic")],
+        )
+        out = await ShiftEligibilityService(db).get_position_roster("org-1", "ems")
+        assert [m["user_id"] for m in out["members"]] == ["u1"]
+        sources = out["members"][0]["sources"]
+        assert {
+            "type": "qualification",
+            "label": "Paramedic",
+            "expires_on": None,
+        } in sources
+
+    async def test_a_qualification_for_another_seat_does_not_list_them(self):
+        db = self._db_for(
+            users=[_member("u1", rank="unranked")],
+            ranks=[],
+            training=[],
+            operators=[],
+            qualifications=[("u1", "paramedic")],
+        )
+        out = await ShiftEligibilityService(db).get_position_roster(
+            "org-1", "firefighter"
+        )
+        assert out["members"] == []
 
     async def test_org_not_found_returns_empty(self):
         out = await ShiftEligibilityService(_db([_one(None)])).get_position_roster(
@@ -518,6 +613,157 @@ class TestPositionRoster:
         )
         out = await ShiftEligibilityService(db).get_position_roster("org-1", "ems")
         assert out["members"][0]["sources"] == [{"type": "position", "label": "EMT"}]
+
+    async def test_rank_mirroring_position_is_not_reported_twice(self):
+        # Onboarding gives every member the system position mirroring their
+        # rank, and rank codes share a vocabulary with position slugs, so a
+        # Lieutenant resolves "lieutenant" through slug_map on both branches.
+        # That is one grant, and the roster listed it as two identical badges.
+        db = self._db_for(
+            users=[_member("u1", rank="lieutenant")],
+            ranks=[("lieutenant", "Lieutenant", ["driver", "officer"])],
+            training=[],
+            operators=[],
+            held=[("u1", "lieutenant", "Lieutenant"), ("u1", "member", "Member")],
+        )
+        out = await ShiftEligibilityService(db).get_position_roster("org-1", "driver")
+
+        assert out["members"][0]["sources"] == [{"type": "rank", "label": "Lieutenant"}]
+
+    async def test_position_distinct_from_rank_still_reported(self):
+        # The dedupe keys on the slug, not on "a rank source exists" -- a
+        # position that grants the seat for its own reason is a real second
+        # source and must survive.
+        db = self._db_for(
+            users=[_member("u1", rank="lieutenant")],
+            ranks=[
+                ("lieutenant", "Lieutenant", ["driver"]),
+                ("engineer", "Engineer", ["driver"]),
+            ],
+            training=[],
+            operators=[],
+            held=[("u1", "lieutenant", "Lieutenant"), ("u1", "engineer", "Engineer")],
+        )
+        out = await ShiftEligibilityService(db).get_position_roster("org-1", "driver")
+
+        assert out["members"][0]["sources"] == [
+            {"type": "rank", "label": "Lieutenant"},
+            {"type": "position", "label": "Engineer"},
+        ]
+
+    async def test_rank_and_personal_qualifications_both_report(self):
+        """A Lieutenant who is also an EMT and a firefighter in his own right.
+
+        The department's case: a member's qualifications can come *with* the
+        rank and *also* stand on their own, and an officer reading this screen
+        needs to see which. Only the rank-mirroring position is redundant --
+        every slug that is genuinely a separate credential still reports, so
+        losing the rank would not silently drop the EMS clearance he holds
+        independently of it.
+        """
+        ranks = [
+            ("lieutenant", "Lieutenant", ["officer", "firefighter", "ems", "driver"]),
+            ("emt", "EMT", ["ems"]),
+            ("firefighter", "Firefighter", ["firefighter"]),
+        ]
+        held = [
+            ("u1", "lieutenant", "Lieutenant"),
+            ("u1", "emt", "EMT"),
+            ("u1", "firefighter", "Firefighter"),
+        ]
+
+        def roster_for(position):
+            return ShiftEligibilityService(
+                self._db_for(
+                    users=[_member("u1", rank="lieutenant")],
+                    ranks=ranks,
+                    training=[],
+                    operators=[],
+                    held=held,
+                )
+            ).get_position_roster("org-1", position)
+
+        ems = await roster_for("ems")
+        assert ems["members"][0]["sources"] == [
+            {"type": "rank", "label": "Lieutenant"},
+            {"type": "position", "label": "EMT"},
+        ]
+
+        fire = await roster_for("firefighter")
+        assert fire["members"][0]["sources"] == [
+            {"type": "rank", "label": "Lieutenant"},
+            {"type": "position", "label": "Firefighter"},
+        ]
+
+    async def test_duplicate_held_position_rows_report_once(self):
+        db = self._db_for(
+            users=[_member("u1", rank="")],
+            ranks=[("emt", "EMT", ["ems"])],
+            training=[],
+            operators=[],
+            held=[("u1", "emt", "EMT"), ("u1", "emt", "EMT")],
+        )
+        out = await ShiftEligibilityService(db).get_position_roster("org-1", "ems")
+
+        assert out["members"][0]["sources"] == [{"type": "position", "label": "EMT"}]
+
+    async def test_a_qualification_carries_the_date_it_lapses(self):
+        """Resolving as of today is not enough on its own.
+
+        The roster is not asked about a particular shift, so it answers for
+        today -- which means a card that lapses next week reads exactly like
+        one good for another five years. The expiry rides along so an officer
+        staffing next month sees it coming rather than finding the roster
+        quietly shorter.
+        """
+        db = self._db_for(
+            users=[_member("u1", rank="")],
+            ranks=[],
+            training=[],
+            operators=[],
+            qualifications=[("u1", "paramedic", date(2027, 3, 1))],
+        )
+        out = await ShiftEligibilityService(db).get_position_roster(
+            "org-1", "paramedic"
+        )
+
+        assert out["members"][0]["sources"] == [
+            {
+                "type": "qualification",
+                "label": "Paramedic",
+                "expires_on": date(2027, 3, 1),
+            }
+        ]
+
+    async def test_a_never_expiring_qualification_reports_no_date(self):
+        # A null expiry means the credential does not lapse, not that it has.
+        db = self._db_for(
+            users=[_member("u1", rank="")],
+            ranks=[],
+            training=[],
+            operators=[],
+            qualifications=[("u1", "paramedic", None)],
+        )
+        out = await ShiftEligibilityService(db).get_position_roster(
+            "org-1", "paramedic"
+        )
+        assert out["members"][0]["sources"][0]["expires_on"] is None
+
+    async def test_duplicate_completed_enrollments_report_the_program_once(self):
+        db = self._db_for(
+            users=[_member("u1", rank="firefighter")],
+            ranks=[("firefighter", "Firefighter", ["firefighter"])],
+            training=[
+                ("u1", "Driver Operator Pipeline", "driver_candidate"),
+                ("u1", "Driver Operator Pipeline", "driver_candidate"),
+            ],
+            operators=[],
+        )
+        out = await ShiftEligibilityService(db).get_position_roster("org-1", "driver")
+
+        assert out["members"][0]["sources"] == [
+            {"type": "training", "label": "Driver Operator Pipeline"}
+        ]
 
     async def test_rank_without_a_stored_row_uses_the_seed_label(self):
         db = self._db_for(
@@ -700,6 +946,7 @@ class TestAmbulanceEmtSeatIsFillable:
                 _one(shift),
                 _rank_rows([("emt", ["ems", "firefighter"])]),
                 _held_rows(["emt"]),
+                _qual_rows(),
                 _rows([]),
             ]
         )
@@ -725,6 +972,7 @@ class TestAmbulanceEmtSeatIsFillable:
                 _one(shift),
                 _rank_rows([("emt", ["ems", "firefighter"])]),
                 _held_rows([]),
+                _qual_rows(),
                 _rows([]),
             ]
         )
@@ -732,3 +980,127 @@ class TestAmbulanceEmtSeatIsFillable:
             _user(rank="emt"), "org-1", "s1"
         )
         assert "ems" in eligible
+
+
+def _user_with_status(status, rank="ff", membership_type="active"):
+    return SimpleNamespace(
+        id="u1", rank=rank, membership_type=membership_type, status=status
+    )
+
+
+class TestAccountStatusGate:
+    """``User.status`` and a member's *standing* are two axes that share words.
+
+    Three spellings appear in both — probationary, retired, and (as
+    ``inactive`` against ``honorary``) the non-participating case — and nothing
+    reconciles them. ``POST /member-status/{id}/status`` writes ``status`` and
+    never touches ``membership_type``, so retiring somebody through the members
+    screen leaves them reading as a regular operational member to every rule
+    that consults membership. Self-signup consulted only membership.
+
+    ``get_position_roster`` already filtered ``User.is_active``, which made the
+    roster *stricter* than the endpoint it exists to mirror: a department could
+    see a member absent from the roster and still watch them take a seat.
+    """
+
+    @staticmethod
+    def _ambulance_shift():
+        return SimpleNamespace(
+            id="s1",
+            positions=["driver", "ems"],
+            open_to_all_members=False,
+            date=date(2026, 9, 1),
+            start_time=None,
+        )
+
+    @pytest.mark.parametrize(
+        "status",
+        [
+            "retired",
+            "suspended",
+            "dropped_voluntary",
+            "dropped_involuntary",
+            "archived",
+            "inactive",
+            "leave",
+        ],
+    )
+    async def test_an_inactive_account_is_eligible_for_nothing(self, status):
+        db = _db([_one(_org()), _one(self._ambulance_shift())])
+        eligible = await ShiftEligibilityService(db).get_eligible_positions(
+            _user_with_status(status, rank="emt"), "org-1", "s1"
+        )
+        assert eligible == []
+
+    async def test_an_active_account_is_unaffected(self):
+        db = _db(
+            [
+                _one(_org()),
+                _one(self._ambulance_shift()),
+                _rank_rows([("emt", ["ems"])]),
+                _held_rows([]),
+                _qual_rows(),
+                _rows([]),
+            ]
+        )
+        eligible = await ShiftEligibilityService(db).get_eligible_positions(
+            _user_with_status("active", rank="emt"), "org-1", "s1"
+        )
+        assert eligible == ["ems"]
+
+    async def test_an_enum_status_is_read_the_same_as_a_string(self):
+        """The column is a ``(str, Enum)``, so both forms turn up in practice.
+
+        A row loaded through the ORM carries the enum member; one built in a
+        test or by a raw query carries the string. Reading only one of the two
+        would make this gate depend on how the user object was obtained.
+        """
+        from app.models.user import UserStatus
+
+        db = _db([_one(_org()), _one(self._ambulance_shift())])
+        eligible = await ShiftEligibilityService(db).get_eligible_positions(
+            _user_with_status(UserStatus.RETIRED, rank="emt"), "org-1", "s1"
+        )
+        assert eligible == []
+
+    async def test_an_absent_status_is_left_alone(self):
+        """No status means "not a real User row", not "inactive".
+
+        Stubs and lighter caller-supplied objects reach this path; failing them
+        closed would deny seats on the strength of a missing attribute rather
+        than a recorded decision.
+        """
+        assert ShiftEligibilityService._account_is_active(SimpleNamespace()) is True
+
+    async def test_open_to_all_does_not_readmit_a_dropped_member(self):
+        """The bypass waives membership type and rank. Not account status.
+
+        "Open to all members" is a statement about which *members* may take the
+        seat. A dropped account is not a member, and an open shift is the one
+        place a department is least likely to notice them on the roster.
+        """
+        shift = SimpleNamespace(
+            id="s1",
+            positions=["driver", "ems"],
+            open_to_all_members=True,
+            date=date(2026, 9, 1),
+            start_time=None,
+        )
+        db = _db([_one(_org()), _one(shift)])
+        eligible = await ShiftEligibilityService(db).get_eligible_positions(
+            _user_with_status("dropped_involuntary", rank=None), "org-1", "s1"
+        )
+        assert eligible == []
+
+    async def test_the_bulk_path_agrees_with_the_single_one(self):
+        """Both answer the same question, so they must answer it the same way.
+
+        The bulk path backs the day and month panels; the single path backs the
+        signup button. A disagreement shows a member a seat the button then
+        refuses — or, worse in this direction, hides one it would have allowed.
+        """
+        db = _db([_one(_org())])
+        answers = await ShiftEligibilityService(db).get_eligible_positions_bulk(
+            _user_with_status("retired", rank="emt"), "org-1", ["s1", "s2"]
+        )
+        assert answers == {"s1": [], "s2": []}

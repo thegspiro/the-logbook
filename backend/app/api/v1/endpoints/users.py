@@ -5,6 +5,7 @@ Endpoints for user management and listing.
 """
 
 from datetime import datetime, timezone
+from typing import Optional
 from uuid import UUID
 
 from fastapi import (
@@ -61,6 +62,10 @@ from app.services.admin_continuity_service import (
     LastAdministratorError,
     assert_not_last_administrator,
     assert_positions_retain_administrator,
+)
+from app.services.operational_rank_service import (
+    OperationalRankService,
+    rank_not_configured_message,
 )
 from app.services.organization_service import OrganizationService
 from app.services.security_monitoring import report_privilege_escalation_attempt
@@ -253,6 +258,9 @@ async def create_member(
     await _enforce_rank_grant_ceiling(
         current_user, user_data.rank, db, get_client_ip(request)
     )
+    canonical_rank = await _canonical_rank_or_400(
+        user_data.rank, str(current_user.organization_id), db
+    )
 
     # Auto-generate membership number if not provided and auto-generation is on
     membership_number = user_data.membership_number
@@ -280,7 +288,8 @@ async def create_member(
         date_of_birth=user_data.date_of_birth,
         hire_date=user_data.hire_date,
         # Department info
-        rank=user_data.rank,
+        # Canonical spelling, not the caller's — see _canonical_rank_or_400.
+        rank=canonical_rank,
         station=user_data.station,
         platoon=user_data.platoon,
         # Address
@@ -708,6 +717,43 @@ async def _enforce_role_grant_ceiling(
                         "beyond your own."
                     ),
                 )
+
+
+async def _canonical_rank_or_400(
+    rank: Optional[str], organization_id: str, db: AsyncSession
+) -> Optional[str]:
+    """Refuse a rank the organization does not have; return the one it does.
+
+    ``User.rank`` is a plain ``String(100)`` with no foreign key, so until now
+    any string at all could be stored — and a typo does not fail loudly. It
+    resolves to no eligible seats and no default permissions, so the member
+    silently cannot sign up for anything, which reads as the application being
+    broken rather than as a mistyped rank.
+
+    The codebase already knew: ``OperationalRankService.validate_ranks``
+    exists to *report* members whose stored rank matches no configured one.
+    This asks the same question one step earlier, where it can still be
+    answered by refusing the write.
+
+    **Callers must store the value this returns, not the one they passed in.**
+    Checking a normalized string and then persisting the caller's original
+    re-creates the exact failure being guarded against — ``" firefighter "``
+    would clear the check and then match no dictionary key downstream, leaving
+    the member with no permissions and no seats.
+
+    Clearing a rank stays allowed — an empty value is "no rank", not a bad one
+    — and comes back as ``None`` so the caller writes the cleared value.
+    """
+    if rank is None or not str(rank).strip():
+        return None
+    service = OperationalRankService(db)
+    canonical = await service.resolve_rank_code(organization_id, str(rank))
+    if canonical is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=rank_not_configured_message(str(rank)),
+        )
+    return canonical
 
 
 async def _enforce_rank_grant_ceiling(
@@ -1404,6 +1450,12 @@ async def update_user_profile(
         "station",
         "platoon",
         "membership_number",
+        # Membership classification decides who is in the operational body and
+        # therefore who receives which ballot. Left out of this set, any holder
+        # of the broader users.edit grant could move themselves from social or
+        # administrative into operational and vote on what they liked.
+        "member_class",
+        "member_status",
     }
     has_restricted = restricted_fields & update_data.keys()
     if has_restricted:
@@ -1420,8 +1472,8 @@ async def update_user_profile(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=(
                     "Only leadership, the secretary, or the membership coordinator "
-                    "can update hire date, rank, station, platoon, or membership "
-                    "number"
+                    "can update hire date, rank, station, platoon, membership "
+                    "number, or membership class and status"
                 ),
             )
 
@@ -1431,6 +1483,9 @@ async def update_user_profile(
         # settings.manage/security.manage. Only enforced on an actual change.
         if "rank" in update_data and update_data["rank"] != user.rank:
             await _enforce_rank_grant_ceiling(perm_user, update_data["rank"], db, None)
+            update_data["rank"] = await _canonical_rank_or_400(
+                update_data["rank"], str(current_user.organization_id), db
+            )
 
     # Handle emergency_contacts separately (needs serialization)
     if "emergency_contacts" in update_data:
