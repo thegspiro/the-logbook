@@ -15,6 +15,8 @@ const MessagesAdminPage = lazyWithRetry(() => import('./pages/MessagesAdminPage'
 
 const MessagesInboxPage = lazyWithRetry(() => import('./pages/MessagesInboxPage'));
 
+const MessageDetailPage = lazyWithRetry(() => import('./pages/MessageDetailPage'));
+
 const PhotoUseConsentPage = lazyWithRetry(() => import('./pages/PhotoUseConsentPage'));
 
 export const getCommunicationsRoutes = () => {
@@ -58,6 +60,19 @@ export const getCommunicationsRoutes = () => {
           <ProtectedRoute>
             <Suspense fallback={null}>
               <MessagesInboxPage />
+            </Suspense>
+          </ProtectedRoute>
+        }
+      />
+      {/* Sits under /messages so the breadcrumb path back to the inbox is the
+          URL's own parent — no permission beyond sign-in, because the backend
+          only serves a message the caller was actually targeted with. */}
+      <Route
+        path="/messages/:messageId"
+        element={
+          <ProtectedRoute>
+            <Suspense fallback={null}>
+              <MessageDetailPage />
             </Suspense>
           </ProtectedRoute>
         }

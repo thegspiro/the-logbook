@@ -173,7 +173,14 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
     { label: 'Members', path: '/members', icon: Users },
     { label: 'Events', path: '/events', icon: Calendar },
     { label: 'Documents', path: '/documents', icon: FileText },
-    ...(isModuleOn('storefront') ? [{ label: 'Department Store', path: '/store', icon: Store } as NavItem] : []),
+    // The route requires `storefront.view` (modules/storefront/routes.tsx), so
+    // the module toggle alone is not the gate: a member whose department was
+    // seeded before the storefront module shipped holds no storefront grant
+    // and got Access Denied from an entry the navigation was still
+    // advertising. A nav gate has to be a subset of its route's gate.
+    ...(isModuleOn('storefront')
+      ? [{ label: 'Department Store', path: '/store', icon: Store, permission: 'storefront.view' } as NavItem]
+      : []),
     ...(isModuleOn('training')
       ? [
           {

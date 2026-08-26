@@ -44,6 +44,44 @@ def _baseline_permissions() -> set[str]:
     return granted
 
 
+#: Everything the 2026-08-25 ``notifications.view`` revocation covers. The
+#: baseline three plus the Engineer rank and the position that mirrors it —
+#: Engineer is a driver/operator, not an officer, and the Send Log is no more
+#: their business than a firefighter's.
+NOTIFICATIONS_REVOKED_SOURCES = BASELINE_SOURCES + (
+    ("engineer position", DEFAULT_POSITIONS, "engineer", "permissions"),
+    ("engineer rank", OPERATIONAL_RANKS, "engineer", "default_permissions"),
+)
+
+
+def test_notifications_view_is_not_a_baseline_grant():
+    """The Send Log it opens is scoped to the org, not to the recipient.
+
+    ``notifications.view`` gates ``GET /notifications/logs``, and
+    ``NotificationsService.get_logs`` filters on ``organization_id`` alone —
+    there is no recipient scoping anywhere on that path. ``NotificationLog``
+    stores ``recipient_email``, ``subject`` and ``message``, so a grant seeded
+    to the whole department let any member read the body of every notification
+    sent to every other member.
+
+    Withholding it costs a member nothing they can act on: their own inbox is
+    ``GET /notifications/my``, which depends on ``get_current_user`` and no
+    permission at all. What they lose is three admin tabs, one of which
+    (Email Templates) was already a dead end — its only control navigates to a
+    route requiring ``settings.manage``.
+
+    Revoked from the seeded rows by migration ``a1f7c34e9b02``; per the
+    ``compliance.view`` precedent, the registry edit alone would have left the
+    grant live on every department that has already onboarded.
+    """
+    for label, registry, slug, field in NOTIFICATIONS_REVOKED_SOURCES:
+        assert "notifications.view" not in registry[slug][field], (
+            f"the seeded {label} carries notifications.view, which opens the "
+            "org-wide Send Log — every member's notification subjects and "
+            "bodies, readable by anyone"
+        )
+
+
 def test_compliance_view_is_not_a_baseline_grant():
     """``compliance.view`` is an officer grant wearing a view grant's name.
 
@@ -96,3 +134,34 @@ def test_baseline_excludes_the_reporting_and_audit_grants():
             f"{permission} aggregates across members and must not be seeded "
             "to the whole department"
         )
+
+
+def test_storefront_browsing_is_a_baseline_grant():
+    """Every member can reach the department store.
+
+    The store is a member-facing amenity, not an officer tool: the whole point
+    is that the rank and file order their own job shirts instead of a
+    quartermaster collecting sizes on paper. ``storefront.view`` gates the
+    ``/store`` route and ``storefront.order`` the submit, so a baseline that
+    omits either leaves the navigation showing a store that bounces the member
+    who taps it.
+
+    The gap this guards is not the registry — it is the *stored* copy. Rank
+    defaults resolve at runtime, so every member carrying an operational rank
+    holds these regardless; the members who lost the store are the ones with
+    no rank at all (administrative, social and support members), who hold only
+    the ``member`` position as onboarding wrote it. Migration
+    ``a4f8c1b92d17`` backfills the rows written before these grants existed.
+    """
+    baseline = _baseline_permissions()
+    assert "storefront.view" in baseline
+    assert "storefront.order" in baseline
+
+
+def test_storefront_manage_is_not_a_baseline_grant():
+    """Running the store is the quartermaster's, not everybody's.
+
+    ``storefront.manage`` is the whole admin console — catalog pricing and
+    cost, order windows, every member's orders, and payment reconciliation.
+    """
+    assert "storefront.manage" not in _baseline_permissions()

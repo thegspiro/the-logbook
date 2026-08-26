@@ -103,7 +103,9 @@ const SchedulingWidgets: React.FC<{ timezone: string }> = ({ timezone }) => {
           <h3 id="scheduling-widgets-heading" className="text-theme-text-primary text-lg font-semibold">
             Scheduling Operations
           </h3>
-          <p className="text-theme-text-muted text-sm">Today and rolling windows use {timezone}.</p>
+          <p className="text-theme-text-muted text-sm">
+            Department-wide staffing for today and the rolling window below.
+          </p>
         </div>
         <div className="flex flex-wrap items-end gap-2">
           <label className="text-theme-text-secondary text-xs">

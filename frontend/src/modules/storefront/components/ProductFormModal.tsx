@@ -11,7 +11,15 @@ import { Modal } from '../../../components/Modal';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { blankToNull, numberOrNull } from '../../../utils/formValues';
 import { storefrontService } from '../services/api';
-import { StoreProductStatus, type StoreProduct, type StoreProductInput, type StoreProductVariantInput } from '../types';
+import {
+  DEFAULT_EMBROIDERY_THREAD_COLOR,
+  EMBROIDERY_THREAD_COLORS,
+  StoreProductStatus,
+  type EmbroideryThreadColor,
+  type StoreProduct,
+  type StoreProductInput,
+  type StoreProductVariantInput,
+} from '../types';
 
 interface ProductFormModalProps {
   isOpen: boolean;
@@ -39,6 +47,7 @@ interface FormState {
   personalizationLabel: string;
   personalizationMaxLength: string;
   personalizationPrice: string;
+  personalizationThreadColor: EmbroideryThreadColor;
   sortOrder: string;
   internalNotes: string;
 }
@@ -62,6 +71,7 @@ const emptyForm: FormState = {
   personalizationLabel: '',
   personalizationMaxLength: '30',
   personalizationPrice: '0',
+  personalizationThreadColor: DEFAULT_EMBROIDERY_THREAD_COLOR,
   sortOrder: '0',
   internalNotes: '',
 };
@@ -131,6 +141,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({ isOpen, prod
         personalizationLabel: product.personalizationLabel ?? '',
         personalizationMaxLength: String(product.personalizationMaxLength ?? 30),
         personalizationPrice: String(product.personalizationPrice ?? '0'),
+        personalizationThreadColor: product.personalizationThreadColor ?? DEFAULT_EMBROIDERY_THREAD_COLOR,
         sortOrder: String(product.sortOrder),
         internalNotes: product.internalNotes ?? '',
       });
@@ -205,6 +216,7 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({ isOpen, prod
       personalizationLabel: blankToNull(form.personalizationLabel),
       personalizationMaxLength: Number(form.personalizationMaxLength || 30),
       personalizationPrice: Number(form.personalizationPrice || 0),
+      personalizationThreadColor: form.personalizationThreadColor,
       sortOrder: Number(form.sortOrder || 0),
       internalNotes: blankToNull(form.internalNotes),
       variants: variantPayload,
@@ -480,6 +492,43 @@ export const ProductFormModal: React.FC<ProductFormModalProps> = ({ isOpen, prod
                   />
                 </div>
               </div>
+              <div>
+                <span className="form-label" id="product-pers-thread">
+                  Thread color
+                </span>
+                <p className="text-theme-text-secondary mb-2 text-xs">
+                  What the vendor embroiders this item in. Members see their name previewed in it.
+                </p>
+                <div className="flex flex-wrap gap-2" role="radiogroup" aria-labelledby="product-pers-thread">
+                  {EMBROIDERY_THREAD_COLORS.map((color) => {
+                    const selected = form.personalizationThreadColor === color.value;
+                    return (
+                      <button
+                        key={color.value}
+                        type="button"
+                        role="radio"
+                        aria-checked={selected}
+                        onClick={() => update('personalizationThreadColor', color.value)}
+                        className={`focus-visible:ring-theme-focus-ring mobile-touch-target inline-flex items-center gap-2 rounded-lg border px-2.5 py-1.5 text-[13px] transition-colors focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-hidden ${
+                          selected
+                            ? 'border-2 border-red-800 bg-red-50 font-bold text-red-900 dark:border-red-600 dark:bg-red-500/15 dark:text-red-200'
+                            : 'border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover bg-theme-surface'
+                        }`}
+                      >
+                        {/* Ringed rather than bare: the white and silver
+                            swatches vanish into a light surface otherwise. */}
+                        <span
+                          aria-hidden="true"
+                          className="h-4 w-4 shrink-0 rounded-full ring-1 ring-slate-400/60"
+                          style={{ backgroundColor: color.hex }}
+                        />
+                        {color.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
               <div className="form-grid-2">
                 <div>
                   <label htmlFor="product-pers-max" className="form-label">

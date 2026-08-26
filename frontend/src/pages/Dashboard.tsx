@@ -165,13 +165,24 @@ const Dashboard: React.FC = () => {
   // The legacy summary retains its settings gate, while chief operations is
   // available through the data-source permissions declared in its registry.
   // Everyone — including those leaders — still lands on the personal view.
+  //
+  // Every gate here is a *manage* grant on purpose. `inventory.view`,
+  // `apparatus.view`, `facilities.view` and `scheduling.view` are all baseline
+  // member grants (see DEFAULT_POSITIONS["member"]), so gating on them showed
+  // the My Department tab — department-wide staffing, fleet and facility
+  // reporting — to every firefighter in the department. These mirror the
+  // permissions the backend actually enforces on the widget endpoints, so the
+  // tab never advertises a panel that would come back empty or 403.
   const canViewLegacyAdmin = checkPermission('settings.manage');
-  const canViewAssets = ['inventory.view', 'apparatus.view', 'facilities.view'].some(checkPermission);
+  const canViewAssets =
+    canViewLegacyAdmin || ['inventory.manage', 'apparatus.manage', 'facilities.manage'].some(checkPermission);
   const canViewChiefOperations = canViewChiefDashboard(checkPermission);
   const canViewOrganization = canViewLegacyAdmin || canViewChiefOperations || canViewAssets;
-  const canManageMessages = canViewOrganization || checkPermission('notifications.manage');
+  // Clearing a department-wide persistent message is a notifications action;
+  // holding a fleet or facility grant is not authority to retract one.
+  const canManageMessages = canViewLegacyAdmin || checkPermission('notifications.manage');
   const canManageAdminHours = checkPermission('admin_hours.manage');
-  const canViewScheduling = checkPermission('scheduling.view');
+  const canViewScheduling = checkPermission('scheduling.manage');
   const [adminSummary, setAdminSummary] = useState<AdminSummary | null>(null);
   const [loadingAdmin, setLoadingAdmin] = useState(canViewLegacyAdmin);
   const [adminError, setAdminError] = useState(false);
@@ -829,7 +840,10 @@ const Dashboard: React.FC = () => {
         unread: !msg.is_read,
         onClick: () => {
           if (!msg.is_read && !msg.is_persistent) void markMessageRead(msg.id);
-          void navigate('/messages');
+          // Deep-link to the message itself; its breadcrumb carries the member
+          // on to the full inbox, which tapping the feed row used to be the
+          // only way to reach.
+          void navigate(`/messages/${msg.id}`);
         },
         message: msg,
       });
@@ -1378,7 +1392,7 @@ const Dashboard: React.FC = () => {
                               equally invalid and split apart by the parser.
                               LinkifiedText stops click propagation on its
                               anchors, so following a link doesn't also fire the
-                              row's navigation to /messages. */}
+                              row's navigation to the message. */}
                           {msg ? (
                             <div
                               role="button"
@@ -1389,8 +1403,9 @@ const Dashboard: React.FC = () => {
                                 // linkified body can hold focusable anchors,
                                 // and Enter on one bubbles here — without this
                                 // guard the row would swallow the keypress and
-                                // navigate to /messages instead of opening the
-                                // link (the anchor's guard covers clicks only).
+                                // navigate to the message instead of opening
+                                // the link (the anchor's guard covers clicks
+                                // only).
                                 if (e.target !== e.currentTarget) return;
                                 if (e.key === 'Enter' || e.key === ' ') {
                                   e.preventDefault();

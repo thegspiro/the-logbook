@@ -23,6 +23,17 @@ export function getCurrentBuildId(): string | undefined {
 }
 
 /**
+ * UTC ISO timestamp of when this bundle was built.
+ *
+ * Read lazily for the same reason as `getCurrentBuildId`. Returns `undefined`
+ * in dev and in any context where the define is absent, so callers can leave
+ * the release date out rather than print a placeholder date.
+ */
+export function getCurrentBuildTime(): string | undefined {
+  return typeof __BUILD_TIME__ !== 'undefined' ? __BUILD_TIME__ : undefined;
+}
+
+/**
  * Fetch the build ID the server is currently serving.
  *
  * `cache: 'no-store'` plus the NetworkOnly runtime rule in vite.config.ts keeps

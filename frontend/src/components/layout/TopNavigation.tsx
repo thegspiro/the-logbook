@@ -128,7 +128,10 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
     { label: 'Events', path: '/events' },
     { label: 'Documents', path: '/documents' },
     { label: 'Learning Center', path: '/learning' },
-    ...(isModuleOn('storefront') ? [{ label: 'Department Store', path: '/store' } as NavItem] : []),
+    // Gate mirrors SideNavigation's Department Store — see there.
+    ...(isModuleOn('storefront')
+      ? [{ label: 'Department Store', path: '/store', permission: 'storefront.view' } as NavItem]
+      : []),
     ...(isModuleOn('training')
       ? [
           {

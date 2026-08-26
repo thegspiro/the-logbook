@@ -136,6 +136,39 @@ describe('SizePreferencesModal', () => {
     expect(onClose).not.toHaveBeenCalled();
   });
 
+  it('keeps the detail sizes behind a disclosure, collapsed when the member has none', async () => {
+    mockGetMy.mockResolvedValue({ shirt_size: 'l', pant_waist: '34' });
+    render(<SizePreferencesModal isOpen onClose={onClose} />);
+    await pantWaist();
+
+    const toggle = screen.getByRole('button', { name: /Additional sizes/ });
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  });
+
+  it('expands the disclosure when the member already has detail sizes stored', async () => {
+    mockGetMy.mockResolvedValue({ shirt_size: 'l', glove_size: 'm' });
+    render(<SizePreferencesModal isOpen onClose={onClose} />);
+    await pantWaist();
+
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /Additional sizes/ })).toHaveAttribute('aria-expanded', 'true')
+    );
+  });
+
+  it('saves detail sizes entered through the disclosure', async () => {
+    const user = userEvent.setup();
+    render(<SizePreferencesModal isOpen onClose={onClose} />);
+    await pantWaist();
+
+    await user.click(screen.getByRole('button', { name: /Additional sizes/ }));
+    await user.type(screen.getByPlaceholderText('e.g. 7 1/4'), '7 1/2');
+    await user.click(screen.getByRole('button', { name: 'Save Sizes' }));
+
+    await waitFor(() => expect(mockUpsertMy).toHaveBeenCalledTimes(1));
+    const payload = mockUpsertMy.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(payload.hat_size).toBe('7 1/2');
+  });
+
   it('cancel closes without saving', async () => {
     const user = userEvent.setup();
     render(<SizePreferencesModal isOpen onClose={onClose} />);

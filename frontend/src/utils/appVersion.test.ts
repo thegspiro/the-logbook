@@ -1,8 +1,9 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { fetchServerBuildId, formatBuildId, getCurrentBuildId } from './appVersion';
+import { fetchServerBuildId, formatBuildId, getCurrentBuildId, getCurrentBuildTime } from './appVersion';
 
 declare global {
   var __BUILD_ID__: string | undefined;
+  var __BUILD_TIME__: string | undefined;
 }
 
 function mockVersionResponse(body: unknown, ok = true): void {
@@ -18,6 +19,7 @@ function mockVersionResponse(body: unknown, ok = true): void {
 afterEach(() => {
   vi.unstubAllGlobals();
   Reflect.deleteProperty(globalThis, '__BUILD_ID__');
+  Reflect.deleteProperty(globalThis, '__BUILD_TIME__');
 });
 
 describe('getCurrentBuildId', () => {
@@ -58,6 +60,19 @@ describe('fetchServerBuildId', () => {
   it('returns null when offline rather than throwing at the caller', async () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('offline')));
     await expect(fetchServerBuildId()).resolves.toBeNull();
+  });
+});
+
+describe('getCurrentBuildTime', () => {
+  it('returns the UTC timestamp stamped into the bundle', () => {
+    globalThis.__BUILD_TIME__ = '2026-08-25T19:14:00.000Z';
+    expect(getCurrentBuildTime()).toBe('2026-08-25T19:14:00.000Z');
+  });
+
+  // The App settings panel leaves the release date out rather than printing a
+  // stand-in date that would read as fact.
+  it('returns undefined in dev, where the define is absent', () => {
+    expect(getCurrentBuildTime()).toBeUndefined();
   });
 });
 

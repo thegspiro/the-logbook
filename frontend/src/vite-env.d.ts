@@ -3,6 +3,9 @@
 /** Injected at build time by versionJsonPlugin in vite.config.ts. */
 declare const __BUILD_ID__: string;
 
+/** UTC ISO timestamp of the build, injected alongside `__BUILD_ID__`. */
+declare const __BUILD_TIME__: string;
+
 interface ImportMetaEnv {
   readonly VITE_API_URL: string;
 }
