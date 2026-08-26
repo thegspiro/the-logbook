@@ -23,6 +23,7 @@ from app.models.grant import (
     Pledge,
     PledgeStatus,
 )
+from app.utils.model_updates import apply_updates
 from app.utils.sql_ordering import nulls_last_asc
 from app.utils.sql_search import LIKE_ESCAPE_CHAR, like_pattern
 
@@ -119,8 +120,11 @@ class FundraisingService:
         campaign = await self.get_campaign(campaign_id, organization_id)
         if not campaign:
             return None
-        for key, value in _json_safe_amounts(data).items():
-            setattr(campaign, key, value)
+        apply_updates(
+            campaign,
+            _json_safe_amounts(data),
+            skip={"organization_id", "id"},
+        )
         await self.db.flush()
         return campaign
 
@@ -186,8 +190,7 @@ class FundraisingService:
         donor = await self.get_donor(donor_id, organization_id)
         if not donor:
             return None
-        for key, value in data.items():
-            setattr(donor, key, value)
+        apply_updates(donor, data, skip={"organization_id", "id"})
         await self.db.flush()
         return donor
 
@@ -307,8 +310,7 @@ class FundraisingService:
         ):
             raise ValueError("Donor not found")
 
-        for key, value in data.items():
-            setattr(donation, key, value)
+        apply_updates(donation, data, skip={"organization_id", "id"})
         await self.db.flush()
 
         # Recalculate aggregates for both the old and new campaign/donor.
@@ -322,50 +324,76 @@ class FundraisingService:
     async def _update_campaign_total(
         self, campaign_id: str, organization_id: str
     ) -> None:
+        """Recalculate a campaign's running total from its donations.
+
+        Read-then-write aggregate recompute (Pitfall #27): two donations to
+        the same campaign, recorded/updated concurrently, would each read a
+        stale SUM and one could overwrite the other's contribution. Lock the
+        campaign row first — the parent both writers actually contend on —
+        and make the SUM itself a locking read too: under REPEATABLE READ a
+        plain SELECT answers from the transaction's first-read snapshot even
+        after a lock is acquired elsewhere, so the row lock alone would not
+        make the SUM current.
+        """
+        camp_result = await self.db.execute(
+            select(FundraisingCampaign)
+            .where(
+                FundraisingCampaign.id == campaign_id,
+                FundraisingCampaign.organization_id == organization_id,
+            )
+            .with_for_update()
+        )
+        campaign = camp_result.scalar_one_or_none()
+        if not campaign:
+            return
         result = await self.db.execute(
-            select(func.coalesce(func.sum(Donation.amount), 0)).where(
+            select(func.coalesce(func.sum(Donation.amount), 0))
+            .where(
                 Donation.campaign_id == campaign_id,
                 Donation.organization_id == organization_id,
                 Donation.payment_status == PaymentStatus.COMPLETED.value,
             )
+            .with_for_update()
         )
-        total = result.scalar()
-        camp_result = await self.db.execute(
-            select(FundraisingCampaign).where(
-                FundraisingCampaign.id == campaign_id,
-                FundraisingCampaign.organization_id == organization_id,
-            )
-        )
-        campaign = camp_result.scalar_one_or_none()
-        if campaign:
-            campaign.current_amount = total
+        campaign.current_amount = result.scalar()
 
     async def _update_donor_stats(self, donor_id: str, organization_id: str) -> None:
+        """Recalculate a donor's lifetime stats from their donations.
+
+        Same read-then-write race as `_update_campaign_total` above — lock
+        the donor row first, then make the aggregate read itself a locking
+        read so it does not answer from a pre-lock snapshot.
+        """
+        donor_result = await self.db.execute(
+            select(Donor)
+            .where(
+                Donor.id == donor_id,
+                Donor.organization_id == organization_id,
+            )
+            .with_for_update()
+        )
+        donor = donor_result.scalar_one_or_none()
+        if not donor:
+            return
         result = await self.db.execute(
             select(
                 func.coalesce(func.sum(Donation.amount), 0),
                 func.count(Donation.id),
                 func.min(Donation.donation_date),
                 func.max(Donation.donation_date),
-            ).where(
+            )
+            .where(
                 Donation.donor_id == donor_id,
                 Donation.organization_id == organization_id,
                 Donation.payment_status == PaymentStatus.COMPLETED.value,
             )
+            .with_for_update()
         )
         row = result.one()
-        donor_result = await self.db.execute(
-            select(Donor).where(
-                Donor.id == donor_id,
-                Donor.organization_id == organization_id,
-            )
-        )
-        donor = donor_result.scalar_one_or_none()
-        if donor:
-            donor.total_donated = row[0]
-            donor.donation_count = row[1]
-            donor.first_donation_date = row[2].date() if row[2] else None
-            donor.last_donation_date = row[3].date() if row[3] else None
+        donor.total_donated = row[0]
+        donor.donation_count = row[1]
+        donor.first_donation_date = row[2].date() if row[2] else None
+        donor.last_donation_date = row[3].date() if row[3] else None
 
     # ------------------------------------------------------------------
     # Pledges
@@ -430,8 +458,7 @@ class FundraisingService:
         if not pledge:
             return None
         await self._validate_pledge_fks(data, organization_id)
-        for key, value in data.items():
-            setattr(pledge, key, value)
+        apply_updates(pledge, data, skip={"organization_id", "id"})
         await self.db.flush()
         return pledge
 
@@ -508,8 +535,7 @@ class FundraisingService:
         if not event:
             return None
         await self._validate_fundraising_event_fks(data, organization_id)
-        for key, value in data.items():
-            setattr(event, key, value)
+        apply_updates(event, data, skip={"organization_id", "id"})
         await self.db.flush()
         return event
 

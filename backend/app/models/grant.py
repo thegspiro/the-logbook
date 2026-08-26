@@ -315,9 +315,21 @@ class GrantOpportunity(Base):
         onupdate=func.now(),
     )
 
-    # Relationships
+    # Relationships. No cascade, and passive_deletes=True:
+    # GrantApplication.opportunity_id is ondelete="SET NULL" (an
+    # application is deliberately allowed to outlive the opportunity it
+    # was linked from — "may be a custom/manual entry"). Without
+    # passive_deletes, SQLAlchemy's unit-of-work would try to null out (or,
+    # with the cascade this line used to carry, delete-orphan and actually
+    # delete) every linked application in Python before issuing the
+    # DELETE — an implicit lazy-load of `applications` in an async session
+    # (MissingGreenlet) at best, or, under the old cascade, silently erasing
+    # every linked application's full financial history (budget items,
+    # expenditures, compliance tasks, notes) at worst — the opposite of
+    # what the FK's own ondelete says. passive_deletes=True leaves this
+    # entirely to the DB's own ON DELETE SET NULL.
     applications = relationship(
-        "GrantApplication", back_populates="opportunity", cascade="all, delete-orphan"
+        "GrantApplication", back_populates="opportunity", passive_deletes=True
     )
 
     __table_args__ = (

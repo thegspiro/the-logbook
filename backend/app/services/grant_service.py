@@ -28,6 +28,7 @@ from app.models.grant import (
     GrantOpportunity,
 )
 from app.models.user import User
+from app.utils.model_updates import apply_updates
 from app.utils.org_scoping import assert_in_org
 from app.utils.sql_ordering import nulls_last_asc
 from app.utils.sql_search import LIKE_ESCAPE_CHAR, like_pattern
@@ -150,8 +151,7 @@ class GrantService:
         opportunity = await self.get_opportunity(opportunity_id, organization_id)
         if not opportunity:
             return None
-        for key, value in data.items():
-            setattr(opportunity, key, value)
+        apply_updates(opportunity, data, skip={"organization_id", "id"})
         await self.db.flush()
         return opportunity
 
@@ -327,8 +327,7 @@ class GrantService:
 
         old_status = application.application_status
 
-        for key, value in data.items():
-            setattr(application, key, value)
+        apply_updates(application, data, skip={"organization_id", "id"})
 
         # Log status change
         new_status = application.application_status
@@ -365,10 +364,37 @@ class GrantService:
         await self.db.flush()
         return application
 
+    _AUTO_GENERATED_TASK_TYPES = (
+        "performance_report",
+        "closeout_report",
+        "equipment_inventory",
+    )
+
     async def _generate_compliance_tasks(
         self, application: GrantApplication, user_id: str
     ) -> None:
-        """Auto-generate standard compliance tasks when a grant is awarded."""
+        """Auto-generate standard compliance tasks when a grant is awarded.
+
+        Called on every transition *into* AWARDED (`update_application` has
+        no transition guard — that is GF-7's broader, still-open question),
+        so an awarded -> active -> awarded round-trip would otherwise
+        re-enter this method and append a second full set of tasks with the
+        same titles and due dates. Guarded here, independent of whatever
+        GF-7 eventually decides about editability: if any of this method's
+        own task types already exist for this application, skip
+        regeneration entirely. Scoped to just those three types (not "any
+        compliance task") so a task an officer added by hand before the
+        first award doesn't suppress the auto-generated set.
+        """
+        existing_result = await self.db.execute(
+            select(func.count()).where(
+                GrantComplianceTask.application_id == application.id,
+                GrantComplianceTask.task_type.in_(self._AUTO_GENERATED_TASK_TYPES),
+            )
+        )
+        if (existing_result.scalar() or 0) > 0:
+            return
+
         tasks_to_create = []
 
         # Generate periodic performance reports based on reporting frequency
@@ -553,8 +579,7 @@ class GrantService:
         item = result.scalar_one_or_none()
         if not item:
             return None
-        for key, value in data.items():
-            setattr(item, key, value)
+        apply_updates(item, data, skip={"application_id", "id"})
         await self.db.flush()
         return item
 
@@ -643,7 +668,9 @@ class GrantService:
 
         # Update budget item amount_spent if linked
         if expenditure.budget_item_id:
-            await self._update_budget_item_spent(expenditure.budget_item_id)
+            await self._update_budget_item_spent(
+                expenditure.budget_item_id, organization_id
+            )
 
         # Refreshed last, after the spend rollup above, which flushes again.
         # created_at / updated_at are server-side defaults, and the response
@@ -675,18 +702,19 @@ class GrantService:
         ):
             raise ValueError("Budget item not found")
         old_budget_item_id = expenditure.budget_item_id
-        for key, value in data.items():
-            setattr(expenditure, key, value)
+        apply_updates(expenditure, data, skip={"application_id", "id"})
         await self.db.flush()
 
         # Recalculate budget item totals
         if old_budget_item_id:
-            await self._update_budget_item_spent(old_budget_item_id)
+            await self._update_budget_item_spent(old_budget_item_id, organization_id)
         if (
             expenditure.budget_item_id
             and expenditure.budget_item_id != old_budget_item_id
         ):
-            await self._update_budget_item_spent(expenditure.budget_item_id)
+            await self._update_budget_item_spent(
+                expenditure.budget_item_id, organization_id
+            )
 
         return expenditure
 
@@ -711,24 +739,51 @@ class GrantService:
         await self.db.delete(expenditure)
         await self.db.flush()
         if budget_item_id:
-            await self._update_budget_item_spent(budget_item_id)
+            await self._update_budget_item_spent(budget_item_id, organization_id)
         return True
 
-    async def _update_budget_item_spent(self, budget_item_id: str) -> None:
-        """Recalculate total spent for a budget item from its expenditures."""
-        result = await self.db.execute(
-            select(func.coalesce(func.sum(GrantExpenditure.amount), 0)).where(
-                GrantExpenditure.budget_item_id == budget_item_id
-            )
-        )
-        total_spent = result.scalar()
+    async def _update_budget_item_spent(
+        self, budget_item_id: str, organization_id: str
+    ) -> None:
+        """Recalculate total spent for a budget item from its expenditures.
+
+        Read-then-write aggregate recompute (Pitfall #27): two expenditures
+        against the same budget item, created/updated/deleted concurrently,
+        would each read a stale SUM and one could overwrite the other's
+        contribution. Lock the budget item row — the parent both writers
+        actually contend on — and make the SUM itself a locking read too:
+        under REPEATABLE READ a plain SELECT answers from the transaction's
+        first-read snapshot even after a lock is acquired elsewhere, so the
+        row lock alone would not make the SUM current.
+
+        Also org-scoped via the parent application, matching every current
+        caller's already-validated `budget_item_id` — defense in depth, not
+        currently exploitable since callers only ever pass an id they
+        resolved through `_budget_item_in_application`.
+        """
         item_result = await self.db.execute(
-            select(GrantBudgetItem).where(GrantBudgetItem.id == budget_item_id)
+            select(GrantBudgetItem)
+            .join(
+                GrantApplication,
+                GrantBudgetItem.application_id == GrantApplication.id,
+            )
+            .where(
+                GrantBudgetItem.id == budget_item_id,
+                GrantApplication.organization_id == organization_id,
+            )
+            .with_for_update()
         )
         item = item_result.scalar_one_or_none()
-        if item:
-            item.amount_spent = total_spent
-            item.amount_remaining = item.amount_budgeted - total_spent
+        if not item:
+            return
+        result = await self.db.execute(
+            select(func.coalesce(func.sum(GrantExpenditure.amount), 0))
+            .where(GrantExpenditure.budget_item_id == budget_item_id)
+            .with_for_update()
+        )
+        total_spent = result.scalar()
+        item.amount_spent = total_spent
+        item.amount_remaining = item.amount_budgeted - total_spent
 
     # ------------------------------------------------------------------
     # Compliance Tasks
@@ -812,8 +867,7 @@ class GrantService:
         )
 
         old_status = task.status
-        for key, value in data.items():
-            setattr(task, key, value)
+        apply_updates(task, data, skip={"application_id", "id"})
 
         # Auto-set completed_date when marking as completed
         if (

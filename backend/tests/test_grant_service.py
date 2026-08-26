@@ -39,10 +39,11 @@ def _application(
     )
 
 
-async def _generate(application):
+async def _generate(application, existing_task_count=0):
     """Run the generator and return the objects added to the session."""
     db = MagicMock()
     db.add = MagicMock()
+    db.execute = AsyncMock(return_value=_scalar(existing_task_count))
     await GrantService(db)._generate_compliance_tasks(application, "user-1")
     return [c.args[0] for c in db.add.call_args_list]
 
@@ -110,6 +111,16 @@ class TestComplianceTaskGeneration:
         assert len(reports) == 3
         assert "quarterly" in reports[0].description
 
+    async def test_skips_regeneration_when_auto_generated_tasks_already_exist(self):
+        # An awarded -> active -> awarded round-trip re-enters this method.
+        # If any of its own task types already exist for the application,
+        # it must add nothing rather than appending a duplicate set.
+        added = await _generate(
+            _application(freq="quarterly", category="equipment"),
+            existing_task_count=1,
+        )
+        assert added == []
+
 
 class TestUpdateBudgetItemSpent:
     async def test_sets_spent_and_remaining(self):
@@ -117,16 +128,18 @@ class TestUpdateBudgetItemSpent:
             id="b1", amount_budgeted=1000, amount_spent=0, amount_remaining=0
         )
         db = MagicMock()
-        db.execute = AsyncMock(side_effect=[_scalar(300), _one(item)])
-        await GrantService(db)._update_budget_item_spent("b1")
+        # Item lock happens first, then the (also locking) SUM read.
+        db.execute = AsyncMock(side_effect=[_one(item), _scalar(300)])
+        await GrantService(db)._update_budget_item_spent("b1", "org-1")
         assert item.amount_spent == 300
         assert item.amount_remaining == 700
 
-    async def test_missing_item_is_noop(self):
+    async def test_missing_or_out_of_org_item_is_noop(self):
         db = MagicMock()
-        db.execute = AsyncMock(side_effect=[_scalar(300), _one(None)])
-        # Should not raise when the budget item is gone.
-        await GrantService(db)._update_budget_item_spent("b1")
+        db.execute = AsyncMock(return_value=_one(None))
+        # Should not raise, and must not attempt the SUM query.
+        await GrantService(db)._update_budget_item_spent("b1", "org-1")
+        db.execute.assert_awaited_once()
 
 
 class TestSubresourceOrgScoping:

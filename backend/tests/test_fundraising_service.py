@@ -99,14 +99,16 @@ class TestFundraisingReport:
 class TestUpdateCampaignTotal:
     async def test_sets_current_amount_from_sum(self):
         campaign = SimpleNamespace(id="c1", current_amount=0)
-        db = _db([_scalar(750), _one(campaign)])
+        # Campaign row lock happens first, then the (also locking) SUM read.
+        db = _db([_one(campaign), _scalar(750)])
         await FundraisingService(db)._update_campaign_total("c1", "org-1")
         assert campaign.current_amount == 750
 
     async def test_missing_campaign_is_noop(self):
-        db = _db([_scalar(750), _one(None)])
-        # Should not raise even when the campaign row is gone.
+        db = _db([_one(None)])
+        # Should not raise, and must not attempt the SUM query.
         await FundraisingService(db)._update_campaign_total("c1", "org-1")
+        db.execute.assert_awaited_once()
 
 
 class TestUpdateDonorStats:
@@ -119,7 +121,8 @@ class TestUpdateDonorStats:
             last_donation_date=None,
         )
         row = (500, 3, datetime(2026, 1, 1), datetime(2026, 6, 1))
-        db = _db([_row(row), _one(donor)])
+        # Donor row lock happens first, then the (also locking) aggregate read.
+        db = _db([_one(donor), _row(row)])
         await FundraisingService(db)._update_donor_stats("d1", "org-1")
         assert donor.total_donated == 500
         assert donor.donation_count == 3
@@ -134,10 +137,16 @@ class TestUpdateDonorStats:
             first_donation_date=None,
             last_donation_date=None,
         )
-        db = _db([_row((0, 0, None, None)), _one(donor)])
+        db = _db([_one(donor), _row((0, 0, None, None))])
         await FundraisingService(db)._update_donor_stats("d1", "org-1")
         assert donor.first_donation_date is None
         assert donor.last_donation_date is None
+
+    async def test_missing_donor_is_noop(self):
+        db = _db([_one(None)])
+        # Should not raise, and must not attempt the aggregate query.
+        await FundraisingService(db)._update_donor_stats("d1", "org-1")
+        db.execute.assert_awaited_once()
 
 
 class TestCreateDonation:
