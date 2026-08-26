@@ -3585,6 +3585,8 @@ async def list_equipment_requests(
         .options(
             selectinload(EquipmentRequest.requester),
             selectinload(EquipmentRequest.reviewer),
+            selectinload(EquipmentRequest.item),
+            selectinload(EquipmentRequest.category),
         )
     )
 
@@ -3618,6 +3620,44 @@ async def list_equipment_requests(
                 "item_name": r.item_name,
                 "item_id": r.item_id,
                 "category_id": r.category_id,
+                "category_name": r.category.name if r.category else None,
+                "requested_item": (
+                    {
+                        "tracking_type": (
+                            r.item.tracking_type.value
+                            if hasattr(r.item.tracking_type, "value")
+                            else r.item.tracking_type
+                        ),
+                        "status": (
+                            r.item.status.value
+                            if hasattr(r.item.status, "value")
+                            else r.item.status
+                        ),
+                        "available_quantity": (
+                            r.item.quantity
+                            if (
+                                r.item.tracking_type.value
+                                if hasattr(r.item.tracking_type, "value")
+                                else r.item.tracking_type
+                            )
+                            == "pool"
+                            else (
+                                1
+                                if (
+                                    r.item.status.value
+                                    if hasattr(r.item.status, "value")
+                                    else r.item.status
+                                )
+                                == "available"
+                                else 0
+                            )
+                        ),
+                        "min_rank_order": r.item.min_rank_order,
+                        "restricted_to_positions": r.item.restricted_to_positions,
+                    }
+                    if r.item
+                    else None
+                ),
                 "quantity": r.quantity,
                 "request_type": (
                     r.request_type
@@ -3737,6 +3777,7 @@ async def fulfill_equipment_request(
         quantity=fulfill_data.quantity,
         expected_return_at=fulfill_data.expected_return_at,
         override_allowance=fulfill_data.override_allowance,
+        substitution_override_reason=fulfill_data.substitution_override_reason,
     )
 
     if error:
@@ -3754,6 +3795,7 @@ async def fulfill_equipment_request(
             "request_id": str(request_id),
             "fulfillment_type": req.fulfillment_type,
             "fulfillment_reference_id": req.fulfillment_reference_id,
+            "substitution_override_reason": fulfill_data.substitution_override_reason,
         },
         user_id=str(current_user.id),
         username=current_user.username,

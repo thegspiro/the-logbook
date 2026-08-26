@@ -608,6 +608,7 @@ export const inventoryService = {
       quantity?: number | undefined;
       expected_return_at?: string | undefined;
       override_allowance?: boolean;
+      substitution_override_reason?: string | undefined;
     }
   ): Promise<{
     id: string;

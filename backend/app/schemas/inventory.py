@@ -1362,6 +1362,10 @@ class EquipmentRequestFulfill(BaseModel):
     quantity: Optional[int] = Field(default=None, ge=1)
     expected_return_at: Optional[datetime] = None
     override_allowance: bool = False
+    substitution_override_reason: Optional[FreeText] = Field(
+        default=None,
+        description="Required justification when fulfilling with an item outside the requested item/category",
+    )
 
 
 # ============================================

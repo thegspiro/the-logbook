@@ -52,6 +52,8 @@ const EquipmentRequestsPage: React.FC = () => {
   const [fulfillQuantity, setFulfillQuantity] = useState('1');
   const [fulfillReturnAt, setFulfillReturnAt] = useState('');
   const [fulfillOverride, setFulfillOverride] = useState(false);
+  const [substitutionOverride, setSubstitutionOverride] = useState(false);
+  const [substitutionReason, setSubstitutionReason] = useState('');
   const [items, setItems] = useState<InventoryItem[]>([]);
 
   const loadRequests = useCallback(async () => {
@@ -107,6 +109,8 @@ const EquipmentRequestsPage: React.FC = () => {
     setFulfillQuantity(String(req.quantity || 1));
     setFulfillReturnAt('');
     setFulfillOverride(false);
+    setSubstitutionOverride(false);
+    setSubstitutionReason('');
     setFulfillModal({ open: true, request: req });
     if (items.length === 0) {
       void inventoryService
@@ -116,10 +120,54 @@ const EquipmentRequestsPage: React.FC = () => {
     }
   };
 
+  const loadItems = () => {
+    if (items.length > 0) return;
+    void inventoryService
+      .getItems({ active_only: true, limit: 500 })
+      .then((res) => setItems(res.items))
+      .catch((err: unknown) => toast.error(getErrorMessage(err, 'Failed to load items')));
+  };
+
+  const isCompatible = (req: EquipmentRequestItem | null, item: InventoryItem) =>
+    req
+      ? req.item_id
+        ? item.id === req.item_id
+        : req.category_id
+          ? item.category_id === req.category_id
+          : true
+      : false;
+
+  const availableQuantity = (item: InventoryItem) =>
+    item.tracking_type === 'pool' ? item.quantity : item.status === 'available' ? 1 : 0;
+
+  const handleApproveAndFulfill = async () => {
+    if (!reviewModal.request) return;
+    const request = reviewModal.request;
+    setSubmitting(true);
+    try {
+      await inventoryService.reviewEquipmentRequest(request.id, {
+        status: 'approved',
+        review_notes: reviewNotes || undefined,
+      });
+      setReviewModal({ open: false, request: null });
+      setReviewNotes('');
+      openFulfill({ ...request, status: 'approved' });
+      toast.success('Request approved — complete fulfillment');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to approve request'));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   const handleFulfill = async () => {
     if (!fulfillModal.request) return;
     if (!fulfillItemId.trim()) {
       toast.error('An item is required to fulfill this request');
+      return;
+    }
+    if (substitutionOverride && !substitutionReason.trim()) {
+      toast.error('Document a reason for the substitution override');
       return;
     }
     setSubmitting(true);
@@ -129,6 +177,7 @@ const EquipmentRequestsPage: React.FC = () => {
         quantity: Number(fulfillQuantity) || undefined,
         expected_return_at: fulfillReturnAt || undefined,
         override_allowance: fulfillOverride,
+        substitution_override_reason: substitutionOverride ? substitutionReason.trim() : undefined,
       });
       toast.success('Request fulfilled');
       setFulfillModal({ open: false, request: null });
@@ -243,6 +292,7 @@ const EquipmentRequestsPage: React.FC = () => {
                       onClick={() => {
                         setReviewModal({ open: true, request: req });
                         setReviewNotes('');
+                        loadItems();
                       }}
                       className="btn-info shrink-0 px-3 py-1.5 text-xs"
                     >
@@ -340,10 +390,52 @@ const EquipmentRequestsPage: React.FC = () => {
           {reviewModal.request && (
             <div className="space-y-4">
               <div className="text-theme-text-secondary text-sm">
-                <p>Requester: {reviewModal.request.requester_name ?? 'Unknown'}</p>
-                <p>Type: {reviewModal.request.request_type}</p>
-                <p>Quantity: {reviewModal.request.quantity}</p>
-                {reviewModal.request.reason && <p className="mt-1">Reason: {reviewModal.request.reason}</p>}
+                <p>
+                  <strong>Requested:</strong> {reviewModal.request.item_name}
+                  {reviewModal.request.category_name ? ` (${reviewModal.request.category_name})` : ''}
+                </p>
+                <p>
+                  <strong>Requester:</strong> {reviewModal.request.requester_name ?? 'Unknown'}
+                </p>
+                <p>
+                  <strong>Member intent:</strong> {reviewModal.request.request_type} —{' '}
+                  {reviewModal.request.reason || 'No reason provided'}
+                </p>
+                <p>
+                  <strong>Quantity:</strong> {reviewModal.request.quantity}
+                </p>
+                <p>
+                  <strong>Tracking:</strong>{' '}
+                  {reviewModal.request.requested_item?.tracking_type ?? 'Determined when fulfilled'}
+                </p>
+                <p>
+                  <strong>Availability:</strong>{' '}
+                  {reviewModal.request.requested_item
+                    ? `${reviewModal.request.requested_item.available_quantity} available (${reviewModal.request.requested_item.status})`
+                    : 'No specific catalog item selected'}
+                </p>
+                <p>
+                  <strong>Restrictions:</strong>{' '}
+                  {reviewModal.request.requested_item?.min_rank_order != null ||
+                  reviewModal.request.requested_item?.restricted_to_positions?.length
+                    ? [
+                        reviewModal.request.requested_item.min_rank_order != null
+                          ? `minimum rank order ${reviewModal.request.requested_item.min_rank_order}`
+                          : '',
+                        reviewModal.request.requested_item.restricted_to_positions?.length
+                          ? `positions: ${reviewModal.request.requested_item.restricted_to_positions.join(', ')}`
+                          : '',
+                      ]
+                        .filter(Boolean)
+                        .join('; ')
+                    : 'None'}
+                </p>
+                <p>
+                  <strong>Expected return:</strong>{' '}
+                  {reviewModal.request.request_type === 'checkout'
+                    ? 'Required at fulfillment'
+                    : 'Not required (optional temporary assignment)'}
+                </p>
               </div>
 
               <div>
@@ -379,7 +471,23 @@ const EquipmentRequestsPage: React.FC = () => {
                   className="btn-success btn-md flex items-center justify-center gap-1.5 disabled:opacity-50"
                 >
                   <Check className="h-4 w-4" />
-                  Approve
+                  Approve for later fulfillment
+                </button>
+                <button
+                  onClick={() => void handleApproveAndFulfill()}
+                  disabled={
+                    submitting ||
+                    !items.some(
+                      (item) =>
+                        isCompatible(reviewModal.request, item) &&
+                        availableQuantity(item) >= (reviewModal.request?.quantity ?? 1)
+                    )
+                  }
+                  className="btn-success btn-md flex items-center justify-center gap-1.5 disabled:opacity-50"
+                  title="Available only when catalog stock is immediately available"
+                >
+                  <PackageCheck className="h-4 w-4" />
+                  Approve &amp; fulfill now
                 </button>
               </div>
             </div>
@@ -411,16 +519,18 @@ const EquipmentRequestsPage: React.FC = () => {
                   className="form-input w-full"
                 >
                   <option value="">Select an item…</option>
-                  {items.map((it) => {
-                    const tag = it.serial_number || it.asset_tag || it.barcode;
-                    return (
-                      <option key={it.id} value={it.id}>
-                        {it.name}
-                        {tag ? ` — ${tag}` : ''}
-                        {it.tracking_type === 'pool' ? ` (pool: ${it.quantity} on hand)` : ''}
-                      </option>
-                    );
-                  })}
+                  {items
+                    .filter((it) => substitutionOverride || isCompatible(fulfillModal.request, it))
+                    .map((it) => {
+                      const tag = it.serial_number || it.asset_tag || it.barcode;
+                      return (
+                        <option key={it.id} value={it.id}>
+                          {it.name}
+                          {tag ? ` — ${tag}` : ''}
+                          {` — ${it.status}; ${availableQuantity(it)} available`}
+                        </option>
+                      );
+                    })}
                 </select>
                 <p className="text-theme-text-muted mt-1 text-xs">
                   Pool items are issued; individual items are{' '}
@@ -467,6 +577,42 @@ const EquipmentRequestsPage: React.FC = () => {
                 />
                 Override issuance allowance limit
               </label>
+
+              <div className="border-theme-border rounded-md border p-3">
+                <label className="text-theme-text-primary inline-flex items-center gap-2 text-sm font-medium">
+                  <input
+                    type="checkbox"
+                    checked={substitutionOverride}
+                    onChange={(e) => {
+                      setSubstitutionOverride(e.target.checked);
+                      setFulfillItemId('');
+                    }}
+                    className="form-checkbox"
+                  />
+                  Override requested item/category compatibility
+                </label>
+                <p className="text-theme-text-muted mt-1 text-xs">
+                  This exposes other active inventory and records the substitution in the audit event.
+                </p>
+                {substitutionOverride && (
+                  <div className="mt-3">
+                    <label
+                      htmlFor="substitution-reason"
+                      className="text-theme-text-primary mb-1 block text-sm font-medium"
+                    >
+                      Substitution justification (required)
+                    </label>
+                    <textarea
+                      id="substitution-reason"
+                      rows={2}
+                      value={substitutionReason}
+                      onChange={(e) => setSubstitutionReason(e.target.value)}
+                      className="form-input"
+                      placeholder="Explain why this substitute is appropriate…"
+                    />
+                  </div>
+                )}
+              </div>
 
               <div className="flex flex-col-reverse items-stretch justify-end gap-2 sm:flex-row sm:items-center sm:gap-3">
                 <button
