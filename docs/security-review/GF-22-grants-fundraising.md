@@ -213,12 +213,12 @@ were already correct in the schema.
 
 ## Completion gate
 
-| Check                                                              | Result                 |
-| ------------------------------------------------------------------ | ---------------------- |
-| `flake8` (changed files)                                           | clean                  |
-| `black --check` (changed files)                                    | clean                  |
-| `isort --check-only` (changed files)                               | clean                  |
-| `python3 scripts/validate_migrations.py --strict`                  | PASSED (no migrations) |
-| backend tests, scope (`grant_service` + `fundraising_service`)     | 45 passed              |
-| backend tests, integration (`test_grant_opportunity_delete_db.py`) | 1 passed               |
-| backend tests, full suite                                          | pending                |
+| Check                                                              | Result                  |
+| ------------------------------------------------------------------ | ----------------------- |
+| `flake8` (changed files)                                           | clean                   |
+| `black --check` (changed files)                                    | clean                   |
+| `isort --check-only` (changed files)                               | clean                   |
+| `python3 scripts/validate_migrations.py --strict`                  | PASSED (no migrations)  |
+| backend tests, scope (`grant_service` + `fundraising_service`)     | 45 passed               |
+| backend tests, integration (`test_grant_opportunity_delete_db.py`) | 1 passed                |
+| backend tests, full suite                                          | 8849 passed, 22 skipped |
