@@ -219,16 +219,24 @@ async def _configure(db_session, org_id: str, **flags) -> None:
     await service.update_config(organization_id=org_id, updated_by=None, **flags)
 
 
-async def _grant_officer_position(db_session, org_id: str, user_id: str) -> None:
-    """Attach a position the endpoint's officer check recognizes."""
+async def _grant_officer_position(
+    db_session, org_id: str, user_id: str, slug: str = "training_officer"
+) -> None:
+    """Attach a position the endpoint's officer check recognizes.
+
+    Name and slug are the *seeded* pair — "Training Officer" / ``training_officer``
+    — because that is the data a real department has. The fixture used to set
+    the name equal to the slug so the check would pass against ``Position.name``;
+    it now matches on ``Position.slug``, so this exercises the real shape.
+    """
     position_id = str(uuid.uuid4())
-    slug = TRAINING_OFFICER_ROLE_SLUGS[1]
+    name = DEFAULT_POSITIONS[slug]["name"]
     await db_session.execute(
         text(
             "INSERT INTO positions (id, organization_id, name, slug, is_system) "
             "VALUES (:i, :o, :n, :s, :y)"
         ),
-        {"i": position_id, "o": org_id, "n": slug, "s": slug, "y": True},
+        {"i": position_id, "o": org_id, "n": name, "s": slug, "y": True},
     )
     await db_session.execute(
         text("INSERT INTO user_positions (user_id, position_id) " "VALUES (:u, :p)"),
@@ -413,15 +421,11 @@ async def test_officer_visibility_is_reported_as_effective(
     as_member = await get_my_training_summary(db=db_session, current_user=user)
     assert as_member["visibility"]["show_training_hours"] is False
 
-    # Same caller, now holding a training-officer position.
-    #
-    # The position's *name* is set to the slug on purpose: the endpoint
-    # compares ``TRAINING_OFFICER_ROLE_SLUGS`` against ``Position.name``, not
-    # ``Position.slug``. That mismatch is a real defect — on a stock
-    # installation, where the seeded name is "Training Officer",
-    # ``is_officer`` never becomes True — but it is not this change's to fix,
-    # and the fixture has to match the code as it stands for the exemption to
-    # be exercised at all.
+    # Same caller, now holding the seeded training-officer position — name
+    # "Training Officer", slug ``training_officer``. Until 2026-08-26 the
+    # endpoint compared TRAINING_OFFICER_ROLE_SLUGS against ``Position.name``,
+    # so this exemption could not fire on any real installation and the fixture
+    # had to set the name equal to the slug to exercise it at all.
     await _grant_officer_position(db_session, org_id, str(user.id))
 
     # Drop the identity map before re-reading. The endpoint re-queries the
@@ -438,6 +442,33 @@ async def test_officer_visibility_is_reported_as_effective(
     # Not folded in: the export endpoint has no officer exemption either, so
     # flipping this would offer a button that 403s.
     assert visibility["allow_member_report_export"] is False
+
+
+async def test_the_seeded_fire_chief_also_counts_as_an_officer(
+    db_session, setup_org_and_admin
+):
+    """The chief is in TRAINING_OFFICER_ROLE_SLUGS and never matched it.
+
+    The group named ``"chief"``, and no department is seeded a position with
+    that slug — the chief's slug is ``fire_chief``. Combined with the
+    name-versus-slug comparison this endpoint used to do, a chief opening
+    /my-training got the plain member's visibility policy. Both halves are
+    fixed; this asserts the outcome rather than either mechanism.
+    """
+    org_id, _ = setup_org_and_admin
+    user = await _member(db_session, setup_org_and_admin)
+    await _configure(db_session, org_id, show_training_hours=False)
+
+    assert "fire_chief" in TRAINING_OFFICER_ROLE_SLUGS
+    await _grant_officer_position(db_session, org_id, str(user.id), slug="fire_chief")
+
+    # See the note in the sibling test: the identity map holds a populated
+    # positions collection that a re-query will not overwrite.
+    db_session.expunge_all()
+    user = await _member(db_session, setup_org_and_admin)
+
+    summary = await get_my_training_summary(db=db_session, current_user=user)
+    assert summary["visibility"]["show_training_hours"] is True
 
 
 def test_member_shift_queries_filter_on_release():

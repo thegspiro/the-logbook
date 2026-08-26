@@ -7,6 +7,196 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### The chief was missing from every notification meant to include them (2026-08-26)
+
+**Fixed**
+
+- **Role groups named position slugs no department is ever given.**
+  `LEADERSHIP_ROLE_SLUGS`, `ADMIN_NOTIFY_ROLE_SLUGS` and
+  `TRAINING_OFFICER_ROLE_SLUGS` are matched against `Position.slug`, and every
+  one of them named `"chief"`. The seeded chief's slug is `fire_chief`. So the
+  chief was silently absent from election rollback and deletion alerts, member
+  drop and auto-archive notices, the overdue-property report, and the store's
+  admin heads-up — and the election path reported a recipient count to whoever
+  rolled the election back that quietly excluded them. `"admin"`, which two of
+  the lists also named, has never been a position at all.
+
+  The groups now name **office keys**, expanded through `OFFICE_CATALOG` by a
+  new `position_slugs_for_offices`. That catalog's chief entry already knew
+  `fire_chief` and `chief` were one office; nothing else did. Expanding rather
+  than replacing matters: `chief` stays reachable, because an admin who names a
+  custom position "Chief" gets exactly that slug from `slugify` — which is why
+  this worked on some installations and not others, and so was never reported.
+  `"admin"` becomes `it_manager`, the System Owner position that actually
+  carries the authority these groups reach for.
+
+- **An officer check that could never be true.** `training_module_config`
+  compared `TRAINING_OFFICER_ROLE_SLUGS` against `Position.name` — the seeded
+  names are "Training Officer" and "Fire Chief" — so `is_officer` was
+  unconditionally `False` on every installation. A training officer opening
+  their own training page got the plain member's visibility policy: their own
+  history, hours and narrative hidden from them. Two independent defects in one
+  expression, both closed.
+
+- **`ROLE_CHIEF` is gone.** It was `"chief"`, a single slug. No single slug
+  answers "the chief", so the replacement is `CHIEF_POSITION_SLUGS`. Its
+  sharpest call site was `cert_alert_service`: an admin turning on "CC the chief
+  on escalation" got a toggle that could not do anything.
+
+- **Leadership members were emailed once per position held.**
+  `_notify_leadership` joined `User.roles` without `distinct`, so a member
+  holding `president` and the auto-assigned `member` came back twice — emailed
+  twice, and counted twice in the "N leadership members have been notified"
+  message. Pre-existing, and fixed here because making the chief match would
+  have added them to it. The join bought nothing: the positions were already
+  eager-loaded and the filter runs in Python.
+
+- **An EMS-only service was offered a fire department's apparatus.** The
+  scheduling defaults seated engine, ladder, tanker, brush, tower and hazmat for
+  every organization, and the settings panel unioned its own hardcoded copy of
+  that list over whatever the server sent — so those six were shown regardless,
+  with no control to remove them. They are now withheld from an EMS-only
+  agency, which keeps ambulance, rescue, boat, chief and utility. **Nothing is
+  invented**: no new apparatus type, no new staffing number.
+
+  The vehicle picker's fallback (`GET /scheduling/apparatus-options`) carried a
+  _second_ copy of the same eleven strings. `DEFAULT_APPARATUS_TYPES` is deleted
+  and the fallback reads the staffing templates directly — otherwise one of the
+  two would have been made agency-aware and the other not, and a new EMS
+  department would still have been offered Engine and Ladder as its entire
+  picker.
+
+**Scope**
+
+- **The scheduling change reaches existing organizations immediately.** Unlike
+  the rank and position seeds, nothing writes these defaults to a row —
+  `get_settings` reads the built-ins live on every request and folds a stored
+  row over them, and a row exists only once an admin has saved the panel. So
+  every organization that has never saved sees this on deploy; one that has
+  saved keeps what it saved. Templates already built are unaffected, because
+  their seats were copied at creation.
+- **Crew seats are untouched.** `"firefighter"` inside an apparatus default is a
+  `ShiftPosition` — a seat on a rig, a different namespace from rank codes and
+  position slugs — persisted verbatim into three untyped JSON columns and
+  cross-referenced by every organization's `eligible_positions`. Renaming one
+  would orphan those rows the way the `EMT`/`ems` divergence did, and would buy
+  nothing: an EMT is already eligible for a `firefighter` seat.
+- **Offline still shows the full set.** The frontend keeps the complete
+  fire-shaped copy as its offline and cold-cache fallback, because the browser
+  has no notion of the organization's agency type; the narrowing happens
+  server-side, where it is known.
+- **`compliance_officer` still resolves to nobody**, and `assistant_training_officer`
+  with it. Both are fallbacks behind `cert_alert_config`, which a department
+  fills in with its own slugs, so naming a position it may reasonably have
+  invented is the point. Recorded in `tests/test_role_group_slugs.py` as an
+  explicit exemption rather than left to be rediscovered.
+
+`tests/test_role_group_slugs.py` asserts every slug a role group produces is one
+a department can actually hold, and `tests/test_shift_settings_parity.py` closes
+the "kept in lockstep with the frontend" comment that nothing had been enforcing.
+
+### An EMS-only agency was seeded a fire department's positions (2026-08-26)
+
+**Fixed**
+
+- **Positions now follow the agency, as ranks already did.** `_create_default_roles`
+  wrote all 28 `DEFAULT_POSITIONS` to every organization regardless of
+  `organization_type`, so an EMS-only service was handed a **Firefighter**
+  position it can never fill, and read "Chief" in its rank list beside "Fire
+  Chief" in the position list. Positions are the primary source of permissions,
+  so this was the half of the vocabulary that mattered more — and the gap the
+  rank change had recorded in this file rather than closed.
+
+  An EMS-only service is now seeded no Firefighter, a Chief rather than a Fire
+  Chief, and a Driver / Operator rather than an Engineer. **Slugs are
+  untouched** — `fire_chief` still keys the permission registry, the office
+  catalog and the shift-eligibility fallback, so it must mean the same thing for
+  every agency. Only the selection and the wording vary.
+
+- **The onboarding wizard follows too, because otherwise the fix is cosmetic.**
+  `RoleSetup.tsx` carries its own copy of the position list and never fetches
+  one, and `save_session_roles` _creates_ a system position for any id it does
+  not already know. So a wizard that kept offering Firefighter to an EMS
+  department would put back the exact row the seed left out — with grants built
+  from two checkboxes instead of from `DEFAULT_POSITIONS`, because the create
+  branch does not apply `_merge_default_permissions`. The restored
+  `positionsConfig` goes through the same filter for the same reason: it is read
+  from `localStorage` and can predate this change.
+
+  The wizard's half of the rule lives in `config/agencyPositions.ts` rather than
+  in the screen, so the contract test that keeps the two languages honest —
+  `test_onboarding_position_template_parity.py`, which reads it as text — has a
+  small stable file to read instead of a 1,100-line component. It asserts both
+  directions: the wizard never offers a discipline position the backend declined
+  to seed, and it renames exactly what the backend renames.
+
+**Changed**
+
+- **One selection rule for ranks and positions**, in `core.permissions` beside
+  both registries: `DISCIPLINE_CODES_BY_ORG_TYPE`, `is_seeded_for` and
+  `label_for`. `default_ranks_for` was rewritten onto it and
+  `_COMMAND_RANK_CODES`, `RANK_CODES_BY_ORG_TYPE` and `RANK_LABELS_BY_ORG_TYPE`
+  are gone. Two copies of "an EMS-only agency calls this Chief" is the drift
+  this branch has spent its life deleting.
+
+  **Only disciplines are enumerated**, so officer rungs are universal by
+  construction. That also closes a hazard the review of the rank change flagged:
+  a rung added to `DEFAULT_RANKS` and left out of `_COMMAND_RANK_CODES` used to
+  be dropped from every seed silently. The failure direction is now the
+  recoverable one — a code nobody classifies reaches every agency — and the
+  golden sets in `tests/test_agency_position_seeding.py` are what force the
+  classification.
+
+- `_create_default_roles` takes the agency type as a **required** argument, so a
+  second caller has to decide rather than inherit a fire department by omission.
+  `RoleManagementService.initialize_default_roles` — uncalled, and previously
+  agency-blind — requires it too: an unwired seeder that hands every agency a
+  fire ladder is how this comes back. `core/seed.py` routes through
+  `default_positions_for("fire_department")`, the agency it builds.
+
+- The frontend's `OrganizationType` union is defined once, in the onboarding
+  store, rather than re-declared per screen. `test_enum_consistency.py` now
+  scans `.ts` as well as `.tsx` to find it — globbing `.tsx` alone had made "the
+  frontend does not define this type" and "it is defined somewhere sensible"
+  indistinguishable.
+
+- The onboarding status record keeps the **coerced** agency type.
+  `create_organization` silently falls back to `fire_department` for a type it
+  does not recognise, but the status row kept the raw argument — two answers to
+  the same question, and the status row is what a resumed wizard reads back.
+
+- Seeded positions no longer persist the registry's list **by reference**. The
+  seven rank-mirroring entries alias the rank registry's list object (pitfall
+  #23), so the row held a module constant behind a database column, one in-place
+  edit away from rewriting every other department's seed for the life of the
+  process.
+
+**Scope**
+
+- **New organizations only; no migration.** The seed runs once inside
+  `create_organization`, which rejects a second organization. An EMS service
+  already onboarded keeps the positions it was given — members are assigned to
+  those rows, and renaming or deleting one rewrites their record.
+- **Discipline positions confer nothing either way.** The auto-assigned `member`
+  position is a strict superset of the `firefighter` position's grants (18 vs
+  17, adding `equipment_check.submit`), so dropping Firefighter for an EMS
+  agency costs no permissions, and the asymmetry — fire keeps a discipline
+  position, EMS has none — is a naming matter, not an access one. The symmetric
+  alternative is a `DEFAULT_POSITIONS["emt"]` entry aliasing the EMT rank's
+  list; it is deliberately not added here, since it would seed a row that grants
+  strictly less than one every member already holds.
+- **`ems_supply_officer` stays universal.** Most fire departments run EMS, and
+  withholding it would be the mirror of the bug this closes.
+- **`DEFAULT_RANK_LABELS`** in `shift_eligibility_service` is still built from
+  the unfiltered `DEFAULT_RANKS` — deliberately, so a code with no stored row
+  still resolves — so an ineligibility message can still say "Fire Chief" to an
+  EMS agency that deleted that rank. Cosmetic, and left alone rather than made
+  agency-aware, because that map exists precisely to answer for codes the
+  organization was never seeded.
+- **`scripts/seed_test_users.py`** keeps its own hand-written position list,
+  which had already drifted from the registry before this change. It is a dev
+  fixture, not a source of truth.
+
 ### The medic seat nobody could fill, three source badges that looked identical, and a writer for member qualifications (2026-08-26)
 
 **Fixed**
@@ -278,6 +468,24 @@ the service and the eligibility reader are.
   seeded one rank too many can delete it while one seeded too few has no
   indication anything is absent.
 
+  **This reaches new organizations only, and there is no migration.** The seed
+  fires solely into an empty table, so an EMS service already onboarded keeps
+  the fire ladder it was given and can edit the list by hand. Rewriting a
+  department's existing ranks would rename rows its members are already filed
+  under, which is worse than the wrong label. Note the contrast with the EMT
+  fix above: rank grants resolve from code at request time, so that one takes
+  effect for every existing installation the moment this deploys.
+
+  **Positions are not agency-aware, and were not changed here.** Onboarding
+  still seeds every `DEFAULT_POSITIONS` entry to every organization, so an
+  EMS-only department is still given "Fire Chief", "Engineer" and
+  "Firefighter" _positions_ — and positions, not ranks, are the primary source
+  of permissions. Until that is settled the two lists disagree on screen: the
+  rank reads "Chief" where the position beside it reads "Fire Chief". The
+  position registry is aliased into the rank registry (pitfall #23) and is
+  seeded once per organization at onboarding, so changing it is a data
+  migration rather than a registry edit, and it is left for its own change.
+
 - **A custom rank silently conferred nothing.** Rank defaults resolve from a
   code-level registry keyed by `rank_code`, so a rank a department invents for
   itself — Battalion Chief, Firefighter II — grants no permissions. That is
@@ -287,6 +495,22 @@ the service and the eligibility reader are.
   reports `default_permission_count` and the rank editor marks a rank that
   grants none.
 
+**Changed**
+
+- **Who may assign the EMT rank has narrowed, as a consequence of the fix.**
+  `_assert_rank_within_caller_ceiling` refuses to let anyone set a rank that
+  grants more than they hold themselves. While `emt` resolved to an empty list
+  that check passed trivially for everybody; it now requires all seventeen
+  grants. Of the seeded positions that can manage members, Fire Chief, Deputy
+  Chief, Assistant Chief, Captain, IT Manager and President are unaffected,
+  while Vice President, Secretary, Assistant Secretary and Membership
+  Coordinator can no longer assign it — and get a logged privilege-escalation
+  attempt when they try. This is the same ceiling those positions already hit
+  on `firefighter`, so EMT now behaves like every other line rank rather than
+  being the one that slipped through; a department that wants its membership
+  coordinator to file EMTs should grant that position the rank's view
+  permissions.
+
 **Removed**
 
 - `OPERATIONAL_ROLE_SLUGS` and `ADMINISTRATIVE_ROLE_SLUGS` from
@@ -294,11 +518,17 @@ the service and the eligibility reader are.
   definition. They were not harmless: they read as a third authority on the
   rank vocabulary and agreed with neither real one, listing `chief` where the
   seed writes `fire_chief`, and offering `driver` and `paramedic`, which are
-  not ranks at all and grant nothing.
+  not ranks at all and grant nothing. The two documentation tables that still
+  listed them — in `docs/ENUM_CONVENTIONS.md` and `docs/TROUBLESHOOTING.md`,
+  the latter under an instruction to import them — go with them.
 
 `tests/test_rank_registry_agreement.py` now asserts the seed and the
 permission registry describe the same set in both directions, so a rank cannot
 again be offered to departments while conferring nothing.
+`tests/test_operational_rank_service.py` and
+`RanksSettingsSection.test.tsx` cover the reported count and the badge it
+drives, including the stale-response case where the field is absent — the
+count must fall through to no badge rather than warning about every rank.
 
 ### Embroidery and engraving are not the same job (2026-08-26)
 

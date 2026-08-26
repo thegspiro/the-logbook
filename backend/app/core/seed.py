@@ -11,7 +11,7 @@ from loguru import logger
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.permissions import DEFAULT_ROLES
+from app.core.permissions import default_positions_for
 from app.models.user import Organization, Role
 
 
@@ -72,7 +72,11 @@ async def seed_roles(db: AsyncSession, organization_id: uuid.UUID):
     """
     logger.info(f"Seeding roles for organization {organization_id}")
 
-    for role_slug, role_data in DEFAULT_ROLES.items():
+    # `seed_organization` above builds a fire department, so that is the agency
+    # whose default positions this seeds. Routed through `default_positions_for`
+    # rather than the raw registry so a dev database matches what onboarding
+    # would actually write.
+    for role_slug, role_data in default_positions_for("fire_department").items():
         # Check if role already exists
         result = await db.execute(
             select(Role).where(

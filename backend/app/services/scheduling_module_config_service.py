@@ -15,6 +15,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.scheduling_module_config import SchedulingModuleConfig
+from app.models.user import Organization
 from app.schemas.scheduling_module_config import ShiftSettingsSchema
 
 # Built-in defaults, kept in lockstep with the frontend's DEFAULT_SETTINGS in
@@ -92,7 +93,65 @@ DEFAULT_SHIFT_SETTINGS: Dict[str, Any] = {
 
 # Columns that carry one settings field each; used to fold row values over the
 # defaults and to write a full payload back.
+#
+# Derived from the full (fire) shape on purpose: every agency stores the same
+# nine fields, only their *values* differ, so narrowing the defaults must never
+# narrow this.
 _SETTINGS_COLUMNS = tuple(DEFAULT_SHIFT_SETTINGS.keys())
+
+# Apparatus an EMS-only service does not run, and never will.
+#
+# Withheld rather than replaced: what remains — ambulance, rescue, boat, chief,
+# utility — is what the list already offered, so nothing here invents a rig or a
+# staffing number for a discipline this file cannot speak for. A third-service
+# EMS agency that does run a rescue keeps it.
+#
+# Only the *selection* changes. The crew slots inside each entry are
+# ``ShiftPosition`` values — a seat on a rig, a different namespace from rank
+# codes and position slugs — and are persisted verbatim into three untyped JSON
+# columns and cross-referenced by every organization's
+# ``operational_ranks.eligible_positions``. Renaming or filtering a seat would
+# orphan those rows the way the ``EMT``/``ems`` divergence did (see
+# ``app/utils/positions.py``), and it would buy nothing: an EMT is already
+# eligible for a ``firefighter`` seat.
+_FIRE_ONLY_APPARATUS_TYPES = frozenset(
+    {"engine", "ladder", "tanker", "brush", "tower", "hazmat"}
+)
+
+
+def apparatus_type_defaults_for(organization_type: Optional[str]) -> Dict[str, Any]:
+    """The apparatus staffing templates an agency of this type should see.
+
+    Unknown or missing types get the full set, matching the fallback the rank
+    and position seeds use: a department shown one rig too many can ignore it,
+    while one shown too few has no indication anything is absent.
+    """
+    if organization_type != "ems_only":
+        return DEFAULT_APPARATUS_TYPE_DEFAULTS
+    return {
+        code: entry
+        for code, entry in DEFAULT_APPARATUS_TYPE_DEFAULTS.items()
+        if code not in _FIRE_ONLY_APPARATUS_TYPES
+    }
+
+
+async def apparatus_type_defaults_for_org(
+    db: AsyncSession, organization_id: str
+) -> Dict[str, Any]:
+    """The apparatus staffing templates this organization should be offered.
+
+    The agency type is read here rather than passed in because both call sites
+    hold a ``current_user``, not the organization row — the same shape as
+    ``OperationalRankService._seed_set``. Shared with the unified vehicle
+    picker's fallback in ``api/v1/endpoints/scheduling.py`` so the two cannot
+    answer differently.
+    """
+    result = await db.execute(
+        select(Organization.organization_type).where(Organization.id == organization_id)
+    )
+    org_type = result.scalar_one_or_none()
+    # The column is an Enum; unwrap to the stored string value.
+    return apparatus_type_defaults_for(getattr(org_type, "value", org_type))
 
 
 class SchedulingModuleConfigService:
@@ -115,11 +174,22 @@ class SchedulingModuleConfigService:
         The effective settings are the built-in defaults with every non-NULL
         stored column folded over them, so callers always get a complete
         object. Row is None when the org has never saved settings.
+
+        Note what that means for the agency-aware apparatus defaults below:
+        nothing ever seeds this table, so an organization that has never opened
+        the settings panel is reading the built-ins live on every request. A
+        change to them reaches every such organization at once — unlike the
+        rank and position seeds, which only ever fire into an empty table. An
+        organization that *has* saved keeps what it saved, because its stored
+        column wins.
         """
         row = await self._get_row(organization_id)
         # deepcopy so callers can never mutate the module-level defaults —
         # the same aliasing trap as CLAUDE.md Pitfall #12, one level earlier.
         settings = copy.deepcopy(DEFAULT_SHIFT_SETTINGS)
+        settings["apparatus_type_defaults"] = copy.deepcopy(
+            await apparatus_type_defaults_for_org(self.db, organization_id)
+        )
         if row is not None:
             for column in _SETTINGS_COLUMNS:
                 value = getattr(row, column)
