@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { BrowserRouter } from 'react-router';
 import type { InboxMessage } from '../../../services/adminServices';
 
@@ -58,5 +59,18 @@ describe('MessagesInboxPage', () => {
     mockGetInbox.mockResolvedValue([]);
     renderPage();
     expect(await screen.findByText(/No messages/i)).toBeInTheDocument();
+  });
+
+  it('loads another page so older communications remain reachable', async () => {
+    const firstPage = Array.from({ length: 20 }, (_, index) => msg({ id: `m${index}`, title: `Message ${index}` }));
+    mockGetInbox.mockResolvedValueOnce(firstPage).mockResolvedValueOnce([msg({ id: 'm20', title: 'Older message' })]);
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.click(await screen.findByRole('button', { name: /Load more messages/i }));
+
+    expect(await screen.findByText('Older message')).toBeInTheDocument();
+    expect(mockGetInbox).toHaveBeenLastCalledWith({ include_read: true, skip: 20, limit: 20 });
+    expect(screen.queryByRole('button', { name: /Load more messages/i })).not.toBeInTheDocument();
   });
 });
