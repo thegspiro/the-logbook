@@ -3265,13 +3265,19 @@ async def list_departure_clearances(
 async def get_departure_clearance(
     clearance_id: UUID,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("inventory.view")),
+    current_user: User = Depends(require_permission("inventory.manage")),
 ):
     """
     Get a departure clearance with all line items.
 
+    Returns another member's full line-item detail (item names, serials,
+    values, disposition) by id, so this is quartermaster business like its
+    siblings (initiate/list/resolve/complete), not a `.view`-level read —
+    matching the self-or-quartermaster gate already applied to
+    `/users/{user_id}/clearance`.
+
     **Authentication required**
-    **Requires permission: inventory.view**
+    **Requires permission: inventory.manage**
     """
     service = DepartureClearanceService(db)
     clearance = await service.get_clearance(
