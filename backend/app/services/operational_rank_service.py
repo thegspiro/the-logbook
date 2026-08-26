@@ -7,7 +7,7 @@ Business logic for per-organization operational rank management.
 from typing import Dict, List, Optional
 from uuid import UUID
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -297,8 +297,14 @@ class OperationalRankService:
 
         update_data = data.model_dump(exclude_unset=True)
 
-        # If rank_code is being changed, check for duplicates
-        if "rank_code" in update_data and update_data["rank_code"] != rank.rank_code:
+        old_rank_code = rank.rank_code
+        new_rank_code = update_data.get("rank_code")
+
+        # A rank code is also the denormalized key stored on every member.  A
+        # rename therefore has to move those references in the same database
+        # transaction as the rank row; otherwise members briefly (or, after a
+        # failure, permanently) lose their permissions and shift eligibility.
+        if new_rank_code is not None and new_rank_code != old_rank_code:
             dup = await self.db.execute(
                 select(OperationalRank).where(
                     OperationalRank.organization_id == organization_id,
@@ -311,11 +317,27 @@ class OperationalRankService:
                     f"Rank code '{update_data['rank_code']}' already exists"
                 )
 
-        for field, value in update_data.items():
-            setattr(rank, field, value)
+        try:
+            if new_rank_code is not None and new_rank_code != old_rank_code:
+                await self.db.execute(
+                    update(User)
+                    .where(
+                        User.organization_id == organization_id,
+                        User.rank == old_rank_code,
+                    )
+                    .values(rank=new_rank_code)
+                )
 
-        await self.db.commit()
-        await self.db.refresh(rank)
+            for field, value in update_data.items():
+                setattr(rank, field, value)
+
+            await self.db.commit()
+            await self.db.refresh(rank)
+        except Exception:
+            # commit/flush failures must undo both sides of the migration and
+            # leave the request-scoped session usable by the endpoint.
+            await self.db.rollback()
+            raise
         return rank
 
     async def delete_rank(
@@ -326,8 +348,29 @@ class OperationalRankService:
         rank = await self.get_rank(rank_id, organization_id)
         if not rank:
             return False
-        await self.db.delete(rank)
-        await self.db.commit()
+
+        # Include inactive, archived, and soft-deleted members: their records
+        # are historical references too and may later be restored or audited.
+        usage = await self.db.execute(
+            select(func.count(User.id)).where(
+                User.organization_id == organization_id,
+                User.rank == rank.rank_code,
+            )
+        )
+        member_count = usage.scalar() or 0
+        if member_count:
+            noun = "member" if member_count == 1 else "members"
+            raise ValueError(
+                f"Cannot delete rank '{rank.display_name}' while it is assigned "
+                f"to {member_count} {noun}. Reassign those members first."
+            )
+
+        try:
+            await self.db.delete(rank)
+            await self.db.commit()
+        except Exception:
+            await self.db.rollback()
+            raise
         return True
 
     async def reorder_ranks(
