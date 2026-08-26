@@ -7,6 +7,7 @@ approval chains, and export operations.
 """
 
 from datetime import datetime
+from decimal import Decimal
 from typing import Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -27,7 +28,7 @@ from app.schemas.base import UTCResponseBase
 # priority map to strict MySQL ENUM columns, but were typed as free str and stored
 # raw — an out-of-set value passed Pydantic, reached MySQL, and 500'd (FIN2-1, the B1
 # latent-500 class). Validating the enum INPUT (→ 422) is safe hardening and does not
-# touch any money math. Amounts stay as-is (the float→Decimal FIN-7 item is separate).
+# touch any money math.
 _APPLIES_TO = {e.value for e in ApprovalEntityType}
 _STEP_TYPES = {e.value for e in ApprovalStepType}
 _APPROVER_TYPES = {e.value for e in ApproverType}
@@ -149,7 +150,7 @@ class BudgetCreate(BaseModel):
 
     fiscal_year_id: str
     category_id: str
-    amount_budgeted: float = Field(..., ge=0)
+    amount_budgeted: Decimal = Field(..., ge=0, decimal_places=2)
     notes: Optional[str] = None
     station_id: Optional[str] = None
 
@@ -157,7 +158,7 @@ class BudgetCreate(BaseModel):
 class BudgetUpdate(BaseModel):
     """Update a budget line"""
 
-    amount_budgeted: Optional[float] = Field(None, ge=0)
+    amount_budgeted: Optional[Decimal] = Field(None, ge=0, decimal_places=2)
     notes: Optional[str] = None
     station_id: Optional[str] = None
 
@@ -171,9 +172,9 @@ class BudgetResponse(UTCResponseBase):
     organization_id: str
     fiscal_year_id: str
     category_id: str
-    amount_budgeted: float
-    amount_spent: float
-    amount_encumbered: float
+    amount_budgeted: Decimal
+    amount_spent: Decimal
+    amount_encumbered: Decimal
     notes: Optional[str] = None
     station_id: Optional[str] = None
     created_by: str
@@ -186,10 +187,10 @@ class BudgetSummaryResponse(BaseModel):
 
     model_config = _RESPONSE_CONFIG
 
-    total_budgeted: float
-    total_spent: float
-    total_encumbered: float
-    total_remaining: float
+    total_budgeted: Decimal
+    total_spent: Decimal
+    total_encumbered: Decimal
+    total_remaining: Decimal
     percent_used: float
     category_breakdown: list[dict] = []
 
@@ -217,7 +218,7 @@ class ApprovalChainStepCreate(BaseModel):
     notification_emails: Optional[list[str]] = None
     email_template_id: Optional[str] = None
     allow_self_approval: bool = False
-    auto_approve_under: Optional[float] = None
+    auto_approve_under: Optional[Decimal] = Field(None, decimal_places=2)
     required: bool = True
 
 
@@ -239,7 +240,7 @@ class ApprovalChainStepUpdate(BaseModel):
     notification_emails: Optional[list[str]] = None
     email_template_id: Optional[str] = None
     allow_self_approval: Optional[bool] = None
-    auto_approve_under: Optional[float] = None
+    auto_approve_under: Optional[Decimal] = Field(None, decimal_places=2)
     required: Optional[bool] = None
 
 
@@ -258,7 +259,7 @@ class ApprovalChainStepResponse(UTCResponseBase):
     notification_emails: Optional[list[str]] = None
     email_template_id: Optional[str] = None
     allow_self_approval: bool
-    auto_approve_under: Optional[float] = None
+    auto_approve_under: Optional[Decimal] = Field(None, decimal_places=2)
     required: bool
     created_at: datetime
 
@@ -273,8 +274,8 @@ class ApprovalChainCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=200)
     description: Optional[str] = None
     applies_to: str
-    min_amount: Optional[float] = None
-    max_amount: Optional[float] = None
+    min_amount: Optional[Decimal] = Field(None, decimal_places=2)
+    max_amount: Optional[Decimal] = Field(None, decimal_places=2)
     budget_category_id: Optional[str] = None
     is_default: bool = False
     steps: Optional[list[ApprovalChainStepCreate]] = None
@@ -290,8 +291,8 @@ class ApprovalChainUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=200)
     description: Optional[str] = None
     applies_to: Optional[str] = None
-    min_amount: Optional[float] = None
-    max_amount: Optional[float] = None
+    min_amount: Optional[Decimal] = Field(None, decimal_places=2)
+    max_amount: Optional[Decimal] = Field(None, decimal_places=2)
     budget_category_id: Optional[str] = None
     is_default: Optional[bool] = None
     is_active: Optional[bool] = None
@@ -307,8 +308,8 @@ class ApprovalChainResponse(UTCResponseBase):
     name: str
     description: Optional[str] = None
     applies_to: str
-    min_amount: Optional[float] = None
-    max_amount: Optional[float] = None
+    min_amount: Optional[Decimal] = Field(None, decimal_places=2)
+    max_amount: Optional[Decimal] = Field(None, decimal_places=2)
     budget_category_id: Optional[str] = None
     is_default: bool
     is_active: bool
@@ -353,7 +354,7 @@ class PendingApprovalResponse(UTCResponseBase):
     entity_type: str
     entity_id: str
     entity_title: str
-    entity_amount: float
+    entity_amount: Decimal
     requester_name: str
     step_name: str
     step_order: int
@@ -375,7 +376,7 @@ class PurchaseRequestCreate(BaseModel):
     title: str = Field(..., min_length=1, max_length=300)
     description: Optional[str] = None
     vendor: Optional[str] = None
-    estimated_amount: float = Field(..., gt=0)
+    estimated_amount: Decimal = Field(..., gt=0, decimal_places=2)
     priority: str = "medium"
     notes: Optional[str] = None
     apparatus_id: Optional[str] = None
@@ -391,8 +392,8 @@ class PurchaseRequestUpdate(BaseModel):
     title: Optional[str] = Field(None, min_length=1, max_length=300)
     description: Optional[str] = None
     vendor: Optional[str] = None
-    estimated_amount: Optional[float] = Field(None, gt=0)
-    actual_amount: Optional[float] = Field(None, gt=0)
+    estimated_amount: Optional[Decimal] = Field(None, gt=0, decimal_places=2)
+    actual_amount: Optional[Decimal] = Field(None, gt=0, decimal_places=2)
     priority: Optional[str] = None
     notes: Optional[str] = None
     receipt_url: Optional[str] = None
@@ -414,8 +415,8 @@ class PurchaseRequestResponse(UTCResponseBase):
     title: str
     description: Optional[str] = None
     vendor: Optional[str] = None
-    estimated_amount: float
-    actual_amount: Optional[float] = None
+    estimated_amount: Decimal
+    actual_amount: Optional[Decimal] = None
     status: str
     priority: str
     approved_by: Optional[str] = None
@@ -447,7 +448,7 @@ class ExpenseLineItemCreate(BaseModel):
 
     budget_id: Optional[str] = None
     description: str = Field(..., min_length=1, max_length=500)
-    amount: float = Field(..., gt=0)
+    amount: Decimal = Field(..., gt=0, decimal_places=2)
     date_incurred: datetime
     # Typed as the enum so an unknown value is rejected with a 422 here rather
     # than reaching MySQL, where the column is an ENUM and the insert fails with
@@ -467,7 +468,7 @@ class ExpenseLineItemResponse(UTCResponseBase):
     expense_report_id: str
     budget_id: Optional[str] = None
     description: str
-    amount: float
+    amount: Decimal
     date_incurred: datetime
     expense_type: str
     receipt_url: Optional[str] = None
@@ -505,7 +506,7 @@ class ExpenseReportResponse(UTCResponseBase):
     fiscal_year_id: str
     title: str
     description: Optional[str] = None
-    total_amount: float
+    total_amount: Decimal
     status: str
     approved_by: Optional[str] = None
     approved_at: Optional[datetime] = None
@@ -531,7 +532,7 @@ class CheckRequestCreate(BaseModel):
     budget_id: Optional[str] = None
     payee_name: str = Field(..., min_length=1, max_length=300)
     payee_address: Optional[str] = None
-    amount: float = Field(..., gt=0)
+    amount: Decimal = Field(..., gt=0, decimal_places=2)
     memo: Optional[str] = None
     purpose: Optional[str] = None
     notes: Optional[str] = None
@@ -543,7 +544,7 @@ class CheckRequestUpdate(BaseModel):
     budget_id: Optional[str] = None
     payee_name: Optional[str] = Field(None, min_length=1, max_length=300)
     payee_address: Optional[str] = None
-    amount: Optional[float] = Field(None, gt=0)
+    amount: Optional[Decimal] = Field(None, gt=0, decimal_places=2)
     memo: Optional[str] = None
     purpose: Optional[str] = None
     notes: Optional[str] = None
@@ -564,7 +565,7 @@ class CheckRequestResponse(UTCResponseBase):
     budget_id: Optional[str] = None
     payee_name: str
     payee_address: Optional[str] = None
-    amount: float
+    amount: Decimal
     memo: Optional[str] = None
     purpose: Optional[str] = None
     status: str
@@ -592,11 +593,11 @@ class DuesScheduleCreate(BaseModel):
     )
 
     name: str = Field(..., min_length=1, max_length=200)
-    amount: float = Field(..., gt=0)
+    amount: Decimal = Field(..., gt=0, decimal_places=2)
     frequency: str
     due_date: datetime
     grace_period_days: int = Field(30, ge=0)
-    late_fee_amount: Optional[float] = None
+    late_fee_amount: Optional[Decimal] = Field(None, decimal_places=2)
     fiscal_year_id: Optional[str] = None
     applies_to_membership_types: Optional[list[str]] = None
     notes: Optional[str] = None
@@ -610,11 +611,11 @@ class DuesScheduleUpdate(BaseModel):
     )
 
     name: Optional[str] = Field(None, min_length=1, max_length=200)
-    amount: Optional[float] = Field(None, gt=0)
+    amount: Optional[Decimal] = Field(None, gt=0, decimal_places=2)
     frequency: Optional[str] = None
     due_date: Optional[datetime] = None
-    grace_period_days: Optional[int] = Field(None, ge=0)
-    late_fee_amount: Optional[float] = None
+    grace_period_days: Optional[int] = Field(None, ge=0, decimal_places=2)
+    late_fee_amount: Optional[Decimal] = Field(None, decimal_places=2)
     fiscal_year_id: Optional[str] = None
     applies_to_membership_types: Optional[list[str]] = None
     is_active: Optional[bool] = None
@@ -629,11 +630,11 @@ class DuesScheduleResponse(UTCResponseBase):
     id: str
     organization_id: str
     name: str
-    amount: float
+    amount: Decimal
     frequency: str
     due_date: datetime
     grace_period_days: int
-    late_fee_amount: Optional[float] = None
+    late_fee_amount: Optional[Decimal] = Field(None, decimal_places=2)
     fiscal_year_id: Optional[str] = None
     applies_to_membership_types: Optional[list[str]] = None
     is_active: bool
@@ -652,14 +653,14 @@ class MemberDuesResponse(UTCResponseBase):
     organization_id: str
     dues_schedule_id: str
     user_id: str
-    amount_due: float
-    amount_paid: float
+    amount_due: Decimal
+    amount_paid: Decimal
     status: str
     due_date: datetime
     paid_date: Optional[datetime] = None
     payment_method: Optional[str] = None
     transaction_reference: Optional[str] = None
-    late_fee_applied: Optional[float] = None
+    late_fee_applied: Optional[Decimal] = None
     waived_by: Optional[str] = None
     waived_at: Optional[datetime] = None
     waive_reason: Optional[str] = None
@@ -676,7 +677,7 @@ class DuesPaymentResponse(UTCResponseBase):
     id: str
     organization_id: str
     member_dues_id: str
-    amount: float
+    amount: Decimal
     payment_method: Optional[str] = None
     transaction_reference: Optional[str] = None
     notes: Optional[str] = None
@@ -689,7 +690,7 @@ class DuesPaymentResponse(UTCResponseBase):
 class MemberDuesPayment(BaseModel):
     """Record a dues payment"""
 
-    amount_paid: float = Field(..., gt=0)
+    amount_paid: Decimal = Field(..., gt=0, decimal_places=2)
     payment_method: Optional[str] = None
     transaction_reference: Optional[str] = None
     notes: Optional[str] = None
@@ -715,10 +716,10 @@ class DuesSummaryResponse(BaseModel):
 
     model_config = _RESPONSE_CONFIG
 
-    total_expected: float
-    total_collected: float
-    total_outstanding: float
-    total_waived: float
+    total_expected: Decimal
+    total_collected: Decimal
+    total_outstanding: Decimal
+    total_waived: Decimal
     collection_rate: float
     members_paid: int
     members_overdue: int

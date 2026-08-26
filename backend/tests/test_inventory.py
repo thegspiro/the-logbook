@@ -560,7 +560,7 @@ class TestPoolIssuance:
 class TestBatchOperations:
 
     @pytest.mark.asyncio
-    async def test_batch_checkout(self, db_session, setup_org_and_user):
+    async def test_distribute_items(self, db_session, setup_org_and_user):
         org_id, user_id, _ = setup_org_and_user
         svc = InventoryService(db_session)
 
@@ -576,9 +576,15 @@ class TestBatchOperations:
                 },
                 created_by=uuid.UUID(user_id),
             )
-            items_data.append({"code": f"BC-{i:04d}", "quantity": 1})
+            items_data.append(
+                {
+                    "code": f"BC-{i:04d}",
+                    "quantity": 1,
+                    "operation": "permanent_assignment",
+                }
+            )
 
-        result = await svc.batch_checkout(
+        result = await svc.distribute_items(
             user_id=uuid.UUID(user_id),
             organization_id=uuid.UUID(org_id),
             performed_by=uuid.UUID(user_id),
@@ -590,7 +596,9 @@ class TestBatchOperations:
         assert result["failed"] == 0
 
     @pytest.mark.asyncio
-    async def test_batch_checkout_partial_failure(self, db_session, setup_org_and_user):
+    async def test_distribute_items_partial_failure(
+        self, db_session, setup_org_and_user
+    ):
         org_id, user_id, _ = setup_org_and_user
         svc = InventoryService(db_session)
 
@@ -605,19 +613,108 @@ class TestBatchOperations:
             created_by=uuid.UUID(user_id),
         )
 
-        result = await svc.batch_checkout(
+        result = await svc.distribute_items(
             user_id=uuid.UUID(user_id),
             organization_id=uuid.UUID(org_id),
             performed_by=uuid.UUID(user_id),
             items=[
-                {"code": "BC-REAL", "quantity": 1},
-                {"code": "BC-NONEXISTENT", "quantity": 1},
+                {"code": "BC-REAL", "quantity": 1, "operation": "permanent_assignment"},
+                {
+                    "code": "BC-NONEXISTENT",
+                    "quantity": 1,
+                    "operation": "permanent_assignment",
+                },
             ],
         )
 
         assert result["total_scanned"] == 2
         assert result["successful"] == 1
         assert result["failed"] == 1
+
+    @pytest.mark.asyncio
+    async def test_stale_scanner_cannot_reassign_an_already_held_item(
+        self, db_session, setup_org_and_user
+    ):
+        """A second scanner submission loses the custody race without writing."""
+        org_id, user_id, _ = setup_org_and_user
+        svc = InventoryService(db_session)
+        item, _ = await svc.create_item(
+            organization_id=uuid.UUID(org_id),
+            item_data={
+                "name": "Race Helmet",
+                "barcode": "RACE-1",
+                "condition": "good",
+                "status": "available",
+            },
+            created_by=uuid.UUID(user_id),
+        )
+        first = await svc.distribute_items(
+            user_id=uuid.UUID(user_id),
+            organization_id=uuid.UUID(org_id),
+            performed_by=uuid.UUID(user_id),
+            items=[{"code": "RACE-1", "operation": "permanent_assignment"}],
+        )
+        stale = await svc.distribute_items(
+            user_id=uuid.UUID(user_id),
+            organization_id=uuid.UUID(org_id),
+            performed_by=uuid.UUID(user_id),
+            items=[{"code": "RACE-1", "operation": "permanent_assignment"}],
+        )
+        assert first["successful"] == 1
+        assert stale["successful"] == 0
+        assert stale["results"][0]["conflict"]["holder_id"] == user_id
+        assert stale["results"][0]["conflict"]["holding_type"] == "assignment"
+        refreshed = await svc.get_item_by_id(uuid.UUID(item.id), uuid.UUID(org_id))
+        assert str(refreshed.assigned_to_user_id) == user_id
+
+    @pytest.mark.asyncio
+    async def test_a_held_item_reports_its_holder_instead_of_reassigning(
+        self, db_session, setup_org_and_user
+    ):
+        """Scanning someone else's item surfaces custody, it does not transfer.
+
+        `assign_item_to_user` refuses any non-AVAILABLE item on purpose --
+        reassignment is a chain-of-custody transfer that has to close the old
+        record as it opens the new one, which a bare scan carries no return
+        condition or reason for. So the batch path reports who holds the item
+        and leaves it alone; confirming the transfer is the transfer
+        endpoint's job. Asserted for a *different* member than the holder
+        because that is the case a too-permissive branch would silently
+        reassign.
+        """
+        org_id, user_id, user2_id = setup_org_and_user
+        svc = InventoryService(db_session)
+        item, _ = await svc.create_item(
+            organization_id=uuid.UUID(org_id),
+            item_data={
+                "name": "Transfer Helmet",
+                "barcode": "XFER-1",
+                "condition": "good",
+                "status": "available",
+            },
+            created_by=uuid.UUID(user_id),
+        )
+        first = await svc.distribute_items(
+            user_id=uuid.UUID(user_id),
+            organization_id=uuid.UUID(org_id),
+            performed_by=uuid.UUID(user_id),
+            items=[{"code": "XFER-1", "operation": "permanent_assignment"}],
+        )
+        assert first["successful"] == 1
+
+        scanned = await svc.distribute_items(
+            user_id=uuid.UUID(user2_id),
+            organization_id=uuid.UUID(org_id),
+            performed_by=uuid.UUID(user_id),
+            items=[{"code": "XFER-1", "operation": "permanent_assignment"}],
+        )
+        assert scanned["successful"] == 0
+        conflict = scanned["results"][0]["conflict"]
+        assert conflict is not None
+        assert conflict["holder_id"] == user_id
+        assert conflict["holding_type"] == "assignment"
+        refreshed = await svc.get_item_by_id(uuid.UUID(item.id), uuid.UUID(org_id))
+        assert str(refreshed.assigned_to_user_id) == user_id
 
 
 # ── Maintenance Tests ────────────────────────────────────────────────

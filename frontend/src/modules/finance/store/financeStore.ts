@@ -201,7 +201,7 @@ export const useFinanceStore = create<FinanceState>((set) => ({
   createBudget: async (data) => {
     set({ isLoading: true, error: null });
     try {
-      const budget = await budgetService.create(data);
+      const budget = await budgetService.create({ ...data, amountBudgeted: data.amountBudgeted.toFixed(2) });
       set((state) => ({
         budgets: [...state.budgets, budget],
         isLoading: false,

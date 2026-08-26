@@ -16,14 +16,7 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-| Field       | Value                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
-| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| PR          | [#1851](https://github.com/thegspiro/the-logbook/pull/1851)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| Branch      | `claude/security-review-training-core`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| Feature     | 17 Training core                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
-| CI          | pending — just opened                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
-| Threads     | none yet                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
-| Last tended | 2026-08-26 — opened. Read all six in-scope files in full (training.py, training_programs.py, training_sessions.py + their 3 backing services; training_program_service.py grew 36% since the module audit). Re-verified TR-1/2/4/7/9/10 still hold. 3 new findings (TR-11 MEDIUM XC-1 program-import category_ids; TR-12 LOW/MED XC-3 two unscoped User lookups; TR-13 LOW/MED XC-1 course_id on 3 record-create paths), all fixed. Closed 1 stale carried-forward flag (training-sessions dangling-FK batch, already resolved) via a doc correction. 2 items flagged (enum validation gap, enroll_member race), mirrored into KNOWN_LIMITATIONS.md. Full write-up in `docs/security-review/TR-17-training-core.md`. Full completion gate green, full 8663-test backend suite. |
+None — PR #1904 (feature 22, grants & fundraising) merged. Next iteration starts feature 23 (medical supplies).
 
 ---
 
@@ -68,12 +61,12 @@ data-carrying modules, then the supporting infrastructure.
 | 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | ✅ #1842        |
 | 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                | ✅ #1846, #1847 |
 | 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                       | ✅ #1848        |
-| 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`                                                                                   | ⏳ #1851        |
-| 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ⬜              |
-| 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3723 L)                                                                                                          | ⬜              |
-| 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ⬜              |
-| 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ⬜              |
-| 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ⬜              |
+| 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`                                                                                   | ✅ #1851        |
+| 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ✅ #1873        |
+| 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3723 L)                                                                                                          | ✅ #1901        |
+| 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ✅ #1902        |
+| 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ✅ #1903        |
+| 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ✅              |
 | 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ⬜              |
 | 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ⬜              |
 | 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ⬜              |
@@ -609,3 +602,249 @@ re-runs the whole-codebase sweeps against whatever has landed since.
   race), mirrored into `KNOWN_LIMITATIONS.md`. Full completion gate green,
   full 8663-test backend suite. See `TR-17-training-core.md` for the
   complete write-up.
+- **17 Training core ✅ merged** — PR #1851 merged 2026-08-26. No review
+  threads (Codex reported it had hit its usage limit for security reviews,
+  same as #1835); CI ran clean. Next: 18 training extended.
+- **18 Training extended — PR #1873 opened.** The other half of the
+  training module's module-audit unit: `training_submissions.py`,
+  `training_waivers.py`, `training_enhancements.py`, `external_training.py`,
+  and `course_cohorts.py`/`course_syllabus.py` — the last two never read by
+  any prior audit or review pass at all (~10,000 L across 12 files
+  combined). Read in full across 4 parallel reads, each briefed with the
+  specific prior findings/flagged items for its files so the pass
+  re-verified rather than re-derived. 10 findings, all fixed: **TRX-1
+  (HIGH, confirmed live)** — `bulk_enroll_members`'s prerequisite-gate
+  error strings resolved a foreign org member's real name via an unscoped
+  batch `User` lookup; not caught by the TR-17 pass despite
+  `training_program_service.py` being in that iteration's file list, since
+  this is an error-message path, not a by-id read/update/delete. **TRX-2 /
+  TRX-5 / TRX-5b** — blind `setattr` on NOT NULL columns (external-provider,
+  cohort, syllabus-class updates), routed through `apply_updates`. **TRX-3**
+  — `GET /effectiveness/evaluations` had no permission gate at all and
+  leaked every member's free-text self-evaluations org-wide; confined
+  non-officers to their own submissions, mirroring the file's own
+  `get_member_competencies`/`.../me` split. **TRX-4 (MEDIUM)** — cohort
+  class reschedule/cancel mutated and **committed** before checking the
+  class belonged to the URL's cohort, and cancel's audit-log call sat after
+  that check — a cross-cohort request cancelled a real class with zero
+  audit trail while telling the caller 404; fixed by scoping the fetch to
+  `cohort_id` before any write. **TRX-6 through TRX-10** — six
+  client-supplied FK ids unvalidated in-org (waiver `requirement_ids` —
+  also corrected a stale "not projected" premise, it is projected;
+  submission `category_id`; 5 recertification-pathway FKs; 2
+  multi-agency-exercise FKs; xAPI `source_provider_id`). Verified good, no
+  code change: the cohort-generation transaction's full id chain, and the
+  roster-membership-gated cohort read's org-scoping + PII redaction.
+  Corrected a stale count in the SCH-10 `KNOWN_LIMITATIONS.md` entry
+  (`external_training_service.py`'s own httpx client is an 8th affected
+  site, not among the original 7). Full completion gate green, full
+  8778-test backend suite. See `TRX-18-training-extended.md` for the
+  complete write-up.
+- **18 Training extended ✅ merged** — PR #1873 merged 2026-08-26. A Codex
+  review round caught 3 real issues before merge (see prior log entry) —
+  all fixed and threads resolved. **Separately, while getting CI green,
+  found and fixed two pre-existing, repo-wide-blocking regressions on
+  `main` unrelated to this feature**: `InventoryAdminHub.tsx` (introduced
+  by #1894) failed `npm run lint`/`npm run build` for every open PR that
+  merged main in (a banned `.toLocaleDateString()` call with no timezone
+  parameter, three un-narrowed `severity` literals, and a banned
+  `bg-red-600` fill) — fixed via standalone PR #1899, also merged. A Codex
+  review on #1899 caught a real bug in that fix's own first draft (two
+  calendar-date fields shifting a day west of UTC) — fixed and verified.
+  While driving #1899 to green, also discovered a second pre-existing
+  gap: the fire-chief officer-visibility test's `@pytest.mark.integration`
+  fix (first surfaced during #1873's own CI, apparently authored by
+  another session) had only ever been merged directly into #1873's
+  branch, never through its own PR onto `main` — so `main` itself, and
+  any fresh branch cut from it, still failed `Backend Unit Tests` on that
+  same MySQL-connection error. Ported the identical one-line fix into
+  #1899 so it closes on `main` for good rather than resurfacing on the
+  next branch. Both PRs fully green (16/16 checks) before merge. Next:
+  19 skills testing.
+- **19 Skills testing ⏳** — reviewed `endpoints/skills_testing.py` (grown
+  2.6x to 3,723 L since the 1,412 L last audited) and
+  `skills_testing_service.py` (1,207 L) in full via 3 parallel background
+  agents, cross-checked against `docs/module-audit/compliance-skills.md`
+  and `docs/app-review/compliance-skills.md`. Re-confirmed CS-1, CS-2,
+  CS-8/CS-10, LIKE escaping (Pitfall #25) and CSV injection guarding
+  (Pitfall #15) all still intact. Four new findings, all fixed: **SKT-1**
+  `update_template`'s blind `setattr` loop could raise an unhandled 500 on
+  an explicit null against a NOT NULL column, now routed through
+  `apply_updates`. **SKT-2/SKT-3** `void_test` and
+  `return_test_for_correction` had no separation-of-duties check unlike
+  their siblings `create_test`/`validate_test` (CS-8) — an
+  officer-candidate could void their own unfavorable result or force
+  unlimited free redo cycles on their own submission; both now call
+  `assert_different_person`. **SKT-4** `assert_attempts_remaining`'s
+  `max_attempts` cap was a read-then-write with no row lock (Pitfall #27,
+  independently corroborated by all 3 review agents) — fixed with both
+  halves the pitfall requires: a `FOR UPDATE` lock on the candidate's
+  `RequirementProgress` row, and the spent-count query itself made a
+  locking read. Fixing the new lock query broke 5 pre-existing tests whose
+  mocked `db.execute` result queues didn't account for the extra call —
+  reordered, not a logic change. Full local completion gate green:
+  flake8/black/isort clean, migrations validated, 380/380 skills-scoped
+  tests and the full 8814-test backend suite pass. Findings doc:
+  `docs/security-review/SKT-19-skills-testing.md`. PR #1901 opened and
+  subscribed. Next: 20 compliance, once #1901 merges.
+- **19 Skills testing ✅ merged** — PR #1901 merged 2026-08-26. Codex review
+  caught two real issues in the SKT-4 capacity-lock fix before merge: (P1)
+  locking the candidate's `RequirementProgress` row rather than something
+  guaranteed to exist — `_validate_requirement_link` never requires an
+  active enrollment, so the lock could silently serialize on nothing; (P2) a
+  lock-ordering deadlock risk, since `validate_test` locks its specific
+  `SkillTest` row before calling into the capacity check, so two concurrent
+  validations could each hold their own test row and then deadlock waiting
+  on the capacity lock in reverse order of each other. Fixed by locking
+  `TrainingRequirement` instead (the row already fetched first, guaranteed
+  to exist for every capped test) via a new `lock_attempt_capacity` helper,
+  and by having `validate_test` acquire that lock — through a non-locking
+  peek at the test's `requirement_id` — before locking the test row, fixing
+  the ordering as well as the target. Replied to both review threads with
+  the fix and resolved them. Full local completion gate re-verified green
+  (391/391 skills-scoped, 8816/8816 full suite) before pushing the revision;
+  CI came back 16/16 green with no further comments. Next: 20 compliance.
+- **20 Compliance ⏳** — this module already had the deepest prior coverage
+  in the rotation (module-audit iteration 22 + 4 app-review passes through
+  2026-08-09); read `compliance_officer.py`+service, `training_compliance.py`,
+  and `compliance_config.py`+service+model+schema in full via 3 parallel
+  background agents, re-confirming CS-1, CS-3, CS-6, CS-7, CS-8 (skills
+  half), CS-9 recipient audit, and no IDOR/SQL-injection all still intact.
+  **CMP-1/CMP-2** `update_compliance_config`/`update_compliance_profile`
+  discarded an explicit null before the service ever saw it
+  (`exclude_none=True`), so a profile's threshold override ("null = use org
+  default") could never actually be cleared — fixed with `exclude_unset=True`
+  - `apply_updates`. **CMP-3** a first-write race on `ComplianceConfig`
+    surfaced as a raw 500 — now a clean 400. **CMP-4** `get_incomplete_records`
+    silently capped its scan at the 500 most-recently-completed records with no
+    signal to the caller, so older incomplete records on any org with more
+    history were permanently invisible — fixed by pushing the predicate into
+    SQL. **CMP-5** `report_type`'s real 3-value set (`monthly`/`annual`/
+    `yearly`, the last used only by a scheduled task bypassing the HTTP schema)
+    was undocumented at the schema layer and contradicted by a stale model
+    comment — tightened to a `Literal`. **CMP-6** dict-key id-normalization
+    parity for `ContributedHoursService`/`_get_admin_hours_summary` (both added
+    since the last audit, both reintroducing the un-normalized pattern CS-9 had
+    already fixed elsewhere in the same file) — guarded with a UUID-object
+    regression test. **CMP-7** `create_attestation`'s percentage bound was
+    schema-only; added a service-layer check to match its sibling validations.
+    CS-8 attestation dual-control (re-confirmed no narrow fix exists — the
+    record has no "subject" field to compare against the actor at all) and
+    CS-9 monthly windowing remain flagged as product decisions, not bugs. Two
+    design observations raised for owner awareness rather than fixed (a
+    broader permission grant and a `compliance_exempt`-filtering inconsistency
+    on the new contributed-hours endpoint — both look intentional per their
+    docstrings). Full local completion gate green: flake8/black/isort clean,
+    migrations validated, 269/269 compliance-scoped and 8833/8833 full backend
+    suite pass. Findings doc: `docs/security-review/CMP-20-compliance.md`. PR
+    #1902 opened and subscribed. Next: 21 admin hours, once #1902 merges.
+- **20 Compliance ✅ merged** — PR #1902 merged 2026-08-26. Codex review
+  caught one real regression in the CMP-4 fix before merge: the SQL
+  location predicate checked only `location IS NULL`, but the Python
+  fallback logic (`not r.location`) also treats `location=""` as missing —
+  a value the training schemas allow — so a completed record with
+  `location=""` and no `location_id` was silently excluded from the new SQL
+  scan, the opposite of what the fix was for. Corrected to
+  `location IS NULL OR location = ''`, matching the Python check exactly;
+  replied and resolved the review thread. Full local completion gate
+  re-verified green (270/270 compliance-scoped, 8834/8834 full suite)
+  before the final push; CI came back 16/16 green with no further comments.
+  Next: 21 admin hours.
+- **21 Admin hours ⏳** — this HIGH-sensitivity module (self-credit/SoD risk)
+  already had thorough prior coverage (module-audit iteration 15 + 4
+  app-review passes through 2026-08-09); read `admin_hours.py` and
+  `admin_hours_service.py` in full via 3 parallel background agents,
+  re-confirming AH-1 through AH-6 all still intact. **AH-7 (HIGH)**
+  `get_user_hours_compliance` resolved a client-supplied `user_id` with no
+  `organization_id` filter — a caller with compliance access could pull
+  compliance/membership data for a member of a different organization;
+  independently flagged by two agents. **AH-8** `clock_out` was the one
+  query in this module not yet org-scoped — literally deferred to this
+  exact rotation turn by a same-day sibling commit
+  (`clock_out_by_category`'s own fix). **AH-9** `update_category`'s blind
+  `setattr` loop → `apply_updates`. **AH-10** `clock_in` was a read-then-
+  write race with no lock (Pitfall #27) — fixed with a lock on the user's
+  own row plus a locking active-session read. **AH-11** event-hour-mapping
+  percentage totals could race past 100% — `FOR UPDATE` added, residual
+  first-insert gap noted rather than hidden. **AH-12** `edit_pending_entry`
+  now applies the same future/24h-cap/overlap guards `create_manual_entry`
+  already had (closes a "parity nit" prior passes explicitly left open).
+  **AH-13** 4 unguarded `datetime.fromisoformat` call sites → clean 400s.
+  **AH-14** 3 `source_rsvp_id`-keyed queries (new since last audit) gained
+  `organization_id` filters. Per-org SoD toggle and a resync
+  approval-integrity gap (documented as deliberate in the code) remain
+  flagged as product decisions. Full local completion gate green:
+  flake8/black/isort clean, migrations validated, 604/604 admin_hours+event
+  scoped and 8845/8845 full backend suite pass. Findings doc:
+  `docs/security-review/AH-21-admin-hours.md`. PR #1903 opened and
+  subscribed. Next: 22 grants & fundraising, once #1903 merges.
+- **21 Admin hours ✅ merged** — PR #1903 merged 2026-08-26. Codex review
+  caught one real deadlock risk in the AH-11 fix before merge: the first
+  version of `update_event_hour_mapping`'s percentage-check locked only
+  the _other_ mappings for a source, excluding the target row being
+  updated. Two concurrent updates to two different mappings under the same
+  source could each lock the row the other was about to write to, then
+  each block writing their own row at flush — a lock-order inversion
+  InnoDB resolves by killing one side as a deadlock (surfaced as a 500).
+  Fixed by locking the complete set of mappings for the source — including
+  the target — in one query ordered consistently by id, so a second
+  transaction reaching the same source queues behind the first instead of
+  each holding what the other needs. `create_event_hour_mapping` doesn't
+  share this failure mode (a fresh INSERT never needs to acquire a write
+  lock on an existing row). Replied and resolved the review thread. Full
+  local completion gate re-verified green (8846/8846 full suite) before
+  the final push; CI came back 16/16 green with no further comments.
+  Next: 22 grants & fundraising.
+- **22 Grants & fundraising** — read `docs/module-audit/grants-fundraising.md`
+  (iteration 14, GF-1 through GF-9) and `docs/app-review/grants-fundraising.md`
+  (4 passes through 2026-08-09, GF-10 through GF-12) first; three parallel
+  agents then read `grants.py`, `grant_service.py`, `fundraising_service.py`
+  in full, re-confirming GF-1 through GF-12 and surfacing six new findings.
+  **GF-13 (HIGH, most severe of the whole rotation so far)**
+  `GrantOpportunity.applications` carried `cascade="all, delete-orphan"`
+  while `GrantApplication.opportunity_id` is `ondelete="SET NULL"` — deleting
+  an opportunity with linked applications either crashed or silently deleted
+  every one of those applications and their full financial history. Fixed by
+  removing the cascade and adding `passive_deletes=True`; guarded by a new
+  real-DB integration test (`test_grant_opportunity_delete_db.py`), invisible
+  to a mocked session. **GF-14** an awarded->active->awarded round-trip
+  duplicated the auto-generated compliance task set — idempotency guard
+  added, scoped narrowly so it doesn't presume an answer to GF-7's broader
+  state-machine question. **GF-15** three read-then-write aggregate
+  recomputes (campaign total, donor stats, budget item spent) had no lock —
+  Pitfall #27 fix applied to all three (lock the parent row, make the SUM
+  itself a locking read). **GF-16** ten update methods across both services
+  used blind `setattr` loops -> converted to `apply_updates`. **GF-17/GF-18**
+  two by-id queries (`_notes_with_authors`, the budget-item fetch inside the
+  GF-15 fix) gained `organization_id` filters for defense-in-depth
+  consistency; neither was independently exploitable. GF-7 (broader
+  state-machine/overspend question), GF-8 (`is_anonymous` enforcement), GF-9
+  (float money math) re-confirmed unchanged and stay flagged as product
+  decisions, per every prior pass. Full local completion gate green:
+  flake8/black/isort clean, migrations validated (no migration needed —
+  GF-13's fix is ORM-relationship-only), 45/45 grant+fundraising scoped and
+  8849/8849 full backend suite pass. Findings doc:
+  `docs/security-review/GF-22-grants-fundraising.md`. PR #1904 opened and
+  subscribed. Next: 23 medical supplies, once #1904 merges.
+- **22 Grants & fundraising ✅ merged** — PR #1904 merged 2026-08-26.
+  Codex review caught two real issues before merge, both fixed in the same
+  PR: (P1) the parent-lock fixes for GF-15 left `create_donation`/
+  `create_expenditure` (and the reassignment branches of
+  `update_donation`/`update_expenditure`) inserting/updating the
+  FK-carrying child row _before_ locking the parent — InnoDB's own FK
+  check on that insert takes a shared lock on the parent, so two
+  concurrent writes to the same parent could each hold a shared lock and
+  then both try to upgrade to the exclusive FOR UPDATE lock the recompute
+  takes, deadlocking; fixed by acquiring the parent lock(s) first, via new
+  `_lock_campaign`/`_lock_donor`/`_lock_budget_item` helpers. (P2) the
+  GF-14 idempotency guard matched on `task_type`, which is fully
+  client-settable on manual task creation with no status restriction — an
+  officer's own pre-award task of the same type could make the guard
+  believe generation had already run and silently skip the real thing;
+  replaced with a dedicated `compliance_tasks_generated` boolean on
+  `GrantApplication` (migration `472a1e34aa84`). Both fixes replied to and
+  resolved on their review threads. CI also caught the generated
+  `docs/DATABASE_SCHEMA.md` going stale after the new column — regenerated
+  and pushed. Full local completion gate re-verified green (8855/8855 full
+  suite) before the final push; CI came back green with no further
+  comments. Next: 23 medical supplies.
