@@ -8,33 +8,15 @@ All configurable values should be referenced by constant, never by raw string.
 """
 
 # ============================================
-# Role Group Constants
+# Configurable Role Defaults
 # ============================================
-# These define the canonical slug lists used for role-based lookups.
-# If the set of roles in a group changes, update it here — every
-# consumer picks up the change automatically.
-
-# Leadership roles notified on critical events (election rollbacks, deletions, etc.)
-LEADERSHIP_ROLE_SLUGS: list[str] = [
-    "chief",
-    "president",
-    "vice_president",
-    "secretary",
-]
-
-# Admin-level roles CC'd on member drops, archive notifications, etc.
-ADMIN_NOTIFY_ROLE_SLUGS: list[str] = [
-    "admin",
-    "quartermaster",
-    "chief",
-]
-
-# Roles that grant officer-level access in training module config
-TRAINING_OFFICER_ROLE_SLUGS: list[str] = [
-    "admin",
-    "training_officer",
-    "chief",
-]
+# Position slugs a department may override through its own settings. These are
+# fallbacks, not authorities: if a lookup here misses, the department's own
+# configuration is the thing to correct.
+#
+# The *notification* groups — LEADERSHIP_ROLE_SLUGS, ADMIN_NOTIFY_ROLE_SLUGS and
+# TRAINING_OFFICER_ROLE_SLUGS — are not here. They are derived from
+# OFFICE_CATALOG and so are defined below it, under "Role Groups".
 
 # OPERATIONAL_ROLE_SLUGS and ADMINISTRATIVE_ROLE_SLUGS were removed on
 # 2026-08-26. Neither had ever been read: each had exactly one reference in
@@ -45,12 +27,21 @@ TRAINING_OFFICER_ROLE_SLUGS: list[str] = [
 # grant nothing. Election voter eligibility is decided by the member's
 # ``membership_type``; see ``ElectionService._user_has_role_type()``.
 
-# Default training officer roles for cert alert config fallback
+# Default training officer roles for cert alert config fallback.
+#
+# ``assistant_training_officer`` is not a seeded position and resolves to
+# nobody; ``training_officer`` carries the list. Left as written because these
+# two are fallbacks behind ``cert_alert_config``, which a department fills in
+# with its own position slugs — naming a position a department may reasonably
+# have invented is the point. ``tests/test_role_group_slugs.py`` allows them
+# explicitly so the exception is recorded rather than assumed.
 DEFAULT_TRAINING_OFFICER_ROLES: list[str] = [
     "training_officer",
     "assistant_training_officer",
 ]
 
+# Same, and worth knowing: no position is seeded with this slug, so on a stock
+# install this list resolves to the empty set rather than to a smaller one.
 DEFAULT_COMPLIANCE_OFFICER_ROLES: list[str] = [
     "compliance_officer",
 ]
@@ -65,7 +56,12 @@ DEFAULT_COMPLIANCE_OFFICER_ROLES: list[str] = [
 ROLE_TRAINING_OFFICER = "training_officer"
 ROLE_IT_MANAGER = "it_manager"
 ROLE_MEMBER = "member"
-ROLE_CHIEF = "chief"
+
+# ROLE_CHIEF was removed on 2026-08-26. It was ``"chief"``, and no position with
+# that slug is ever seeded — the chief's slug is ``fire_chief`` — so every
+# lookup through it silently matched nobody. There is no single slug that
+# answers "the chief", because a department may hold either spelling, so the
+# replacement is a list: CHIEF_POSITION_SLUGS, below.
 
 
 # ============================================
@@ -171,6 +167,77 @@ OFFICE_CATALOG: list[dict[str, object]] = [
         "position_slugs": ["ems_supply_officer"],
     },
 ]
+
+# ============================================
+# Role Groups
+# ============================================
+# Sets of positions a notification or an access check addresses collectively.
+#
+# **Every member is an office key, expanded through OFFICE_CATALOG.** That
+# indirection is the whole point. Until 2026-08-26 these were hand-written slug
+# lists naming ``"chief"``, and no position with that slug is ever seeded — the
+# seeded slug is ``fire_chief`` — so the chief was silently absent from election
+# rollback alerts, member-drop and auto-archive notices, the overdue-property
+# report, and the store's admin heads-up. ``OFFICE_CATALOG``'s chief entry
+# already knew the two spellings were one office; nothing else did.
+#
+# Expanding rather than replacing matters: ``"chief"`` remains reachable as a
+# real slug, because an admin who names a custom position "Chief" gets it from
+# ``slugify`` (``role_service.slugify``) or from the onboarding wizard's custom
+# position field. A department on either spelling is now addressed correctly,
+# and one holding both resolves to both — so **call sites must dedupe by user**,
+# since a member could hold two positions in the same group.
+#
+# ``tests/test_role_group_slugs.py`` asserts every slug these produce is one a
+# department can actually hold.
+
+
+def position_slugs_for_offices(*office_keys: str) -> list[str]:
+    """Expand office keys to the position slugs that hold them.
+
+    A key with no catalog entry passes through unchanged, so a group may name a
+    position that is not an office (``it_manager``, ``training_officer``)
+    without needing one invented for it.
+    """
+    by_key = {str(office["key"]): office for office in OFFICE_CATALOG}
+    slugs: list[str] = []
+    for key in office_keys:
+        office = by_key.get(key)
+        expanded = (
+            [str(slug) for slug in office["position_slugs"]]  # type: ignore[union-attr]
+            if office
+            else [key]
+        )
+        for slug in expanded:
+            if slug not in slugs:
+                slugs.append(slug)
+    return slugs
+
+
+# Leadership roles notified on critical events (election rollbacks, deletions).
+LEADERSHIP_ROLE_SLUGS: list[str] = position_slugs_for_offices(
+    "chief", "president", "vice_president", "secretary"
+)
+
+# Admin-level roles CC'd on member drops, archive notifications, etc.
+#
+# ``it_manager`` stands where ``"admin"`` used to. There has never been a
+# position slugged ``admin``; the System Owner position is ``it_manager``, and
+# it is the one that actually carries the authority this group reaches for
+# (``get_admin_position_slugs`` in ``core.permissions`` names it first).
+ADMIN_NOTIFY_ROLE_SLUGS: list[str] = position_slugs_for_offices(
+    "it_manager", "quartermaster", "chief"
+)
+
+# Roles that grant officer-level access in training module config.
+TRAINING_OFFICER_ROLE_SLUGS: list[str] = position_slugs_for_offices(
+    "it_manager", "training_officer", "chief"
+)
+
+# Every spelling of "the chief" a department may hold. Replaces ROLE_CHIEF,
+# which named only the one spelling no department is ever given.
+CHIEF_POSITION_SLUGS: list[str] = position_slugs_for_offices("chief")
+
 
 # Per-office variable suffixes, paired with the description shown in the
 # template editor's variable palette ("{label}" is the office label).

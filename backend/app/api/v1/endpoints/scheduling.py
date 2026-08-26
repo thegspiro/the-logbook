@@ -114,6 +114,9 @@ from app.services.integration_services.notification_dispatch import (
     notify_entity_created,
     notify_summary,
 )
+from app.services.scheduling_module_config_service import (
+    apparatus_type_defaults_for_org,
+)
 from app.services.scheduling_service import SchedulingService
 from app.services.scheduling_widget_service import (
     MAX_WIDGET_WINDOW_DAYS,
@@ -2864,19 +2867,11 @@ async def end_standing_shift(
 # ============================================
 
 
-DEFAULT_APPARATUS_TYPES = [
-    "engine",
-    "ladder",
-    "ambulance",
-    "rescue",
-    "tanker",
-    "brush",
-    "tower",
-    "hazmat",
-    "boat",
-    "chief",
-    "utility",
-]
+# DEFAULT_APPARATUS_TYPES was removed on 2026-08-26. It was a second copy of
+# the eleven strings in DEFAULT_APPARATUS_TYPE_DEFAULTS, and the vehicle
+# picker's fallback below is its only consumer — so making one agency-aware and
+# not the other would have left a new EMS department offered Engine and Ladder
+# as its entire picker. The fallback now reads the staffing templates directly.
 
 
 @router.get("/apparatus-options", response_model=ApparatusOptionsResponse)
@@ -2957,9 +2952,15 @@ async def list_apparatus_options(
                 )
             source = "basic"
 
-    # 3. Fall back to hardcoded defaults
+    # 3. Fall back to hardcoded defaults, narrowed to what this kind of agency
+    #    runs. An EMS-only service that has not entered its vehicles was
+    #    otherwise offered Engine, Ladder, Tanker, Brush, Tower and Hazmat as
+    #    its entire picker.
     if not options:
-        for t in DEFAULT_APPARATUS_TYPES:
+        agency_defaults = await apparatus_type_defaults_for_org(
+            db, str(current_user.organization_id)
+        )
+        for t in agency_defaults:
             options.append(
                 ApparatusOption(
                     name=t.capitalize(),

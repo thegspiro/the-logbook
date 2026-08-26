@@ -90,7 +90,11 @@ class TestEnumConsistency:
             r"type (\w+) = (['\"][^'\"]+['\"](?:\s*\|\s*['\"][^'\"]+['\"])*)"
         )
 
-        for ts_file in frontend_dir.rglob("*.tsx"):
+        # Both extensions: a shared union belongs in a .ts module, not in
+        # whichever screen happened to need it first, and globbing .tsx alone
+        # made "the frontend does not define this type" and "it is defined
+        # somewhere sensible" indistinguishable.
+        for ts_file in sorted(frontend_dir.rglob("*.ts*")):
             content = ts_file.read_text()
 
             for match in re.finditer(union_type_pattern, content):
@@ -284,7 +288,7 @@ def verify_enum_consistency() -> tuple[bool, list[str]]:
     )
 
     if frontend_dir.exists():
-        for ts_file in frontend_dir.rglob("*.tsx"):
+        for ts_file in sorted(frontend_dir.rglob("*.ts*")):
             content = ts_file.read_text()
             for match in re.finditer(union_type_pattern, content):
                 type_name = match.group(1)

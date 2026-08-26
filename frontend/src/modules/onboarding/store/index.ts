@@ -5,4 +5,5 @@ export type {
   OnboardingError,
   OnboardingStationDraft,
   OnboardingApparatusDraft,
+  OrganizationType,
 } from './onboardingStore';

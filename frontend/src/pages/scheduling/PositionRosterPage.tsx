@@ -4,30 +4,59 @@
  * "Who is cleared to drive?" — answered in one screen instead of opening each
  * apparatus's operator tab in turn.
  *
- * Eligibility for a shift position comes from three independent sources OR'd
- * together (rank, completed training, the org's open-position list), so a
- * member can hold a position for a reason that is not obvious from their
- * profile. This page shows the sources alongside each name, and pairs them
- * with the member's EVOC standing so the gap that matters is visible: someone
- * whose rank lets them sign up as a driver with no EVOC certification behind
- * it.
+ * Eligibility for a shift position comes from five independent sources OR'd
+ * together (rank, a held position, completed training, a current
+ * qualification, the org's open-position list), so a member can hold a
+ * position for a reason that is not obvious from their profile. This page
+ * shows the sources alongside each name, and pairs them with the member's EVOC
+ * standing so the gap that matters is visible: someone whose rank lets them
+ * sign up as a driver with no EVOC certification behind it.
+ *
+ * Only the qualification source can lapse on its own -- rank, held positions
+ * and completed programs all persist until somebody edits a record -- so it is
+ * the one that carries its expiry date onto the badge.
  */
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router';
 import toast from 'react-hot-toast';
-import { AlertTriangle, GraduationCap, Loader2, Search, Shield, Truck, Unlock, Users } from 'lucide-react';
+import {
+  AlertTriangle,
+  BadgeCheck,
+  Briefcase,
+  GraduationCap,
+  Loader2,
+  Search,
+  Shield,
+  Truck,
+  Unlock,
+  Users,
+} from 'lucide-react';
 import { schedulingService } from '../../modules/scheduling/services/api';
 import type { PositionRosterMember, PositionRosterResponse } from '../../modules/scheduling/types';
 import { POSITION_LABELS } from '../../constants/enums';
-import { formatDate } from '../../utils/dateFormatting';
+import { calendarDaysFromToday, formatCalendarDate, formatDate } from '../../utils/dateFormatting';
 import { useTimezone } from '../../hooks/useTimezone';
 import { getErrorMessage } from '../../utils/errorHandling';
 import { EmptyState } from '../../components/ux/EmptyState';
 import SchedulingHeader from './SchedulingHeader';
 import DriverExceptionsPanel from './DriverExceptionsPanel';
 
-const POSITIONS = ['driver', 'officer', 'firefighter', 'ems', 'captain', 'lieutenant', 'probationary'] as const;
+const POSITIONS = [
+  'driver',
+  'officer',
+  'firefighter',
+  'ems',
+  'paramedic',
+  'captain',
+  'lieutenant',
+  'probationary',
+] as const;
+
+// A qualification inside this window still counts, but is close enough that an
+// officer staffing next month needs to see it now rather than discover it when
+// the roster quietly shortens.
+const EXPIRING_SOON_DAYS = 60;
 
 const TABS = [
   { id: 'roster', label: 'Cleared roster' },
@@ -36,8 +65,14 @@ const TABS = [
 
 type TabId = (typeof TABS)[number]['id'];
 
+// One entry per source type the roster endpoint emits. A type with no entry
+// here falls back to the rank styling, which is how a held-position source
+// spent its life masquerading as a second rank badge -- and how a
+// qualification joined it when that source was added.
 const SOURCE_STYLES: Record<string, { icon: React.ElementType; className: string }> = {
   rank: { icon: Shield, className: 'bg-violet-500/15 text-violet-700 dark:text-violet-400' },
+  position: { icon: Briefcase, className: 'bg-indigo-500/15 text-indigo-700 dark:text-indigo-400' },
+  qualification: { icon: BadgeCheck, className: 'bg-teal-500/15 text-teal-700 dark:text-teal-400' },
   training: { icon: GraduationCap, className: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-400' },
   open: { icon: Unlock, className: 'bg-sky-500/15 text-sky-700 dark:text-sky-400' },
 };
@@ -96,13 +131,28 @@ const PositionRosterPage: React.FC = () => {
       {member.sources.map((source, idx) => {
         const style = SOURCE_STYLES[source.type] ?? SOURCE_STYLES.rank;
         const Icon = style?.icon ?? Shield;
+
+        // Only a qualification carries an expiry, and only when it expires at
+        // all. Inside the window the badge switches to the same amber the EVOC
+        // warning uses, so "runs out in three weeks" reads as the caution it is
+        // rather than as one more green tick.
+        const daysLeft = source.expires_on ? calendarDaysFromToday(source.expires_on, tz) : null;
+        const expiringSoon = daysLeft !== null && daysLeft <= EXPIRING_SOON_DAYS;
+        const className = expiringSoon
+          ? 'bg-amber-500/15 text-amber-700 dark:text-amber-400'
+          : (style?.className ?? '');
+
         return (
           <span
             key={`${source.type}-${source.label}-${idx}`}
-            className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-medium ${style?.className ?? ''}`}
+            className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] font-medium ${className}`}
+            title={source.expires_on ? `Expires ${formatCalendarDate(source.expires_on)}` : undefined}
           >
             <Icon className="h-3 w-3" aria-hidden="true" />
             {source.label}
+            {source.expires_on && (
+              <span className="font-normal opacity-80">· exp {formatCalendarDate(source.expires_on)}</span>
+            )}
           </span>
         );
       })}

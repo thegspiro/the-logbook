@@ -227,6 +227,18 @@ class TrainingCourse(Base):
         Integer
     )  # How long before recertification needed (null = doesn't expire)
 
+    # The qualification code (see app/services/qualification_service.py)
+    # completing this course grants its holder. Null for a course that teaches
+    # something without conferring one, which is most continuing education.
+    #
+    # This is the writer half of member_qualifications. Without it a training
+    # officer has to record the certification twice -- once as the training
+    # record that actually happened, again as a qualification grant -- and the
+    # two drift the first time somebody forgets the second. The course already
+    # knows what it certifies; the record already knows when it was completed
+    # and when it expires.
+    grants_qualification = Column(String(50), index=True)
+
     # Course Details
     instructor = Column(String(255))
     max_participants = Column(Integer)
@@ -3089,12 +3101,22 @@ class ShiftCall(Base):
 
 
 class ShiftPosition(str, enum.Enum):
-    """Position/role within a shift"""
+    """Position/role within a shift.
+
+    Must stay the same set as ``ShiftPosition`` in app/schemas/scheduling.py and
+    ``CANONICAL_POSITIONS`` in app/utils/positions.py. This one is the *stored*
+    vocabulary -- it backs the MySQL ENUM DDL on ``shift_assignments.position``
+    and ``standing_shift_claims.position`` -- so a seat the request schema
+    accepts and this enum omits passes validation and eligibility and then
+    fails when the ORM flushes it. ``tests/test_position_slots.py`` asserts all
+    three agree.
+    """
 
     OFFICER = "officer"
     DRIVER = "driver"
     FIREFIGHTER = "firefighter"
     EMS = "ems"
+    PARAMEDIC = "paramedic"
     CAPTAIN = "captain"
     LIEUTENANT = "lieutenant"
     PROBATIONARY = "probationary"

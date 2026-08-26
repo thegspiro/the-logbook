@@ -55,6 +55,10 @@ _TARGET_COLUMNS: tuple[_EnumColumn, ...] = (
     _EnumColumn("screening_records", "screening_type", ScreeningType, None),
     _EnumColumn("screening_records", "status", ScreeningStatus, "scheduled"),
     _EnumColumn("shift_assignments", "position", ShiftPosition, "firefighter"),
+    # Same enum, same DDL shape, and it needs the same widening when a seat is
+    # added -- this module compares the column's labels against the model enum,
+    # so a column left out of this list silently keeps the older set.
+    _EnumColumn("standing_shift_claims", "position", ShiftPosition, "firefighter"),
     _EnumColumn("shift_assignments", "assignment_status", AssignmentStatus, "assigned"),
     _EnumColumn("shift_swap_requests", "status", SwapRequestStatus, "pending"),
     _EnumColumn("shift_time_off", "status", TimeOffStatus, "pending"),

@@ -59,6 +59,11 @@ const POSITION_OPTIONS = [
   'driver',
   'firefighter',
   'ems',
+  // A medic seat is a different seat from an EMT one -- an ALS unit that
+  // must be staffed by a paramedic cannot say so with 'ems' alone. Values
+  // here must stay within CANONICAL_POSITIONS; test_position_slots.py parses
+  // this list to enforce it.
+  'paramedic',
   'captain',
   'lieutenant',
   'probationary',

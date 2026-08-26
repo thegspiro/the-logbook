@@ -3347,6 +3347,14 @@ class EventService:
             ):
                 return [], "Location not found"
 
+        # Same XC-1 shape as location_id above: a client-supplied template_id
+        # must belong to the caller's org before it's stored on every
+        # occurrence. (EventCreate, the plain single-event schema, has no
+        # template_id field at all, so only this recurring path can set it.)
+        if event_data.get("template_id"):
+            if not await self.get_template(event_data["template_id"], organization_id):
+                return [], "Template not found"
+
         # Generate occurrence dates
         occurrences = self._generate_recurrence_dates(
             start_datetime=event_data["start_datetime"],

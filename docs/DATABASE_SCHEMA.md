@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**256 tables · 4372 columns · 827 foreign keys**
+**256 tables · 4373 columns · 827 foreign keys**
 
 ---
 
@@ -567,7 +567,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`standing_shift_claims`](#standing_shift_claims) | `StandingShiftClaim` | 14 | A member's recurring claim on a shift — "every Tuesday night". |
 | [`training_approvals`](#training_approvals) | `TrainingApproval` | 15 | Training Approval model |
 | [`training_categories`](#training_categories) | `TrainingCategory` | 14 | Training Category model |
-| [`training_courses`](#training_courses) | `TrainingCourse` | 19 | Training Course model |
+| [`training_courses`](#training_courses) | `TrainingCourse` | 20 | Training Course model |
 | [`training_effectiveness_evaluations`](#training_effectiveness_evaluations) | `TrainingEffectivenessEvaluation` | 20 | Training Effectiveness Evaluation model |
 | [`training_module_configs`](#training_module_configs) | `TrainingModuleConfig` | 45 | Training Module Configuration model |
 | [`training_programs`](#training_programs) | `TrainingProgram` | 23 | Training Program model |
@@ -8345,6 +8345,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `credit_hours` | FLOAT | yes |  |  |  |
 | `prerequisites` | JSON | yes |  |  |  |
 | `expiration_months` | INTEGER | yes |  |  |  |
+| `grants_qualification` | VARCHAR(50) | yes | IDX |  |  |
 | `instructor` | VARCHAR(255) | yes |  |  |  |
 | `max_participants` | INTEGER | yes |  |  |  |
 | `materials_required` | JSON | yes |  |  |  |
@@ -8359,6 +8360,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 - `idx_course_org_code` (`organization_id`, `code`)
 - `ix_training_courses_active` (`active`)
+- `ix_training_courses_grants_qualification` (`grants_qualification`)
 
 ### `training_effectiveness_evaluations`
 

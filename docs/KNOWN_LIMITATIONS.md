@@ -2111,6 +2111,91 @@ already records this pairing as deliberately unadjudicated, for the same
 reason. (Security review EC-14 residual,
 `docs/security-review/EC-14-equipment-check-shifts.md`.)
 
+## Outbound Integration Requests — The DNS-Rebinding TOCTOU Is Narrowed, Not Closed (2026-08-26)
+
+`assert_outbound_url_safe()` (`app/utils/url_validator.py`) re-resolves an
+org-configured integration URL's hostname via `socket.getaddrinfo()`
+immediately before an outbound request, to catch a hostname that was
+repointed at an internal address since it was saved. **Seven** call sites
+share the gap, across three distinct transports:
+
+- **Five** go through the shared `create_integration_client()` (plain
+  `httpx.AsyncClient`) and share one remediation:
+  `integration_services/{teams,webhook,slack,discord,calcom}_service.py`.
+- **`audit_ship_service.py`** constructs its own `httpx.AsyncClient`
+  directly rather than going through `create_integration_client` — a
+  `create_integration_client` fix alone would not reach it; it needs either
+  migrating onto the shared client or its own equivalent fix.
+- **`push_service.py`** doesn't use `httpx` at all — `_send_one` dispatches
+  through `pywebpush.webpush()`, a synchronous library with its own
+  connection handling. Pinning a resolved address here needs a
+  transport-specific approach, not the httpx-level fix the other six share;
+  it would remain vulnerable if a fix were scoped only to
+  `create_integration_client`.
+
+In every one of the seven, the actual request performs its **own**
+independent DNS resolution when it connects, separate from the
+`assert_outbound_url_safe` check. A hostname that resolves to a public IP
+for the check and an internal one moments later (classic DNS rebinding)
+passes the check and still reaches the internal address. The function's own
+docstring says it "shrink[s] the rebinding window... versus
+save-time-to-send" — narrows, not closes — which is accurate; a security
+review draft that read this as "closed," and then first wrote it up as six
+files sharing one fix, was corrected twice (SCH-10, then a Codex review of
+that correction itself).
+
+Not fixed: closing it means pinning the address `assert_outbound_url_safe`
+resolved for the actual connection (while preserving the original Host
+header / SNI), separately for each of the three transports above — not one
+shared-infrastructure change, and not a fix scoped to any single file. Needs
+a dedicated cross-cutting pass (the shape SEC-00 exists for) that accounts
+for all three transports, not a unilateral fix inside a feature-scoped
+review. (Security review SCH-10, `docs/security-review/SCH-15-scheduling.md`.)
+
+## Training — Bulk/Historical-Import Enum Fields Have No Request-Level Validators (2026-08-26)
+
+`BulkTrainingRecordEntry.training_type`/`.status`,
+`HistoricalImportConfirmRequest.default_status`/`.default_training_type`,
+and `CourseMappingEntry.new_training_type` have no `@field_validator`,
+unlike the single-record `TrainingRecordCreate`/`TrainingRecordUpdate`
+schemas, which do. All three are DB-level `Enum` columns on
+`TrainingRecord`, so a bad value still reaches the database layer instead
+of 422ing at the Pydantic boundary.
+
+Not currently a crash risk: both bulk paths wrap each row's insert in its
+own error boundary (`create_records_bulk` flushes per row inside a
+try/except; `confirm_historical_import` runs each row in its own
+`db.begin_nested()`), so an invalid enum value fails only that one row with
+a sanitized message — the rest of the batch still imports.
+
+Not fixed: adding a `@field_validator` to a `List[...]`-carried field
+changes the failure mode from per-row partial success to whole-request
+rejection, since Pydantic validates the full payload before the endpoint
+runs at all. Whether that's the right trade-off for a bulk-import UX (fail
+the whole file on one bad row vs. import what's valid and report the rest)
+is a product decision, not a drive-by fix. (Security review TR-17 residual,
+`docs/security-review/TR-17-training-core.md`.)
+
+## Training — `enroll_member`'s Duplicate-Active-Enrollment Guard Is a Race (2026-08-26)
+
+`TrainingProgramService.enroll_member` checks for an existing ACTIVE
+enrollment (SELECT), then inserts a new `ProgramEnrollment` row — with no
+unique constraint or row lock backing the check. Two concurrent enroll
+calls for the same (user, program) pair can both pass the SELECT before
+either commits, producing two ACTIVE enrollment rows for the same member on
+the same program.
+
+Data-integrity, not a tenant-isolation or capacity-abuse issue — no
+cross-org effect, and the practical impact is a duplicate enrollment record
+rather than anything security-relevant.
+
+Not fixed: closing it needs a schema change (a partial unique index on
+`(user_id, program_id)` where `status = 'active'`, or an equivalent
+row-locking guard matching CLAUDE.md Pitfall #27's shape), which this
+rotation's process reserves for a flagged item rather than a drive-by
+fix inside an unrelated finding. (Security review TR-17 residual,
+`docs/security-review/TR-17-training-core.md`.)
+
 ## Process
 
 The review loop (see [review-log.md](./review-log.md)) advances through one area
