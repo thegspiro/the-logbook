@@ -96,3 +96,34 @@ def test_baseline_excludes_the_reporting_and_audit_grants():
             f"{permission} aggregates across members and must not be seeded "
             "to the whole department"
         )
+
+
+def test_storefront_browsing_is_a_baseline_grant():
+    """Every member can reach the department store.
+
+    The store is a member-facing amenity, not an officer tool: the whole point
+    is that the rank and file order their own job shirts instead of a
+    quartermaster collecting sizes on paper. ``storefront.view`` gates the
+    ``/store`` route and ``storefront.order`` the submit, so a baseline that
+    omits either leaves the navigation showing a store that bounces the member
+    who taps it.
+
+    The gap this guards is not the registry — it is the *stored* copy. Rank
+    defaults resolve at runtime, so every member carrying an operational rank
+    holds these regardless; the members who lost the store are the ones with
+    no rank at all (administrative, social and support members), who hold only
+    the ``member`` position as onboarding wrote it. Migration
+    ``a4f8c1b92d17`` backfills the rows written before these grants existed.
+    """
+    baseline = _baseline_permissions()
+    assert "storefront.view" in baseline
+    assert "storefront.order" in baseline
+
+
+def test_storefront_manage_is_not_a_baseline_grant():
+    """Running the store is the quartermaster's, not everybody's.
+
+    ``storefront.manage`` is the whole admin console — catalog pricing and
+    cost, order windows, every member's orders, and payment reconciliation.
+    """
+    assert "storefront.manage" not in _baseline_permissions()
