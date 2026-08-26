@@ -7795,7 +7795,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
 | `shift_id` | VARCHAR(36) | no | FK, IDX |  | → `shifts.id` ON DELETE CASCADE |
 | `user_id` | VARCHAR(36) | no | FK, IDX |  | → `users.id` ON DELETE CASCADE |
-| `position` | ENUM(`officer`, `driver`, `firefighter`, `ems`, `captain`, `lieutenant`, `probationary`, `volunteer`, `other`) | no |  | `firefighter` |  |
+| `position` | ENUM(`officer`, `driver`, `firefighter`, `ems`, `paramedic`, `captain`, `lieutenant`, `probationary`, `volunteer`, `other`) | no |  | `firefighter` |  |
 | `assignment_status` | ENUM(`assigned`, `confirmed`, `declined`, `pending`, `cancelled`, `no_show`) | no |  | `assigned` |  |
 | `outreach_role` | VARCHAR(100) | yes |  |  |  |
 | `is_training` | BOOL | no |  | `0` |  |
@@ -8249,7 +8249,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `pattern` | ENUM(`weekly`, `biweekly`, `monthly`) | no |  | `weekly` |  |
 | `weekday` | INTEGER | no |  |  |  |
 | `period` | ENUM(`day`, `night`) | no |  | `day` |  |
-| `position` | ENUM(`officer`, `driver`, `firefighter`, `ems`, `captain`, `lieutenant`, `probationary`, `volunteer`, `other`) | no |  | `firefighter` |  |
+| `position` | ENUM(`officer`, `driver`, `firefighter`, `ems`, `paramedic`, `captain`, `lieutenant`, `probationary`, `volunteer`, `other`) | no |  | `firefighter` |  |
 | `apparatus_id` | VARCHAR(36) | yes |  |  |  |
 | `start_date` | DATE | no |  |  |  |
 | `end_date` | DATE | no |  |  |  |

@@ -31,7 +31,6 @@ import type {
   EquipmentRequestItem,
   ReturnRequestItem,
   RequestTypeLiteral,
-  RequestPriorityLiteral,
 } from '../types';
 import { getConditionColor, REQUEST_STATUS_BADGES } from '../types';
 import { useAuthStore } from '../../../stores/authStore';
@@ -126,7 +125,6 @@ const MyEquipmentPage: React.FC = () => {
   const [reqResults, setReqResults] = useState<InventoryItem[]>([]);
   const [reqSelected, setReqSelected] = useState<InventoryItem | null>(null);
   const [reqType, setReqType] = useState<RequestTypeLiteral>('checkout');
-  const [reqPriority, setReqPriority] = useState<RequestPriorityLiteral>('normal');
   const [reqQty, setReqQty] = useState(1);
   const [reqReason, setReqReason] = useState('');
   const [reqSearching, setReqSearching] = useState(false);
@@ -227,7 +225,6 @@ const MyEquipmentPage: React.FC = () => {
         category_id: reqSelected.category_id || undefined,
         quantity: reqSelected.tracking_type === 'pool' ? reqQty : 1,
         request_type: reqType,
-        priority: reqPriority,
         reason: reqReason.trim() || undefined,
       });
       toast.success('Equipment request submitted');
@@ -246,7 +243,6 @@ const MyEquipmentPage: React.FC = () => {
     setReqResults([]);
     setReqSelected(null);
     setReqType('checkout');
-    setReqPriority('normal');
     setReqQty(1);
     setReqReason('');
   };
@@ -687,7 +683,7 @@ const MyEquipmentPage: React.FC = () => {
               )}
             </div>
 
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div>
               <div>
                 <label className={labelClass}>Request Type</label>
                 <select
@@ -698,18 +694,6 @@ const MyEquipmentPage: React.FC = () => {
                   <option value="checkout">Checkout</option>
                   <option value="issuance">Issuance</option>
                   <option value="purchase">Purchase</option>
-                </select>
-              </div>
-              <div>
-                <label className={labelClass}>Priority</label>
-                <select
-                  value={reqPriority}
-                  onChange={(e) => setReqPriority(e.target.value as RequestPriorityLiteral)}
-                  className={selectClass}
-                >
-                  <option value="low">Low</option>
-                  <option value="normal">Normal</option>
-                  <option value="high">High</option>
                 </select>
               </div>
             </div>
