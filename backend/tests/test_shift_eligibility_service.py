@@ -980,3 +980,127 @@ class TestAmbulanceEmtSeatIsFillable:
             _user(rank="emt"), "org-1", "s1"
         )
         assert "ems" in eligible
+
+
+def _user_with_status(status, rank="ff", membership_type="active"):
+    return SimpleNamespace(
+        id="u1", rank=rank, membership_type=membership_type, status=status
+    )
+
+
+class TestAccountStatusGate:
+    """``User.status`` and a member's *standing* are two axes that share words.
+
+    Three spellings appear in both — probationary, retired, and (as
+    ``inactive`` against ``honorary``) the non-participating case — and nothing
+    reconciles them. ``POST /member-status/{id}/status`` writes ``status`` and
+    never touches ``membership_type``, so retiring somebody through the members
+    screen leaves them reading as a regular operational member to every rule
+    that consults membership. Self-signup consulted only membership.
+
+    ``get_position_roster`` already filtered ``User.is_active``, which made the
+    roster *stricter* than the endpoint it exists to mirror: a department could
+    see a member absent from the roster and still watch them take a seat.
+    """
+
+    @staticmethod
+    def _ambulance_shift():
+        return SimpleNamespace(
+            id="s1",
+            positions=["driver", "ems"],
+            open_to_all_members=False,
+            date=date(2026, 9, 1),
+            start_time=None,
+        )
+
+    @pytest.mark.parametrize(
+        "status",
+        [
+            "retired",
+            "suspended",
+            "dropped_voluntary",
+            "dropped_involuntary",
+            "archived",
+            "inactive",
+            "leave",
+        ],
+    )
+    async def test_an_inactive_account_is_eligible_for_nothing(self, status):
+        db = _db([_one(_org()), _one(self._ambulance_shift())])
+        eligible = await ShiftEligibilityService(db).get_eligible_positions(
+            _user_with_status(status, rank="emt"), "org-1", "s1"
+        )
+        assert eligible == []
+
+    async def test_an_active_account_is_unaffected(self):
+        db = _db(
+            [
+                _one(_org()),
+                _one(self._ambulance_shift()),
+                _rank_rows([("emt", ["ems"])]),
+                _held_rows([]),
+                _qual_rows(),
+                _rows([]),
+            ]
+        )
+        eligible = await ShiftEligibilityService(db).get_eligible_positions(
+            _user_with_status("active", rank="emt"), "org-1", "s1"
+        )
+        assert eligible == ["ems"]
+
+    async def test_an_enum_status_is_read_the_same_as_a_string(self):
+        """The column is a ``(str, Enum)``, so both forms turn up in practice.
+
+        A row loaded through the ORM carries the enum member; one built in a
+        test or by a raw query carries the string. Reading only one of the two
+        would make this gate depend on how the user object was obtained.
+        """
+        from app.models.user import UserStatus
+
+        db = _db([_one(_org()), _one(self._ambulance_shift())])
+        eligible = await ShiftEligibilityService(db).get_eligible_positions(
+            _user_with_status(UserStatus.RETIRED, rank="emt"), "org-1", "s1"
+        )
+        assert eligible == []
+
+    async def test_an_absent_status_is_left_alone(self):
+        """No status means "not a real User row", not "inactive".
+
+        Stubs and lighter caller-supplied objects reach this path; failing them
+        closed would deny seats on the strength of a missing attribute rather
+        than a recorded decision.
+        """
+        assert ShiftEligibilityService._account_is_active(SimpleNamespace()) is True
+
+    async def test_open_to_all_does_not_readmit_a_dropped_member(self):
+        """The bypass waives membership type and rank. Not account status.
+
+        "Open to all members" is a statement about which *members* may take the
+        seat. A dropped account is not a member, and an open shift is the one
+        place a department is least likely to notice them on the roster.
+        """
+        shift = SimpleNamespace(
+            id="s1",
+            positions=["driver", "ems"],
+            open_to_all_members=True,
+            date=date(2026, 9, 1),
+            start_time=None,
+        )
+        db = _db([_one(_org()), _one(shift)])
+        eligible = await ShiftEligibilityService(db).get_eligible_positions(
+            _user_with_status("dropped_involuntary", rank=None), "org-1", "s1"
+        )
+        assert eligible == []
+
+    async def test_the_bulk_path_agrees_with_the_single_one(self):
+        """Both answer the same question, so they must answer it the same way.
+
+        The bulk path backs the day and month panels; the single path backs the
+        signup button. A disagreement shows a member a seat the button then
+        refuses — or, worse in this direction, hides one it would have allowed.
+        """
+        db = _db([_one(_org())])
+        answers = await ShiftEligibilityService(db).get_eligible_positions_bulk(
+            _user_with_status("retired", rank="emt"), "org-1", ["s1", "s2"]
+        )
+        assert answers == {"s1": [], "s2": []}

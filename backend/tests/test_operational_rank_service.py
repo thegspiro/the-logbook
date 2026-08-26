@@ -369,3 +369,145 @@ class TestSeedSetFollowsAgencyType:
         for org_type in ("fire_department", "fire_ems_combined", "ems_only"):
             for code, _label, _order, _positions in default_ranks_for(org_type):
                 assert code in known, f"{org_type} seeds unknown rank code {code!r}"
+
+
+class TestIsKnownRank:
+    """The question asked before a rank is stored, not after.
+
+    ``User.rank`` is a plain ``String(100)`` with no foreign key, so any string
+    could be written to it. A mistyped one fails silently in the worst possible
+    way: it matches no configured rank, so it resolves to no eligible seats and
+    no default permissions, and the member simply cannot sign up for anything.
+    Nothing tells them why.
+    """
+
+    async def test_a_stored_row_is_known(self):
+        db = _db([_one(SimpleNamespace(id="r1"))])
+        service = OperationalRankService(db)
+        assert await service.is_known_rank("org-1", "custom_rank") is True
+
+    async def test_an_unstored_unseeded_code_is_not(self):
+        db = _db([_one(None)])
+        service = OperationalRankService(db)
+        assert await service.is_known_rank("org-1", "capitan") is False
+
+    @pytest.mark.parametrize("code", sorted({c for c, _l, _o, _p in DEFAULT_RANKS}))
+    async def test_every_seed_code_is_known_without_a_stored_row(self, code):
+        """The half that matters, and the half that would recreate #1833.
+
+        Seeding only ever fires into an empty table, so a department onboarded
+        before a code joined ``DEFAULT_RANKS`` has no row for it — while
+        ``_get_slug_eligibility_map``'s fallback still honours it. Validating
+        against stored rows alone would refuse a rank the rest of the system
+        treats as perfectly valid, which is the shape of the EMT seat bug: one
+        registry disagreeing with another about what exists.
+        """
+        db = _db([_one(None)])
+        service = OperationalRankService(db)
+        assert await service.is_known_rank("org-1", code) is True
+        db.execute.assert_not_awaited()
+
+    @pytest.mark.parametrize("blank", ["", "   ", None])
+    async def test_a_blank_code_is_not_a_rank(self, blank):
+        # Not an error either: clearing a rank is handled a layer up, where an
+        # empty value means "no rank" rather than "a bad one".
+        db = _db([])
+        service = OperationalRankService(db)
+        assert await service.is_known_rank("org-1", blank) is False
+
+    async def test_surrounding_whitespace_does_not_change_the_answer(self):
+        db = _db([_one(None)])
+        service = OperationalRankService(db)
+        assert await service.is_known_rank("org-1", "  firefighter  ") is True
+
+    async def test_the_lookup_is_scoped_to_the_organization(self):
+        """A rank another department configured is not this one's rank."""
+        db = _db([_one(None)])
+        service = OperationalRankService(db)
+        await service.is_known_rank("org-1", "their_custom_rank")
+        clause = str(db.execute.await_args[0][0])
+        assert "organization_id" in clause
+
+
+class TestResolveRankCodeCanonicalizes:
+    """Validating a normalized value and storing the original is the bug itself.
+
+    Every consumer of ``User.rank`` is an exact dictionary lookup:
+    ``OPERATIONAL_RANKS.get(rank)`` for default permissions, and the slug map
+    keyed by ``rank_code`` for eligible seats. So a rank that differs only by
+    case or surrounding whitespace resolves to no permissions and no seats —
+    the member cannot sign up for anything and nothing says why.
+
+    That is the failure the write-time check exists to prevent, so a check that
+    normalizes for the comparison and then lets the caller's spelling be stored
+    waves it straight through. ``resolve_rank_code`` returns the spelling to
+    store for exactly this reason.
+    """
+
+    async def test_surrounding_whitespace_is_stripped_from_what_is_stored(self):
+        db = _db([])
+        service = OperationalRankService(db)
+        assert await service.resolve_rank_code("org-1", "  firefighter  ") == (
+            "firefighter"
+        )
+
+    @pytest.mark.parametrize("spelling", ["Firefighter", "FIREFIGHTER", "FireFighter"])
+    async def test_display_casing_resolves_to_the_canonical_code(self, spelling):
+        # The prospect conversion UI suggests display-cased values, and MySQL's
+        # default collation would have matched a stored row that way anyway.
+        # Accepting them is fine; storing them verbatim is not.
+        db = _db([])
+        service = OperationalRankService(db)
+        assert await service.resolve_rank_code("org-1", spelling) == "firefighter"
+
+    async def test_a_stored_row_returns_its_own_spelling(self):
+        db = _db([_one("station_captain")])
+        service = OperationalRankService(db)
+        assert (
+            await service.resolve_rank_code("org-1", "STATION_CAPTAIN")
+            == "station_captain"
+        )
+
+    async def test_an_unknown_code_resolves_to_none(self):
+        db = _db([_one(None)])
+        service = OperationalRankService(db)
+        assert await service.resolve_rank_code("org-1", "fire_cheif") is None
+
+    @pytest.mark.parametrize("blank", ["", "   ", None])
+    async def test_a_blank_code_resolves_to_none_without_a_query(self, blank):
+        db = _db([])
+        service = OperationalRankService(db)
+        assert await service.resolve_rank_code("org-1", blank) is None
+        db.execute.assert_not_awaited()
+
+    async def test_the_sql_folds_case_rather_than_trusting_the_collation(self):
+        """MySQL's default collation is case-insensitive; not every backend is.
+
+        Relying on it would make the answer depend on database configuration,
+        which is the kind of invisible dependency that only shows up as a
+        member who cannot sign up for anything.
+        """
+        db = _db([_one(None)])
+        service = OperationalRankService(db)
+        await service.resolve_rank_code("org-1", "Custom_Rank")
+        clause = str(db.execute.await_args[0][0]).lower()
+        assert "lower(" in clause
+
+    @pytest.mark.parametrize(
+        "spelling", ["firefighter", " firefighter ", "Firefighter", "FIREFIGHTER"]
+    )
+    async def test_what_is_stored_actually_grants_the_ranks_permissions(self, spelling):
+        """The assertion that would have caught this: end at the grant, not the check.
+
+        A test that only asserts "the value was accepted" passes just as
+        happily on a stored `" firefighter "` that grants nothing.
+        """
+        from app.core.permissions import get_rank_default_permissions
+
+        db = _db([])
+        service = OperationalRankService(db)
+        stored = await service.resolve_rank_code("org-1", spelling)
+        assert get_rank_default_permissions(stored), (
+            f"a member stored with rank {stored!r} holds no rank permissions, "
+            "which is the silent disqualification this check exists to prevent"
+        )

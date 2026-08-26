@@ -47,7 +47,7 @@ export const getFinanceRoutes = () => {
       <Route
         path="/finance"
         element={
-          <ProtectedRoute requiredPermission="finance.view">
+          <ProtectedRoute requiredPermission="finance.view" requiredModule="finance" moduleLabel="Finance">
             <FinanceDashboardPage />
           </ProtectedRoute>
         }
@@ -57,7 +57,7 @@ export const getFinanceRoutes = () => {
       <Route
         path="/finance/budgets"
         element={
-          <ProtectedRoute requiredPermission="finance.view">
+          <ProtectedRoute requiredPermission="finance.view" requiredModule="finance" moduleLabel="Finance">
             <BudgetsPage />
           </ProtectedRoute>
         }
@@ -65,7 +65,7 @@ export const getFinanceRoutes = () => {
       <Route
         path="/finance/budgets/:id"
         element={
-          <ProtectedRoute requiredPermission="finance.view">
+          <ProtectedRoute requiredPermission="finance.view" requiredModule="finance" moduleLabel="Finance">
             <BudgetDetailPage />
           </ProtectedRoute>
         }
@@ -75,7 +75,7 @@ export const getFinanceRoutes = () => {
       <Route
         path="/finance/settings"
         element={
-          <ProtectedRoute requiredPermission="finance.manage">
+          <ProtectedRoute requiredPermission="finance.manage" requiredModule="finance" moduleLabel="Finance">
             <FiscalYearSettingsPage />
           </ProtectedRoute>
         }
@@ -83,7 +83,11 @@ export const getFinanceRoutes = () => {
       <Route
         path="/finance/settings/approval-chains"
         element={
-          <ProtectedRoute requiredPermission="finance.configure_approvals">
+          <ProtectedRoute
+            requiredPermission="finance.configure_approvals"
+            requiredModule="finance"
+            moduleLabel="Finance"
+          >
             <ApprovalChainsSettingsPage />
           </ProtectedRoute>
         }
@@ -93,7 +97,7 @@ export const getFinanceRoutes = () => {
       <Route
         path="/finance/purchase-requests"
         element={
-          <ProtectedRoute requiredPermission="finance.view">
+          <ProtectedRoute requiredPermission="finance.view" requiredModule="finance" moduleLabel="Finance">
             <PurchaseRequestsPage />
           </ProtectedRoute>
         }
@@ -101,7 +105,7 @@ export const getFinanceRoutes = () => {
       <Route
         path="/finance/purchase-requests/new"
         element={
-          <ProtectedRoute requiredPermission="finance.view">
+          <ProtectedRoute requiredPermission="finance.view" requiredModule="finance" moduleLabel="Finance">
             <PurchaseRequestFormPage />
           </ProtectedRoute>
         }
@@ -109,7 +113,7 @@ export const getFinanceRoutes = () => {
       <Route
         path="/finance/purchase-requests/:id"
         element={
-          <ProtectedRoute requiredPermission="finance.view">
+          <ProtectedRoute requiredPermission="finance.view" requiredModule="finance" moduleLabel="Finance">
             <PurchaseRequestDetailPage />
           </ProtectedRoute>
         }
@@ -117,7 +121,7 @@ export const getFinanceRoutes = () => {
       <Route
         path="/finance/purchase-requests/:id/edit"
         element={
-          <ProtectedRoute requiredPermission="finance.view">
+          <ProtectedRoute requiredPermission="finance.view" requiredModule="finance" moduleLabel="Finance">
             <PurchaseRequestFormPage />
           </ProtectedRoute>
         }
@@ -127,7 +131,7 @@ export const getFinanceRoutes = () => {
       <Route
         path="/finance/expenses"
         element={
-          <ProtectedRoute requiredPermission="finance.view">
+          <ProtectedRoute requiredPermission="finance.view" requiredModule="finance" moduleLabel="Finance">
             <ExpenseReportsPage />
           </ProtectedRoute>
         }
@@ -135,7 +139,7 @@ export const getFinanceRoutes = () => {
       <Route
         path="/finance/expenses/new"
         element={
-          <ProtectedRoute requiredPermission="finance.view">
+          <ProtectedRoute requiredPermission="finance.view" requiredModule="finance" moduleLabel="Finance">
             <ExpenseReportFormPage />
           </ProtectedRoute>
         }
@@ -143,7 +147,7 @@ export const getFinanceRoutes = () => {
       <Route
         path="/finance/expenses/:id"
         element={
-          <ProtectedRoute requiredPermission="finance.view">
+          <ProtectedRoute requiredPermission="finance.view" requiredModule="finance" moduleLabel="Finance">
             <ExpenseReportDetailPage />
           </ProtectedRoute>
         }
@@ -153,7 +157,7 @@ export const getFinanceRoutes = () => {
       <Route
         path="/finance/check-requests"
         element={
-          <ProtectedRoute requiredPermission="finance.view">
+          <ProtectedRoute requiredPermission="finance.view" requiredModule="finance" moduleLabel="Finance">
             <CheckRequestsPage />
           </ProtectedRoute>
         }
@@ -161,7 +165,7 @@ export const getFinanceRoutes = () => {
       <Route
         path="/finance/check-requests/new"
         element={
-          <ProtectedRoute requiredPermission="finance.view">
+          <ProtectedRoute requiredPermission="finance.view" requiredModule="finance" moduleLabel="Finance">
             <CheckRequestFormPage />
           </ProtectedRoute>
         }
@@ -169,7 +173,7 @@ export const getFinanceRoutes = () => {
       <Route
         path="/finance/check-requests/:id"
         element={
-          <ProtectedRoute requiredPermission="finance.view">
+          <ProtectedRoute requiredPermission="finance.view" requiredModule="finance" moduleLabel="Finance">
             <CheckRequestDetailPage />
           </ProtectedRoute>
         }
@@ -179,7 +183,7 @@ export const getFinanceRoutes = () => {
       <Route
         path="/finance/dues"
         element={
-          <ProtectedRoute requiredPermission="finance.view">
+          <ProtectedRoute requiredPermission="finance.view" requiredModule="finance" moduleLabel="Finance">
             <DuesManagementPage />
           </ProtectedRoute>
         }

@@ -134,6 +134,25 @@ const generateRolePermissions = (
  * Build position templates dynamically using the module registry.
  * This ensures new modules are included in position permissions automatically.
  */
+/**
+ * Positions the members category used to offer, which are really a member's
+ * class and status rather than a job they hold. They are set on the member
+ * record now, and migration c3d4e5f6a7b8 recovers the standing of anyone who
+ * already holds one.
+ *
+ * Kept as a named list because an in-flight onboarding session persists its
+ * position picks to localStorage: without this, resuming a session started
+ * before the change re-creates exactly what the migration just retired.
+ */
+const RETIRED_STANDING_SLUGS = new Set([
+  'probationary_member',
+  'junior_member',
+  'life_member',
+  'administrative_member',
+  'social_member',
+  'exempt_member',
+]);
+
 const buildPositionTemplates = (modules: ModuleDefinition[]) => ({
   system: {
     name: 'System / Special',
@@ -402,9 +421,21 @@ const buildPositionTemplates = (modules: ModuleDefinition[]) => ({
       },
     ],
   },
+  // One entry, deliberately. This category used to offer Probationary,
+  // Junior, Life, Administrative, Social and Exempt "positions" too — but
+  // those are a member's *class* and *status*, not a job they hold, and
+  // creating them here wrote a permission-bearing position for each. That
+  // contradicted the taxonomy the User model documents ("membership types
+  // carry no permissions") and left a member's standing recorded in two
+  // unconnected places: `member_class`/`member_status` on the member, and a
+  // held position nothing on the backend reads.
+  //
+  // Standing is set on the member record now. "Regular Member" stays, because
+  // it is the genuine baseline position every member holds — it is in the
+  // backend's DEFAULT_POSITIONS and carries the day-one grant set.
   members: {
     name: 'Member Positions',
-    description: 'Standard and special member access levels',
+    description: 'The baseline access every member holds',
     positions: [
       {
         id: 'member',
@@ -413,54 +444,6 @@ const buildPositionTemplates = (modules: ModuleDefinition[]) => ({
         icon: Users,
         priority: 10,
         permissions: generateRolePermissions(modules, 'member'),
-      },
-      {
-        id: 'probationary_member',
-        name: 'Probationary Member',
-        description: 'New members with limited access during their trial period',
-        icon: UserPlus,
-        priority: 5,
-        permissions: generateRolePermissions(modules, 'probationary'),
-      },
-      {
-        id: 'junior_member',
-        name: 'Junior Member',
-        description: 'Youth or junior participants with restricted access',
-        icon: Users,
-        priority: 5,
-        permissions: generateRolePermissions(modules, 'probationary'),
-      },
-      {
-        id: 'life_member',
-        name: 'Life Member',
-        description: 'Long-serving members with honorary status',
-        icon: BadgeCheck,
-        priority: 10,
-        permissions: generateRolePermissions(modules, 'member'),
-      },
-      {
-        id: 'administrative_member',
-        name: 'Administrative Member',
-        description: 'Members focused on administrative and support duties',
-        icon: Briefcase,
-        priority: 8,
-        permissions: generateRolePermissions(modules, 'member'),
-      },
-      {
-        id: 'social_member',
-        name: 'Social / Associate Member',
-        description: 'Non-operational members involved socially',
-        icon: Users,
-        priority: 5,
-        permissions: generateRolePermissions(modules, 'probationary'),
-      },
-      {
-        id: 'exempt_member',
-        name: 'Exempt / Retired Member',
-        description: 'Former active members with limited access',
-        icon: BadgeCheck,
-        priority: 5,
-        permissions: generateRolePermissions(modules, 'probationary'),
       },
     ],
   },
@@ -523,6 +506,14 @@ const PositionSetup: React.FC = () => {
     if (savedPositionsConfig) {
       const restored: Record<string, RoleConfig> = {};
       for (const [posId, saved] of Object.entries(savedPositionsConfig)) {
+        // A session started before these stopped being offered still has them
+        // in localStorage, and this restore is what would put them back:
+        // handleContinue submits whatever is here, recreating the
+        // permission-bearing positions *after* the recovery migration has
+        // already reclassified those members. Dropped by slug rather than by
+        // "not in the current templates", which would also discard the custom
+        // positions a department built in this very session.
+        if (RETIRED_STANDING_SLUGS.has(posId)) continue;
         restored[posId] = {
           ...saved,
           icon: ICON_MAP[saved.icon || 'UserCog'] || UserCog,

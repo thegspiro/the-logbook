@@ -81,6 +81,90 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   sees the medic whose card runs out in three weeks rather than discovering
   it when the roster silently shortens.
 
+### Membership standing stops being a "position", and three silent refusals get a reason (2026-08-26)
+
+**Changed**
+
+- **Onboarding no longer offers membership standing as a position.** The role
+  setup screen listed Probationary, Junior, Life, Administrative, Social and
+  Exempt beside Regular Member, and creating one wrote a permission-bearing
+  `positions` row. Those are a member's _class_ and _status_ — what kind of
+  member they are and where they sit on the ladder — not a job they hold, and
+  the User model's own taxonomy has always said so.
+
+  The cost was not cosmetic. A department that used them recorded standing in
+  two unconnected places: `member_class` / `member_status` on the member, which
+  every backend gate reads, and a held position that none of them do. Changing
+  one left the other stale, with nothing to reconcile them. And because the
+  position carried real grants, "reclassify this member" and "change what they
+  can see" were one action with no indication they were.
+
+  Regular Member stays — it is the genuine baseline position, it is in the
+  backend's `DEFAULT_POSITIONS`, and it carries the day-one grant set.
+
+  A migration recovers the standing from the installs that already have these
+  positions, taking the most specific one where a member holds several. It
+  **does not delete the positions**: each carries the `member` or
+  `probationary` grant template, and a member whose only position was
+  `life_member` would lose everything it gave them. Reclassifying somebody is
+  not a reason to cut their access, so the rows stay and a department can
+  retire them from the position editor once it is satisfied the standing is
+  right. Only members reading as plainly `operational` / `regular` are
+  touched, so anything more specific already on the member wins, and members
+  left deliberately unclassified by the previous migration (a custom
+  membership tier id) stay that way.
+
+**Fixed**
+
+- **A mistyped rank is refused at the write instead of failing three screens
+  later.** `User.rank` is a plain `String(100)` with no foreign key, so any
+  string at all could be stored — and `fire_cheif` does not fail loudly. It
+  matches no configured rank, so it resolves to no eligible seats and no
+  default permissions, and the member simply cannot sign up for anything. What
+  they see is "you are not qualified for this position", which reads as the
+  application being broken.
+
+  The codebase already knew about this class of problem:
+  `OperationalRankService.validate_ranks` exists to _report_ members whose
+  stored rank matches nothing. The same question is now asked one step earlier,
+  where it can still be answered by refusing the write with a message naming
+  the value and where to add it. Clearing a rank stays allowed — an empty value
+  is "no rank", not a bad one.
+
+  All three write paths refuse it in the same words — creating a member,
+  updating a profile, and transferring a prospect to full membership. The third
+  is the one that matters most: nobody watches a brand-new record fail to
+  appear on a shift roster, and the department has no reason to suspect the
+  rank field.
+
+  A rank counts as configured if the organization has a stored row for it **or**
+  it is one of the built-in seed codes. The second half is load-bearing:
+  seeding only ever fires into an empty table, so a department onboarded before
+  a code joined `DEFAULT_RANKS` has no row for it while shift eligibility still
+  honours it. Validating against stored rows alone would refuse a rank the rest
+  of the system treats as valid — which is the shape of the EMT seat bug fixed
+  earlier today.
+
+- **A retired, suspended or dropped member could still take a shift seat.**
+  `User.status` (the account and roster lifecycle) and `membership_type` (the
+  membership ladder) are separate axes that share three spellings, and nothing
+  reconciles them — correctly, since a probationary member has an active
+  account and a member on leave is still a regular member. But retiring
+  somebody through the members screen writes `status` and never touches
+  `membership_type`, so every rule that consulted only membership saw them as a
+  regular operational member.
+
+  Self-signup was one of those rules. `get_position_roster` already filtered on
+  the account being active, which made the roster _stricter_ than the endpoint
+  it exists to mirror: a department could see a member absent from the roster
+  and still watch them take a seat. Logging in was blocked either way, but a
+  session opened before the status change outlives it.
+
+  Account status is now checked ahead of everything else, including the
+  open-to-all bypass. "Open to all members" waives the membership-type and rank
+  checks; it does not make a dropped account a member again — and an open shift
+  is where a department is least likely to notice one on the roster.
+
 ### Member class, member status, and qualifications become separate facts (2026-08-26)
 
 **Added**

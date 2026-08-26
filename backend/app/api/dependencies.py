@@ -379,3 +379,91 @@ def require_secretary():
         "settings.manage_contact_visibility",
         "organization.update_settings",
     )
+
+
+async def get_request_enabled_modules(
+    request: Request,
+    current_user: User | None = Depends(get_optional_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> frozenset[str] | None:
+    """The caller's organization's enabled modules, resolved once per request.
+
+    ``None`` when the request carries no session. That is not the same as "no
+    modules": module enablement is a property of an organization, and an
+    anonymous caller has not named one, so there is nothing to compare against
+    and :func:`require_module` stands aside.
+
+    Memoized on ``request.state`` because a single request can ask more than
+    once — a router-level ``require_module`` plus an endpoint that consults the
+    set itself, for instance — and each resolution is a database read.
+    """
+    if current_user is None:
+        return None
+
+    cached = getattr(request.state, "enabled_modules", None)
+    if cached is not None:
+        return cached
+
+    from app.services.organization_service import OrganizationService
+
+    modules = frozenset(
+        (
+            await OrganizationService(db).get_enabled_modules(
+                current_user.organization_id
+            )
+        ).enabled_modules
+    )
+    request.state.enabled_modules = modules
+    return modules
+
+
+def require_module(module: str, label: str | None = None):
+    """Require that *module* is switched on for the caller's organization.
+
+    Module enablement and permissions answer different questions and neither
+    substitutes for the other. A permission asks whether this member may see
+    this data; the module flag asks whether the department runs this part of
+    the app at all. A treasurer holds ``finance.manage`` whether or not the
+    department keeps its books here, so the permission alone cannot decide.
+
+    Mounted at ``include_router`` rather than per-endpoint, so a route added
+    to an already-gated module inherits the gate instead of relying on
+    whoever adds it to remember.
+
+    **A request with no session passes through.** Several gated routers carry
+    token-authenticated public routes — the ballot a member votes from an
+    emailed link, the Salesforce OAuth callback — and those callers have no
+    organization for this to be a question about; the token, not a session,
+    is what authorizes them. Depending on the *mandatory* current-user
+    dependency here would have quietly turned those into 401s, which is why
+    this takes the optional one. Every authenticated caller is still gated,
+    and that is the surface the module switch is about.
+
+    403 rather than 404: hiding the module's existence buys nothing (the
+    settings screen lists every module to any admin) and would turn a
+    configuration choice into a debugging exercise. The dedicated error code
+    is what lets the client tell "your department switched this off" apart
+    from "you lack the permission", which are opposite problems with opposite
+    fixes.
+    """
+
+    async def check_module_enabled(
+        enabled: frozenset[str] | None = Depends(get_request_enabled_modules),
+    ) -> None:
+        if enabled is None or module in enabled:
+            return
+        name = label or module.replace("_", " ").title()
+        raise CodedHTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=(
+                f"The {name} module is not enabled for this organization. "
+                "An administrator can turn it on under Settings > Modules."
+            ),
+            error_code=ErrorCode.ORG_MODULE_DISABLED,
+        )
+
+    # Named on the function rather than left in a closure cell, so tooling can
+    # read the map off a built app. Mirrors ``required_permissions`` on the
+    # permission checkers; cell ordering is not part of the language contract.
+    check_module_enabled.required_module = module
+    return check_module_enabled

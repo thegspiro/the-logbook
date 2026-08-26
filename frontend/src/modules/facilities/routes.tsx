@@ -37,7 +37,11 @@ export const getFacilitiesRoutes = () => (
       path="/facilities/print-labels"
       element={
         <Suspense fallback={null}>
-          <ProtectedRoute requiredAnyPermission={['facilities.view', 'facilities.manage']}>
+          <ProtectedRoute
+            requiredModule="facilities"
+            moduleLabel="Facilities"
+            requiredAnyPermission={['facilities.view', 'facilities.manage']}
+          >
             <FacilityLabelPrintPage />
           </ProtectedRoute>
         </Suspense>
@@ -48,7 +52,11 @@ export const getFacilitiesRoutes = () => (
       path="/facilities/maintenance"
       element={
         <Suspense fallback={null}>
-          <ProtectedRoute requiredAnyPermission={['facilities.view', 'facilities.manage']}>
+          <ProtectedRoute
+            requiredModule="facilities"
+            moduleLabel="Facilities"
+            requiredAnyPermission={['facilities.view', 'facilities.manage']}
+          >
             <MaintenanceListPage />
           </ProtectedRoute>
         </Suspense>
@@ -58,7 +66,11 @@ export const getFacilitiesRoutes = () => (
       path="/facilities/inspections"
       element={
         <Suspense fallback={null}>
-          <ProtectedRoute requiredAnyPermission={['facilities.view', 'facilities.manage']}>
+          <ProtectedRoute
+            requiredModule="facilities"
+            moduleLabel="Facilities"
+            requiredAnyPermission={['facilities.view', 'facilities.manage']}
+          >
             <InspectionsListPage />
           </ProtectedRoute>
         </Suspense>
@@ -69,7 +81,11 @@ export const getFacilitiesRoutes = () => (
       path="/facilities/:id"
       element={
         <Suspense fallback={null}>
-          <ProtectedRoute requiredAnyPermission={['facilities.view', 'facilities.manage']}>
+          <ProtectedRoute
+            requiredModule="facilities"
+            moduleLabel="Facilities"
+            requiredAnyPermission={['facilities.view', 'facilities.manage']}
+          >
             <FacilityDetailPage />
           </ProtectedRoute>
         </Suspense>
@@ -80,7 +96,11 @@ export const getFacilitiesRoutes = () => (
       path="/facilities"
       element={
         <Suspense fallback={null}>
-          <ProtectedRoute requiredAnyPermission={['facilities.view', 'facilities.manage']}>
+          <ProtectedRoute
+            requiredModule="facilities"
+            moduleLabel="Facilities"
+            requiredAnyPermission={['facilities.view', 'facilities.manage']}
+          >
             <FacilitiesDashboard />
           </ProtectedRoute>
         </Suspense>
@@ -102,7 +122,11 @@ export const getFacilitiesRoutes = () => (
               (permanent id-based URLs, no secret). Room kiosk codes are bearer
               credentials the backend redacts for non-managers, so those cards
               simply don't render for apparatus-only viewers. */}
-          <ProtectedRoute requiredAnyPermission={['locations.manage', 'facilities.manage', 'apparatus.view']}>
+          <ProtectedRoute
+            requiredModule="facilities"
+            moduleLabel="Facilities"
+            requiredAnyPermission={['locations.manage', 'facilities.manage', 'apparatus.view']}
+          >
             <RoomQRCodesPage />
           </ProtectedRoute>
         </Suspense>

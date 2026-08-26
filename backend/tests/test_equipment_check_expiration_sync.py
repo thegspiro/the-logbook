@@ -782,6 +782,67 @@ class TestUpdateDeployedLot:
 
         assert result is None
 
+    async def test_submitter_cannot_inflate_a_deployed_lots_quantity(
+        self, service, mock_db
+    ):
+        """swap_item_lot trusts this figure as the submitter's replacement
+        cap, so a submit-only caller raising it here would let them set
+        their own cap."""
+        item = _template_item(expected_quantity=4)
+        lot = _deployed("dl-1", 2, TOMORROW)
+        item.deployed_lots = [lot]
+        self._wire(mock_db, item)
+
+        with pytest.raises(PermissionError):
+            await service.update_deployed_lot(
+                "ti-1",
+                "dl-1",
+                "org-1",
+                MagicMock(id="u-1", first_name="A", last_name="B"),
+                {"quantity": 3},
+                allow_metadata_change=False,
+            )
+
+        assert lot.quantity == 2
+
+    async def test_submitter_can_still_decrease_a_deployed_lots_quantity(
+        self, service, mock_db
+    ):
+        item = _template_item(expected_quantity=4)
+        lot = _deployed("dl-1", 2, TOMORROW)
+        item.deployed_lots = [lot]
+        self._wire(mock_db, item)
+
+        await service.update_deployed_lot(
+            "ti-1",
+            "dl-1",
+            "org-1",
+            MagicMock(id="u-1", first_name="A", last_name="B"),
+            {"quantity": 1},
+            allow_metadata_change=False,
+        )
+
+        assert lot.quantity == 1
+
+    async def test_manager_can_still_increase_a_deployed_lots_quantity(
+        self, service, mock_db
+    ):
+        item = _template_item(expected_quantity=4)
+        lot = _deployed("dl-1", 2, TOMORROW)
+        item.deployed_lots = [lot]
+        self._wire(mock_db, item)
+
+        await service.update_deployed_lot(
+            "ti-1",
+            "dl-1",
+            "org-1",
+            MagicMock(id="u-1", first_name="A", last_name="B"),
+            {"quantity": 3},
+            allow_metadata_change=True,
+        )
+
+        assert lot.quantity == 3
+
 
 class TestUpdateDeployedLotAuthorization:
     """Counts are crew corrections; compliance metadata is privileged.

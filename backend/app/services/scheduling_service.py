@@ -1180,6 +1180,27 @@ class SchedulingService:
         )
         return result.scalar_one_or_none() is not None
 
+    async def _all_users_in_org(
+        self, user_ids: List[Any], organization_id: UUID
+    ) -> bool:
+        """Batched form of ``_user_in_org`` for a list of ids.
+
+        One ``IN`` query rather than one per id — a caller-supplied list can
+        run to 100 entries (e.g. ``ShiftCall.responding_members``), and a
+        per-id loop would cost up to 100 serial round trips on one request.
+        """
+        ids = {str(uid) for uid in user_ids if uid}
+        if not ids:
+            return True
+        result = await self.db.execute(
+            select(User.id).where(
+                User.id.in_(ids),
+                User.organization_id == str(organization_id),
+            )
+        )
+        found = {row for row in result.scalars().all()}
+        return ids <= found
+
     async def _program_in_org(self, program_id: str, organization_id: UUID) -> bool:
         """Return True if training_program_id belongs to the given org."""
         if not program_id:
@@ -2049,6 +2070,22 @@ class SchedulingService:
             if tracking.get("mode") != CallTrackingMode.DETAILED:
                 return None, "Detailed call records are disabled for this organization"
 
+            # responding_members is a client-supplied list of user ids stored
+            # straight into JSON — validate in-org before persisting, same
+            # discipline as manual_hours/attendance user ids elsewhere in this
+            # file. This is a within-org referential-integrity check, not a
+            # cross-tenant one: every reader of this column (compute_member_
+            # call_counts, ShiftCompletionService's trainee lookup) is scoped
+            # to one already-org-validated shift/trainee first, so a foreign
+            # id here can never attribute a count to another org's member. It
+            # would otherwise let this org's own data reference a nonexistent
+            # or foreign id for no reason. One batched query rather than one
+            # per id — up to 100 entries per payload.
+            if not await self._all_users_in_org(
+                call_data.get("responding_members") or [], organization_id
+            ):
+                return None, "One or more members are not in your organization"
+
             call = ShiftCall(
                 shift_id=shift_id, organization_id=organization_id, **call_data
             )
@@ -2096,6 +2133,12 @@ class SchedulingService:
             call = await self.get_shift_call_by_id(call_id, organization_id)
             if not call:
                 return None, "Shift call not found"
+
+            if "responding_members" in update_data:
+                if not await self._all_users_in_org(
+                    update_data["responding_members"] or [], organization_id
+                ):
+                    return None, "One or more members are not in your organization"
 
             for key, value in update_data.items():
                 if key not in self.PROTECTED_FIELDS:

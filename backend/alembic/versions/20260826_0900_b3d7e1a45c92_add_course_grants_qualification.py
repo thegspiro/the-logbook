@@ -18,7 +18,7 @@ qualifications nobody awarded. Until a training officer sets it, completing a
 course grants nothing and eligibility behaves exactly as it does today.
 
 Revision ID: b3d7e1a45c92
-Revises: a7b8c9d0e1f2
+Revises: c3d4e5f6a7b8
 Create Date: 2026-08-26 09:00:00.000000
 """
 
@@ -26,7 +26,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision = "b3d7e1a45c92"
-down_revision = "a7b8c9d0e1f2"
+down_revision = "c3d4e5f6a7b8"
 branch_labels = None
 depends_on = None
 
