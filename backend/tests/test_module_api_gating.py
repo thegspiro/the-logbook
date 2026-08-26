@@ -17,7 +17,7 @@ would only surface as "the ballot link is broken", so it is pinned here.
 """
 
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi import Depends, FastAPI
@@ -405,6 +405,58 @@ def test_module_routes_are_flat():
     )
 
 
+# frontend/src/modules/<directory> -> the module key that directory is the
+# home of. Every route under a home directory belongs to that module, so the
+# completeness check below applies to all of them.
+#
+# A directory absent from this map is not a gated module's home. It may still
+# carry a module gate on an individual route — /members/:userId/training is
+# Training's data hosted on a Membership route — and that route is gated on
+# its own merits without making every sibling route in Membership answerable
+# to Training.
+MODULE_HOME_DIRECTORIES = {
+    "apparatus": "apparatus",
+    "elections": "elections",
+    "facilities": "facilities",
+    "finance": "finance",
+    "grants-fundraising": "grants",
+    "integrations": "integrations",
+    "inventory": "inventory",
+    "medical-screening": "medical_screening",
+    "medical-supplies": "medical_supplies",
+    "minutes": "minutes",
+    "notifications": "notifications",
+    "prospective-members": "prospective_members",
+    "public-portal": "public_info",
+    "reports": "reports",
+    "scheduling": "scheduling",
+    "storefront": "storefront",
+    "training": "training",
+}
+
+
+def test_every_api_gated_module_has_a_home_directory():
+    """The map above has to cover the gated set, or the check below skips one.
+
+    A module whose home directory is missing here is silently exempt from the
+    completeness check — which is the failure mode this whole test exists to
+    close, one level up.
+    """
+    missing = set(EXPECTED_GATES.values()) - set(MODULE_HOME_DIRECTORIES.values())
+    assert not missing, (
+        "these modules are gated in the API but have no frontend home "
+        f"directory recorded, so their routes are not checked: {sorted(missing)}"
+    )
+
+
+def test_a_home_directory_names_a_module_that_exists():
+    """A typo'd entry would exempt the directory it was meant to cover."""
+    from app.schemas.organization import ModuleSettings
+
+    unknown = set(MODULE_HOME_DIRECTORIES.values()) - set(ModuleSettings.model_fields)
+    assert not unknown, f"home directories naming no module field: {sorted(unknown)}"
+
+
 def test_a_gated_frontend_module_gates_every_one_of_its_routes():
     """A half-gated module is worse than an ungated one.
 
@@ -423,9 +475,8 @@ def test_a_gated_frontend_module_gates_every_one_of_its_routes():
     at, which carries one.
     """
     partial = {}
-    for module, routes in _module_routes().items():
-        source_has_gate = any("requiredModule=" in seg for _, seg in routes)
-        if not source_has_gate:
+    for directory, routes in _module_routes().items():
+        if directory not in MODULE_HOME_DIRECTORIES:
             continue
         ungated = [
             path
@@ -435,7 +486,7 @@ def test_a_gated_frontend_module_gates_every_one_of_its_routes():
             and path not in ROUTES_OPEN_BY_DESIGN
         ]
         if ungated:
-            partial[module] = ungated
+            partial[directory] = ungated
     assert not partial, (
         "routes inside a gated module with no module gate of their own. Add "
         "the gate, or record the route in ROUTES_OPEN_BY_DESIGN with the "
@@ -496,3 +547,66 @@ def test_a_ui_only_gate_is_still_gated_somewhere_in_the_ui():
         "these modules are exempt from the API gate because the UI gates them, "
         f"and the UI no longer does: {sorted(orphaned)}"
     )
+
+
+# ── The public portal, which the session-based gate cannot reach ────────────
+
+
+async def test_the_public_portal_refuses_when_public_info_is_off():
+    """``/api/public/v1`` is a second mount with API-key callers.
+
+    ``require_module`` resolves the organization from the caller's session,
+    and this router's callers are external websites holding an API key. So
+    gating ``/api/v1/public-portal`` left this one serving organization
+    details, events and member statistics from a module the department had
+    retired — the exact "the API kept answering" defect, on the surface that
+    publishes to the open internet.
+    """
+    from types import SimpleNamespace as NS
+
+    from fastapi import HTTPException
+
+    from app.api.public.portal import check_portal_enabled
+
+    config = NS(enabled=True, organization_id="org-a")
+    with patch(
+        "app.services.organization_service.OrganizationService.get_enabled_modules",
+        new=AsyncMock(return_value=NS(enabled_modules=["members", "events"])),
+    ):
+        with pytest.raises(HTTPException) as raised:
+            await check_portal_enabled(config, MagicMock())
+
+    assert raised.value.status_code == 503
+
+
+async def test_the_public_portal_serves_when_the_module_is_on():
+    """Both switches have to hold, so the enabled case must still pass."""
+    from types import SimpleNamespace as NS
+
+    from app.api.public.portal import check_portal_enabled
+
+    config = NS(enabled=True, organization_id="org-a")
+    with patch(
+        "app.services.organization_service.OrganizationService.get_enabled_modules",
+        new=AsyncMock(return_value=NS(enabled_modules=["members", "public_info"])),
+    ):
+        await check_portal_enabled(config, MagicMock())
+
+
+async def test_the_portals_own_switch_still_refuses_independently():
+    """The module being on does not override the portal's own off switch."""
+    from types import SimpleNamespace as NS
+
+    from fastapi import HTTPException
+
+    from app.api.public.portal import check_portal_enabled
+
+    config = NS(enabled=False, organization_id="org-a")
+    with patch(
+        "app.services.organization_service.OrganizationService.get_enabled_modules",
+        new=AsyncMock(return_value=NS(enabled_modules=["public_info"])),
+    ):
+        with pytest.raises(HTTPException) as raised:
+            await check_portal_enabled(config, MagicMock())
+
+    assert raised.value.status_code == 503

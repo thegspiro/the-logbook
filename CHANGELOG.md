@@ -7,6 +7,108 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Deleting a grant opportunity could silently wipe out every application ever linked to it (2026-08-27)
+
+**Fixed**
+
+- Deleting a grant opportunity that still had applications attached either
+  crashed or, worse, silently deleted every one of those applications —
+  including their budget items, expenditures, compliance tasks, and notes.
+  An application is supposed to survive its opportunity being removed (it
+  may have started as a manual entry); it now does, with its opportunity
+  link simply cleared.
+- Moving a grant application from Awarded back to Active and then back to
+  Awarded duplicated the whole set of auto-generated compliance tasks
+  (progress reports, closeout report, equipment inventory) a second time.
+  Re-awarding a grant no longer regenerates tasks that already exist.
+- Two donations to the same campaign, or two expenditures against the same
+  budget line, recorded or edited at nearly the same moment, could each
+  read a stale running total and one could silently overwrite the other's
+  contribution. Both totals now serialize correctly under concurrent
+  writes.
+- A handful of grant/fundraising update actions (editing an opportunity,
+  application, budget item, expenditure, compliance task, campaign, donor,
+  donation, pledge, or fundraising event) could turn an attempt to clear an
+  optional field into an unhandled server error instead of a clean
+  validation message.
+- A couple of internal lookups (resolving a note's author name, and the
+  budget-item total recompute) were missing the department filter every
+  other query in this module already carries — closed for consistency,
+  though neither was reachable from outside the department in practice.
+
+### An officer with compliance access could look up any member's admin-hours progress, in any department (2026-08-27)
+
+**Fixed**
+
+- `GET /admin-hours/compliance/{user_id}` restricted ordinary members to
+  their own id, but an officer holding compliance access could pass any
+  member's id — including one from a different department on the same
+  server — and get back that member's role/position data used to pick a
+  compliance profile. Now scoped to the officer's own department.
+- Two admin-hours entries clocked in at the same moment (a double-tap, or
+  two open tabs) could both succeed, leaving a member with two simultaneous
+  active sessions and no clean way to clock out of either. Clock-in now
+  serializes per member so only one can win.
+- An officer editing a still-pending admin-hours entry could set times that
+  span more than 24 hours, land in the future, or overlap another entry for
+  the same member — all guards the original entry already enforced, just
+  not re-checked on edit.
+- Two officers creating or updating event-to-admin-hours mappings for the
+  same event type at the same time could push the combined percentage over
+  100%, double-crediting part of an event's duration.
+- A malformed date on four admin-hours report/export endpoints crashed with
+  a server error instead of a clean "invalid date" message.
+- A few remaining internal admin-hours queries added since the last review
+  were missing the department filter every other query in the module
+  already carries — closed for consistency, though none were reachable
+  from outside the department in practice.
+
+### A compliance officer's "what's missing" report silently stopped at the newest 500 records (2026-08-26)
+
+**Fixed**
+
+- `GET /incomplete-records` fetched only the 500 most-recently-completed
+  training records, then filtered for missing fields in Python and stopped
+  once it found enough. For any department with more than 500 completed
+  records, an incomplete one older than that window was permanently
+  invisible with no signal the scan wasn't complete. The missing-field check
+  now runs in SQL, so the result covers the whole organization.
+- `update_compliance_config` and `update_compliance_profile` discarded an
+  explicit `null` before it ever reached the database, so a profile's
+  threshold override (documented as "null = use org default") could never
+  actually be reset — only overwritten with another number. Both now
+  distinguish an omitted field (leave alone) from an explicit null (clear
+  it), and reject a null against a field that can't be empty with a clean
+  error instead of a database crash.
+- Two concurrent first-time saves of an organization's compliance
+  configuration could crash one of them with a raw database error instead of
+  a clean "already exists" message.
+- A department's total-hours report could silently drop a member's hours if
+  their id were ever loaded as a different data type than usual — hardened
+  to match the fix already in place for the ISO-readiness report.
+
+### A skills-testing officer could void or return their own result, and the attempt cap could race (2026-08-26)
+
+**Fixed**
+
+- `void_test` and `return_test_for_correction` had no separation-of-duties
+  check, unlike their siblings `create_test` and `validate_test`. An
+  officer-candidate could void their own unfavorable official result out of
+  the pass-rate and average-score totals, or repeatedly return their own
+  pending submission for unlimited free redo cycles with no attempt spent.
+  Both now enforce the same `assert_different_person` check as
+  `validate_test`.
+- `assert_attempts_remaining`'s `max_attempts` cap counted validated tests
+  with a plain `SELECT` and no row lock, so two officers validating
+  different pending tests for the same candidate and requirement at the same
+  moment could both read the count as under the cap before either commits.
+  Fixed with a `FOR UPDATE` lock on the candidate's `RequirementProgress`
+  row plus a locking read on the count itself — a lock elsewhere does not
+  refresh an already-open transaction's snapshot.
+- `update_template` applied its payload with a blind `setattr` loop; an
+  explicit `null` against `name`, `sections`, or `score_pass_fail_criteria`
+  (all NOT NULL) raised an unhandled `IntegrityError` instead of a clean 400. Now routes through `apply_updates`.
+
 ### The chief was missing from every notification meant to include them (2026-08-26)
 
 **Fixed**
@@ -664,6 +766,23 @@ count must fall through to no badge rather than warning about every rank.
   file outside the caller's own organization's upload directory; the
   download endpoint now confines every resolved path to that directory.
 - Downloading a document is now recorded in the audit log.
+
+### Admin hours: reading another member's requirement progress returned a 500 (2026-08-25)
+
+**Fixed**
+
+- `GET /admin-hours/compliance/{user_id}` raised for every user except the
+  caller. The service loads the target member to decide which compliance
+  profiles apply to them, then reads `user.positions` — a lazy load, which
+  under asyncio raises `MissingGreenlet` rather than emitting the query. The
+  endpoint's own permission check exists precisely so an officer can read
+  somebody else's progress, and that was the only path that failed.
+
+  SQLAlchemy's identity map is what hid it: asking for your own compliance
+  resolves to the already-loaded `current_user`, whose positions the auth
+  dependency populated, so the endpoint answered correctly for anyone who
+  tried it on themselves. No screen calls it for another member yet, so this
+  is an API fix rather than a visible one.
 
 ### Every member could read every other member's notifications (2026-08-25)
 
