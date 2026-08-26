@@ -694,7 +694,7 @@ async def create_purchase_request(
         raise HTTPException(status_code=500, detail=safe_error_detail(e))
 
 
-async def _with_approval_steps(service, payload, entity_type, entity_id):
+async def _with_approval_steps(service, payload, entity_type, entity_id, org_id):
     """Attach the approval records for a finance document.
 
     `ApprovalStepRecord` is polymorphic — it keys on (entity_type, entity_id)
@@ -704,7 +704,7 @@ async def _with_approval_steps(service, payload, entity_type, entity_id):
     just said "No approval steps configured for this request".
     """
     steps = []
-    for record in await service.get_approval_records(entity_type, entity_id):
+    for record in await service.get_approval_records(entity_type, entity_id, org_id):
         step = ApprovalStepRecordResponse.model_validate(record)
         # `step_name` and `step_order` describe the chain step, not the record,
         # so they have to be copied across from the eager-loaded relationship —
@@ -732,6 +732,7 @@ async def get_purchase_request(
         PurchaseRequestResponse.model_validate(pr),
         ApprovalEntityType.PURCHASE_REQUEST,
         pr.id,
+        str(current_user.organization_id),
     )
 
 
@@ -942,6 +943,7 @@ async def get_expense_report(
         ExpenseReportResponse.model_validate(er),
         ApprovalEntityType.EXPENSE_REPORT,
         er.id,
+        str(current_user.organization_id),
     )
 
 
@@ -1090,6 +1092,7 @@ async def get_check_request(
         CheckRequestResponse.model_validate(cr),
         ApprovalEntityType.CHECK_REQUEST,
         cr.id,
+        str(current_user.organization_id),
     )
 
 
