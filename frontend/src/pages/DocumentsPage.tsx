@@ -29,6 +29,12 @@ import { asArray } from '../utils/asArray';
 
 type ViewMode = 'grid' | 'list';
 
+// Pseudo folder id selecting every document the caller can see, including
+// documents with no folder_id at all (org-level uploads, or the "No folder"
+// choice on the upload form) -- otherwise those documents are uploadable
+// but never visible or reachable anywhere in this page (Codex finding).
+const ALL_DOCUMENTS = '__all__';
+
 const DocumentsPage: React.FC = () => {
   const { checkPermission } = useAuthStore();
   const canManage = checkPermission('documents.manage');
@@ -92,7 +98,7 @@ const DocumentsPage: React.FC = () => {
   const fetchDocuments = useCallback(async (folderId: string) => {
     setDocumentsLoading(true);
     try {
-      const response = await documentsService.getDocuments({ folder_id: folderId });
+      const response = await documentsService.getDocuments(folderId === ALL_DOCUMENTS ? {} : { folder_id: folderId });
       setDocuments(asArray(response.documents));
     } catch {
       setError('Unable to load documents. Please check your connection and try again.');
@@ -162,7 +168,12 @@ const DocumentsPage: React.FC = () => {
       }
       await documentsService.uploadDocument(formData);
       setShowUploadModal(false);
-      setUploadForm({ name: '', description: '', folder: selectedFolder || '', file: null });
+      setUploadForm({
+        name: '',
+        description: '',
+        folder: selectedFolder && selectedFolder !== ALL_DOCUMENTS ? selectedFolder : '',
+        file: null,
+      });
       await fetchFolders();
       await fetchSummary();
       if (selectedFolder) {
@@ -225,10 +236,11 @@ const DocumentsPage: React.FC = () => {
   }, []);
 
   const handleOpenUploadModal = useCallback(() => {
+    const currentFolder = selectedFolder && selectedFolder !== ALL_DOCUMENTS ? selectedFolder : '';
     setUploadForm({
       name: '',
       description: '',
-      folder: selectedFolder || (folders.length > 0 && folders[0] ? folders[0].id : ''),
+      folder: currentFolder || (folders.length > 0 && folders[0] ? folders[0].id : ''),
       file: null,
     });
     setShowUploadModal(true);
@@ -364,7 +376,11 @@ const DocumentsPage: React.FC = () => {
                 id="doc-search"
                 type="text"
                 placeholder={
-                  selectedFolder ? 'Search documents in this folder...' : 'Select a folder to browse documents...'
+                  selectedFolder === ALL_DOCUMENTS
+                    ? 'Search all documents...'
+                    : selectedFolder
+                      ? 'Search documents in this folder...'
+                      : 'Select a folder to browse documents...'
                 }
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
@@ -407,6 +423,22 @@ const DocumentsPage: React.FC = () => {
         {!selectedFolder && (
           <div className="mb-8">
             <h2 className="text-theme-text-primary mb-4 text-lg font-semibold">Folders</h2>
+            <div className="mb-4">
+              <button
+                onClick={() => handleFolderSelect(ALL_DOCUMENTS)}
+                className="stat-card group hover:bg-theme-surface-hover w-full text-left transition-all hover:border-amber-500/30 md:max-w-xs"
+              >
+                <div className="flex items-start space-x-3">
+                  <FileText className="h-8 w-8 text-amber-700 transition-transform group-hover:scale-110 dark:text-amber-400" />
+                  <div className="min-w-0 flex-1">
+                    <h3 className="text-theme-text-primary truncate font-semibold">All Documents</h3>
+                    <p className="text-theme-text-muted mt-1 text-sm">
+                      Every document you can see, including ones with no folder
+                    </p>
+                  </div>
+                </div>
+              </button>
+            </div>
             {folders.length > 0 ? (
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
                 {folders.map((folder) => (
@@ -471,16 +503,18 @@ const DocumentsPage: React.FC = () => {
                           </p>
                         </div>
                         <div className="flex shrink-0 items-start space-x-1">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              void handleDownloadDocument(doc);
-                            }}
-                            className="text-theme-text-muted p-1 transition-all hover:text-amber-700 sm:opacity-0 sm:group-hover:opacity-100 dark:hover:text-amber-400"
-                            title="Download document"
-                          >
-                            <Download className="h-4 w-4" />
-                          </button>
+                          {doc.has_file && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                void handleDownloadDocument(doc);
+                              }}
+                              className="text-theme-text-muted p-1 transition-all hover:text-amber-700 sm:opacity-0 sm:group-hover:opacity-100 dark:hover:text-amber-400"
+                              title="Download document"
+                            >
+                              <Download className="h-4 w-4" />
+                            </button>
+                          )}
                           {canManage && (
                             <button
                               onClick={(e) => {
@@ -568,13 +602,15 @@ const DocumentsPage: React.FC = () => {
                           <td className="text-theme-text-muted px-4 py-3 text-sm">{formatDate(doc.created_at, tz)}</td>
                           <td className="px-4 py-3 text-right">
                             <div className="flex items-center justify-end space-x-1">
-                              <button
-                                onClick={() => void handleDownloadDocument(doc)}
-                                className="text-theme-text-muted p-1 transition-colors hover:text-amber-700 dark:hover:text-amber-400"
-                                title="Download document"
-                              >
-                                <Download className="h-4 w-4" />
-                              </button>
+                              {doc.has_file && (
+                                <button
+                                  onClick={() => void handleDownloadDocument(doc)}
+                                  className="text-theme-text-muted p-1 transition-colors hover:text-amber-700 dark:hover:text-amber-400"
+                                  title="Download document"
+                                >
+                                  <Download className="h-4 w-4" />
+                                </button>
+                              )}
                               {canManage && (
                                 <button
                                   onClick={() => setDeleteConfirm(doc.id)}

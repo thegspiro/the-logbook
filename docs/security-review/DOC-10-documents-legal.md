@@ -23,6 +23,17 @@ rotation's established flag-not-fix pattern (FIN-9/ELEC-12/USR-5/MP-10/MS-6);
 one is a real, larger gap flagged for an owner decision rather than
 implemented here. See Findings below for per-item disposition.
 
+**Revision note (second round):** the larger flagged gap (DOC-18, no
+download endpoint) was reconsidered and implemented rather than left
+flagged — an established precedent for the exact shape already existed in
+this codebase. Codex then reviewed _that_ implementation and found six more
+issues: one in the new endpoint's own path-containment scope, one a
+reachability regression the DOC-11 fix introduced on the frontend, one a
+guaranteed-failure UI gap for generated documents, one a 500 that DOC-12's
+own fix exposed on a pre-existing endpoint, and two narrower
+correctness/compatibility points on the DOC-10 date fix and the public API
+shape. All six fixed — DOC-19 through DOC-24, below.
+
 ## Scope
 
 The rotation's feature 10 row lists three files
@@ -554,6 +565,104 @@ a missing on-disk file, and a tampered out-of-`UPLOAD_DIR` path all rejected.
 Mirrored out of `docs/KNOWN_LIMITATIONS.md` now that it's fixed rather than
 flagged.
 
+**Revision note (2026-08-25, second round):** Codex reviewed the DOC-18
+implementation itself (commit `89d87e77`) and found six further issues —
+one in the download endpoint's own containment check, one a regression the
+fix introduced in the frontend (folderless documents reachable to upload but
+not to view), one against a pre-existing endpoint the fix's own `apply_updates`
+switch exposed, and three narrower correctness/compatibility points. All six
+fixed below.
+
+### DOC-19 — MED — Download's containment check was scoped to the shared root, not the caller's org — ✅ FIXED
+
+`download_document`'s realpath containment check compared the resolved
+`file_path` against `UPLOAD_DIR` — the root every organization's files live
+under (`UPLOAD_DIR/<organization_id>/...`) — rather than the caller's own
+org subdirectory. A document row whose `file_path` was corrupted or
+tampered to point at a _different_ org's subdirectory would still pass:
+it's beneath `UPLOAD_DIR`, just not beneath the org that's supposed to own
+it. The row lookup and folder ACL only validate the caller's own row, so
+nothing else would have caught this before `FileResponse` served the other
+org's bytes. Fixed: containment is now checked against
+`UPLOAD_DIR/<current_user.organization_id>`, matching exactly the directory
+`upload_document` itself writes into. Covered by
+`test_documents_access.py::TestDownloadDocument
+::test_path_inside_another_orgs_upload_directory_is_rejected`.
+
+### DOC-20 — HIGH — Folderless documents were uploadable but permanently unreachable — ✅ FIXED
+
+DOC-18's own fix for the frontend's `folder: 'general'` sentinel (defaulting
+to `''`/"No folder" instead) made a genuinely folderless upload possible for
+the first time — but `DocumentsPage.tsx` only ever fetches and renders
+documents while `selectedFolder` is truthy, and the upload response itself
+was discarded. The upload succeeds, counts toward the summary, and then has
+no view, download, move, or delete path anywhere in the UI — a regression
+introduced by the fix meant to make that same upload path stop erroring.
+Fixed: added an "All Documents" view (`ALL_DOCUMENTS` pseudo-selection in
+`DocumentsPage.tsx`) that fetches with no `folder_id` filter — which
+`get_documents` already treats as "every document the caller can see,"
+folderless ones included — reachable as a tile alongside the real folders.
+
+### DOC-21 — MED — Download shown, and guaranteed to fail, for generated documents — ✅ FIXED
+
+The Download action added for DOC-18 rendered for every listed document,
+including generated records (published meeting minutes, property returns)
+that carry `content_html` and no `file_path` at all. `download_document`
+correctly 404s those — there is nothing on disk to serve — but the button
+gave no indication in advance, so a real, existing, supported document type
+deterministically failed the one action just added for it. Fixed: `Document`
+gained a `has_file` property (`bool(self.file_path)`), exposed on
+`DocumentResponse`; the frontend now renders the Download action only when
+`doc.has_file` is true.
+
+### DOC-22 — HIGH — `DocumentFolderUpdate` accepted an explicit null for non-nullable-in-practice fields — ✅ FIXED
+
+DOC-12's fix (switching `update_folder`'s payload dump from
+`exclude_none=True` to `exclude_unset=True` + `apply_updates`) correctly
+made explicit nulls reach the service — for fields where that's the right
+behavior. `color`/`icon` are DB-nullable (no `nullable=False` on either
+column, so `apply_updates`'s NOT-NULL guard never fires) but
+`DocumentFolderResponse` declares both as **required** strings. An explicit
+`{"color": null}` therefore now commits successfully and then fails Pydantic
+response validation on the very next read of that row — a 500 on a
+technically-valid PATCH, self-inflicted by fixing DOC-12, and one that keeps
+recurring on every subsequent listing that includes the corrupted row.
+Neither field has a legitimate reason to be cleared: `DocumentFolderCreate`
+always supplies both a real default. Fixed: `DocumentFolderUpdate` gained a
+`model_validator(mode="after")` rejecting an explicit null for either field
+at the request boundary (422, not a later 500). Covered by
+`test_documents_access.py::TestDocumentFolderUpdateSchema`.
+
+### DOC-23 — LOW — Republishing a legal document without a date could resurrect an old, disambiguated legacy date — ✅ FIXED
+
+`effective_date_for`'s legacy-key fallback (`legal["last_updated"]`) exists
+to bridge an upgraded install's first read before anyone republishes under
+the new per-type keys — but it applied unconditionally whenever the
+per-type key was absent, which is also the normal state right after a
+_dateless_ republish (`_write_settings` pops the per-type key when no
+`effective_date` is given). On an install that still carried the legacy
+key, publishing new text with no date would read back the legacy value —
+misdating the new text with an old, disambiguated date, the exact failure
+DOC-10 was written to prevent. Fixed: `_write_settings` now pops the legacy
+key on every genuine publish (`body is not None`), for either document
+type — the first publish under the fixed code is exactly the point at
+which the ambiguous bridge is no longer needed for anything. Covered by
+`test_legal_documents.py::TestWriteSettings
+::test_publishing_retires_the_legacy_shared_key`.
+
+### DOC-24 — LOW — Removing `lastUpdated` from the public endpoint could break an external v1 client — ✅ FIXED
+
+DOC-10's fix replaced the public, versioned, unauthenticated endpoint's
+`lastUpdated` field with the two new per-document fields, but
+`wiki/API-Reference.md` still documented the old shape — an external
+integration reading or strictly decoding that field would silently lose the
+date or fail decoding, even though the bundled frontend moved on. Fixed:
+`lastUpdated` is kept in the response (resolving to whichever per-document
+date is set, preferring the privacy policy's — the same ambiguity the
+original shared key always had, not a new one) rather than removed outright,
+and `wiki/API-Reference.md` is updated to document all three fields and the
+deprecation. Covered by `test_public_legal.py`'s `lastUpdated` assertions.
+
 ## Schema & migration notes
 
 `20260820_0135_06adc68a8b84_add_legal_document_revisions.py` reviewed in
@@ -600,25 +709,41 @@ This pass added or extended:
   (`lastUpdated` → `privacyPolicyLastUpdated`/`termsOfServiceLastUpdated`)
   had changed the public endpoint's response shape without updating this
   file's assertions, so 5 of its tests were failing against the pushed code.
+  Extended with 2 new cases for DOC-24's `lastUpdated` back-compat field.
+- `tests/test_documents_access.py::TestDownloadDocument
+::test_path_inside_another_orgs_upload_directory_is_rejected` — new case
+  for DOC-19; the existing 4 cases in this class were also updated to write
+  their fixture files under `UPLOAD_DIR/<org_id>`, matching the narrowed
+  containment scope (they previously wrote straight into `UPLOAD_DIR`,
+  which the org-scoped check would now correctly reject).
+- `tests/test_documents_access.py::TestDocumentFolderUpdateSchema` — new
+  class, 4 cases, for DOC-22.
+- `tests/test_legal_documents.py::TestWriteSettings
+::test_publishing_retires_the_legacy_shared_key` — new case for DOC-23.
+- DOC-20 (folderless documents unreachable) and DOC-21 (Download shown for
+  generated documents) are frontend-only fixes to `DocumentsPage.tsx`; no
+  test harness exists for this page yet, so these are covered by
+  `npx tsc --noEmit` + `npx eslint` only, not by a behavioral test. Noted
+  here rather than silently claimed as tested.
 
 Existing coverage otherwise still pins every invariant checked above:
 `tests/test_documents_access.py`, `tests/test_legal_documents.py`,
 `tests/test_print_documents.py`, `tests/test_public_legal.py`,
-`tests/test_changelog_fixes.py` — 167 backend tests total across this
+`tests/test_changelog_fixes.py` — 174 backend tests total across this
 feature's surface, all passing.
 
 ## Completion gate
 
-| Check                                                                                                                                                        | Result                                                                                                              |
-| ------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------- |
-| `flake8`                                                                                                                                                     | pass (`app/`, `tests/`, `alembic/`)                                                                                 |
-| `black --check`                                                                                                                                              | pass                                                                                                                |
-| `isort --check-only`                                                                                                                                         | pass                                                                                                                |
-| `python3 scripts/validate_migrations.py --strict`                                                                                                            | pass (357 migrations, single head)                                                                                  |
-| `pytest tests/test_documents_access.py tests/test_legal_documents.py tests/test_print_documents.py tests/test_public_legal.py tests/test_changelog_fixes.py` | 167 passed                                                                                                          |
-| `npx tsc --noEmit` (frontend)                                                                                                                                | pass                                                                                                                |
-| `npx eslint .` (frontend, changed files only)                                                                                                                | pass — `DocumentsPage.tsx`, `documentsService.ts`, `LegalPage.tsx`, `LegalPage.test.tsx`, `LegalPage.a11y.test.tsx` |
-| `npx vitest run` (changed frontend test files)                                                                                                               | 12 passed                                                                                                           |
+| Check                                                                                                                                                        | Result                                                                                                                                  |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `flake8`                                                                                                                                                     | pass (`app/`, `tests/`, `alembic/`)                                                                                                     |
+| `black --check`                                                                                                                                              | pass                                                                                                                                    |
+| `isort --check-only`                                                                                                                                         | pass                                                                                                                                    |
+| `python3 scripts/validate_migrations.py --strict`                                                                                                            | pass (358 migrations, single head) — no new migration (`has_file` is a Python property, not a column)                                   |
+| `pytest tests/test_documents_access.py tests/test_legal_documents.py tests/test_print_documents.py tests/test_public_legal.py tests/test_changelog_fixes.py` | 174 passed                                                                                                                              |
+| `npx tsc --noEmit` (frontend)                                                                                                                                | pass                                                                                                                                    |
+| `npx eslint .` (frontend, changed files only)                                                                                                                | pass — `DocumentsPage.tsx`, `documentsService.ts`, `formsServices.ts`, `LegalPage.tsx`, `LegalPage.test.tsx`, `LegalPage.a11y.test.tsx` |
+| `npx vitest run` (changed frontend test files)                                                                                                               | 12 passed                                                                                                                               |
 
 ## Next
 

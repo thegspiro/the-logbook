@@ -1421,15 +1421,23 @@ Unauthenticated, rate-limited (30/min per IP). Backs the public `/privacy` and
 `/terms` pages.
 
 ```
-GET    /api/public/v1/legal    # { organizationName, privacyPolicy, termsOfService, lastUpdated }
+GET    /api/public/v1/legal    # { organizationName, privacyPolicy, termsOfService,
+                                #   privacyPolicyLastUpdated, termsOfServiceLastUpdated,
+                                #   lastUpdated }
 ```
 
 Returns the single organization's configured text
-(`settings.legal.privacy_policy` / `legal.terms_of_service`, with an optional
-`legal.last_updated` revision date shown above custom text); `null` values mean
-the frontend renders its built-in defaults, which carry their own date. On a
-multi-organization install all fields are `null` — with no org context, no
-tenant's text is served.
+(`settings.legal.privacy_policy` / `legal.terms_of_service`), each with its own
+revision date (`legal.privacy_policy_effective_date` /
+`legal.terms_of_service_effective_date`) shown above custom text; `null` values
+mean the frontend renders its built-in defaults, which carry their own date. On
+a multi-organization install all fields are `null` — with no org context, no
+tenant's text is served. `lastUpdated` is deprecated — kept only for backward
+compatibility with clients that read the original single shared date — and
+resolves to whichever of the two per-document dates is set, preferring the
+privacy policy's; new integrations should read the per-document fields
+instead, since a department can (and often does) revise the two documents on
+different schedules.
 
 `settings["legal"]` is unvalidated JSON, so values are read defensively: a
 non-string value, a non-dict `legal` key, or blank/whitespace text all return

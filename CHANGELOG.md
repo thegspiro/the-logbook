@@ -44,8 +44,17 @@ check the consent itself.
 
 - There was no way to retrieve the bytes of an uploaded document at all —
   members could upload and delete a file but never open or download it. A
-  Download action is now available wherever a document is listed, subject to
-  the same folder access rules as viewing it.
+  Download action is now available wherever a document is listed (except on
+  generated documents like published meeting minutes, which have no
+  separate file to download), subject to the same folder access rules as
+  viewing it.
+- A document uploaded with no folder had no way to be seen, downloaded, or
+  managed afterward — the upload itself succeeded, but nothing in the app
+  showed it again. An "All Documents" view now lists every document,
+  including ones with no folder.
+- Editing a folder's color or icon to blank could corrupt the folder well
+  enough to break every later attempt to view it. Both fields are required
+  now, matching how every folder already has one.
 - Uploading a document with the Document Name field left blank (advertised
   in the UI as optional, defaulting to the file name) returned an error
   instead of actually defaulting to the file name.

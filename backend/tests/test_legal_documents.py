@@ -99,6 +99,33 @@ class TestWriteSettings:
         )
         assert "privacy_policy_effective_date" not in org.settings["legal"]
 
+    def test_publishing_retires_the_legacy_shared_key(self):
+        # Codex finding on PR #1827: effective_date_for() falls back to the
+        # legacy shared "last_updated" key whenever the per-type key is
+        # absent -- which is the normal state right after a dateless
+        # republish (the branch above). Left in place, that fallback would
+        # resurrect an old, disambiguated date on the *next* dateless
+        # republish of either document. The legacy key only exists to bridge
+        # an upgraded install's first read before anyone republishes; the
+        # first genuine publish under the per-type scheme is exactly the
+        # point at which that bridge is no longer needed.
+        org = Organization(name="Falls Church VFD", slug="fcvfd")
+        org.settings = {
+            "legal": {
+                "privacy_policy": "Old notice.",
+                "last_updated": "Jan 1, 2020",
+            }
+        }
+        self._service()._write_settings(
+            org,
+            LegalDocumentType.PRIVACY_POLICY,
+            body="New notice.",
+            effective_date=None,
+        )
+        legal = org.settings["legal"]
+        assert "last_updated" not in legal
+        assert effective_date_for(legal, LegalDocumentType.PRIVACY_POLICY) is None
+
     def test_preserves_unrelated_settings_keys(self):
         org = Organization(name="Falls Church VFD", slug="fcvfd")
         org.settings = {"enabled_modules": ["events"], "events": {"visible": True}}

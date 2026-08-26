@@ -472,10 +472,16 @@ async def download_document(
     if not document.file_path:
         raise HTTPException(status_code=404, detail="Document file not found on disk")
 
-    # Defence-in-depth: ensure the stored path resolves inside the uploads
-    # directory before serving it, in case the DB value is ever tampered with.
+    # Defence-in-depth: ensure the stored path resolves inside *this org's*
+    # own upload directory before serving it, in case the DB value is ever
+    # tampered with. Scoped to the org subdirectory, not the shared
+    # UPLOAD_DIR root: every org's files live under UPLOAD_DIR, so a
+    # tampered file_path pointing at another org's subdirectory would still
+    # pass a root-level check and leak that org's document (Codex finding).
     resolved_path = os.path.realpath(document.file_path)
-    allowed_base = os.path.realpath(UPLOAD_DIR)
+    allowed_base = os.path.realpath(
+        os.path.join(UPLOAD_DIR, str(current_user.organization_id))
+    )
     if (
         not resolved_path.startswith(allowed_base + os.sep)
         and resolved_path != allowed_base

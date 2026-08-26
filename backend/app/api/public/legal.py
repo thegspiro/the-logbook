@@ -112,4 +112,13 @@ async def get_legal_text(
         "termsOfService": terms_of_service,
         "privacyPolicyLastUpdated": privacy_policy_last_updated,
         "termsOfServiceLastUpdated": terms_of_service_last_updated,
+        # Deprecated, kept for backward compatibility: this versioned,
+        # unauthenticated endpoint's documented shape included a single
+        # shared `lastUpdated`, and an external v1 client reading or
+        # requiring that field should not silently lose it or fail strict
+        # decoding just because the bundled frontend moved to the two
+        # per-document fields above (Codex finding). Picks whichever
+        # document has a date, preferring the privacy policy — the same
+        # ambiguity the original shared key always had, not a new one.
+        "lastUpdated": privacy_policy_last_updated or terms_of_service_last_updated,
     }

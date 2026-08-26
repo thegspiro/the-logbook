@@ -299,5 +299,15 @@ class LegalDocumentService:
                 legal[date_key] = effective_date
             else:
                 legal.pop(date_key, None)
+            # Retire the ambiguous pre-fix shared key the moment either
+            # document type publishes under the per-type scheme: once that
+            # happens, ``effective_date_for``'s legacy fallback would
+            # otherwise resurrect an old, disambiguated date on a *later*
+            # dateless republish of either document (Codex finding). The
+            # fallback exists only to bridge an upgraded install's first
+            # read before anyone has published again — the first genuine
+            # publish is exactly the point at which that bridge is no
+            # longer needed for either document type.
+            legal.pop(LEGACY_SHARED_DATE_KEY, None)
         settings["legal"] = legal
         organization.settings = settings

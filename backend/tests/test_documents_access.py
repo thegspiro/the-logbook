@@ -13,6 +13,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from fastapi import HTTPException
+from pydantic import ValidationError
 
 from app.api.v1.endpoints.documents import (
     _parse_uuid_or_400,
@@ -21,6 +22,7 @@ from app.api.v1.endpoints.documents import (
 )
 from app.models.document import Document, DocumentFolder, FolderVisibility
 from app.models.user import Organization
+from app.schemas.documents import DocumentFolderUpdate
 from app.services.documents_service import (
     DocumentsService,
     _get_user_permissions,
@@ -289,6 +291,37 @@ class TestCreatesCycle:
         assert await svc._creates_cycle("f1", "f2", "org-1") is False
 
 
+class TestDocumentFolderUpdateSchema:
+    """Codex finding on PR #1827: ``color``/``icon`` are DB-nullable, but
+    ``DocumentFolderResponse`` declares both as required strings — a PATCH
+    that clears either would commit successfully and then 500 on every
+    subsequent read of that row (including any listing containing it).
+    Rejected at the request boundary instead, since neither field ever has a
+    legitimate reason to be null: ``DocumentFolderCreate`` always gives both
+    a real default.
+    """
+
+    pytestmark = pytest.mark.unit
+
+    def test_explicit_null_color_is_rejected(self):
+        with pytest.raises(ValidationError, match="color cannot be cleared"):
+            DocumentFolderUpdate(color=None)
+
+    def test_explicit_null_icon_is_rejected(self):
+        with pytest.raises(ValidationError, match="icon cannot be cleared"):
+            DocumentFolderUpdate(icon=None)
+
+    def test_omitting_color_and_icon_is_fine(self):
+        update = DocumentFolderUpdate(name="Renamed")
+        assert "color" not in update.model_fields_set
+        assert "icon" not in update.model_fields_set
+
+    def test_a_real_value_is_accepted(self):
+        update = DocumentFolderUpdate(color="#FF0000", icon="star")
+        assert update.color == "#FF0000"
+        assert update.icon == "star"
+
+
 class TestParseUuidOr400:
     """DOC-10 finding #4: a malformed UUID at the request boundary must be a
     clean 4xx, not an unhandled 500."""
@@ -412,6 +445,12 @@ class TestDownloadDocument:
     document's bytes at all. ``download_document`` must apply the same
     folder ACL ``get_document`` does, and must not serve a document with no
     (or a tampered) file on disk.
+
+    Files are written under ``UPLOAD_DIR/<organization_id>``, matching how
+    ``upload_document`` actually lays them out on disk — the containment
+    check is scoped to that per-org subdirectory, not the shared root, so a
+    fixture that wrote straight into ``tmp_path`` would pass a check that
+    real uploads could never satisfy (Codex finding).
     """
 
     async def _org_and_folder(self, db_session, slug, **folder_kwargs):
@@ -423,13 +462,19 @@ class TestDownloadDocument:
         await db_session.flush()
         return org, folder
 
+    def _stored_file(self, upload_dir, org, name="stored.pdf"):
+        org_dir = upload_dir / str(org.id)
+        org_dir.mkdir(parents=True, exist_ok=True)
+        file_path = org_dir / name
+        file_path.write_bytes(b"%PDF-1.4 test")
+        return file_path
+
     async def test_accessible_document_downloads(
         self, db_session, tmp_path, monkeypatch
     ):
         monkeypatch.setattr("app.api.v1.endpoints.documents.UPLOAD_DIR", str(tmp_path))
         org, folder = await self._org_and_folder(db_session, "fcvfd-dl-1")
-        file_path = tmp_path / "stored.pdf"
-        file_path.write_bytes(b"%PDF-1.4 test")
+        file_path = self._stored_file(tmp_path, org)
         document = Document(
             organization_id=org.id,
             folder_id=folder.id,
@@ -457,8 +502,7 @@ class TestDownloadDocument:
         org, folder = await self._org_and_folder(
             db_session, "fcvfd-dl-2", visibility=FolderVisibility.LEADERSHIP
         )
-        file_path = tmp_path / "stored.pdf"
-        file_path.write_bytes(b"%PDF-1.4 test")
+        file_path = self._stored_file(tmp_path, org)
         document = Document(
             organization_id=org.id,
             folder_id=folder.id,
@@ -481,12 +525,14 @@ class TestDownloadDocument:
     ):
         monkeypatch.setattr("app.api.v1.endpoints.documents.UPLOAD_DIR", str(tmp_path))
         org, folder = await self._org_and_folder(db_session, "fcvfd-dl-3")
+        org_dir = tmp_path / str(org.id)
+        org_dir.mkdir(parents=True, exist_ok=True)
         document = Document(
             organization_id=org.id,
             folder_id=folder.id,
             name="Doc",
             file_name="gone.pdf",
-            file_path=str(tmp_path / "never-written.pdf"),
+            file_path=str(org_dir / "never-written.pdf"),
             file_type="application/pdf",
         )
         db_session.add(document)
@@ -501,8 +547,9 @@ class TestDownloadDocument:
     async def test_path_outside_upload_dir_is_rejected(
         self, db_session, tmp_path, monkeypatch
     ):
-        # Defence-in-depth: a tampered file_path outside UPLOAD_DIR must not
-        # be served even if the row and the file both genuinely exist.
+        # Defence-in-depth: a tampered file_path outside UPLOAD_DIR entirely
+        # must not be served even if the row and the file both genuinely
+        # exist.
         upload_dir = tmp_path / "uploads"
         upload_dir.mkdir()
         monkeypatch.setattr(
@@ -517,6 +564,35 @@ class TestDownloadDocument:
             name="Doc",
             file_name="outside.pdf",
             file_path=str(outside_file),
+            file_type="application/pdf",
+        )
+        db_session.add(document)
+        await db_session.flush()
+
+        user = _user(uid="caller-1", roles=[(["documents.view"], "member")])
+        user.organization_id = org.id
+        with pytest.raises(HTTPException) as exc:
+            await download_document(document.id, db=db_session, current_user=user)
+        assert exc.value.status_code == 403
+
+    async def test_path_inside_another_orgs_upload_directory_is_rejected(
+        self, db_session, tmp_path, monkeypatch
+    ):
+        # Codex finding: every org's files live under the same UPLOAD_DIR
+        # root, so a root-level containment check would accept a tampered
+        # file_path pointing at a *different* org's own subdirectory and
+        # leak that org's document. Containment must be scoped to the
+        # caller's own org subdirectory.
+        monkeypatch.setattr("app.api.v1.endpoints.documents.UPLOAD_DIR", str(tmp_path))
+        org, folder = await self._org_and_folder(db_session, "fcvfd-dl-5")
+        other_org, _ = await self._org_and_folder(db_session, "fcvfd-dl-6")
+        other_orgs_file = self._stored_file(tmp_path, other_org, name="theirs.pdf")
+        document = Document(
+            organization_id=org.id,
+            folder_id=folder.id,
+            name="Doc",
+            file_name="theirs.pdf",
+            file_path=str(other_orgs_file),
             file_type="application/pdf",
         )
         db_session.add(document)

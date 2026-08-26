@@ -8,7 +8,7 @@ from datetime import datetime
 from typing import List, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.models.document import DocumentStatus
 from app.schemas.base import UTCResponseBase
@@ -44,6 +44,22 @@ class DocumentFolderUpdate(BaseModel):
     visibility: Optional[str] = Field(None, pattern="^(organization|leadership|owner)$")
     owner_user_id: Optional[UUID] = None
     allowed_roles: Optional[List[str]] = None
+
+    @model_validator(mode="after")
+    def _color_and_icon_cannot_be_cleared(self) -> "DocumentFolderUpdate":
+        """Reject an explicit null for ``color``/``icon`` at the request boundary.
+
+        Both columns are DB-nullable (no ``nullable=False``), so `apply_updates`
+        would happily write a null and commit it — but `DocumentFolderResponse`
+        declares both as required strings, so the next read of that row (or any
+        listing containing it) would fail Pydantic response validation with a
+        500. `DocumentFolderCreate` always gives both a real default, so there
+        is never a legitimate reason to clear one on update either.
+        """
+        for field in ("color", "icon"):
+            if field in self.model_fields_set and getattr(self, field) is None:
+                raise ValueError(f"{field} cannot be cleared")
+        return self
 
 
 class DocumentFolderResponse(UTCResponseBase):
@@ -108,6 +124,7 @@ class DocumentResponse(UTCResponseBase):
     file_name: Optional[str] = None
     file_size: int = 0
     file_type: Optional[str] = None
+    has_file: bool = True
     status: str = "active"
     version: int = 1
     tags: Optional[str] = None

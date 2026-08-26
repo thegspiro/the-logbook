@@ -26,6 +26,7 @@ class TestGetLegalText:
             "termsOfService": None,
             "privacyPolicyLastUpdated": None,
             "termsOfServiceLastUpdated": None,
+            "lastUpdated": None,
         }
 
     async def test_single_org_without_custom_text(self, db_session):
@@ -36,6 +37,7 @@ class TestGetLegalText:
         assert result["termsOfService"] is None
         assert result["privacyPolicyLastUpdated"] is None
         assert result["termsOfServiceLastUpdated"] is None
+        assert result["lastUpdated"] is None
 
     async def test_single_org_with_custom_text(self, db_session):
         await _make_org(
@@ -54,6 +56,24 @@ class TestGetLegalText:
         assert result["termsOfService"] == "Our custom terms."
         assert result["privacyPolicyLastUpdated"] == "March 3, 2026"
         assert result["termsOfServiceLastUpdated"] == "June 1, 2026"
+        # Deprecated back-compat field: prefers the privacy policy's date,
+        # same ambiguity the original shared key always had.
+        assert result["lastUpdated"] == "March 3, 2026"
+
+    async def test_legacy_last_updated_falls_back_to_terms_when_privacy_is_unset(
+        self, db_session
+    ):
+        await _make_org(
+            db_session,
+            "Falls Church VFD",
+            "fcvfd",
+            legal={
+                "terms_of_service": "Our custom terms.",
+                "terms_of_service_effective_date": "June 1, 2026",
+            },
+        )
+        result = await get_legal_text(request=None, db=db_session, _=None)
+        assert result["lastUpdated"] == "June 1, 2026"
 
     async def test_multiple_orgs_returns_defaults(self, db_session):
         # Anonymous endpoint has no org context on a multi-tenant install:
@@ -67,6 +87,7 @@ class TestGetLegalText:
             "termsOfService": None,
             "privacyPolicyLastUpdated": None,
             "termsOfServiceLastUpdated": None,
+            "lastUpdated": None,
         }
 
     async def test_blank_and_whitespace_text_falls_back_to_defaults(self, db_session):
