@@ -494,9 +494,29 @@ class TestApprovalChainService:
         assert records[0].status == ApprovalStepStatus.PENDING
         assert records[1].status == ApprovalStepStatus.PENDING
 
+        # The entity id is valid, but belongs to this chain's organization.
+        # Direct helper calls from another tenant must not expose it.
+        foreign_org_id = str(uuid.uuid4())
+        assert (
+            await service.get_approval_records(
+                ApprovalEntityType.PURCHASE_REQUEST,
+                "test-entity-id",
+                foreign_org_id,
+            )
+            == []
+        )
+        assert (
+            await service.get_current_pending_step(
+                ApprovalEntityType.PURCHASE_REQUEST,
+                "test-entity-id",
+                foreign_org_id,
+            )
+            is None
+        )
+
         # Approve step 1
         current = await service.get_current_pending_step(
-            ApprovalEntityType.PURCHASE_REQUEST, "test-entity-id"
+            ApprovalEntityType.PURCHASE_REQUEST, "test-entity-id", org_id
         )
         assert current is not None
         assert current.id == records[0].id
@@ -505,7 +525,7 @@ class TestApprovalChainService:
 
         # Check step 2 is now current
         current2 = await service.get_current_pending_step(
-            ApprovalEntityType.PURCHASE_REQUEST, "test-entity-id"
+            ApprovalEntityType.PURCHASE_REQUEST, "test-entity-id", org_id
         )
         assert current2 is not None
         assert current2.id == records[1].id
@@ -554,7 +574,7 @@ class TestApprovalChainService:
         await service.approve_step(records[0].id, user_id, org_id=org_id)
 
         updated_records = await service.get_approval_records(
-            ApprovalEntityType.PURCHASE_REQUEST, "test-notify-entity"
+            ApprovalEntityType.PURCHASE_REQUEST, "test-notify-entity", org_id
         )
         notification_record = next(
             (r for r in updated_records if r.step_id == records[1].step_id), None

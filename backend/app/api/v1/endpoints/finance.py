@@ -5,6 +5,7 @@ Handles fiscal years, budgets, purchase requests, expense reports,
 check requests, dues, approval chains, and QuickBooks export.
 """
 
+from decimal import Decimal
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -561,7 +562,7 @@ async def delete_chain_step(
 @router.get("/approval-chains/preview", response_model=ApprovalChainResponse)
 async def preview_approval_chain(
     entity_type: str = Query(...),
-    amount: float = Query(...),
+    amount: Decimal = Query(..., decimal_places=2),
     category_id: Optional[str] = Query(None),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("finance.view")),
@@ -734,7 +735,7 @@ async def create_purchase_request(
         raise HTTPException(status_code=500, detail=safe_error_detail(e))
 
 
-async def _with_approval_steps(service, payload, entity_type, entity_id):
+async def _with_approval_steps(service, payload, entity_type, entity_id, org_id):
     """Attach the approval records for a finance document.
 
     `ApprovalStepRecord` is polymorphic — it keys on (entity_type, entity_id)
@@ -744,7 +745,7 @@ async def _with_approval_steps(service, payload, entity_type, entity_id):
     just said "No approval steps configured for this request".
     """
     steps = []
-    for record in await service.get_approval_records(entity_type, entity_id):
+    for record in await service.get_approval_records(entity_type, entity_id, org_id):
         step = ApprovalStepRecordResponse.model_validate(record)
         # `step_name` and `step_order` describe the chain step, not the record,
         # so they have to be copied across from the eager-loaded relationship —
@@ -772,6 +773,7 @@ async def get_purchase_request(
         PurchaseRequestResponse.model_validate(pr),
         ApprovalEntityType.PURCHASE_REQUEST,
         pr.id,
+        str(current_user.organization_id),
     )
 
 
@@ -875,7 +877,7 @@ async def mark_pr_received(
 )
 async def mark_pr_paid(
     pr_id: str,
-    actual_amount: Optional[float] = Query(None),
+    actual_amount: Optional[Decimal] = Query(None, decimal_places=2),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("finance.manage")),
 ):
@@ -996,6 +998,7 @@ async def get_expense_report(
         ExpenseReportResponse.model_validate(er),
         ApprovalEntityType.EXPENSE_REPORT,
         er.id,
+        str(current_user.organization_id),
     )
 
 
@@ -1154,6 +1157,7 @@ async def get_check_request(
         CheckRequestResponse.model_validate(cr),
         ApprovalEntityType.CHECK_REQUEST,
         cr.id,
+        str(current_user.organization_id),
     )
 
 

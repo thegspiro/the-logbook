@@ -2384,7 +2384,7 @@ Lt. Santos navigates to **Inventory > Check Out** to reserve training equipment:
 > assignment types in the table above are real — an assignment is `permanent` or
 > `temporary`, and the member's equipment list groups them accordingly — but
 > nothing in the interface lets you pick one. Assigning from an item's detail
-> page and the bulk batch-checkout both create **permanent** assignments with no
+> page and the bulk distribute-items both create **permanent** assignments with no
 > choice offered. The one way to produce a loan today is to fulfil an equipment
 > request with an expected-return date. Pool issuance (the hose lengths above)
 > is a separate flow and does honour a return date. See
