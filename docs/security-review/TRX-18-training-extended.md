@@ -93,6 +93,24 @@ confine non-officers to their own submissions
 established `training.py` pattern (`get_expiring_certifications`) rather
 than introducing a third access-control shape.
 
+**A Codex review round on the PR caught two real issues in the initial
+fix, both corrected before merge:** (1, **P1**) the endpoint started
+passing a `user_id=` keyword to `TrainingEffectivenessService.get_evaluations`,
+but the service method's own signature was never updated to accept it —
+every request to this endpoint, officer or not, would have raised
+`TypeError: unexpected keyword argument 'user_id'` and 500'd. Missed by
+this iteration's own tests because they replaced the whole service with an
+unrestricted `AsyncMock`, which swallows an unexpected-keyword `TypeError`
+that a real call would raise. Fixed by adding the parameter and its
+`TrainingEffectivenessEvaluation.user_id` predicate to the real method, and
+added a test that exercises the real method (not a mock) so a signature
+drift like this fails loudly. (2, **P2**) the officer check used
+`training.manage` only; the repo's own `can_view_officer_training_data`
+helper (used by every other officer-gated training read in this file)
+treats `training.view_all` as equally sufficient, so the fix as first
+written silently downgraded read-only leadership roles. Fixed by using the
+shared helper instead of a hand-rolled permission check.
+
 ### TRX-4 — MEDIUM — Cohort class reschedule/cancel: mutate-before-validate, and a silent audit gap on mismatch
 
 `reschedule_cohort_class`/`cancel_cohort_class` resolved the target purely
@@ -191,9 +209,17 @@ for the same "close it before something dereferences it" reasoning as
 TRX-8/TRX-9. **Fix:** `assert_in_org` (allow_none); the single-statement
 endpoint's `except ValueError` handling was also missing entirely (it only
 had a catch-all `except Exception → 500`) — added, so the new check
-actually surfaces as a 400. The batch-ingestion endpoint needed no change:
-`ingest_batch` already catches per-statement exceptions and reports them in
-its per-row `errors` array rather than raising.
+actually surfaces as a 400.
+
+**A Codex review round caught that the batch path needed more than "no
+change"**: `ingest_batch` calls `ingest_statement` once per statement, so
+the naive fix re-ran the same indexed provider-lookup query up to 1,000
+times per batch request — a real, avoidable latency/DB-load regression on
+top of the per-row flush/refresh the loop already does. Fixed by validating
+the shared `source_provider_id` once in `ingest_batch` before the loop, and
+threading a private `_provider_validated` flag into `ingest_statement` so
+each row's call skips the redundant re-check; the single-statement path is
+unaffected and still validates on every call.
 
 ## Corrections to prior write-ups
 
@@ -254,27 +280,32 @@ No schema changes this iteration. No `SET NULL` nullability issues found.
 
 ## Guard tests added
 
-- `test_training_extended_fk_scoping.py` — 8 tests (TRX-1, TRX-6, TRX-7,
-  TRX-8, TRX-9, TRX-10).
+- `test_training_extended_fk_scoping.py` — 9 tests (TRX-1, TRX-6, TRX-7,
+  TRX-8, TRX-9, TRX-10, plus the batch-provider-validated-once regression
+  test added for the Codex-caught efficiency fix).
 - `test_training_extended_null_handling.py` — 9 tests (TRX-2, TRX-5,
   TRX-5b), unit-testing `apply_updates` against real ORM instances
   (matching `test_facilities_service.py::TestNullabilityGuard`'s precedent
   — a `SimpleNamespace` has no mapper, so `apply_updates`'s NOT-NULL guard
   cannot be exercised against one).
 - `test_course_cohort_class_mutation_scoping.py` — 3 tests (TRX-4).
-- `test_training_effectiveness_self_scoping.py` — 2 tests (TRX-3).
+- `test_training_effectiveness_self_scoping.py` — 5 tests (TRX-3, including
+  a `training.view_all` permission-parity test and two tests against the
+  real `TrainingEffectivenessService.get_evaluations` method — not a mock
+  — so the P1 signature-mismatch class of bug fails a test rather than
+  only surfacing in review or production).
 - `test_training_autoapprove_credit_guard.py` — updated the existing
   `_svc` test helper to mock the new `category_id` org-check (TRX-7 added
   a `db.execute` call this file's mocked session didn't previously need).
 
 ## Completion gate
 
-| Check                                                                                                  | Result                                                           |
-| ------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------- |
-| `flake8` (changed files)                                                                               | ✅ 0 violations                                                  |
-| `black --check` (changed files)                                                                        | ✅ clean                                                         |
-| `isort --check-only` (changed files)                                                                   | ✅ clean                                                         |
-| `python3 scripts/validate_migrations.py --strict`                                                      | ✅ single head                                                   |
-| `pytest tests/ -k "training or cohort or syllabus or waiver or external or enhancement or submission"` | ✅ 979 passed, 1 skipped (pre-existing optional-dependency skip) |
-| `pytest tests/` (full backend suite)                                                                   | ✅ 8778 passed, 22 skipped (pre-existing Docker/no-MySQL skips)  |
-| `tsc --noEmit` / `eslint .`                                                                            | n/a — no frontend file changed this iteration                    |
+| Check                                                                                                          | Result                                                           |
+| -------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| `flake8` (changed files)                                                                                       | ✅ 0 violations                                                  |
+| `black --check` (changed files)                                                                                | ✅ clean                                                         |
+| `isort --check-only` (changed files)                                                                           | ✅ clean                                                         |
+| `python3 scripts/validate_migrations.py --strict`                                                              | ✅ single head                                                   |
+| `pytest tests/ -k "training or cohort or syllabus or waiver or external or enhancement or submission or xapi"` | ✅ 983 passed, 1 skipped (pre-existing optional-dependency skip) |
+| `pytest tests/` (full backend suite)                                                                           | ✅ 8782 passed, 22 skipped (pre-existing Docker/no-MySQL skips)  |
+| `tsc --noEmit` / `eslint .`                                                                                    | n/a — no frontend file changed this iteration                    |

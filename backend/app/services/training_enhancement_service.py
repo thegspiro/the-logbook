@@ -541,6 +541,7 @@ class TrainingEffectivenessService:
         course_id: Optional[str] = None,
         session_id: Optional[str] = None,
         level: Optional[str] = None,
+        user_id: Optional[str] = None,
     ) -> list:
         """Get effectiveness evaluations with filters"""
         query = select(TrainingEffectivenessEvaluation).where(
@@ -556,6 +557,8 @@ class TrainingEffectivenessService:
             query = query.where(
                 TrainingEffectivenessEvaluation.evaluation_level == level
             )
+        if user_id:
+            query = query.where(TrainingEffectivenessEvaluation.user_id == user_id)
         result = await self.db.execute(
             query.order_by(TrainingEffectivenessEvaluation.created_at.desc())
         )
@@ -721,16 +724,23 @@ class XAPIService:
         organization_id: str,
         raw_statement: dict,
         source_provider_id: Optional[str] = None,
+        _provider_validated: bool = False,
     ) -> XAPIStatement:
-        """Ingest a single xAPI statement"""
-        await assert_in_org(
-            self.db,
-            ExternalTrainingProvider,
-            source_provider_id,
-            organization_id,
-            allow_none=True,
-            label="source provider",
-        )
+        """Ingest a single xAPI statement.
+
+        ``_provider_validated`` lets ``ingest_batch`` validate the shared
+        ``source_provider_id`` once before its loop instead of re-running the
+        same indexed query for every one of up to 1,000 statements.
+        """
+        if not _provider_validated:
+            await assert_in_org(
+                self.db,
+                ExternalTrainingProvider,
+                source_provider_id,
+                organization_id,
+                allow_none=True,
+                label="source provider",
+            )
         actor = raw_statement.get("actor", {})
         verb = raw_statement.get("verb", {})
         obj = raw_statement.get("object", {})
@@ -818,13 +828,27 @@ class XAPIService:
         source_provider_id: Optional[str] = None,
     ) -> dict:
         """Ingest a batch of xAPI statements"""
+        await assert_in_org(
+            self.db,
+            ExternalTrainingProvider,
+            source_provider_id,
+            organization_id,
+            allow_none=True,
+            label="source provider",
+        )
+
         accepted = 0
         rejected = 0
         errors = []
 
         for i, raw in enumerate(statements):
             try:
-                await self.ingest_statement(organization_id, raw, source_provider_id)
+                await self.ingest_statement(
+                    organization_id,
+                    raw,
+                    source_provider_id,
+                    _provider_validated=True,
+                )
                 accepted += 1
             except Exception as e:
                 rejected += 1

@@ -223,3 +223,29 @@ class TestXAPISourceProviderScoping:
             await ingest_xapi_statement(data, db, _user())
         assert exc.value.status_code == 400
         db.add.assert_not_called()
+
+    async def test_batch_validates_shared_provider_once_not_per_statement(self):
+        """A Codex review on this PR caught that the naive per-statement fix
+        re-ran the same indexed provider query up to 1,000 times per batch
+        request. ingest_batch must validate once before the loop and pass
+        that result down instead of re-querying inside ingest_statement."""
+        from app.services.training_enhancement_service import XAPIService
+
+        provider_id = str(uuid4())
+        db = MagicMock()
+        # Exactly one provider-lookup query for the whole batch, however
+        # many statements it contains.
+        db.execute = AsyncMock(side_effect=[_one(provider_id)])
+        db.add = MagicMock()
+        db.flush = AsyncMock()
+        db.refresh = AsyncMock()
+
+        service = XAPIService(db)
+        statements = [{"actor": {}, "verb": {}, "object": {}} for _ in range(5)]
+        result = await service.ingest_batch(
+            "org-1", statements, source_provider_id=provider_id
+        )
+
+        assert result["accepted"] == 5
+        assert result["rejected"] == 0
+        assert db.execute.await_count == 1

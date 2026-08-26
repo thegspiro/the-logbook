@@ -12,7 +12,11 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.dependencies import get_current_user, require_permission
+from app.api.dependencies import (
+    can_view_officer_training_data,
+    get_current_user,
+    require_permission,
+)
 from app.core.database import get_db
 from app.core.error_codes import CodedHTTPException, ErrorCode
 from app.core.utils import safe_error_detail
@@ -407,13 +411,9 @@ async def get_effectiveness_evaluations(
     Non-officers are confined to their own submitted evaluations — these
     carry free-text comments/ratings members would not expect coworkers to
     read, the same PII class ``get_member_competencies`` gates. Holders of
-    ``training.manage`` see the whole organization.
+    ``training.manage`` or ``training.view_all`` see the whole organization.
     """
-    from app.api.dependencies import _collect_user_permissions, _has_permission
-
-    is_officer = _has_permission(
-        "training.manage", _collect_user_permissions(current_user)
-    )
+    is_officer = can_view_officer_training_data(current_user)
     service = TrainingEffectivenessService(db)
     evals = await service.get_evaluations(
         current_user.organization_id,
