@@ -28,6 +28,8 @@ import {
   BatchReturnResponse,
 } from '../services/api';
 import { useHtml5Scanner } from '../hooks/useHtml5Scanner';
+import { useTimezone } from '../hooks/useTimezone';
+import { formatDateTime } from '../utils/dateFormatting';
 import { useScanFeedback } from '../hooks/useScanFeedback';
 import { ScanSuccessFlash } from './ux/ScanSuccessFlash';
 import { FlashlightToggle } from './ux/FlashlightToggle';
@@ -91,6 +93,7 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
   memberName,
   onComplete,
 }) => {
+  const tz = useTimezone();
   // State
   const [scannedItems, setScannedItems] = useState<ScannedItem[]>([]);
   const [manualCode, setManualCode] = useState('');
@@ -763,8 +766,8 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
                           <div role="alert" className="mt-2 rounded-md border-2 border-red-500 bg-red-100 p-3 text-sm text-red-950 dark:bg-red-950 dark:text-red-100">
                             <p className="font-bold">Already held — standard assignment was blocked</p>
                             <p>Current holder: <strong>{r.conflict.holder_name}</strong></p>
-                            <p>{r.conflict.holding_type} since {new Date(r.conflict.held_since).toLocaleString()}</p>
-                            {r.conflict.expected_return_date && <p>Expected return: {new Date(r.conflict.expected_return_date).toLocaleString()}</p>}
+                            <p>{r.conflict.holding_type} since {formatDateTime(r.conflict.held_since, tz)}</p>
+                            {r.conflict.expected_return_date && <p>Expected return: {formatDateTime(r.conflict.expected_return_date, tz)}</p>}
                             {canTransfer && (
                               <button type="button" className="btn-secondary mt-2" onClick={() => setTransferResult(r)}>
                                 Transfer item

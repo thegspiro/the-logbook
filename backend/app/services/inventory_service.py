@@ -3477,10 +3477,19 @@ class InventoryService:
                         else (successful, failed + 1)
                     )
 
-                elif operation == "permanent_assignment" and item.status in (
-                    ItemStatus.AVAILABLE,
-                    ItemStatus.ASSIGNED,
+                elif (
+                    operation == "permanent_assignment"
+                    and item.status == ItemStatus.AVAILABLE
                 ):
+                    # AVAILABLE only, deliberately. `assign_item_to_user`
+                    # refuses anything else outright -- "reassignment is a
+                    # chain-of-custody transfer, never an ordinary assignment"
+                    # -- so admitting ASSIGNED here only produced a failed
+                    # result with no custody data attached. An item someone
+                    # already holds falls to the conflict branch below, which
+                    # reports who holds it so the scanner can offer the
+                    # transfer endpoint; that path closes the old record and
+                    # opens its successor atomically, which a bare scan cannot.
                     assignment, err = await self.assign_item_to_user(
                         item_id=UUID(item.id),
                         user_id=user_id,
