@@ -181,7 +181,7 @@ room-owned rather than bidirectional, which is a sound design but narrower than
 
 ## Active gaps and improvement opportunities
 
-### FAC-P10 — HIGH access boundary — Facilities was seeded as a member workspace — ✅ FIXED (2026-08-26)
+### FAC-P11 — HIGH access boundary — Facilities was seeded as a member workspace — ✅ FIXED (2026-08-26)
 
 The backend routes were permission-gated, but both rank-and-file operational
 ranks and the default Member position were seeded with `facilities.view`.
