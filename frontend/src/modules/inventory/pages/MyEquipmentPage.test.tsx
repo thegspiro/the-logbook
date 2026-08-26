@@ -200,26 +200,38 @@ describe('MyEquipmentPage', () => {
     });
   });
 
-  it('submits an equipment request after searching and selecting an item', async () => {
-    mockGetItems.mockResolvedValue({ items: [availableItem], total: 1 });
-    const user = userEvent.setup();
-    renderWithRouter(<MyEquipmentPage />);
-    await screen.findByRole('heading', { name: 'My Issued Gear' });
+  // #1875 removed the member-facing priority selector, so the only control in
+  // this modal is the request type. The three options are exactly the backend
+  // RequestType values a member can originate; `return` is member-initiated
+  // from the issued-gear list, not from this form.
+  it.each(['checkout', 'issuance', 'purchase'] as const)(
+    'submits a backend-supported %s request after searching and selecting an item',
+    async (requestType) => {
+      mockGetItems.mockResolvedValue({ items: [availableItem], total: 1 });
+      const user = userEvent.setup();
+      renderWithRouter(<MyEquipmentPage />);
+      await screen.findByRole('heading', { name: 'My Issued Gear' });
 
-    await user.click(screen.getByRole('button', { name: /Request Equipment/ }));
-    expect(screen.queryByRole('combobox', { name: /priority/i })).not.toBeInTheDocument();
-    await user.type(await screen.findByPlaceholderText('Search available items...'), 'Radio');
-    await user.click(await screen.findByRole('button', { name: /Spare Radio/ }));
-    await user.click(screen.getByRole('button', { name: /Submit Request/ }));
+      await user.click(screen.getByRole('button', { name: /Request Equipment/ }));
+      expect(screen.queryByRole('combobox', { name: /priority/i })).not.toBeInTheDocument();
+      await user.type(await screen.findByPlaceholderText('Search available items...'), 'Radio');
+      await user.click(await screen.findByRole('button', { name: /Spare Radio/ }));
 
-    await waitFor(() => expect(mockCreateEquipmentRequest).toHaveBeenCalledTimes(1));
-    expect(mockCreateEquipmentRequest.mock.calls[0]?.[0]).toEqual({
-      category_id: undefined,
-      item_id: 'avail-1',
-      item_name: 'Spare Radio',
-      quantity: 1,
-      reason: undefined,
-      request_type: 'checkout',
-    });
-  });
+      const [requestTypeSelect, ...otherSelects] = screen.getAllByRole('combobox');
+      expect(otherSelects).toHaveLength(0);
+      expect(requestTypeSelect).toBeDefined();
+      await user.selectOptions(requestTypeSelect as HTMLElement, requestType);
+      await user.click(screen.getByRole('button', { name: /Submit Request/ }));
+
+      await waitFor(() => expect(mockCreateEquipmentRequest).toHaveBeenCalledTimes(1));
+      expect(mockCreateEquipmentRequest.mock.calls[0]?.[0]).toEqual({
+        category_id: undefined,
+        item_id: 'avail-1',
+        item_name: 'Spare Radio',
+        quantity: 1,
+        reason: undefined,
+        request_type: requestType,
+      });
+    }
+  );
 });

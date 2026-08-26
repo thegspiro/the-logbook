@@ -1173,7 +1173,7 @@ InventoryScanModal:
     → GET /api/v1/inventory/lookup?q=<barcode>
     → Item matches displayed in dropdown
     → User selects item → adds to batch (checkout or return)
-    → POST /api/v1/inventory/batch-checkout or batch-return
+    → POST /api/v1/inventory/distribute-items or batch-return
 
 MemberIdScannerModal / MemberScanPage:
   Camera → html5-qrcode (useHtml5Scanner hook)

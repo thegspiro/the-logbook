@@ -1018,8 +1018,17 @@ class TestAssignItem:
 
     @pytest.mark.unit
     @pytest.mark.asyncio
-    async def test_reassign_already_assigned_item(self, service, mock_db):
-        """Assigning an ALREADY_ASSIGNED item to a different user should trigger unassign first."""
+    async def test_reassign_already_assigned_item_is_refused(self, service, mock_db):
+        """An ALREADY_ASSIGNED item is refused, not silently re-homed.
+
+        This used to unassign the current holder and assign onward in one
+        step, which closed a custody record without anyone confirming the
+        item had actually come back. Reassignment is a chain-of-custody
+        transfer now: `transfer_item_holding` closes the old record and opens
+        its successor atomically, with a return condition recorded. So the
+        plain assign path refuses, and — the part worth asserting — it does
+        not reach `unassign_item` on the way.
+        """
         old_user = uuid4()
         new_user = uuid4()
         item = _make_item(
@@ -1030,7 +1039,6 @@ class TestAssignItem:
         mock_result.scalar_one_or_none.return_value = item
         mock_db.execute = AsyncMock(return_value=mock_result)
 
-        # Mock unassign_item to just pass
         service.unassign_item = AsyncMock(return_value=(True, None))
 
         with patch.object(
@@ -1042,8 +1050,11 @@ class TestAssignItem:
                 organization_id=UUID(item.organization_id),
                 assigned_by=uuid4(),
             )
-        assert err is None
-        service.unassign_item.assert_awaited_once()
+        assert assignment is None
+        assert err is not None
+        assert "not available" in err
+        service.unassign_item.assert_not_awaited()
+        assert item.assigned_to_user_id == str(old_user)
 
 
 # ============================================

@@ -230,18 +230,30 @@ async def create_application(
         )
 
 
-async def _notes_with_authors(db: AsyncSession, notes) -> list[GrantNoteResponse]:
+async def _notes_with_authors(
+    db: AsyncSession, notes, organization_id: str
+) -> list[GrantNoteResponse]:
     """Serialize notes with their author's name resolved.
 
     A note carries only `created_by`. Rendering that is what put a raw UUID
     beside every entry in the activity log, and the log reads the application
     detail response as well as this collection, so both go through here. One
     query for the whole page, not one per note.
+
+    Org-scoped defense in depth: `author_ids` only ever come from notes
+    already resolved through an org-scoped application/list query, so this
+    is not currently reachable cross-tenant, but the lookup follows the same
+    convention as every other by-id query in this file.
     """
     author_ids = {str(n.created_by) for n in notes if n.created_by}
     names: dict[str, str] = {}
     if author_ids:
-        result = await db.execute(select(User).where(User.id.in_(author_ids)))
+        result = await db.execute(
+            select(User).where(
+                User.id.in_(author_ids),
+                User.organization_id == organization_id,
+            )
+        )
         names = {
             str(user.id): user.full_name or user.username
             for user in result.scalars().all()
@@ -279,7 +291,9 @@ async def get_application(
                 detail="Grant application not found",
             )
         payload = GrantApplicationResponse.model_validate(application)
-        payload.grant_notes = await _notes_with_authors(db, application.grant_notes)
+        payload.grant_notes = await _notes_with_authors(
+            db, application.grant_notes, str(current_user.organization_id)
+        )
         return payload
     except HTTPException:
         raise
@@ -880,7 +894,7 @@ async def list_notes(
             organization_id=str(current_user.organization_id),
         )
         page = notes[pagination.skip : pagination.skip + pagination.limit]
-        return await _notes_with_authors(db, page)
+        return await _notes_with_authors(db, page, str(current_user.organization_id))
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
