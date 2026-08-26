@@ -26,6 +26,7 @@ from app.models.user import Organization, User
 from app.services.separation_of_duties import assert_different_person
 from app.utils.csv_export import SafeCsvWriter
 from app.utils.hours import hours_from_minutes
+from app.utils.model_updates import apply_updates
 
 # A single manual admin-hours entry cannot span more than a day — bounds the
 # absurd-duration self-credit vector on client-supplied times.
@@ -123,16 +124,19 @@ class AdminHoursService:
     ) -> AdminHoursCategory:
         """Update an existing category.
 
-        All provided kwargs are set on the model, including explicit None values
-        (e.g. setting description=None clears it). Only pass fields that were
-        actually provided by the caller (use exclude_unset on the schema).
+        All provided kwargs are set on the model via `apply_updates`,
+        including explicit None values against a nullable column (e.g.
+        setting description=None clears it) — a None against a NOT NULL
+        column (name, require_approval, is_active, sort_order) raises a
+        clean ValueError instead of a flush-time IntegrityError. Only pass
+        fields that were actually provided by the caller (use exclude_unset
+        on the schema).
         """
         category = await self.get_category(category_id, organization_id)
         if not category:
             raise ValueError("Category not found")
 
-        for key, value in kwargs.items():
-            setattr(category, key, value)
+        apply_updates(category, kwargs, skip={"organization_id", "id"})
         category.updated_by = updated_by
         await self.db.flush()
         await self.db.refresh(category, ["created_at", "updated_at"])
@@ -212,8 +216,22 @@ class AdminHoursService:
         if not category.is_active:
             raise ValueError("This category is no longer active")
 
-        # Check for existing active session (any category)
-        active = await self._get_active_session(user_id, organization_id)
+        # Lock the caller's own User row (guaranteed to exist, one per user)
+        # to serialize concurrent clock-ins for the same user — a double-tap
+        # or two open tabs racing here could otherwise both pass the
+        # active-session check and both insert an ACTIVE entry, corrupting
+        # the "one active session at a time" invariant `clock_out`/
+        # `get_active_session` depend on (Pitfall #27).
+        await self.db.execute(
+            select(User.id).where(User.id == user_id).with_for_update()
+        )
+
+        # Check for existing active session (any category) — a locking read,
+        # not a plain SELECT: the User lock above doesn't by itself refresh
+        # this transaction's snapshot for a different table.
+        active = await self._get_active_session(
+            user_id, organization_id, for_update=True
+        )
         if active:
             if active.category_id == category_id:
                 raise ValueError("ALREADY_CLOCKED_IN")
@@ -237,12 +255,23 @@ class AdminHoursService:
         logger.info("User {} clocked in to category {}", user_id, category.name)
         return entry
 
-    async def clock_out(self, entry_id: str, user_id: str) -> AdminHoursEntry:
-        """Clock out a user from an active admin hours session."""
+    async def clock_out(
+        self, entry_id: str, user_id: str, organization_id: str
+    ) -> AdminHoursEntry:
+        """Clock out a user from an active admin hours session.
+
+        `user_id`-scoping alone happens to make this safe today (one org per
+        user), but the query itself carried no org anchor — the same
+        CLAUDE.md Pitfall #14a gap `clock_out_by_category` closed on its own
+        query. Filtering explicitly costs nothing for a valid call and closes
+        the gap on this query too, rather than leaving it as an implicit
+        cross-method invariant.
+        """
         result = await self.db.execute(
             select(AdminHoursEntry).where(
                 AdminHoursEntry.id == entry_id,
                 AdminHoursEntry.user_id == user_id,
+                AdminHoursEntry.organization_id == str(organization_id),
                 AdminHoursEntry.status == AdminHoursEntryStatus.ACTIVE,
             )
         )
@@ -295,7 +324,7 @@ class AdminHoursService:
         if not entry:
             raise ValueError("No active session found for this category")
 
-        return await self.clock_out(entry.id, user_id)
+        return await self.clock_out(entry.id, user_id, organization_id)
 
     async def get_active_session(
         self, user_id: str, organization_id: str
@@ -332,16 +361,24 @@ class AdminHoursService:
         }
 
     async def _get_active_session(
-        self, user_id: str, organization_id: str
+        self, user_id: str, organization_id: str, for_update: bool = False
     ) -> Optional[AdminHoursEntry]:
-        """Internal: get the active entry for a user (AH-5: org-scoped)."""
-        result = await self.db.execute(
-            select(AdminHoursEntry).where(
-                AdminHoursEntry.user_id == user_id,
-                AdminHoursEntry.organization_id == organization_id,
-                AdminHoursEntry.status == AdminHoursEntryStatus.ACTIVE,
-            )
+        """Internal: get the active entry for a user (AH-5: org-scoped).
+
+        ``for_update``: a locking read, for `clock_in`'s race guard below —
+        under REPEATABLE READ, a plain SELECT could still answer from a
+        stale snapshot even with the caller's User row locked separately
+        (Pitfall #27), so the check itself has to be a locking read too. The
+        read path (`get_active_session`) never needs this.
+        """
+        query = select(AdminHoursEntry).where(
+            AdminHoursEntry.user_id == user_id,
+            AdminHoursEntry.organization_id == organization_id,
+            AdminHoursEntry.status == AdminHoursEntryStatus.ACTIVE,
         )
+        if for_update:
+            query = query.with_for_update(of=AdminHoursEntry)
+        result = await self.db.execute(query)
         return result.scalar_one_or_none()
 
     # =========================================================================
@@ -735,16 +772,41 @@ class AdminHoursService:
         if description is not None:
             entry.description = description
 
-        # Validate and recalculate duration
+        # Validate and recalculate duration — the same guards
+        # create_manual_entry applies, since an edit can move these times
+        # just as freely as the original manual entry could (future-dating,
+        # an unbounded span, or a new overlap with another entry).
         if entry.clock_out_at and entry.clock_in_at:
             start = _ensure_utc(entry.clock_in_at)
             end = _ensure_utc(entry.clock_out_at)
             if end <= start:
                 raise ValueError("Clock-out time must be after clock-in time")
+
+            now = datetime.now(timezone.utc)
+            if start > now:
+                raise ValueError("Clock-in time cannot be in the future")
+            if end > now:
+                raise ValueError("Clock-out time cannot be in the future")
+
             duration = end - start
             entry.duration_minutes = int(duration.total_seconds() / 60)
             if entry.duration_minutes < 1:
                 raise ValueError("Duration must be at least 1 minute")
+            if entry.duration_minutes > MAX_MANUAL_ENTRY_MINUTES:
+                raise ValueError("A single entry cannot exceed 24 hours")
+
+            overlap = await self._check_overlap(
+                entry.user_id,
+                organization_id,
+                start,
+                end,
+                exclude_entry_id=entry_id,
+            )
+            if overlap:
+                raise ValueError(
+                    "This time range overlaps with an existing entry. "
+                    "Please adjust the times."
+                )
 
         await self.db.flush()
         await self.db.refresh(entry, ["created_at", "updated_at"])
@@ -1308,12 +1370,22 @@ class AdminHoursService:
         if not cat:
             raise ValueError("Admin hours category not found")
 
-        # Check total percentage for this source won't exceed 100
-        existing_query = select(
-            func.coalesce(func.sum(EventHourMapping.percentage), 0)
-        ).where(
-            EventHourMapping.organization_id == organization_id,
-            EventHourMapping.is_active.is_(True),
+        # Check total percentage for this source won't exceed 100. A locking
+        # read: two concurrent creates for the same source could otherwise
+        # both read a total under 100 and jointly exceed it (Pitfall #27).
+        # There's no single parent row for a "source" (event_type is a
+        # string, not an FK) to lock ahead of this, so a race between two
+        # concurrent *first* mappings for a brand-new source is not fully
+        # closed by this alone — but every case where at least one mapping
+        # for the source already exists is, which is the common case once a
+        # source has any allocation at all.
+        existing_query = (
+            select(func.coalesce(func.sum(EventHourMapping.percentage), 0))
+            .where(
+                EventHourMapping.organization_id == organization_id,
+                EventHourMapping.is_active.is_(True),
+            )
+            .with_for_update(of=EventHourMapping)
         )
         if event_type:
             existing_query = existing_query.where(
@@ -1364,24 +1436,40 @@ class AdminHoursService:
             raise ValueError("Mapping not found")
 
         if percentage is not None:
-            # Validate new total won't exceed 100
-            existing_query = select(
-                func.coalesce(func.sum(EventHourMapping.percentage), 0)
-            ).where(
+            # Lock the complete set of mappings for this source — including
+            # the target row itself — in one query, ordered consistently by
+            # id, before reading or writing any of them. Locking only the
+            # *other* mappings (excluding the target, as an earlier version
+            # of this fix did) lets two concurrent updates for two different
+            # mappings under the same source each lock the row the other is
+            # about to write to, then each block writing their own row at
+            # flush — a lock-order inversion InnoDB resolves by killing one
+            # side as a deadlock (Codex review, PR #1903). Locking the same
+            # full set in the same order on every call means the second
+            # transaction to reach it simply queues behind the first, rather
+            # than each holding what the other needs.
+            source_query = select(EventHourMapping).where(
                 EventHourMapping.organization_id == organization_id,
-                EventHourMapping.is_active.is_(True),
-                EventHourMapping.id != mapping_id,
             )
             if mapping.event_type:
-                existing_query = existing_query.where(
+                source_query = source_query.where(
                     EventHourMapping.event_type == mapping.event_type
                 )
             else:
-                existing_query = existing_query.where(
+                source_query = source_query.where(
                     EventHourMapping.custom_category == mapping.custom_category
                 )
-            result = await self.db.execute(existing_query)
-            other_total = result.scalar() or 0
+            source_query = source_query.order_by(EventHourMapping.id).with_for_update(
+                of=EventHourMapping
+            )
+            source_result = await self.db.execute(source_query)
+            source_mappings = source_result.scalars().all()
+
+            other_total = sum(
+                m.percentage
+                for m in source_mappings
+                if m.id != mapping_id and m.is_active
+            )
             if other_total + percentage > 100:
                 raise ValueError(
                     f"Total percentage would be {other_total + percentage}%. "
@@ -1530,6 +1618,7 @@ class AdminHoursService:
             keep = {category_id for category_id, _pct, _cat in mappings}
             stale_result = await self.db.execute(
                 select(AdminHoursEntry).where(
+                    AdminHoursEntry.organization_id == organization_id,
                     AdminHoursEntry.source_rsvp_id == rsvp_id,
                     AdminHoursEntry.entry_method
                     == AdminHoursEntryMethod.EVENT_ATTENDANCE,
@@ -1544,6 +1633,7 @@ class AdminHoursService:
             # Skip if entry already exists for this RSVP + category (idempotent)
             existing = await self.db.execute(
                 select(AdminHoursEntry).where(
+                    AdminHoursEntry.organization_id == organization_id,
                     AdminHoursEntry.source_rsvp_id == rsvp_id,
                     AdminHoursEntry.category_id == category_id,
                 )
@@ -1595,7 +1685,9 @@ class AdminHoursService:
 
         return created_count
 
-    async def delete_event_attendance_entries(self, rsvp_id: str) -> int:
+    async def delete_event_attendance_entries(
+        self, rsvp_id: str, organization_id: str
+    ) -> int:
         """Remove the hours credited from one attendance record.
 
         Called when an attendee is taken off an event. Without it the entry
@@ -1610,6 +1702,7 @@ class AdminHoursService:
         """
         result = await self.db.execute(
             select(AdminHoursEntry).where(
+                AdminHoursEntry.organization_id == organization_id,
                 AdminHoursEntry.source_rsvp_id == rsvp_id,
                 AdminHoursEntry.entry_method == AdminHoursEntryMethod.EVENT_ATTENDANCE,
             )
@@ -1638,16 +1731,25 @@ class AdminHoursService:
 
         # Get user to check membership type and roles.
         #
+        # Org-scoped: the endpoint only restricts non-admin callers to their
+        # own id, so an admin_hours.manage/compliance.view holder could
+        # otherwise pass any user_id — including one from another organization
+        # — and have this method resolve that user's membership_type/positions
+        # and match them against the caller's own org's compliance profiles.
+        #
         # `positions` is eager-loaded because it is read below, and a lazy load
         # inside an async session raises MissingGreenlet rather than emitting
-        # the query. The failure hid behind SQLAlchemy's identity map: asking
+        # the query. That failure hid behind SQLAlchemy's identity map: asking
         # for your own compliance returns the already-loaded `current_user`
-        # instance, whose positions the auth dependency populated, so this only
+        # instance, whose positions the auth dependency populated, so it only
         # ever 500ed when an officer looked at somebody else.
         user_result = await self.db.execute(
             select(UserModel)
             .options(selectinload(UserModel.positions))
-            .where(UserModel.id == user_id)
+            .where(
+                UserModel.id == user_id,
+                UserModel.organization_id == organization_id,
+            )
         )
         user = user_result.scalar_one_or_none()
         if not user:
@@ -1729,6 +1831,7 @@ class AdminHoursService:
                 select(
                     func.coalesce(func.sum(AdminHoursEntry.duration_minutes), 0)
                 ).where(
+                    AdminHoursEntry.organization_id == organization_id,
                     AdminHoursEntry.user_id == user_id,
                     AdminHoursEntry.category_id == cat_id,
                     AdminHoursEntry.status == AdminHoursEntryStatus.APPROVED,

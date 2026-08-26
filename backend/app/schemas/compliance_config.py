@@ -5,7 +5,7 @@ Pydantic request/response schemas for compliance config endpoints.
 """
 
 from datetime import datetime
-from typing import List, Optional
+from typing import List, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from pydantic.alias_generators import to_camel
@@ -204,9 +204,9 @@ class ComplianceConfigResponse(ComplianceConfigBase):
 class ComplianceReportGenerate(BaseModel):
     """Request schema for generating a report."""
 
-    report_type: str = Field(
+    report_type: Literal["monthly", "annual", "yearly"] = Field(
         ...,
-        description="monthly or annual",
+        description="monthly, annual, or yearly ('yearly' is an alias of 'annual')",
     )
     year: int = Field(..., ge=2020, le=2100)
     month: Optional[int] = Field(None, ge=1, le=12)
