@@ -27,7 +27,7 @@ rank defaults regardless; a department that wants its Quartermaster back in
 there grants it explicitly.
 
 Revision ID: c4f8a2e70d19
-Revises: c4a91b7e2f08
+Revises: c6a3f8b41e29
 Create Date: 2026-08-25 20:00:00.000000
 """
 
@@ -37,7 +37,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision = "c4f8a2e70d19"
-down_revision = "c4a91b7e2f08"
+down_revision = "c6a3f8b41e29"
 branch_labels = None
 depends_on = None
 
