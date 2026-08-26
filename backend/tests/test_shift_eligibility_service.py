@@ -554,6 +554,60 @@ class TestPositionRoster:
             {"type": "position", "label": "Engineer"},
         ]
 
+    async def test_rank_and_personal_qualifications_both_report(self):
+        """A Lieutenant who is also an EMT and a firefighter in his own right.
+
+        The department's case: a member's qualifications can come *with* the
+        rank and *also* stand on their own, and an officer reading this screen
+        needs to see which. Only the rank-mirroring position is redundant --
+        every slug that is genuinely a separate credential still reports, so
+        losing the rank would not silently drop the EMS clearance he holds
+        independently of it.
+        """
+        ranks = [
+            ("lieutenant", "Lieutenant", ["officer", "firefighter", "ems", "driver"]),
+            ("emt", "EMT", ["ems"]),
+            ("firefighter", "Firefighter", ["firefighter"]),
+        ]
+        held = [
+            ("u1", "lieutenant", "Lieutenant"),
+            ("u1", "emt", "EMT"),
+            ("u1", "firefighter", "Firefighter"),
+        ]
+        training = [("u1", "Driver Operator Pipeline", "driver_candidate")]
+
+        def roster_for(position):
+            return ShiftEligibilityService(
+                self._db_for(
+                    users=[_member("u1", rank="lieutenant")],
+                    ranks=ranks,
+                    training=training,
+                    operators=[],
+                    held=held,
+                )
+            ).get_position_roster("org-1", position)
+
+        ems = await roster_for("ems")
+        assert ems["members"][0]["sources"] == [
+            {"type": "rank", "label": "Lieutenant"},
+            {"type": "position", "label": "EMT"},
+        ]
+
+        # Same shape for the firefighter seat: rank grants it, and so does the
+        # position he holds on his own.
+        fire = await roster_for("firefighter")
+        assert fire["members"][0]["sources"] == [
+            {"type": "rank", "label": "Lieutenant"},
+            {"type": "position", "label": "Firefighter"},
+        ]
+
+        # Driver comes from rank plus the completed pipeline, not a position.
+        driver = await roster_for("driver")
+        assert driver["members"][0]["sources"] == [
+            {"type": "rank", "label": "Lieutenant"},
+            {"type": "training", "label": "Driver Operator Pipeline"},
+        ]
+
     async def test_duplicate_held_position_rows_report_once(self):
         db = self._db_for(
             users=[_member("u1", rank="")],
