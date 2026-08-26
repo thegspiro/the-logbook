@@ -1,6 +1,6 @@
 # Security Review — Meetings & Minutes
 
-**Prefix:** `MM` · **Iteration:** 24 · **Reviewed:** 2026-08-26 · **PR:** TBD
+**Prefix:** `MM` · **Iteration:** 24 · **Reviewed:** 2026-08-26 · **PR:** #1906
 
 **Backend:** `app/api/v1/endpoints/meetings.py` (493 L, 17 endpoints),
 `app/api/v1/endpoints/minutes.py` (1,037 L, 25 endpoints),
