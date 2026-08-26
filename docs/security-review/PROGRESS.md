@@ -16,7 +16,7 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-None — PR #1904 (feature 22, grants & fundraising) merged. Next iteration starts feature 23 (medical supplies).
+PR #1905 (feature 23, medical supplies) — open, awaiting CI/review.
 
 ---
 
@@ -67,7 +67,7 @@ data-carrying modules, then the supporting infrastructure.
 | 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ✅ #1902        |
 | 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ✅ #1903        |
 | 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ✅              |
-| 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ⬜              |
+| 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ⏳              |
 | 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ⬜              |
 | 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ⬜              |
 | 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                         | ⬜              |
@@ -848,3 +848,27 @@ re-runs the whole-codebase sweeps against whatever has landed since.
   and pushed. Full local completion gate re-verified green (8855/8855 full
   suite) before the final push; CI came back green with no further
   comments. Next: 23 medical supplies.
+- **23 Medical supplies** — no prior module-audit or app-review pass exists
+  for this feature, the first review of `medical_supplies.py` (667 L, 15
+  endpoints). Read directly rather than via parallel agents — small file,
+  and its only dependency (`InventoryService`) was already read in full by
+  the INV-11 pass three weeks prior. The endpoint layer itself is soundly
+  domain-pinned: every by-id write re-checks the target is in the medical
+  domain, the domain is never client-supplied, and a `category_id: null`
+  escape hatch out of the domain is already closed with its own guard test.
+  **MSUP-1 (MED)** the one real gap: three shared `InventoryService`
+  methods this router calls (`update_category`, `update_item`,
+  `update_lot`) used blind `setattr` loops instead of `apply_updates` — out
+  of INV-11's tenant-isolation lens, so not previously flagged.
+  `update_lot` was the worst case, with no exception handling at all, so an
+  explicit null against its NOT NULL `quantity` column was a genuine
+  unhandled 500; `update_category`/`update_item` softened the same bug into
+  a generic sanitized error via a catch-all `try/except`. All three now
+  route through `apply_updates`; `update_lot`'s two callers
+  (`inventory.py` and this router) gained a `ValueError` -> 400 catch to
+  match the sibling `add_lots_bulk` convention already on both files. Full
+  local completion gate green: flake8/black/isort clean, migrations
+  validated (no schema change), 553/553 inventory+medical_supplies scoped
+  and 8897/8897 full backend suite pass. Findings doc:
+  `docs/security-review/MSUP-23-medical-supplies.md`. PR #1905 opened and
+  subscribed. Next: 24 meetings & minutes, once #1905 merges.
