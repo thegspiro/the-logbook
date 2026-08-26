@@ -4254,7 +4254,10 @@ class InventoryService:
         )
         signature = ":".join(
             [
-                item.assigned_to_user_id or "none",
+                # assigned_to_user_id is a String column, but an assignment made
+                # earlier in the same session still holds the UUID object the
+                # caller passed, so join() would raise on it.
+                str(item.assigned_to_user_id) if item.assigned_to_user_id else "none",
                 *(sorted(str(r.id) for r in assignments)),
                 *(sorted(str(r.id) for r in checkouts)),
                 *(sorted(str(r.id) for r in issuances)),

@@ -553,7 +553,7 @@ class TestWriteOffReleasesHolders:
         )
         assert err is None
         review = (await svc.get_write_off_requests(org_id))[0]
-        item.status = ItemStatus.MAINTENANCE
+        item.status = ItemStatus.IN_MAINTENANCE
         await db_session.commit()
 
         _, err = await svc.review_write_off(
@@ -567,7 +567,7 @@ class TestWriteOffReleasesHolders:
         )
         assert err == "Item status or holder changed; refresh and review again"
         await db_session.refresh(item)
-        assert item.status == ItemStatus.MAINTENANCE
+        assert item.status == ItemStatus.IN_MAINTENANCE
 
 
 # ── NFPA Inspection Write Path ─────────────────────────────────────
