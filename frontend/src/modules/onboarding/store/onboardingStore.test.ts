@@ -8,6 +8,7 @@ function getState() {
 
 const initialState = {
   departmentName: '',
+  organizationType: 'fire_department' as const,
   logoData: null,
   navigationLayout: 'top' as const,
   emailPlatform: null,
@@ -78,6 +79,26 @@ describe('onboardingStore', () => {
     it('setNavigationLayout also writes to localStorage directly', () => {
       getState().setNavigationLayout('left');
       expect(localStorage.getItem('navigationLayout')).toBe('left');
+    });
+
+    it('defaults organizationType to a fire department', () => {
+      // The position step reads this to decide which positions to offer, and a
+      // department shown one too many can untick it while one shown too few has
+      // no indication anything is absent. So the unset case leans full.
+      expect(getState().organizationType).toBe('fire_department');
+    });
+
+    it('setOrganizationType updates state', () => {
+      getState().setOrganizationType('ems_only');
+      expect(getState().organizationType).toBe('ems_only');
+    });
+
+    it('persists organizationType, which the position step reads several screens later', () => {
+      getState().setOrganizationType('ems_only');
+      const persisted = JSON.parse(localStorage.getItem('onboarding-storage') ?? '{}') as {
+        state?: { organizationType?: string };
+      };
+      expect(persisted.state?.organizationType).toBe('ems_only');
     });
   });
 

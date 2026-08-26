@@ -37,6 +37,35 @@ class TestVocabularyMatchesTheSeatNames:
             "ShiftPosition cannot name — no member could ever use it"
         )
 
+    @pytest.mark.parametrize("seat", sorted(p.value for p in ShiftPosition))
+    def test_every_seat_is_grantable_by_something(self, seat):
+        """The reverse of the guard above, and the half that was missing.
+
+        Checking that every granted seat is nameable catches a qualification
+        pointing at a seat nobody can sign up for. It does not catch the
+        mirror image: a seat that exists and that *nothing* clears anybody
+        for. That is the same unfillable seat from the member's side, and it
+        is how the medic seat shipped -- ``paramedic`` was added to
+        ``ShiftPosition`` while the Paramedic qualification still granted only
+        ``ems``.
+
+        A seat may be reached by a rank or by a qualification; it must be
+        reached by one of them.
+        """
+        from app.services.operational_rank_service import DEFAULT_RANKS
+
+        rank_seats = set()
+        for _code, _label, _order, positions in DEFAULT_RANKS:
+            rank_seats |= set(positions or [])
+        qualification_seats = set()
+        for entry in QUALIFICATIONS.values():
+            qualification_seats |= set(entry["positions"])
+
+        assert seat in (rank_seats | qualification_seats), (
+            f"the {seat!r} seat can be put on a shift but no rank or "
+            "qualification clears anybody for it, so it can never be filled"
+        )
+
     @pytest.mark.parametrize("code", sorted(QUALIFICATIONS))
     def test_every_qualification_grants_something(self, code):
         assert QUALIFICATIONS[code][
@@ -73,12 +102,23 @@ class TestSeatsGranted:
         Rank stays 'captain' and says nothing about patient care;
         the qualification says nothing about command. Both are true at once,
         which is the entire point of separating them.
+
+        The medic seat is included alongside the EMS one because a paramedic
+        holds the higher credential: they can staff an ALS unit that requires a
+        medic *and* anything an EMT can. Asserted as the exact set so that
+        neither half can be dropped without this failing.
         """
-        assert positions_for_qualifications(["paramedic"]) == {"ems"}
+        assert positions_for_qualifications(["paramedic"]) == {"ems", "paramedic"}
+
+    def test_an_emt_does_not_reach_the_medic_seat(self):
+        # The other direction, and the reason the medic seat exists at all: a
+        # department staffing an ALS unit needs a seat an EMT cannot fill.
+        assert positions_for_qualifications(["emt"]) == {"ems"}
+        assert positions_for_qualifications(["aemt"]) == {"ems"}
 
     def test_qualifications_union_rather_than_override(self):
         both = positions_for_qualifications(["driver_operator", "paramedic"])
-        assert both == {"driver", "ems"}
+        assert both == {"driver", "ems", "paramedic"}
 
     def test_holding_none_grants_none(self):
         assert positions_for_qualifications([]) == set()

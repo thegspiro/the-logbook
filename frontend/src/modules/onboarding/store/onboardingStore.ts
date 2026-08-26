@@ -47,9 +47,23 @@ export interface OnboardingApparatusDraft {
   positions: string[];
 }
 
+/**
+ * What kind of agency this is. Mirrors the backend `OrganizationType` enum, and
+ * decides which default positions are seeded and what a couple of them are
+ * called — see `default_positions_for` in `backend/app/core/permissions.py`.
+ */
+export type OrganizationType = 'fire_department' | 'ems_only' | 'fire_ems_combined';
+
 export interface OnboardingState {
   // Department Information
   departmentName: string;
+  /**
+   * Chosen in step 1 and read in the position step, which has to offer the same
+   * list the backend seeded. Defaults to the full fire set, matching the
+   * backend fallback: a department shown one position too many can untick it,
+   * one shown too few has no indication anything is absent.
+   */
+  organizationType: OrganizationType;
   logoData: string | null;
   navigationLayout: 'top' | 'left';
 
@@ -126,6 +140,7 @@ export interface OnboardingState {
 export interface OnboardingActions {
   // Department Actions
   setDepartmentName: (name: string) => void;
+  setOrganizationType: (organizationType: OrganizationType) => void;
   setLogoData: (data: string | null) => void;
   setNavigationLayout: (layout: 'top' | 'left') => void;
 
@@ -185,6 +200,7 @@ export interface OnboardingActions {
 
 const initialState: OnboardingState = {
   departmentName: '',
+  organizationType: 'fire_department',
   logoData: null,
   navigationLayout: 'top',
   emailPlatform: null,
@@ -245,6 +261,11 @@ export const useOnboardingStore = create<OnboardingState & OnboardingActions>()(
       // Department Actions
       setDepartmentName: (name) => {
         set({ departmentName: name });
+        get().triggerAutoSave();
+      },
+
+      setOrganizationType: (organizationType) => {
+        set({ organizationType });
         get().triggerAutoSave();
       },
 
@@ -472,6 +493,7 @@ export const useOnboardingStore = create<OnboardingState & OnboardingActions>()(
       // lingering in localStorage after onboarding completes.
       partialize: (state) => ({
         departmentName: state.departmentName,
+        organizationType: state.organizationType,
         logoData: state.logoData,
         navigationLayout: state.navigationLayout,
         emailPlatform: state.emailPlatform,

@@ -34,12 +34,16 @@ through, None/empty → None, and a tampered value (`InvalidTag`) propagates.
 
 - **TR-4** (`year` default in requirements-progress — compliance-semantics decision).
 - **TR-6 residual (dangling-FK batch)** — the LOW, **not-projected** client-FK stores
-  (session-create category/program/phase/requirement/instructor, recert
-  `source_requirement_id`, recurring `template_id`, waiver `requirement_ids`, and the
+  (recert `source_requirement_id`, waiver `requirement_ids`, and the
   bulk_enroll/sync re-fetch backstops) remain a deliberate future FK-hardening batch:
   none is read back into a response, so each is a dangling-reference correctness item
   rather than a cross-org leak, and the doc has consistently batched them for their
-  own focused pass rather than a rotation tick.
+  own focused pass rather than a rotation tick. **Update (security review TR-17,
+  2026-08-26): the session-create category/program/phase/requirement/instructor
+  ids and the recurring `template_id` are resolved — both now validated in-org
+  (`TrainingSessionService._validate_linkage_ids`,
+  `event_service.create_recurring_event`'s `template_id` check). Removed from this
+  batch.**
 
 **Completion gate (pass 4):** `flake8` 0 · `black --check` clean · `tsc --noEmit`
 n/a (no frontend change) · `test_external_training_decrypt_failclosed.py`
@@ -139,9 +143,11 @@ the foreign member's name**. **Fix:** org-scope the User lookup
 **Flagged (unchanged):** TR-5 (auto-approve branch spawns a COMPLETED self-credit
 with no reviewer — SoD product decision, KNOWN_LIMITATIONS), TR-4 (year default),
 TR-6 residual (bulk_enroll / sync re-fetch backstops). LOW dangling-FK stores that
-are **not** projected (session-create category/program/phase/requirement/instructor,
-recert `source_requirement_id`, recurring `template_id`, waiver `requirement_ids`)
+are **not** projected (recert `source_requirement_id`, waiver `requirement_ids`)
 are noted for a future FK-hardening batch, not fixed here — no read-back leak.
+(Session-create category/program/phase/requirement/instructor and recurring
+`template_id` were also in this batch at the time of this pass; both are now
+validated in-org — see security review TR-17, 2026-08-26.)
 **Lens 6 (latent-500) clean:** submission endpoints route service `ValueError`/
 `PermissionError` through `handle_service_errors`; enhancement endpoints each have
 `except ValueError→400`.

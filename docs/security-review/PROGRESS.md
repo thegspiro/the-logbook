@@ -16,14 +16,14 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-| Field       | Value                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| PR          | [#1838](https://github.com/thegspiro/the-logbook/pull/1838)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
-| Branch      | `claude/security-review-apparatus-nfc`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
-| Feature     | 13 Apparatus & NFC                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
-| CI          | fresh push, awaiting first run                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
-| Threads     | 1 addressed — Codex caught that the new guard test's assertion was hollow (checked the whole compiled statement, which always lists `organization_id` as a SELECT column regardless of the WHERE clause). Fixed to assert against `.whereclause` specifically, and fixed the same pre-existing flaw in a sibling test in the same class. Replied and resolved.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
-| Last tended | 2026-08-26 — re-verified AP-1/AP2-1/AP2-2 (the apparatus module's XC-1 FK classes, `assert_in_org` at 17 sites) still hold. Read the two genuinely new, previously-unaudited pieces in full: `nfc_tag_service.py` (member ID cards + check-in stations — UIDs hashed with a salted SHA-256, never stored raw; every lookup org-scoped) and `driver_exception_service.py` (a sanctioned EVOC-requirement bypass — separation of duties on both requester and beneficiary, a locking conditional UPDATE for the approval race, a mandatory bounded validity window). No defect found in either. **AP-6 (LOW, fixed)** — while tracing the NFC admin-hours check-in path, found `AdminHoursService.clock_out_by_category` had no `organization_id` filter on its own query; not currently exploitable (both callers pass the caller's own id, and an entry's category is always org-consistent by construction at `clock_in` time), but a real violation of the letter of Pitfall #14a, closed with a one-line filter + parameter on both call sites. A sibling method (`clock_out`) has the identical shape and is left for the Admin Hours module's own turn (rotation feature 21) rather than scope-creeping into this PR. Full completion gate green, including the full 8388-test backend suite (re-run after discovering and fixing an unrelated stale-local-DB-schema issue from a migration that landed on `main` mid-session — not a code defect, just a sandbox re-sync). See `docs/security-review/AP-13-apparatus-nfc.md` for the complete write-up. |
+| Field       | Value                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| PR          | [#1851](https://github.com/thegspiro/the-logbook/pull/1851)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| Branch      | `claude/security-review-training-core`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| Feature     | 17 Training core                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| CI          | pending — just opened                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| Threads     | none yet                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| Last tended | 2026-08-26 — opened. Read all six in-scope files in full (training.py, training_programs.py, training_sessions.py + their 3 backing services; training_program_service.py grew 36% since the module audit). Re-verified TR-1/2/4/7/9/10 still hold. 3 new findings (TR-11 MEDIUM XC-1 program-import category_ids; TR-12 LOW/MED XC-3 two unscoped User lookups; TR-13 LOW/MED XC-1 course_id on 3 record-create paths), all fixed. Closed 1 stale carried-forward flag (training-sessions dangling-FK batch, already resolved) via a doc correction. 2 items flagged (enum validation gap, enroll_member race), mirrored into KNOWN_LIMITATIONS.md. Full write-up in `docs/security-review/TR-17-training-core.md`. Full completion gate green, full 8663-test backend suite. |
 
 ---
 
@@ -49,43 +49,43 @@ in scope; re-reporting something they fixed is not.
 Ordered by risk: unauthenticated and money-handling surfaces first, then the
 data-carrying modules, then the supporting infrastructure.
 
-| #   | Feature                   | Prefix | Principal code                                                                                                                                  | Status   |
-| --- | ------------------------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------- | -------- |
-| 00  | Cross-cutting baseline    | SEC    | whole-codebase sweeps; see `SEC-00-cross-cutting-baseline.md`                                                                                   | ✅ #1799 |
-| 01  | Auth & session lifecycle  | AUTH   | `endpoints/auth.py`, `auth_service.py`, `mfa_service.py`, `oauth_service.py`                                                                    | ✅ #1804 |
-| 02  | Permissions & roles       | PERM   | `dependencies.py`, `core/permissions.py`, `roles.py`, `operational_ranks.py`, `officers.py`, `org_chart.py`                                     | ✅ #1805 |
-| 03  | Public surface & webhooks | PUB    | `api/public/*` (20 unauth routes), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`                                      | ✅ #1806 |
-| 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                              | ✅ #1807 |
-| 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                     | ✅ #1809 |
-| 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | ✅ #1810 |
-| 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ✅ #1814 |
-| 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ✅ #1815 |
-| 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ✅ #1816 |
-| 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ✅ #1826 |
-| 11  | Inventory                 | INV    | `endpoints/inventory.py` (6539 L), `inventory_service.py`                                                                                       | ✅ #1835 |
-| 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ✅ #1836 |
-| 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | ⏳       |
-| 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | ⬜       |
-| 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                | ⬜       |
-| 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                       | ⬜       |
-| 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`                                                                                   | ⬜       |
-| 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ⬜       |
-| 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3723 L)                                                                                                          | ⬜       |
-| 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ⬜       |
-| 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ⬜       |
-| 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ⬜       |
-| 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ⬜       |
-| 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ⬜       |
-| 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ⬜       |
-| 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                         | ⬜       |
-| 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                         | ⬜       |
-| 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`                                                                    | ⬜       |
-| 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                              | ⬜       |
-| 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (24 unauth bootstrap routes)                                                                                             | ⬜       |
-| 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                   | ⬜       |
-| 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                  | ⬜       |
-| 33  | Core infrastructure       | CORE   | `core/security_middleware.py`, `core/middleware.py`, `core/database.py`, `core/config.py`                                                       | ⬜       |
-| 34  | Frontend shared           | FE     | `utils/apiCache.ts`, module axios instances, `ProtectedRoute`, global stores                                                                    | ⬜       |
+| #   | Feature                   | Prefix | Principal code                                                                                                                                  | Status          |
+| --- | ------------------------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------- | --------------- |
+| 00  | Cross-cutting baseline    | SEC    | whole-codebase sweeps; see `SEC-00-cross-cutting-baseline.md`                                                                                   | ✅ #1799        |
+| 01  | Auth & session lifecycle  | AUTH   | `endpoints/auth.py`, `auth_service.py`, `mfa_service.py`, `oauth_service.py`                                                                    | ✅ #1804        |
+| 02  | Permissions & roles       | PERM   | `dependencies.py`, `core/permissions.py`, `roles.py`, `operational_ranks.py`, `officers.py`, `org_chart.py`                                     | ✅ #1805        |
+| 03  | Public surface & webhooks | PUB    | `api/public/*` (20 unauth routes), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`                                      | ✅ #1806        |
+| 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                              | ✅ #1807        |
+| 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                     | ✅ #1809        |
+| 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | ✅ #1810        |
+| 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ✅ #1814        |
+| 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ✅ #1815        |
+| 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ✅ #1816        |
+| 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ✅ #1826        |
+| 11  | Inventory                 | INV    | `endpoints/inventory.py` (6539 L), `inventory_service.py`                                                                                       | ✅ #1835        |
+| 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ✅ #1836        |
+| 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | ✅ #1838        |
+| 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | ✅ #1842        |
+| 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                | ✅ #1846, #1847 |
+| 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                       | ✅ #1848        |
+| 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`                                                                                   | ⏳ #1851        |
+| 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ⬜              |
+| 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3723 L)                                                                                                          | ⬜              |
+| 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ⬜              |
+| 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ⬜              |
+| 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ⬜              |
+| 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ⬜              |
+| 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ⬜              |
+| 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ⬜              |
+| 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                         | ⬜              |
+| 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                         | ⬜              |
+| 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`                                                                    | ⬜              |
+| 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                              | ⬜              |
+| 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (24 unauth bootstrap routes)                                                                                             | ⬜              |
+| 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                   | ⬜              |
+| 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                  | ⬜              |
+| 33  | Core infrastructure       | CORE   | `core/security_middleware.py`, `core/middleware.py`, `core/database.py`, `core/config.py`                                                       | ⬜              |
+| 34  | Frontend shared           | FE     | `utils/apiCache.ts`, module axios instances, `ProtectedRoute`, global stores                                                                    | ⬜              |
 
 **35 iterations per full pass.** After 34 the rotation wraps to 00, which
 re-runs the whole-codebase sweeps against whatever has landed since.
@@ -470,3 +470,142 @@ re-runs the whole-codebase sweeps against whatever has landed since.
   turn (feature 21). Full completion gate green, full 8388-test backend
   suite. See `AP-13-apparatus-nfc.md` for the complete write-up. Next: 14
   equipment check & shifts.
+- **13 Apparatus & NFC ✅ merged** — PR #1838 merged 2026-08-26 12:31 UTC.
+  A Codex review round caught that the new guard test's org-scoping
+  assertion was hollow (checked the whole compiled statement rather than
+  its WHERE clause); fixed, and the same pre-existing flaw in a sibling
+  test in the same class was fixed alongside it.
+- **14 Equipment check & shifts — no new findings, no code changes.** The
+  most heavily audited module by finding-count in the rotation (11 fixes
+  in the module audit alone, including a HIGH cross-tenant apparatus write,
+  plus 3 more from app-review). Re-verified all 14 prior fixes hold.
+  `equipment_check.py` grew from 34 to 47 routes since the last pass — a
+  new supply-officer stock swap/consume/recount feature (9 endpoints
+  touching `InventoryLot` quantities, the exact shape of surface this
+  module's history shows is where its defects live). Read all nine, and
+  their service methods, in full. Found them already correctly
+  org-scoped, and the one concurrency-sensitive operation
+  (`swap_item_lot`) correctly locking three separate rows in a
+  deliberately fixed order to avoid both an overconsumption race and a
+  lock-ordering deadlock. No defect found. Full completion gate green,
+  full 8500-test backend suite. See `EC-14-equipment-check-shifts.md` for
+  the complete write-up. Next: 15 scheduling.
+- **14 Equipment check & shifts — correction: a Codex review of the above
+  draft caught 3 real issues it missed.** (1) `report_item_used` was an
+  unlocked read-modify-write on deployed-lot quantities — fixed with a
+  row lock plus a locking read on the item's deployed lots, same order as
+  `swap_item_lot`. (2) A submit-only caller could inflate a deployed
+  lot's quantity via `update_deployed_lot` (only metadata changes were
+  blocked, not increases) and then use that inflated figure as
+  `swap_item_lot`'s submitter cap — fixed by requiring manage permission
+  for a quantity increase under `allow_metadata_change=False`. (3) None
+  of the 9 new supply endpoints were in the frontend's
+  `UNCACHEABLE_PREFIXES` despite carrying reporter names and free-text
+  notes — fixed by adding `/equipment-checks`. A 4th thread (the
+  pre-existing `get_item_deployments` `.view`-vs-`.manage` gate gap) was
+  confirmed already deliberately unadjudicated and mirrored into
+  `docs/KNOWN_LIMITATIONS.md` rather than fixed. Same shape as FAC-12's
+  draft-vs-final split. `EC-14-equipment-check-shifts.md` rewritten with
+  a Revision note and the EC-12/EC-13/EC-14 write-ups. Guard tests added
+  for all three fixes. Full completion gate green, full 8542-test backend
+  suite, frontend `tsc`/`eslint`/`vitest` clean.
+- **14 Equipment check & shifts ✅ merged** — PR #1842 merged 2026-08-26.
+  All 4 Codex review threads replied to (with the fixing commit hash) and
+  resolved; all 16 CI checks green on the merged head, no merge conflict.
+  Next: 15 scheduling.
+- **15 Scheduling — PR #1846 opened.** `scheduling.py` and
+  `scheduling_service.py` have roughly doubled in size since the last
+  full read (module-audit iteration 19 + 4 app-review passes,
+  2026-08-06..09): endpoints ~1,900 → 3,437 L (92 routes), service
+  ~5,000 → 7,018 L. Re-read both in full rather than treating the growth
+  as incremental, plus `standing_shift_service.py` (570 L, recurring
+  member shift claims) and the `scheduling_module_config`/`calcom_sync`
+  surface, neither previously reviewed. SCH-1 through SCH-8 all
+  re-verified still fixed, no regressions. One new finding: SCH-9 (LOW,
+  XC-1) — `create_shift_call`/`update_shift_call` stored a
+  client-supplied `responding_members` user-id list with no in-org
+  check, the one exception to this file's otherwise-universal
+  client-supplied-user-id discipline; `compute_member_call_counts` sums
+  this column, so a foreign id could inflate an unrelated org's
+  member's call-count statistic. Fixed via the same `_user_in_org`
+  helper used everywhere else in the file. Guard tests added
+  (`test_scheduling_org_scoping.py::TestShiftCallRespondingMembersScoping`).
+  Full completion gate green, full 8544-test backend suite. See
+  `SCH-15-scheduling.md` for the complete write-up.
+- **15 Scheduling ✅ merged (#1846), Codex round follow-up opened
+  (#1847).** #1846 was merged by the repo owner before its Codex review
+  round finished, leaving 3 findings unaddressed on `main`: a real
+  efficiency gap (SCH-9's original per-id validation loop — up to 100
+  serial queries) and two inaccurate claims in the draft's own write-up
+  (SCH-9's cross-tenant impact was overstated — there is no cross-tenant
+  failure scenario, since every reader of `responding_members` is scoped
+  to one already org-validated shift/trainee first; and a "Verified
+  good" claim that `calcom_service.py` closes the DNS-rebinding TOCTOU
+  was wrong — it narrows the window, and the same repo-wide pattern
+  exists in 5 other integration services). Followed the merged-branch
+  protocol: rebased the one unmerged commit onto latest main rather than
+  reusing or discarding it, pushed to a fresh branch, opened #1847.
+  SCH-9 downgraded to NIT with corrected text; the DNS-rebinding gap
+  filed as SCH-10, flagged (cross-cutting, not scheduling-specific) and
+  mirrored into `KNOWN_LIMITATIONS.md`. Replied to and resolved all 3
+  Codex threads on the now-merged #1846, referencing #1847. Full
+  completion gate green, full 8556-test backend suite.
+- **15 Scheduling — #1847 ✅ merged.** A second Codex round on #1847
+  itself caught that the SCH-10 correction had undercounted its own
+  affected surface — six files sharing one fix, when it's actually seven
+  callers of `assert_outbound_url_safe` across three distinct transports
+  (five via the shared `create_integration_client`, one hand-built
+  `httpx.AsyncClient` in `audit_ship_service.py`, one `pywebpush` in
+  `push_service.py` — neither of the latter two reachable by a fix
+  scoped to the shared client factory). Corrected in both
+  `SCH-15-scheduling.md` and `KNOWN_LIMITATIONS.md`; replied to and
+  resolved the thread. All 16 CI checks green on the merged head, no
+  merge conflict. Next: 16 events & requests.
+- **16 Events & requests — PR #1848 opened.** `events.py`,
+  `event_requests.py`, and `event_service.py` grew 15-30% since the last
+  full read (module-audit iteration 17 + 4 app-review passes,
+  2026-08-06..09); read all three in full plus the new
+  `event_request_service.py` (extracted from `event_requests.py`'s
+  endpoint file since the last audit). EV-1 through EV-10, EV2-1, EV2-2
+  all re-verified still fixed, no regressions. One new finding: EV-11
+  (LOW, XC-1) — `create_recurring_event`'s client-supplied `template_id`
+  was not org-validated, unlike `location_id` checked two lines above it
+  — fixed via the existing org-scoped `get_template()`. A first draft of
+  the fix also wrongly added the same check to `create_event`, based on
+  a misread of the schema (`EventCreate` has no `template_id` field at
+  all); this failed all 16 tests in `test_event_lifecycle.py` and was
+  caught and reverted by running the full suite before opening the PR,
+  not by external review. Full completion gate green, full 8557-test
+  backend suite. See `EV-16-events-requests.md` for the complete
+  write-up.
+- **16 Events & requests ✅ merged** — PR #1848 merged 2026-08-26. No
+  review threads; all 16 CI checks green on the merged head, no merge
+  conflict. Next: 17 training core.
+- **17 Training core — PR #1851 opened.** The largest feature reviewed so
+  far: `training.py`, `training_programs.py`, `training_sessions.py`, and
+  their 3 backing services (~11,000 L combined), split off from the
+  module-audit's single "Training" unit (8 endpoint files, 154 endpoints)
+  — `training_submissions.py`/`training_enhancements.py`/
+  `training_waivers.py`/`external_training.py`/`course_cohorts.py`/
+  `course_syllabus.py` are feature 18. `training_program_service.py` grew
+  36% since the module audit (4,027 → 5,482 L); read all six in-scope
+  files in full, split across 3 parallel reads. TR-1/2/4/7/9/10
+  re-verified still hold. 3 new findings, all fixed: TR-11 (MEDIUM, XC-1)
+  — program JSON-import stored a client-supplied `category_ids` array
+  unvalidated, the one requirement-creation path in the file missing the
+  `assert_all_in_org` guard every sibling path has; also fixed a missing
+  `except ValueError` wrapper on the import endpoint (a pre-existing
+  latent-500 this fix's own new raise would have hit too). TR-12 (LOW/MED,
+  XC-3) — two `User` lookups in `training_service.py` had no org filter,
+  reachable by a `training.manage` officer supplying a foreign org's
+  `user_id` (existence oracle + a cross-org membership_type read feeding
+  tier-exemption logic). TR-13 (LOW/MED, XC-1) — `course_id` was never
+  org-validated on 3 record-create paths, unlike `user_id`/`category_id`
+  on the same endpoints. Also closed 1 stale carried-forward flag (doc
+  correction, not code): the training-sessions "dangling FK batch" is
+  already resolved via `_validate_linkage_ids`, corrected in
+  `docs/app-review/training.md`. 2 items flagged (enum validation gap in
+  bulk/historical-import paths; `enroll_member`'s duplicate-enrollment
+  race), mirrored into `KNOWN_LIMITATIONS.md`. Full completion gate green,
+  full 8663-test backend suite. See `TR-17-training-core.md` for the
+  complete write-up.

@@ -34,6 +34,7 @@ CANONICAL_POSITIONS = frozenset(
         "driver",
         "firefighter",
         "ems",
+        "paramedic",
         "captain",
         "lieutenant",
         "probationary",
