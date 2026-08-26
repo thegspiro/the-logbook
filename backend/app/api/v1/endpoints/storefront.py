@@ -276,6 +276,7 @@ def _product_payload(product: StoreProduct, has_image: bool = False) -> Dict[str
                 "personalization_max_length",
                 "personalization_price",
                 "personalization_thread_color",
+                "personalization_method",
                 "sort_order",
                 "internal_notes",
                 "created_at",

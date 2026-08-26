@@ -27,6 +27,20 @@ _MIGRATION = (
 
 _STOREFRONT_GRANTS = ("storefront.view", "storefront.order", "storefront.manage")
 
+#: Permissions the frozen ``_PRIOR_DEFAULTS`` still carries because they were
+#: in the registry when ``a4f8c1b92d17`` was written, and which a later
+#: revision has since removed. The snapshot is right to keep them: a pristine
+#: stored row still has them at the moment this migration runs, because the
+#: revision that revokes them runs afterwards.
+#:
+#: ``notifications.view`` — revoked from the baseline member and junior ranks
+#: by ``a1f7c34e9b02`` (#1829), which is downstream of this migration.
+_EXPECTED_DRIFT: dict[str, set[str]] = {
+    "member": {"notifications.view"},
+    "firefighter": {"notifications.view"},
+    "engineer": {"notifications.view"},
+}
+
 
 def _load_migration():
     spec = importlib.util.spec_from_file_location("_backfill_storefront", _MIGRATION)
@@ -91,10 +105,28 @@ class TestFrozenPriorDefaults:
         assert set(module._PRIOR_DEFAULTS) == set(module._BACKFILL)
 
     @pytest.mark.parametrize("slug", sorted(_seeded_slugs_with_storefront()))
-    def test_snapshot_is_the_registry_set_minus_the_added_grants(self, slug):
+    def test_snapshot_matches_the_registry_but_for_documented_drift(self, slug):
+        """The snapshot describes a pristine row *when this migration runs*.
+
+        It cannot stay equal to the live registry forever, and it is not
+        supposed to: later revisions change what a fresh install seeds, which
+        is the whole reason the snapshot is frozen. What must stay true is that
+        every difference is one somebody decided on, so the allowance below is
+        explicit and a new, unexplained divergence still fails here.
+        """
         module = _load_migration()
         registry = set(DEFAULT_POSITIONS[slug]["permissions"])
-        assert module._PRIOR_DEFAULTS[slug] == registry - set(module._BACKFILL[slug])
+        expected = registry - set(module._BACKFILL[slug])
+        snapshot = module._PRIOR_DEFAULTS[slug]
+
+        assert snapshot - expected == _EXPECTED_DRIFT.get(slug, set()), (
+            f"{slug}: snapshot carries a permission the registry no longer "
+            "seeds, and it is not in _EXPECTED_DRIFT"
+        )
+        assert expected - snapshot == set(), (
+            f"{slug}: the registry seeds a permission the snapshot omits, so a "
+            "pristine row would no longer match and the backfill would skip it"
+        )
 
     def test_the_snapshot_never_already_carries_a_grant(self):
         # If it did, a pristine row would never match and nothing would be
