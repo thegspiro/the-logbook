@@ -148,7 +148,7 @@ const PurchaseRequestFormPage: React.FC = () => {
         title: pr.title,
         description: pr.description ?? '',
         vendor: pr.vendor ?? '',
-        estimatedAmount: pr.estimatedAmount,
+        estimatedAmount: Number(pr.estimatedAmount),
         priority: pr.priority,
         budgetId: pr.budgetId ?? '',
         fiscalYearId: pr.fiscalYearId,
@@ -177,7 +177,7 @@ const PurchaseRequestFormPage: React.FC = () => {
     try {
       const payload: Partial<PurchaseRequest> = {
         title: data.title,
-        estimatedAmount: data.estimatedAmount,
+        estimatedAmount: data.estimatedAmount.toFixed(2),
         priority: data.priority as PurchaseRequestPriority,
         fiscalYearId: data.fiscalYearId,
       };
@@ -337,7 +337,8 @@ const PurchaseRequestFormPage: React.FC = () => {
               {budgets.map((b) => (
                 <option key={b.id} value={b.id}>
                   {categoryMap.get(b.categoryId) ?? 'Unknown'} -{' '}
-                  {formatCurrencyWhole(b.amountBudgeted - b.amountSpent - b.amountEncumbered)} remaining
+                  {formatCurrencyWhole(Number(b.amountBudgeted) - Number(b.amountSpent) - Number(b.amountEncumbered))}{' '}
+                  remaining
                 </option>
               ))}
             </select>

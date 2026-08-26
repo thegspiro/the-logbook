@@ -179,6 +179,10 @@ export const APPROVAL_STEP_STATUS_COLORS: Record<string, string> = {
   sent: 'bg-blue-100 text-blue-800 dark:bg-blue-500/20 dark:text-blue-400',
 };
 
+/** Exact base-10 monetary value serialized by the API. */
+export type DecimalString = string;
+export type MonetaryAmount = DecimalString;
+
 // =============================================================================
 // Interfaces
 // =============================================================================
@@ -214,9 +218,9 @@ export interface Budget {
   organizationId: string;
   fiscalYearId: string;
   categoryId: string;
-  amountBudgeted: number;
-  amountSpent: number;
-  amountEncumbered: number;
+  amountBudgeted: MonetaryAmount;
+  amountSpent: MonetaryAmount;
+  amountEncumbered: MonetaryAmount;
   notes?: string;
   stationId?: string;
   createdBy: string;
@@ -225,10 +229,10 @@ export interface Budget {
 }
 
 export interface BudgetSummary {
-  totalBudgeted: number;
-  totalSpent: number;
-  totalEncumbered: number;
-  totalRemaining: number;
+  totalBudgeted: MonetaryAmount;
+  totalSpent: MonetaryAmount;
+  totalEncumbered: MonetaryAmount;
+  totalRemaining: MonetaryAmount;
   percentUsed: number;
   categoryBreakdown: Record<string, unknown>[];
 }
@@ -244,7 +248,7 @@ export interface ApprovalChainStep {
   notificationEmails?: string[];
   emailTemplateId?: string;
   allowSelfApproval: boolean;
-  autoApproveUnder?: number;
+  autoApproveUnder?: MonetaryAmount;
   required: boolean;
   createdAt: string;
 }
@@ -255,8 +259,8 @@ export interface ApprovalChain {
   name: string;
   description?: string;
   appliesTo: ApprovalEntityType;
-  minAmount?: number;
-  maxAmount?: number;
+  minAmount?: MonetaryAmount;
+  maxAmount?: MonetaryAmount;
   budgetCategoryId?: string;
   isDefault: boolean;
   isActive: boolean;
@@ -287,7 +291,7 @@ export interface PendingApproval {
   entityType: ApprovalEntityType;
   entityId: string;
   entityTitle: string;
-  entityAmount: number;
+  entityAmount: MonetaryAmount;
   requesterName: string;
   stepName: string;
   stepOrder: number;
@@ -304,8 +308,8 @@ export interface PurchaseRequest {
   title: string;
   description?: string | null;
   vendor?: string | null;
-  estimatedAmount: number;
-  actualAmount?: number;
+  estimatedAmount: MonetaryAmount;
+  actualAmount?: MonetaryAmount;
   status: PurchaseRequestStatus;
   priority: PurchaseRequestPriority;
   approvedBy?: string;
@@ -328,7 +332,7 @@ export interface ExpenseLineItem {
   expenseReportId: string;
   budgetId?: string;
   description: string;
-  amount: number;
+  amount: MonetaryAmount;
   dateIncurred: string;
   expenseType: ExpenseType;
   receiptUrl?: string;
@@ -344,7 +348,7 @@ export interface ExpenseReport {
   fiscalYearId: string;
   title: string;
   description?: string;
-  totalAmount: number;
+  totalAmount: MonetaryAmount;
   status: ExpenseReportStatus;
   approvedBy?: string;
   approvedAt?: string;
@@ -367,7 +371,7 @@ export interface CheckRequest {
   budgetId?: string;
   payeeName: string;
   payeeAddress?: string;
-  amount: number;
+  amount: MonetaryAmount;
   memo?: string;
   purpose?: string;
   status: CheckRequestStatus;
@@ -386,11 +390,11 @@ export interface DuesSchedule {
   id: string;
   organizationId: string;
   name: string;
-  amount: number;
+  amount: MonetaryAmount;
   frequency: DuesFrequency;
   dueDate: string;
   gracePeriodDays: number;
-  lateFeeAmount?: number;
+  lateFeeAmount?: MonetaryAmount;
   fiscalYearId?: string;
   appliesToMembershipTypes?: string[];
   isActive: boolean;
@@ -405,14 +409,14 @@ export interface MemberDues {
   organizationId: string;
   duesScheduleId: string;
   userId: string;
-  amountDue: number;
-  amountPaid: number;
+  amountDue: MonetaryAmount;
+  amountPaid: MonetaryAmount;
   status: DuesStatus;
   dueDate: string;
   paidDate?: string;
   paymentMethod?: string;
   transactionReference?: string;
-  lateFeeApplied?: number;
+  lateFeeApplied?: MonetaryAmount;
   waivedBy?: string;
   waivedAt?: string;
   waiveReason?: string;
@@ -422,10 +426,10 @@ export interface MemberDues {
 }
 
 export interface DuesSummary {
-  totalExpected: number;
-  totalCollected: number;
-  totalOutstanding: number;
-  totalWaived: number;
+  totalExpected: MonetaryAmount;
+  totalCollected: MonetaryAmount;
+  totalOutstanding: MonetaryAmount;
+  totalWaived: MonetaryAmount;
   collectionRate: number;
   membersPaid: number;
   membersOverdue: number;
