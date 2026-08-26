@@ -288,4 +288,4 @@ backend suite re-run green (see Completion gate).
 | `alembic upgrade head` (live test database)                        | applied cleanly         |
 | backend tests, scope (`grant_service` + `fundraising_service`)     | 52 passed               |
 | backend tests, integration (`test_grant_opportunity_delete_db.py`) | 1 passed                |
-| backend tests, full suite                                          | 8849 passed, 22 skipped |
+| backend tests, full suite                                          | 8855 passed, 22 skipped |
