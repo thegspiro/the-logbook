@@ -823,7 +823,7 @@ describe('Dashboard', () => {
     // Message bodies are linkified; an <a> inside a <button> is invalid HTML
     // and the parser splits the row apart, so message rows render as
     // div[role=button]. Following a link must not also fire the row's
-    // navigation to /messages and yank the current tab away.
+    // navigation to the message and yank the current tab away.
     it('lets a body link be followed without triggering the row navigation', async () => {
       mockGetInbox.mockResolvedValue([
         makeMessage({
@@ -844,11 +844,12 @@ describe('Dashboard', () => {
       link.addEventListener('click', (e) => e.preventDefault());
       await user.click(link);
 
-      expect(mockNavigate).not.toHaveBeenCalledWith('/messages');
+      expect(mockNavigate).not.toHaveBeenCalledWith('/messages/msg-link');
 
-      // Clicking the row outside the link still opens the messages page.
+      // Clicking the row outside the link still opens that message, whose
+      // breadcrumb leads on to the full inbox.
       await user.click(within(feed).getByText('Fill the duty survey'));
-      expect(mockNavigate).toHaveBeenCalledWith('/messages');
+      expect(mockNavigate).toHaveBeenCalledWith('/messages/msg-link');
     });
 
     // Enter on a focused body link bubbles to the row's keydown handler; the
@@ -875,13 +876,13 @@ describe('Dashboard', () => {
       link.focus();
       await user.keyboard('{Enter}');
 
-      expect(mockNavigate).not.toHaveBeenCalledWith('/messages');
+      expect(mockNavigate).not.toHaveBeenCalledWith('/messages/msg-link-kbd');
 
       // The row itself still responds to keyboard activation.
       const row = within(feed).getByRole('button', { name: /Fill the duty survey/ });
       row.focus();
       await user.keyboard('{Enter}');
-      expect(mockNavigate).toHaveBeenCalledWith('/messages');
+      expect(mockNavigate).toHaveBeenCalledWith('/messages/msg-link-kbd');
     });
   });
 
@@ -928,6 +929,24 @@ describe('Dashboard', () => {
       expect(within(equipment).getByText('2')).toBeInTheDocument();
       expect(within(equipment).queryByText('51')).not.toBeInTheDocument();
     });
+
+    // Every permission here is granted to DEFAULT_POSITIONS["member"], so gating
+    // the tab on any of them put department-wide reporting in front of every
+    // firefighter in the department.
+    it.each(['inventory.view', 'apparatus.view', 'facilities.view', 'scheduling.view'])(
+      'stays hidden from a member holding only the baseline grant %s',
+      async (grant) => {
+        mockCheckPermission.mockImplementation((permission: string) => permission === grant);
+
+        renderWithRouter(<Dashboard />);
+
+        await waitFor(() => {
+          expect(mockGetMyShifts).toHaveBeenCalledTimes(1);
+        });
+        expect(screen.queryByRole('tab', { name: 'My Department' })).not.toBeInTheDocument();
+        expect(screen.queryByText('Scheduling Operations')).not.toBeInTheDocument();
+      }
+    );
 
     it('is hidden from members without settings.manage', async () => {
       renderWithRouter(<Dashboard />);

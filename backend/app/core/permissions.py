@@ -78,6 +78,11 @@ USERS_VIEW_CONTACT = Permission(
 USERS_UPDATE_POSITIONS = Permission(
     "users.update_positions", "Update user positions", PermissionCategory.USERS
 )
+USERS_VIEW_CONSENTS = Permission(
+    "users.view_consents",
+    "View member privacy consent records",
+    PermissionCategory.USERS,
+)
 
 MEMBERS_VIEW = Permission(
     "members.view", "View member list", PermissionCategory.MEMBERS
@@ -234,6 +239,18 @@ TRAINING_VIEW = Permission(
 )
 TRAINING_MANAGE = Permission(
     "training.manage", "Manage training records", PermissionCategory.TRAINING
+)
+# Configure the training module's org-level settings — chiefly the member
+# visibility panel, which decides how much of an officer's written assessment
+# the member being assessed may read. Deliberately separate from
+# ``training.manage``: setting disclosure policy is a records-administration
+# job (the Membership Coordinator's), while ``training.manage`` is the power
+# to create and edit anybody's training records. The endpoints accept either,
+# so roles that already held ``training.manage`` keep the access they had.
+TRAINING_CONFIGURE = Permission(
+    "training.configure",
+    "Configure training module settings",
+    PermissionCategory.TRAINING,
 )
 
 # Compliance
@@ -610,6 +627,7 @@ ALL_PERMISSIONS: list[Permission] = [
     USERS_EDIT,
     USERS_DELETE,
     USERS_VIEW_CONTACT,
+    USERS_VIEW_CONSENTS,
     USERS_UPDATE_POSITIONS,
     MEMBERS_VIEW,
     MEMBERS_MANAGE,
@@ -641,6 +659,7 @@ ALL_PERMISSIONS: list[Permission] = [
     # Modules
     TRAINING_VIEW,
     TRAINING_MANAGE,
+    TRAINING_CONFIGURE,
     COMPLIANCE_VIEW,
     COMPLIANCE_MANAGE,
     MEDICAL_SCREENING_VIEW,
@@ -887,6 +906,46 @@ _LEADERSHIP_VIEW_PERMISSIONS = [
     PROSPECTIVE_MEMBERS_VIEW.name,
 ]
 
+# What a rank-and-file member of the department can see, whatever their
+# discipline.
+#
+# Firefighter and EMT are **independent** ranks, not a progression: plenty of
+# firefighters never certify as EMTs, plenty of EMTs never ride the engine,
+# and an EMS-only agency has no firefighters at all. Neither implies the
+# other, and holding one says nothing about the other.
+#
+# They share this list because standing at the bottom of the operational
+# ladder is what decides what a member may *see*, and that is the same
+# question for both. Two copies would answer it differently within a release.
+# Anything added here is added to every rank-and-file member of every
+# department, which is what ``tests/test_baseline_member_grants.py`` exists to
+# make deliberate.
+#
+# Note the alias below: ``DEFAULT_POSITIONS["firefighter"]["permissions"]``
+# resolves to this same object, so onboarding writes these grants into a
+# system *position* too (CLAUDE.md pitfall #23).
+_LINE_MEMBER_PERMISSIONS = [
+    MEMBERS_VIEW.name,
+    ORGANIZATION_VIEW.name,
+    TRAINING_VIEW.name,
+    SCHEDULING_VIEW.name,
+    SCHEDULING_SWAP.name,
+    INVENTORY_VIEW.name,
+    STOREFRONT_VIEW.name,
+    STOREFRONT_ORDER.name,
+    MEETINGS_VIEW.name,
+    ELECTIONS_VIEW.name,
+    EVENTS_VIEW.name,
+    FORMS_VIEW.name,
+    MINUTES_VIEW.name,
+    DOCUMENTS_VIEW.name,
+    APPARATUS_VIEW.name,
+    FACILITIES_VIEW.name,
+    LOCATIONS_VIEW.name,
+    # No notifications.view — see the `member` position in
+    # DEFAULT_POSITIONS. The Send Log it opens is org-wide.
+]
+
 OPERATIONAL_RANKS: dict[str, dict] = {
     "fire_chief": {
         "label": "Fire Chief",
@@ -917,6 +976,7 @@ OPERATIONAL_RANKS: dict[str, dict] = {
             SECURITY_MANAGE.name,
             SETTINGS_MANAGE_CONTACT_VISIBILITY.name,
             TRAINING_MANAGE.name,
+            TRAINING_CONFIGURE.name,
             COMPLIANCE_MANAGE.name,
             SCHEDULING_MANAGE.name,
             SCHEDULING_ASSIGN.name,
@@ -984,6 +1044,7 @@ OPERATIONAL_RANKS: dict[str, dict] = {
             MEMBERS_ASSIGN_POSITIONS.name,
             MEMBERS_CREATE.name,
             TRAINING_MANAGE.name,
+            TRAINING_CONFIGURE.name,
             COMPLIANCE_MANAGE.name,
             SCHEDULING_MANAGE.name,
             SCHEDULING_ASSIGN.name,
@@ -1045,6 +1106,7 @@ OPERATIONAL_RANKS: dict[str, dict] = {
             MEMBERS_ASSIGN_POSITIONS.name,
             MEMBERS_CREATE.name,
             TRAINING_MANAGE.name,
+            TRAINING_CONFIGURE.name,
             COMPLIANCE_MANAGE.name,
             SCHEDULING_MANAGE.name,
             SCHEDULING_ASSIGN.name,
@@ -1094,6 +1156,7 @@ OPERATIONAL_RANKS: dict[str, dict] = {
             MEMBERS_CHECK_IN.name,
             PROSPECTIVE_MEMBERS_MANAGE.name,
             TRAINING_MANAGE.name,
+            TRAINING_CONFIGURE.name,
             COMPLIANCE_MANAGE.name,
             SCHEDULING_MANAGE.name,
             SCHEDULING_ASSIGN.name,
@@ -1113,6 +1176,7 @@ OPERATIONAL_RANKS: dict[str, dict] = {
         "default_permissions": _LEADERSHIP_VIEW_PERMISSIONS
         + [
             TRAINING_MANAGE.name,
+            TRAINING_CONFIGURE.name,
             SCHEDULING_MANAGE.name,
             SCHEDULING_ASSIGN.name,
             SCHEDULING_SWAP.name,
@@ -1146,34 +1210,98 @@ OPERATIONAL_RANKS: dict[str, dict] = {
             APPARATUS_MAINTENANCE.name,
             FACILITIES_VIEW.name,
             LOCATIONS_VIEW.name,
-            NOTIFICATIONS_VIEW.name,
+            # No notifications.view — see the `member` position in
+            # DEFAULT_POSITIONS. The Send Log it opens is org-wide.
         ],
     },
     "firefighter": {
         "label": "Firefighter",
         "priority": 10,
-        "default_permissions": [
-            MEMBERS_VIEW.name,
-            ORGANIZATION_VIEW.name,
-            TRAINING_VIEW.name,
-            SCHEDULING_VIEW.name,
-            SCHEDULING_SWAP.name,
-            INVENTORY_VIEW.name,
-            STOREFRONT_VIEW.name,
-            STOREFRONT_ORDER.name,
-            MEETINGS_VIEW.name,
-            ELECTIONS_VIEW.name,
-            EVENTS_VIEW.name,
-            FORMS_VIEW.name,
-            MINUTES_VIEW.name,
-            DOCUMENTS_VIEW.name,
-            APPARATUS_VIEW.name,
-            FACILITIES_VIEW.name,
-            LOCATIONS_VIEW.name,
-            NOTIFICATIONS_VIEW.name,
-        ],
+        "default_permissions": _LINE_MEMBER_PERMISSIONS,
+    },
+    # Seeded by ``DEFAULT_RANKS`` since the rank list shipped, but missing
+    # from this registry until 2026-08-26 — so ``get_rank_default_permissions
+    # ("emt")`` answered ``[]`` and a member whose only standing was the EMT
+    # rank held nothing at all. Unlike Firefighter there is no mirroring entry
+    # in ``DEFAULT_POSITIONS``, so nothing else made up the difference.
+    "emt": {
+        "label": "EMT",
+        "priority": 5,
+        "default_permissions": _LINE_MEMBER_PERMISSIONS,
     },
 }
+
+
+# ============================================
+# Agency Type — what a department's discipline changes about this vocabulary
+# ============================================
+# Ranks and positions share one code vocabulary, and an agency type changes two
+# things about it: which discipline rungs exist at all, and what a couple of
+# them are called. Both live here, once, because both registries live here —
+# a second copy in the rank service is how ``chief`` and ``fire_chief`` came to
+# name the same thing in two files.
+#
+# **Only disciplines are listed.** Every agency has a chief, captains and
+# lieutenants, so officer codes are absent from these sets and are seeded
+# everywhere by construction. That is deliberate: a code added to a registry
+# and forgotten here is seeded to everybody, which is the recoverable
+# direction. The alternative — enumerating the officers and filtering to that
+# list — silently drops any rung nobody remembered to add.
+
+_FIRE_DISCIPLINES = frozenset({"engineer", "firefighter", "emt"})
+
+# An EMS-only service has the same officer ladder as anyone else and no fire
+# line at all. Firefighter and EMT are independent ranks, not two rungs of one
+# ladder, so dropping one says nothing about the other.
+_EMS_DISCIPLINES = frozenset({"engineer", "emt"})
+
+DISCIPLINE_CODES_BY_ORG_TYPE: dict[str, frozenset[str]] = {
+    "fire_department": _FIRE_DISCIPLINES,
+    "fire_ems_combined": _FIRE_DISCIPLINES,
+    "ems_only": _EMS_DISCIPLINES,
+}
+
+#: Every code that is a discipline for *some* agency. A code outside this set is
+#: universal.
+ALL_DISCIPLINE_CODES: frozenset[str] = frozenset().union(
+    *DISCIPLINE_CODES_BY_ORG_TYPE.values()
+)
+
+# What an agency calls a code, where it differs from the registry's own wording.
+#
+# One map for ranks and positions together, on purpose: a department that calls
+# the rank "Chief" calls the position "Chief" too, and the two screens sit next
+# to each other in settings. The base wording differs between the registries
+# (the rank is "Engineer", the position "Engineer / Driver Operator"); the
+# override does not, which is precisely why it is written once.
+LABELS_BY_ORG_TYPE: dict[str, dict[str, str]] = {
+    "ems_only": {
+        "fire_chief": "Chief",
+        "engineer": "Driver / Operator",
+    },
+}
+
+
+def disciplines_for(organization_type: str | None) -> frozenset[str]:
+    """The discipline codes an agency of this type actually has.
+
+    Falls back to the full fire set for an unknown or missing type: a
+    department handed one rung too many can delete it, while one handed too few
+    has no indication anything is absent.
+    """
+    return DISCIPLINE_CODES_BY_ORG_TYPE.get(organization_type or "", _FIRE_DISCIPLINES)
+
+
+def is_seeded_for(code: str, organization_type: str | None) -> bool:
+    """Whether a rank code / position slug is seeded to this kind of agency."""
+    return code not in ALL_DISCIPLINE_CODES or code in disciplines_for(
+        organization_type
+    )
+
+
+def label_for(code: str, organization_type: str | None, default: str) -> str:
+    """What this agency calls ``code``, or the registry's own wording."""
+    return LABELS_BY_ORG_TYPE.get(organization_type or "", {}).get(code, default)
 
 
 def get_rank_default_permissions(rank: str) -> list[str]:
@@ -1303,6 +1431,7 @@ DEFAULT_POSITIONS: dict[str, dict] = {
             SETTINGS_MANAGE_CONTACT_VISIBILITY.name,
             TRAINING_VIEW.name,
             TRAINING_MANAGE.name,
+            TRAINING_CONFIGURE.name,
             TRAINING_VIEW_ALL.name,
             COMPLIANCE_VIEW.name,
             COMPLIANCE_MANAGE.name,
@@ -1429,6 +1558,8 @@ DEFAULT_POSITIONS: dict[str, dict] = {
             MEMBERS_VIEW.name,
             POSITIONS_VIEW.name,
             ORGANIZATION_VIEW.name,
+            STOREFRONT_VIEW.name,
+            STOREFRONT_ORDER.name,
             SETTINGS_VIEW.name,
             LEGAL_PROPOSE.name,
             FUNDRAISING_VIEW.name,
@@ -1468,6 +1599,8 @@ DEFAULT_POSITIONS: dict[str, dict] = {
             MEMBERS_ASSIGN_POSITIONS.name,
             POSITIONS_VIEW.name,
             ORGANIZATION_VIEW.name,
+            STOREFRONT_VIEW.name,
+            STOREFRONT_ORDER.name,
             SETTINGS_VIEW.name,
             LEGAL_PROPOSE.name,
             SETTINGS_MANAGE_CONTACT_VISIBILITY.name,
@@ -1509,6 +1642,8 @@ DEFAULT_POSITIONS: dict[str, dict] = {
             MEMBERS_VIEW.name,
             POSITIONS_VIEW.name,
             ORGANIZATION_VIEW.name,
+            STOREFRONT_VIEW.name,
+            STOREFRONT_ORDER.name,
             SETTINGS_VIEW.name,
             LEGAL_PROPOSE.name,
             MEETINGS_VIEW.name,
@@ -1564,6 +1699,8 @@ DEFAULT_POSITIONS: dict[str, dict] = {
             MEMBERS_VIEW.name,
             POSITIONS_VIEW.name,
             ORGANIZATION_VIEW.name,
+            STOREFRONT_VIEW.name,
+            STOREFRONT_ORDER.name,
             INVENTORY_VIEW_MEDICAL.name,
             INVENTORY_MANAGE_MEDICAL.name,
             # Both halves of the shelf-to-truck loop: stock is only useful if
@@ -1587,6 +1724,8 @@ DEFAULT_POSITIONS: dict[str, dict] = {
             MEMBERS_VIEW.name,
             POSITIONS_VIEW.name,
             ORGANIZATION_VIEW.name,
+            STOREFRONT_VIEW.name,
+            STOREFRONT_ORDER.name,
             EVENTS_VIEW.name,
             EVENTS_CREATE.name,
             EVENTS_EDIT.name,
@@ -1595,6 +1734,7 @@ DEFAULT_POSITIONS: dict[str, dict] = {
             LOCATIONS_CREATE.name,
             LOCATIONS_EDIT.name,
             LOCATIONS_MANAGE.name,
+            USERS_VIEW_CONSENTS.name,
         ],
     },
     "communications_officer": {
@@ -1609,6 +1749,8 @@ DEFAULT_POSITIONS: dict[str, dict] = {
             MEMBERS_VIEW.name,
             POSITIONS_VIEW.name,
             ORGANIZATION_VIEW.name,
+            STOREFRONT_VIEW.name,
+            STOREFRONT_ORDER.name,
             EVENTS_VIEW.name,
             EVENTS_CREATE.name,
             EVENTS_EDIT.name,
@@ -1617,6 +1759,7 @@ DEFAULT_POSITIONS: dict[str, dict] = {
             DOCUMENTS_VIEW.name,
             NOTIFICATIONS_VIEW.name,
             NOTIFICATIONS_MANAGE.name,
+            USERS_VIEW_CONSENTS.name,
         ],
     },
     "historian": {
@@ -1629,12 +1772,15 @@ DEFAULT_POSITIONS: dict[str, dict] = {
             USERS_VIEW.name,
             MEMBERS_VIEW.name,
             ORGANIZATION_VIEW.name,
+            STOREFRONT_VIEW.name,
+            STOREFRONT_ORDER.name,
             MEETINGS_VIEW.name,
             MINUTES_VIEW.name,
             DOCUMENTS_VIEW.name,
             DOCUMENTS_MANAGE.name,
             EVENTS_VIEW.name,
             NOTIFICATIONS_VIEW.name,
+            USERS_VIEW_CONSENTS.name,
         ],
     },
     "apparatus_officer": {
@@ -1701,9 +1847,15 @@ DEFAULT_POSITIONS: dict[str, dict] = {
             MEMBERS_CREATE.name,
             POSITIONS_VIEW.name,
             ORGANIZATION_VIEW.name,
+            STOREFRONT_VIEW.name,
+            STOREFRONT_ORDER.name,
             SETTINGS_VIEW.name,
             LEGAL_PROPOSE.name,
             COMPLIANCE_VIEW.name,
+            # Sets how much of a member's own training file the member may
+            # read. Not accompanied by training.manage: the coordinator
+            # administers the disclosure policy, not the records themselves.
+            TRAINING_CONFIGURE.name,
             EVENTS_VIEW.name,
             NOTIFICATIONS_VIEW.name,
         ],
@@ -1722,6 +1874,7 @@ DEFAULT_POSITIONS: dict[str, dict] = {
             ORGANIZATION_VIEW.name,
             TRAINING_VIEW.name,
             TRAINING_MANAGE.name,
+            TRAINING_CONFIGURE.name,
             TRAINING_VIEW_ALL.name,
             COMPLIANCE_VIEW.name,
             COMPLIANCE_MANAGE.name,
@@ -1755,8 +1908,11 @@ DEFAULT_POSITIONS: dict[str, dict] = {
             MEMBERS_VIEW.name,
             POSITIONS_VIEW.name,
             ORGANIZATION_VIEW.name,
+            STOREFRONT_VIEW.name,
+            STOREFRONT_ORDER.name,
             TRAINING_VIEW.name,
             TRAINING_MANAGE.name,
+            TRAINING_CONFIGURE.name,
             TRAINING_VIEW_ALL.name,
             COMPLIANCE_VIEW.name,
             COMPLIANCE_MANAGE.name,
@@ -1788,6 +1944,8 @@ DEFAULT_POSITIONS: dict[str, dict] = {
             USERS_VIEW_CONTACT.name,
             MEMBERS_VIEW.name,
             ORGANIZATION_VIEW.name,
+            STOREFRONT_VIEW.name,
+            STOREFRONT_ORDER.name,
             FUNDRAISING_VIEW.name,
             FUNDRAISING_MANAGE.name,
             EVENTS_VIEW.name,
@@ -1816,6 +1974,8 @@ DEFAULT_POSITIONS: dict[str, dict] = {
             MEMBERS_CHECK_IN.name,
             POSITIONS_VIEW.name,
             ORGANIZATION_VIEW.name,
+            STOREFRONT_VIEW.name,
+            STOREFRONT_ORDER.name,
             SETTINGS_VIEW.name,
             LEGAL_PROPOSE.name,
             MEETINGS_VIEW.name,
@@ -1840,6 +2000,8 @@ DEFAULT_POSITIONS: dict[str, dict] = {
             MEMBERS_VIEW.name,
             POSITIONS_VIEW.name,
             ORGANIZATION_VIEW.name,
+            STOREFRONT_VIEW.name,
+            STOREFRONT_ORDER.name,
             SCHEDULING_VIEW.name,
             SCHEDULING_MANAGE.name,
             SCHEDULING_ASSIGN.name,
@@ -1863,6 +2025,8 @@ DEFAULT_POSITIONS: dict[str, dict] = {
             USERS_VIEW_CONTACT.name,
             MEMBERS_VIEW.name,
             ORGANIZATION_VIEW.name,
+            STOREFRONT_VIEW.name,
+            STOREFRONT_ORDER.name,
             EVENTS_VIEW.name,
             EVENTS_CREATE.name,
             EVENTS_EDIT.name,
@@ -1929,10 +2093,41 @@ DEFAULT_POSITIONS: dict[str, dict] = {
             APPARATUS_VIEW.name,
             FACILITIES_VIEW.name,
             LOCATIONS_VIEW.name,
-            NOTIFICATIONS_VIEW.name,
+            # notifications.view is deliberately absent. A member's own
+            # inbox (`GET /notifications/my`) is gated on authentication
+            # alone, so withholding this costs them nothing they can act
+            # on — while holding it opens `GET /notifications/logs`, which
+            # is scoped to the organization and not to the recipient: every
+            # subject and body the department has sent anyone, readable by
+            # anyone.
         ],
     },
 }
+
+
+def default_positions_for(organization_type: str | None) -> dict[str, dict]:
+    """The default positions an agency of this type should be seeded.
+
+    An EMS-only service has no firefighters and never will, and its chief is a
+    Chief rather than a Fire Chief. Everything else in the registry is
+    administrative or universal and is seeded to every agency.
+
+    The returned definitions are **shallow** copies, and must stay that way:
+    ``DEFAULT_POSITIONS[slug]["permissions"]`` *is* the rank registry's list
+    object for the seven rank-mirroring slugs (pitfall #23), and copying the
+    list would quietly end the aliasing that
+    ``tests/test_rank_registry_agreement.py`` asserts. Only ``name`` is
+    rewritten, so a caller reading ``permissions`` still gets the shared list.
+    """
+    return {
+        slug: {
+            **definition,
+            "name": label_for(slug, organization_type, definition["name"]),
+        }
+        for slug, definition in DEFAULT_POSITIONS.items()
+        if is_seeded_for(slug, organization_type)
+    }
+
 
 # Backward-compatible alias
 DEFAULT_ROLES = DEFAULT_POSITIONS

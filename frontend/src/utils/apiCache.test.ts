@@ -436,6 +436,12 @@ describe('apiCache', () => {
     it('returns false for /users/ endpoints', () => {
       expect(isCacheable('/users/123')).toBe(false);
       expect(isCacheable('/users/me')).toBe(false);
+      // The photo-use consent roster is a member list (names, emails,
+      // membership numbers) and rides on the prefix rather than an entry of
+      // its own. Narrowing the prefix to '/users/' would still cover it, but
+      // it is asserted here so a future tidy-up of that entry cannot make a
+      // roster of the whole department cacheable in passing.
+      expect(isCacheable('/users/consents/photo-use')).toBe(false);
     });
 
     it('returns false for /security/ endpoints', () => {
@@ -583,6 +589,16 @@ describe('apiCache', () => {
     it('returns false for facility occupant/access-key PII', () => {
       expect(isCacheable('/facilities/occupants')).toBe(false);
       expect(isCacheable('/facilities/access-keys')).toBe(false);
+    });
+
+    it('returns false for equipment-check reporter/restock PII (EC-14)', () => {
+      // ApparatusInventoryResponse and the check-log carry a reporter's full
+      // name and a free-text restock note; a caller whose equipment-check
+      // permission is later revoked must not keep reading them from cache.
+      expect(isCacheable('/equipment-checks/apparatus/123/inventory')).toBe(false);
+      expect(isCacheable('/equipment-checks/log')).toBe(false);
+      expect(isCacheable('/equipment-checks/items/1/deployed-lots')).toBe(false);
+      expect(isCacheable('/equipment-checks/supply/expiring-items')).toBe(false);
     });
 
     it('excludes event roster sub-resources but still caches event list/detail', () => {

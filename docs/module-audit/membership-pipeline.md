@@ -102,6 +102,19 @@ a foreign `pipeline_id` on the election package is checked in-org via
 `get_pipeline`. Unknown ids reject with `ValueError → 400`. See
 `docs/app-review/membership-pipeline.md`.
 
+**Correction (security-review, 2026-08-25):** five defects in code added
+after this audit — none present at the time it was written — are fixed in
+`docs/security-review/MP-08-membership-pipeline.md` (MP-8 through MP-12):
+`update_prospect` silently dropped an explicit null instead of clearing the
+field, and separately offered an unguarded path to set/clear the derived
+`TRANSFERRED` status; `/approve-step` returned the full applicant record to a
+caller authorized only by role, not by view permission; and
+`PUT`/`DELETE /interviews/{id}` bypassed the router-wide self-access guard
+(those routes carry no `{prospect_id}` path parameter for it to key on). A
+sixth (unbounded election-package listing/creation, MP-10) is flagged in
+`docs/KNOWN_LIMITATIONS.md` rather than fixed. `update_prospect`'s sensitive-
+field masking (MP-6, below) was preserved by the MP-8 fix.
+
 ### MP-6 — LOW — Sensitive PII persisted in the activity log / audit trail — ✅ FIXED (B9)
 
 `update_prospect` recorded old→new values of every changed field (incl.

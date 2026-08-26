@@ -8,8 +8,9 @@ from datetime import datetime
 from typing import List, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, computed_field
 
+from app.core.permissions import get_rank_default_permissions
 from app.schemas.base import UTCResponseBase
 
 
@@ -67,6 +68,22 @@ class RankResponse(UTCResponseBase):
     eligible_positions: Optional[List[str]] = None
     created_at: datetime
     updated_at: datetime
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def default_permission_count(self) -> int:
+        """How many permissions this rank confers on its own, or 0.
+
+        Rank defaults resolve from a code-level registry keyed by
+        ``rank_code``, not from this row, so a rank a department invents for
+        itself — Battalion Chief, Firefighter II — confers nothing. That is
+        the documented design (positions are the primary source of
+        permissions), but it was invisible: the editor rendered a custom rank
+        identically to a seeded one. Reported so the screen can say which is
+        which rather than leaving an admin to discover it from a member who
+        cannot see anything.
+        """
+        return len(get_rank_default_permissions(self.rank_code))
 
 
 class RankReorderItem(BaseModel):

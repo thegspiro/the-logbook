@@ -30,6 +30,7 @@ from app.models.grant import (
 from app.models.user import User
 from app.utils.org_scoping import assert_in_org
 from app.utils.sql_ordering import nulls_last_asc
+from app.utils.sql_search import LIKE_ESCAPE_CHAR, like_pattern
 
 
 def _status_value(value: Any) -> str:
@@ -97,12 +98,11 @@ class GrantService:
         if category:
             query = query.where(GrantOpportunity.category == category)
         if search:
-            safe = search.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-            pattern = f"%{safe}%"
+            pattern = like_pattern(search)
             query = query.where(
-                (GrantOpportunity.name.ilike(pattern, escape="\\"))
-                | (GrantOpportunity.agency.ilike(pattern, escape="\\"))
-                | (GrantOpportunity.description.ilike(pattern, escape="\\"))
+                (GrantOpportunity.name.ilike(pattern, escape=LIKE_ESCAPE_CHAR))
+                | (GrantOpportunity.agency.ilike(pattern, escape=LIKE_ESCAPE_CHAR))
+                | (GrantOpportunity.description.ilike(pattern, escape=LIKE_ESCAPE_CHAR))
             )
         query = query.order_by(*nulls_last_asc(GrantOpportunity.deadline_date))
         result = await self.db.execute(query)

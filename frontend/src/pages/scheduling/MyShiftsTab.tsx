@@ -835,7 +835,7 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
                   value={timeOffForm.reason}
                   onChange={(e) => setTimeOffForm((p) => ({ ...p, reason: e.target.value }))}
                   rows={3}
-                  placeholder="Reason for time off (helps your manager understand the request)"
+                  placeholder="Reason for time off (helps your officer understand the request)"
                   className={inputCls + ' resize-none'}
                 />
               </div>
@@ -861,7 +861,7 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
                         </li>
                       ))}
                     </ul>
-                    <p className="mt-1 text-xs">Your manager will need to find coverage or reassign these shifts.</p>
+                    <p className="mt-1 text-xs">An officer will need to find coverage or reassign these shifts.</p>
                   </div>
                 </div>
               )}

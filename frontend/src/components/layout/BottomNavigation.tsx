@@ -32,7 +32,11 @@ interface TabDef {
 const TAB_CANDIDATES: TabDef[] = [
   { label: 'Home', path: '/dashboard', icon: Home },
   { label: 'Events', path: '/events', icon: Calendar },
-  { label: 'Store', path: '/store', icon: Store, module: 'storefront' },
+  // `permission` as well as `module`: the /store route requires
+  // storefront.view, and a tab that lands on Access Denied is worse than no
+  // tab — the slot fallback chain below hands the space to a destination the
+  // member can actually open.
+  { label: 'Store', path: '/store', icon: Store, module: 'storefront', permission: 'storefront.view' },
   { label: 'Schedule', path: '/scheduling', icon: Clock, module: 'scheduling' },
   { label: 'Training', path: '/training/my-training', icon: GraduationCap, module: 'training' },
   { label: 'Members', path: '/members', icon: Users },

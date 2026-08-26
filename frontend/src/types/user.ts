@@ -2,7 +2,7 @@
  * User type definitions
  */
 
-import type { UserStatus } from '../constants/enums';
+import type { ConsentStatus, UserStatus } from '../constants/enums';
 
 export interface User {
   id: string;
@@ -264,6 +264,32 @@ export interface ConsentItem {
   /** null = never asked; the backend treats that as "no consent" */
   granted: boolean | null;
   updated_at: string | null;
+}
+
+export interface ConsentRosterMember {
+  user_id: string;
+  first_name: string | null;
+  last_name: string | null;
+  photo_url: string | null;
+  rank: string | null;
+  station: string | null;
+  membership_number: string | null;
+  member_status: string | null;
+  status: ConsentStatus;
+  granted: boolean | null;
+  /** UTC ISO timestamp of the member's most recent decision; null if never asked */
+  decided_at: string | null;
+}
+
+export interface ConsentRoster {
+  consent_type: string;
+  summary: {
+    granted: number;
+    declined: number;
+    not_answered: number;
+    total: number;
+  };
+  members: ConsentRosterMember[];
 }
 
 export interface DeletionImpact {

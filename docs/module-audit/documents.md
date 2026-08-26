@@ -29,6 +29,14 @@ tenant isolation).
   by minutes-publish). Frontend confirms no consumption.
 - **LIKE search escapes `\`, `%`, `_`; no raw SQL; flake8 clean; no TODOs.**
 
+**Correction (security review, 2026-08-25):** `docs/security-review/DOC-10-documents-legal.md`
+re-verified DOC-1/2/3/6 (still fixed) and DOC-4/DOC-5 (still open, unchanged
+— DOC-5 confirmed to extend identically to the facility-folder hierarchy
+added since this audit), and reviewed two files this audit never covered —
+`station_documents.py`/`print_document_service.py` and
+`legal_documents.py`/`legal_service.py` — for the first time. No new
+findings in either.
+
 ## Findings
 
 ### DOC-1 — MEDIUM (data retention) — `delete_document` orphaned the on-disk file — ✅ FIXED

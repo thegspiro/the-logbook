@@ -92,7 +92,7 @@ async def create_rank(
 @router.get("/validate", response_model=RankValidationResponse)
 async def validate_ranks(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_permission("settings.manage")),
 ):
     """
     Check for active members whose rank does not match any configured rank.
@@ -101,6 +101,7 @@ async def validate_ranks(
     who are still actively interacting with the platform are checked.
 
     **Authentication required**
+    **Permissions required:** settings.manage
     """
     service = OperationalRankService(db)
     issues = await service.validate_ranks(current_user.organization_id)

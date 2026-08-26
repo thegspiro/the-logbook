@@ -14,6 +14,8 @@ import { useTimezone } from '../../../hooks/useTimezone';
 import { formatCurrency, formatDateTime } from '../../../utils/dateFormatting';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { storefrontService } from '../services/api';
+import { ThreadSwatch } from './ThreadSwatch';
+import { methodLabel } from '../utils/personalization';
 import {
   ORDER_STATUS_BADGES,
   ORDER_STATUS_LABELS,
@@ -254,8 +256,12 @@ export const OrderDetailModal: React.FC<OrderDetailModalProps> = ({ orderId, onC
                         {item.productName}
                         {item.variantLabel && <span className="text-theme-text-muted"> — {item.variantLabel}</span>}
                         {item.personalizationText && (
-                          <div className="text-theme-text-muted text-xs italic">
-                            &ldquo;{item.personalizationText}&rdquo;
+                          <div className="text-theme-text-muted flex items-center gap-1.5 text-xs italic">
+                            <span>&ldquo;{item.personalizationText}&rdquo;</span>
+                            <span className="not-italic">{methodLabel(item.personalizationMethod)}</span>
+                            {item.personalizationThreadColor && (
+                              <ThreadSwatch color={item.personalizationThreadColor} />
+                            )}
                           </div>
                         )}
                       </td>

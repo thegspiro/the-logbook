@@ -65,6 +65,12 @@ const MONTHS = [
   'December',
 ];
 
+/* Unmarked reads as required to most people, and this form has more fields a
+   member may leave blank than ones they must fill, so the blank-able ones say
+   so. The requirement/program linkage block states it once for the whole
+   section instead — see the note above <TrainingLinkageFields />. */
+const Optional: React.FC = () => <span className="text-theme-text-muted font-normal">(Optional)</span>;
+
 /**
  * Create Training Session Page
  *
@@ -370,7 +376,9 @@ const CreateTrainingSessionPage: React.FC = () => {
 
               {/* Description */}
               <div>
-                <label className="text-theme-text-primary mb-2 block text-sm font-semibold">Description</label>
+                <label className="text-theme-text-primary mb-2 block text-sm font-semibold">
+                  Description <Optional />
+                </label>
                 <textarea
                   value={formData.description}
                   onChange={(e) => updateField('description', e.target.value)}
@@ -488,7 +496,7 @@ const CreateTrainingSessionPage: React.FC = () => {
                     {recurrencePattern === 'custom' && (
                       <div>
                         <label className="text-theme-text-primary mb-2 block text-sm font-semibold">
-                          Days of the Week
+                          Days of the Week <span className="text-red-700">*</span>
                         </label>
                         <div className="flex flex-wrap gap-2">
                           {WEEKDAYS.map((day, index) => (
@@ -574,7 +582,9 @@ const CreateTrainingSessionPage: React.FC = () => {
               <div className="space-y-3">
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                   <div>
-                    <label className="text-theme-text-primary mb-2 block text-sm font-semibold">Location</label>
+                    <label className="text-theme-text-primary mb-2 block text-sm font-semibold">
+                      Location <Optional />
+                    </label>
                     {locations.length > 0 ? (
                       <select
                         value={locationMode === 'other' ? '__other__' : formData.location_id || ''}
@@ -618,7 +628,7 @@ const CreateTrainingSessionPage: React.FC = () => {
                   </div>
                   <div>
                     <label className="text-theme-text-primary mb-2 block text-sm font-semibold">
-                      {locationMode === 'other' ? 'Location Name / Address' : 'Location Details'}
+                      {locationMode === 'other' ? 'Location Name / Address' : 'Location Details'} <Optional />
                     </label>
                     {locationMode === 'other' && locations.length > 0 ? (
                       <input
@@ -702,7 +712,9 @@ const CreateTrainingSessionPage: React.FC = () => {
               {formData.requires_rsvp && (
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                   <div>
-                    <label className="text-theme-text-primary mb-2 block text-sm font-semibold">RSVP Deadline</label>
+                    <label className="text-theme-text-primary mb-2 block text-sm font-semibold">
+                      RSVP Deadline <Optional />
+                    </label>
                     <DateTimeQuarterHour
                       value={formData.rsvp_deadline ?? ''}
                       onChange={(v) => updateField('rsvp_deadline', v)}
@@ -710,7 +722,9 @@ const CreateTrainingSessionPage: React.FC = () => {
                     />
                   </div>
                   <div>
-                    <label className="text-theme-text-primary mb-2 block text-sm font-semibold">Max Participants</label>
+                    <label className="text-theme-text-primary mb-2 block text-sm font-semibold">
+                      Max Participants <Optional />
+                    </label>
                     <input
                       type="number"
                       value={formData.max_attendees || ''}
@@ -842,7 +856,9 @@ const CreateTrainingSessionPage: React.FC = () => {
                       />
                     </div>
                     <div>
-                      <label className="text-theme-text-primary mb-2 block text-sm font-semibold">Course Code</label>
+                      <label className="text-theme-text-primary mb-2 block text-sm font-semibold">
+                        Course Code <Optional />
+                      </label>
                       <input
                         type="text"
                         value={formData.course_code}
@@ -887,7 +903,9 @@ const CreateTrainingSessionPage: React.FC = () => {
                   </div>
 
                   <div>
-                    <label className="text-theme-text-primary mb-2 block text-sm font-semibold">Lead Instructor</label>
+                    <label className="text-theme-text-primary mb-2 block text-sm font-semibold">
+                      Lead Instructor <Optional />
+                    </label>
                     <select
                       value={instructorId}
                       onChange={(e) => {
@@ -908,7 +926,9 @@ const CreateTrainingSessionPage: React.FC = () => {
                   </div>
 
                   <div>
-                    <label className="text-theme-text-primary mb-2 block text-sm font-semibold">Apparatus</label>
+                    <label className="text-theme-text-primary mb-2 block text-sm font-semibold">
+                      Apparatus <Optional />
+                    </label>
                     <select
                       value={apparatusId}
                       onChange={(e) => setApparatusId(e.target.value)}
@@ -965,7 +985,7 @@ const CreateTrainingSessionPage: React.FC = () => {
                     <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                       <div>
                         <label className="text-theme-text-primary mb-2 block text-sm font-semibold">
-                          Issuing Agency
+                          Issuing Agency <Optional />
                         </label>
                         <input
                           type="text"
@@ -977,7 +997,7 @@ const CreateTrainingSessionPage: React.FC = () => {
                       </div>
                       <div>
                         <label className="text-theme-text-primary mb-2 block text-sm font-semibold">
-                          Cert Number Prefix
+                          Cert Number Prefix <Optional />
                         </label>
                         <input
                           type="text"
@@ -990,7 +1010,7 @@ const CreateTrainingSessionPage: React.FC = () => {
                     </div>
                     <div>
                       <label className="text-theme-text-primary mb-2 block text-sm font-semibold">
-                        Expiration (months)
+                        Expiration (months) <Optional />
                       </label>
                       <input
                         type="number"

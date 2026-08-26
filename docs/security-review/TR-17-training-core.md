@@ -1,0 +1,337 @@
+# Security Review 17 — Training Core
+
+**Prefix:** `TR` · **Iteration:** 17 · **Reviewed:** 2026-08-26 · **PR:** [#1851](https://github.com/thegspiro/the-logbook/pull/1851)
+
+**Backend:** `api/v1/endpoints/training.py` (3,162 L),
+`api/v1/endpoints/training_programs.py` (2,142 L),
+`api/v1/endpoints/training_sessions.py` (528 L),
+`services/training_service.py` (1,034 L),
+`services/training_program_service.py` (5,482 L — grew from 4,027 L, +36%),
+`services/training_session_service.py` (1,801 L),
+`services/training_compliance.py` (771 L)
+**Frontend:** `modules/training` (not read line-by-line this iteration)
+**Migrations:** none this iteration (no schema change)
+
+---
+
+## Scope
+
+This is the training module's first pass through the security-review
+rotation, and the largest feature reviewed so far. Module-audit iteration 18
+covered the whole training module (8 endpoint files, ~8,100 L, 154 endpoints)
+at a mix of full-read and invariant-level depth, followed by 4 app-review
+Tier B passes (2026-08-06 through 2026-08-09). The rotation splits that one
+module-audit unit into two security-review passes — **this iteration is
+"training core"**: `training.py`, `training_programs.py`,
+`training_sessions.py`, and their three backing services. `training_
+submissions.py`, `training_enhancements.py`, `training_waivers.py`,
+`external_training.py`, and the never-yet-audited `course_cohorts.py`/
+`course_syllabus.py` are feature 18, "training extended," out of scope here.
+
+**Read in full, not sampled:** all six files listed above. Split across
+three parallel reads given the combined size (~11,000 L): `training.py` +
+`training_service.py` + `training_compliance.py`; `training_programs.py` +
+`training_program_service.py` (the latter grew 36% since the module audit —
+treated as largely a first thorough read, since the audit's own caveat says
+this file was reviewed "for invariants, not line-by-line" at the smaller
+size); `training_sessions.py` + `training_session_service.py`.
+
+## Route inventory
+
+- **`training.py`**: 36/36 routes authenticated. No `.view`-gating-a-write
+  found. Per-member PHI routes (`/stats/user/{id}`, `/compliance-summary/{id}`,
+  `/reports/user/{id}`, `/requirements/progress/{id}`, `/category-hours/{id}`)
+  all still gate via `_require_self_or_training_officer`; `GET /records`
+  still self-scopes non-officers to `user_id == current_user.id`.
+- **`training_programs.py`**: every route authenticated; every mutating
+  route requires `training.manage` except two deliberately member-scoped
+  paths (`PATCH /progress/{id}`, `POST /enrollments/{id}/withdraw`), both
+  `get_current_user`-gated with ownership/officer checks pushed into the
+  service (`acting_user_id` + `can_manage`) — correct design, not a
+  permission-inversion.
+- **`training_sessions.py`**: 9/9 routes authenticated. Two are deliberately
+  `get_current_user`-only, read-only, and documented as such
+  (`GET /by-event/{event_id}`, `GET /calendar`); every mutating route
+  requires `events.manage` or the narrower `events.reopen_attendance` (split
+  from `events.manage` so the person who finalized can't unilaterally
+  reopen — mirrors the same split in the events module); `GET
+/approve/{token}` requires `training.manage` (attendee PII in the
+  response).
+
+No unauthenticated route found in any of the three files.
+
+## Verified good ✅
+
+- **TR-1, TR-2, TR-7 (write + read side), TR-9/TR-10, TR-4 all re-verified
+  still hold** in `training.py`/`training_service.py`. TR-3/TR-6/TR-8 live
+  in files outside this iteration's scope (`external_training.py`,
+  `training_enhancement_service.py`) and were not re-chased.
+- **Programs-service tenant isolation re-verified "XC-3 clean"** at the
+  36%-larger size: every by-id program/phase/milestone/requirement-link/
+  enrollment/progress operation traces to an org-scoped fetch, including the
+  progress row lock (`with_for_update(of=RequirementProgress)`).
+  `enroll_member` still validates both the program and the target user's org
+  membership before enrolling.
+- **The idempotent credit ledger is intact.** `apply_requirement_credit`/
+  `revoke_requirement_credit` route through `RequirementProgressCredit`,
+  guarded by a real unique constraint (`uq_progress_credit_source` on
+  `(progress_id, source_type, source_id)`) with an `IntegrityError` fallback
+  as the concurrency backstop — the claimed "no double-credit on re-sync/
+  re-approve" mechanism, confirmed under the larger file.
+- **The training-sessions "dangling FK batch" is resolved, not just still
+  dangling — the carried-forward flag is stale.** The module-audit and
+  app-review docs list `category_id`/`program_id`/`phase_id`/
+  `requirement_id`/`instructor_id` on session-create as unvalidated,
+  batched for "a future FK-hardening pass," on the premise that none is
+  projected back so there's no live leak. Re-verified in the current code:
+  all five are now validated in-org via `TrainingSessionService.
+_validate_linkage_ids` (an `is_in_org` call per field), called from
+  `create_training_session`, `create_recurring_training_session`, and
+  `update_session_linkage`. They are echoed back in
+  `TrainingSessionResponse` as bare UUIDs, but grepped app-wide for any
+  join/enrichment that would resolve them to a name across orgs — none
+  exists, so the "not a leak" half of the premise also still holds. Two
+  adjacent items in the same batch, in the same generation call chain, are
+  also already fixed: `course_cohort_service.py`'s ad-hoc class creation
+  validates `instructor_id`/`location_id`/`category_id`/`requirement_id`/
+  `phase_id` in-org, and `event_service.create_recurring_event` validates
+  `location_id`/`template_id`. Recommend closing this batch item in
+  `docs/module-audit/training.md` and `docs/app-review/training.md` rather
+  than carrying it forward again.
+- **The multi-table generation transaction** (Events, TrainingSessions,
+  EventRSVPs, ProgramEnrollments — actually implemented in
+  `course_cohort_service.py`'s `create_cohort`, called from the session-core
+  scope via `TrainingSessionService.create_training_session(commit=False)`)
+  threads one `organization_id` through every write with no per-table
+  re-derivation — no cross-table org-mismatch path found, closing the
+  module-audit's own coverage-note concern about this exact transaction's
+  "wide blast radius for an org-scoping miss."
+- **`EventRSVP` overrides in the training-approval flow are backstopped,
+  not a live gap.** `_finalize_training_records`/`submit_training_approval`
+  look up an RSVP by `event_id` (org-trusted) **and** client-supplied
+  `attendee.user_id` with no explicit `organization_id` filter on that
+  query. Traced why this doesn't matter: an RSVP row for a given event can
+  only exist for a user already validated in-org at RSVP-creation time
+  (self-service RSVP forces `user_id=current_user.id`; manager-added
+  attendees are org-validated) — so no cross-org RSVP row could ever exist
+  for this query to match, regardless of the `user_id` a caller supplies.
+  Verified good, not fixed (nothing to fix).
+- **Recurring/generation caps still bounded**: session recurrence delegates
+  to `EventService.create_recurring_event`'s 365-occurrence cap; the
+  separate cohort-syllabus generation path has its own 200-class cap
+  (`MAX_GENERATED_CLASSES`). No unbounded generation path found.
+- **RSVP capacity locking** (used by session sign-up via `Event`/`EventRSVP`)
+  confirmed correct at both halves of Pitfall #27 in `event_service.py` —
+  re-verified as part of the events review two iterations ago, unchanged
+  here.
+- **No SQL injection / no LIKE surface** in any of the six files — zero
+  `.like()`/`.ilike()` calls.
+- **JSON-column mutation discipline holds** — every JSON-column write
+  found (`progress_notes`, checklist state, custom fields) uses
+  `copy.deepcopy` + reassignment; no in-place mutation without reassignment.
+- **Update payloads correctly distinguish omitted from explicit-null** —
+  every update method checked uses `model_dump(exclude_unset=True)`.
+- **`/training/expiring-certifications`'s member-name enrichment lookup**
+  now filters `organization_id` too. `user_ids` are drawn from
+  `TrainingRecord` rows already filtered to this org, so this wasn't
+  independently exploitable — added for consistency with every other
+  enrichment query in the module rather than to close a live gap.
+- **`TrainingProgramUpdate.target_roles`** (a `List[UUID]`) is stored
+  without org validation, inconsistent with the `assert_all_in_org`
+  convention elsewhere in the file — but the code explicitly documents
+  `target_position`/`target_roles` as advisory-only, non-gating display
+  data, not a security boundary. Verified the claim (nothing reads these
+  fields to make an authorization decision); not a finding.
+
+## Findings
+
+### TR-11 — MEDIUM (XC-1) — Program JSON import stored a client-supplied `category_ids` array unvalidated — ✅ FIXED
+
+**What:** `POST /training/programs/import` ingests an arbitrary
+user-uploaded JSON body with no Pydantic schema (`payload: dict`).
+`_resolve_or_create_requirement`, which the import walks for every
+requirement it needs to create, wrote `req_data.get("category_ids")`
+straight onto a new `TrainingRequirement` with no in-org check — unlike
+every other requirement-creation path in this same file
+(`create_training_requirement`, `update_training_requirement`,
+`build_program`, `import_registry_requirements`), all of which validate
+`category_ids`/`required_courses`/linked-requirement ids via
+`assert_all_in_org` before storing. `app/utils/org_scoping.py`'s own
+docstring names `category_ids` as the canonical example of the class this
+helper exists to close.
+
+**Where:** `app/services/training_program_service.py` —
+`_resolve_or_create_requirement` (was line 5150), called from
+`import_program_from_json` (called by `POST /programs/import`,
+`training.manage`).
+
+**Failure scenario:** a `training.manage` user crafts (or is handed) an
+import file whose requirement carries another organization's
+`TrainingCategory` id. The requirement is created with that foreign id in
+its `category_ids` array — a persisted, dangling cross-tenant reference
+that `training_compliance.py`'s evaluator later matches training records
+against.
+
+**Impact:** MEDIUM — matches the severity class of TR-6/TR-7 (the same
+unvalidated-category-FK shape, already fixed on every other write path in
+this module), though this specific route requires deliberate insider action
+by an authenticated `training.manage` user of the caller's own org, not an
+externally reachable exploit.
+
+**Fix:** `_resolve_or_create_requirement` now validates `category_ids` via
+`assert_all_in_org(..., TrainingCategory, ...)` before constructing the new
+`TrainingRequirement`, mirroring `_validate_required_courses`'s pattern
+exactly. Also fixed an adjacent latent-500: `POST /programs/import` had no
+`except ValueError` handler at all, so this new check's rejection (and the
+pre-existing `structure_type` enum-validation `ValueError` two lines above
+it, which had the identical gap) would have propagated as an unhandled 500
+rather than a clean 400 — added the standard wrapper. Guard tests:
+`test_training_program_import_scoping.py` (3 tests: rejects a foreign
+category, accepts an in-org one, skips validation when none supplied).
+
+### TR-12 — LOW/MEDIUM (XC-3) — Two `User` lookups in `training_service.py` were not org-scoped — ✅ FIXED
+
+**What:** `get_all_requirements_progress` and `generate_training_report`'s
+tier-exemption block both fetched a `User` row by `user_id` alone
+(`select(User).where(User.id == str(user_id))`), unlike the equivalent
+lookup in `get_compliance_summary` in the same module, which already filters
+`organization_id`. Both are reachable from routes gated
+`_require_self_or_training_officer` (`/requirements/progress/{user_id}`,
+`/reports/user/{user_id}`) — that helper checks self-id-match-or-
+`training.manage`, not org membership, so a `training.manage` officer in
+one org could pass a foreign org's `user_id`.
+
+**Where:** `app/services/training_service.py` — `get_all_requirements_progress`
+(was line 944) and `generate_training_report`'s tier-exemption block (was
+line 195).
+
+**Failure scenario:** a training officer in Org A calls
+`GET /training/requirements/progress/{foreign_user_id}` (or
+`/reports/user/{foreign_user_id}`) with a user id from Org B. Before the
+fix: the `User` row is fetched cross-org (an existence oracle — a
+differing response shape between "found, foreign" and "not found" — though
+the downstream `TrainingRecord`/`TrainingRequirement` queries were already
+correctly org-scoped, so no foreign completions/certifications were
+returned), and in `generate_training_report`, the foreign user's
+`membership_type` is mixed into the _caller's org's_ tier-exemption
+resolution — an org-isolation violation in the compliance logic itself,
+even though tier ids are org-specific strings unlikely to collide in
+practice.
+
+**Impact:** LOW/MEDIUM — no PHI/record disclosure (downstream queries were
+already correctly scoped), but a real cross-org existence oracle and a
+genuine org-boundary violation in the tier-exemption computation.
+
+**Fix:** both lookups now add `organization_id == str(organization_id)` to
+their `where()`, matching every other `User` lookup in this module. Guard
+tests: `test_training_service_user_scoping.py` (behavioral test for
+`get_all_requirements_progress`, asserting `stmt.whereclause` — not the
+whole compiled statement, which always projects `organization_id` for a
+bare `select(User)` regardless of filtering, the exact hollow-assertion
+trap CLAUDE.md's pitfall doc warns about; source-inspection test for
+`generate_training_report`, since behaviorally mocking the full report
+method is fragile and obscures the one invariant being guarded).
+
+### TR-13 — LOW/MEDIUM (XC-1) — `course_id` was never org-validated on any of its three write paths — ✅ FIXED
+
+**What:** unlike `user_id` (TR-2) and `category_id` (TR-7) on the same
+endpoints, a client-supplied `course_id` was stored unchecked on
+`POST /training/records` (`create_record`), `POST /training/records/bulk`
+(`create_records_bulk`), and `POST /training/import/confirm`
+(`confirm_historical_import`, both the already-"matched" `course_id` a row
+carries and a `map_existing` mapping's `existing_course_id` — both
+client-supplied on the confirm request itself, since the whole `rows`/
+`course_mappings` payload round-trips through the client between parse and
+confirm, so a server-computed match at parse time is not trustworthy by
+the time confirm receives it back).
+
+**Where:** `app/api/v1/endpoints/training.py` — `create_record` (was line
+601), `create_records_bulk` (was line 848), `confirm_historical_import`
+(was lines 2363/2374).
+
+**Failure scenario:** `create_record`/`create_records_bulk` already ran an
+org-scoped course lookup, but only to auto-calculate `expiration_date` —
+if the course wasn't found in-org, the calc was silently skipped rather
+than the request rejected, and the raw `course_id` was still stored.
+`confirm_historical_import` had no course lookup on the `map_existing`
+path at all. In all three cases the resulting `TrainingRecord.course_id`
+is a dangling reference to another org's course.
+
+**Impact:** LOW/MEDIUM — no current read-leak (`TrainingRecordResponse`
+only returns the raw `course_id` UUID, never a joined course name/code the
+way the actual TR-7 leak worked), but the identical missing-validation
+shape as TR-2/TR-7 on the exact same functions, and any future consumer
+that joins on `course_id` without its own org filter would reopen a
+TR-7-class leak.
+
+**Fix:** all three paths now validate `course_id` in-org before storing —
+`create_record`/`create_records_bulk` reject with a clean error (404 /
+per-row error, respectively) instead of silently skipping the auto-calc;
+`confirm_historical_import` batches a single org-scoped `IN` query across
+every candidate `course_id` in the request (both `matched_course_id` and
+`map_existing` mappings) before the row loop, rather than one query per
+row, and rejects any row whose resolved `course_id` isn't in that set
+(server-generated ids from the `create_new` action are exempt — they're
+always in-org since they were just created for this request). Guard tests:
+`test_training_records_course_scoping.py` (3 tests, one per write path).
+
+## Corrections to prior write-ups
+
+- **`docs/module-audit/training.md` / `docs/app-review/training.md`**: the
+  session-create "dangling FK batch" (category/program/phase/requirement/
+  instructor) is resolved (see Verified good above) — recommend updating
+  both docs to close this item rather than carrying it into a future
+  FK-hardening pass, since the fix (`_validate_linkage_ids`) is already in
+  place and confirmed by this iteration.
+
+## Flagged, not fixed
+
+- **Enum validation gap in bulk/historical-import paths.**
+  `BulkTrainingRecordEntry.training_type`/`.status` and
+  `HistoricalImportConfirmRequest.default_status`/`.default_training_type`
+  and `CourseMappingEntry.new_training_type` have no `@field_validator`,
+  unlike the single-record `TrainingRecordCreate`/`Update` (the TR-2-era
+  fix). Both are DB-level `Enum` columns, so a bad value still reaches the
+  DB layer rather than 422ing at the Pydantic boundary — but both bulk
+  paths wrap each row's insert in its own try/except (`create_records_bulk`:
+  `db.flush()` per row; `confirm_historical_import`: `db.begin_nested()`
+  per row), so a bad value fails only that one row with a sanitized message,
+  not the whole request. Not fixed here: adding request-level `@field_
+validator`s to a `List[...]` field changes the failure mode from
+  per-row-partial-success to whole-request-rejection (Pydantic validates
+  before the endpoint runs at all) — a behavior change needing a product
+  call on whether that's the right trade-off for a bulk-import UX, not a
+  drive-by fix. Mirrored into `docs/KNOWN_LIMITATIONS.md`.
+- **`enroll_member`'s duplicate-active-enrollment guard is a race.**
+  `training_program_service.py`'s `enroll_member` does a plain SELECT
+  (check for an existing ACTIVE enrollment) then INSERT, with no unique
+  constraint or row lock backing it — two concurrent enroll calls for the
+  same (user, program) could both pass the check and create two ACTIVE
+  enrollments. Data-integrity, not tenant-isolation or an abuse vector;
+  closing it properly needs a DB migration (a partial unique index on
+  `(user_id, program_id)` where `status = 'active'`, or equivalent), which
+  Step 4 of this rotation's own process reserves for a flagged item rather
+  than a drive-by fix. Mirrored into `docs/KNOWN_LIMITATIONS.md`.
+
+## Schema & migration notes
+
+No schema changes this iteration. No `SET NULL` nullability issues found.
+
+## Guard tests added
+
+- `test_training_program_import_scoping.py` — 3 tests (TR-11).
+- `test_training_service_user_scoping.py` — 3 tests (TR-12, plus the
+  `/expiring-certifications` defense-in-depth enrichment scoping).
+- `test_training_records_course_scoping.py` — 3 tests (TR-13).
+
+## Completion gate
+
+| Check                                                     | Result                                                           |
+| --------------------------------------------------------- | ---------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/` (changed files)             | ✅ 0 violations                                                  |
+| `black --check app/ tests/ alembic/` (changed files)      | ✅ clean                                                         |
+| `isort --check-only app/ tests/ alembic/` (changed files) | ✅ clean                                                         |
+| `python3 scripts/validate_migrations.py --strict`         | ✅ single head                                                   |
+| `pytest tests/ -k "training"`                             | ✅ 792 passed, 1 skipped (pre-existing optional-dependency skip) |
+| `pytest tests/` (full backend suite)                      | ✅ 8663 passed, 22 skipped (pre-existing Docker/no-MySQL skips)  |
+| `tsc --noEmit` / `eslint .`                               | n/a — no frontend file changed this iteration                    |

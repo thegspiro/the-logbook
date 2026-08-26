@@ -8,10 +8,12 @@ from typing import Dict, List, Optional
 from uuid import UUID
 
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.permissions import is_seeded_for, label_for
 from app.models.operational_rank import OperationalRank
-from app.models.user import User, UserStatus
+from app.models.user import Organization, User, UserStatus
 from app.schemas.operational_rank import RankCreate, RankUpdate
 
 # Statuses considered non-active for rank validation purposes.
@@ -25,12 +27,14 @@ _INACTIVE_STATUSES = {
 }
 
 
-# All shift position values for reference.
+# Every shift position value in the vocabulary. Kept in step with
+# ``ShiftPosition`` in app/schemas/scheduling.py.
 _ALL_POSITIONS = [
     "officer",
     "driver",
     "firefighter",
     "ems",
+    "paramedic",
     "captain",
     "lieutenant",
     "probationary",
@@ -38,12 +42,23 @@ _ALL_POSITIONS = [
     "other",
 ]
 
+# What the three chief ranks are seeded with -- everything a rank can confer.
+#
+# Deliberately NOT _ALL_POSITIONS. ``paramedic`` is a licence a member holds,
+# not something a chief's stripes confer: promoting an officer does not make
+# them a paramedic, and seeding it here would have put every chief on the
+# paramedic roster with no card behind it -- the exact "cleared on paper"
+# problem the credential path exists to close. Paramedic is earned only by a
+# current certification (TrainingCourse.target_position), so it appears in the
+# vocabulary above and in no rank's default grant.
+_CHIEF_POSITIONS = [p for p in _ALL_POSITIONS if p != "paramedic"]
+
 # Default ranks seeded for new organizations.
 # Format: (rank_code, display_name, sort_order, eligible_positions)
 DEFAULT_RANKS = [
-    ("fire_chief", "Fire Chief", 0, _ALL_POSITIONS),
-    ("deputy_chief", "Deputy Chief", 1, _ALL_POSITIONS),
-    ("assistant_chief", "Assistant Chief", 2, _ALL_POSITIONS),
+    ("fire_chief", "Fire Chief", 0, _CHIEF_POSITIONS),
+    ("deputy_chief", "Deputy Chief", 1, _CHIEF_POSITIONS),
+    ("assistant_chief", "Assistant Chief", 2, _CHIEF_POSITIONS),
     (
         "captain",
         "Captain",
@@ -61,6 +76,72 @@ DEFAULT_RANKS = [
     ("emt", "EMT", 7, ["ems", "firefighter"]),
 ]
 
+#: Every code the seed knows, whatever agency type it is written for.
+#:
+#: A rank is accepted on write if it is a stored row for the organization *or*
+#: one of these. The second half matters: the seed only fires into an empty
+#: table, so a department onboarded before a code joined DEFAULT_RANKS has no
+#: row for it while the eligibility fallback still honours it. Validating
+#: against stored rows alone would refuse a rank the rest of the system treats
+#: as valid — the shape of the EMT bug in #1833.
+#:
+#: Note it spans every agency type on purpose, unlike ``default_ranks_for``
+#: below: what a department may *hold* is broader than what it is seeded.
+DEFAULT_RANK_CODES = frozenset(code for code, _l, _o, _p in DEFAULT_RANKS)
+
+
+def rank_not_configured_message(rank: str) -> str:
+    """The refusal every write path gives for an unknown rank.
+
+    One wording, because a member told "not configured" by one screen and
+    something else by another has no way to tell they are the same problem.
+    It has to name the value — a typo is invisible until it is quoted back —
+    and say where to fix it.
+    """
+    return (
+        f"'{rank}' is not a rank this department has configured. "
+        "Add it under Settings → Ranks first, or pick an existing one."
+    )
+
+
+# Which ranks an agency of each type is seeded, and what it calls them, are one
+# decision shared with the position registry — ``app/core/permissions`` owns it
+# (``is_seeded_for`` / ``label_for``). Two copies is how ``chief`` and
+# ``fire_chief`` came to name the same thing in two files.
+#
+# The rank *codes* are shared across agency types on purpose: they key the
+# permission registry and the shift-eligibility fallback, so a code that exists
+# for one agency must mean the same thing for every other. Only the selection
+# and the labels vary.
+#
+# ``sort_order`` is a flat ranking, not a tree, and deliberately so: who reports
+# to whom is the org chart's job (``OrgChartNode`` carries both a ``parent_id``
+# and a ``rank_code``), not this list's. That separation is what lets a large
+# department run parallel discipline chiefs — a Fire Chief and an EMS Chief both
+# reporting to a Chief of Department, as FDNY does — by giving the two the same
+# ``sort_order`` and letting the chart record the branch. Nothing is seeded for
+# that shape: it belongs to a handful of very large organizations, and seeding
+# two chiefs to every combined agency would be wrong for the volunteer
+# departments this list is sized for. Those ranks are added in the rank editor,
+# where they will report no default permissions until a position supplies them.
+
+
+def default_ranks_for(organization_type: Optional[str]) -> List[tuple]:
+    """The DEFAULT_RANKS entries an agency of this type should be seeded.
+
+    Officer ranks are universal and are not enumerated anywhere: ``is_seeded_for``
+    keeps any code that is not a discipline, so a rung added to DEFAULT_RANKS is
+    seeded to every agency until somebody says otherwise. Unknown or missing
+    types fall back to the full fire set for the same reason — a department that
+    ends up with one rank too many can delete it, whereas one seeded too few has
+    no indication anything is absent.
+    """
+    return [
+        (code, label_for(code, organization_type, label), order, positions)
+        for code, label, order, positions in DEFAULT_RANKS
+        if is_seeded_for(code, organization_type)
+    ]
+
 
 class OperationalRankService:
     def __init__(self, db: AsyncSession):
@@ -71,7 +152,15 @@ class OperationalRankService:
     # ------------------------------------------------------------------
 
     async def seed_defaults(self, organization_id: str) -> List[OperationalRank]:
-        """Insert the default rank set for an organization if none exist."""
+        """Insert the default rank set for an organization if none exist.
+
+        The set depends on what kind of agency this is. An EMS-only service
+        has lieutenants and captains like anyone else, but it has no
+        firefighters and no engine, so seeding it "Firefighter", "Engineer"
+        and "Fire Chief" hands it a ladder its members can never be on — and
+        because the seed only ever fires into an empty table, whatever it
+        writes on day one is what the department lives with.
+        """
         result = await self.db.execute(
             select(func.count(OperationalRank.id)).where(
                 OperationalRank.organization_id == organization_id,
@@ -81,25 +170,65 @@ class OperationalRankService:
             return []
 
         ranks = []
-        for code, label, order, positions in DEFAULT_RANKS:
+        for code, label, order, positions in await self._seed_set(organization_id):
             rank = OperationalRank(
                 organization_id=organization_id,
                 rank_code=code,
                 display_name=label,
                 sort_order=order,
-                # Copy: the three chief ranks share the _ALL_POSITIONS list
+                # Copy: the three chief ranks share the _CHIEF_POSITIONS list
                 # object, so persisting the reference directly would alias them
                 # (and the module constant) to one mutable list.
                 eligible_positions=list(positions),
             )
-            self.db.add(rank)
             ranks.append(rank)
 
-        await self.db.flush()
+        try:
+            # A brand-new org's very first load can race: two concurrent
+            # requests both see count == 0 and both attempt to seed. The
+            # `(organization_id, rank_code)` unique constraint stops the
+            # second insert from duplicating rows, but a plain session
+            # rollback() here would expire every object in the request's
+            # identity map — including `current_user`, loaded earlier by
+            # get_current_user on this same request-scoped session — and the
+            # endpoint's next synchronous access to current_user.organization_id
+            # would then need an implicit refresh outside the async greenlet
+            # context, raising MissingGreenlet (the same class of bug as the
+            # reopen-attendance 500, see CHANGELOG 2026-08-25). A SAVEPOINT
+            # (begin_nested) rollback only expires objects modified within it,
+            # leaving current_user untouched.
+            async with self.db.begin_nested():
+                for rank in ranks:
+                    self.db.add(rank)
+                await self.db.flush()
+        except IntegrityError:
+            # Someone else already seeded it — treat the same as
+            # skip-when-ranks-exist.
+            return []
+
         # Refresh server-computed timestamps to prevent MissingGreenlet
         for rank in ranks:
             await self.db.refresh(rank, attribute_names=["created_at", "updated_at"])
         return ranks
+
+    async def _seed_set(self, organization_id: str) -> List[tuple]:
+        """The rank entries to seed, chosen by the organization's agency type.
+
+        Read here rather than taken as an argument because the caller is the
+        ranks endpoint, which holds a ``current_user`` and not the organization
+        row. (Positions go the other way: ``create_organization`` already has
+        the org in memory, so ``_create_default_roles`` takes the type as an
+        argument.) A missing organization falls back to the full set via
+        ``default_ranks_for``.
+        """
+        result = await self.db.execute(
+            select(Organization.organization_type).where(
+                Organization.id == organization_id
+            )
+        )
+        org_type = result.scalar_one_or_none()
+        # The column is an Enum, so unwrap to the stored string value.
+        return default_ranks_for(getattr(org_type, "value", org_type))
 
     # ------------------------------------------------------------------
     # CRUD
@@ -217,6 +346,63 @@ class OperationalRankService:
     # ------------------------------------------------------------------
     # Validation
     # ------------------------------------------------------------------
+
+    async def resolve_rank_code(
+        self, organization_id: str, rank_code: str
+    ) -> Optional[str]:
+        """The canonical code for ``rank_code``, or ``None`` if it is not a rank.
+
+        Resolves two ways, and the second matters: a stored
+        ``operational_ranks`` row, **or** one of the built-in seed codes. The
+        seed only ever fires into an empty table, so a department onboarded
+        before a code joined ``DEFAULT_RANKS`` has no row for it while the
+        eligibility fallback still honours it. Rejecting those would refuse a
+        rank the rest of the system treats as valid — the exact shape of the
+        EMT bug in #1833.
+
+        **It returns the canonical spelling rather than a yes/no, and callers
+        must persist what it returns.** Every downstream consumer of
+        ``User.rank`` is an exact dictionary lookup —
+        ``OPERATIONAL_RANKS.get(rank)`` for default permissions, the slug map
+        keyed by ``rank_code`` for eligible seats — so a value that differs by
+        case or surrounding whitespace resolves to no permissions and no seats.
+        Validating a normalized string and storing the caller's original would
+        therefore wave through the very failure this check exists to prevent:
+        ``" firefighter "`` passes, stores with its spaces, and grants nothing.
+
+        Matching is deliberately case-insensitive on both paths. The prospect
+        conversion UI suggests display-cased values like ``Firefighter``, and
+        MySQL's default collation would have matched a stored row that way
+        regardless — so the choice is between accepting those and canonicalizing
+        them, or accepting them and storing something inert. ``lower()`` is
+        applied in SQL rather than relying on the server's collation, so the
+        answer does not change with database configuration. The per-org rank
+        table holds a dozen rows behind an ``organization_id`` filter, so
+        losing the index on that column costs nothing.
+        """
+        code = (rank_code or "").strip()
+        if not code:
+            return None
+        folded = code.lower()
+        for seeded in DEFAULT_RANK_CODES:
+            if seeded == folded:
+                return seeded
+        result = await self.db.execute(
+            select(OperationalRank.rank_code).where(
+                OperationalRank.organization_id == organization_id,
+                func.lower(OperationalRank.rank_code) == folded,
+            )
+        )
+        return result.scalar_one_or_none()
+
+    async def is_known_rank(self, organization_id: str, rank_code: str) -> bool:
+        """Whether ``rank_code`` names a rank this organization has.
+
+        The predicate form of :meth:`resolve_rank_code`. Prefer that one on any
+        path that goes on to *store* the rank — this answers whether the value
+        is acceptable, not what should be written.
+        """
+        return await self.resolve_rank_code(organization_id, rank_code) is not None
 
     async def validate_ranks(
         self,

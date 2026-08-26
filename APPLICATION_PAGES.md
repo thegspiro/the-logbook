@@ -767,21 +767,6 @@ lot's number or expiration date require `equipment_check.manage` or
 | -------------------- | ----------------- | ------------------------ |
 | `/medical-screening` | Medical Screening | `medical_screening.view` |
 
-> **The route is not permission-gated, though this table said it was**
-> _(corrected 2026-08-16, found by `scripts/check_route_permissions.py`)_. Every
-> other module wraps its routes in `<ProtectedRoute requiredPermission=…>`;
-> `getMedicalScreeningRoutes()` returns a bare `<Route>`, so any signed-in member
-> can open the page.
->
-> **What actually protects the data is the API**, which enforces
-> `medical_screening.view` on every read — so a member without it gets an empty
-> or erroring screen rather than PHI, the same server-side-redaction pattern the
-> skills-testing print routes use. This is therefore a defence-in-depth and UX
-> gap rather than a disclosure: the member sees a broken page instead of a clean
-> "not authorized". **Adding the route gate would match every other module** and
-> is recorded in [`docs/KNOWN_LIMITATIONS.md`](docs/KNOWN_LIMITATIONS.md) for an
-> owner decision, since it changes who can reach the URL.
-
 > Compliance dashboard for tracking member and prospect medical screenings (physicals, drug tests, fitness assessments, psychological evaluations). Includes screening requirements configuration, individual records management, compliance status per member, and expiring screenings alerts. Availability is controlled per organization via the `enabled_modules` setting in Organization/Admin Settings.
 
 ---
@@ -971,11 +956,57 @@ lot's number or expiration date require `equipment_check.manage` or
 
 ## Communications & Messaging _(documented 2026-08-10)_
 
-| URL                               | Page                      | Permission             |
-| --------------------------------- | ------------------------- | ---------------------- |
-| `/messages`                       | Messages                  | Authenticated          |
-| `/communications/messages`        | Message Administration    | `notifications.manage` |
-| `/communications/email-templates` | Email Template Management | `settings.manage`      |
+| URL                                 | Page                      | Permission                                                                           |
+| ----------------------------------- | ------------------------- | ------------------------------------------------------------------------------------ |
+| `/messages`                         | Messages                  | Authenticated                                                                        |
+| `/messages/:messageId`              | Message Detail            | Authenticated _(2026-08-26)_                                                         |
+| `/communications/messages`          | Message Administration    | `notifications.manage`                                                               |
+| `/communications/email-templates`   | Email Template Management | `settings.manage`                                                                    |
+| `/communications/photo-use-consent` | Photo Use Consent         | any of `users.view_consents`, `notifications.manage`, `members.manage`, `users.edit` |
+
+> **Photo Use Consent** _(2026-08-25)_ lists every member's answer to the
+> photo-use privacy choice they set in User Settings, so the PIO can check the
+> whole roster before a newsletter or social post rather than one member at a
+> time. Read-only: consent recorded by somebody else is not consent, so there is
+> no admin write counterpart — matching `/users/{user_id}/consents`.
+>
+> **"Not answered" is counted separately from "Declined" and means the same
+> thing.** Both are "do not publish"; they are split because only one of them
+> describes a member who can still be asked. Inactive members are hidden by
+> default (a retiree's photo can still be in the archive, so the toggle exists).
+>
+> **Permission: `notifications.manage`, `members.manage`, or `users.edit`.**
+> `users.view` was the first choice and was wrong _(corrected in review)_: it
+> reads as a narrow grant but 25 of the 30 default positions carry it — the EMS
+> Supply Officer and Apparatus Officer among them — which would have made a
+> whole-department list a **weaker** gate than reading one member's consent via
+> `/users/{user_id}/consents` (`users.edit` or `members.manage`).
+> `notifications.manage` is what puts the PIO here: it is the grant that
+> distinguishes the Communications Officer, and it already gates this page's
+> neighbours under Forms & Comms.
+>
+> **`users.view_consents` was added for the Historian and Public Outreach
+> positions** _(2026-08-25)_, who have a real claim on the page — a historian
+> curates the photo archive — but who share nothing with each other beyond
+> broad grants (`users.view`, `members.view`, `events.view`). Widening to any
+> of those would have reopened what the paragraph above closed, so the grant
+> had to be one that means only this. It is seeded to those two positions plus
+> the Communications Officer, and backfilled onto existing installations by
+> `20260825_1900_c4a91b7e2f08` — a registry change alone reaches new
+> departments only (CLAUDE.md pitfall 23).
+>
+> That backfill rewrites a stored position **only when its permission set still
+> equals the pre-change default**, not merely when `is_system` is true:
+> `RoleService.update_role` edits a system position's permissions in place, so
+> the flag stays true on one a department has customized. A department that has
+> changed its Historian keeps its own set and grants the permission itself in
+> Role Management if it wants the page.
+>
+> The response deliberately carries **no contact fields**. The member directory
+> gates email behind the organization's contact-visibility setting, and a second
+> list carrying it unconditionally would quietly undo that — so the roster
+> returns only what identifies somebody on a photo call sheet: name, rank,
+> station, membership number.
 
 > The Email Templates page has a **Footers** tab _(2026-08-10)_. The footer used
 > to be copy-pasted into all 35 default bodies; it is now a named library on the

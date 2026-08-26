@@ -5,6 +5,17 @@
 
 ---
 
+**Correction (security review, 2026-08-25):** the migration this file cites
+below as `20260809_0001_encrypt_medical_screening_phi.py` is actually dated
+`20260810_0001` on disk — a one-day transcription error, no functional
+effect. Three follow-ups from this review's own "Flagged / future" list are
+addressed in `docs/security-review/MS-09-medical-screening.md`: the
+unbounded-list item (MS-6, still flagged, now mirrored into
+`docs/KNOWN_LIMITATIONS.md`) and a new latent-500 defect in the same shape as
+MS2-5 — an explicit `null` on a NOT NULL column, which MS2-5's enum validator
+doesn't cover — fixed as MS-5. The exactly-one-of and compliance-404 items
+remain open, unchanged.
+
 ## Pass 4 (2026-08-09) — MS-1 closed: PHI encrypted at rest
 
 The pass-4 deliverable is closing **MS-1**, the highest-value follow-up flagged

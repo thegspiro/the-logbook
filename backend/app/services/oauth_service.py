@@ -47,16 +47,29 @@ async def _link_existing_user(
     mismatch on later logins (identity-takeover guard), including an attempt to
     sign in with a different provider than the one already linked.
     """
-    # Single-org system: scope the lookup to the active organization.
+    # Single-org system: scope the lookup to the active organization, mirroring
+    # the password-login path (AuthService.authenticate_user). A deactivated
+    # (or absent) org must fail closed rather than dropping the org filter —
+    # without the `.active` check here, a member of a deactivated org could
+    # still sign in via Google/Microsoft after password login was blocked.
     org_result = await db.execute(
-        select(Organization).order_by(Organization.created_at.asc()).limit(1)
+        select(Organization)
+        .where(Organization.active.is_(True))
+        .order_by(Organization.created_at.asc())
+        .limit(1)
     )
     org = org_result.scalar_one_or_none()
 
-    query = select(User).where(User.email == email).where(User.deleted_at.is_(None))
-    if org:
-        query = query.where(User.organization_id == str(org.id))
-    result = await db.execute(query)
+    if not org:
+        logger.warning(f"{provider} login: no active organization")
+        return None, "no_account"
+
+    result = await db.execute(
+        select(User)
+        .where(User.email == email)
+        .where(User.deleted_at.is_(None))
+        .where(User.organization_id == str(org.id))
+    )
     user = result.scalar_one_or_none()
 
     if not user:

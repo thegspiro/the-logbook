@@ -522,9 +522,19 @@ class FacilityPhotoUpdate(BaseModel):
     is_primary: Optional[bool] = None
 
 
-class FacilityPhotoResponse(FacilityPhotoCreate):
+class FacilityPhotoResponse(BaseModel):
+    # Deliberately does not inherit FacilityPhotoCreate: `file_path` is an
+    # internal storage location, not something a `facilities.view` holder
+    # (the baseline permission gating these reads) should learn — mirrors
+    # DocumentResponse in the generic Documents module, which excludes the
+    # same field for the same reason.
     id: str
     organization_id: str
+    facility_id: str
+    file_name: str
+    mime_type: Optional[str] = None
+    caption: Optional[str] = None
+    is_primary: bool = False
     uploaded_by: Optional[str] = None
     uploaded_at: datetime
     model_config = _response_config
@@ -553,9 +563,21 @@ class FacilityDocumentUpdate(BaseModel):
     expiration_date: Optional[date] = None
 
 
-class FacilityDocumentResponse(FacilityDocumentCreate):
+class FacilityDocumentResponse(BaseModel):
+    # Deliberately does not inherit FacilityDocumentCreate: `file_path` is an
+    # internal storage location, not something a `facilities.view` holder
+    # (the baseline permission gating these reads) should learn — mirrors
+    # DocumentResponse in the generic Documents module, which excludes the
+    # same field for the same reason.
     id: str
     organization_id: str
+    facility_id: str
+    file_name: str
+    mime_type: Optional[str] = None
+    document_type: Optional[str] = None
+    description: Optional[str] = None
+    document_date: Optional[date] = None
+    expiration_date: Optional[date] = None
     uploaded_by: Optional[str] = None
     uploaded_at: datetime
     model_config = _response_config

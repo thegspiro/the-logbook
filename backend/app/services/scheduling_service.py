@@ -1002,14 +1002,25 @@ class SchedulingService:
         )
 
     async def get_shift_by_id(
-        self, shift_id: UUID, organization_id: UUID
+        self, shift_id: UUID, organization_id: UUID, for_update: bool = False
     ) -> Optional[Shift]:
-        """Get a shift by ID"""
-        result = await self.db.execute(
+        """Get a shift by ID.
+
+        ``for_update`` locks the row for the caller's transaction. Seat
+        capacity is a read-then-write — count the occupants, then insert — so
+        two members claiming the last seat at the same moment both read the
+        same count and both get in. Locking the shift serializes them on one
+        row, the way ``event_service`` already locks the event row before
+        counting "going" RSVPs against ``max_attendees``.
+        """
+        query = (
             select(Shift)
             .where(Shift.id == str(shift_id))
             .where(Shift.organization_id == str(organization_id))
         )
+        if for_update:
+            query = query.with_for_update()
+        result = await self.db.execute(query)
         return result.scalar_one_or_none()
 
     # ============================================
@@ -1168,6 +1179,27 @@ class SchedulingService:
             .where(User.organization_id == str(organization_id))
         )
         return result.scalar_one_or_none() is not None
+
+    async def _all_users_in_org(
+        self, user_ids: List[Any], organization_id: UUID
+    ) -> bool:
+        """Batched form of ``_user_in_org`` for a list of ids.
+
+        One ``IN`` query rather than one per id — a caller-supplied list can
+        run to 100 entries (e.g. ``ShiftCall.responding_members``), and a
+        per-id loop would cost up to 100 serial round trips on one request.
+        """
+        ids = {str(uid) for uid in user_ids if uid}
+        if not ids:
+            return True
+        result = await self.db.execute(
+            select(User.id).where(
+                User.id.in_(ids),
+                User.organization_id == str(organization_id),
+            )
+        )
+        found = {row for row in result.scalars().all()}
+        return ids <= found
 
     async def _program_in_org(self, program_id: str, organization_id: UUID) -> bool:
         """Return True if training_program_id belongs to the given org."""
@@ -2038,6 +2070,22 @@ class SchedulingService:
             if tracking.get("mode") != CallTrackingMode.DETAILED:
                 return None, "Detailed call records are disabled for this organization"
 
+            # responding_members is a client-supplied list of user ids stored
+            # straight into JSON — validate in-org before persisting, same
+            # discipline as manual_hours/attendance user ids elsewhere in this
+            # file. This is a within-org referential-integrity check, not a
+            # cross-tenant one: every reader of this column (compute_member_
+            # call_counts, ShiftCompletionService's trainee lookup) is scoped
+            # to one already-org-validated shift/trainee first, so a foreign
+            # id here can never attribute a count to another org's member. It
+            # would otherwise let this org's own data reference a nonexistent
+            # or foreign id for no reason. One batched query rather than one
+            # per id — up to 100 entries per payload.
+            if not await self._all_users_in_org(
+                call_data.get("responding_members") or [], organization_id
+            ):
+                return None, "One or more members are not in your organization"
+
             call = ShiftCall(
                 shift_id=shift_id, organization_id=organization_id, **call_data
             )
@@ -2085,6 +2133,12 @@ class SchedulingService:
             call = await self.get_shift_call_by_id(call_id, organization_id)
             if not call:
                 return None, "Shift call not found"
+
+            if "responding_members" in update_data:
+                if not await self._all_users_in_org(
+                    update_data["responding_members"] or [], organization_id
+                ):
+                    return None, "One or more members are not in your organization"
 
             for key, value in update_data.items():
                 if key not in self.PROTECTED_FIELDS:
@@ -2879,6 +2933,14 @@ class SchedulingService:
             )
             if excluded:
                 filled_query = filled_query.where(ShiftAssignment.id.notin_(excluded))
+            # FOR UPDATE, not for the locks but for the *read*: under InnoDB's
+            # default REPEATABLE READ a plain SELECT answers from the snapshot
+            # taken at the transaction's first read, which the endpoint already
+            # established before it got here. Holding the shift row lock does
+            # not refresh that snapshot, so a plain count still returns the
+            # tally from before the member who beat us to the seat committed.
+            # A locking read always sees the latest committed version.
+            filled_query = filled_query.with_for_update()
             filled = (await self.db.execute(filled_query)).scalar() or 0
             if filled >= shift.min_staffing:
                 return f"The last seat on this {context} was just claimed"
@@ -2906,6 +2968,8 @@ class SchedulingService:
                 occupied_query = occupied_query.where(
                     ShiftAssignment.id.notin_(excluded)
                 )
+            # Locking read — see the note on filled_query above.
+            occupied_query = occupied_query.with_for_update()
             occupied = (await self.db.execute(occupied_query)).scalar() or 0
             if occupied >= len(matching_slots):
                 return "Position was filled after this request was submitted"
@@ -2959,8 +3023,16 @@ class SchedulingService:
         flexibility to assign to cancelled/finalized/past shifts for records.
         """
         try:
-            # Verify shift belongs to org
-            shift = await self.get_shift_by_id(shift_id, organization_id)
+            # Verify shift belongs to org, and lock the row on every path.
+            # The headcount cap (min_staffing) is waived for officer-made
+            # assignments, but the named-seat cap is not — a seat on a crew is
+            # one seat whoever fills it — so every caller reaches a capacity
+            # check and every caller needs the serialization. Locking only
+            # self-signup left two officers, or an officer racing a member,
+            # both counting the last Driver seat as free.
+            shift = await self.get_shift_by_id(
+                shift_id, organization_id, for_update=True
+            )
             if not shift:
                 return None, "Shift not found"
 
@@ -4001,7 +4073,7 @@ class SchedulingService:
                 swap_request.target_user_id
             ):
                 return await reject(
-                    "Target participants cannot manager-review swap requests"
+                    "Target participants cannot officer-review swap requests"
                 )
 
             if status == SwapRequestStatus.APPROVED:

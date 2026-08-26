@@ -377,6 +377,23 @@ export type RequestStatus = (typeof RequestStatus)[keyof typeof RequestStatus];
  */
 export const DRIVER_NOT_QUALIFIED_CODE = 'LB-SCHED-001';
 
+// The qualification a course certifies its holder in. Values must match
+// QUALIFICATIONS in backend/app/services/qualification_service.py — a course
+// that names a code the backend does not know grants nothing, so a test parses
+// this list and asserts the two agree rather than letting it 422 on save.
+//
+// These are qualifications, not shift seats: which seats a qualification
+// clears is the backend's business (a Paramedic clears both the medic seat and
+// the EMS one), and duplicating that mapping here is how the two drift.
+export const COURSE_QUALIFICATIONS: { value: string; label: string }[] = [
+  { value: 'firefighter_i', label: 'Firefighter I' },
+  { value: 'firefighter_ii', label: 'Firefighter II' },
+  { value: 'driver_operator', label: 'Driver / Operator' },
+  { value: 'emt', label: 'EMT' },
+  { value: 'aemt', label: 'Advanced EMT' },
+  { value: 'paramedic', label: 'Paramedic' },
+];
+
 export const POSITION_LABELS: Record<string, string> = {
   officer: 'Officer',
   driver: 'Driver/Operator',
@@ -384,6 +401,7 @@ export const POSITION_LABELS: Record<string, string> = {
   EMS: 'EMT',
   ems: 'EMT',
   EMT: 'EMT',
+  paramedic: 'Paramedic',
   captain: 'Captain',
   lieutenant: 'Lieutenant',
   probationary: 'Probationary',
@@ -617,3 +635,33 @@ export const MEETING_WEEKDAYS: { value: number; label: string; short: string }[]
   { value: 5, label: 'Saturday', short: 'Sat' },
   { value: 6, label: 'Sunday', short: 'Sun' },
 ];
+
+// ============================================
+// Member Consent (ISO/IEC 27701)
+// ============================================
+
+/**
+ * One member's standing on a single consent.
+ *
+ * `declined` and `not_answered` are identical in effect — both mean "do not
+ * use" — and are kept apart because only one of them describes a member who
+ * can still be asked.
+ */
+export const ConsentStatus = {
+  GRANTED: 'granted',
+  DECLINED: 'declined',
+  NOT_ANSWERED: 'not_answered',
+} as const;
+export type ConsentStatus = (typeof ConsentStatus)[keyof typeof ConsentStatus];
+
+export const CONSENT_STATUS_LABELS: Record<ConsentStatus, string> = {
+  granted: 'Agreed',
+  declined: 'Declined',
+  not_answered: 'Not answered',
+};
+
+export const CONSENT_STATUS_COLORS: Record<ConsentStatus, string> = {
+  granted: 'bg-green-500/10 text-green-700 dark:text-green-400 border-green-500/20',
+  declined: 'bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/20',
+  not_answered: 'bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/20',
+};

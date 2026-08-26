@@ -21,6 +21,18 @@ function sourceLabel(error: ErrorLog): string {
   return 'Client';
 }
 
+/**
+ * Who the failure happened to. The backend resolves the stored id to a name;
+ * an unresolved one means the account is gone, which is worth saying rather
+ * than leaving the reader to wonder why there is no name. The id itself stays
+ * on the row in full — truncated, it cannot be searched for or matched against
+ * a support ticket.
+ */
+function affectedUserLabel(error: ErrorLog): string {
+  if (!error.userName) return 'Account not found';
+  return error.userUsername ? `${error.userName} (${error.userUsername})` : error.userName;
+}
+
 function statusLabel(context: Record<string, unknown>): string | null {
   const status = context.status;
   return typeof status === 'number' || typeof status === 'string' ? String(status) : null;
@@ -399,8 +411,11 @@ const ErrorMonitoringPage: React.FC = () => {
                                   <dt className="text-theme-text-muted text-xs font-semibold uppercase">
                                     Affected user
                                   </dt>
-                                  <dd className="text-theme-text-primary mt-1 font-mono text-xs">
-                                    {error.userId.slice(0, 8)}…
+                                  <dd className="text-theme-text-primary mt-1">
+                                    {affectedUserLabel(error)}
+                                    <span className="text-theme-text-muted block font-mono text-xs break-all">
+                                      {error.userId}
+                                    </span>
                                   </dd>
                                 </div>
                               )}

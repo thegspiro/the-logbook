@@ -117,6 +117,13 @@ const NotificationsPage: React.FC = () => {
   const { checkPermission } = useAuthStore();
   const canManage = checkPermission('notifications.manage');
   const canView = checkPermission('notifications.view');
+  // The Email Templates tab is a signpost, not a screen: its only control
+  // navigates to /communications/email-templates, which is behind
+  // `settings.manage`. Gating the tab on `notifications.view` sent anyone
+  // holding view alone to an Access Denied page via a button that promised
+  // otherwise, so it is gated on the permission its destination actually
+  // requires.
+  const canManageTemplates = checkPermission('settings.manage');
   const tz = useTimezone();
 
   // Shared notification count store
@@ -150,15 +157,22 @@ const NotificationsPage: React.FC = () => {
   // then Rules, press Back, and the address bar says `?tab=log` while the page
   // still renders Rules. Deriving removes the state that could fall out of step
   // at all.
+  //
+  // Each tab carries its own gate rather than sharing one, because Email
+  // Templates answers to `settings.manage` while Rules and the Send Log answer
+  // to `notifications.view`. A tab nobody can open must not be restorable from
+  // the URL either — the deep link is the same door as the button.
   const requestedTab = searchParams.get('tab');
+  const tabIsAvailable: Record<'inbox' | 'rules' | 'templates' | 'log', boolean> = {
+    inbox: true,
+    rules: canView,
+    templates: canManageTemplates,
+    log: canView,
+  };
+  const isTabName = (value: string | null): value is keyof typeof tabIsAvailable =>
+    value === 'inbox' || value === 'rules' || value === 'templates' || value === 'log';
   const activeTab: 'inbox' | 'rules' | 'templates' | 'log' =
-    requestedTab === 'inbox'
-      ? 'inbox'
-      : canView && (requestedTab === 'rules' || requestedTab === 'templates' || requestedTab === 'log')
-        ? requestedTab
-        : canView
-          ? 'rules'
-          : 'inbox';
+    isTabName(requestedTab) && tabIsAvailable[requestedTab] ? requestedTab : canView ? 'rules' : 'inbox';
   const [logChannelFilter, setLogChannelFilter] = useState<'all' | 'email' | 'in_app'>('all');
 
   // Create form states
@@ -467,7 +481,7 @@ const NotificationsPage: React.FC = () => {
               Notification Rules
             </button>
           )}
-          {canView && (
+          {canManageTemplates && (
             <button
               onClick={() => handleTabChange('templates')}
               role="tab"

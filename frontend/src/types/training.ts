@@ -187,6 +187,8 @@ export interface TrainingCourse {
   credit_hours?: number;
   prerequisites?: string[];
   expiration_months?: number;
+  /** Qualification code completing this course grants its holder. */
+  grants_qualification?: string | null;
   instructor?: string;
   max_participants?: number;
   materials_required?: string[];
@@ -485,6 +487,8 @@ export interface TrainingCourseCreate {
   credit_hours?: number;
   prerequisites?: string[];
   expiration_months?: number;
+  /** Qualification code completing this course grants its holder. */
+  grants_qualification?: string | null;
   instructor?: string;
   max_participants?: number;
   materials_required?: string[];
@@ -500,6 +504,8 @@ export interface TrainingCourseUpdate {
   credit_hours?: number;
   prerequisites?: string[];
   expiration_months?: number;
+  /** Qualification code completing this course grants its holder. */
+  grants_qualification?: string | null;
   instructor?: string;
   max_participants?: number;
   materials_required?: string[];
@@ -1909,10 +1915,17 @@ export interface MyTrainingSummary {
   }>;
   hours_summary?: {
     total_records: number;
-    /** Lifetime training hours — this endpoint is "my training record". */
-    total_hours: number;
-    /** Month-to-date, for summaries that add training to other hour types. */
-    hours_this_month: number;
+    /**
+     * Lifetime training hours — this endpoint is "my training record".
+     * Absent when the department has `show_training_hours` off and the
+     * caller is not an officer: the counts still come back, the hours do not.
+     */
+    total_hours?: number;
+    /**
+     * Month-to-date, for summaries that add training to other hour types.
+     * Withheld alongside `total_hours`.
+     */
+    hours_this_month?: number;
     completed_courses: number;
   };
   requirements_summary?: { total_requirements: number; met_requirements: number; avg_compliance: number | null };

@@ -26,8 +26,10 @@ from app.models.document import (
     DocumentStatus,
     FolderVisibility,
 )
-from app.models.user import User
+from app.models.user import Organization, User
+from app.utils.model_updates import apply_updates
 from app.utils.org_scoping import assert_in_org
+from app.utils.sql_search import LIKE_ESCAPE_CHAR, like_pattern
 
 # Permissions that grant leadership-level access to all folders
 LEADERSHIP_PERMISSIONS = {"documents.manage", "members.manage", "*"}
@@ -235,6 +237,41 @@ class DocumentsService:
         folders = result.scalars().all()
         return {f.id for f in folders if self.can_access_folder(f, user)}
 
+    async def _creates_cycle(
+        self, folder_id: UUID, candidate_parent_id: Any, organization_id: UUID
+    ) -> bool:
+        """True if *candidate_parent_id* is *folder_id* itself or one of its
+        own descendants — i.e. re-parenting under it would make the folder its
+        own ancestor.
+
+        `assert_in_org` only proves the candidate parent exists in the org; it
+        has no way to know it is the folder being moved (self-parenting) or
+        already sits underneath it (a cycle), either of which drops the folder
+        out of root-based navigation and can break cascade delete. Walks the
+        candidate's ancestor chain rather than the folder's descendants,
+        because the chain to the root is bounded by tree depth, while the
+        descendant subtree can be arbitrarily wide.
+        """
+        target = str(folder_id)
+        current: Optional[str] = str(candidate_parent_id)
+        seen: Set[str] = set()
+        while current:
+            if current == target:
+                return True
+            if current in seen:
+                # A pre-existing cycle we didn't create — stop rather than
+                # loop forever; it is not this call's job to repair it.
+                break
+            seen.add(current)
+            result = await self.db.execute(
+                select(DocumentFolder.parent_id).where(
+                    DocumentFolder.id == current,
+                    DocumentFolder.organization_id == str(organization_id),
+                )
+            )
+            current = result.scalar_one_or_none()
+        return False
+
     async def update_folder(
         self, folder_id: UUID, organization_id: UUID, update_data: Dict[str, Any]
     ) -> Optional[DocumentFolder]:
@@ -245,14 +282,22 @@ class DocumentsService:
 
         # DOC-6 (XC-1): validate re-pointed FKs are in-org before applying.
         if "parent_id" in update_data:
+            new_parent_id = update_data["parent_id"]
             await assert_in_org(
                 self.db,
                 DocumentFolder,
-                update_data["parent_id"],
+                new_parent_id,
                 organization_id,
                 allow_none=True,
                 label="parent folder",
             )
+            if new_parent_id and await self._creates_cycle(
+                folder_id, new_parent_id, organization_id
+            ):
+                raise ValueError(
+                    "A folder cannot be moved into itself or one of its own "
+                    "descendants"
+                )
         if "owner_user_id" in update_data:
             await assert_in_org(
                 self.db,
@@ -263,8 +308,22 @@ class DocumentsService:
                 label="owner",
             )
 
-        for key, value in update_data.items():
-            setattr(folder, key, value)
+        # DOC-20 (Codex round-2 on #1826): color/icon are DB-nullable (the
+        # column predates the "#3B82F6"/"folder" defaults) but
+        # DocumentFolderResponse declares both as plain, non-Optional str.
+        # apply_updates only rejects a null against a NOT NULL column, so an
+        # explicit `{"color": null}` would sail through, commit, and only
+        # fail when this (or any later) response tries to serialize the row
+        # -- a 500 after the bad value is already persisted, and a folder
+        # listing that happens to include this row breaks too. Reject the
+        # clear here, at the same layer as the other folder-specific
+        # validation above, rather than letting a DB-level nullable column
+        # stand in for a response-schema contract it doesn't enforce.
+        for _field in ("color", "icon"):
+            if _field in update_data and update_data[_field] is None:
+                raise ValueError(f"'{_field}' cannot be cleared; provide a value")
+
+        apply_updates(folder, update_data)
 
         await self.db.commit()
         await self.db.refresh(folder)
@@ -376,14 +435,11 @@ class DocumentsService:
             query = query.where(Document.status == DocumentStatus.ACTIVE)
 
         if search:
-            safe_search = (
-                search.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-            )
-            search_term = f"%{safe_search}%"
+            search_term = like_pattern(search)
             query = query.where(
-                Document.name.ilike(search_term)
-                | Document.description.ilike(search_term)
-                | Document.tags.ilike(search_term)
+                Document.name.ilike(search_term, escape=LIKE_ESCAPE_CHAR)
+                | Document.description.ilike(search_term, escape=LIKE_ESCAPE_CHAR)
+                | Document.tags.ilike(search_term, escape=LIKE_ESCAPE_CHAR)
             )
 
         # Count
@@ -477,8 +533,7 @@ class DocumentsService:
                 label="folder",
             )
 
-        for key, value in update_data.items():
-            setattr(document, key, value)
+        apply_updates(document, update_data)
 
         await self.db.commit()
         await self.db.refresh(document)
@@ -748,13 +803,31 @@ class DocumentsService:
                 ├── Inspection Reports/
                 ├── Insurance & Leases/
                 └── Capital Projects/
+
+        The whole get-or-create is a read-then-write with no uniqueness
+        constraint behind it (Pitfall #27 shape): two requests that both see
+        "no folder yet" would otherwise both insert a facility folder (and
+        its sub-folders), and every later read would break with
+        MultipleResultsFound. Locking the organization row for the duration
+        serializes concurrent first-accesses across the org's facilities —
+        cheap, since this only runs once per facility ever.
         """
+        org = await self.db.scalar(
+            select(Organization)
+            .where(Organization.id == str(organization_id))
+            .with_for_update()
+        )
+        if org is None:
+            raise ValueError("Organization not found")
+
         # Find the 'facilities' system folder
         result = await self.db.execute(
             select(DocumentFolder)
             .where(DocumentFolder.organization_id == str(organization_id))
             .where(DocumentFolder.slug == FOLDER_FACILITIES)
             .where(DocumentFolder.is_system.is_(True))
+            .order_by(DocumentFolder.id)
+            .limit(1)
         )
         facilities_root = result.scalar_one_or_none()
 
@@ -785,6 +858,8 @@ class DocumentsService:
             select(DocumentFolder)
             .where(DocumentFolder.parent_id == facilities_root.id)
             .where(DocumentFolder.slug == f"facility-{facility_id_str}")
+            .order_by(DocumentFolder.id)
+            .limit(1)
         )
         facility_folder = result.scalar_one_or_none()
 
@@ -837,12 +912,19 @@ class DocumentsService:
         """
         Get the sub-folders for a specific facility.
         Returns an empty list if the facility folder doesn't exist.
+
+        Uses ``limit(1)`` rather than ``scalar_one_or_none()`` on both lookups
+        so a pre-existing duplicate row (from a race predating the lock in
+        ``ensure_facility_folder``) degrades to picking one deterministically
+        instead of a persistent 500 on every read.
         """
         result = await self.db.execute(
             select(DocumentFolder)
             .where(DocumentFolder.organization_id == str(organization_id))
             .where(DocumentFolder.slug == FOLDER_FACILITIES)
             .where(DocumentFolder.is_system.is_(True))
+            .order_by(DocumentFolder.id)
+            .limit(1)
         )
         facilities_root = result.scalar_one_or_none()
         if not facilities_root:
@@ -853,6 +935,8 @@ class DocumentsService:
             select(DocumentFolder)
             .where(DocumentFolder.parent_id == facilities_root.id)
             .where(DocumentFolder.slug == f"facility-{facility_id_str}")
+            .order_by(DocumentFolder.id)
+            .limit(1)
         )
         facility_folder = result.scalar_one_or_none()
         if not facility_folder:

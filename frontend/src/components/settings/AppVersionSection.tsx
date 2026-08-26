@@ -13,18 +13,25 @@ import React, { useState } from 'react';
 import { RefreshCw, Trash2, CheckCircle, WifiOff } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useConfirm } from '../../contexts/ConfirmContext';
-import { fetchServerBuildId, formatBuildId, getCurrentBuildId } from '../../utils/appVersion';
+import { fetchServerBuildId, formatBuildId, getCurrentBuildId, getCurrentBuildTime } from '../../utils/appVersion';
+import { formatDateCustom } from '../../utils/dateFormatting';
+import { useTimezone } from '../../hooks/useTimezone';
 import { applyAppUpdate } from '../../utils/updateRecovery';
 import { forceAppRefresh } from '../../utils/forceAppRefresh';
 
 export const AppVersionSection: React.FC = () => {
   const { confirm } = useConfirm();
+  const tz = useTimezone();
   const [checking, setChecking] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [upToDate, setUpToDate] = useState(false);
   const [unreachable, setUnreachable] = useState(false);
 
   const currentBuildId = getCurrentBuildId();
+  // A random hex id says nothing about age. The release date is what turns
+  // "I'm on 3f9a2c14e8b7" into an answer support can act on — a member three
+  // deployments behind reads out a date, not an id nobody can rank.
+  const currentBuildTime = getCurrentBuildTime();
   const busy = checking || refreshing;
 
   const handleCheck = async (): Promise<void> => {
@@ -104,12 +111,25 @@ export const AppVersionSection: React.FC = () => {
         <div className="pr-4">
           <span className="text-theme-text-primary text-sm font-medium">Installed version</span>
           <p className="text-theme-text-secondary text-sm">
-            Quote this if you report a problem — it tells support exactly which build you are seeing.
+            Quote this if you report a problem — it tells support exactly which build you are seeing, and when it was
+            released.
           </p>
         </div>
-        <code className="bg-theme-input-bg text-theme-text-primary rounded-sm px-2 py-1 font-mono text-sm">
-          {formatBuildId(currentBuildId)}
-        </code>
+        <div className="text-right">
+          <code className="bg-theme-input-bg text-theme-text-primary rounded-sm px-2 py-1 font-mono text-sm">
+            {formatBuildId(currentBuildId)}
+          </code>
+          {currentBuildTime && (
+            <p className="text-theme-text-secondary mt-1 text-sm">
+              Released{' '}
+              {formatDateCustom(
+                currentBuildTime,
+                { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' },
+                tz
+              )}
+            </p>
+          )}
+        </div>
       </div>
 
       <div className="border-theme-surface-border flex flex-wrap items-center justify-between gap-3 border-b py-4">

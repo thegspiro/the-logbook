@@ -23,7 +23,11 @@ export const getApparatusRoutes = () => {
         path="/apparatus/print-labels"
         element={
           <Suspense fallback={null}>
-            <ProtectedRoute requiredAnyPermission={['apparatus.view', 'apparatus.manage']}>
+            <ProtectedRoute
+              requiredModule="apparatus"
+              moduleLabel="Apparatus"
+              requiredAnyPermission={['apparatus.view', 'apparatus.manage']}
+            >
               <ApparatusLabelPrintPage />
             </ProtectedRoute>
           </Suspense>
@@ -34,7 +38,11 @@ export const getApparatusRoutes = () => {
         path="/apparatus"
         element={
           <Suspense fallback={null}>
-            <ProtectedRoute requiredAnyPermission={['apparatus.view', 'apparatus.manage']}>
+            <ProtectedRoute
+              requiredModule="apparatus"
+              moduleLabel="Apparatus"
+              requiredAnyPermission={['apparatus.view', 'apparatus.manage']}
+            >
               <ApparatusListPage />
             </ProtectedRoute>
           </Suspense>
@@ -45,7 +53,11 @@ export const getApparatusRoutes = () => {
       <Route
         path="/apparatus/new"
         element={
-          <ProtectedRoute requiredAnyPermission={['apparatus.create', 'apparatus.manage']}>
+          <ProtectedRoute
+            requiredModule="apparatus"
+            moduleLabel="Apparatus"
+            requiredAnyPermission={['apparatus.create', 'apparatus.manage']}
+          >
             <Suspense fallback={null}>
               <ApparatusFormPage />
             </Suspense>
@@ -58,7 +70,11 @@ export const getApparatusRoutes = () => {
         path="/apparatus/:id"
         element={
           <Suspense fallback={null}>
-            <ProtectedRoute requiredAnyPermission={['apparatus.view', 'apparatus.manage']}>
+            <ProtectedRoute
+              requiredModule="apparatus"
+              moduleLabel="Apparatus"
+              requiredAnyPermission={['apparatus.view', 'apparatus.manage']}
+            >
               <ApparatusDetailPage />
             </ProtectedRoute>
           </Suspense>
@@ -69,7 +85,11 @@ export const getApparatusRoutes = () => {
       <Route
         path="/apparatus/:id/edit"
         element={
-          <ProtectedRoute requiredAnyPermission={['apparatus.edit', 'apparatus.manage']}>
+          <ProtectedRoute
+            requiredModule="apparatus"
+            moduleLabel="Apparatus"
+            requiredAnyPermission={['apparatus.edit', 'apparatus.manage']}
+          >
             <Suspense fallback={null}>
               <ApparatusFormPage />
             </Suspense>

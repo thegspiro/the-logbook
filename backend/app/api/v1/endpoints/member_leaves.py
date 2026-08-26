@@ -31,6 +31,7 @@ from app.api.dependencies import (
     require_all_permissions,
     require_permission,
 )
+from app.core.audit import log_audit_event
 from app.core.database import get_db
 from app.core.utils import ensure_found, safe_error_detail
 from app.models.user import MemberLeaveOfAbsence, User
@@ -180,6 +181,22 @@ async def create_leave_of_absence(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=safe_error_detail(exc))
 
+    await log_audit_event(
+        db=db,
+        event_type="leave_of_absence_created",
+        event_category="user_management",
+        severity="info",
+        event_data={
+            "target_user_id": str(leave.user_id),
+            "leave_id": str(leave.id),
+            "leave_type": data.leave_type,
+            "start_date": data.start_date.isoformat(),
+            "end_date": data.end_date.isoformat() if data.end_date else None,
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
     # Keep the schedule representative: drop the member's existing shift
     # assignments during the leave so those slots show as open for fill-in or
     # hold-over. Best-effort — the leave itself is already committed.
@@ -279,6 +296,21 @@ async def update_leave_of_absence(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=safe_error_detail(exc))
     leave = ensure_found(updated, "Leave of absence")
+
+    await log_audit_event(
+        db=db,
+        event_type="leave_of_absence_updated",
+        event_category="user_management",
+        severity="info",
+        event_data={
+            "target_user_id": str(leave.user_id),
+            "leave_id": str(leave.id),
+            "fields_changed": sorted(updates.keys()),
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
     return _to_response(leave)
 
 
@@ -290,8 +322,26 @@ async def delete_leave_of_absence(
 ):
     """Deactivate a leave of absence (soft delete)."""
     svc = MemberLeaveService(db)
+    # Fetched before deactivation so the audit event still has the leave's
+    # target member — deactivate_leave returns only a success flag.
+    leave = await svc.get_leave(
+        organization_id=str(current_user.organization_id), leave_id=leave_id
+    )
     success = await svc.deactivate_leave(
         organization_id=str(current_user.organization_id),
         leave_id=leave_id,
     )
     ensure_found(success, "Leave of absence")
+
+    await log_audit_event(
+        db=db,
+        event_type="leave_of_absence_deleted",
+        event_category="user_management",
+        severity="info",
+        event_data={
+            "target_user_id": str(leave.user_id) if leave else None,
+            "leave_id": leave_id,
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )

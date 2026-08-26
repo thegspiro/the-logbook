@@ -28,7 +28,7 @@ import type {
   ApplicantListItem,
   ApplicantListFilters,
   ProspectSourceEvent,
-  ApplicantStatus,
+  SettableApplicantStatus,
   PaginatedApplicantList,
   AdvanceStageRequest,
   BulkActionResult,
@@ -64,8 +64,8 @@ import type {
   InactivityAlertLevel,
   CurrentStageAction,
 } from '../types';
-import { DEFAULT_INACTIVITY_CONFIG, FILE_UPLOAD_LIMITS, StepProgressStatus } from '../types';
-import { StageType as StageTypeConst, VotingMethod, VictoryCondition } from '../../../constants/enums';
+import { DEFAULT_INACTIVITY_CONFIG, FILE_UPLOAD_LIMITS, StepProgressStatus, defaultStageConfig } from '../types';
+import { StageType as StageTypeConst } from '../../../constants/enums';
 import { asArray } from '../../../utils/asArray';
 
 const api = createApiClient();
@@ -162,42 +162,6 @@ function mapStepTypeToFrontend(
   return StageTypeConst.MANUAL_APPROVAL;
 }
 
-/** Provide a valid default StageConfig for a given stage type */
-function getDefaultStageConfig(stageType: StageType): PipelineStage['config'] {
-  switch (stageType) {
-    case StageTypeConst.FORM_SUBMISSION:
-      return { form_id: '', form_name: '' };
-    case StageTypeConst.DOCUMENT_UPLOAD:
-      return { required_document_types: [], allow_multiple: true };
-    case StageTypeConst.ELECTION_VOTE:
-      return {
-        voting_method: VotingMethod.SIMPLE_MAJORITY,
-        victory_condition: VictoryCondition.MAJORITY,
-        eligible_voter_roles: [],
-        anonymous_voting: true,
-      };
-    case StageTypeConst.MEETING:
-      return { meeting_type: 'chief_meeting', meeting_description: '' };
-    case StageTypeConst.STATUS_PAGE_TOGGLE:
-      return { enable_public_status: true, custom_message: '' };
-    case StageTypeConst.AUTOMATED_EMAIL:
-      return {
-        email_subject: 'Welcome to the Membership Process',
-        include_welcome: true,
-        welcome_message: '',
-        include_faq_link: false,
-        faq_url: '',
-        include_next_meeting: false,
-        next_meeting_details: '',
-        include_status_tracker: false,
-        custom_sections: [],
-      };
-    case StageTypeConst.MANUAL_APPROVAL:
-    default:
-      return { approver_roles: [], require_notes: false };
-  }
-}
-
 /** Map a backend pipeline step response to a frontend PipelineStage */
 function mapStepToStage(step: BackendStepResponse): PipelineStage {
   const backendConfig = step.config ?? null;
@@ -208,11 +172,10 @@ function mapStepToStage(step: BackendStepResponse): PipelineStage {
     name: step.name,
     description: step.description || undefined,
     stage_type: stageType,
-    config: backendConfig
-      ? { ...getDefaultStageConfig(stageType), ...backendConfig }
-      : getDefaultStageConfig(stageType),
+    config: backendConfig ? { ...defaultStageConfig(stageType), ...backendConfig } : defaultStageConfig(stageType),
     sort_order: step.sort_order ?? 0,
     is_required: step.required ?? true,
+    inactivity_timeout_days: step.inactivity_timeout_days ?? null,
     notify_prospect_on_completion: step.notify_prospect_on_completion ?? false,
     public_visible: step.public_visible ?? true,
     created_at: step.created_at,
@@ -292,8 +255,11 @@ function mapStageUpdateToBackend(stage: PipelineStageUpdate): BackendStepUpdateP
   if (stage.notify_prospect_on_completion !== undefined)
     payload.notify_prospect_on_completion = stage.notify_prospect_on_completion;
   if (stage.public_visible !== undefined) payload.public_visible = stage.public_visible;
-  if (stage.inactivity_timeout_days !== undefined)
-    payload.inactivity_timeout_days = stage.inactivity_timeout_days ?? undefined;
+  // An explicit null travels as null. Collapsing it to undefined drops the key,
+  // and the backend reads a dropped key as "leave this alone" — so unticking
+  // "use a custom timeout for this stage" was acknowledged with a success toast
+  // and the old override stayed in the database.
+  if (stage.inactivity_timeout_days !== undefined) payload.inactivity_timeout_days = stage.inactivity_timeout_days;
   return payload;
 }
 
@@ -646,6 +612,13 @@ export const applicantService = {
     filters?: ApplicantListFilters | undefined;
     page?: number | undefined;
     pageSize?: number | undefined;
+    /**
+     * Drop closed applications (rejected, withdrawn, inactive, converted).
+     * The board and the applicant table set this: a rejected applicant is out
+     * of the pipeline, not a card in the stage they were rejected at. The
+     * archive tabs leave it off and filter to one closed status instead.
+     */
+    openOnly?: boolean | undefined;
   }): Promise<PaginatedApplicantList> {
     const page = params?.page ?? 1;
     const pageSize = params?.pageSize ?? 25;
@@ -662,6 +635,9 @@ export const applicantService = {
             : params?.filters?.status,
           search: params?.filters?.search,
           event_id: params?.filters?.event_id,
+          // Omitted rather than sent as false, so the archive tabs' request
+          // URLs (and their cache keys) are unchanged by this parameter.
+          open_only: params?.openOnly ? true : undefined,
           limit: pageSize,
           offset,
         },
@@ -842,7 +818,11 @@ export const applicantService = {
    * overwrite the coordinator notes field, which the previous client-side
    * bulk path did on every selected record.
    */
-  async bulkSetStatus(applicantIds: string[], status: ApplicantStatus, reason?: string): Promise<BulkActionResult> {
+  async bulkSetStatus(
+    applicantIds: string[],
+    status: SettableApplicantStatus,
+    reason?: string
+  ): Promise<BulkActionResult> {
     const response = await api.post<BulkActionResult>('/prospective-members/prospects/bulk-status', {
       prospect_ids: applicantIds,
       status,
@@ -859,45 +839,41 @@ export const applicantService = {
     return mapProspectToApplicant(response.data);
   },
 
-  async rejectApplicant(applicantId: string, reason?: string): Promise<Applicant> {
-    // Backend doesn't have a dedicated reject endpoint; use update with status
-    const response = await api.put<BackendProspectResponse>(`/prospective-members/prospects/${applicantId}`, {
-      status: 'rejected',
-      notes: reason,
+  /**
+   * Change one applicant's status, recording `reason` in their activity log.
+   *
+   * These used to go through the update endpoint as `{ status, notes: reason }`,
+   * which wrote the reason over the coordinator's notes — the same bug that
+   * was fixed for the bulk path, still live on the single-record one. `notes`
+   * is the coordinator's running record of the applicant; the reason for a
+   * decision belongs in the activity log beside who made it and when.
+   */
+  async setApplicantStatus(applicantId: string, status: SettableApplicantStatus, reason?: string): Promise<Applicant> {
+    const response = await api.post<BackendProspectResponse>(`/prospective-members/prospects/${applicantId}/status`, {
+      status,
+      reason: reason || undefined,
     });
     return mapProspectToApplicant(response.data);
+  },
+
+  async rejectApplicant(applicantId: string, reason?: string): Promise<Applicant> {
+    return this.setApplicantStatus(applicantId, 'rejected', reason);
   },
 
   async putOnHold(applicantId: string, reason?: string): Promise<Applicant> {
-    const response = await api.put<BackendProspectResponse>(`/prospective-members/prospects/${applicantId}`, {
-      status: 'on_hold',
-      notes: reason,
-    });
-    return mapProspectToApplicant(response.data);
+    return this.setApplicantStatus(applicantId, 'on_hold', reason);
   },
 
   async withdrawApplicant(applicantId: string, data?: WithdrawApplicantRequest): Promise<Applicant> {
-    const response = await api.put<BackendProspectResponse>(`/prospective-members/prospects/${applicantId}`, {
-      status: 'withdrawn',
-      notes: data?.reason,
-    });
-    return mapProspectToApplicant(response.data);
+    return this.setApplicantStatus(applicantId, 'withdrawn', data?.reason);
   },
 
   async resumeApplicant(applicantId: string): Promise<Applicant> {
-    // Resume by setting status back to active
-    const response = await api.put<BackendProspectResponse>(`/prospective-members/prospects/${applicantId}`, {
-      status: 'active',
-    });
-    return mapProspectToApplicant(response.data);
+    return this.setApplicantStatus(applicantId, 'active');
   },
 
   async reactivateApplicant(applicantId: string, data?: ReactivateApplicantRequest): Promise<Applicant> {
-    const response = await api.put<BackendProspectResponse>(`/prospective-members/prospects/${applicantId}`, {
-      status: 'active',
-      notes: data?.notes,
-    });
-    return mapProspectToApplicant(response.data);
+    return this.setApplicantStatus(applicantId, 'active', data?.notes);
   },
 
   async getInactiveApplicants(params?: {
@@ -927,6 +903,40 @@ export const applicantService = {
       filters: {
         pipeline_id: params?.pipeline_id,
         status: 'withdrawn',
+        search: params?.search,
+      },
+      page: params?.page,
+      pageSize: params?.pageSize,
+    });
+  },
+
+  async getRejectedApplicants(params?: {
+    pipeline_id?: string | undefined;
+    search?: string | undefined;
+    page?: number | undefined;
+    pageSize?: number | undefined;
+  }): Promise<PaginatedApplicantList> {
+    return this.getApplicants({
+      filters: {
+        pipeline_id: params?.pipeline_id,
+        status: 'rejected',
+        search: params?.search,
+      },
+      page: params?.page,
+      pageSize: params?.pageSize,
+    });
+  },
+
+  async getConvertedApplicants(params?: {
+    pipeline_id?: string | undefined;
+    search?: string | undefined;
+    page?: number | undefined;
+    pageSize?: number | undefined;
+  }): Promise<PaginatedApplicantList> {
+    return this.getApplicants({
+      filters: {
+        pipeline_id: params?.pipeline_id,
+        status: 'converted',
         search: params?.search,
       },
       page: params?.page,

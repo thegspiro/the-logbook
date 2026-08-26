@@ -494,3 +494,68 @@ class TestResumeCountReconciliation:
                     )
                     conn.commit()
             engine.dispose()
+
+
+class TestValidateMigrationsScriptFailsOnAFork:
+    """The dedicated gate must be at least as strict as the test suite.
+
+    `scripts/validate_migrations.py` is what CI's Backend Lint job runs on
+    every push, and it is the only check whose whole purpose is the chain. A
+    fork used to reach it as a *warning*: the script printed "Multiple heads
+    detected" and then "VALIDATION PASSED" and exited 0, so the gate written
+    for this exact problem waved it through while `alembic upgrade head` was
+    already failing with "Multiple head revisions".
+
+    Both forks of 2026-08-24 were caught by TestMigrationChain above instead —
+    the general-purpose suite being stricter than the dedicated gate is the
+    inversion this pins shut.
+    """
+
+    @staticmethod
+    def _write(tmp_path, name, revision, down_revision):
+        down = "None" if down_revision is None else f'"{down_revision}"'
+        (tmp_path / name).write_text(
+            f'"""Fixture migration."""\n\n'
+            f'revision = "{revision}"\n'
+            f"down_revision = {down}\n"
+            f"branch_labels = None\n"
+            f"depends_on = None\n\n\n"
+            f"def upgrade():\n    pass\n\n\n"
+            f"def downgrade():\n    pass\n"
+        )
+
+    def _validate(self, tmp_path):
+        import importlib.util
+
+        script = (
+            Path(__file__).resolve().parents[1] / "scripts" / "validate_migrations.py"
+        )
+        spec = importlib.util.spec_from_file_location("_validate_migrations", script)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        # (is_valid, errors, warnings)
+        return module.validate_migrations(tmp_path)
+
+    def test_a_linear_chain_passes(self, tmp_path):
+        self._write(tmp_path, "0001_base.py", "aaaa11112222", None)
+        self._write(tmp_path, "0002_next.py", "bbbb11112222", "aaaa11112222")
+
+        is_valid, errors, _warnings = self._validate(tmp_path)
+
+        assert is_valid is True
+        assert errors == []
+
+    def test_a_forked_chain_fails(self, tmp_path):
+        """Two migrations claiming the same parent — the exact shape that
+        broke this branch twice when main landed a migration first."""
+        self._write(tmp_path, "0001_base.py", "aaaa11112222", None)
+        self._write(tmp_path, "0002_ours.py", "bbbb11112222", "aaaa11112222")
+        self._write(tmp_path, "0003_theirs.py", "cccc11112222", "aaaa11112222")
+
+        is_valid, errors, _warnings = self._validate(tmp_path)
+
+        assert is_valid is False, (
+            "A forked chain must FAIL the dedicated gate, not warn: "
+            "`alembic upgrade head` cannot run until it is resolved."
+        )
+        assert any("Multiple heads" in e for e in errors), errors

@@ -34,6 +34,7 @@ from app.api.dependencies import (
     user_has_permission,
 )
 from app.api.prospect_privacy import (
+    block_self_interview_access,
     block_self_prospect_access,
     get_hidden_prospect_ids,
 )
@@ -76,11 +77,13 @@ from app.schemas.membership_pipeline import (
     ProspectListResponse,
     ProspectResponse,
     ProspectSourceEventResponse,
+    ProspectStatusChangeRequest,
     ProspectUpdate,
     PurgeInactiveRequest,
     PurgeInactiveResponse,
     ReportStageGroupsUpdate,
     StepApprovalRequest,
+    StepApprovalResponse,
     StepReorderRequest,
     TransferProspectRequest,
     TransferProspectResponse,
@@ -868,6 +871,13 @@ async def list_prospects(
     event_id: UUID | None = Query(
         None, description="Only prospects linked to this event"
     ),
+    open_only: bool = Query(
+        False,
+        description=(
+            "Only applications still open — excludes rejected, withdrawn, "
+            "inactive and transferred records"
+        ),
+    ),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
@@ -884,6 +894,11 @@ async def list_prospects(
 
     ``event_id`` narrows the list to the applicants a given event produced or
     was linked to — what an open house actually brought in.
+
+    ``open_only`` drops closed applications (rejected, withdrawn, inactive,
+    transferred), which is what the pipeline board and applicant table ask
+    for — a rejected applicant is out of the pipeline. The archive tabs fetch
+    one closed status at a time through ``status`` instead.
 
     The caller's own prospective-membership record, if they have one, is
     omitted from the results and from ``total``.
@@ -908,6 +923,7 @@ async def list_prospects(
         limit=limit,
         offset=offset,
         exclude_prospect_ids=hidden_prospect_ids,
+        open_only=open_only,
     )
 
     now = datetime.now(timezone.utc)
@@ -1133,7 +1149,9 @@ async def complete_step(
     return prospect
 
 
-@router.post("/prospects/{prospect_id}/approve-step", response_model=ProspectResponse)
+@router.post(
+    "/prospects/{prospect_id}/approve-step", response_model=StepApprovalResponse
+)
 async def approve_step(
     prospect_id: UUID,
     data: StepApprovalRequest,
@@ -1150,7 +1168,14 @@ async def approve_step(
     The service only accepts an approval for a role the caller currently
     holds, so no broader permission gate is needed; the step completes (and
     the prospect advances) only when the last required role has signed.
+
+    Returns a minimal result, not the full prospect record: the caller is
+    authorized by the role they hold, not by prospective_members.view, and
+    the full record carries PII (DOB, address, coordinator notes) that
+    holding an approval role does not entitle them to see.
     """
+    from app.models.membership_pipeline import StepProgressStatus
+
     service = MembershipPipelineService(db)
     try:
         prospect = await service.record_step_approval(
@@ -1167,7 +1192,20 @@ async def approve_step(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Prospect not found"
         )
-    return prospect
+    progress = next(
+        (
+            p
+            for p in (prospect.step_progress or [])
+            if str(p.step_id) == str(data.step_id)
+        ),
+        None,
+    )
+    step_completed = bool(progress and progress.status == StepProgressStatus.COMPLETED)
+    return StepApprovalResponse(
+        prospect_id=prospect_id,
+        step_id=data.step_id,
+        step_completed=step_completed,
+    )
 
 
 @router.post("/prospects/{prospect_id}/skip-step", response_model=ProspectResponse)
@@ -1295,6 +1333,54 @@ async def bulk_advance_prospects(
             username=current_user.username,
         )
     return response
+
+
+@router.post("/prospects/{prospect_id}/status", response_model=ProspectResponse)
+async def set_prospect_status(
+    prospect_id: UUID,
+    data: ProspectStatusChangeRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(
+        require_permission("members.manage", "prospective_members.manage")
+    ),
+):
+    """
+    Set one prospect's status (reject, place on hold, withdraw, reactivate).
+
+    ``reason`` is recorded in the prospect's activity log. Like the bulk
+    endpoint, it deliberately does not touch the coordinator notes field —
+    routing a rejection reason through the update endpoint as ``notes``
+    overwrote whatever had been written about the applicant.
+
+    **Requires permission: members.manage or prospective_members.manage**
+    """
+    service = MembershipPipelineService(db)
+    try:
+        prospect = await service.set_prospect_status(
+            prospect_id=str(prospect_id),
+            organization_id=current_user.organization_id,
+            status=data.status,
+            changed_by=current_user.id,
+            reason=data.reason,
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
+        )
+    if not prospect:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Prospect not found"
+        )
+    await log_audit_event(
+        db=db,
+        event_type="membership_pipeline.prospect_status_changed",
+        event_category="membership",
+        severity="info",
+        event_data={"prospect_id": str(prospect_id), "status": data.status},
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+    return prospect
 
 
 @router.post("/prospects/bulk-status", response_model=BulkActionResponse)
@@ -1797,15 +1883,20 @@ async def create_election_package(
     **Requires permission: members.manage or prospective_members.manage**
     """
     service = MembershipPipelineService(db)
-    pkg = await service.create_election_package(
-        prospect_id=str(prospect_id),
-        organization_id=current_user.organization_id,
-        pipeline_id=str(data.pipeline_id) if data.pipeline_id else None,
-        step_id=str(data.step_id) if data.step_id else None,
-        coordinator_notes=data.coordinator_notes,
-        package_config=data.package_config,
-        created_by=current_user.id,
-    )
+    try:
+        pkg = await service.create_election_package(
+            prospect_id=str(prospect_id),
+            organization_id=current_user.organization_id,
+            pipeline_id=str(data.pipeline_id) if data.pipeline_id else None,
+            step_id=str(data.step_id) if data.step_id else None,
+            coordinator_notes=data.coordinator_notes,
+            package_config=data.package_config,
+            created_by=current_user.id,
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
+        )
     if not pkg:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Prospect not found"
@@ -1849,6 +1940,13 @@ async def list_election_packages(
     status_filter: str | None = Query(
         None, alias="status", description="Filter by status"
     ),
+    include_closed: bool = Query(
+        False,
+        description=(
+            "Include packages belonging to closed applications (rejected, "
+            "withdrawn, inactive, transferred)"
+        ),
+    ),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(
         require_permission(
@@ -1862,6 +1960,10 @@ async def list_election_packages(
     """
     List election packages across all prospects, optionally filtered.
 
+    Packages belonging to closed applications are omitted unless
+    ``include_closed`` is set: this is the list a ballot is assembled from,
+    and a rejected applicant's package stays "ready" after the rejection.
+
     The package built for the caller's own application is omitted — it
     bundles the interview and coordinator material the vote is based on.
 
@@ -1873,6 +1975,7 @@ async def list_election_packages(
         pipeline_id=str(pipeline_id) if pipeline_id else None,
         status_filter=status_filter,
         exclude_prospect_ids=hidden_prospect_ids,
+        include_closed=include_closed,
     )
     return packages
 
@@ -2036,6 +2139,7 @@ async def create_interview(
 @router.put(
     "/interviews/{interview_id}",
     response_model=InterviewResponse,
+    dependencies=[Depends(block_self_interview_access)],
 )
 async def update_interview(
     interview_id: UUID,
@@ -2070,6 +2174,7 @@ async def update_interview(
 @router.delete(
     "/interviews/{interview_id}",
     status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(block_self_interview_access)],
 )
 async def delete_interview(
     interview_id: UUID,

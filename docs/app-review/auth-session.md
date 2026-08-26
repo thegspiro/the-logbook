@@ -3,6 +3,33 @@
 **Prefix:** `AUTH` · **Iteration:** A2 · **Reviewed:** 2026-08-05 (pass 1),
 2026-08-08 (pass 2)
 
+## Pass 3 (2026-08-25) — security-review AUTH re-verification — see AUTH-01
+
+Re-verified against current code as part of the application-wide security
+rotation (`docs/security-review/AUTH-01-auth-session.md`). Two corrections to
+the record below, plus one new fix:
+
+- **The M2 "refresh grace window" this doc calls intact was removed on
+  2026-08-12**, deliberately — CHANGELOG 2026-08-12 explains it was itself a
+  replay-window vulnerability. `refresh_access_token` (`auth_service.py:317`)
+  now revokes the whole session on any refresh-token mismatch with no grace
+  fallback; `previous_refresh_token`/`previous_refresh_expires_at` are cleared
+  every rotation and read by nothing (tracked as a LOW cleanup item in
+  `docs/KNOWN_LIMITATIONS.md`). Net effect is a stronger security posture; this
+  doc's "M2 fix intact" bullet below is superseded and should not be
+  re-verified as still describing current behavior.
+- **Route count is 26 (11 public / 15 private), not 25 (10/15).**
+  `GET /captcha-config` (`auth.py:249`) is public and was omitted from the
+  original enumeration below — it only exposes a public CAPTCHA site key, so
+  this is a doc-completeness gap, not a security bug.
+- **AUTH-1 — OAuth login skipped the organization-active check — ✅ FIXED**,
+  see `docs/security-review/AUTH-01-auth-session.md`.
+
+Everything else re-verified clean: all 5 sampled routes (mix of public/private)
+still match this doc's auth-dependency claims; no raw SQL/LIKE, no unbounded
+in-memory caches, no schema/migration drift in `consent.py`, and the frontend
+auth store/API clients remain httpOnly-cookie-only with no `window.confirm`.
+
 ## Pass 2 (2026-08-08) — six-lens sweep — no code change
 
 Re-verified this heavily-hardened surface: **every pass-1 fix holds** — M1

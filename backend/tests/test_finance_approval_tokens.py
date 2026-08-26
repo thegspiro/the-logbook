@@ -5,8 +5,9 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from sqlalchemy.dialects import mysql
 
-from app.models.finance import ApprovalStepStatus
+from app.models.finance import ApprovalStepStatus, ApproverType
 from app.services.finance_service import FinanceService
+from app.services.separation_of_duties import SeparationOfDutiesError
 
 
 def _result(record):
@@ -15,14 +16,23 @@ def _result(record):
     return result
 
 
-def _pending_record():
+def _pending_record(step=None):
     record = MagicMock()
     record.status = ApprovalStepStatus.PENDING
     record.token_expires_at = None
     record.entity_type = MagicMock()
     record.entity_id = "entity-id"
     record.approval_token = "approval-token"
+    record.step = step
     return record
+
+
+def _email_step(approver_value, allow_self_approval=False):
+    step = MagicMock()
+    step.approver_type = ApproverType.EMAIL
+    step.approver_value = approver_value
+    step.allow_self_approval = allow_self_approval
+    return step
 
 
 @pytest.mark.parametrize("action", ["approve_by_token", "deny_by_token"])
@@ -44,3 +54,75 @@ async def test_token_action_locks_and_consumes_token(action):
     assert record.approval_token is None
     assert record.notes == "reviewed"
     db.flush.assert_awaited_once()
+
+
+class TestApproveByTokenSelfApprovalGuard:
+    """Codex review (PR #1806): an EMAIL-type step whose approver_value is
+
+    the requester's own email let the requester approve their own request
+    via the token path, with no check at all -- contradicting
+    FINANCE_MODULE.md's documented "prevents the requester from also being
+    the approver at any step" invariant. approve_by_token() must reject this
+    unless the step opts in via allow_self_approval.
+    """
+
+    @staticmethod
+    def _service_for(record, requester_email):
+        db = MagicMock()
+        db.execute = AsyncMock(return_value=_result(record))
+        db.flush = AsyncMock()
+        service = FinanceService(db)
+        service._entity_creator_email = AsyncMock(return_value=requester_email)
+        service._advance_notification_steps = AsyncMock()
+        service._check_all_steps_complete = AsyncMock(return_value=False)
+        return service
+
+    async def test_rejects_when_approver_email_matches_requester(self):
+        record = _pending_record(step=_email_step("treasurer@dept.org"))
+        service = self._service_for(record, requester_email="treasurer@dept.org")
+
+        with pytest.raises(SeparationOfDutiesError):
+            await service.approve_by_token(record.approval_token, "self-approving")
+
+        assert record.status == ApprovalStepStatus.PENDING  # never mutated
+        service._advance_notification_steps.assert_not_awaited()
+
+    async def test_rejects_case_insensitively(self):
+        record = _pending_record(step=_email_step("Treasurer@Dept.org"))
+        service = self._service_for(record, requester_email="treasurer@dept.org")
+
+        with pytest.raises(SeparationOfDutiesError):
+            await service.approve_by_token(record.approval_token)
+
+    async def test_allows_when_allow_self_approval_is_set(self):
+        record = _pending_record(
+            step=_email_step("treasurer@dept.org", allow_self_approval=True)
+        )
+        service = self._service_for(record, requester_email="treasurer@dept.org")
+
+        await service.approve_by_token(record.approval_token)
+
+        assert record.status == ApprovalStepStatus.APPROVED
+
+    async def test_allows_when_emails_differ(self):
+        record = _pending_record(step=_email_step("board@dept.org"))
+        service = self._service_for(record, requester_email="treasurer@dept.org")
+
+        await service.approve_by_token(record.approval_token)
+
+        assert record.status == ApprovalStepStatus.APPROVED
+
+    async def test_allows_non_email_approver_types(self):
+        # POSITION/PERMISSION/SPECIFIC_USER steps have no email to compare --
+        # unaffected by this guard, matching the original reasoning for those
+        # types (no Logbook identity resolvable from the token alone).
+        step = MagicMock()
+        step.approver_type = ApproverType.POSITION
+        step.approver_value = "treasurer"
+        step.allow_self_approval = False
+        record = _pending_record(step=step)
+        service = self._service_for(record, requester_email="treasurer@dept.org")
+
+        await service.approve_by_token(record.approval_token)
+
+        assert record.status == ApprovalStepStatus.APPROVED

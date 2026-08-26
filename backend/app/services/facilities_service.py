@@ -80,6 +80,7 @@ from app.schemas.facilities import (
 )
 from app.utils.model_updates import apply_updates
 from app.utils.org_scoping import assert_in_org
+from app.utils.sql_search import LIKE_ESCAPE_CHAR, like_pattern
 
 # How many levels of room nesting are allowed (a top-level room is level 1).
 # Rooms within rooms are for real spatial containment — a storage cage inside
@@ -150,8 +151,7 @@ class FacilitiesService:
 
     async def _apply_updates(self, instance, update_schema) -> None:
         update_data = update_schema.model_dump(exclude_unset=True)
-        for field, value in update_data.items():
-            setattr(instance, field, value)
+        apply_updates(instance, update_data)
         await self.db.commit()
         await self.db.refresh(instance)
 
@@ -590,15 +590,14 @@ class FacilitiesService:
         if is_archived is not None:
             conditions.append(Facility.is_archived == is_archived)
         if search:
-            safe_search = (
-                search.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-            )
-            search_term = f"%{safe_search}%"
+            search_term = like_pattern(search)
             conditions.append(
                 or_(
-                    Facility.name.ilike(search_term),
-                    Facility.facility_number.ilike(search_term),
-                    Facility.city.ilike(search_term),
+                    Facility.name.ilike(search_term, escape=LIKE_ESCAPE_CHAR),
+                    Facility.facility_number.ilike(
+                        search_term, escape=LIKE_ESCAPE_CHAR
+                    ),
+                    Facility.city.ilike(search_term, escape=LIKE_ESCAPE_CHAR),
                 )
             )
 
@@ -921,8 +920,7 @@ class FacilitiesService:
             raise ValueError("Invalid facility status")
 
         update_data = facility_data.model_dump(exclude_unset=True)
-        for field, value in update_data.items():
-            setattr(facility, field, value)
+        apply_updates(facility, update_data)
 
         await self.db.commit()
         await self.db.refresh(facility)
@@ -1078,8 +1076,7 @@ class FacilitiesService:
                 other_photo.is_primary = False
             await self.db.flush()
 
-        for field, value in update_data.items():
-            setattr(photo, field, value)
+        apply_updates(photo, update_data)
 
         await self.db.commit()
         await self.db.refresh(photo)
@@ -1513,8 +1510,7 @@ class FacilitiesService:
                 maintenance.completed_date = date.today()
             maintenance.is_overdue = False
 
-        for field, value in update_data.items():
-            setattr(maintenance, field, value)
+        apply_updates(maintenance, update_data)
 
         # Recheck overdue status
         if (
@@ -1744,8 +1740,7 @@ class FacilitiesService:
 
         update_data = inspection_data.model_dump(exclude_unset=True)
 
-        for field, value in update_data.items():
-            setattr(inspection, field, value)
+        apply_updates(inspection, update_data)
 
         await self.db.commit()
         await self.db.refresh(inspection)
@@ -2863,8 +2858,7 @@ class FacilitiesService:
 
         update_data = project_data.model_dump(exclude_unset=True)
 
-        for field, value in update_data.items():
-            setattr(project, field, value)
+        apply_updates(project, update_data)
 
         await self.db.commit()
         await self.db.refresh(project)
@@ -2972,8 +2966,7 @@ class FacilitiesService:
 
         update_data = policy_data.model_dump(exclude_unset=True)
 
-        for field, value in update_data.items():
-            setattr(policy, field, value)
+        apply_updates(policy, update_data)
 
         await self.db.commit()
         await self.db.refresh(policy)

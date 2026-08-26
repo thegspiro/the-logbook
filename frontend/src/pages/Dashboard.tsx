@@ -60,6 +60,7 @@ import { getProgressBarColor, getEventTypeLabel, getRSVPStatusLabel, getRSVPStat
 import { requirementTarget } from '../utils/pipelineProgress';
 import { formatHours, sumHoursToQuarter } from '../utils/hoursFormatting';
 import { useTimezone } from '../hooks/useTimezone';
+import { useEnabledModules } from '../hooks/useEnabledModules';
 import {
   addCalendarDays,
   formatCalendarDate,
@@ -165,13 +166,25 @@ const Dashboard: React.FC = () => {
   // The legacy summary retains its settings gate, while chief operations is
   // available through the data-source permissions declared in its registry.
   // Everyone — including those leaders — still lands on the personal view.
+  //
+  // Every gate here is a *manage* grant on purpose. `inventory.view`,
+  // `apparatus.view`, `facilities.view` and `scheduling.view` are all baseline
+  // member grants (see DEFAULT_POSITIONS["member"]), so gating on them showed
+  // the My Department tab — department-wide staffing, fleet and facility
+  // reporting — to every firefighter in the department. These mirror the
+  // permissions the backend actually enforces on the widget endpoints, so the
+  // tab never advertises a panel that would come back empty or 403.
   const canViewLegacyAdmin = checkPermission('settings.manage');
-  const canViewAssets = ['inventory.view', 'apparatus.view', 'facilities.view'].some(checkPermission);
+  const canViewAssets =
+    canViewLegacyAdmin || ['inventory.manage', 'apparatus.manage', 'facilities.manage'].some(checkPermission);
   const canViewChiefOperations = canViewChiefDashboard(checkPermission);
   const canViewOrganization = canViewLegacyAdmin || canViewChiefOperations || canViewAssets;
-  const canManageMessages = canViewOrganization || checkPermission('notifications.manage');
+  // Clearing a department-wide persistent message is a notifications action;
+  // holding a fleet or facility grant is not authority to retract one.
+  const canManageMessages = canViewLegacyAdmin || checkPermission('notifications.manage');
   const canManageAdminHours = checkPermission('admin_hours.manage');
-  const canViewScheduling = checkPermission('scheduling.view');
+  const canViewScheduling = checkPermission('scheduling.manage');
+  const { isModuleOn } = useEnabledModules();
   const [adminSummary, setAdminSummary] = useState<AdminSummary | null>(null);
   const [loadingAdmin, setLoadingAdmin] = useState(canViewLegacyAdmin);
   const [adminError, setAdminError] = useState(false);
@@ -829,7 +842,10 @@ const Dashboard: React.FC = () => {
         unread: !msg.is_read,
         onClick: () => {
           if (!msg.is_read && !msg.is_persistent) void markMessageRead(msg.id);
-          void navigate('/messages');
+          // Deep-link to the message itself; its breadcrumb carries the member
+          // on to the full inbox, which tapping the feed row used to be the
+          // only way to reach.
+          void navigate(`/messages/${msg.id}`);
         },
         message: msg,
       });
@@ -1378,7 +1394,7 @@ const Dashboard: React.FC = () => {
                               equally invalid and split apart by the parser.
                               LinkifiedText stops click propagation on its
                               anchors, so following a link doesn't also fire the
-                              row's navigation to /messages. */}
+                              row's navigation to the message. */}
                           {msg ? (
                             <div
                               role="button"
@@ -1389,8 +1405,9 @@ const Dashboard: React.FC = () => {
                                 // linkified body can hold focusable anchors,
                                 // and Enter on one bubbles here — without this
                                 // guard the row would swallow the keypress and
-                                // navigate to /messages instead of opening the
-                                // link (the anchor's guard covers clicks only).
+                                // navigate to the message instead of opening
+                                // the link (the anchor's guard covers clicks
+                                // only).
                                 if (e.target !== e.currentTarget) return;
                                 if (e.key === 'Enter' || e.key === ' ') {
                                   e.preventDefault();
@@ -1617,14 +1634,22 @@ const Dashboard: React.FC = () => {
                       loading={loadingAdmin}
                     />
 
-                    <DashboardStatCard
-                      label="Training Compliance"
-                      value={`${adminSummary?.training_completion_pct ?? 0}%`}
-                      icon={GraduationCap}
-                      iconColor="text-green-700 dark:text-green-400"
-                      description={`${formatHours(adminSummary?.recent_training_hours)} hrs last 30 days`}
-                      loading={loadingAdmin}
-                    />
+                    {/*
+                      Null, not 0, is what says "this department does not run
+                      Training" — a genuine 0% still gets its card. Kept
+                      mounted while loading so the skeleton row does not
+                      reflow once the summary lands.
+                    */}
+                    {(loadingAdmin || adminSummary?.training_completion_pct != null) && (
+                      <DashboardStatCard
+                        label="Training Compliance"
+                        value={`${adminSummary?.training_completion_pct ?? 0}%`}
+                        icon={GraduationCap}
+                        iconColor="text-green-700 dark:text-green-400"
+                        description={`${formatHours(adminSummary?.recent_training_hours)} hrs last 30 days`}
+                        loading={loadingAdmin}
+                      />
+                    )}
 
                     <DashboardStatCard
                       label="Upcoming Events"
@@ -1635,24 +1660,26 @@ const Dashboard: React.FC = () => {
                       loading={loadingAdmin}
                     />
 
-                    <DashboardStatCard
-                      label="Action Items"
-                      value={adminSummary?.open_action_items ?? 0}
-                      icon={(adminSummary?.overdue_action_items ?? 0) > 0 ? AlertTriangle : ClipboardList}
-                      iconColor={
-                        (adminSummary?.overdue_action_items ?? 0) > 0
-                          ? 'text-red-700 dark:text-red-400'
-                          : 'text-yellow-700 dark:text-yellow-400'
-                      }
-                      description={
-                        (adminSummary?.overdue_action_items ?? 0) > 0
-                          ? `${adminSummary?.overdue_action_items} overdue`
-                          : 'All on track'
-                      }
-                      loading={loadingAdmin}
-                      onClick={() => void navigate('/action-items')}
-                      ariaLabel={`Action Items: ${adminSummary?.open_action_items ?? 0} open${(adminSummary?.overdue_action_items ?? 0) > 0 ? `, ${adminSummary?.overdue_action_items} overdue` : ''}`}
-                    />
+                    {(loadingAdmin || adminSummary?.open_action_items != null) && (
+                      <DashboardStatCard
+                        label="Action Items"
+                        value={adminSummary?.open_action_items ?? 0}
+                        icon={(adminSummary?.overdue_action_items ?? 0) > 0 ? AlertTriangle : ClipboardList}
+                        iconColor={
+                          (adminSummary?.overdue_action_items ?? 0) > 0
+                            ? 'text-red-700 dark:text-red-400'
+                            : 'text-yellow-700 dark:text-yellow-400'
+                        }
+                        description={
+                          (adminSummary?.overdue_action_items ?? 0) > 0
+                            ? `${adminSummary?.overdue_action_items} overdue`
+                            : 'All on track'
+                        }
+                        loading={loadingAdmin}
+                        onClick={() => void navigate('/action-items')}
+                        ariaLabel={`Action Items: ${adminSummary?.open_action_items ?? 0} open${(adminSummary?.overdue_action_items ?? 0) > 0 ? `, ${adminSummary?.overdue_action_items} overdue` : ''}`}
+                      />
+                    )}
 
                     <DashboardStatCard
                       label="Admin Hours"
@@ -1672,7 +1699,14 @@ const Dashboard: React.FC = () => {
                 ))}
             </div>
 
-            {canViewScheduling && <SchedulingWidgets timezone={tz} />}
+            {/*
+              The widget summary comes from /api/v1/scheduling, which the
+              module gate refuses outright when Scheduling is off — so
+              without this the department tab renders a card that can only
+              fail. The permission says who may see the crew figures; the
+              module flag says whether this department schedules here at all.
+            */}
+            {canViewScheduling && isModuleOn('scheduling') && <SchedulingWidgets timezone={tz} />}
 
             {canViewOrganization && setupProgress && (
               <OrganizationSetupWidget

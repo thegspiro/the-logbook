@@ -50,6 +50,7 @@ from app.utils.prospect_fields import LABEL_MAP as _SHARED_LABEL_MAP
 from app.utils.prospect_fields import (
     REQUIRED_PROSPECT_FIELDS as _SHARED_REQUIRED_FIELDS,
 )
+from app.utils.sql_search import LIKE_ESCAPE_CHAR, like_pattern
 
 
 @dataclass(frozen=True)
@@ -76,6 +77,27 @@ _STATUS_BLOCK_REASON = {
     ProspectStatus.INACTIVE: "inactive",
     ProspectStatus.TRANSFERRED: "already a member",
 }
+
+
+# A closed application is one no further pipeline work will happen on:
+# rejected and withdrawn end it by decision, inactive by neglect, and
+# transferred because the applicant is a member now. It is a narrower set
+# than "not movable" on purpose — on hold is a pause the coordinator intends
+# to lift, and approved still owes a conversion, so both remain open
+# applications and stay on the board.
+#
+# Closed applications are dropped from the pipeline: off the kanban and the
+# applicant table, and refused for the work that only makes sense on an open
+# application (an election package, a place on a ballot, an interview).
+# Reactivating one puts it back at the stage it left from.
+CLOSED_PROSPECT_STATUSES = frozenset(
+    {
+        ProspectStatus.REJECTED,
+        ProspectStatus.WITHDRAWN,
+        ProspectStatus.INACTIVE,
+        ProspectStatus.TRANSFERRED,
+    }
+)
 
 
 # The detailed duplicate-match message names the existing member and their
@@ -106,6 +128,31 @@ def _assert_movable(prospect: ProspectiveMember, action: str) -> None:
         f"This applicant is {reason} and cannot be {action}. "
         f"Reactivate the application first."
     )
+
+
+def _assert_open(prospect: ProspectiveMember, action: str) -> None:
+    """Raise unless the application is still open.
+
+    Weaker than :func:`_assert_movable` on purpose: this gates work that is
+    legitimate on a paused application (an interview held while a candidate
+    sorts out a scheduling conflict) but not on a closed one. ``action`` is
+    the verb shown to the coordinator, as above.
+    """
+    status = prospect.status
+    if status not in CLOSED_PROSPECT_STATUSES:
+        return
+    reason = _STATUS_BLOCK_REASON.get(
+        status, str(getattr(status, "value", status) or "closed")
+    )
+    # A transferred applicant is a member now, so "reactivate the
+    # application" is not the way out of this one — it would be advice to
+    # re-run somebody through the pipeline they already completed.
+    remedy = (
+        ""
+        if status == ProspectStatus.TRANSFERRED
+        else " Reactivate the application first."
+    )
+    raise ValueError(f"This applicant is {reason} and cannot be {action}.{remedy}")
 
 
 class MembershipPipelineService:
@@ -691,21 +738,20 @@ class MembershipPipelineService:
         against each column individually never hits.
         """
 
-        def _escape(value: str) -> str:
-            return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-
         terms = [t for t in search.split() if t]
         if not terms:
             terms = [search]
 
         clauses = []
         for term in terms:
-            pattern = f"%{_escape(term)}%"
+            pattern = like_pattern(term)
             clauses.append(
                 or_(
-                    ProspectiveMember.first_name.ilike(pattern),
-                    ProspectiveMember.last_name.ilike(pattern),
-                    ProspectiveMember.email.ilike(pattern),
+                    ProspectiveMember.first_name.ilike(
+                        pattern, escape=LIKE_ESCAPE_CHAR
+                    ),
+                    ProspectiveMember.last_name.ilike(pattern, escape=LIKE_ESCAPE_CHAR),
+                    ProspectiveMember.email.ilike(pattern, escape=LIKE_ESCAPE_CHAR),
                 )
             )
         return and_(*clauses)
@@ -720,6 +766,7 @@ class MembershipPipelineService:
         limit: int = 50,
         offset: int = 0,
         exclude_prospect_ids: Optional[Iterable[str]] = None,
+        open_only: bool = False,
     ) -> tuple[List[ProspectiveMember], int]:
         """List prospects with filters.
 
@@ -729,6 +776,12 @@ class MembershipPipelineService:
         the event belongs to *organization_id*; the prospect scope below stops
         a foreign id leaking rows, but it would read as "no applicants" rather
         than as the wrong-org id it is.
+
+        ``open_only`` drops every closed application
+        (:data:`CLOSED_PROSPECT_STATUSES`), which is what the pipeline board
+        and applicant table want: a rejected applicant is out of the pipeline,
+        not a card in the stage they were rejected at. It defaults off so the
+        archive views can still ask for one closed status at a time.
         """
         query = (
             select(ProspectiveMember)
@@ -744,6 +797,10 @@ class MembershipPipelineService:
             query = query.where(ProspectiveMember.pipeline_id == pipeline_id)
         if status:
             query = query.where(ProspectiveMember.status == status)
+        if open_only:
+            query = query.where(
+                ProspectiveMember.status.notin_(sorted(CLOSED_PROSPECT_STATUSES))
+            )
         if event_id:
             query = query.where(
                 or_(
@@ -1129,18 +1186,44 @@ class MembershipPipelineService:
                 label="referring member",
             )
 
+        # TRANSFERRED is derived, not chosen (see _apply_status_change) — the
+        # dedicated status endpoint refuses to set or clear it. This generic
+        # update reaches the same status column and must refuse it the same
+        # way, or it is a second, unguarded path to the exact bypass that
+        # guard exists to close.
+        if data.get("status") is not None:
+            target = self._parse_status(data["status"])
+            if (
+                target == ProspectStatus.TRANSFERRED
+                or prospect.status == ProspectStatus.TRANSFERRED
+            ):
+                raise ValueError(
+                    "Transferred is set by converting the applicant to a "
+                    "member and cannot be set or cleared through this update."
+                )
+
+        # Old values captured before the write, for the activity-log diff
+        # below. exclude_unset upstream means every key here was explicitly
+        # sent by the caller, so apply_updates must not drop an explicit
+        # null the way `if value is not None` used to (CLAUDE.md Pitfall #1):
+        # a client clearing e.g. referred_by got a 200 with the old value
+        # left in place.
+        updates = {
+            k: v for k, v in data.items() if k not in self._PROSPECT_PROTECTED_FIELDS
+        }
+        old_values = {k: getattr(prospect, k, None) for k in updates}
+
+        written = apply_updates(prospect, updates)
+
         changes = {}
-        for key, value in data.items():
-            if key in self._PROSPECT_PROTECTED_FIELDS:
-                continue
-            if value is not None and hasattr(prospect, key):
-                old_value = getattr(prospect, key)
-                if old_value != value:
-                    if key in self._SENSITIVE_ACTIVITY_FIELDS:
-                        changes[key] = {"changed": True}
-                    else:
-                        changes[key] = {"from": str(old_value), "to": str(value)}
-                    setattr(prospect, key, value)
+        for key in written:
+            new_value = getattr(prospect, key)
+            old_value = old_values.get(key)
+            if old_value != new_value:
+                if key in self._SENSITIVE_ACTIVITY_FIELDS:
+                    changes[key] = {"changed": True}
+                else:
+                    changes[key] = {"from": str(old_value), "to": str(new_value)}
 
         if changes:
             await self._log_activity(
@@ -2051,36 +2134,103 @@ class MembershipPipelineService:
         rejection silently destroyed whatever had been written about each
         applicant.
         """
-        try:
-            target = ProspectStatus(status)
-        except ValueError:
-            raise ValueError(f"Invalid status: {status}")
+        target = self._parse_status(status)
 
         async def _set_status(prospect: ProspectiveMember) -> None:
-            previous = (
-                prospect.status.value
-                if hasattr(prospect.status, "value")
-                else str(prospect.status)
-            )
-            if previous == target.value:
-                raise ValueError(f"Prospect is already {target.value}")
-            prospect.status = target
-            await self._log_activity(
-                prospect_id=str(prospect.id),
-                action="prospect_status_changed",
-                details={
-                    "from": previous,
-                    "to": target.value,
-                    "reason": reason,
-                    "bulk": True,
-                },
-                performed_by=changed_by,
+            await self._apply_status_change(
+                prospect, target, changed_by, reason, bulk=True
             )
             await self.db.commit()
 
         return await self._bulk_apply(
             prospect_ids, organization_id, _set_status, exclude_prospect_ids
         )
+
+    @staticmethod
+    def _parse_status(status: str) -> ProspectStatus:
+        try:
+            return ProspectStatus(status)
+        except ValueError:
+            raise ValueError(f"Invalid status: {status}")
+
+    async def _apply_status_change(
+        self,
+        prospect: ProspectiveMember,
+        target: ProspectStatus,
+        changed_by: Optional[str],
+        reason: Optional[str],
+        bulk: bool,
+    ) -> None:
+        """Move one prospect to ``target``, recording ``reason`` as activity.
+
+        The reason is deliberately kept out of ``prospect.notes``: it is the
+        coordinator's running record of the applicant, and writing a
+        rejection reason over it destroys whatever was there — which is
+        exactly what the pre-2026-08 bulk path did, and what the single-record
+        reject / hold / withdraw path kept doing through the update endpoint
+        afterwards. Both now come through here.
+        """
+        # TRANSFERRED is derived, not chosen: transfer_prospect sets it as it
+        # creates the User and stamps transferred_user_id / transferred_at.
+        # Setting it here would close the application, remove it from the
+        # pipeline and count it as a conversion in the stats with no member
+        # anywhere behind it; clearing it would put somebody who is already a
+        # member back on the board, under the active-email unique index.
+        # Neither direction is a status change, so neither is offered here.
+        if target == ProspectStatus.TRANSFERRED:
+            raise ValueError(
+                "Transferred is set by converting the applicant to a member. "
+                "Use the transfer endpoint rather than a status change."
+            )
+        if prospect.status == ProspectStatus.TRANSFERRED:
+            raise ValueError(
+                "This applicant is already a member, so their application "
+                "cannot be reopened from here."
+            )
+
+        previous = (
+            prospect.status.value
+            if hasattr(prospect.status, "value")
+            else str(prospect.status)
+        )
+        if previous == target.value:
+            raise ValueError(f"Prospect is already {target.value}")
+        prospect.status = target
+        await self._log_activity(
+            prospect_id=str(prospect.id),
+            action="prospect_status_changed",
+            details={
+                "from": previous,
+                "to": target.value,
+                "reason": reason,
+                "bulk": bulk,
+            },
+            performed_by=changed_by,
+        )
+
+    async def set_prospect_status(
+        self,
+        prospect_id: str,
+        organization_id: str,
+        status: str,
+        changed_by: Optional[str] = None,
+        reason: Optional[str] = None,
+    ) -> Optional[ProspectiveMember]:
+        """Set one prospect's status, logging ``reason`` to its activity log.
+
+        Returns None when the prospect is not in the caller's organization,
+        so the endpoint can answer 404 rather than leaking its existence.
+        """
+        target = self._parse_status(status)
+        prospect = await self.get_prospect(prospect_id, organization_id)
+        if not prospect:
+            return None
+
+        await self._apply_status_change(
+            prospect, target, changed_by, reason, bulk=False
+        )
+        await self.db.commit()
+        return await self.get_prospect(prospect_id, organization_id)
 
     async def regress_prospect(
         self,
@@ -2286,6 +2436,32 @@ class MembershipPipelineService:
         membership_type: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Internal method to perform the actual transfer"""
+
+        # A rank that matches nothing the department has configured resolves to
+        # no eligible seats and no default permissions, so the new member is
+        # created unable to sign up for anything with nothing to explain why.
+        # Refused here rather than reported later, in the same words the user
+        # endpoints use.
+        if rank and str(rank).strip():
+            from app.services.operational_rank_service import (
+                OperationalRankService,
+                rank_not_configured_message,
+            )
+
+            rank_service = OperationalRankService(self.db)
+            canonical = await rank_service.resolve_rank_code(
+                str(prospect.organization_id), str(rank)
+            )
+            if canonical is None:
+                return {
+                    "success": False,
+                    "message": rank_not_configured_message(str(rank)),
+                }
+            # Store the canonical spelling, not the caller's. The conversion UI
+            # suggests display-cased values ("Firefighter"), which would match
+            # no dictionary key downstream and leave the new member with no
+            # permissions and no eligible seats.
+            rank = canonical
 
         # Check for existing users with the same email (prevents duplicates)
         existing_matches = await self.check_existing_members(
@@ -2555,7 +2731,9 @@ class MembershipPipelineService:
                     select(TrainingProgram)
                     .where(
                         TrainingProgram.organization_id == organization_id,
-                        TrainingProgram.name.ilike("%probationary%"),
+                        TrainingProgram.name.ilike(
+                            "%probationary%", escape=LIKE_ESCAPE_CHAR
+                        ),
                         TrainingProgram.active.is_(True),
                     )
                     .limit(1)
@@ -4328,6 +4506,11 @@ class MembershipPipelineService:
         if not prospect:
             return None
 
+        # A package is the material the membership votes on. Building one for
+        # an application that has already been closed puts a rejected or
+        # withdrawn applicant in front of the members for a vote.
+        _assert_open(prospect, "put forward for election")
+
         # MP-5: validate any client-supplied pipeline_id / step_id are in-org
         # and consistent, so the package can't persist a foreign/dangling FK.
         effective_pipeline = prospect.pipeline
@@ -4484,8 +4667,16 @@ class MembershipPipelineService:
         pipeline_id: Optional[str] = None,
         status_filter: Optional[str] = None,
         exclude_prospect_ids: Optional[Iterable[str]] = None,
+        include_closed: bool = False,
     ) -> List[ProspectElectionPackage]:
-        """List election packages, optionally filtered by pipeline and status"""
+        """List election packages, optionally filtered by pipeline and status.
+
+        Packages belonging to closed applications are omitted unless
+        ``include_closed`` is set. This list is what an election officer picks
+        a ballot from, so a rejected applicant's still-"ready" package
+        appearing in it is an invitation to hold a vote on somebody the
+        department already declined.
+        """
         query = (
             select(ProspectElectionPackage)
             .join(
@@ -4494,6 +4685,10 @@ class MembershipPipelineService:
             )
             .where(ProspectiveMember.organization_id == organization_id)
         )
+        if not include_closed:
+            query = query.where(
+                ProspectiveMember.status.notin_(sorted(CLOSED_PROSPECT_STATUSES))
+            )
         query = self._apply_prospect_exclusions(query, exclude_prospect_ids)
         if pipeline_id:
             query = query.where(ProspectElectionPackage.pipeline_id == pipeline_id)
@@ -4523,6 +4718,16 @@ class MembershipPipelineService:
         pkg = await self.get_election_package(prospect_id, organization_id)
         if not pkg:
             raise ValueError("Election package not found")
+
+        # The package's own status is not enough: it is a snapshot taken when
+        # the applicant reached the election stage, and it stays "ready" after
+        # the application is closed. Without this, a rejected applicant could
+        # still be added to a ballot and voted on.
+        prospect = await self.get_prospect(prospect_id, organization_id)
+        if not prospect:
+            raise ValueError("Prospect not found")
+        _assert_open(prospect, "added to a ballot")
+
         if pkg.status != "ready":
             raise ValueError(
                 f"Package must be in 'ready' status to assign "
@@ -5052,6 +5257,8 @@ class MembershipPipelineService:
         prospect = await self.get_prospect(prospect_id, organization_id)
         if not prospect:
             raise ValueError("Prospect not found")
+
+        _assert_open(prospect, "interviewed")
 
         # MP-5: reject a client-supplied step_id that isn't in this prospect's
         # pipeline (integrity — prevents a dangling step FK on the interview).

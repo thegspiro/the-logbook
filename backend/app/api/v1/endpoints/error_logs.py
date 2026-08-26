@@ -40,6 +40,60 @@ ERROR_LOG_RATE_LIMIT = 120
 ERROR_LOG_RATE_WINDOW_SECONDS = 60
 
 
+async def _affected_users(
+    db: AsyncSession, organization_id: str, errors: list[ErrorLog]
+) -> dict[str, dict[str, str]]:
+    """Resolve the ``user_id`` on each row to a name an administrator knows.
+
+    A truncated UUID identifies nobody: it cannot be searched for, and it does
+    not answer the first question asked of a report — is this one member's
+    browser or everyone's. Looked up in one batched query rather than per row.
+
+    Org-scoped (pitfall #14a) even though the rows were already scoped: the id
+    reaches this query from stored data, so the filter is what keeps a stale or
+    mis-stamped row from naming a member of another department.
+    """
+    user_ids = {e.user_id for e in errors if e.user_id}
+    if not user_ids:
+        return {}
+
+    result = await db.execute(
+        select(User.id, User.first_name, User.last_name, User.username).where(
+            User.id.in_(user_ids),
+            User.organization_id == organization_id,
+        )
+    )
+    return {
+        str(user_id): {
+            "name": f"{first_name or ''} {last_name or ''}".strip() or username,
+            "username": username,
+        }
+        for user_id, first_name, last_name, username in result.all()
+    }
+
+
+def _serialize_error(
+    error: ErrorLog, users: dict[str, dict[str, str]]
+) -> dict[str, Any]:
+    """Row shape shared by the list, stats and export endpoints."""
+    user = users.get(error.user_id or "")
+    return {
+        "id": error.id,
+        "error_type": error.error_type,
+        "error_message": error.error_message,
+        "user_message": error.user_message,
+        "troubleshooting_steps": error.troubleshooting_steps or [],
+        "context": error.context or {},
+        "user_id": error.user_id,
+        # Absent when the account has since been deleted; the reader falls
+        # back to the id rather than claiming the report had no user.
+        "user_name": user["name"] if user else None,
+        "user_username": user["username"] if user else None,
+        "event_id": error.event_id,
+        "created_at": utc_isoformat(error.created_at),
+    }
+
+
 class ErrorLogCreate(BaseModel):
     """Validated schema for error log creation."""
 
@@ -156,23 +210,11 @@ async def get_errors(
         .offset(skip)
         .limit(limit)
     )
-    errors = result.scalars().all()
+    errors = list(result.scalars().all())
+    affected = await _affected_users(db, str(current_user.organization_id), errors)
 
     return {
-        "errors": [
-            {
-                "id": e.id,
-                "error_type": e.error_type,
-                "error_message": e.error_message,
-                "user_message": e.user_message,
-                "troubleshooting_steps": e.troubleshooting_steps or [],
-                "context": e.context or {},
-                "user_id": e.user_id,
-                "event_id": e.event_id,
-                "created_at": utc_isoformat(e.created_at),
-            }
-            for e in errors
-        ],
+        "errors": [_serialize_error(e, affected) for e in errors],
         "total": total,
     }
 
@@ -212,25 +254,13 @@ async def get_error_stats(
     recent_result = await db.execute(
         select(ErrorLog).where(*filters).order_by(ErrorLog.created_at.desc()).limit(5)
     )
-    recent = recent_result.scalars().all()
+    recent = list(recent_result.scalars().all())
+    affected = await _affected_users(db, str(current_user.organization_id), recent)
 
     return {
         "total": total,
         "by_type": by_type,
-        "recent_errors": [
-            {
-                "id": e.id,
-                "error_type": e.error_type,
-                "error_message": e.error_message,
-                "user_message": e.user_message,
-                "troubleshooting_steps": e.troubleshooting_steps or [],
-                "context": e.context or {},
-                "user_id": e.user_id,
-                "event_id": e.event_id,
-                "created_at": utc_isoformat(e.created_at),
-            }
-            for e in recent
-        ],
+        "recent_errors": [_serialize_error(e, affected) for e in recent],
     }
 
 
@@ -292,7 +322,8 @@ async def export_errors(
         .order_by(ErrorLog.created_at.desc())
         .limit(1000)
     )
-    errors = result.scalars().all()
+    errors = list(result.scalars().all())
+    affected = await _affected_users(db, str(current_user.organization_id), errors)
 
     await log_audit_event(
         db=db,
@@ -308,17 +339,4 @@ async def export_errors(
         ip_address=get_client_ip(request),
     )
 
-    return [
-        {
-            "id": e.id,
-            "error_type": e.error_type,
-            "error_message": e.error_message,
-            "user_message": e.user_message,
-            "troubleshooting_steps": e.troubleshooting_steps or [],
-            "context": e.context or {},
-            "user_id": e.user_id,
-            "event_id": e.event_id,
-            "created_at": utc_isoformat(e.created_at),
-        }
-        for e in errors
-    ]
+    return [_serialize_error(e, affected) for e in errors]

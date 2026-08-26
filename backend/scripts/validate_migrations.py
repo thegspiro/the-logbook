@@ -12,6 +12,7 @@ Usage:
     python scripts/validate_migrations.py
 """
 
+import argparse
 import ast
 import re
 import sys
@@ -100,12 +101,16 @@ def parse_migration_file(filepath: Path) -> Dict[str, object]:
     }
 
 
-def validate_migrations(versions_dir: Path) -> Tuple[bool, List[str]]:
+def validate_migrations(versions_dir: Path) -> Tuple[bool, List[str], List[str]]:
     """
     Validate the migration chain.
 
     Returns:
-        Tuple of (is_valid, list of error messages)
+        Tuple of (is_valid, error messages, warning messages).
+
+        Warnings are returned rather than only printed so ``--strict``
+        can fail on them; a forked chain is reported as a warning
+        because it is legal mid-merge, and fatal by the time it lands.
     """
     errors = []
     warnings = []
@@ -116,7 +121,7 @@ def validate_migrations(versions_dir: Path) -> Tuple[bool, List[str]]:
 
     if not migration_files:
         errors.append("No migration files found!")
-        return False, errors
+        return False, errors, warnings
 
     # Parse all migrations
     migrations = []
@@ -184,7 +189,23 @@ def validate_migrations(versions_dir: Path) -> Tuple[bool, List[str]]:
         for m in migrations:
             if m["revision"] in head_revisions:
                 head_files.append(f"{m['file']} ({m['revision']})")
-        warnings.append(f"Multiple heads detected (branching): {', '.join(head_files)}")
+        # An ERROR, not a warning. This script is the dedicated gate for the
+        # chain and CI runs it on every push, but a fork only ever produced a
+        # warning — so it exited 0 and the gate passed while `alembic upgrade
+        # head` was already broken with "Multiple head revisions". The thing
+        # that actually caught the two forks of 2026-08-24 was a pytest case
+        # in test_alembic_migrations.py, which means the general-purpose test
+        # suite was stricter than the check written for this exact problem.
+        #
+        # A fork is not a style preference: every deployment that runs
+        # `alembic upgrade head` fails outright until somebody resolves it, and
+        # on a repo where main merges several times an hour it happens to any
+        # branch carrying a migration.
+        errors.append(
+            f"Multiple heads detected (branching): {', '.join(head_files)}. "
+            f"`alembic upgrade head` fails until this is resolved — repoint "
+            f"the newer migration onto the other head, or merge them."
+        )
 
     # Print results
     print("\n" + "=" * 60)
@@ -232,23 +253,43 @@ def validate_migrations(versions_dir: Path) -> Tuple[bool, List[str]]:
         print("\n" + "=" * 60)
         print("VALIDATION FAILED")
         print("=" * 60 + "\n")
-        return False, errors
+        return False, errors, warnings
 
     print("\n" + "=" * 60)
     print("VALIDATION PASSED")
     print("=" * 60 + "\n")
-    return True, []
+    return True, [], warnings
 
 
 def main():
     """Main entry point."""
+    parser = argparse.ArgumentParser(
+        description=(
+            "Validate the Alembic revision chain: duplicate ids, orphaned "
+            "down_revisions, multiple bases, and a forked chain."
+        )
+    )
+    parser.add_argument(
+        "--strict",
+        action="store_true",
+        help=(
+            "Fail on warnings too. A forked chain is the only warning this "
+            "script reports, and it is what breaks `alembic upgrade head` "
+            "for everyone once the second branch merges — so CI runs strict."
+        ),
+    )
+    args = parser.parse_args()
+
     versions_dir = backend_dir / "alembic" / "versions"
 
     if not versions_dir.exists():
         print(f"Error: Versions directory not found: {versions_dir}")
         sys.exit(1)
 
-    is_valid, errors = validate_migrations(versions_dir)
+    is_valid, _errors, warnings = validate_migrations(versions_dir)
+    if args.strict and warnings:
+        print("Strict mode: warnings above are treated as failures.")
+        sys.exit(1)
     sys.exit(0 if is_valid else 1)
 
 
