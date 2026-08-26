@@ -16,10 +16,7 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-PR #1901 (feature 19, skills testing) — open, subscribed. 4 fixes: SoD gaps on
-`void_test`/`return_test_for_correction`, `assert_attempts_remaining` capacity
-lock (Pitfall #27), `update_template` null-handling. See
-`docs/security-review/SKT-19-skills-testing.md`.
+None — PR #1901 (feature 19, skills testing) merged. Next iteration starts feature 20 (compliance).
 
 ---
 
@@ -66,8 +63,8 @@ data-carrying modules, then the supporting infrastructure.
 | 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                       | ✅ #1848        |
 | 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`                                                                                   | ✅ #1851        |
 | 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ✅ #1873        |
-| 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3723 L)                                                                                                          | ⏳ #1901        |
-| 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ⬜              |
+| 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3723 L)                                                                                                          | ✅ #1901        |
+| 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | 🔄              |
 | 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ⬜              |
 | 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ⬜              |
 | 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ⬜              |
@@ -690,3 +687,20 @@ re-runs the whole-codebase sweeps against whatever has landed since.
   tests and the full 8814-test backend suite pass. Findings doc:
   `docs/security-review/SKT-19-skills-testing.md`. PR #1901 opened and
   subscribed. Next: 20 compliance, once #1901 merges.
+- **19 Skills testing ✅ merged** — PR #1901 merged 2026-08-26. Codex review
+  caught two real issues in the SKT-4 capacity-lock fix before merge: (P1)
+  locking the candidate's `RequirementProgress` row rather than something
+  guaranteed to exist — `_validate_requirement_link` never requires an
+  active enrollment, so the lock could silently serialize on nothing; (P2) a
+  lock-ordering deadlock risk, since `validate_test` locks its specific
+  `SkillTest` row before calling into the capacity check, so two concurrent
+  validations could each hold their own test row and then deadlock waiting
+  on the capacity lock in reverse order of each other. Fixed by locking
+  `TrainingRequirement` instead (the row already fetched first, guaranteed
+  to exist for every capped test) via a new `lock_attempt_capacity` helper,
+  and by having `validate_test` acquire that lock — through a non-locking
+  peek at the test's `requirement_id` — before locking the test row, fixing
+  the ordering as well as the target. Replied to both review threads with
+  the fix and resolved them. Full local completion gate re-verified green
+  (391/391 skills-scoped, 8816/8816 full suite) before pushing the revision;
+  CI came back 16/16 green with no further comments. Next: 20 compliance.
