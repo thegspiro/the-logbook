@@ -44,6 +44,7 @@ from app.models.inventory import (
     MemberSizePreferences,
     NFPAInspectionDetail,
     NFPAItemCompliance,
+    ReorderReceipt,
     ReorderRequest,
     ReorderStatus,
     RequestStatus,
@@ -4291,9 +4292,9 @@ class InventoryService:
             }
 
         # Count issued this period
+        now = datetime.now(timezone.utc)
         period_start = None
         if allowance.period_type == "annual":
-            now = datetime.now(timezone.utc)
             period_start = datetime(now.year, 1, 1, tzinfo=timezone.utc)
         # "career" and "one_time" count all time
 
@@ -5544,20 +5545,14 @@ class InventoryService:
             if not reorder:
                 return None, "Reorder request not found"
 
+            if "quantity_received" in data:
+                return None, "Received quantity changes require the receiving workflow"
+
             await self._assert_reorder_fks_in_org(data, organization_id)
 
-            now = datetime.now(timezone.utc)
             new_status = data.get("status")
-
-            # Handle status transitions
             if new_status and new_status != reorder.status.value:
-                if new_status == "approved":
-                    data["approved_by"] = current_user_id
-                    data["approved_at"] = now
-                elif new_status == "ordered":
-                    data["ordered_at"] = now
-                elif new_status == "received":
-                    data["received_at"] = now
+                return None, "Status changes require a workflow action"
 
             for key, value in data.items():
                 setattr(reorder, key, value)
@@ -5574,6 +5569,154 @@ class InventoryService:
         except Exception as e:
             logger.error(f"Error updating reorder request: {e}")
             return None, str(e)
+
+    async def transition_reorder_request(
+        self, request_id, organization_id, data, current_user_id
+    ):
+        """Apply only an allowed forward/cancellation edge under a row lock."""
+        row = await self.db.scalar(
+            select(ReorderRequest)
+            .where(
+                ReorderRequest.id == str(request_id),
+                ReorderRequest.organization_id == str(organization_id),
+            )
+            .with_for_update()
+        )
+        if not row:
+            return None, "Reorder request not found"
+        if row.version != data["expected_version"]:
+            return None, "Reorder request was updated by another user; reload and retry"
+        current = row.status.value
+        action = data["action"]
+        edges = {
+            ("pending", "approve"): "approved",
+            ("approved", "mark_ordered"): "ordered",
+        }
+        target = edges.get((current, action))
+        if action == "cancel" and current in {"pending", "approved", "ordered"}:
+            target = "cancelled"
+        if not target:
+            return None, f"Action {action} is not allowed from {current}"
+        now = datetime.now(timezone.utc)
+        if target == "approved":
+            row.approved_by, row.approved_at = current_user_id, now
+        if target == "ordered":
+            if "vendor_id" in data:
+                await self._assert_reorder_fks_in_org(
+                    {"vendor_id": data.get("vendor_id")}, organization_id
+                )
+                row.vendor_id = (
+                    str(data["vendor_id"]) if data.get("vendor_id") else None
+                )
+            if data.get("vendor"):
+                row.vendor = data["vendor"].strip()
+            if data.get("purchase_order_number"):
+                row.purchase_order_number = data["purchase_order_number"].strip()
+            org = await self.db.get(Organization, str(organization_id))
+            if org.reorder_vendor_required and not (
+                row.vendor_id or (row.vendor and row.vendor.strip())
+            ):
+                return None, "Department policy requires a vendor before ordering"
+            if org.reorder_po_required and not (
+                row.purchase_order_number and row.purchase_order_number.strip()
+            ):
+                return (
+                    None,
+                    "Department policy requires a purchase-order reference before ordering",
+                )
+            row.ordered_at = now
+        row.status = ReorderStatus(target)
+        row.version += 1
+        await self.db.flush()
+        return row, None
+
+    async def correct_reorder_status(self, request_id, organization_id, data):
+        row = await self.db.scalar(
+            select(ReorderRequest)
+            .where(
+                ReorderRequest.id == str(request_id),
+                ReorderRequest.organization_id == str(organization_id),
+            )
+            .with_for_update()
+        )
+        if not row:
+            return None, "Reorder request not found"
+        if row.version != data["expected_version"]:
+            return None, "Reorder request was updated by another user; reload and retry"
+        row.status = ReorderStatus(data["status"])
+        row.version += 1
+        await self.db.flush()
+        return row, None
+
+    async def receive_reorder(self, request_id, organization_id, data, current_user_id):
+        """Atomically append receipt history, create stock, and advance status."""
+        row = await self.db.scalar(
+            select(ReorderRequest)
+            .where(
+                ReorderRequest.id == str(request_id),
+                ReorderRequest.organization_id == str(organization_id),
+            )
+            .with_for_update()
+        )
+        if not row:
+            return None, "Reorder request not found"
+        prior = await self.db.scalar(
+            select(ReorderReceipt).where(
+                ReorderReceipt.reorder_request_id == row.id,
+                ReorderReceipt.idempotency_key == data["idempotency_key"],
+            )
+        )
+        if prior:
+            return None, "This receipt has already been recorded"
+        if row.version != data["expected_version"]:
+            return None, "Reorder request was updated by another user; reload and retry"
+        if row.status not in {ReorderStatus.ORDERED, ReorderStatus.PARTIALLY_RECEIVED}:
+            return None, f"Stock cannot be received from {row.status.value}"
+        if not row.item_id:
+            return None, "Link an inventory item before receiving stock"
+        outstanding = row.quantity_requested - row.quantity_received
+        if data["quantity"] > outstanding and not data.get("confirm_over_receipt"):
+            return (
+                None,
+                f"Quantity exceeds the outstanding quantity ({outstanding}); confirm over-receipt",
+            )
+        lot = InventoryLot(
+            organization_id=str(organization_id),
+            inventory_item_id=row.item_id,
+            lot_number=data.get("lot_number"),
+            expiration_date=data.get("expiration_date"),
+            quantity=data["quantity"],
+            received_date=date.today(),
+            storage_location=data["storage_location"],
+            unit_cost=data["unit_cost"],
+            created_by=current_user_id,
+        )
+        self.db.add(lot)
+        await self.db.flush()
+        receipt = ReorderReceipt(
+            organization_id=str(organization_id),
+            reorder_request_id=row.id,
+            inventory_lot_id=lot.id,
+            idempotency_key=data["idempotency_key"],
+            quantity=data["quantity"],
+            unit_cost=data["unit_cost"],
+            storage_location=data["storage_location"],
+            received_by=current_user_id,
+        )
+        self.db.add(receipt)
+        row.quantity_received += data["quantity"]
+        row.actual_unit_cost = data["unit_cost"]
+        row.status = (
+            ReorderStatus.RECEIVED
+            if row.quantity_received >= row.quantity_requested
+            else ReorderStatus.PARTIALLY_RECEIVED
+        )
+        row.received_at = (
+            datetime.now(timezone.utc) if row.status == ReorderStatus.RECEIVED else None
+        )
+        row.version += 1
+        await self.db.flush()
+        return row, None
 
     async def delete_reorder_request(
         self, request_id: UUID, organization_id: UUID
@@ -6544,6 +6687,7 @@ class InventoryService:
                 if allowance is not None:
                     groups.setdefault(allowance.id, []).append(uid)
             by_id = {a.id: a for a in allowances}
+            now = datetime.now(timezone.utc)
             for aid, uids in groups.items():
                 allowance = by_id[aid]
                 q = (
@@ -6557,7 +6701,6 @@ class InventoryService:
                     .group_by(ItemIssuance.user_id)
                 )
                 if allowance.period_type == "annual":
-                    now = datetime.now(timezone.utc)
                     q = q.where(
                         ItemIssuance.issued_at
                         >= datetime(now.year, 1, 1, tzinfo=timezone.utc)

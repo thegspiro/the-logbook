@@ -1451,6 +1451,8 @@ export interface ReorderRequest {
   item_name: string;
   quantity_requested: number;
   quantity_received?: number;
+  quantity_outstanding: number;
+  version: number;
   vendor?: string;
   vendor_contact?: string;
   vendor_id?: string;
@@ -1502,6 +1504,24 @@ export interface ReorderRequestUpdate {
   status?: string | undefined;
   urgency?: string | undefined;
   notes?: string | null | undefined;
+}
+
+export interface ReorderTransition {
+  action: 'approve' | 'mark_ordered' | 'cancel';
+  expected_version: number;
+  vendor_id?: string;
+  vendor?: string;
+  purchase_order_number?: string;
+}
+
+export interface ReorderReceiptCreate {
+  quantity: number;
+  expected_version: number;
+  idempotency_key: string;
+  storage_location: string;
+  unit_cost: number;
+  lot_number?: string;
+  confirm_over_receipt?: boolean;
 }
 
 // Scan / Quick-Action Types

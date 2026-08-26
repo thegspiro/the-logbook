@@ -695,6 +695,8 @@ class InventoryLot(Base):
         Integer, default=0, nullable=False, server_default="0"
     )  # ready units on hand
     received_date = Column(Date, nullable=True)
+    storage_location = Column(String(255), nullable=True)
+    unit_cost = Column(Numeric(10, 2), nullable=True)
     notes = Column(Text, nullable=True)
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -1994,6 +1996,7 @@ class ReorderStatus(str, enum.Enum):
     PENDING = "pending"
     APPROVED = "approved"
     ORDERED = "ordered"
+    PARTIALLY_RECEIVED = "partially_received"
     RECEIVED = "received"
     CANCELLED = "cancelled"
 
@@ -2036,7 +2039,8 @@ class ReorderRequest(Base):
     )
     item_name = Column(String(255), nullable=False)
     quantity_requested = Column(Integer, nullable=False, default=1, server_default="1")
-    quantity_received = Column(Integer, nullable=True)
+    quantity_received = Column(Integer, nullable=False, default=0, server_default="0")
+    version = Column(Integer, nullable=False, default=1, server_default="1")
 
     # Vendor / ordering details. `vendor` / `vendor_contact` are the legacy
     # free-text fields; `vendor_id` links the request to a tracked vendor and
@@ -2093,10 +2097,46 @@ class ReorderRequest(Base):
     requester = relationship("User", foreign_keys=[requested_by])
     approver = relationship("User", foreign_keys=[approved_by])
     vendor_record = relationship("InventoryVendor", foreign_keys=[vendor_id])
+    receipts = relationship("ReorderReceipt", back_populates="reorder_request")
 
     __table_args__ = (
         Index("idx_reorder_org_status", "organization_id", "status"),
         Index("idx_reorder_item", "item_id"),
+    )
+
+
+class ReorderReceipt(Base):
+    """Immutable receipt history; one client receipt key may affect stock once."""
+
+    __tablename__ = "reorder_receipts"
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    organization_id = Column(
+        String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False
+    )
+    reorder_request_id = Column(
+        String(36),
+        ForeignKey("reorder_requests.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    inventory_lot_id = Column(
+        String(36), ForeignKey("inventory_lots.id", ondelete="RESTRICT"), nullable=False
+    )
+    idempotency_key = Column(String(100), nullable=False)
+    quantity = Column(Integer, nullable=False)
+    unit_cost = Column(Numeric(10, 2), nullable=True)
+    storage_location = Column(String(255), nullable=True)
+    received_by = Column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    received_at = Column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    reorder_request = relationship("ReorderRequest", back_populates="receipts")
+    __table_args__ = (
+        UniqueConstraint(
+            "reorder_request_id", "idempotency_key", name="uq_reorder_receipt_key"
+        ),
+        Index("ix_reorder_receipts_request", "reorder_request_id"),
     )
 
 
