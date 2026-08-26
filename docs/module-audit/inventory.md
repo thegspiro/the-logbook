@@ -8,6 +8,13 @@ WebSocket), `app/services/inventory_service.py` (5,678 L),
 isolation/correctness, with a full line-by-line tenant-isolation read of the
 service layer).
 
+**Correction (security-review 11, 2026-08-26):** the endpoint/line counts
+above were already stale by the time this doc's own commit landed — the file
+had 132 endpoints, not 116, at that point. See
+`docs/security-review/INV-11-inventory.md` for the corrected count and the
+full re-audit (all prior findings re-verified, INV-4 confirmed closed, one
+new access-control gap found and fixed).
+
 ## Verified good ✅
 
 - **Auth coverage:** all 116 endpoints authenticated. 115 carry a

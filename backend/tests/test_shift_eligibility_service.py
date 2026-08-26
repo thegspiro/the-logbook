@@ -14,11 +14,17 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from app.schemas.scheduling import ShiftPosition
 from app.services.shift_eligibility_service import (
     DEFAULT_EXCLUDED_MEMBERSHIP_TYPES,
     ShiftEligibilityService,
 )
-from app.utils.positions import TRAINING_POSITION_MAP
+from app.utils.positions import (
+    TRAINING_TARGET_VALUES,
+    normalize_stored_positions,
+    training_target_to_position,
+    training_targets_for,
+)
 
 
 def _one(obj):
@@ -452,7 +458,7 @@ class TestPositionRoster:
         assert member["sources"] == [{"type": "rank", "label": "Engineer"}]
 
     async def test_driver_candidate_program_maps_to_driver(self):
-        # The same TRAINING_POSITION_MAP translation the signup gate uses.
+        # The same training_target_to_position translation the gate uses.
         db = self._db_for(
             users=[_member("u1", rank="firefighter")],
             ranks=[("firefighter", "Firefighter", ["firefighter"])],
@@ -814,35 +820,35 @@ class TestPositionRoster:
     def test_a_certification_for_another_position_is_excluded_in_sql(self):
         """The roster filters by target_position in the query, not after it.
 
-        Asserted on the reverse map rather than through the mocked session,
+        Asserted on the reverse lookup rather than through the mocked session,
         because the fake returns whatever rows a test hands it regardless of
         the WHERE clause -- so a roster-level assertion here would pass even if
         the filter were deleted. The behaviour against a real database is
-        covered by the paramedic/EMT split below.
+        covered by the paramedic/EMT split above.
         """
-        svc = ShiftEligibilityService(_db([]))
-
         # An EMT card must not reach the medic roster, and vice versa.
-        assert "emt" not in svc._target_values_for("paramedic")
-        assert svc._target_values_for("paramedic") == ["paramedic"]
+        assert training_targets_for("paramedic") == ["paramedic"]
 
-        # Both spellings of the EMS seat resolve to it, and only those.
-        assert svc._target_values_for("ems") == ["ems", "emt"]
+        # Both spellings of the EMS seat resolve to it, and only those. The
+        # emt -> ems alias is stated once, in canonical_position.
+        assert training_targets_for("ems") == ["ems", "emt"]
 
         # driver_candidate is the pipeline name departments actually type.
-        assert svc._target_values_for("driver") == ["driver", "driver_candidate"]
+        assert training_targets_for("driver") == ["driver", "driver_candidate"]
 
-        # A seat with no alias still matches itself -- the identity case the
-        # forward lookup gets from its .get(v, v) default.
-        assert svc._target_values_for("captain") == ["captain"]
+        # A seat with no alias still matches itself.
+        assert training_targets_for("captain") == ["captain"]
 
-    def test_every_mapped_value_round_trips(self):
-        # Whatever the forward map resolves a value to, the reverse lookup for
-        # that seat must offer the value back, or a course configured through
-        # the API would be filtered out of the roster it was meant to feed.
-        svc = ShiftEligibilityService(_db([]))
-        for value, seat in TRAINING_POSITION_MAP.items():
-            assert value in svc._target_values_for(seat)
+    def test_every_target_value_round_trips(self):
+        # Whatever the forward resolution maps a value to, the reverse lookup
+        # for that seat must offer the value back, or a course configured
+        # through the API would be filtered out of the roster it feeds.
+        for value in TRAINING_TARGET_VALUES:
+            seat = training_target_to_position(value)
+            assert value in training_targets_for(seat), (
+                f"{value!r} resolves to {seat!r} but the roster filter for "
+                f"{seat!r} would not select it"
+            )
 
     async def test_rank_without_a_stored_row_uses_the_seed_label(self):
         db = self._db_for(
@@ -990,3 +996,70 @@ class TestEvocEnforcementSetting:
 
 if __name__ == "__main__":  # pragma: no cover
     raise SystemExit(pytest.main([__file__, "-v"]))
+
+
+class TestAmbulanceEmtSeatIsFillable:
+    """The reported defect: an EMT blocked from the EMT seat on an ambulance.
+
+    ``ApparatusBasicPage`` wrote the seat as ``"EMT"`` while ranks, held
+    positions and training all grant ``"ems"``. Step 4 intersects the two
+    case-sensitively, so the intersection was empty and the endpoint answered
+    403 — for a member who was, by every configured rule, qualified to ride.
+
+    No setting could unblock it: ``open_positions`` and ``open_to_all_members``
+    both put ``"EMT"`` into the eligible set, and the signup API can only send
+    ``ShiftPosition.EMS``. The seat itself had to be settled, which is what
+    ``normalize_stored_positions`` now does on write and the
+    ``d7a4e9c31b60`` migration did to the rows already stored.
+    """
+
+    @staticmethod
+    def _ambulance_shift():
+        # Exactly what the apparatus default produces once normalized, which is
+        # what SchedulingPage copies into the shift.
+        return SimpleNamespace(
+            id="s1",
+            positions=normalize_stored_positions(["driver", "EMT"]),
+            open_to_all_members=False,
+        )
+
+    async def test_emt_can_take_the_ambulance_ems_seat(self):
+        shift = self._ambulance_shift()
+        db = _db(
+            [
+                _one(_org()),
+                _one(shift),
+                _rank_rows([("emt", ["ems", "firefighter"])]),
+                _held_rows(["emt"]),
+                _rows([]),
+            ]
+        )
+        eligible = await ShiftEligibilityService(db).get_eligible_positions(
+            _user(rank=None), "org-1", "s1"
+        )
+        assert "ems" in eligible
+
+    async def test_the_seat_is_nameable_by_the_signup_api(self):
+        # The other half of the block: even a non-empty eligible set is refused
+        # when the client cannot name the seat, since signup_for_shift compares
+        # ShiftPosition's value against it.
+        seats = {
+            slot["position"] for slot in normalize_stored_positions(["driver", "EMT"])
+        }
+        assert seats <= {p.value for p in ShiftPosition}
+
+    async def test_an_emt_by_rank_rather_than_position_also_fits(self):
+        shift = self._ambulance_shift()
+        db = _db(
+            [
+                _one(_org()),
+                _one(shift),
+                _rank_rows([("emt", ["ems", "firefighter"])]),
+                _held_rows([]),
+                _rows([]),
+            ]
+        )
+        eligible = await ShiftEligibilityService(db).get_eligible_positions(
+            _user(rank="emt"), "org-1", "s1"
+        )
+        assert "ems" in eligible

@@ -54,6 +54,29 @@ const gatesForPath = (source: string, navPath: string): string[][] => {
 
 const NAV_SURFACES = ['components/layout/SideNavigation.tsx', 'components/layout/TopNavigation.tsx'] as const;
 
+/**
+ * Slice exactly one nav entry, by its label.
+ *
+ * `gatesForPath` reads a fixed window either side of the path, which bleeds
+ * into the neighbouring literal — the Store Admin row sits directly after Gear
+ * Admin, so its window picks up `inventory.manage`. Anchoring on the label and
+ * stopping at the first closing brace keeps the assertion about one row.
+ */
+const navEntry = (source: string, label: string): string => {
+  const start = source.indexOf(`label: '${label}',`);
+  expect(start, `no '${label}' entry`).toBeGreaterThan(-1);
+  return source.slice(start, source.indexOf('}', start));
+};
+
+/** Pull the `permission`/`requiresModule`/`module` keys off one palette command. */
+const paletteCommand = (source: string, id: string): string => {
+  const start = source.indexOf(`id: '${id}',`);
+  expect(start, `CommandPalette has no '${id}' command`).toBeGreaterThan(-1);
+  // Commands are object literals in one array; stop at the first closing brace
+  // that ends this literal rather than a nested one.
+  return source.slice(start, source.indexOf('\n  },', start));
+};
+
 describe('navigation gates match the routes they target', () => {
   it('offers /medical-supplies only on permissions its route accepts', () => {
     for (const surface of NAV_SURFACES) {
@@ -77,6 +100,60 @@ describe('navigation gates match the routes they target', () => {
       const gate = gatesForPath(read(surface), '/medical-supplies')[0] ?? [];
       expect(gate, `${surface}: /medical-supplies is gated on the everyone-grant`).not.toContain('inventory.view');
     }
+  });
+
+  it('offers the store only where the route would open it', () => {
+    // /store and /store/orders both carry requiredPermission="storefront.view"
+    // AND requiredModule="storefront" (modules/storefront/routes.tsx).
+    for (const surface of NAV_SURFACES) {
+      const gates = gatesForPath(read(surface), '/store');
+      expect(gates.length, `${surface} should carry a /store entry`).toBeGreaterThan(0);
+      expect(
+        gates.some((g) => g.includes('storefront.view')),
+        `${surface}: no /store entry gated on storefront.view`
+      ).toBe(true);
+    }
+
+    // Bottom bar — a tab landing on Access Denied is worse than no tab, since
+    // the slot fallback would otherwise hand the space to a usable page.
+    const bottom = read('components/layout/BottomNavigation.tsx');
+    const storeTab = bottom.slice(bottom.indexOf("path: '/store',"));
+    expect(storeTab.slice(0, storeTab.indexOf('},')), 'BottomNavigation /store tab is ungated').toContain(
+      "permission: 'storefront.view'"
+    );
+
+    // Command palette — both entries, permission and module. 'my-store-orders'
+    // shipped with neither even though its route carries both.
+    const palette = read('components/ux/CommandPalette.tsx');
+    for (const id of ['store', 'my-store-orders']) {
+      const block = paletteCommand(palette, id);
+      expect(block, `CommandPalette '${id}' offers the store with no permission`).toContain(
+        "permission: 'storefront.view'"
+      );
+      expect(block, `CommandPalette '${id}' ignores the storefront module gate`).toContain(
+        "requiresModule: 'storefront'"
+      );
+    }
+  });
+
+  it('keeps the store admin console on storefront.manage', () => {
+    // /store/admin requires storefront.manage. `checkPermission` does exact
+    // match plus module wildcard, so storefront.view does NOT imply it — a
+    // view-gated row here would be a link to Access Denied for every member.
+    for (const surface of NAV_SURFACES) {
+      const entry = navEntry(read(surface), 'Store Admin');
+      expect(entry, `${surface}: Store Admin targets the wrong path`).toContain("path: '/store/admin'");
+      expect(entry, `${surface}: Store Admin is not gated on storefront.manage`).toContain(
+        "permission: 'storefront.manage'"
+      );
+      expect(entry, `${surface}: Store Admin is offered on the browse grant`).not.toContain('storefront.view');
+    }
+
+    // The bottom bar is member-facing and must not offer the console at all.
+    expect(
+      read('components/layout/BottomNavigation.tsx'),
+      'BottomNavigation offers the store admin console'
+    ).not.toContain("path: '/store/admin'");
   });
 
   it('gates every surface that offers the gear catalogue on inventory.manage', () => {

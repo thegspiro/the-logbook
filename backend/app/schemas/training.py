@@ -17,7 +17,7 @@ from app.models.training import TrainingType as ModelTrainingType
 from app.schemas.base import UTCResponseBase
 from app.schemas.checklist import ChecklistItem, coerce_checklist_items
 from app.schemas.enum_validation import validate_enum_value
-from app.utils.positions import TRAINING_POSITION_MAP
+from app.utils.positions import TRAINING_TARGET_VALUES
 
 _response_config = ConfigDict(from_attributes=True)
 
@@ -110,14 +110,17 @@ def _validate_target_position(v: Optional[str]) -> Optional[str]:
     grant that silently does nothing, which is worse than no field at all
     because the training officer believes the seat is wired. Blank is coerced
     to None so an emptied form field clears the grant rather than storing "".
+
+    Validated against the same vocabulary ``training_target_to_position``
+    resolves, so what the API accepts and what confers a seat cannot drift.
     """
     if v is None:
         return None
     cleaned = v.strip().lower()
     if not cleaned:
         return None
-    if cleaned not in TRAINING_POSITION_MAP:
-        allowed = ", ".join(sorted(TRAINING_POSITION_MAP))
+    if cleaned not in TRAINING_TARGET_VALUES:
+        allowed = ", ".join(sorted(TRAINING_TARGET_VALUES))
         raise ValueError(f"target_position must be one of: {allowed}")
     return cleaned
 

@@ -377,10 +377,14 @@ export type RequestStatus = (typeof RequestStatus)[keyof typeof RequestStatus];
  */
 export const DRIVER_NOT_QUALIFIED_CODE = 'LB-SCHED-001';
 
-// What a course's certification can qualify its holder to fill. These are the
-// values the backend's TRAINING_POSITION_MAP resolves; it also accepts the
-// legacy aliases `ems` and `aic`, which are deliberately not offered here
-// because each duplicates an entry below.
+// What a course's certification can qualify its holder to fill.
+//
+// Every value here must be one the backend accepts: `TRAINING_TARGET_VALUES`
+// in app/utils/positions.py, resolved by `training_target_to_position`. The
+// API also accepts `ems` and `aic`, which are deliberately not offered because
+// each duplicates an entry below (`emt` and `officer`). A test parses this
+// list and asserts the two agree, so a value added here alone would fail
+// rather than 422 on somebody's save.
 export const COURSE_TARGET_POSITIONS: { value: string; label: string }[] = [
   { value: 'firefighter', label: 'Firefighter' },
   { value: 'driver_candidate', label: 'Driver/Operator' },

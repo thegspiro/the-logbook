@@ -25,7 +25,7 @@ nobody granted. Until a training officer sets it, certifications confer
 nothing and eligibility behaves exactly as it did before.
 
 Revision ID: b3d7e1a45c92
-Revises: a1f7c34e9b02
+Revises: b3e8d1f45a27
 Create Date: 2026-08-26 09:00:00.000000
 """
 
@@ -33,7 +33,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision = "b3d7e1a45c92"
-down_revision = "a1f7c34e9b02"
+down_revision = "b3e8d1f45a27"
 branch_labels = None
 depends_on = None
 

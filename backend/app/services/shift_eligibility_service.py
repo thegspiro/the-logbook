@@ -34,7 +34,7 @@ from app.models.user import Organization, Position, User, user_positions
 from app.services.driver_exception_service import DriverExceptionService
 from app.services.evoc_level_service import EvocLevelService
 from app.services.operational_rank_service import DEFAULT_RANKS
-from app.utils.positions import TRAINING_POSITION_MAP
+from app.utils.positions import training_target_to_position, training_targets_for
 
 # Default membership types excluded from self-service shift signup.
 DEFAULT_EXCLUDED_MEMBERSHIP_TYPES = [
@@ -514,7 +514,7 @@ class ShiftEligibilityService:
     ) -> Dict[str, List[str]]:
         """user_id -> names of completed programs that unlock ``position``.
 
-        Uses the same ``TRAINING_POSITION_MAP`` translation as
+        Uses the same ``training_target_to_position`` translation as
         ``_get_training_positions`` so a ``driver_candidate`` program shows up
         on the driver roster.
         """
@@ -534,7 +534,7 @@ class ShiftEligibilityService:
 
         by_user: Dict[str, List[str]] = {}
         for user_id, program_name, target_position in result.all():
-            mapped = TRAINING_POSITION_MAP.get(target_position, target_position)
+            mapped = training_target_to_position(target_position)
             if mapped == position:
                 by_user.setdefault(str(user_id), []).append(program_name)
         return by_user
@@ -716,20 +716,6 @@ class ShiftEligibilityService:
             ),
         )
 
-    @staticmethod
-    def _target_values_for(position: str) -> List[str]:
-        """Every ``target_position`` value that resolves to ``position``.
-
-        The reverse of TRAINING_POSITION_MAP, including the identity case the
-        forward lookup gets from its ``.get(v, v)`` default. Lets the roster
-        filter in SQL rather than reading every certification the department
-        holds and discarding most of them in Python.
-        """
-        values = {k for k, v in TRAINING_POSITION_MAP.items() if v == position}
-        if position not in TRAINING_POSITION_MAP:
-            values.add(position)
-        return sorted(values)
-
     async def _get_certification_positions(
         self, user_id: str, organization_id: str
     ) -> List[str]:
@@ -758,7 +744,7 @@ class ShiftEligibilityService:
         )
         positions = []
         for (target_pos,) in result.all():
-            mapped = TRAINING_POSITION_MAP.get(target_pos, target_pos)
+            mapped = training_target_to_position(target_pos)
             if mapped:
                 positions.append(mapped)
         return positions
@@ -784,7 +770,7 @@ class ShiftEligibilityService:
             .where(
                 TrainingRecord.organization_id == organization_id,
                 TrainingCourse.organization_id == organization_id,
-                TrainingCourse.target_position.in_(self._target_values_for(position)),
+                TrainingCourse.target_position.in_(training_targets_for(position)),
                 *self._current_certification_clause(),
             )
         )
@@ -819,7 +805,7 @@ class ShiftEligibilityService:
         )
         positions = []
         for (target_pos,) in result.all():
-            mapped = TRAINING_POSITION_MAP.get(target_pos, target_pos)
+            mapped = training_target_to_position(target_pos)
             if mapped:
                 positions.append(mapped)
         return positions

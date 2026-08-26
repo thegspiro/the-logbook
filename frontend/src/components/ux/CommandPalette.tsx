@@ -49,6 +49,13 @@ interface CommandItem {
    * navigation's behavior.
    */
   hideWhenModuleOn?: string;
+  /**
+   * Hide this command unless the named module is enabled — the mirror of
+   * `hideWhenModuleOn`, for a page whose route carries `requiredModule`.
+   * Permissive while the config is unconfigured or still loading, matching
+   * `isModuleOn` and every navigation bar.
+   */
+  requiresModule?: string;
 }
 
 const COMMANDS: CommandItem[] = [
@@ -98,8 +105,10 @@ const COMMANDS: CommandItem[] = [
     section: 'Navigation',
     // Same reasoning as Gear & Uniforms above: the route requires
     // storefront.view, so offering it ungated makes the palette a route to
-    // Access Denied.
+    // Access Denied. The route carries `requiredModule` too, so a department
+    // with the store switched off must not be offered it either.
     permission: 'storefront.view',
+    requiresModule: 'storefront',
     keywords: ['storefront', 'shop', 'merch', 'apparel', 'order'],
   },
   {
@@ -196,7 +205,19 @@ const COMMANDS: CommandItem[] = [
     section: 'Actions',
   },
   { id: 'my-equipment', label: 'My Issued Gear', path: '/inventory/my-equipment', icon: Package, section: 'Actions' },
-  { id: 'my-store-orders', label: 'My Store Orders', path: '/store/orders', icon: Package, section: 'Actions' },
+  {
+    id: 'my-store-orders',
+    label: 'My Store Orders',
+    path: '/store/orders',
+    icon: Package,
+    section: 'Actions',
+    // /store/orders carries the same route gate as /store. This entry had
+    // neither, so it offered Access Denied to every member without the grant
+    // and to every department with the store switched off. ('My Issued Gear'
+    // above is genuinely ungated — its route has no ProtectedRoute at all.)
+    permission: 'storefront.view',
+    requiresModule: 'storefront',
+  },
 
   // Admin
   {
@@ -236,7 +257,11 @@ export const CommandPalette: React.FC = () => {
         (!cmd.permission || checkPermission(cmd.permission)) &&
         (!cmd.anyPermission || cmd.anyPermission.some(checkPermission)) &&
         // enabledModules is null while loading/unconfigured — hide nothing then
-        !(cmd.hideWhenModuleOn && enabledModules?.has(cmd.hideWhenModuleOn))
+        !(cmd.hideWhenModuleOn && enabledModules?.has(cmd.hideWhenModuleOn)) &&
+        // Same rule as `isModuleOn`, read off the state rather than the
+        // helper: the helper is rebuilt every render, so depending on it here
+        // would recompute this memo every render too.
+        (!cmd.requiresModule || enabledModules === null || enabledModules.has(cmd.requiresModule))
     );
 
     if (!query.trim()) return accessible;
