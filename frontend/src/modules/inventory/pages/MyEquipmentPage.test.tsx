@@ -209,14 +209,20 @@ describe('MyEquipmentPage', () => {
     await user.click(screen.getByRole('button', { name: /Request Equipment/ }));
     expect(screen.getByLabelText('How long do you need it?')).toBeInTheDocument();
     expect(screen.getByText(/quartermaster will determine the final issue method/i)).toBeInTheDocument();
+    // #1875 took the member's priority picker away; this branch must not bring
+    // it back while replacing request_type with requested_duration.
+    expect(screen.queryByRole('combobox', { name: /priority/i })).not.toBeInTheDocument();
     await user.type(await screen.findByPlaceholderText('Search available items...'), 'Radio');
     await user.click(await screen.findByRole('button', { name: /Spare Radio/ }));
     await user.click(screen.getByRole('button', { name: /Submit Request/ }));
 
     await waitFor(() => expect(mockCreateEquipmentRequest).toHaveBeenCalledTimes(1));
-    expect(mockCreateEquipmentRequest.mock.calls[0]?.[0]).toMatchObject({
+    expect(mockCreateEquipmentRequest.mock.calls[0]?.[0]).toEqual({
+      category_id: undefined,
       item_id: 'avail-1',
       item_name: 'Spare Radio',
+      quantity: 1,
+      reason: undefined,
       requested_duration: 'temporary',
     });
   });

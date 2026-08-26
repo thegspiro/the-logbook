@@ -17,7 +17,7 @@ from loguru import logger
 from sqlalchemy import Integer, and_, cast, func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import contains_eager, selectinload
 
 from app.core.config import settings
 from app.models.finance import (
@@ -292,9 +292,9 @@ class FinanceService:
             )
         )
         row = result.one()
-        total_budgeted = float(row.total_budgeted)
-        total_spent = float(row.total_spent)
-        total_encumbered = float(row.total_encumbered)
+        total_budgeted = row.total_budgeted
+        total_spent = row.total_spent
+        total_encumbered = row.total_encumbered
         total_remaining = total_budgeted - total_spent - total_encumbered
         percent_used = (total_spent / total_budgeted * 100) if total_budgeted > 0 else 0
         return {
@@ -302,7 +302,7 @@ class FinanceService:
             "total_spent": total_spent,
             "total_encumbered": total_encumbered,
             "total_remaining": total_remaining,
-            "percent_used": round(percent_used, 2),
+            "percent_used": round(float(percent_used), 2),
             "category_breakdown": [],
         }
 
@@ -418,7 +418,7 @@ class FinanceService:
         self,
         org_id: str,
         entity_type: ApprovalEntityType,
-        amount: float,
+        amount: Decimal,
         budget_category_id: Optional[str] = None,
     ) -> Optional[ApprovalChain]:
         """Find the most specific matching approval chain"""
@@ -454,9 +454,9 @@ class FinanceService:
                 continue
 
             # Check amount range
-            if chain.min_amount is not None and amount < float(chain.min_amount):
+            if chain.min_amount is not None and amount < chain.min_amount:
                 continue
-            if chain.max_amount is not None and amount > float(chain.max_amount):
+            if chain.max_amount is not None and amount > chain.max_amount:
                 continue
 
             # Score by specificity
@@ -488,7 +488,7 @@ class FinanceService:
         chain: ApprovalChain,
         entity_type: ApprovalEntityType,
         entity_id: str,
-        amount: float,
+        amount: Decimal,
         requester_id: str,
     ) -> list[ApprovalStepRecord]:
         """Create step records for an entity going through an approval chain"""
@@ -501,7 +501,7 @@ class FinanceService:
             if (
                 step.step_type == ApprovalStepType.APPROVAL
                 and step.auto_approve_under is not None
-                and amount < float(step.auto_approve_under)
+                and amount < step.auto_approve_under
             ):
                 status = ApprovalStepStatus.AUTO_APPROVED
 
@@ -580,7 +580,7 @@ class FinanceService:
             return False
 
     async def get_approval_records(
-        self, entity_type: ApprovalEntityType, entity_id: str
+        self, entity_type: ApprovalEntityType, entity_id: str, org_id: str
     ) -> list[ApprovalStepRecord]:
         result = await self.db.execute(
             select(ApprovalStepRecord)
@@ -589,9 +589,11 @@ class FinanceService:
                 ApprovalChainStep,
                 ApprovalChainStep.id == ApprovalStepRecord.step_id,
             )
+            .join(ApprovalChain, ApprovalChain.id == ApprovalStepRecord.chain_id)
             .where(
                 ApprovalStepRecord.entity_type == entity_type,
                 ApprovalStepRecord.entity_id == entity_id,
+                ApprovalChain.organization_id == org_id,
             )
             # Chain position, not created_at: records for one entity are
             # created in the same instant, so DATETIME ties would make the
@@ -601,10 +603,10 @@ class FinanceService:
         return list(result.scalars().all())
 
     async def get_current_pending_step(
-        self, entity_type: ApprovalEntityType, entity_id: str
+        self, entity_type: ApprovalEntityType, entity_id: str, org_id: str
     ) -> Optional[ApprovalStepRecord]:
         """Get the first non-completed step for an entity"""
-        records = await self.get_approval_records(entity_type, entity_id)
+        records = await self.get_approval_records(entity_type, entity_id, org_id)
         for record in records:
             if record.status == ApprovalStepStatus.PENDING:
                 return record
@@ -644,7 +646,7 @@ class FinanceService:
         # unguarded: withdrawing your own request is not a conflict.
         assert_different_person(
             approver_id,
-            await self._entity_creator_id(record.entity_type, record.entity_id),
+            await self._entity_creator_id(record.entity_type, record.entity_id, org_id),
             action="approve",
             record=record.entity_type.value.replace("_", " "),
         )
@@ -658,15 +660,17 @@ class FinanceService:
         await self.db.flush()
 
         # Process next steps (advance notification steps automatically)
-        await self._advance_notification_steps(record.entity_type, record.entity_id)
+        await self._advance_notification_steps(
+            record.entity_type, record.entity_id, org_id
+        )
 
         # Check if all steps are complete
         all_complete = await self._check_all_steps_complete(
-            record.entity_type, record.entity_id
+            record.entity_type, record.entity_id, org_id
         )
         if all_complete:
             await self._finalize_approval(
-                record.entity_type, record.entity_id, approver_id
+                record.entity_type, record.entity_id, approver_id, org_id
             )
 
         logger.info("Approval step {} approved by {}", step_record_id, approver_id)
@@ -705,7 +709,7 @@ class FinanceService:
 
         # Deny the entire entity
         await self._finalize_denial(
-            record.entity_type, record.entity_id, denier_id, notes
+            record.entity_type, record.entity_id, denier_id, notes, org_id
         )
 
         await self.db.flush()
@@ -728,13 +732,18 @@ class FinanceService:
         """
         result = await self.db.execute(
             select(ApprovalStepRecord)
-            .options(selectinload(ApprovalStepRecord.step))
+            .join(ApprovalChain, ApprovalChain.id == ApprovalStepRecord.chain_id)
+            .options(
+                selectinload(ApprovalStepRecord.step),
+                contains_eager(ApprovalStepRecord.chain),
+            )
             .where(ApprovalStepRecord.approval_token == token)
             .with_for_update()
         )
         record = result.scalar_one_or_none()
         if not record:
             raise ValueError("Invalid approval token")
+        org_id = record.chain.organization_id
         if record.status != ApprovalStepStatus.PENDING:
             raise ValueError("This step has already been acted on")
         if record.token_expires_at and record.token_expires_at < datetime.now(
@@ -750,7 +759,7 @@ class FinanceService:
         ):
             approver_email = (step.approver_value or "").strip().lower()
             requester_email = await self._entity_creator_email(
-                record.entity_type, record.entity_id
+                record.entity_type, record.entity_id, org_id
             )
             if (
                 approver_email
@@ -770,12 +779,16 @@ class FinanceService:
         record.approval_token = None
 
         await self.db.flush()
-        await self._advance_notification_steps(record.entity_type, record.entity_id)
+        await self._advance_notification_steps(
+            record.entity_type, record.entity_id, org_id
+        )
         all_complete = await self._check_all_steps_complete(
-            record.entity_type, record.entity_id
+            record.entity_type, record.entity_id, org_id
         )
         if all_complete:
-            await self._finalize_approval(record.entity_type, record.entity_id, None)
+            await self._finalize_approval(
+                record.entity_type, record.entity_id, None, org_id
+            )
 
         return record
 
@@ -785,12 +798,15 @@ class FinanceService:
         """Deny a step via email token (for external approvers)"""
         result = await self.db.execute(
             select(ApprovalStepRecord)
+            .join(ApprovalChain, ApprovalChain.id == ApprovalStepRecord.chain_id)
+            .options(contains_eager(ApprovalStepRecord.chain))
             .where(ApprovalStepRecord.approval_token == token)
             .with_for_update()
         )
         record = result.scalar_one_or_none()
         if not record:
             raise ValueError("Invalid approval token")
+        org_id = record.chain.organization_id
         if record.status != ApprovalStepStatus.PENDING:
             raise ValueError("This step has already been acted on")
         if record.token_expires_at and record.token_expires_at < datetime.now(
@@ -803,7 +819,9 @@ class FinanceService:
         record.notes = notes
         record.approval_token = None
 
-        await self._finalize_denial(record.entity_type, record.entity_id, None, notes)
+        await self._finalize_denial(
+            record.entity_type, record.entity_id, None, notes, org_id
+        )
         await self.db.flush()
         return record
 
@@ -867,7 +885,7 @@ class FinanceService:
 
             # Check if this step is the current active step
             current_step = await self.get_current_pending_step(
-                record.entity_type, record.entity_id
+                record.entity_type, record.entity_id, org_id
             )
             if not current_step or current_step.id != record.id:
                 continue
@@ -895,7 +913,7 @@ class FinanceService:
         self,
         org_id: str,
         entity_type: str,
-        amount: float,
+        amount: Decimal,
         category_id: Optional[str] = None,
     ) -> Optional[ApprovalChain]:
         """Preview which chain would be selected for given parameters"""
@@ -909,9 +927,10 @@ class FinanceService:
         self,
         entity_type: ApprovalEntityType,
         entity_id: str,
+        org_id: str,
     ) -> None:
         """Auto-advance any notification steps that are now reachable"""
-        records = await self.get_approval_records(entity_type, entity_id)
+        records = await self.get_approval_records(entity_type, entity_id, org_id)
         for record in records:
             if record.status != ApprovalStepStatus.PENDING:
                 continue
@@ -940,15 +959,16 @@ class FinanceService:
         self,
         entity_type: ApprovalEntityType,
         entity_id: str,
+        org_id: str,
     ) -> bool:
-        records = await self.get_approval_records(entity_type, entity_id)
+        records = await self.get_approval_records(entity_type, entity_id, org_id)
         for record in records:
             if record.status == ApprovalStepStatus.PENDING:
                 return False
         return True
 
     async def _entity_creator_id(
-        self, entity_type: ApprovalEntityType, entity_id: str
+        self, entity_type: ApprovalEntityType, entity_id: str, org_id: str
     ) -> Optional[str]:
         """Who raised the request an approval step belongs to.
 
@@ -977,12 +997,14 @@ class FinanceService:
 
         model, requester_column = mapping
         result = await self.db.execute(
-            select(requester_column).where(model.id == entity_id)
+            select(requester_column).where(
+                model.id == entity_id, model.organization_id == org_id
+            )
         )
         return result.scalar_one_or_none()
 
     async def _entity_creator_email(
-        self, entity_type: ApprovalEntityType, entity_id: str
+        self, entity_type: ApprovalEntityType, entity_id: str, org_id: str
     ) -> Optional[str]:
         """Email of whoever raised the request, for the token-approval path.
 
@@ -990,7 +1012,7 @@ class FinanceService:
         approve_by_token(). Returns None if the requester id can't be
         resolved or that user no longer exists.
         """
-        requester_id = await self._entity_creator_id(entity_type, entity_id)
+        requester_id = await self._entity_creator_id(entity_type, entity_id, org_id)
         if not requester_id:
             return None
         result = await self.db.execute(
@@ -1003,12 +1025,16 @@ class FinanceService:
         entity_type: ApprovalEntityType,
         entity_id: str,
         approver_id: Optional[str],
+        org_id: str,
     ) -> None:
         """Set the entity status to APPROVED and update denormalized fields"""
         now = datetime.now(timezone.utc)
         if entity_type == ApprovalEntityType.PURCHASE_REQUEST:
             result = await self.db.execute(
-                select(PurchaseRequest).where(PurchaseRequest.id == entity_id)
+                select(PurchaseRequest).where(
+                    PurchaseRequest.id == entity_id,
+                    PurchaseRequest.organization_id == org_id,
+                )
             )
             entity = result.scalar_one_or_none()
             if entity:
@@ -1019,12 +1045,15 @@ class FinanceService:
                 if entity.budget_id:
                     await self._encumber_budget(
                         entity.budget_id,
-                        float(entity.estimated_amount),
+                        entity.estimated_amount,
                         entity.organization_id,
                     )
         elif entity_type == ApprovalEntityType.EXPENSE_REPORT:
             result = await self.db.execute(
-                select(ExpenseReport).where(ExpenseReport.id == entity_id)
+                select(ExpenseReport).where(
+                    ExpenseReport.id == entity_id,
+                    ExpenseReport.organization_id == org_id,
+                )
             )
             entity = result.scalar_one_or_none()
             if entity:
@@ -1033,7 +1062,10 @@ class FinanceService:
                 entity.approved_at = now
         elif entity_type == ApprovalEntityType.CHECK_REQUEST:
             result = await self.db.execute(
-                select(CheckRequest).where(CheckRequest.id == entity_id)
+                select(CheckRequest).where(
+                    CheckRequest.id == entity_id,
+                    CheckRequest.organization_id == org_id,
+                )
             )
             entity = result.scalar_one_or_none()
             if entity:
@@ -1049,11 +1081,15 @@ class FinanceService:
         entity_id: str,
         denier_id: Optional[str],
         reason: Optional[str],
+        org_id: str,
     ) -> None:
         """Set the entity status to DENIED"""
         if entity_type == ApprovalEntityType.PURCHASE_REQUEST:
             result = await self.db.execute(
-                select(PurchaseRequest).where(PurchaseRequest.id == entity_id)
+                select(PurchaseRequest).where(
+                    PurchaseRequest.id == entity_id,
+                    PurchaseRequest.organization_id == org_id,
+                )
             )
             entity = result.scalar_one_or_none()
             if entity:
@@ -1068,7 +1104,10 @@ class FinanceService:
                 # and silently corrupted other PRs' encumbrances on that budget.
         elif entity_type == ApprovalEntityType.EXPENSE_REPORT:
             result = await self.db.execute(
-                select(ExpenseReport).where(ExpenseReport.id == entity_id)
+                select(ExpenseReport).where(
+                    ExpenseReport.id == entity_id,
+                    ExpenseReport.organization_id == org_id,
+                )
             )
             entity = result.scalar_one_or_none()
             if entity:
@@ -1077,7 +1116,10 @@ class FinanceService:
                 entity.denial_reason = reason
         elif entity_type == ApprovalEntityType.CHECK_REQUEST:
             result = await self.db.execute(
-                select(CheckRequest).where(CheckRequest.id == entity_id)
+                select(CheckRequest).where(
+                    CheckRequest.id == entity_id,
+                    CheckRequest.organization_id == org_id,
+                )
             )
             entity = result.scalar_one_or_none()
             if entity:
@@ -1105,7 +1147,7 @@ class FinanceService:
             if entity:
                 return {
                     "title": entity.title,
-                    "amount": float(entity.estimated_amount),
+                    "amount": entity.estimated_amount,
                     "requester_name": "",
                     "submitted_at": entity.created_at,
                 }
@@ -1120,7 +1162,7 @@ class FinanceService:
             if entity:
                 return {
                     "title": entity.title,
-                    "amount": float(entity.total_amount),
+                    "amount": entity.total_amount,
                     "requester_name": "",
                     "submitted_at": entity.created_at,
                 }
@@ -1135,7 +1177,7 @@ class FinanceService:
             if entity:
                 return {
                     "title": f"Check to {entity.payee_name}",
-                    "amount": float(entity.amount),
+                    "amount": entity.amount,
                     "requester_name": "",
                     "submitted_at": entity.created_at,
                 }
@@ -1311,7 +1353,7 @@ class FinanceService:
         chain = await self.resolve_approval_chain(
             org_id,
             ApprovalEntityType.PURCHASE_REQUEST,
-            float(pr.estimated_amount),
+            pr.estimated_amount,
             budget_category_id,
         )
 
@@ -1321,16 +1363,16 @@ class FinanceService:
                 chain,
                 ApprovalEntityType.PURCHASE_REQUEST,
                 pr.id,
-                float(pr.estimated_amount),
+                pr.estimated_amount,
                 pr.requested_by,
             )
             # Check if all steps were auto-approved
             all_complete = await self._check_all_steps_complete(
-                ApprovalEntityType.PURCHASE_REQUEST, pr.id
+                ApprovalEntityType.PURCHASE_REQUEST, pr.id, org_id
             )
             if all_complete:
                 await self._finalize_approval(
-                    ApprovalEntityType.PURCHASE_REQUEST, pr.id, None
+                    ApprovalEntityType.PURCHASE_REQUEST, pr.id, None, org_id
                 )
         else:
             # No chain — needs manual approval
@@ -1369,7 +1411,7 @@ class FinanceService:
         self,
         pr_id: str,
         org_id: str,
-        actual_amount: Optional[float] = None,
+        actual_amount: Optional[Decimal] = None,
         acted_by: Optional[str] = None,
     ) -> PurchaseRequest:
         pr = await self.get_purchase_request(pr_id, org_id)
@@ -1389,14 +1431,12 @@ class FinanceService:
         pr.status = PurchaseRequestStatus.PAID
         pr.paid_at = datetime.now(timezone.utc)
         if actual_amount is not None:
-            pr.actual_amount = Decimal(str(actual_amount))
+            pr.actual_amount = actual_amount
 
         # Move from encumbered to spent
         if pr.budget_id:
-            amount = float(pr.actual_amount or pr.estimated_amount)
-            await self._release_encumbrance(
-                pr.budget_id, float(pr.estimated_amount), org_id
-            )
+            amount = pr.actual_amount or pr.estimated_amount
+            await self._release_encumbrance(pr.budget_id, pr.estimated_amount, org_id)
             await self._add_to_spent(pr.budget_id, amount, org_id)
 
         await self.db.flush()
@@ -1416,9 +1456,7 @@ class FinanceService:
             PurchaseRequestStatus.ORDERED,
             PurchaseRequestStatus.RECEIVED,
         ):
-            await self._release_encumbrance(
-                pr.budget_id, float(pr.estimated_amount), org_id
-            )
+            await self._release_encumbrance(pr.budget_id, pr.estimated_amount, org_id)
 
         pr.status = PurchaseRequestStatus.CANCELLED
         await self.db.flush()
@@ -1556,7 +1594,7 @@ class FinanceService:
             raise ValueError("Expense report not found")
         if er.status != ExpenseReportStatus.DRAFT:
             raise ValueError("Only draft reports can be submitted")
-        if float(er.total_amount) <= 0:
+        if er.total_amount <= 0:
             raise ValueError("Expense report must have line items")
 
         er.status = ExpenseReportStatus.SUBMITTED
@@ -1564,7 +1602,7 @@ class FinanceService:
         chain = await self.resolve_approval_chain(
             org_id,
             ApprovalEntityType.EXPENSE_REPORT,
-            float(er.total_amount),
+            er.total_amount,
         )
 
         if chain and chain.steps:
@@ -1573,15 +1611,15 @@ class FinanceService:
                 chain,
                 ApprovalEntityType.EXPENSE_REPORT,
                 er.id,
-                float(er.total_amount),
+                er.total_amount,
                 er.submitted_by,
             )
             all_complete = await self._check_all_steps_complete(
-                ApprovalEntityType.EXPENSE_REPORT, er.id
+                ApprovalEntityType.EXPENSE_REPORT, er.id, org_id
             )
             if all_complete:
                 await self._finalize_approval(
-                    ApprovalEntityType.EXPENSE_REPORT, er.id, None
+                    ApprovalEntityType.EXPENSE_REPORT, er.id, None, org_id
                 )
         else:
             er.status = ExpenseReportStatus.PENDING_APPROVAL
@@ -1614,7 +1652,7 @@ class FinanceService:
         # Add to spent for each line item's budget
         for item in er.line_items:
             if item.budget_id:
-                await self._add_to_spent(item.budget_id, float(item.amount), org_id)
+                await self._add_to_spent(item.budget_id, item.amount, org_id)
 
         await self.db.flush()
         await self.db.refresh(er, ["updated_at"])
@@ -1698,7 +1736,7 @@ class FinanceService:
         chain = await self.resolve_approval_chain(
             org_id,
             ApprovalEntityType.CHECK_REQUEST,
-            float(cr.amount),
+            cr.amount,
             budget_category_id,
         )
 
@@ -1708,15 +1746,15 @@ class FinanceService:
                 chain,
                 ApprovalEntityType.CHECK_REQUEST,
                 cr.id,
-                float(cr.amount),
+                cr.amount,
                 cr.requested_by,
             )
             all_complete = await self._check_all_steps_complete(
-                ApprovalEntityType.CHECK_REQUEST, cr.id
+                ApprovalEntityType.CHECK_REQUEST, cr.id, org_id
             )
             if all_complete:
                 await self._finalize_approval(
-                    ApprovalEntityType.CHECK_REQUEST, cr.id, None
+                    ApprovalEntityType.CHECK_REQUEST, cr.id, None, org_id
                 )
         else:
             cr.status = CheckRequestStatus.PENDING_APPROVAL
@@ -1748,7 +1786,7 @@ class FinanceService:
         cr.check_date = check_date or datetime.now(timezone.utc)
 
         if cr.budget_id:
-            await self._add_to_spent(cr.budget_id, float(cr.amount), org_id)
+            await self._add_to_spent(cr.budget_id, cr.amount, org_id)
 
         await self.db.flush()
         await self.db.refresh(cr, ["updated_at"])
@@ -2056,10 +2094,11 @@ class FinanceService:
         result = await self.db.execute(query)
         all_dues = list(result.scalars().all())
 
-        total_expected = sum(float(d.amount_due) for d in all_dues)
-        total_collected = sum(float(d.amount_paid) for d in all_dues)
+        total_expected = sum((d.amount_due for d in all_dues), Decimal("0.00"))
+        total_collected = sum((d.amount_paid for d in all_dues), Decimal("0.00"))
         total_waived = sum(
-            float(d.amount_due) for d in all_dues if d.status == DuesStatus.WAIVED
+            (d.amount_due for d in all_dues if d.status == DuesStatus.WAIVED),
+            Decimal("0.00"),
         )
         total_outstanding = total_expected - total_collected - total_waived
         collection_rate = (
@@ -2071,7 +2110,7 @@ class FinanceService:
             "total_collected": total_collected,
             "total_outstanding": total_outstanding,
             "total_waived": total_waived,
-            "collection_rate": round(collection_rate, 2),
+            "collection_rate": round(float(collection_rate), 2),
             "members_paid": sum(1 for d in all_dues if d.status == DuesStatus.PAID),
             "members_overdue": sum(
                 1 for d in all_dues if d.status == DuesStatus.OVERDUE
@@ -2307,7 +2346,7 @@ class FinanceService:
     # organization_id, which is always the caller's own org (records are
     # org-stamped on create).
     async def _encumber_budget(
-        self, budget_id: str, amount: float, org_id: str
+        self, budget_id: str, amount: Decimal, org_id: str
     ) -> None:
         result = await self.db.execute(
             select(Budget).where(
@@ -2317,11 +2356,11 @@ class FinanceService:
         )
         budget = result.scalar_one_or_none()
         if budget:
-            budget.amount_encumbered = budget.amount_encumbered + Decimal(str(amount))
+            budget.amount_encumbered = budget.amount_encumbered + amount
             await self.db.flush()
 
     async def _release_encumbrance(
-        self, budget_id: str, amount: float, org_id: str
+        self, budget_id: str, amount: Decimal, org_id: str
     ) -> None:
         result = await self.db.execute(
             select(Budget).where(
@@ -2333,11 +2372,11 @@ class FinanceService:
         if budget:
             budget.amount_encumbered = max(
                 Decimal("0"),
-                budget.amount_encumbered - Decimal(str(amount)),
+                budget.amount_encumbered - amount,
             )
             await self.db.flush()
 
-    async def _add_to_spent(self, budget_id: str, amount: float, org_id: str) -> None:
+    async def _add_to_spent(self, budget_id: str, amount: Decimal, org_id: str) -> None:
         result = await self.db.execute(
             select(Budget).where(
                 Budget.id == budget_id,
@@ -2346,7 +2385,7 @@ class FinanceService:
         )
         budget = result.scalar_one_or_none()
         if budget:
-            budget.amount_spent = budget.amount_spent + Decimal(str(amount))
+            budget.amount_spent = budget.amount_spent + amount
             await self.db.flush()
 
     async def _validate_finance_fks(self, org_id: str, data: dict) -> None:

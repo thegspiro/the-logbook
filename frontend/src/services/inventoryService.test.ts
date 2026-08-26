@@ -553,15 +553,15 @@ describe('inventoryService', () => {
     });
   });
 
-  describe('batchCheckout', () => {
-    it('should POST to /inventory/batch-checkout', async () => {
+  describe('distributeItems', () => {
+    it('should POST to /inventory/distribute-items', async () => {
       const data = { user_id: 'u1', item_codes: ['BC-1', 'BC-2'] };
       const response = { successful: 2, failed: 0 };
       mockPost.mockResolvedValueOnce({ data: response });
 
-      const result = await inventoryService.batchCheckout(data as never);
+      const result = await inventoryService.distributeItems(data as never);
 
-      expect(mockPost).toHaveBeenCalledWith('/inventory/batch-checkout', data);
+      expect(mockPost).toHaveBeenCalledWith('/inventory/distribute-items', data);
       expect(result).toEqual(response);
     });
   });

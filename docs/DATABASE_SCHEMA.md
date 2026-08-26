@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**256 tables · 4373 columns · 827 foreign keys**
+**256 tables · 4374 columns · 827 foreign keys**
 
 ---
 
@@ -312,7 +312,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`departure_clearances`](#departure_clearances) | `DepartureClearance` | 18 | Departure Clearance model |
 | [`equipment_kit_items`](#equipment_kit_items) | `EquipmentKitItem` | 9 | One line item in a kit template — specifies what item/category |
 | [`equipment_kits`](#equipment_kits) | `EquipmentKit` | 10 | Kit/bundle template for issuing multiple items as a set. |
-| [`equipment_requests`](#equipment_requests) | `EquipmentRequest` | 20 | Equipment Request model |
+| [`equipment_requests`](#equipment_requests) | `EquipmentRequest` | 21 | Equipment Request model |
 | [`inventory_categories`](#inventory_categories) | `InventoryCategory` | 16 | Inventory Category model |
 | [`inventory_impact_plans`](#inventory_impact_plans) | `InventoryImpactPlan` | 8 | A saved, named impact-planner scenario. |
 | [`inventory_items`](#inventory_items) | `InventoryItem` | 51 | Inventory Item model |
@@ -4632,6 +4632,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `category_id` | VARCHAR(36) | yes | FK |  | → `inventory_categories.id` ON DELETE SET NULL |
 | `quantity` | INTEGER | no |  | `1` |  |
 | `request_type` | ENUM(`checkout`, `issuance`, `purchase`, `return`) | no |  | `'checkout'` |  |
+| `requested_duration` | VARCHAR(20) | no |  | `'temporary'` |  |
 | `priority` | ENUM(`low`, `normal`, `high`) | no |  | `'normal'` |  |
 | `reason` | TEXT | yes |  |  |  |
 | `status` | ENUM(`pending`, `approved`, `denied`, `fulfilled`) | no | IDX | `'pending'` |  |
@@ -7795,7 +7796,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
 | `shift_id` | VARCHAR(36) | no | FK, IDX |  | → `shifts.id` ON DELETE CASCADE |
 | `user_id` | VARCHAR(36) | no | FK, IDX |  | → `users.id` ON DELETE CASCADE |
-| `position` | ENUM(`officer`, `driver`, `firefighter`, `ems`, `captain`, `lieutenant`, `probationary`, `volunteer`, `other`) | no |  | `firefighter` |  |
+| `position` | ENUM(`officer`, `driver`, `firefighter`, `ems`, `paramedic`, `captain`, `lieutenant`, `probationary`, `volunteer`, `other`) | no |  | `firefighter` |  |
 | `assignment_status` | ENUM(`assigned`, `confirmed`, `declined`, `pending`, `cancelled`, `no_show`) | no |  | `assigned` |  |
 | `outreach_role` | VARCHAR(100) | yes |  |  |  |
 | `is_training` | BOOL | no |  | `0` |  |
@@ -8249,7 +8250,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `pattern` | ENUM(`weekly`, `biweekly`, `monthly`) | no |  | `weekly` |  |
 | `weekday` | INTEGER | no |  |  |  |
 | `period` | ENUM(`day`, `night`) | no |  | `day` |  |
-| `position` | ENUM(`officer`, `driver`, `firefighter`, `ems`, `captain`, `lieutenant`, `probationary`, `volunteer`, `other`) | no |  | `firefighter` |  |
+| `position` | ENUM(`officer`, `driver`, `firefighter`, `ems`, `paramedic`, `captain`, `lieutenant`, `probationary`, `volunteer`, `other`) | no |  | `firefighter` |  |
 | `apparatus_id` | VARCHAR(36) | yes |  |  |  |
 | `start_date` | DATE | no |  |  |  |
 | `end_date` | DATE | no |  |  |  |

@@ -57,9 +57,9 @@ interface SummaryCardsProps {
 }
 
 const SummaryCards: React.FC<SummaryCardsProps> = ({ budgets }) => {
-  const totalBudgeted = budgets.reduce((s, b) => s + b.amountBudgeted, 0);
-  const totalSpent = budgets.reduce((s, b) => s + b.amountSpent, 0);
-  const totalEncumbered = budgets.reduce((s, b) => s + b.amountEncumbered, 0);
+  const totalBudgeted = budgets.reduce((s, b) => s + Number(b.amountBudgeted), 0);
+  const totalSpent = budgets.reduce((s, b) => s + Number(b.amountSpent), 0);
+  const totalEncumbered = budgets.reduce((s, b) => s + Number(b.amountEncumbered), 0);
   const totalRemaining = totalBudgeted - totalSpent - totalEncumbered;
 
   const cards = [
@@ -144,7 +144,8 @@ const BudgetsPage: React.FC = () => {
     return map;
   }, [budgetCategories]);
 
-  const getRemaining = (b: Budget): number => b.amountBudgeted - b.amountSpent - b.amountEncumbered;
+  const getRemaining = (b: Budget): number =>
+    Number(b.amountBudgeted) - Number(b.amountSpent) - Number(b.amountEncumbered);
 
   if (isLoading && budgets.length === 0) {
     return (
@@ -282,13 +283,13 @@ const BudgetsPage: React.FC = () => {
                         </Link>
                       </td>
                       <td className="text-theme-text-primary px-4 py-3 text-right text-sm font-semibold whitespace-nowrap">
-                        {formatCurrencyWhole(budget.amountBudgeted)}
+                        {formatCurrencyWhole(Number(budget.amountBudgeted))}
                       </td>
                       <td className="text-theme-text-primary px-4 py-3 text-right text-sm whitespace-nowrap">
-                        {formatCurrencyWhole(budget.amountSpent)}
+                        {formatCurrencyWhole(Number(budget.amountSpent))}
                       </td>
                       <td className="text-theme-text-secondary px-4 py-3 text-right text-sm whitespace-nowrap">
-                        {formatCurrencyWhole(budget.amountEncumbered)}
+                        {formatCurrencyWhole(Number(budget.amountEncumbered))}
                       </td>
                       <td
                         className={`px-4 py-3 text-right text-sm font-medium whitespace-nowrap ${remaining < 0 ? 'text-red-600' : 'text-green-600'}`}
@@ -297,9 +298,9 @@ const BudgetsPage: React.FC = () => {
                       </td>
                       <td className="px-4 py-3" style={{ minWidth: 160 }}>
                         <BudgetProgress
-                          spent={budget.amountSpent}
-                          encumbered={budget.amountEncumbered}
-                          budgeted={budget.amountBudgeted}
+                          spent={Number(budget.amountSpent)}
+                          encumbered={Number(budget.amountEncumbered)}
+                          budgeted={Number(budget.amountBudgeted)}
                         />
                       </td>
                       <td className="px-4 py-3">
@@ -319,13 +320,13 @@ const BudgetsPage: React.FC = () => {
                 <tr className="border-theme-surface-border bg-theme-surface border-t-2">
                   <td className="text-theme-text-primary px-4 py-3 text-sm font-bold">Total</td>
                   <td className="text-theme-text-primary px-4 py-3 text-right text-sm font-bold whitespace-nowrap">
-                    {formatCurrencyWhole(budgets.reduce((s, b) => s + b.amountBudgeted, 0))}
+                    {formatCurrencyWhole(budgets.reduce((s, b) => s + Number(b.amountBudgeted), 0))}
                   </td>
                   <td className="text-theme-text-primary px-4 py-3 text-right text-sm font-bold whitespace-nowrap">
-                    {formatCurrencyWhole(budgets.reduce((s, b) => s + b.amountSpent, 0))}
+                    {formatCurrencyWhole(budgets.reduce((s, b) => s + Number(b.amountSpent), 0))}
                   </td>
                   <td className="text-theme-text-secondary px-4 py-3 text-right text-sm font-bold whitespace-nowrap">
-                    {formatCurrencyWhole(budgets.reduce((s, b) => s + b.amountEncumbered, 0))}
+                    {formatCurrencyWhole(budgets.reduce((s, b) => s + Number(b.amountEncumbered), 0))}
                   </td>
                   <td className="px-4 py-3 text-right text-sm font-bold whitespace-nowrap text-green-600">
                     {formatCurrencyWhole(budgets.reduce((s, b) => s + getRemaining(b), 0))}

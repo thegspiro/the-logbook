@@ -80,6 +80,19 @@ describe('EquipmentRequestsPage', () => {
     expect(screen.getByText(/Need for shift/)).toBeInTheDocument();
   });
 
+  it('does not present member-selected priority to quartermasters', async () => {
+    mockGetEquipmentRequests.mockResolvedValue({
+      requests: [makeRequest({ priority: 'high' })],
+      total: 1,
+      skip: 0,
+      limit: 25,
+    });
+    renderWithRouter(<EquipmentRequestsPage />);
+
+    expect(await screen.findByText('Radio XTS 5000')).toBeInTheDocument();
+    expect(screen.queryByText('high', { exact: false })).not.toBeInTheDocument();
+  });
+
   it('shows empty state when no requests', async () => {
     mockGetEquipmentRequests.mockResolvedValue({ requests: [], total: 0, skip: 0, limit: 25 });
     renderWithRouter(<EquipmentRequestsPage />);

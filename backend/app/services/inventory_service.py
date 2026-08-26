@@ -47,7 +47,6 @@ from app.models.inventory import (
     ReorderRequest,
     ReorderStatus,
     RequestStatus,
-    RequestType,
     ReturnRequest,
     ReturnRequestStatus,
     ReturnRequestType,
@@ -3411,10 +3410,10 @@ class InventoryService:
         return results[:limit]
 
     # ============================================
-    # Batch Checkout (scan-to-assign)
+    # Item distribution (scan-to-assign or loan)
     # ============================================
 
-    async def batch_checkout(
+    async def distribute_items(
         self,
         user_id: UUID,
         organization_id: UUID,
@@ -3423,9 +3422,9 @@ class InventoryService:
         reason: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
-        Process a batch of scanned items: assign, checkout, or issue
-        each one to the specified user based on the item's tracking type
-        and current status.
+        Distribute scanned items using the explicitly requested operation for
+        individual gear. Quantity-tracked stock always follows pool issuance
+        policy, independently of the requested duration.
 
         Returns a summary with per-item results.
         """
@@ -3437,6 +3436,8 @@ class InventoryService:
             code = scan["code"]
             quantity = scan.get("quantity", 1)
             scan_item_id = scan.get("item_id")
+            operation = scan["operation"]
+            expected_return_at = scan.get("expected_return_at")
 
             # Prefer direct item_id lookup when available (avoids
             # mismatch when item was found by name search)
@@ -3476,8 +3477,10 @@ class InventoryService:
                         else (successful, failed + 1)
                     )
 
-                elif item.status in (ItemStatus.AVAILABLE, ItemStatus.ASSIGNED):
-                    # Individual available/assigned item → (re)assign
+                elif operation == "permanent_assignment" and item.status in (
+                    ItemStatus.AVAILABLE,
+                    ItemStatus.ASSIGNED,
+                ):
                     assignment, err = await self.assign_item_to_user(
                         item_id=UUID(item.id),
                         user_id=user_id,
@@ -3487,7 +3490,30 @@ class InventoryService:
                         reason=reason,
                     )
                     results.append(
-                        self._batch_result(code, item, "assigned", not err, err)
+                        self._batch_result(
+                            code, item, "permanent_assignment", not err, err
+                        )
+                    )
+                    successful, failed = (
+                        (successful + 1, failed)
+                        if not err
+                        else (successful, failed + 1)
+                    )
+
+                elif (
+                    operation == "temporary_loan"
+                    and item.status == ItemStatus.AVAILABLE
+                ):
+                    checkout, err = await self.checkout_item(
+                        item_id=UUID(item.id),
+                        user_id=user_id,
+                        organization_id=organization_id,
+                        checked_out_by=performed_by,
+                        expected_return_at=expected_return_at,
+                        reason=reason,
+                    )
+                    results.append(
+                        self._batch_result(code, item, "temporary_loan", not err, err)
                     )
                     successful, failed = (
                         (successful + 1, failed)
@@ -3531,7 +3557,7 @@ class InventoryService:
         success: bool,
         error: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """Build a single result entry for batch checkout/return operations."""
+        """Build a single result entry for distribution/return operations."""
         return {
             "code": code,
             "item_name": item.name if item else "Unknown",
