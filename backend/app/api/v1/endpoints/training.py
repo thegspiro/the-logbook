@@ -596,13 +596,12 @@ async def create_record(
     """
     record_data = record.model_dump()
 
-    # Auto-calculate expiration_date from the course's expiration_months
-    # when not explicitly provided but completion_date and course_id are set
-    if (
-        not record_data.get("expiration_date")
-        and record_data.get("course_id")
-        and record_data.get("completion_date")
-    ):
+    # XC-1: a client-supplied course_id must belong to the caller's org,
+    # same shape as the category_id check below — an unvalidated id would
+    # persist a dangling cross-tenant reference. Reuse the fetched course
+    # for the expiration_date auto-calc so this isn't a second query.
+    course = None
+    if record_data.get("course_id"):
         course_result = await db.execute(
             select(TrainingCourse).where(
                 TrainingCourse.id == str(record_data["course_id"]),
@@ -610,14 +609,24 @@ async def create_record(
             )
         )
         course = course_result.scalar_one_or_none()
-        if course and course.expiration_months:
-            comp = record_data["completion_date"]
-            # Add expiration_months to completion_date
-            month = comp.month - 1 + course.expiration_months
-            year = comp.year + month // 12
-            month = month % 12 + 1
-            day = min(comp.day, calendar.monthrange(year, month)[1])
-            record_data["expiration_date"] = date(year, month, day)
+        if not course:
+            raise HTTPException(status_code=404, detail="Training course not found")
+
+    # Auto-calculate expiration_date from the course's expiration_months
+    # when not explicitly provided but completion_date and course_id are set
+    if (
+        not record_data.get("expiration_date")
+        and course
+        and record_data.get("completion_date")
+        and course.expiration_months
+    ):
+        comp = record_data["completion_date"]
+        # Add expiration_months to completion_date
+        month = comp.month - 1 + course.expiration_months
+        year = comp.year + month // 12
+        month = month % 12 + 1
+        day = min(comp.day, calendar.monthrange(year, month)[1])
+        record_data["expiration_date"] = date(year, month, day)
 
     # SECURITY: the client-supplied user_id must belong to the caller's org.
     # Validate unconditionally (previously this only ran when rank/station were
@@ -835,12 +844,10 @@ async def create_records_bulk(
         record_data.setdefault("rank_at_completion", member.rank)
         record_data.setdefault("station_at_completion", member.station)
 
-        # Auto-calculate expiration from course
-        if (
-            not record_data.get("expiration_date")
-            and record_data.get("course_id")
-            and record_data.get("completion_date")
-        ):
+        # XC-1: a client-supplied course_id must belong to the caller's org
+        # (same shape as the member-org check above) before it's stored.
+        course_obj = None
+        if record_data.get("course_id"):
             course_result = await db.execute(
                 select(TrainingCourse).where(
                     TrainingCourse.id == str(record_data["course_id"]),
@@ -848,13 +855,24 @@ async def create_records_bulk(
                 )
             )
             course_obj = course_result.scalar_one_or_none()
-            if course_obj and course_obj.expiration_months:
-                comp = record_data["completion_date"]
-                month = comp.month - 1 + course_obj.expiration_months
-                year = comp.year + month // 12
-                month = month % 12 + 1
-                day = min(comp.day, calendar.monthrange(year, month)[1])
-                record_data["expiration_date"] = date(year, month, day)
+            if not course_obj:
+                errors.append(f"Row {idx + 1}: training course not found")
+                failed += 1
+                continue
+
+        # Auto-calculate expiration from course
+        if (
+            not record_data.get("expiration_date")
+            and course_obj
+            and record_data.get("completion_date")
+            and course_obj.expiration_months
+        ):
+            comp = record_data["completion_date"]
+            month = comp.month - 1 + course_obj.expiration_months
+            year = comp.year + month // 12
+            month = month % 12 + 1
+            day = min(comp.day, calendar.monthrange(year, month)[1])
+            record_data["expiration_date"] = date(year, month, day)
 
         try:
             new_record = TrainingRecord(
@@ -2329,6 +2347,28 @@ async def confirm_historical_import(
         )
         valid_member_ids = {str(uid) for (uid,) in member_result.all()}
 
+    # XC-1: every course_id this confirm request could resolve to (either a
+    # row's already-"matched" id or a map_existing mapping's id) must belong
+    # to the caller's org before it's stored. Both are client-supplied on
+    # this exact request — a parse-time match doesn't survive the round
+    # trip through the client, so it's re-validated here alongside the
+    # mapping ids rather than trusted.
+    candidate_course_ids = {
+        str(r.matched_course_id) for r in request.rows if r.matched_course_id
+    } | {
+        str(m.existing_course_id)
+        for m in request.course_mappings
+        if m.action == "map_existing" and m.existing_course_id
+    }
+    valid_course_ids: set[str] = set()
+    if candidate_course_ids:
+        course_result = await db.execute(
+            select(TrainingCourse.id)
+            .where(TrainingCourse.id.in_(candidate_course_ids))
+            .where(TrainingCourse.organization_id == str(current_user.organization_id))
+        )
+        valid_course_ids = {str(cid) for (cid,) in course_result.all()}
+
     for row in request.rows:
         # Skip rows without matched member
         if not row.user_id:
@@ -2359,6 +2399,19 @@ async def confirm_historical_import(
                     if mapping.new_training_type:
                         training_type = mapping.new_training_type
             # If no mapping provided, still import with course_name only (no course_id)
+
+        # Reject rows whose resolved course_id is outside this org.
+        # created_courses' ids are server-generated above (always in-org) and
+        # skip this check; matched_course_id/existing_course_id are both
+        # client-supplied on this request and must be re-validated here.
+        if course_id and course_id not in created_courses.values():
+            if course_id not in valid_course_ids:
+                failed += 1
+                errors.append(
+                    f"Row skipped: course '{course_name}' is not in this "
+                    "organization's catalog"
+                )
+                continue
 
         # Validate training type
         valid_types = {
@@ -2901,11 +2954,16 @@ async def get_expiring_certifications_detailed(
     )
     records = result.scalars().all()
 
-    # Enrich with member names
+    # Enrich with member names. user_ids come from records already filtered
+    # to this org above, so a foreign id shouldn't reach here today -- but
+    # scope the lookup anyway, matching every other enrichment query in this
+    # module, so it stays true if that upstream guarantee ever changes.
     user_ids = list({r.user_id for r in records})
     users_map: dict = {}
     if user_ids:
-        users_result = await db.execute(select(User).where(User.id.in_(user_ids)))
+        users_result = await db.execute(
+            select(User).where(User.id.in_(user_ids), User.organization_id == org_id)
+        )
         users_map = {u.id: u for u in users_result.scalars().all()}
 
     # Return flat array matching frontend ExpiringCertification interface

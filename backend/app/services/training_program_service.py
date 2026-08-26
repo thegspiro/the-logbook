@@ -5132,6 +5132,22 @@ class TrainingProgramService:
         if found:
             return found.id, False
 
+        # category_ids is a client-supplied FK array from an uploaded JSON
+        # file, same XC-1 shape _validate_required_courses already guards
+        # for required_courses: an out-of-org id would persist a dangling
+        # cross-tenant reference the compliance evaluator later matches
+        # records against.
+        try:
+            await assert_all_in_org(
+                self.db,
+                TrainingCategory,
+                req_data.get("category_ids"),
+                organization_id,
+                label="linked category",
+            )
+        except ValueError as exc:
+            raise ValueError(f"{exc} (in imported requirement '{name}')") from exc
+
         req = TrainingRequirement(
             organization_id=organization_id,
             name=name,
