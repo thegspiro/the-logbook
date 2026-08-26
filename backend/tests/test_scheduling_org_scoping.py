@@ -268,3 +268,49 @@ class TestTemplateApparatusScoping:
         )
         assert result is None
         assert err == "Apparatus not found"
+
+
+class TestShiftCallRespondingMembersScoping:
+    """responding_members is a client-supplied list of user ids stored
+    straight into JSON. compute_member_call_counts sums it across a shift's
+    calls, so an unvalidated foreign id could inflate another org's user's
+    call-count credit if the id happened to collide — validate in-org like
+    every other client-supplied user id in this file (Pitfall #14c)."""
+
+    async def test_create_rejects_foreign_responding_member(self):
+        shift = SimpleNamespace(id="s1", organization_id="org-1")
+        org = SimpleNamespace(id="org-1", settings={})
+        db = MagicMock()
+        db.execute = AsyncMock(
+            side_effect=[
+                _one(shift),  # get_shift_by_id
+                _one(org),  # CallTrackingService.get_settings -> _get_org
+                _one(None),  # _user_in_org -> foreign
+            ]
+        )
+        db.add = MagicMock()
+        svc = SchedulingService(db)
+        call, err = await svc.create_shift_call(
+            "org-1",
+            "s1",
+            {"incident_type": "medical", "responding_members": ["uFOREIGN"]},
+        )
+        assert call is None
+        assert err == "One or more members are not in your organization"
+        db.add.assert_not_called()
+
+    async def test_update_rejects_foreign_responding_member(self):
+        call = SimpleNamespace(id="c1", organization_id="org-1")
+        db = MagicMock()
+        db.execute = AsyncMock(
+            side_effect=[
+                _one(call),  # get_shift_call_by_id
+                _one(None),  # _user_in_org -> foreign
+            ]
+        )
+        svc = SchedulingService(db)
+        result, err = await svc.update_shift_call(
+            "c1", "org-1", {"responding_members": ["uFOREIGN"]}
+        )
+        assert result is None
+        assert err == "One or more members are not in your organization"
