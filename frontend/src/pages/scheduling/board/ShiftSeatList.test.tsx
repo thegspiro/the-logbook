@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ShiftRecord } from '../../../modules/scheduling';
+import { toDateKey } from '../../../modules/scheduling/utils/shiftBoard';
 import ShiftSeatList from './ShiftSeatList';
 
 const ME = 'me-1';
@@ -14,12 +15,19 @@ const seat = (userId: string, position: string, name: string) => ({
   status: 'assigned',
 });
 
+// ShiftSeatList reads the real clock: it renders the claim controls only while
+// `isShiftOpen` holds, and that closes the day after the shift runs. A
+// hardcoded date here is a time bomb — see the matching note in
+// modules/scheduling/utils/shiftBoard.test.ts.
+const TODAY_KEY = toDateKey(new Date());
+const TOMORROW_KEY = toDateKey(new Date(Date.now() + 24 * 60 * 60 * 1000));
+
 const shift = (overrides: Partial<ShiftRecord> = {}): ShiftRecord => ({
   id: 's1',
   organization_id: 'org',
-  shift_date: '2026-08-25',
-  start_time: '2026-08-25T22:00:00Z',
-  end_time: '2026-08-26T10:00:00Z',
+  shift_date: TODAY_KEY,
+  start_time: `${TODAY_KEY}T22:00:00Z`,
+  end_time: `${TOMORROW_KEY}T10:00:00Z`,
   positions: [
     { position: 'officer', required: true },
     { position: 'driver', required: true },
