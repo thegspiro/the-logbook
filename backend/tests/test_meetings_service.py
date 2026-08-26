@@ -92,6 +92,38 @@ class TestCreateFromEvent:
         assert attendees["u3"].excused is False
 
 
+class TestCreateFromEventLocking:
+    """Pitfall #27 (TOCTOU shape): two coordinators bridging the same event
+    concurrently must not both pass the "no meeting yet" check and both
+    insert one. Locking the event row serializes them so the second one's
+    existence check sees the first's committed meeting."""
+
+    async def test_event_fetch_is_locked_before_the_existence_check(self):
+        captured = []
+
+        async def execute(stmt, *_a, **_kw):
+            captured.append(stmt)
+            if len(captured) == 1:
+                return _one(_event())
+            if len(captured) == 2:
+                return _one(None)
+            return _scalars([])
+
+        db = MagicMock()
+        db.execute = execute
+        db.add = MagicMock()
+        db.commit = AsyncMock()
+        db.flush = AsyncMock()
+        db.refresh = AsyncMock()
+
+        meeting, err = await MeetingsService(db).create_from_event("e1", "org-1", "u1")
+
+        assert err is None
+        assert len(captured) >= 2
+        assert "FOR UPDATE" in str(captured[0])
+        assert "events" in str(captured[0]).lower()
+
+
 class TestAddAttendee:
     async def test_meeting_not_found(self):
         db = _db([_one(None)])
@@ -156,12 +188,82 @@ class TestApproveMeeting:
         assert m.approved_at is not None
 
 
+class TestUpdateMeeting:
+    async def test_not_found(self):
+        db = _db([_one(None)])
+        meeting, err = await MeetingsService(db).update_meeting("m1", "org-1", {})
+        assert meeting is None
+        assert err == "Meeting not found"
+
+    async def test_rejects_null_title(self):
+        """update_meeting now routes through apply_updates instead of a
+        blind setattr loop: an explicit null against title (NOT NULL)
+        must raise a clean error, not an unhandled IntegrityError at
+        commit."""
+        from app.models.meeting import Meeting
+
+        meeting = Meeting(
+            id="m1", organization_id="org-1", title="Old Title", meeting_type="business"
+        )
+        db = _db([_one(meeting)])
+
+        result, err = await MeetingsService(db).update_meeting(
+            "m1", "org-1", {"title": None}
+        )
+        assert result is None
+        assert "cannot be cleared" in err.lower()
+
+    async def test_clears_a_nullable_field(self):
+        from app.models.meeting import Meeting
+
+        meeting = Meeting(
+            id="m1", organization_id="org-1", title="Old Title", notes="stale notes"
+        )
+        db = _db([_one(meeting)])
+
+        result, err = await MeetingsService(db).update_meeting(
+            "m1", "org-1", {"notes": None}
+        )
+        assert err is None
+        assert result.notes is None
+
+
 class TestUpdateActionItem:
     async def test_not_found(self):
         db = _db([_one(None)])
         item, err = await MeetingsService(db).update_action_item("i1", "org-1", {})
         assert item is None
         assert err == "Action item not found"
+
+    async def test_reassigning_to_a_foreign_user_is_rejected(self):
+        """MM-4 (XC-1): update_action_item now validates a reassigned
+        `assigned_to`, matching create_action_item's existing check."""
+        from app.models.meeting import MeetingActionItem
+
+        item = MeetingActionItem(
+            id="i1", organization_id="org-1", description="Do the thing"
+        )
+        db = _db([_one(item), _one(None)])  # item fetch, then is_in_org's User query
+
+        result, err = await MeetingsService(db).update_action_item(
+            "i1", "org-1", {"assigned_to": "u-other-org"}
+        )
+        assert result is None
+        assert "invalid" in err.lower()
+
+    async def test_rejects_null_description(self):
+        from app.models.meeting import MeetingActionItem
+
+        item = MeetingActionItem(
+            id="i1", organization_id="org-1", description="Do the thing"
+        )
+        db = _db([_one(item)])
+
+        result, err = await MeetingsService(db).update_action_item(
+            "i1", "org-1", {"description": None}
+        )
+        assert result is None
+        assert "cannot be cleared" in err.lower()
 
     async def test_completing_stamps_completed_at(self):
         item = SimpleNamespace(id="i1", status=ActionItemStatus.OPEN, completed_at=None)

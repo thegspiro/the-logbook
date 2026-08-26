@@ -40,6 +40,8 @@ from app.schemas.minute import (
     MotionCreate,
     MotionUpdate,
 )
+from app.services.separation_of_duties import assert_different_person
+from app.utils.model_updates import apply_updates
 from app.utils.org_scoping import assert_in_org
 from app.utils.sql_search import LIKE_ESCAPE_CHAR, like_pattern
 
@@ -365,8 +367,9 @@ class MinuteService:
         ):
             update_data["footer_config"] = data.footer_config.model_dump()
 
-        for field, value in update_data.items():
-            setattr(minutes, field, value)
+        apply_updates(
+            minutes, update_data, skip={"id", "organization_id", "created_by"}
+        )
 
         # Reset to draft if was rejected
         if minutes.status == MinutesStatus.REJECTED.value:
@@ -429,6 +432,18 @@ class MinuteService:
 
         if minutes.status != MinutesStatus.SUBMITTED.value:
             raise ValueError("Can only approve submitted minutes")
+
+        # Separation of duties: holding minutes.manage says nothing about
+        # whose minutes these are. Without this, a single secretary could
+        # submit and then immediately approve their own record — the same
+        # self-certification gap already closed for finance requests (FIN-4),
+        # skills tests (CS-8), and admin hours (AH-4) via this shared guard.
+        assert_different_person(
+            str(approved_by),
+            minutes.submitted_by,
+            action="approve",
+            record="meeting minutes",
+        )
 
         minutes.status = MinutesStatus.APPROVED
         minutes.approved_at = datetime.now(timezone.utc)
@@ -518,8 +533,7 @@ class MinuteService:
         if "status" in update_data:
             update_data["status"] = MotionStatus(update_data["status"])
 
-        for field, value in update_data.items():
-            setattr(motion, field, value)
+        apply_updates(motion, update_data, skip={"id", "minutes_id"})
 
         await self.db.commit()
         await self.db.refresh(motion)
@@ -616,6 +630,18 @@ class MinuteService:
             allowed = {"status", "completion_notes"}
             update_data = {k: v for k, v in update_data.items() if k in allowed}
 
+        # MM-4 (XC-1): a reassigned owner must be in-org, same as
+        # add_action_item's existing check.
+        if "assignee_id" in update_data:
+            await assert_in_org(
+                self.db,
+                User,
+                update_data.get("assignee_id"),
+                organization_id,
+                allow_none=True,
+                label="assignee",
+            )
+
         if "status" in update_data:
             new_status = MinutesActionItemStatus(update_data["status"])
             update_data["status"] = new_status
@@ -630,8 +656,7 @@ class MinuteService:
         if "priority" in update_data:
             update_data["priority"] = ActionItemPriority(update_data["priority"])
 
-        for field, value in update_data.items():
-            setattr(item, field, value)
+        apply_updates(item, update_data, skip={"id", "minutes_id"})
 
         await self.db.commit()
         await self.db.refresh(item)

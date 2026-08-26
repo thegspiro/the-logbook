@@ -119,7 +119,10 @@ async def update_meeting(
 ):
     """Update a meeting"""
     service = MeetingsService(db)
-    update_data = meeting.model_dump(exclude_none=True)
+    # exclude_unset (not exclude_none): an explicit null must reach the
+    # service as "clear this field" rather than being stripped as "omitted"
+    # — apply_updates is what tells the two apart.
+    update_data = meeting.model_dump(exclude_unset=True)
     result, error = await service.update_meeting(
         meeting_id, current_user.organization_id, update_data
     )
@@ -251,7 +254,7 @@ async def update_action_item(
     """Update an action item"""
     service = MeetingsService(db)
     result, error = await service.update_action_item(
-        item_id, current_user.organization_id, item.model_dump(exclude_none=True)
+        item_id, current_user.organization_id, item.model_dump(exclude_unset=True)
     )
     if error:
         raise HTTPException(
@@ -279,15 +282,14 @@ async def delete_action_item(
 
 @router.get("/action-items/open", response_model=list[ActionItemResponse])
 async def get_open_action_items(
-    assigned_to: str | None = None,
+    assigned_to: UUID | None = None,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("meetings.view", "minutes.view")),
 ):
     """Get all open action items"""
     service = MeetingsService(db)
-    assigned_uuid = UUID(assigned_to) if assigned_to else None
     items = await service.get_open_action_items(
-        current_user.organization_id, assigned_uuid
+        current_user.organization_id, assigned_to
     )
     return items
 
