@@ -16,7 +16,13 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-None — PR #1901 (feature 19, skills testing) merged. Next iteration starts feature 20 (compliance).
+PR #1902 (feature 20, compliance) — open, subscribed. 7 fixes: silent
+500-record cap on `get_incomplete_records`, null-clear bug on
+`update_compliance_config`/`update_compliance_profile`, a config first-write
+race, `report_type` schema drift, dict-key id-normalization parity, and an
+attestation percentage range check. CS-8 attestation dual-control and CS-9
+monthly windowing remain flagged (product decisions). See
+`docs/security-review/CMP-20-compliance.md`.
 
 ---
 
@@ -64,7 +70,7 @@ data-carrying modules, then the supporting infrastructure.
 | 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`                                                                                   | ✅ #1851        |
 | 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ✅ #1873        |
 | 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3723 L)                                                                                                          | ✅ #1901        |
-| 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | 🔄              |
+| 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ⏳ #1902        |
 | 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ⬜              |
 | 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ⬜              |
 | 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ⬜              |
@@ -704,3 +710,37 @@ re-runs the whole-codebase sweeps against whatever has landed since.
   the fix and resolved them. Full local completion gate re-verified green
   (391/391 skills-scoped, 8816/8816 full suite) before pushing the revision;
   CI came back 16/16 green with no further comments. Next: 20 compliance.
+- **20 Compliance ⏳** — this module already had the deepest prior coverage
+  in the rotation (module-audit iteration 22 + 4 app-review passes through
+  2026-08-09); read `compliance_officer.py`+service, `training_compliance.py`,
+  and `compliance_config.py`+service+model+schema in full via 3 parallel
+  background agents, re-confirming CS-1, CS-3, CS-6, CS-7, CS-8 (skills
+  half), CS-9 recipient audit, and no IDOR/SQL-injection all still intact.
+  **CMP-1/CMP-2** `update_compliance_config`/`update_compliance_profile`
+  discarded an explicit null before the service ever saw it
+  (`exclude_none=True`), so a profile's threshold override ("null = use org
+  default") could never actually be cleared — fixed with `exclude_unset=True`
+  - `apply_updates`. **CMP-3** a first-write race on `ComplianceConfig`
+    surfaced as a raw 500 — now a clean 400. **CMP-4** `get_incomplete_records`
+    silently capped its scan at the 500 most-recently-completed records with no
+    signal to the caller, so older incomplete records on any org with more
+    history were permanently invisible — fixed by pushing the predicate into
+    SQL. **CMP-5** `report_type`'s real 3-value set (`monthly`/`annual`/
+    `yearly`, the last used only by a scheduled task bypassing the HTTP schema)
+    was undocumented at the schema layer and contradicted by a stale model
+    comment — tightened to a `Literal`. **CMP-6** dict-key id-normalization
+    parity for `ContributedHoursService`/`_get_admin_hours_summary` (both added
+    since the last audit, both reintroducing the un-normalized pattern CS-9 had
+    already fixed elsewhere in the same file) — guarded with a UUID-object
+    regression test. **CMP-7** `create_attestation`'s percentage bound was
+    schema-only; added a service-layer check to match its sibling validations.
+    CS-8 attestation dual-control (re-confirmed no narrow fix exists — the
+    record has no "subject" field to compare against the actor at all) and
+    CS-9 monthly windowing remain flagged as product decisions, not bugs. Two
+    design observations raised for owner awareness rather than fixed (a
+    broader permission grant and a `compliance_exempt`-filtering inconsistency
+    on the new contributed-hours endpoint — both look intentional per their
+    docstrings). Full local completion gate green: flake8/black/isort clean,
+    migrations validated, 269/269 compliance-scoped and 8833/8833 full backend
+    suite pass. Findings doc: `docs/security-review/CMP-20-compliance.md`. PR
+    #1902 opened and subscribed. Next: 21 admin hours, once #1902 merges.
