@@ -16,14 +16,10 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-| Field       | Value                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
-| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| PR          | [#1873](https://github.com/thegspiro/the-logbook/pull/1873)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
-| Branch      | `claude/security-review-training-extended`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
-| Feature     | 18 Training extended                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
-| CI          | pending — just opened                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
-| Threads     | none yet                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
-| Last tended | 2026-08-26 — opened. Read all twelve in-scope files in full across four parallel reads (training_submissions.py, training_waivers.py, training_enhancements.py, external_training.py, course_cohorts.py, course_syllabus.py + their 6 backing services). `course_cohorts.py`/`course_syllabus.py` had never been read by any prior pass. 10 findings fixed: TRX-1 (HIGH, confirmed live — bulk_enroll_members name leak), TRX-2/5/5b (blind setattr on NOT NULL columns), TRX-3 (effectiveness-evaluations org-wide PII leak, no gate), TRX-4 (cohort-class mutate-before-validate + audit-evasion), TRX-6..10 (6 unvalidated client FK ids). Corrected a stale count in the SCH-10 KNOWN_LIMITATIONS entry (7→8 sites). Full write-up in `docs/security-review/TRX-18-training-extended.md`. Full completion gate green, full 8778-test backend suite. |
+PR #1901 (feature 19, skills testing) — open, subscribed. 4 fixes: SoD gaps on
+`void_test`/`return_test_for_correction`, `assert_attempts_remaining` capacity
+lock (Pitfall #27), `update_template` null-handling. See
+`docs/security-review/SKT-19-skills-testing.md`.
 
 ---
 
@@ -69,8 +65,8 @@ data-carrying modules, then the supporting infrastructure.
 | 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                | ✅ #1846, #1847 |
 | 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                       | ✅ #1848        |
 | 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`                                                                                   | ✅ #1851        |
-| 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ⏳ #1873        |
-| 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3723 L)                                                                                                          | ⬜              |
+| 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ✅ #1873        |
+| 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3723 L)                                                                                                          | ⏳ #1901        |
 | 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ⬜              |
 | 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ⬜              |
 | 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ⬜              |
@@ -647,3 +643,50 @@ re-runs the whole-codebase sweeps against whatever has landed since.
   site, not among the original 7). Full completion gate green, full
   8778-test backend suite. See `TRX-18-training-extended.md` for the
   complete write-up.
+- **18 Training extended ✅ merged** — PR #1873 merged 2026-08-26. A Codex
+  review round caught 3 real issues before merge (see prior log entry) —
+  all fixed and threads resolved. **Separately, while getting CI green,
+  found and fixed two pre-existing, repo-wide-blocking regressions on
+  `main` unrelated to this feature**: `InventoryAdminHub.tsx` (introduced
+  by #1894) failed `npm run lint`/`npm run build` for every open PR that
+  merged main in (a banned `.toLocaleDateString()` call with no timezone
+  parameter, three un-narrowed `severity` literals, and a banned
+  `bg-red-600` fill) — fixed via standalone PR #1899, also merged. A Codex
+  review on #1899 caught a real bug in that fix's own first draft (two
+  calendar-date fields shifting a day west of UTC) — fixed and verified.
+  While driving #1899 to green, also discovered a second pre-existing
+  gap: the fire-chief officer-visibility test's `@pytest.mark.integration`
+  fix (first surfaced during #1873's own CI, apparently authored by
+  another session) had only ever been merged directly into #1873's
+  branch, never through its own PR onto `main` — so `main` itself, and
+  any fresh branch cut from it, still failed `Backend Unit Tests` on that
+  same MySQL-connection error. Ported the identical one-line fix into
+  #1899 so it closes on `main` for good rather than resurfacing on the
+  next branch. Both PRs fully green (16/16 checks) before merge. Next:
+  19 skills testing.
+- **19 Skills testing ⏳** — reviewed `endpoints/skills_testing.py` (grown
+  2.6x to 3,723 L since the 1,412 L last audited) and
+  `skills_testing_service.py` (1,207 L) in full via 3 parallel background
+  agents, cross-checked against `docs/module-audit/compliance-skills.md`
+  and `docs/app-review/compliance-skills.md`. Re-confirmed CS-1, CS-2,
+  CS-8/CS-10, LIKE escaping (Pitfall #25) and CSV injection guarding
+  (Pitfall #15) all still intact. Four new findings, all fixed: **SKT-1**
+  `update_template`'s blind `setattr` loop could raise an unhandled 500 on
+  an explicit null against a NOT NULL column, now routed through
+  `apply_updates`. **SKT-2/SKT-3** `void_test` and
+  `return_test_for_correction` had no separation-of-duties check unlike
+  their siblings `create_test`/`validate_test` (CS-8) — an
+  officer-candidate could void their own unfavorable result or force
+  unlimited free redo cycles on their own submission; both now call
+  `assert_different_person`. **SKT-4** `assert_attempts_remaining`'s
+  `max_attempts` cap was a read-then-write with no row lock (Pitfall #27,
+  independently corroborated by all 3 review agents) — fixed with both
+  halves the pitfall requires: a `FOR UPDATE` lock on the candidate's
+  `RequirementProgress` row, and the spent-count query itself made a
+  locking read. Fixing the new lock query broke 5 pre-existing tests whose
+  mocked `db.execute` result queues didn't account for the extra call —
+  reordered, not a logic change. Full local completion gate green:
+  flake8/black/isort clean, migrations validated, 380/380 skills-scoped
+  tests and the full 8814-test backend suite pass. Findings doc:
+  `docs/security-review/SKT-19-skills-testing.md`. PR #1901 opened and
+  subscribed. Next: 20 compliance, once #1901 merges.
