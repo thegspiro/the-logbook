@@ -444,6 +444,7 @@ async def test_officer_visibility_is_reported_as_effective(
     assert visibility["allow_member_report_export"] is False
 
 
+@pytest.mark.integration
 async def test_the_seeded_fire_chief_also_counts_as_an_officer(
     db_session, setup_org_and_admin
 ):
