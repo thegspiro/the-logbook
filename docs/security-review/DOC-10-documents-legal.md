@@ -34,6 +34,11 @@ own fix exposed on a pre-existing endpoint, and two narrower
 correctness/compatibility points on the DOC-10 date fix and the public API
 shape. All six fixed — DOC-19 through DOC-24, below.
 
+**Revision note (third round):** a Codex _security_ review (a separate pass
+from the general review above) of the same DOC-18 implementation found one
+more issue — document downloads were not audit-logged, contradicting
+`SECURITY.md`'s own documented logging requirements. Fixed as DOC-25.
+
 ## Scope
 
 The rotation's feature 10 row lists three files
@@ -663,6 +668,23 @@ original shared key always had, not a new one) rather than removed outright,
 and `wiki/API-Reference.md` is updated to document all three fields and the
 deprecation. Covered by `test_public_legal.py`'s `lastUpdated` assertions.
 
+### DOC-25 — P3 — Document downloads left no accountability trail — ✅ FIXED
+
+`SECURITY.md`'s audit-logging section explicitly lists "Document downloads"
+under Data Access events to be logged. The new `download_document` endpoint
+(DOC-18) did not — a `documents.view` holder whose credentials were
+compromised, or who misused a legitimate folder-ACL grant to pull a
+sensitive or personal-folder file, left only the generic request log
+(path/IP/status, no authenticated actor), which is not the tamper-evident
+audit chain and cannot provide equivalent accountability. Fixed: logs a
+`document_downloaded` event (`event_category="documents"`, mirroring the
+existing `document_uploaded`/`document_deleted` events in this same file)
+after every prior check succeeds — successful downloads only, matching
+Codex's own scope — with the document id and name, never the resolved
+filesystem path. Covered by
+`test_documents_access.py::TestDownloadDocument::test_successful_download_is_audited`,
+which also asserts the on-disk path never appears in the logged event.
+
 ## Schema & migration notes
 
 `20260820_0135_06adc68a8b84_add_legal_document_revisions.py` reviewed in
@@ -725,11 +747,16 @@ This pass added or extended:
   test harness exists for this page yet, so these are covered by
   `npx tsc --noEmit` + `npx eslint` only, not by a behavioral test. Noted
   here rather than silently claimed as tested.
+- `tests/test_documents_access.py::TestDownloadDocument
+::test_successful_download_is_audited` — new case for DOC-25, asserting
+  the event's actor/document-id/document-name and that the on-disk path
+  never appears in the logged event. `_user()` gained a `username`
+  attribute to support it (`log_audit_event` requires one).
 
 Existing coverage otherwise still pins every invariant checked above:
 `tests/test_documents_access.py`, `tests/test_legal_documents.py`,
 `tests/test_print_documents.py`, `tests/test_public_legal.py`,
-`tests/test_changelog_fixes.py` — 174 backend tests total across this
+`tests/test_changelog_fixes.py` — 175 backend tests total across this
 feature's surface, all passing.
 
 ## Completion gate
@@ -740,7 +767,7 @@ feature's surface, all passing.
 | `black --check`                                                                                                                                              | pass                                                                                                                                    |
 | `isort --check-only`                                                                                                                                         | pass                                                                                                                                    |
 | `python3 scripts/validate_migrations.py --strict`                                                                                                            | pass (358 migrations, single head) — no new migration (`has_file` is a Python property, not a column)                                   |
-| `pytest tests/test_documents_access.py tests/test_legal_documents.py tests/test_print_documents.py tests/test_public_legal.py tests/test_changelog_fixes.py` | 174 passed                                                                                                                              |
+| `pytest tests/test_documents_access.py tests/test_legal_documents.py tests/test_print_documents.py tests/test_public_legal.py tests/test_changelog_fixes.py` | 175 passed                                                                                                                              |
 | `npx tsc --noEmit` (frontend)                                                                                                                                | pass                                                                                                                                    |
 | `npx eslint .` (frontend, changed files only)                                                                                                                | pass — `DocumentsPage.tsx`, `documentsService.ts`, `formsServices.ts`, `LegalPage.tsx`, `LegalPage.test.tsx`, `LegalPage.a11y.test.tsx` |
 | `npx vitest run` (changed frontend test files)                                                                                                               | 12 passed                                                                                                                               |

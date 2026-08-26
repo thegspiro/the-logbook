@@ -495,6 +495,22 @@ async def download_document(
     if not os.path.exists(resolved_path):
         raise HTTPException(status_code=404, detail="Document file not found on disk")
 
+    # SECURITY.md lists document downloads under "Data Access" logging —
+    # a document.view holder's folder-ACL-permitted download is still a
+    # sensitive read with no other accountability trail, since the generic
+    # request log carries no authenticated actor. Logged after every prior
+    # check succeeds (successful downloads only), and the event never
+    # carries the on-disk path itself.
+    await log_audit_event(
+        db=db,
+        event_type="document_downloaded",
+        event_category="documents",
+        severity="info",
+        event_data={"document_id": str(document_id), "document_name": document.name},
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
     return FileResponse(
         path=resolved_path,
         filename=document.file_name or document.name or "download",

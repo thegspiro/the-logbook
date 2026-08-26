@@ -14,12 +14,14 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from fastapi import HTTPException
 from pydantic import ValidationError
+from sqlalchemy import select
 
 from app.api.v1.endpoints.documents import (
     _parse_uuid_or_400,
     _resolve_document_name,
     download_document,
 )
+from app.models.audit import AuditLog
 from app.models.document import Document, DocumentFolder, FolderVisibility
 from app.models.user import Organization
 from app.schemas.documents import DocumentFolderUpdate
@@ -36,7 +38,7 @@ def _user(uid="u1", roles=None):
     role_objs = [
         SimpleNamespace(permissions=perms, slug=slug) for perms, slug in (roles or [])
     ]
-    return SimpleNamespace(id=uid, roles=role_objs)
+    return SimpleNamespace(id=uid, username=f"{uid}-username", roles=role_objs)
 
 
 def _folder(visibility, owner_user_id=None, allowed_roles=None, fid="f1"):
@@ -492,6 +494,43 @@ class TestDownloadDocument:
             document.id, db=db_session, current_user=user
         )
         assert response.path == str(file_path)
+
+    async def test_successful_download_is_audited(
+        self, db_session, tmp_path, monkeypatch
+    ):
+        # SECURITY.md lists document downloads under "Data Access" logging —
+        # documents.view alone otherwise leaves a sensitive read with no
+        # accountability trail.
+        monkeypatch.setattr("app.api.v1.endpoints.documents.UPLOAD_DIR", str(tmp_path))
+        org, folder = await self._org_and_folder(db_session, "fcvfd-dl-audit")
+        file_path = self._stored_file(tmp_path, org)
+        document = Document(
+            organization_id=org.id,
+            folder_id=folder.id,
+            name="Sensitive SOP",
+            file_name="report.pdf",
+            file_path=str(file_path),
+            file_type="application/pdf",
+        )
+        db_session.add(document)
+        await db_session.flush()
+
+        user = _user(uid="caller-1", roles=[(["documents.view"], "member")])
+        user.organization_id = org.id
+        await download_document(document.id, db=db_session, current_user=user)
+
+        result = await db_session.execute(
+            select(AuditLog).where(AuditLog.event_type == "document_downloaded")
+        )
+        events = result.scalars().all()
+        assert len(events) == 1
+        event = events[0]
+        assert event.user_id == "caller-1"
+        assert event.event_data["document_id"] == str(document.id)
+        assert event.event_data["document_name"] == "Sensitive SOP"
+        # The on-disk path is never written into the audit trail.
+        assert "file_path" not in event.event_data
+        assert str(file_path) not in str(event.event_data)
 
     async def test_leadership_only_folder_is_hidden_as_404_not_403(
         self, db_session, tmp_path, monkeypatch
