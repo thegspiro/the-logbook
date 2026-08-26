@@ -4627,6 +4627,9 @@ async def review_write_off_request(
         reviewed_by=str(current_user.id),
         decision=review_data.status,
         review_notes=review_data.review_notes,
+        acknowledgement=review_data.acknowledgement,
+        expected_item_status=review_data.expected_item_status,
+        expected_holder_signature=review_data.expected_holder_signature,
     )
 
     if error:

@@ -643,7 +643,13 @@ export const inventoryService = {
 
   async reviewWriteOff(
     writeOffId: string,
-    data: { status: string; review_notes?: string | undefined }
+    data: {
+      status: string;
+      review_notes: string;
+      acknowledgement?: boolean;
+      expected_item_status?: string | undefined;
+      expected_holder_signature?: string | undefined;
+    }
   ): Promise<{ id: string; status: string; message: string }> {
     const response = await api.put<{ id: string; status: string; message: string }>(
       `/inventory/write-offs/${writeOffId}/review`,

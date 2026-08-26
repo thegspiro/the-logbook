@@ -24,6 +24,7 @@ from app.models.inventory import (
     IssuanceAllowance,
     ItemAssignment,
     ItemIssuance,
+    ItemStatus,
     NFPAInspectionDetail,
     RequestStatus,
     RequestType,
@@ -250,12 +251,17 @@ class TestRetirementNotificationQueued:
             description="Lost at a fire scene",
         )
         assert err is None
+        review = (await svc.get_write_off_requests(org_id))[0]
 
         _, err = await svc.review_write_off(
             write_off_id=wo["id"],
             organization_id=org_id,
             reviewed_by=user_id,
             decision="approved",
+            review_notes="Confirmed lost",
+            acknowledgement=True,
+            expected_item_status=review["current_status"],
+            expected_holder_signature=review["holder_signature"],
         )
         assert err is None
 
@@ -462,11 +468,16 @@ class TestWriteOffReleasesHolders:
             description="Lost it",
         )
         assert err is None
+        review = (await svc.get_write_off_requests(org_id))[0]
         await svc.review_write_off(
             write_off_id=wo["id"],
             organization_id=org_id,
             reviewed_by=user_id,
             decision="approved",
+            review_notes="Confirmed lost",
+            acknowledgement=True,
+            expected_item_status=review["current_status"],
+            expected_holder_signature=review["holder_signature"],
         )
 
         refreshed = await svc.get_item_by_id(uuid.UUID(item.id), uuid.UUID(org_id))
@@ -501,11 +512,16 @@ class TestWriteOffReleasesHolders:
             description="Crushed",
         )
         assert err is None
+        review = (await svc.get_write_off_requests(org_id))[0]
         await svc.review_write_off(
             write_off_id=wo["id"],
             organization_id=org_id,
             reviewed_by=user_id,
             decision="approved",
+            review_notes="Confirmed damage",
+            acknowledgement=True,
+            expected_item_status=review["current_status"],
+            expected_holder_signature=review["holder_signature"],
         )
 
         refreshed = await svc.get_item_by_id(uuid.UUID(item.id), uuid.UUID(org_id))
@@ -515,6 +531,43 @@ class TestWriteOffReleasesHolders:
             select(ItemIssuance).where(ItemIssuance.item_id == item.id)
         )
         assert all(i.is_returned for i in result.scalars().all())
+
+    @pytest.mark.asyncio
+    async def test_concurrent_status_change_rejects_stale_writeoff_review(
+        self, db_session, setup_org_and_user
+    ):
+        """A reviewer cannot retire an item using facts loaded before a change."""
+        org_id, user_id, _ = setup_org_and_user
+        svc = InventoryService(db_session)
+        item, _ = await svc.create_item(
+            organization_id=uuid.UUID(org_id),
+            item_data={"name": "Radio", "condition": "good", "status": "available"},
+            created_by=uuid.UUID(user_id),
+        )
+        wo, err = await svc.create_write_off_request(
+            item_id=item.id,
+            organization_id=org_id,
+            requested_by=user_id,
+            reason="obsolete",
+            description="End of life",
+        )
+        assert err is None
+        review = (await svc.get_write_off_requests(org_id))[0]
+        item.status = ItemStatus.MAINTENANCE
+        await db_session.commit()
+
+        _, err = await svc.review_write_off(
+            write_off_id=wo["id"],
+            organization_id=org_id,
+            reviewed_by=user_id,
+            decision="approved",
+            review_notes="Approved retirement",
+            expected_item_status=review["current_status"],
+            expected_holder_signature=review["holder_signature"],
+        )
+        assert err == "Item status or holder changed; refresh and review again"
+        await db_session.refresh(item)
+        assert item.status == ItemStatus.MAINTENANCE
 
 
 # ── NFPA Inspection Write Path ─────────────────────────────────────

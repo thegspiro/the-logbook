@@ -1439,7 +1439,12 @@ class WriteOffReview(BaseModel):
     """Approve or deny a write-off request"""
 
     status: ReviewStatusLiteral
-    review_notes: Optional[FreeText] = None
+    review_notes: Annotated[
+        str, StringConstraints(strip_whitespace=True, min_length=1, max_length=2000)
+    ]
+    acknowledgement: bool = False
+    expected_item_status: Optional[str] = None
+    expected_holder_signature: Optional[str] = None
 
 
 class WriteOffRequestResponse(UTCResponseBase):
@@ -1461,6 +1466,18 @@ class WriteOffRequestResponse(UTCResponseBase):
     reviewed_at: Optional[datetime] = None
     review_notes: Optional[str] = None
     clearance_id: Optional[str] = None
+    clearance_record: Optional[str] = None
+    current_holder: Optional[str] = None
+    current_status: Optional[str] = None
+    replacement_value: Optional[float] = None
+    linked_charge_record: Optional[str] = None
+    open_maintenance_record: Optional[str] = None
+    active_assignment_count: int = 0
+    active_checkout_count: int = 0
+    active_issuance_count: int = 0
+    acknowledgement_required: bool = False
+    acknowledgement_threshold: Optional[float] = None
+    holder_signature: Optional[str] = None
     created_at: Optional[datetime] = None
 
     model_config = _response_config
