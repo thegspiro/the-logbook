@@ -7,6 +7,58 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### An EMT could not sign up for the EMT seat on an ambulance (2026-08-26)
+
+**Fixed**
+
+- **The apparatus editor wrote a seat name nothing in the system grants.**
+  `ApparatusBasicPage` offered the EMT seat as the literal string `"EMT"`, and
+  built every ambulance from `['driver', 'EMT']`. Every other writer — the
+  shift template form, the scheduling settings, `ShiftPosition` on the wire,
+  `operational_ranks.eligible_positions`, the rank editor — spells that seat
+  `"ems"`.
+
+  Nothing grants `"EMT"`: not a rank, not a held position, not a completed
+  training program. `ShiftEligibilityService` intersects the member's granted
+  seats with the shift's own seats case-sensitively, so the intersection was
+  always empty and `POST /scheduling/shifts/{id}/signup` answered 403. An
+  ambulance created from the defaults had an EMT seat that no EMT could take.
+
+  **No setting could unblock it.** Adding `EMT` to the org's `open_positions`,
+  or marking the shift `open_to_all_members` — the flag that bypasses the rank
+  and membership-type checks entirely — both put `"EMT"` into the eligible set
+  and still failed, because `ShiftPosition` has no `EMT` member and the client
+  can only ever send `ems`. The seat was unnameable by the API that had to
+  fill it.
+
+  It was invisible on screen, which is why it read as the application being
+  broken rather than as a configuration problem: `POSITION_LABELS` maps `EMT`,
+  `EMS` and `ems` all to the label "EMT", so the seat rendered normally. The
+  label was also where the bad value came from — the editor built its option
+  text by capitalising the raw value, so `'ems'` would have displayed as "Ems"
+  and someone stored the label as the value to fix the display.
+
+  The seat _name_ is now settled on write by `canonical_position` in
+  `app/utils/positions.py`, alongside the seat _shape_ that helper already
+  owned, so no writer can reintroduce a spelling the signup API cannot name.
+  `ApparatusBasicPage` stores canonical values and takes its option text from
+  the shared `POSITION_LABELS`. `20260826_1200_d7a4e9c31b60` settles the rows
+  already stored across `basic_apparatus.positions`, `shifts.positions`,
+  `shift_templates.positions` and `apparatus.crew_positions` — the half a
+  write-side fix cannot do, since an ambulance created last month keeps its
+  unfillable seat until its row is rewritten. A department's own custom seat
+  round-trips verbatim; only known spellings fold.
+
+  `tests/test_position_slots.py` asserts the canonical set is exactly
+  `ShiftPosition` and parses `ApparatusBasicPage.tsx` for a non-canonical seat
+  value, so the two vocabularies cannot drift apart again.
+
+- **`alembic upgrade head` failed outright on three heads.** The #1819/#1822
+  merges left `c4a91b7e2f08` with three children — `c6a3f8b41e29`,
+  `c4f8a2e70d19` and `a1f7c34e9b02` — so every fresh database and both CI
+  matrix jobs stopped at `Multiple head revisions are present for given
+argument 'head'`. The chain is relinearized; no migration body changed.
+
 ### Every member could read every other member's notifications (2026-08-25)
 
 **Fixed**

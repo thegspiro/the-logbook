@@ -27,12 +27,44 @@ _MIGRATION = (
 
 _STOREFRONT_GRANTS = ("storefront.view", "storefront.order", "storefront.manage")
 
+# ``a4f8c1b92d17`` runs *before* this one in the chain, so a grant this later
+# migration strips is still on a pristine row at the moment the backfill runs
+# and must still appear in its frozen snapshot. Read from the revoking
+# migration's own constants rather than restated here, so the allowance cannot
+# outlive the revocation it stands for.
+_REVOKED_LATER = (
+    Path(__file__).resolve().parents[1]
+    / "alembic"
+    / "versions"
+    / "20260825_2015_a1f7c34e9b02_revoke_baseline_notifications_view.py"
+)
+
 
 def _load_migration():
     spec = importlib.util.spec_from_file_location("_backfill_storefront", _MIGRATION)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
+
+
+def _load_revocation():
+    spec = importlib.util.spec_from_file_location("_revoke_later", _REVOKED_LATER)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _grants_revoked_after_the_backfill(slug: str) -> set[str]:
+    """Grants a pristine row still carried when ``a4f8c1b92d17`` ran.
+
+    The registry is the *current* seed set. A grant revoked by a migration
+    ordered after the backfill has since left the registry but was still on the
+    row the backfill had to match, so the snapshot legitimately carries it.
+    """
+    revocation = _load_revocation()
+    if slug in revocation._SLUGS:
+        return {revocation._PERMISSION}
+    return set()
 
 
 def _registry_grants(slug: str) -> tuple[str, ...]:
@@ -93,8 +125,12 @@ class TestFrozenPriorDefaults:
     @pytest.mark.parametrize("slug", sorted(_seeded_slugs_with_storefront()))
     def test_snapshot_is_the_registry_set_minus_the_added_grants(self, slug):
         module = _load_migration()
-        registry = set(DEFAULT_POSITIONS[slug]["permissions"])
-        assert module._PRIOR_DEFAULTS[slug] == registry - set(module._BACKFILL[slug])
+        # The registry as it stands, plus what a later migration has since
+        # revoked — which together are what a pristine row held when this
+        # backfill ran, and so what its snapshot must describe.
+        pristine = set(DEFAULT_POSITIONS[slug]["permissions"])
+        pristine |= _grants_revoked_after_the_backfill(slug)
+        assert module._PRIOR_DEFAULTS[slug] == pristine - set(module._BACKFILL[slug])
 
     def test_the_snapshot_never_already_carries_a_grant(self):
         # If it did, a pristine row would never match and nothing would be
