@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Editing a medical supply, item, or category could turn a cleared field into a server error instead of a clear message (2026-08-27)
+
+**Fixed**
+
+- Clearing certain required fields while editing an inventory category, an
+  inventory item, or a stock lot (from either the medical supplies page or
+  the general inventory pages) could produce a generic server error instead
+  of telling the person what went wrong. Stock lot edits in particular could
+  fail with no error message at all. All three now report a clear,
+  specific message.
+
 ### Deleting a grant opportunity could silently wipe out every application ever linked to it (2026-08-27)
 
 **Fixed**
