@@ -36,35 +36,14 @@ TRAINING_OFFICER_ROLE_SLUGS: list[str] = [
     "chief",
 ]
 
-# Operational (line) role slugs.
-#
-# NOTE: These are *position* slugs, NOT voter-eligibility categories.
-# Election voter eligibility (eligible_voter_types) is determined by
-# the member's ``membership_type`` field (active, administrative, life,
-# etc.), not by which role slugs they hold.  See
-# ``ElectionService._user_has_role_type()`` for the full mapping.
-OPERATIONAL_ROLE_SLUGS: list[str] = [
-    "chief",
-    "assistant_chief",
-    "captain",
-    "lieutenant",
-    "firefighter",
-    "driver",
-    "emt",
-    "paramedic",
-]
-
-# Administrative (corporate) role slugs.
-#
-# Same caveat as above: these are position slugs used for permission
-# lookups and UI grouping, not for election voter-type eligibility.
-ADMINISTRATIVE_ROLE_SLUGS: list[str] = [
-    "president",
-    "vice_president",
-    "secretary",
-    "assistant_secretary",
-    "treasurer",
-]
+# OPERATIONAL_ROLE_SLUGS and ADMINISTRATIVE_ROLE_SLUGS were removed on
+# 2026-08-26. Neither had ever been read: each had exactly one reference in
+# the codebase, its own definition. They were not harmless, because they read
+# as a third authority on the rank vocabulary and disagreed with both real
+# ones — listing ``chief`` where ``operational_ranks`` seeds ``fire_chief``,
+# and offering ``driver`` and ``paramedic``, which are not ranks at all and
+# grant nothing. Election voter eligibility is decided by the member's
+# ``membership_type``; see ``ElectionService._user_has_role_type()``.
 
 # Default training officer roles for cert alert config fallback
 DEFAULT_TRAINING_OFFICER_ROLES: list[str] = [
