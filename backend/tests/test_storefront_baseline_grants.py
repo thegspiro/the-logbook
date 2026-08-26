@@ -5,7 +5,7 @@ ways — the ``member``/``firefighter`` positions written at onboarding, and the
 operational rank resolved at runtime — and only the second one was ever true
 for a department seeded before the storefront module shipped. A member with no
 rank recorded therefore got Access Denied from a store the navigation was
-still advertising, which is what ``20260825_1600_c4f8a2e70d19`` backfills.
+still advertising, which is what ``20260825_2000_c4f8a2e70d19`` backfills.
 """
 
 import importlib.util
@@ -22,7 +22,7 @@ _MIGRATION = (
     Path(__file__).resolve().parents[1]
     / "alembic"
     / "versions"
-    / "20260825_1600_c4f8a2e70d19_backfill_storefront_member_grants.py"
+    / "20260825_2000_c4f8a2e70d19_backfill_storefront_member_grants.py"
 )
 
 
