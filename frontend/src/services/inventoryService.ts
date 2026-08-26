@@ -31,6 +31,7 @@ import type {
   ScanLookupResponse,
   DistributeItemsRequest,
   DistributeItemsResponse,
+  InventoryTransferRequest,
   BatchReturnRequest,
   BatchReturnResponse,
   LabelFormat,
@@ -490,6 +491,10 @@ export const inventoryService = {
   async distributeItems(data: DistributeItemsRequest): Promise<DistributeItemsResponse> {
     const response = await api.post<DistributeItemsResponse>('/inventory/distribute-items', data);
     return response.data;
+  },
+
+  async transferItem(data: InventoryTransferRequest): Promise<void> {
+    await api.post('/inventory/transfer', data);
   },
 
   async batchReturn(data: BatchReturnRequest): Promise<BatchReturnResponse> {

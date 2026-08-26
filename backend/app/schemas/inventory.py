@@ -1293,6 +1293,40 @@ class DistributeItemsResultItem(BaseModel):
     action: str  # "permanent_assignment", "temporary_loan", or "issued"
     success: bool
     error: Optional[str] = None
+    conflict: Optional["InventoryHoldingConflict"] = None
+
+
+class InventoryHoldingConflict(BaseModel):
+    """The active chain-of-custody record that prevented distribution."""
+
+    holder_id: UUID
+    holder_name: str
+    holding_type: Literal["assignment", "checkout"]
+    record_id: UUID
+    held_since: datetime
+    expected_return_date: Optional[datetime] = None
+
+
+class InventoryTransferRequest(BaseModel):
+    """Explicit, confirmed transfer of an already-held individual item."""
+
+    item_id: UUID
+    new_holder_id: UUID
+    current_holder_id: UUID
+    current_record_id: UUID
+    holding_type: Literal["assignment", "checkout"]
+    return_condition: ReturnConditionLiteral
+    transfer_reason: FreeText
+    immediate: bool
+
+
+class InventoryTransferResponse(BaseModel):
+    item_id: UUID
+    old_record_id: UUID
+    new_record_id: UUID
+    old_holder_id: UUID
+    new_holder_id: UUID
+    holding_type: Literal["assignment", "checkout"]
 
 
 class DistributeItemsResponse(BaseModel):
