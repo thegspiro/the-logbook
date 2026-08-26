@@ -1,6 +1,6 @@
 # Security Review — Grants & Fundraising
 
-**Prefix:** `GF` · **Iteration:** 22 · **Reviewed:** 2026-08-26 · **PR:** TBD
+**Prefix:** `GF` · **Iteration:** 22 · **Reviewed:** 2026-08-26 · **PR:** #1904
 
 **Backend:** `app/api/v1/endpoints/grants.py` (1,883 L, 45 endpoints),
 `app/services/grant_service.py` (1,135 L), `app/services/fundraising_service.py`

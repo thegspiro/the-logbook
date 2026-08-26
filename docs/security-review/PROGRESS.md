@@ -16,7 +16,7 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-None — PR #1903 (feature 21, admin hours) merged. Next iteration starts feature 22 (grants & fundraising).
+PR #1904 (feature 22, grants & fundraising) — open, awaiting CI/review.
 
 ---
 
@@ -66,7 +66,7 @@ data-carrying modules, then the supporting infrastructure.
 | 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3723 L)                                                                                                          | ✅ #1901        |
 | 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ✅ #1902        |
 | 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ✅ #1903        |
-| 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | 🔄              |
+| 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ⏳              |
 | 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ⬜              |
 | 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ⬜              |
 | 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ⬜              |
@@ -795,3 +795,34 @@ re-runs the whole-codebase sweeps against whatever has landed since.
   local completion gate re-verified green (8846/8846 full suite) before
   the final push; CI came back 16/16 green with no further comments.
   Next: 22 grants & fundraising.
+- **22 Grants & fundraising** — read `docs/module-audit/grants-fundraising.md`
+  (iteration 14, GF-1 through GF-9) and `docs/app-review/grants-fundraising.md`
+  (4 passes through 2026-08-09, GF-10 through GF-12) first; three parallel
+  agents then read `grants.py`, `grant_service.py`, `fundraising_service.py`
+  in full, re-confirming GF-1 through GF-12 and surfacing six new findings.
+  **GF-13 (HIGH, most severe of the whole rotation so far)**
+  `GrantOpportunity.applications` carried `cascade="all, delete-orphan"`
+  while `GrantApplication.opportunity_id` is `ondelete="SET NULL"` — deleting
+  an opportunity with linked applications either crashed or silently deleted
+  every one of those applications and their full financial history. Fixed by
+  removing the cascade and adding `passive_deletes=True`; guarded by a new
+  real-DB integration test (`test_grant_opportunity_delete_db.py`), invisible
+  to a mocked session. **GF-14** an awarded->active->awarded round-trip
+  duplicated the auto-generated compliance task set — idempotency guard
+  added, scoped narrowly so it doesn't presume an answer to GF-7's broader
+  state-machine question. **GF-15** three read-then-write aggregate
+  recomputes (campaign total, donor stats, budget item spent) had no lock —
+  Pitfall #27 fix applied to all three (lock the parent row, make the SUM
+  itself a locking read). **GF-16** ten update methods across both services
+  used blind `setattr` loops -> converted to `apply_updates`. **GF-17/GF-18**
+  two by-id queries (`_notes_with_authors`, the budget-item fetch inside the
+  GF-15 fix) gained `organization_id` filters for defense-in-depth
+  consistency; neither was independently exploitable. GF-7 (broader
+  state-machine/overspend question), GF-8 (`is_anonymous` enforcement), GF-9
+  (float money math) re-confirmed unchanged and stay flagged as product
+  decisions, per every prior pass. Full local completion gate green:
+  flake8/black/isort clean, migrations validated (no migration needed —
+  GF-13's fix is ORM-relationship-only), 45/45 grant+fundraising scoped and
+  8849/8849 full backend suite pass. Findings doc:
+  `docs/security-review/GF-22-grants-fundraising.md`. PR #1904 opened and
+  subscribed. Next: 23 medical supplies, once #1904 merges.
