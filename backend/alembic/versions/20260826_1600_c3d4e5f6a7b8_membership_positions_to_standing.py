@@ -28,7 +28,7 @@ through the ``_reconcile_membership`` listener that normally keeps the three
 in step.
 
 Revision ID: c3d4e5f6a7b8
-Revises: 8bffd3c53428
+Revises: b272a5d5535c
 Create Date: 2026-08-26 16:00:00.000000
 """
 
@@ -37,7 +37,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision = "c3d4e5f6a7b8"
-down_revision = "8bffd3c53428"
+down_revision = "b272a5d5535c"
 branch_labels = None
 depends_on = None
 
