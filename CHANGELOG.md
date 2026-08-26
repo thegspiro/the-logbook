@@ -7,6 +7,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Embroidery and engraving are not the same job (2026-08-26)
+
+**Fixed**
+
+- **`alembic upgrade head` could not run at all.** Three migrations took
+  `c4a91b7e2f08` as their parent — the size-order settle (#1819), a second
+  storefront grant backfill, and the notifications.view revoke (#1829) — so the
+  chain had three heads and every database job on `main` failed before a test
+  ran. Relinearized rather than merged, because the order changes the outcome:
+  the two storefront backfills guard each other, and running them the other way
+  round leaves `storefront.manage` off the Quartermaster on every existing
+  department.
+
+- **An engraved item was sent to the vendor as gold thread.** Personalization
+  was modelled as one process. A cloth item is embroidered and the thread has a
+  colour; a metal item is engraved and there is none. With only a thread colour
+  on the model, a challenge coin reached the purchase order and the CSV export
+  reading "Gold" — an instruction the engraver cannot follow — and the member's
+  preview stitched a coin in gold. Products now carry a personalization method,
+  set per item by the quartermaster, and thread belongs to embroidery alone.
+
+- **The Command Palette offered the store where the route would refuse it.**
+  `My Store Orders` carried no gate at all while `/store/orders` requires
+  `storefront.view` and the storefront module, so it answered Access Denied to
+  every member without the grant and to every department with the store
+  switched off. `Department Store` was permission-gated but not module-gated.
+  `navGateIntegrity.test.ts` now covers the storefront paths; it existed for
+  this class of defect but listed only `/medical-supplies` and `/inventory`.
+
+- **Thirteen corporate positions could not reach the store.** Treasurer,
+  secretary, board of directors, EMS supply officer, public outreach,
+  communications officer, historian, membership coordinator, training officer,
+  fundraising chair, assistant secretary, scheduling officer and meeting hall
+  coordinator held no storefront grant. The store is a member amenity, not an
+  officer tool. The omission hid because permissions union across positions and
+  every operational rank grants the store, so it only bit a member whose sole
+  position was one of these and who had no rank recorded.
+
 ### An EMT could not sign up for the EMT seat on an ambulance (2026-08-26)
 
 **Fixed**
