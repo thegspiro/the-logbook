@@ -11,6 +11,7 @@ from typing import Any, Dict, List, Optional
 
 from loguru import logger
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -26,6 +27,7 @@ from app.models.user import Organization, Position
 from app.services.compliance_officer_service import AnnualComplianceReportService
 from app.services.email_service import EmailService
 from app.utils.external_recipients import audit_external_recipients
+from app.utils.model_updates import apply_updates
 
 
 class ComplianceConfigService:
@@ -59,13 +61,23 @@ class ComplianceConfigService:
                 **data,
             )
             self.db.add(config)
+            try:
+                await self.db.flush()
+            except IntegrityError:
+                # Two concurrent first-time saves for the same org (PUT
+                # /config and/or POST /config/initialize) can both read
+                # config is None and both attempt an insert; organization_id
+                # is unique so the loser's insert fails. Without this, that
+                # raw IntegrityError surfaces as an unhandled 500 instead of
+                # a clean 400 (Pitfall #1/#4).
+                await self.db.rollback()
+                raise ValueError(
+                    "Compliance configuration already exists for this organization"
+                )
         else:
-            for key, value in data.items():
-                if hasattr(config, key):
-                    setattr(config, key, value)
+            apply_updates(config, data)
             config.updated_by = updated_by
-
-        await self.db.flush()
+            await self.db.flush()
 
         # Re-fetch with profiles
         return await self.get_config(organization_id)  # type: ignore[return-value]
@@ -156,9 +168,7 @@ class ComplianceConfigService:
             raise ValueError("Profile not found")
 
         await self._validate_profile_fks(organization_id, data)
-        for key, value in data.items():
-            if hasattr(profile, key) and value is not None:
-                setattr(profile, key, value)
+        apply_updates(profile, data, skip={"config_id", "id"})
 
         await self.db.flush()
         await self.db.refresh(profile)

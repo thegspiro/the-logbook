@@ -200,7 +200,16 @@ describe('MyEquipmentPage', () => {
     });
   });
 
-  it('submits an equipment request after searching and selecting an item', async () => {
+  // #1875 removed the member-facing priority selector. What is left is the
+  // request intent, and this branch derives it from how the item is tracked:
+  // pool stock is always a quantity issue, so it gets no picker at all, and an
+  // individual item gets the two intents a member can actually express.
+  //
+  // #1876's parameterized test went with the flat three-option picker it
+  // exercised. `purchase` is deliberately not offered here: this form makes
+  // you search and select an existing available item, which a request to buy a
+  // new one is not. Its "no priority combobox" assertion is kept below.
+  it('submits a temporary checkout after searching and selecting an item', async () => {
     mockGetItems.mockResolvedValue({ items: [availableItem], total: 1 });
     const user = userEvent.setup();
     renderWithRouter(<MyEquipmentPage />);
