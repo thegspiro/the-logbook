@@ -77,42 +77,28 @@ def test_plain_member_is_backfilled_with_browsing_but_not_management():
     assert backfill["member"] == ("storefront.view", "storefront.order")
 
 
-class TestCoverageHelper:
-    """``_covered`` decides what the migration skips, so it is worth pinning."""
+class TestFrozenPriorDefaults:
+    """The snapshot must describe a pristine row at the moment this runs.
 
-    def test_exact_grant_is_covered(self):
-        covered = _load_migration()._covered
-        assert covered(["storefront.view"], "storefront.view")
-
-    def test_global_and_module_wildcards_are_covered(self):
-        covered = _load_migration()._covered
-        assert covered(["*"], "storefront.view")
-        assert covered(["storefront.*"], "storefront.manage")
-
-    def test_an_unrelated_grant_is_not_covered(self):
-        covered = _load_migration()._covered
-        assert not covered(["inventory.view", "events.view"], "storefront.view")
-
-    def test_a_sibling_grant_does_not_cover(self):
-        covered = _load_migration()._covered
-        assert not covered(["storefront.view"], "storefront.manage")
-
-
-def test_downgrade_does_not_revoke_grants():
-    """The rollback must not take the store away from anyone.
-
-    The upgrade only appends missing grants and records no provenance, so a
-    downgrade that stripped every listed grant would also revoke it from
-    organizations that onboarded after these grants entered the registry and
-    always held them legitimately — putting the store back out of reach for
-    exactly the members this migration exists to serve, on a rollback that was
-    meant to change nothing.
+    ``_PRIOR_DEFAULTS`` is frozen rather than imported, so it can drift from
+    the registry silently — and a drifted snapshot matches nothing, which makes
+    the backfill a no-op that still reports success. These assertions are the
+    thing that notices.
     """
-    module = _load_migration()
-    source = _MIGRATION.read_text()
-    downgrade_body = source[source.index("def downgrade() -> None:") :]
 
-    assert "UPDATE positions" not in downgrade_body
-    assert "DELETE" not in downgrade_body.upper().replace("DELETED", "")
-    # Callable and inert — it must not raise if Alembic ever runs it.
-    assert module.downgrade() is None
+    def test_snapshot_covers_exactly_the_backfilled_slugs(self):
+        module = _load_migration()
+        assert set(module._PRIOR_DEFAULTS) == set(module._BACKFILL)
+
+    @pytest.mark.parametrize("slug", sorted(_seeded_slugs_with_storefront()))
+    def test_snapshot_is_the_registry_set_minus_the_added_grants(self, slug):
+        module = _load_migration()
+        registry = set(DEFAULT_POSITIONS[slug]["permissions"])
+        assert module._PRIOR_DEFAULTS[slug] == registry - set(module._BACKFILL[slug])
+
+    def test_the_snapshot_never_already_carries_a_grant(self):
+        # If it did, a pristine row would never match and nothing would be
+        # backfilled — the silent-no-op failure this guard exists to catch.
+        module = _load_migration()
+        for slug, grants in module._BACKFILL.items():
+            assert not (module._PRIOR_DEFAULTS[slug] & set(grants)), slug
