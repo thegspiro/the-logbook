@@ -14,8 +14,8 @@ from uuid import UUID
 
 from loguru import logger
 from sqlalchemy import and_, case, func, or_, select, update
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from sqlalchemy.sql import Select
 
@@ -55,8 +55,8 @@ from app.models.inventory import (
     ReturnRequestType,
     StorageArea,
     TrackingType,
-    WriteOffRequest,
     WriteOffReason,
+    WriteOffRequest,
     WriteOffStatus,
 )
 from app.models.location import Location
