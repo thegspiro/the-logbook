@@ -26,7 +26,7 @@ from app.models.document import (
     DocumentStatus,
     FolderVisibility,
 )
-from app.models.user import User
+from app.models.user import Organization, User
 from app.utils.model_updates import apply_updates
 from app.utils.org_scoping import assert_in_org
 from app.utils.sql_search import LIKE_ESCAPE_CHAR, like_pattern
@@ -803,13 +803,31 @@ class DocumentsService:
                 ├── Inspection Reports/
                 ├── Insurance & Leases/
                 └── Capital Projects/
+
+        The whole get-or-create is a read-then-write with no uniqueness
+        constraint behind it (Pitfall #27 shape): two requests that both see
+        "no folder yet" would otherwise both insert a facility folder (and
+        its sub-folders), and every later read would break with
+        MultipleResultsFound. Locking the organization row for the duration
+        serializes concurrent first-accesses across the org's facilities —
+        cheap, since this only runs once per facility ever.
         """
+        org = await self.db.scalar(
+            select(Organization)
+            .where(Organization.id == str(organization_id))
+            .with_for_update()
+        )
+        if org is None:
+            raise ValueError("Organization not found")
+
         # Find the 'facilities' system folder
         result = await self.db.execute(
             select(DocumentFolder)
             .where(DocumentFolder.organization_id == str(organization_id))
             .where(DocumentFolder.slug == FOLDER_FACILITIES)
             .where(DocumentFolder.is_system.is_(True))
+            .order_by(DocumentFolder.id)
+            .limit(1)
         )
         facilities_root = result.scalar_one_or_none()
 
@@ -840,6 +858,8 @@ class DocumentsService:
             select(DocumentFolder)
             .where(DocumentFolder.parent_id == facilities_root.id)
             .where(DocumentFolder.slug == f"facility-{facility_id_str}")
+            .order_by(DocumentFolder.id)
+            .limit(1)
         )
         facility_folder = result.scalar_one_or_none()
 
@@ -892,12 +912,19 @@ class DocumentsService:
         """
         Get the sub-folders for a specific facility.
         Returns an empty list if the facility folder doesn't exist.
+
+        Uses ``limit(1)`` rather than ``scalar_one_or_none()`` on both lookups
+        so a pre-existing duplicate row (from a race predating the lock in
+        ``ensure_facility_folder``) degrades to picking one deterministically
+        instead of a persistent 500 on every read.
         """
         result = await self.db.execute(
             select(DocumentFolder)
             .where(DocumentFolder.organization_id == str(organization_id))
             .where(DocumentFolder.slug == FOLDER_FACILITIES)
             .where(DocumentFolder.is_system.is_(True))
+            .order_by(DocumentFolder.id)
+            .limit(1)
         )
         facilities_root = result.scalar_one_or_none()
         if not facilities_root:
@@ -908,6 +935,8 @@ class DocumentsService:
             select(DocumentFolder)
             .where(DocumentFolder.parent_id == facilities_root.id)
             .where(DocumentFolder.slug == f"facility-{facility_id_str}")
+            .order_by(DocumentFolder.id)
+            .limit(1)
         )
         facility_folder = result.scalar_one_or_none()
         if not facility_folder:
