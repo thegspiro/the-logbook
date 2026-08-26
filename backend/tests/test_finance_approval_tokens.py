@@ -24,6 +24,7 @@ def _pending_record(step=None):
     record.entity_id = "entity-id"
     record.approval_token = "approval-token"
     record.step = step
+    record.chain.organization_id = "token-org-id"
     return record
 
 
@@ -54,6 +55,13 @@ async def test_token_action_locks_and_consumes_token(action):
     assert record.approval_token is None
     assert record.notes == "reviewed"
     db.flush.assert_awaited_once()
+    if action == "approve_by_token":
+        service._advance_notification_steps.assert_awaited_once_with(
+            record.entity_type, record.entity_id, "token-org-id"
+        )
+        service._check_all_steps_complete.assert_awaited_once_with(
+            record.entity_type, record.entity_id, "token-org-id"
+        )
 
 
 class TestApproveByTokenSelfApprovalGuard:

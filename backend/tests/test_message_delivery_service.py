@@ -84,6 +84,8 @@ class TestInAppFanOut:
         # The author is excluded; the other two each get an in-app row.
         assert db.add.call_count == 2
         db.commit.assert_awaited()
+        notifications = [call.args[0] for call in db.add.call_args_list]
+        assert all(item.action_url == "/messages/m1" for item in notifications)
 
     async def test_no_recipients_is_a_noop(self):
         db = _db()

@@ -59,8 +59,6 @@ from app.models.operational_rank import OperationalRank
 from app.models.user import User
 from app.schemas.inventory import (
     AllowanceCheckResponse,
-    BatchCheckoutRequest,
-    BatchCheckoutResponse,
     BatchReturnRequest,
     BatchReturnResponse,
     BulkIssuanceRequest,
@@ -78,6 +76,8 @@ from app.schemas.inventory import (
     CompleteClearanceRequest,
     DepartureClearanceCreate,
     DepartureClearanceResponse,
+    DistributeItemsRequest,
+    DistributeItemsResponse,
     EquipmentKitCreate,
     EquipmentKitDetailResponse,
     EquipmentKitResponse,
@@ -111,6 +111,8 @@ from app.schemas.inventory import (
     InventoryLotUpdate,
     InventorySetupStatus,
     InventorySummary,
+    InventoryTransferRequest,
+    InventoryTransferResponse,
     InventoryVendorContactCreate,
     InventoryVendorContactResponse,
     InventoryVendorContactUpdate,
@@ -2979,18 +2981,19 @@ async def lookup_item_by_code(
     return ScanLookupListResponse(results=results, total=len(results))
 
 
-@router.post("/batch-checkout", response_model=BatchCheckoutResponse)
-async def batch_checkout_items(
-    request: BatchCheckoutRequest,
+@router.post("/distribute-items", response_model=DistributeItemsResponse)
+async def distribute_items_endpoint(
+    request: DistributeItemsRequest,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("inventory.manage")),
 ):
     """
-    Assign/checkout/issue multiple scanned items to a member in one operation.
+    Distribute multiple scanned items to a member in one operation.
 
     The quartermaster scans multiple barcodes, building a list, then submits
-    the batch. Each item is processed based on its tracking type:
-    - **Individual + available** → permanently assigned
+    the distribution. Each item is processed based on its tracking type and
+    explicit requested operation:
+    - **Individual + available** → ongoing assignment or temporary loan
     - **Pool item** → units issued from the pool
     - Items that are already assigned or unavailable will fail individually
 
@@ -2998,7 +3001,7 @@ async def batch_checkout_items(
     **Requires permission: inventory.manage**
     """
     service = InventoryService(db)
-    result = await service.batch_checkout(
+    result = await service.distribute_items(
         user_id=request.user_id,
         organization_id=current_user.organization_id,
         performed_by=current_user.id,
@@ -3009,7 +3012,7 @@ async def batch_checkout_items(
     if result["successful"] > 0:
         await log_audit_event(
             db=db,
-            event_type="inventory_batch_checkout",
+            event_type="inventory_distribute_items",
             event_category="inventory",
             severity="info",
             event_data={
@@ -3024,10 +3027,28 @@ async def batch_checkout_items(
 
         await _publish_inventory_event(
             str(current_user.organization_id),
-            "batch_checkout",
+            "distribute_items",
             {"user_id": str(request.user_id), "successful": result["successful"]},
         )
 
+    return result
+
+
+@router.post("/transfer", response_model=InventoryTransferResponse)
+async def transfer_inventory_item(
+    request: InventoryTransferRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """Explicitly transfer custody; stale confirmations fail rather than overwrite."""
+    service = InventoryService(db)
+    result, error = await service.transfer_item_holding(
+        **request.model_dump(),
+        organization_id=current_user.organization_id,
+        performed_by=current_user.id,
+    )
+    if error:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=error)
     return result
 
 
@@ -5076,7 +5097,7 @@ async def inventory_websocket(
         { "type": "inventory_changed", "action": "...", "data": {...} }
 
     Actions: item_created, item_updated, item_assigned, item_unassigned,
-             item_checked_out, item_checked_in, batch_checkout, batch_return,
+             item_checked_out, item_checked_in, distribute_items, batch_return,
              pool_issued, pool_returned, item_retired, write_off_reviewed
     """
     allowed_origins = settings.ALLOWED_ORIGINS

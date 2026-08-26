@@ -14,6 +14,8 @@ import type {
   StorageAreaResponse,
   StorageAreaCreate,
   EquipmentRequestItem,
+  RequestTypeLiteral,
+  RequestPriorityLiteral,
   WriteOffRequestItem,
   InventoryItemCreate,
   InventoryItemBulkEntry,
@@ -27,8 +29,9 @@ import type {
   CategoryPresetApplyResponse,
   InventoryCategoryCreate,
   ScanLookupResponse,
-  BatchCheckoutRequest,
-  BatchCheckoutResponse,
+  DistributeItemsRequest,
+  DistributeItemsResponse,
+  InventoryTransferRequest,
   BatchReturnRequest,
   BatchReturnResponse,
   LabelFormat,
@@ -297,6 +300,31 @@ export const inventoryService = {
     return response.data;
   },
 
+  async getDepartureClearances(params?: { status?: string }): Promise<{
+    clearances: Array<{
+      id: string;
+      user_id: string;
+      status: string;
+      items_outstanding: number;
+      initiated_at: string;
+      return_deadline?: string;
+    }>;
+    total: number;
+  }> {
+    const response = await api.get('/inventory/clearances', { params });
+    return response.data as {
+      clearances: Array<{
+        id: string;
+        user_id: string;
+        status: string;
+        items_outstanding: number;
+        initiated_at: string;
+        return_deadline?: string;
+      }>;
+      total: number;
+    };
+  },
+
   async getLowStockItems(): Promise<LowStockAlert[]> {
     const response = await api.get<LowStockAlert[]>('/inventory/low-stock');
     return asArray(response.data);
@@ -460,9 +488,13 @@ export const inventoryService = {
     return response.data;
   },
 
-  async batchCheckout(data: BatchCheckoutRequest): Promise<BatchCheckoutResponse> {
-    const response = await api.post<BatchCheckoutResponse>('/inventory/batch-checkout', data);
+  async distributeItems(data: DistributeItemsRequest): Promise<DistributeItemsResponse> {
+    const response = await api.post<DistributeItemsResponse>('/inventory/distribute-items', data);
     return response.data;
+  },
+
+  async transferItem(data: InventoryTransferRequest): Promise<void> {
+    await api.post('/inventory/transfer', data);
   },
 
   async batchReturn(data: BatchReturnRequest): Promise<BatchReturnResponse> {
@@ -564,8 +596,8 @@ export const inventoryService = {
     item_id?: string | undefined;
     category_id?: string | undefined;
     quantity?: number;
-    request_type?: string;
-    priority?: string;
+    request_type?: RequestTypeLiteral;
+    priority?: RequestPriorityLiteral;
     reason?: string | undefined;
   }): Promise<{ id: string; item_name: string; status: string; message: string }> {
     const response = await api.post<{ id: string; item_name: string; status: string; message: string }>(

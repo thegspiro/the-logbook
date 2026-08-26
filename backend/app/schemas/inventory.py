@@ -10,7 +10,14 @@ from typing import Annotated, Any, Dict, List, Literal, Optional
 from urllib.parse import urlsplit
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    StringConstraints,
+    field_validator,
+    model_validator,
+)
 
 from app.schemas.base import UTCResponseBase
 
@@ -931,6 +938,41 @@ class MaintenanceRecordCreate(MaintenanceRecordBase):
 
     item_id: UUID
 
+    @model_validator(mode="after")
+    def validate_maintenance_workflow(self):
+        """Keep scheduling, inspection, and completion records internally consistent."""
+        inspection_types = {
+            "inspection",
+            "routine_inspection",
+            "advanced_inspection",
+            "independent_inspection",
+        }
+        maintenance_type = str(self.maintenance_type)
+        if hasattr(self.maintenance_type, "value"):
+            maintenance_type = self.maintenance_type.value
+
+        if not self.description or not self.description.strip():
+            raise ValueError("Task description or performed work is required")
+        if (
+            not self.is_completed
+            and not self.scheduled_date
+            and maintenance_type != "repair"
+        ):
+            raise ValueError("Due date is required for scheduled work")
+        if self.completed_date and not self.is_completed:
+            raise ValueError("Completion date is only allowed for completed work")
+        if self.is_completed and not self.completed_date:
+            raise ValueError("Completion date is required for completed work")
+        if (
+            maintenance_type in inspection_types
+            and self.is_completed
+            and self.passed is None
+        ):
+            raise ValueError("A pass/fail result is required for inspections")
+        if maintenance_type not in inspection_types and self.passed is not None:
+            raise ValueError("Pass/fail result is only allowed for inspections")
+        return self
+
 
 class MaintenanceRecordUpdate(BaseModel):
     """Schema for updating a maintenance record"""
@@ -1212,35 +1254,89 @@ class BatchScanItem(BaseModel):
         default=None, description="Item ID for direct lookup (bypasses code search)"
     )
     quantity: int = Field(default=1, ge=1, description="Quantity (for pool items)")
+    operation: Literal["permanent_assignment", "temporary_loan"] = Field(
+        ...,
+        description="Operation for individually tracked items; pool items follow issuance policy",
+    )
+    expected_return_at: Optional[datetime] = Field(
+        default=None, description="Required expected return date for temporary loans"
+    )
+
+    @model_validator(mode="after")
+    def validate_temporary_loan(self):
+        if self.operation == "temporary_loan":
+            if self.expected_return_at is None:
+                raise ValueError("expected_return_at is required for a temporary loan")
+            now = datetime.now(timezone.utc)
+            expected = self.expected_return_at
+            if expected.tzinfo is None:
+                expected = expected.replace(tzinfo=timezone.utc)
+            if expected <= now:
+                raise ValueError("expected_return_at must be in the future")
+        return self
 
 
-class BatchCheckoutRequest(BaseModel):
-    """Request to assign/checkout/issue multiple scanned items to a member at once"""
+class DistributeItemsRequest(BaseModel):
+    """Request to distribute multiple scanned items to a member at once."""
 
     user_id: UUID
     items: List[BatchScanItem] = Field(..., min_length=1)
     reason: Optional[FreeText] = None
 
 
-class BatchCheckoutResultItem(BaseModel):
-    """Result for a single item in a batch checkout"""
+class DistributeItemsResultItem(BaseModel):
+    """Result for a single distributed item."""
 
     code: str
     item_name: str
     item_id: str
-    action: str  # "assigned", "checked_out", "issued"
+    action: str  # "permanent_assignment", "temporary_loan", or "issued"
     success: bool
     error: Optional[str] = None
+    conflict: Optional["InventoryHoldingConflict"] = None
 
 
-class BatchCheckoutResponse(BaseModel):
-    """Response from a batch checkout operation"""
+class InventoryHoldingConflict(BaseModel):
+    """The active chain-of-custody record that prevented distribution."""
+
+    holder_id: UUID
+    holder_name: str
+    holding_type: Literal["assignment", "checkout"]
+    record_id: UUID
+    held_since: datetime
+    expected_return_date: Optional[datetime] = None
+
+
+class InventoryTransferRequest(BaseModel):
+    """Explicit, confirmed transfer of an already-held individual item."""
+
+    item_id: UUID
+    new_holder_id: UUID
+    current_holder_id: UUID
+    current_record_id: UUID
+    holding_type: Literal["assignment", "checkout"]
+    return_condition: ReturnConditionLiteral
+    transfer_reason: FreeText
+    immediate: bool
+
+
+class InventoryTransferResponse(BaseModel):
+    item_id: UUID
+    old_record_id: UUID
+    new_record_id: UUID
+    old_holder_id: UUID
+    new_holder_id: UUID
+    holding_type: Literal["assignment", "checkout"]
+
+
+class DistributeItemsResponse(BaseModel):
+    """Response from an item distribution operation."""
 
     user_id: UUID
     total_scanned: int
     successful: int
     failed: int
-    results: List[BatchCheckoutResultItem]
+    results: List[DistributeItemsResultItem]
 
 
 class BatchReturnItem(BaseModel):
