@@ -143,6 +143,17 @@ in the org is now reachable (in `completion_date` descending order, capped
 only by the caller's own `limit` param), not just those inside a fixed
 recent-records scan. Response shape is unchanged.
 
+**Revised after Codex review:** the first version of this fix's SQL location
+clause checked only `location IS NULL`, but the Python fallback logic
+(`not r.location`) also treats `location=""` as missing — an input the
+training schemas allow. A completed record with `location=""` and no
+`location_id` was silently excluded from the SQL scan by the initial fix,
+the opposite of what the endpoint exists to surface. Corrected to
+`location IS NULL OR location = ''` (alongside `location_id IS NULL`),
+matching the Python check exactly. Guard test:
+`test_empty_string_location_is_included_in_the_sql_predicate` compiles the
+statement with literal binds and asserts both branches are present.
+
 ### CMP-5 — LOW — `report_type`'s accepted set drifted between schema, model comment, and prior audit docs — ✅ FIXED
 
 **What:** the service's runtime check accepts `"monthly"`, `"annual"`, **and
@@ -297,6 +308,9 @@ no column change.
 - `tests/test_compliance_officer.py::TestContributedHoursService::test_hours_still_match_when_member_id_is_a_uuid_object` — a member whose
   `.id` is a real `uuid.UUID` object still has training/admin hours matched
   correctly; would have failed before the `str()` normalization fix.
+- `tests/test_compliance_officer.py::TestGetIncompleteRecords::test_empty_string_location_is_included_in_the_sql_predicate` — the SQL
+  predicate matches `location = ''` as well as `location IS NULL`, guarding
+  the Codex-caught regression in the first version of CMP-4's fix.
 
 ## Completion gate
 
@@ -306,5 +320,5 @@ no column change.
 | `black --check` (changed files)                   | clean                   |
 | `isort --check-only` (changed files)              | clean                   |
 | `python3 scripts/validate_migrations.py --strict` | PASSED (no migrations)  |
-| backend tests, compliance scope (`-k compliance`) | 269 passed, 1 skipped   |
-| backend tests, full suite                         | 8833 passed, 22 skipped |
+| backend tests, compliance scope (`-k compliance`) | 270 passed, 1 skipped   |
+| backend tests, full suite                         | 8834 passed, 22 skipped |
