@@ -200,7 +200,17 @@ describe('MyEquipmentPage', () => {
     });
   });
 
-  it('submits an equipment request after searching and selecting an item', async () => {
+  it.each([
+    ['checkout', 'low'],
+    ['checkout', 'normal'],
+    ['checkout', 'high'],
+    ['issuance', 'low'],
+    ['issuance', 'normal'],
+    ['issuance', 'high'],
+    ['purchase', 'low'],
+    ['purchase', 'normal'],
+    ['purchase', 'high'],
+  ] as const)('submits backend-supported request option %s at %s priority', async (requestType, priority) => {
     mockGetItems.mockResolvedValue({ items: [availableItem], total: 1 });
     const user = userEvent.setup();
     renderWithRouter(<MyEquipmentPage />);
@@ -209,12 +219,20 @@ describe('MyEquipmentPage', () => {
     await user.click(screen.getByRole('button', { name: /Request Equipment/ }));
     await user.type(await screen.findByPlaceholderText('Search available items...'), 'Radio');
     await user.click(await screen.findByRole('button', { name: /Spare Radio/ }));
+    const selects = screen.getAllByRole('combobox');
+    expect(selects).toHaveLength(2);
+    const requestTypeSelect = selects[0]!;
+    const prioritySelect = selects[1]!;
+    await user.selectOptions(requestTypeSelect, requestType);
+    await user.selectOptions(prioritySelect, priority);
     await user.click(screen.getByRole('button', { name: /Submit Request/ }));
 
     await waitFor(() => expect(mockCreateEquipmentRequest).toHaveBeenCalledTimes(1));
     expect(mockCreateEquipmentRequest.mock.calls[0]?.[0]).toMatchObject({
       item_id: 'avail-1',
       item_name: 'Spare Radio',
+      request_type: requestType,
+      priority,
     });
   });
 });
