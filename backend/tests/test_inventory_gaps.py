@@ -466,7 +466,12 @@ class TestEquipmentRequestFulfillment:
     ):
         org_id, user_id, member_id = setup_org_and_user
         svc = InventoryService(db_session)
-        _, item = await _make_pool_item(svc, org_id, user_id, quantity=0)
+        # A pool item cannot be *created* empty (create_item requires
+        # quantity >= 1), so the shortage under test is depletion after the
+        # fact -- which is the only way stock actually reaches zero.
+        _, item = await _make_pool_item(svc, org_id, user_id, quantity=1)
+        item.quantity = 0
+        await db_session.flush()
         req = EquipmentRequest(
             organization_id=org_id,
             requester_id=member_id,
@@ -495,7 +500,9 @@ class TestEquipmentRequestFulfillment:
     ):
         org_id, user_id, member_id = setup_org_and_user
         svc = InventoryService(db_session)
-        _, item = await _make_pool_item(svc, org_id, user_id, quantity=0)
+        _, item = await _make_pool_item(svc, org_id, user_id, quantity=1)
+        item.quantity = 0
+        await db_session.flush()
         req = EquipmentRequest(
             organization_id=org_id,
             requester_id=member_id,
