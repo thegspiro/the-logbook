@@ -258,6 +258,93 @@ class TestValidateRanks:
         )
         assert await OperationalRankService(db).validate_ranks("org-1") == []
 
+    async def test_accepts_builtin_missing_from_older_organization_rows(self):
+        db = _db(
+            [
+                _rows([("captain",)]),
+                _rows(
+                    [
+                        SimpleNamespace(
+                            id="u1", first_name="Ed", last_name="Medic", rank="emt"
+                        )
+                    ]
+                ),
+            ]
+        )
+
+        assert await OperationalRankService(db).validate_ranks("org-1") == []
+        assert db.execute.await_count == 2
+
+    async def test_accepts_custom_organization_rank(self):
+        db = _db(
+            [
+                _rows([("station_captain",)]),
+                _rows(
+                    [
+                        SimpleNamespace(
+                            id="u1",
+                            first_name="Sam",
+                            last_name="Custom",
+                            rank="station_captain",
+                        )
+                    ]
+                ),
+            ]
+        )
+
+        assert await OperationalRankService(db).validate_ranks("org-1") == []
+
+    @pytest.mark.parametrize("legacy_rank", ["Captain", "  captain  "])
+    async def test_surfaces_recognizable_noncanonical_legacy_values(self, legacy_rank):
+        db = _db(
+            [
+                _rows([]),
+                _rows(
+                    [
+                        SimpleNamespace(
+                            id="u1",
+                            first_name="Casey",
+                            last_name="Legacy",
+                            rank=legacy_rank,
+                        )
+                    ]
+                ),
+            ]
+        )
+
+        assert await OperationalRankService(db).validate_ranks("org-1") == [
+            {
+                "member_id": "u1",
+                "member_name": "Casey Legacy",
+                "rank_code": legacy_rank,
+            }
+        ]
+
+    async def test_surfaces_truly_unknown_value(self):
+        db = _db(
+            [
+                _rows([("station_captain",)]),
+                _rows(
+                    [
+                        SimpleNamespace(
+                            id="u1",
+                            first_name="Una",
+                            last_name="Known",
+                            rank="ghost_rank",
+                        )
+                    ]
+                ),
+            ]
+        )
+
+        assert await OperationalRankService(db).validate_ranks("org-1") == [
+            {
+                "member_id": "u1",
+                "member_name": "Una Known",
+                "rank_code": "ghost_rank",
+            }
+        ]
+
 
 class TestParamedicIsNotARankGrant:
     """A medic seat is earned by a licence, not conferred by stripes.
