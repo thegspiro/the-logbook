@@ -324,6 +324,20 @@ class TestOrgScopedQueries:
         )
         assert "organization_id" in str(captured["stmt"])
 
+    async def test_clock_out_by_category_query_is_org_scoped(self):
+        """`user_id`-scoping alone happens to make this safe against the two
+        current callers (the NFC station and the member's own QR re-scan both
+        pass `current_user.id`), but the query itself carried no org anchor —
+        the letter of CLAUDE.md Pitfall #14a regardless of exploitability.
+        Locks the org filter in so a future caller can't reopen the gap by
+        construction."""
+        db, captured = self._capturing_db(_one(None))
+        with pytest.raises(ValueError, match="No active session found"):
+            await AdminHoursService(db).clock_out_by_category(
+                category_id="cat-1", user_id="u1", organization_id="org-1"
+            )
+        assert "organization_id" in str(captured["stmt"])
+
 
 class TestBulkApproveSeparationOfDuties:
     """AH-4: the bulk-approve path must honor the same no-self-approval control
