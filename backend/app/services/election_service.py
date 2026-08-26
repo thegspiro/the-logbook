@@ -255,20 +255,14 @@ class ElectionService:
         (``member_class`` / ``member_status``), with a fallback to direct
         role-slug matching for custom/specific slugs.
 
-        "operational" and "administrative" read the member's **class**, which
-        is a separate question from how long they have been a member. They
-        previously read ``membership_type``, which held class and status in one
-        field and so could only answer "operational" as ``== "active"`` —
-        silently excluding every probationary, life and retired member from a
-        category that plainly includes them. A department putting a bylaws
-        question to its operational members was not reaching its life members.
-
-        "regular", "life" and "probationary" name a **status** and stay
-        status checks; they mean what they say.
+        The built-in voter categories preserve their legacy election meaning.
+        Status-based categories also require operational class; otherwise an
+        administrative member with regular standing would gain access to
+        ballots restricted to active/life members before the split.
 
         role_types can include:
         - "all" - everyone is eligible
-        - "operational" - members whose class is operational, at any status
+        - "operational" - operational members in regular (active) standing
         - "administrative" - members whose class is administrative
         - "regular" - regular or life members (the non-probationary voting body)
         - "life" - life members only (membership_type "life")
@@ -301,9 +295,14 @@ class ElectionService:
         member_class = (member_class or "").strip().lower()
         member_status = (member_status or "").strip().lower()
 
-        # Class checks — what kind of member, regardless of standing.
+        # Preserve the voter-category contract from the legacy fused field.
+        # Requiring both axes prevents administrative regulars and operational
+        # prospective/retired members from receiving restricted ballot tokens.
         if "operational" in role_types:
-            if member_class == MemberClass.OPERATIONAL:
+            if (
+                member_class == MemberClass.OPERATIONAL
+                and member_status == MemberStatus.REGULAR
+            ):
                 return True
 
         if "administrative" in role_types:
@@ -314,18 +313,25 @@ class ElectionService:
             if member_class == MemberClass.SOCIAL:
                 return True
 
-        # Status checks — where on the ladder, regardless of class.
-        # "regular" is the non-probationary voting body: regular and life.
         if "regular" in role_types:
-            if member_status in (MemberStatus.REGULAR, MemberStatus.LIFE):
+            if member_class == MemberClass.OPERATIONAL and member_status in (
+                MemberStatus.REGULAR,
+                MemberStatus.LIFE,
+            ):
                 return True
 
         if "life" in role_types:
-            if member_status == MemberStatus.LIFE:
+            if (
+                member_class == MemberClass.OPERATIONAL
+                and member_status == MemberStatus.LIFE
+            ):
                 return True
 
         if "probationary" in role_types:
-            if member_status == MemberStatus.PROBATIONARY:
+            if (
+                member_class == MemberClass.OPERATIONAL
+                and member_status == MemberStatus.PROBATIONARY
+            ):
                 return True
 
         # Fallback: check for direct role slug matches

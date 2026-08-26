@@ -2093,6 +2093,24 @@ Not fixed for the same reason as the entries above and below: pagination is a
 response-envelope/frontend-contract change, not a drop-in. (Security review
 DOC-9, `docs/security-review/DOC-10-documents-legal.md`.)
 
+## Equipment Checks — `get_item_deployments` Gates on `.view`, Its Sibling on `.manage` (2026-08-26)
+
+`GET .../deployments` (`get_item_deployments` — which checklist positions
+carry a given inventory item) is gated on `inventory.view`, while
+`update_deployed_lot`'s equivalent write on the same deployed-lot data
+requires `inventory.manage`. Both belong to the same request; a caller who
+can only view inventory can still read a full cross-checklist deployment
+map, one tier looser than the write it feeds.
+
+Not fixed here: unlike the mechanical INV-7 fix, this pairing has no
+identically-shaped sibling already gated the tighter way to copy from, and
+tightening a read gate is a behavior change — an existing `inventory.view`
+holder's screen would start 403ing — that a security review does not make
+unilaterally. `tests/test_permission_gate_composition.py`'s `ALLOWED` dict
+already records this pairing as deliberately unadjudicated, for the same
+reason. (Security review EC-14 residual,
+`docs/security-review/EC-14-equipment-check-shifts.md`.)
+
 ## Process
 
 The review loop (see [review-log.md](./review-log.md)) advances through one area
