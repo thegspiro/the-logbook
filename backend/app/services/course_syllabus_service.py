@@ -30,6 +30,7 @@ from app.schemas.course_cohort import (
     CourseClassCreate,
     CourseClassUpdate,
 )
+from app.utils.model_updates import apply_updates
 from app.utils.org_scoping import assert_in_org
 from app.utils.scheduling_dates import offsets_from_meeting_pattern
 
@@ -253,18 +254,18 @@ class CourseSyllabusService:
         await self._validate_references(data, organization_id)
 
         updates = data.model_dump(exclude_unset=True)
-        for field, value in updates.items():
-            if field in (
-                "class_course_id",
-                "instructor_id",
-                "location_id",
-                "category_id",
-                "requirement_id",
-                "phase_id",
-            ):
-                setattr(course_class, field, str(value) if value else None)
-            else:
-                setattr(course_class, field, value)
+        for field in (
+            "class_course_id",
+            "instructor_id",
+            "location_id",
+            "category_id",
+            "requirement_id",
+            "phase_id",
+        ):
+            if field in updates:
+                updates[field] = str(updates[field]) if updates[field] else None
+
+        apply_updates(course_class, updates)
 
         await self.db.commit()
         await self.db.refresh(course_class)
