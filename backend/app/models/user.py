@@ -39,6 +39,36 @@ Taxonomy
   Individuals who have expressed interest in joining but have not yet
   been converted into full members (no User record, no department
   credentials).
+
+Account status is a fourth axis, and it is not one of the above
+-------------------------------------------------------------
+``User.status`` (``UserStatus``) is the *account and roster* lifecycle: may
+this person sign in, and do they appear as a current member.
+``User.member_status`` is the *membership ladder*: how far through the
+department's own progression they are.  Three spellings appear in both —
+``probationary``, ``retired``, and the non-participating case — which is
+precisely why they get read as one thing and are not.
+
+Nothing reconciles them, deliberately.  A probationary member (ladder) has an
+active account (status); a member on leave (status) is still a regular member
+(ladder).  ``POST /member-status/{id}/status`` writes ``status`` and never
+touches ``membership_type``, and that is correct — but it means a rule that
+consults only membership sees a retired member as a regular operational one.
+Any gate about *participation* must ask both; ``ShiftEligibilityService``
+does.
+
+``membership_type`` cannot be enum-constrained
+----------------------------------------------
+It looks like it should be, and it must not be.  Besides the seven legacy
+values, ``POST /member-status/{id}/tier`` writes organization-configurable
+membership **tier ids** into this same column, validated against
+``organization.settings["membership_tiers"]`` — and the shipped defaults
+already include ``senior``.  Constraining the column would reject
+configuration the application itself offers.  This is also why
+``split_membership_type`` returns ``(None, None)`` for a value it does not
+recognise rather than defaulting: guessing "regular operational member" would
+enrol every custom tier in bodies they were never part of, including ballot
+electorates.
 """
 
 import enum
