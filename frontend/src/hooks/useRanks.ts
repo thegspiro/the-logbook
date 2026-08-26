@@ -1,7 +1,9 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { ranksService } from '../services/api';
 import type { OperationalRankResponse } from '../services/api';
 import { getCachedRanks, setCachedRanks, invalidateRanksCache } from './ranksCache';
+import type { RanksCacheKey } from './ranksCache';
+import { useAuthStore } from '../stores/authStore';
 
 export { invalidateRanksCache } from './ranksCache';
 
@@ -13,36 +15,59 @@ export { invalidateRanksCache } from './ranksCache';
  * Only active ranks are returned by default.
  */
 export function useRanks(activeOnly = true) {
-  const [ranks, setRanks] = useState<OperationalRankResponse[]>(getCachedRanks() ?? []);
-  const [loading, setLoading] = useState(getCachedRanks() === null);
+  const organizationId = useAuthStore((state) => state.user?.organization_id ?? null);
+  const cacheKey = useMemo<RanksCacheKey>(() => ({ activeOnly, organizationId }), [activeOnly, organizationId]);
+  const cacheKeyString = JSON.stringify([organizationId, activeOnly]);
+  const currentKeyRef = useRef(cacheKeyString);
+  currentKeyRef.current = cacheKeyString;
+
+  const initialCachedRanks = getCachedRanks(cacheKey);
+  const [rankState, setRankState] = useState<{ key: string; ranks: OperationalRankResponse[] }>(() => ({
+    key: cacheKeyString,
+    ranks: initialCachedRanks ?? [],
+  }));
+  const [loadingState, setLoadingState] = useState({ key: cacheKeyString, loading: initialCachedRanks === null });
+
+  // Never expose results belonging to the previous filter or organization,
+  // even during the render before the key-change effect runs.
+  const ranks = useMemo(
+    () => (rankState.key === cacheKeyString ? rankState.ranks : (getCachedRanks(cacheKey) ?? [])),
+    [cacheKey, cacheKeyString, rankState]
+  );
+  const loading = loadingState.key === cacheKeyString ? loadingState.loading : getCachedRanks(cacheKey) === null;
 
   const fetchRanks = useCallback(async () => {
     try {
-      setLoading(true);
+      setLoadingState({ key: cacheKeyString, loading: true });
       const data = await ranksService.getRanks(activeOnly ? { is_active: true } : undefined);
-      setCachedRanks(data);
-      setRanks(data);
+      setCachedRanks(cacheKey, data);
+      if (currentKeyRef.current === cacheKeyString) {
+        setRankState({ key: cacheKeyString, ranks: data });
+      }
     } catch {
       // Fall back to empty; dropdowns will have no options until retry
     } finally {
-      setLoading(false);
+      if (currentKeyRef.current === cacheKeyString) {
+        setLoadingState({ key: cacheKeyString, loading: false });
+      }
     }
-  }, [activeOnly]);
+  }, [activeOnly, cacheKey, cacheKeyString]);
 
   useEffect(() => {
-    const cachedRanks = getCachedRanks();
+    const cachedRanks = getCachedRanks(cacheKey);
     if (cachedRanks !== null) {
-      setRanks(cachedRanks);
-      setLoading(false);
+      setRankState({ key: cacheKeyString, ranks: cachedRanks });
+      setLoadingState({ key: cacheKeyString, loading: false });
       return;
     }
+    setRankState({ key: cacheKeyString, ranks: [] });
     void fetchRanks();
-  }, [fetchRanks]);
+  }, [cacheKey, cacheKeyString, fetchRanks]);
 
   const refetch = useCallback(async () => {
-    invalidateRanksCache();
+    invalidateRanksCache(cacheKey);
     await fetchRanks();
-  }, [fetchRanks]);
+  }, [cacheKey, fetchRanks]);
 
   const rankOptions = ranks.map((r: OperationalRankResponse) => ({ value: r.rank_code, label: r.display_name }));
 
