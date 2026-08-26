@@ -23,7 +23,7 @@ is wanted: writing "embroidery" onto every row would claim a decision no
 quartermaster has made yet, and the resolver reads NULL the same way.
 
 Revision ID: d7f4a2c81b93
-Revises: a1f7c34e9b02
+Revises: d7a4e9c31b60
 Create Date: 2026-08-26 01:30:00.000000
 """
 
@@ -32,7 +32,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision = "d7f4a2c81b93"
-down_revision = "a1f7c34e9b02"
+down_revision = "d7a4e9c31b60"
 branch_labels = None
 depends_on = None
 

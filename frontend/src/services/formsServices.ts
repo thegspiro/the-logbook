@@ -244,6 +244,7 @@ export interface DocumentRecord {
   file_name: string;
   file_size: number;
   file_type?: string;
+  has_file: boolean;
   status: string;
   version: number;
   tags?: string;

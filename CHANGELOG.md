@@ -7,6 +7,103 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### An EMT could not sign up for the EMT seat on an ambulance (2026-08-26)
+
+**Fixed**
+
+- **The apparatus editor wrote a seat name nothing in the system grants.**
+  `ApparatusBasicPage` offered the EMT seat as the literal string `"EMT"`, and
+  built every ambulance from `['driver', 'EMT']`. Every other writer — the
+  shift template form, the scheduling settings, `ShiftPosition` on the wire,
+  `operational_ranks.eligible_positions`, the rank editor — spells that seat
+  `"ems"`.
+
+  Nothing grants `"EMT"`: not a rank, not a held position, not a completed
+  training program. `ShiftEligibilityService` intersects the member's granted
+  seats with the shift's own seats case-sensitively, so the intersection was
+  always empty and `POST /scheduling/shifts/{id}/signup` answered 403. An
+  ambulance created from the defaults had an EMT seat that no EMT could take.
+
+  **No setting could unblock it.** Adding `EMT` to the org's `open_positions`,
+  or marking the shift `open_to_all_members` — the flag that bypasses the rank
+  and membership-type checks entirely — both put `"EMT"` into the eligible set
+  and still failed, because `ShiftPosition` has no `EMT` member and the client
+  can only ever send `ems`. The seat was unnameable by the API that had to
+  fill it.
+
+  It was invisible on screen, which is why it read as the application being
+  broken rather than as a configuration problem: `POSITION_LABELS` maps `EMT`,
+  `EMS` and `ems` all to the label "EMT", so the seat rendered normally. The
+  label was also where the bad value came from — the editor built its option
+  text by capitalising the raw value, so `'ems'` would have displayed as "Ems"
+  and someone stored the label as the value to fix the display.
+
+  The seat _name_ is now settled on write by `canonical_position` in
+  `app/utils/positions.py`, alongside the seat _shape_ that helper already
+  owned, so no writer can reintroduce a spelling the signup API cannot name.
+  `ApparatusBasicPage` stores canonical values and takes its option text from
+  the shared `POSITION_LABELS`. `20260826_1200_d7a4e9c31b60` settles the rows
+  already stored across `basic_apparatus.positions`, `shifts.positions`,
+  `shift_templates.positions` and `apparatus.crew_positions` — the half a
+  write-side fix cannot do, since an ambulance created last month keeps its
+  unfillable seat until its row is rewritten. A department's own custom seat
+  round-trips verbatim; only known spellings fold.
+
+  `tests/test_position_slots.py` asserts the canonical set is exactly
+  `ShiftPosition` and parses `ApparatusBasicPage.tsx` for a non-canonical seat
+  value, so the two vocabularies cannot drift apart again.
+
+### Documents could be uploaded but never downloaded, and a dozen other Documents/Legal fixes (2026-08-26)
+
+**Added**
+
+- A Download action is now available wherever a document is listed —
+  members with `documents.manage` could previously upload and delete a
+  file but never open or download what was uploaded. It is hidden on
+  generated documents (published meeting minutes, property returns) that
+  have no separate file to download, and it applies the same folder access
+  rules as viewing the document.
+- A document uploaded with no folder previously had no way to be seen,
+  downloaded, or managed afterward — the upload succeeded, but the file
+  vanished from the page. An "All Documents" view now lists every document
+  the caller can see, including ones with no folder.
+
+**Fixed**
+
+- A malformed folder or document id in a request returned a server error
+  instead of a clean rejection.
+- Editing a folder to clear its parent, its owner, or a document's folder
+  reported success but silently left the old value in place. Clearing now
+  actually clears.
+- A folder could be moved into itself or one of its own sub-folders,
+  making it disappear from folder navigation. This is now rejected with a
+  clear error.
+- Clearing a folder's color or icon to blank could leave it in a state
+  that broke every later attempt to list or view it. Both fields now
+  require a value, matching how every folder already has one.
+- Uploading a document with the Document Name field left blank
+  (advertised in the UI as optional) returned an error instead of
+  defaulting to the file name, as promised.
+- A failed receipt-printer connection returned the printer's configured
+  network address to whoever triggered the print, including staff with no
+  access to printer settings. It now returns a generic message.
+- Publishing two proposed revisions of the same legal document (privacy
+  policy or terms of service) at nearly the same time could leave both
+  marked live, with the public page showing whichever write happened to
+  land last. Publishing is now serialized.
+- A department publishing custom privacy-policy and terms-of-service text
+  with different revision dates could have publishing one silently change
+  the date shown on the other. Each document keeps its own date, and an
+  org that migrated from the old shared-date format no longer has a stale
+  date resurface after it republishes.
+- The public legal-text endpoint keeps returning its original `lastUpdated`
+  field alongside the newer per-document dates, so an external client built
+  against the documented shape does not lose a field it may still rely on.
+- A tampered or corrupted document record could theoretically resolve to a
+  file outside the caller's own organization's upload directory; the
+  download endpoint now confines every resolved path to that directory.
+- Downloading a document is now recorded in the audit log.
+
 ### Every member could read every other member's notifications (2026-08-25)
 
 **Fixed**

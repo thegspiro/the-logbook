@@ -143,6 +143,25 @@ describe('documentsService', () => {
     });
   });
 
+  // --- downloadDocument ---
+  describe('downloadDocument', () => {
+    it('should GET /documents/:id/download as a blob', async () => {
+      const blob = new Blob(['file bytes'], { type: 'application/pdf' });
+      mockGet.mockResolvedValueOnce({ data: blob });
+
+      const result = await documentsService.downloadDocument('d1');
+
+      expect(mockGet).toHaveBeenCalledWith('/documents/d1/download', { responseType: 'blob' });
+      expect(result).toBe(blob);
+    });
+
+    it('should propagate errors (e.g. a document with no file, or cross-org 404)', async () => {
+      mockGet.mockRejectedValueOnce(new Error('Not Found'));
+
+      await expect(documentsService.downloadDocument('d1')).rejects.toThrow('Not Found');
+    });
+  });
+
   // --- updateDocument ---
   describe('updateDocument', () => {
     it('should PATCH /documents/:id with update data', async () => {
