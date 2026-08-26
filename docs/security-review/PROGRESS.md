@@ -16,7 +16,8 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-PR #1906 (feature 24, meetings & minutes) — open, awaiting CI/review.
+None — PR #1906 (feature 24, meetings & minutes) merged. Feature 25
+(messaging & notifications) starting next.
 
 ---
 
@@ -68,7 +69,7 @@ data-carrying modules, then the supporting infrastructure.
 | 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ✅ #1903        |
 | 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ✅              |
 | 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ✅              |
-| 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ⏳              |
+| 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ✅              |
 | 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ⬜              |
 | 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                         | ⬜              |
 | 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                         | ⬜              |
@@ -905,3 +906,26 @@ re-runs the whole-codebase sweeps against whatever has landed since.
   backend suite pass. Findings doc:
   `docs/security-review/MM-24-meetings-minutes.md`. PR #1906 opened and
   subscribed. Next: 25 messaging & notifications, once #1906 merges.
+- **24 Meetings & minutes ✅ merged** — PR #1906 merged 2026-08-26. Codex
+  review caught two real issues before merge, both fixed: (P1) the MM-3 fix
+  locked only the `Event` fetch in `create_from_event`, reasoning it would
+  always be the transaction's first query so the subsequent plain `Meeting`
+  existence-check SELECT would establish its own accurate snapshot — Codex
+  correctly identified this as unsafe in production, since an earlier query
+  elsewhere in the same session (e.g. `get_current_user` resolving the
+  caller) can already have established the REPEATABLE READ snapshot first;
+  fixed by making the existence check a `.with_for_update()` locking read
+  too, matching every other Pitfall #27 fix in this codebase — lock the
+  parent/uniqueness row and separately make the check itself a locking
+  read, never rely on query ordering. (P2) the MM-6 audit-log fix for
+  `update_action_item` logged `changed_fields` from the raw client payload,
+  but the service silently restricts applied fields to
+  `{status, completion_notes}` on approved minutes, so a client sending
+  `description` there would have it no-opped while the audit log still
+  claimed it changed; fixed by having the service expose a non-mapped
+  `applied_fields` attribute (same convention as
+  `MeetingsService.attach_creator_names`) and having the endpoint log that
+  instead. Both replied to and resolved on their review threads. Full local
+  completion gate re-verified green (203/203 meetings-scoped, 8910/8910
+  full suite) before the final push; CI came back green with no further
+  comments. Next: 25 messaging & notifications.
