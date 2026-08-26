@@ -72,6 +72,7 @@ from app.services.skills_testing_service import (
     build_template_snapshot,
     calculate_test_result,
     is_pending_validation,
+    lock_attempt_capacity,
     notify_candidate_result_available,
     notify_candidate_result_voided,
     redact_test_for_view,
@@ -1978,6 +1979,26 @@ async def validate_test(
     **Authentication required**
     **Requires permission: training.manage**
     """
+    # SEC: acquire the attempt-cap serialization lock before locking this
+    # specific test row. Two officers validating different pending tests for
+    # the same candidate+requirement must not each hold their own test row
+    # locked and then deadlock waiting on the capacity lock in the opposite
+    # order — that scan touches every test row for that candidate+requirement,
+    # including whichever one the other transaction is holding
+    # (Codex review, PR #1901). A non-locking peek is enough to learn which
+    # requirement, if any, this test is linked to; assert_attempts_remaining
+    # re-acquires the same lock further down, which is then a no-op.
+    requirement_peek = (
+        await db.execute(
+            select(SkillTest.requirement_id).where(
+                SkillTest.id == str(test_id),
+                SkillTest.organization_id == current_user.organization_id,
+            )
+        )
+    ).first()
+    if requirement_peek and requirement_peek.requirement_id:
+        await lock_attempt_capacity(db, requirement_peek.requirement_id)
+
     test = await _lock_test_for_transition(db, test_id, current_user.organization_id)
 
     if not test:

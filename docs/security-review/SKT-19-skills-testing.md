@@ -196,18 +196,41 @@ independently corroborated by all three review agents on this pass.
 (bulk-validate makes concurrent validation calls the normal case, not a rare
 one, per `_lock_test_for_transition`'s own docstring).
 **Fix:** two changes, per Pitfall #27's "both halves are required" rule:
-(1) added a `SELECT RequirementProgress.id ... FOR UPDATE` lock-acquisition
-query on the candidate's `RequirementProgress` row for this requirement,
-before either existing read — the one stable parent shared by every attempt
-against the requirement, mirroring the pattern already used in
-`training_program_service.update_requirement_progress`; (2) added
+(1) added a lock-acquisition query, before either existing read, on the one
+row guaranteed to exist for every capped test; (2) added
 `.with_for_update(of=SkillTest)` to the existing `spent` count query itself,
 since acquiring a lock elsewhere does not refresh an already-open
 REPEATABLE-READ snapshot — a plain `SELECT` after the lock could still answer
-from before the other transaction committed. Guard tests:
-`TestCapacityLocking` in `tests/test_skill_test_attempt_limit.py`, asserting
+from before the other transaction committed.
+
+**Revised after Codex review** (two comments on the initial version of this
+fix, both correct): the lock was originally acquired on the candidate's
+`RequirementProgress` row, mirroring `training_program_service`'s existing
+pattern for the same class of race. Codex found that pattern doesn't
+transfer here — **(P1)** a `RequirementProgress` row only exists once the
+candidate has an _active enrollment_, which nothing on the
+link-a-requirement-to-a-test path requires (`_validate_requirement_link`
+only checks the requirement belongs to the organization), so the lock could
+silently lock nothing at all; **(P2)** `validate_test` locks the specific
+`SkillTest` row being validated (`_lock_test_for_transition`) _before_
+calling into the capacity check, so two officers validating different
+pending tests for the same candidate+requirement could each hold their own
+test row locked and then deadlock waiting on the capacity lock in the
+opposite order — the `spent` count's own locking scan touches every test row
+for that candidate+requirement, including whichever one the other
+transaction is holding.
+
+Fixed by locking `TrainingRequirement` instead (the row `assert_attempts_remaining`
+already fetches first, and the one guaranteed to exist for every
+`requirement_id` that reaches this point — extracted into a small
+`lock_attempt_capacity` helper), and by having `validate_test` acquire that
+lock via a non-locking peek at the test's `requirement_id` _before_ it locks
+the test row — fixing the lock ordering, not just the lock target. Guard
+tests: `TestCapacityLocking` in `tests/test_skill_test_attempt_limit.py`, asserting
 both the lock query and the count query render `FOR UPDATE` against the
-correct tables.
+correct tables, and `tests/test_skill_test_validate_locking.py`, asserting
+`validate_test` acquires the capacity lock before the per-test row lock (and
+skips it entirely when the peek finds no linked requirement).
 
 ## Schema & migration notes
 
@@ -227,15 +250,22 @@ n/a — no model or migration changes this iteration.
 - `tests/test_skill_test_return.py::TestGuards::test_an_officer_may_not_return_their_own_submission` —
   same assertion for `return_test_for_correction`.
 - `tests/test_skill_test_attempt_limit.py::TestCapacityLocking` — asserts the
-  `RequirementProgress` lock query and the `SkillTest` spent-count query both
+  `TrainingRequirement` lock query and the `SkillTest` spent-count query both
   compile with `FOR UPDATE` against the expected table, so a future edit that
   drops either half of the fix fails loudly rather than silently
   reintroducing the race.
+- `tests/test_skill_test_validate_locking.py` (new file) — asserts
+  `validate_test` acquires the capacity lock (via a non-locking peek at the
+  test's `requirement_id`) before it locks the specific test row, and that it
+  skips the capacity lock entirely when the peek finds no linked
+  requirement. Guards against the lock-ordering deadlock Codex flagged
+  (P2) reintroducing.
 - Existing tests in `test_skill_test_attempt_limit.py` and
-  `test_skill_test_validation.py` updated to account for the new
-  lock-acquisition `db.execute()` call now running earlier in
-  `assert_attempts_remaining`'s call sequence (mock result-queue reordering,
-  not a behavior change to those tests' own assertions).
+  `test_skill_test_validation.py` updated twice: once to account for the
+  original fix's extra lock-acquisition `db.execute()` call, then again
+  after the Codex-review revision collapsed that into the existing
+  requirement fetch (mock result-queue reordering, not a behavior change to
+  those tests' own assertions).
 
 ## Completion gate
 
@@ -245,5 +275,5 @@ n/a — no model or migration changes this iteration.
 | `black --check` (changed files)                   | clean                          |
 | `isort --check-only` (changed files)              | clean                          |
 | `python3 scripts/validate_migrations.py --strict` | PASSED (no migrations touched) |
-| backend tests, skills-testing scope (`-k skill`)  | 380 passed, 1 skipped          |
-| backend tests, full suite                         | 8814 passed, 22 skipped        |
+| backend tests, skills-testing scope (`-k skill`)  | 391 passed, 1 skipped          |
+| backend tests, full suite                         | 8816 passed, 22 skipped        |

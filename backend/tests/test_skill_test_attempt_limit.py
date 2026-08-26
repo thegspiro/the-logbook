@@ -36,10 +36,11 @@ def _scalar_one(value):
 class QueuedSession:
     """AsyncSession stand-in returning queued results in call order.
 
-    assert_attempts_remaining issues up to four queries in a fixed order: the
-    requirement, a RequirementProgress row lock (result discarded), the
-    satisfied-progress count, then the spent-attempt count. Short-circuits
-    mean later ones may never run.
+    assert_attempts_remaining issues up to three queries in a fixed order: a
+    locking read of the requirement (which doubles as the attempt-cap
+    serialization lock — see ``lock_attempt_capacity``), the satisfied-progress
+    count, then the spent-attempt count. Short-circuits mean later ones may
+    never run.
     """
 
     def __init__(self, results):
@@ -67,8 +68,8 @@ async def _run(db):
 class TestAttemptLimit:
     async def test_blocks_once_the_cap_is_spent(self):
         db = QueuedSession(
-            [_scalar_one(_requirement(2)), MagicMock(), _scalar(0), _scalar(2)]
-        )  # 2 of 2 used
+            [_scalar_one(_requirement(2)), _scalar(0), _scalar(2)]  # 2 of 2 used
+        )
 
         with pytest.raises(AttemptLimitReached) as exc:
             await _run(db)
@@ -77,15 +78,13 @@ class TestAttemptLimit:
 
     async def test_allows_while_attempts_remain(self):
         db = QueuedSession(
-            [_scalar_one(_requirement(3)), MagicMock(), _scalar(0), _scalar(2)]
-        )  # 2 of 3 used
+            [_scalar_one(_requirement(3)), _scalar(0), _scalar(2)]  # 2 of 3 used
+        )
         await _run(db)
 
     async def test_blocks_when_attempts_exceed_the_cap(self):
         """Defensive: data predating enforcement can already be over the cap."""
-        db = QueuedSession(
-            [_scalar_one(_requirement(2)), MagicMock(), _scalar(0), _scalar(5)]
-        )
+        db = QueuedSession([_scalar_one(_requirement(2)), _scalar(0), _scalar(5)])
 
         with pytest.raises(AttemptLimitReached):
             await _run(db)
@@ -125,11 +124,11 @@ class TestAttemptLimit:
     # rationed, so recertification testing stays possible.
     async def test_satisfied_requirement_is_exempt(self):
         db = QueuedSession(
-            [_scalar_one(_requirement(1)), MagicMock(), _scalar(1)]
-        )  # already completed
+            [_scalar_one(_requirement(1)), _scalar(1)]  # already completed
+        )
         await _run(db)
         # Stops before counting spent attempts.
-        assert db.calls == 3
+        assert db.calls == 2
 
 
 class TestCapacityLocking:
@@ -139,11 +138,14 @@ class TestCapacityLocking:
     also be a locking read, or it can still answer from the snapshot taken
     before the lock was acquired."""
 
-    async def test_the_progress_row_is_locked_before_any_count(self):
+    async def test_the_requirement_row_is_locked_before_any_count(self):
+        """The requirement fetch doubles as the capacity-serialization lock
+        (`lock_attempt_capacity`) — it must be a locking read on
+        TrainingRequirement, not a plain SELECT."""
         captured = []
 
         db = MagicMock()
-        results = [_scalar_one(_requirement(2)), MagicMock(), _scalar(0), _scalar(0)]
+        results = [_scalar_one(_requirement(2)), _scalar(0), _scalar(0)]
 
         async def execute(stmt, *_args, **_kwargs):
             captured.append(stmt)
@@ -152,9 +154,8 @@ class TestCapacityLocking:
         db.execute = execute
         await _run(db)
 
-        # requirement lookup, then the RequirementProgress lock, in that order.
-        assert "FOR UPDATE" in str(captured[1])
-        assert "requirement_progress" in str(captured[1]).lower()
+        assert "FOR UPDATE" in str(captured[0])
+        assert "training_requirements" in str(captured[0]).lower()
 
     async def test_the_spent_count_is_itself_a_locking_read(self):
         """A plain SELECT here would still answer from the transaction's
@@ -162,7 +163,7 @@ class TestCapacityLocking:
         captured = []
 
         db = MagicMock()
-        results = [_scalar_one(_requirement(2)), MagicMock(), _scalar(0), _scalar(0)]
+        results = [_scalar_one(_requirement(2)), _scalar(0), _scalar(0)]
 
         async def execute(stmt, *_args, **_kwargs):
             captured.append(stmt)
