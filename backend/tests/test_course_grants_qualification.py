@@ -123,12 +123,19 @@ class TestTheCourseFormOffersOnlyKnownQualifications:
         )
 
 
+@pytest.mark.integration
 class TestSyncFromTrainingRecord:
     """Completing a course grants the qualification it certifies.
 
     Verified against a real database rather than a mocked session: the whole
     point of this path is the row it writes, and a fake that accepts any
     ``add`` would pass whether or not the grant landed.
+
+    Marked ``integration`` because of that: CI's unit job runs
+    ``-m "not integration"`` with no database service, and ``db_session``
+    cannot connect there. The validation and enum-sync classes above are pure
+    logic and deliberately stay in the fast job, so a course form that drifts
+    out of the backend vocabulary still fails without waiting for a database.
     """
 
     async def _org_and_member(self, db):
