@@ -168,7 +168,8 @@ async def delete_rank(
     **Permissions required:** settings.manage
     """
     service = OperationalRankService(db)
-    deleted = await service.delete_rank(rank_id, current_user.organization_id)
+    async with handle_service_errors("Failed to delete rank"):
+        deleted = await service.delete_rank(rank_id, current_user.organization_id)
     ensure_found(deleted, "Rank")
 
 
