@@ -1,6 +1,6 @@
 # Security Review 11 — Inventory
 
-**Prefix:** `INV` · **Iteration:** 11 · **Reviewed:** 2026-08-26 · **PR:** (opened this iteration)
+**Prefix:** `INV` · **Iteration:** 11 · **Reviewed:** 2026-08-26 · **PR:** [#1835](https://github.com/thegspiro/the-logbook/pull/1835)
 
 **Backend:** `api/v1/endpoints/inventory.py` (132 routes, 1 WebSocket),
 `services/inventory_service.py` (~7,450 L), `api/v1/endpoints/labels.py`
