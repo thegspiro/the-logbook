@@ -1520,15 +1520,17 @@ export interface BatchScanItem {
   code: string;
   item_id?: string;
   quantity?: number;
+  operation: 'permanent_assignment' | 'temporary_loan';
+  expected_return_at?: string;
 }
 
-export interface BatchCheckoutRequest {
+export interface DistributeItemsRequest {
   user_id: string;
   items: BatchScanItem[];
   reason?: string;
 }
 
-export interface BatchCheckoutResultItem {
+export interface DistributeItemsResultItem {
   code: string;
   item_name: string;
   item_id: string;
@@ -1558,12 +1560,12 @@ export interface InventoryTransferRequest {
   immediate: boolean;
 }
 
-export interface BatchCheckoutResponse {
+export interface DistributeItemsResponse {
   user_id: string;
   total_scanned: number;
   successful: number;
   failed: number;
-  results: BatchCheckoutResultItem[];
+  results: DistributeItemsResultItem[];
 }
 
 export interface BatchReturnItem {

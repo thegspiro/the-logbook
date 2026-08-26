@@ -8,7 +8,7 @@ The Inventory module tracks department equipment, member assignments, pool/quant
 
 - **Individual & Pool Items** — Track individual items (assigned to one person) and pool/quantity items (shared stock)
 - **Item Issuances** — Full lifecycle for pool item issue/return with user, quantity, reason, and condition tracking
-- **Batch Operations** — `batch_checkout` and `batch_return` for multiple items in a single request
+- **Batch Operations** — `distribute_items` and `batch_return` for multiple items in a single request
 - **Live Search** — Real-time item lookup by name, barcode, serial number, or asset tag during scan operations
 - **Departure Clearance** — Full lifecycle (initiate → resolve line items → complete) for tracking property return when members depart
 - **Write-Off Approval** — Supervisor-reviewed workflow for lost, stolen, damaged, or obsolete items before they are removed from inventory
@@ -211,7 +211,7 @@ GET    /api/v1/inventory/checkout/overdue                 # Overdue checkouts
 
 ```
 GET    /api/v1/inventory/lookup                          # Search by code/name
-POST   /api/v1/inventory/batch-checkout                  # Batch checkout
+POST   /api/v1/inventory/distribute-items                  # Item distribution
 POST   /api/v1/inventory/batch-return                    # Batch return
 ```
 
@@ -403,7 +403,7 @@ Browser  ←  WebSocket  ←  FastAPI endpoint  ←  Redis pub/sub  ←  API mut
 { "type": "inventory_changed", "action": "<action>", "data": { ... } }
 ```
 
-Actions: `item_created`, `item_updated`, `item_assigned`, `item_unassigned`, `item_checked_out`, `item_checked_in`, `batch_checkout`, `batch_return`, `pool_issued`, `pool_returned`, `item_retired`, `write_off_reviewed`
+Actions: `item_created`, `item_updated`, `item_assigned`, `item_unassigned`, `item_checked_out`, `item_checked_in`, `distribute_items`, `batch_return`, `pool_issued`, `pool_returned`, `item_retired`, `write_off_reviewed`
 
 ### Graceful Degradation
 

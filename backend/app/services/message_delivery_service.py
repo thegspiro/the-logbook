@@ -142,7 +142,10 @@ class MessageDeliveryService:
                         category=MESSAGE_CATEGORY,
                         subject=message.title,
                         message=message.body,
-                        action_url="/messages",
+                        # Take the member straight to the communication rather
+                        # than making them find it again in the inbox. The
+                        # detail endpoint still enforces audience visibility.
+                        action_url=f"/messages/{message.id}",
                         delivered=True,
                         expires_at=message.expires_at,
                         notification_metadata={
