@@ -1254,35 +1254,55 @@ class BatchScanItem(BaseModel):
         default=None, description="Item ID for direct lookup (bypasses code search)"
     )
     quantity: int = Field(default=1, ge=1, description="Quantity (for pool items)")
+    operation: Literal["permanent_assignment", "temporary_loan"] = Field(
+        ...,
+        description="Operation for individually tracked items; pool items follow issuance policy",
+    )
+    expected_return_at: Optional[datetime] = Field(
+        default=None, description="Required expected return date for temporary loans"
+    )
+
+    @model_validator(mode="after")
+    def validate_temporary_loan(self):
+        if self.operation == "temporary_loan":
+            if self.expected_return_at is None:
+                raise ValueError("expected_return_at is required for a temporary loan")
+            now = datetime.now(timezone.utc)
+            expected = self.expected_return_at
+            if expected.tzinfo is None:
+                expected = expected.replace(tzinfo=timezone.utc)
+            if expected <= now:
+                raise ValueError("expected_return_at must be in the future")
+        return self
 
 
-class BatchCheckoutRequest(BaseModel):
-    """Request to assign/checkout/issue multiple scanned items to a member at once"""
+class DistributeItemsRequest(BaseModel):
+    """Request to distribute multiple scanned items to a member at once."""
 
     user_id: UUID
     items: List[BatchScanItem] = Field(..., min_length=1)
     reason: Optional[FreeText] = None
 
 
-class BatchCheckoutResultItem(BaseModel):
-    """Result for a single item in a batch checkout"""
+class DistributeItemsResultItem(BaseModel):
+    """Result for a single distributed item."""
 
     code: str
     item_name: str
     item_id: str
-    action: str  # "assigned", "checked_out", "issued"
+    action: str  # "permanent_assignment", "temporary_loan", or "issued"
     success: bool
     error: Optional[str] = None
 
 
-class BatchCheckoutResponse(BaseModel):
-    """Response from a batch checkout operation"""
+class DistributeItemsResponse(BaseModel):
+    """Response from an item distribution operation."""
 
     user_id: UUID
     total_scanned: int
     successful: int
     failed: int
-    results: List[BatchCheckoutResultItem]
+    results: List[DistributeItemsResultItem]
 
 
 class BatchReturnItem(BaseModel):

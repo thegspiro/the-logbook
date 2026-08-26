@@ -2,13 +2,13 @@
  * Inventory Scan Modal
  *
  * A modal that lets the quartermaster scan barcodes (or type codes manually)
- * to build a list of items, then submit them as a batch checkout or batch return.
+ * to build a list of items, then submit an item distribution or batch return.
  *
  * Flow:
- *  1. Open modal from a member's profile ("Check-out Items" or "Return Items")
- *  2. Scan/type a code → item appears in the list instantly
- *  3. Repeat for all items
- *  4. Review the list, then tap "Confirm" to submit the batch
+ *  1. Open the modal for a member ("Distribute Items" or "Return Items")
+ *  2. For distribution, choose an ongoing assignment or temporary loan
+ *  3. Scan/type codes to build the item list
+ *  4. Review each item's operation, then confirm
  *
  * Camera scanning uses the native BarcodeDetector API when available
  * (Chrome/Edge 83+, Android) for best performance, and falls back to
@@ -24,7 +24,7 @@ import {
   inventoryService,
   ScanLookupResponse,
   ScanLookupResult,
-  BatchCheckoutResponse,
+  DistributeItemsResponse,
   BatchReturnResponse,
 } from '../services/api';
 import { useHtml5Scanner } from '../hooks/useHtml5Scanner';
@@ -70,10 +70,10 @@ type ActiveScanner = 'native' | 'html5' | null;
 interface InventoryScanModalProps {
   isOpen: boolean;
   onClose: () => void;
-  mode: 'checkout' | 'return';
+  mode: 'distribute' | 'return';
   userId: string;
   memberName: string;
-  onComplete?: (result: BatchCheckoutResponse | BatchReturnResponse) => void;
+  onComplete?: (result: DistributeItemsResponse | BatchReturnResponse) => void;
 }
 
 // ── Helpers ────────────────────────────────────────────────────────
@@ -102,6 +102,10 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
   const [showDropdown, setShowDropdown] = useState(false);
   const [searchLoading, setSearchLoading] = useState(false);
   const [activeDropdownIndex, setActiveDropdownIndex] = useState(-1);
+  const [distributionOperation, setDistributionOperation] = useState<'permanent_assignment' | 'temporary_loan' | null>(
+    null
+  );
+  const [expectedReturnAt, setExpectedReturnAt] = useState('');
   // Whether the native BarcodeDetector is present AND supports our formats.
   // Verified asynchronously on mount; until then we use the html5-qrcode path.
   const [nativeDetectorReady, setNativeDetectorReady] = useState(false);
@@ -353,6 +357,8 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
       setSearchResults([]);
       setShowDropdown(false);
       setActiveDropdownIndex(-1);
+      setDistributionOperation(null);
+      setExpectedReturnAt('');
     }
   }, [isOpen, stopCamera]);
 
@@ -564,7 +570,7 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
     setScannedItems((prev) => prev.map((si) => (si.itemId === itemId ? { ...si, returnCondition: condition } : si)));
   };
 
-  // ── Batch submit ─────────────────────────────────────────────
+  // ── Distribution/return submit ───────────────────────────────
 
   const confirmAndSubmit = () => {
     if (scannedItems.length === 0) return;
@@ -577,13 +583,17 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
     setSubmitting(true);
 
     try {
-      if (mode === 'checkout') {
-        const response = await inventoryService.batchCheckout({
+      if (mode === 'distribute' && distributionOperation) {
+        const response = await inventoryService.distributeItems({
           user_id: userId,
           items: scannedItems.map((si) => ({
             code: si.code,
             item_id: si.itemId,
             quantity: si.quantity,
+            operation: distributionOperation,
+            ...(distributionOperation === 'temporary_loan'
+              ? { expected_return_at: new Date(expectedReturnAt).toISOString() }
+              : {}),
           })),
         });
         setResults(response.results);
@@ -610,7 +620,7 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
 
   // ── Render ───────────────────────────────────────────────────
 
-  const title = mode === 'checkout' ? 'Assign Items' : 'Return Items';
+  const title = mode === 'distribute' ? 'Distribute Items' : 'Return Items';
   const showResults = results !== null;
 
   return (
@@ -621,11 +631,54 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
           <Package className="text-theme-text-muted h-5 w-5" />
           <div>
             <span className="text-theme-text-muted text-sm">
-              {mode === 'checkout' ? 'Assigning to' : 'Returning from'}:
+              {mode === 'distribute' ? 'Distributing to' : 'Returning from'}:
             </span>
             <span className="text-theme-text-primary ml-2 font-medium">{memberName}</span>
           </div>
         </div>
+
+        {mode === 'distribute' && !showResults && (
+          <fieldset className="border-theme-surface-border space-y-3 rounded-lg border p-3">
+            <legend className="text-theme-text-primary px-1 text-sm font-medium">Intended duration</legend>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {(
+                [
+                  ['permanent_assignment', 'Ongoing assignment'],
+                  ['temporary_loan', 'Temporary loan'],
+                ] as const
+              ).map(([value, label]) => (
+                <label
+                  key={value}
+                  className="border-theme-surface-border flex cursor-pointer gap-2 rounded-md border p-3"
+                >
+                  <input
+                    type="radio"
+                    name="distribution-operation"
+                    checked={distributionOperation === value}
+                    onChange={() => setDistributionOperation(value)}
+                  />
+                  <span className="text-theme-text-primary text-sm font-medium">{label}</span>
+                </label>
+              ))}
+            </div>
+            {distributionOperation === 'temporary_loan' && (
+              <label className="text-theme-text-secondary block text-sm">
+                Expected return
+                <input
+                  type="datetime-local"
+                  value={expectedReturnAt}
+                  min={new Date().toISOString().slice(0, 16)}
+                  onChange={(event) => setExpectedReturnAt(event.target.value)}
+                  className="form-input mt-1 block w-full"
+                  required
+                />
+              </label>
+            )}
+            <p className="text-theme-text-muted text-xs">
+              Quantity-tracked pool stock follows the pool issuance policy regardless of this choice.
+            </p>
+          </fieldset>
+        )}
 
         {/* Results view */}
         {showResults ? (
@@ -933,12 +986,16 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
                 </button>
                 <button
                   onClick={confirmAndSubmit}
-                  disabled={submitting}
+                  disabled={
+                    submitting ||
+                    (mode === 'distribute' &&
+                      (!distributionOperation || (distributionOperation === 'temporary_loan' && !expectedReturnAt)))
+                  }
                   className="btn-primary flex items-center gap-2 text-sm"
                 >
                   {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-                  {mode === 'checkout'
-                    ? `Assign ${scannedItems.length} Item${scannedItems.length !== 1 ? 's' : ''}`
+                  {mode === 'distribute'
+                    ? `Review ${scannedItems.length} Item${scannedItems.length !== 1 ? 's' : ''}`
                     : `Return ${scannedItems.length} Item${scannedItems.length !== 1 ? 's' : ''}`}
                 </button>
               </div>
@@ -950,13 +1007,28 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
           <div className="absolute inset-0 z-10 flex items-center justify-center rounded-lg bg-black/50">
             <DialogPanel onClose={() => setShowConfirm(false)} className="mx-4 max-w-sm p-5">
               <h4 className="text-theme-text-primary mb-2 font-medium">
-                Confirm {mode === 'checkout' ? 'Assignment' : 'Return'}
+                Confirm {mode === 'distribute' ? 'Distribution' : 'Return'}
               </h4>
               <p className="text-theme-text-secondary mb-4 text-sm">
-                {mode === 'checkout'
-                  ? `Assign ${scannedItems.length} item${scannedItems.length !== 1 ? 's' : ''} to ${memberName}?`
+                {mode === 'distribute'
+                  ? `Distribute ${scannedItems.length} item${scannedItems.length !== 1 ? 's' : ''} to ${memberName}?`
                   : `Return ${scannedItems.length} item${scannedItems.length !== 1 ? 's' : ''} from ${memberName}?`}
               </p>
+              {mode === 'distribute' && (
+                <ul className="text-theme-text-secondary mb-4 space-y-1 text-sm">
+                  {scannedItems.map((item) => (
+                    <li key={item.itemId}>
+                      {item.itemName}
+                      {item.trackingType === 'pool' && item.quantity > 1 ? ` ×${item.quantity}` : ''}:{' '}
+                      {item.trackingType === 'pool'
+                        ? 'pool issuance'
+                        : distributionOperation === 'temporary_loan'
+                          ? 'temporary loan'
+                          : 'permanent assignment'}
+                    </li>
+                  ))}
+                </ul>
+              )}
               <div className="flex justify-end gap-3">
                 <button
                   onClick={() => setShowConfirm(false)}
