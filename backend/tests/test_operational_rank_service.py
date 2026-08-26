@@ -14,6 +14,7 @@ from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
 import pytest
+from fastapi import HTTPException
 from sqlalchemy.exc import IntegrityError
 
 from app.api.v1.endpoints import operational_ranks as ranks_ep
@@ -60,6 +61,7 @@ def _db(side_effect):
     db.flush = AsyncMock()
     db.refresh = AsyncMock()
     db.delete = AsyncMock()
+    db.rollback = AsyncMock()
     db.begin_nested = MagicMock(return_value=_nested_transaction_cm())
     return db
 
@@ -181,16 +183,134 @@ class TestCrud:
                 "r1", RankUpdate(rank_code="lieutenant"), "org-1"
             )
 
+    async def test_assigned_rank_code_rename_migrates_members(self):
+        rank = SimpleNamespace(id="r1", rank_code="captain", display_name="Captain")
+        db = _db([_one(rank), _one(None), MagicMock()])
+
+        out = await OperationalRankService(db).update_rank(
+            "r1", RankUpdate(rank_code="company_captain"), "org-1"
+        )
+
+        migration = db.execute.await_args_list[2].args[0]
+        compiled = migration.compile(compile_kwargs={"literal_binds": True})
+        sql = str(compiled)
+        assert "UPDATE users SET rank='company_captain'" in sql
+        assert "users.organization_id = 'org-1'" in sql
+        assert "users.rank = 'captain'" in sql
+        assert out.rank_code == "company_captain"
+        db.commit.assert_awaited_once()
+
+    async def test_rank_rename_is_tenant_isolated(self):
+        rank = SimpleNamespace(id="r1", rank_code="captain", display_name="Captain")
+        db = _db([_one(rank), _one(None), MagicMock()])
+
+        await OperationalRankService(db).update_rank(
+            "r1", RankUpdate(rank_code="commander"), "tenant-a"
+        )
+
+        migration = db.execute.await_args_list[2].args[0]
+        sql = str(migration.compile(compile_kwargs={"literal_binds": True}))
+        assert "users.organization_id = 'tenant-a'" in sql
+
+    async def test_rank_rename_rolls_back_member_migration_on_commit_failure(self):
+        rank = SimpleNamespace(id="r1", rank_code="captain", display_name="Captain")
+        db = _db([_one(rank), _one(None), MagicMock()])
+        db.commit.side_effect = RuntimeError("database unavailable")
+
+        with pytest.raises(RuntimeError, match="database unavailable"):
+            await OperationalRankService(db).update_rank(
+                "r1", RankUpdate(rank_code="commander"), "org-1"
+            )
+
+        db.rollback.assert_awaited_once()
+
+    async def test_display_name_rename_preserves_permission_and_shift_keys(self):
+        positions = ["captain", "officer"]
+        rank = SimpleNamespace(
+            id="r1",
+            rank_code="captain",
+            display_name="Captain",
+            eligible_positions=positions,
+        )
+        db = _db([_one(rank)])
+        permissions_before = get_rank_default_permissions(rank.rank_code)
+
+        out = await OperationalRankService(db).update_rank(
+            "r1", RankUpdate(display_name="Company Captain"), "org-1"
+        )
+
+        assert get_rank_default_permissions(out.rank_code) == permissions_before
+        assert out.eligible_positions == positions
+        assert db.execute.await_count == 1  # no member migration for a label edit
+
     async def test_delete_missing_returns_false(self):
         db = _db([_one(None)])
         assert await OperationalRankService(db).delete_rank("r1", "org-1") is False
 
     async def test_delete_succeeds(self):
-        rank = SimpleNamespace(id="r1")
-        db = _db([_one(rank)])
+        rank = SimpleNamespace(id="r1", rank_code="captain", display_name="Captain")
+        db = _db([_one(rank), _scalar(0)])
         assert await OperationalRankService(db).delete_rank("r1", "org-1") is True
         db.delete.assert_awaited()
         db.commit.assert_awaited()
+
+    async def test_delete_rejects_active_or_historical_member_usage(self):
+        rank = SimpleNamespace(id="r1", rank_code="captain", display_name="Captain")
+        db = _db([_one(rank), _scalar(2)])
+
+        with pytest.raises(ValueError, match="assigned to 2 members.*Reassign"):
+            await OperationalRankService(db).delete_rank("r1", "org-1")
+
+        usage_query = db.execute.await_args_list[1].args[0]
+        sql = str(usage_query.compile(compile_kwargs={"literal_binds": True}))
+        assert "users.organization_id = 'org-1'" in sql
+        assert "users.rank = 'captain'" in sql
+        # No status/deleted filters: historical references deliberately count.
+        assert "status" not in sql.lower()
+        assert "deleted_at" not in sql.lower()
+        db.delete.assert_not_awaited()
+        db.commit.assert_not_awaited()
+
+    async def test_delete_endpoint_returns_visible_assignment_error(self):
+        rank = SimpleNamespace(id="r1", rank_code="captain", display_name="Captain")
+        db = _db([_one(rank), _scalar(1)])
+        user = SimpleNamespace(organization_id="org-1")
+
+        with pytest.raises(HTTPException) as exc_info:
+            await ranks_ep.delete_rank(uuid4(), db=db, current_user=user)
+
+        assert exc_info.value.status_code == 400
+        assert "assigned to 1 member" in exc_info.value.detail
+
+    async def test_update_endpoint_returns_renamed_rank_after_member_migration(self):
+        rank_id = uuid4()
+        org_id = uuid4()
+        now = datetime.now()
+        rank = SimpleNamespace(
+            id=str(rank_id),
+            organization_id=str(org_id),
+            rank_code="captain",
+            display_name="Captain",
+            description=None,
+            sort_order=3,
+            is_active=True,
+            eligible_positions=["captain", "officer"],
+            created_at=now,
+            updated_at=now,
+        )
+        db = _db([_one(rank), _one(None), MagicMock()])
+        user = SimpleNamespace(organization_id=str(org_id))
+
+        response = await ranks_ep.update_rank(
+            rank_id,
+            RankUpdate(rank_code="company_captain"),
+            db=db,
+            current_user=user,
+        )
+
+        assert response.rank_code == "company_captain"
+        assert response.eligible_positions == ["captain", "officer"]
+        db.commit.assert_awaited_once()
 
 
 class TestReorder:
