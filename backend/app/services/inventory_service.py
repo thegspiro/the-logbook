@@ -2635,6 +2635,17 @@ class InventoryService:
                         elif maintenance_data.get("next_due_date"):
                             item.next_inspection_due = maintenance_data["next_due_date"]
 
+                    # Completion never silently returns equipment to service. A
+                    # failed inspection must remain unavailable; successful work
+                    # has a separate, deliberate "Return to service" action.
+                    if maintenance_data.get("passed") is False:
+                        item.status = ItemStatus.IN_MAINTENANCE
+                        item.condition = ItemCondition.OUT_OF_SERVICE
+            elif maintenance_data.get("maintenance_type") == "repair":
+                item = await self._get_item_locked(item_id, organization_id)
+                if item:
+                    item.status = ItemStatus.IN_MAINTENANCE
+
             await self.db.commit()
             await self.db.refresh(maintenance)
             return maintenance, None
