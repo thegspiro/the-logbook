@@ -51,9 +51,39 @@ router = APIRouter(prefix="/public/v1", tags=["public-portal"])
 # ============================================================================
 
 
-async def check_portal_enabled(config: PublicPortalConfig):
-    """Check if the public portal is enabled"""
+async def check_portal_enabled(config: PublicPortalConfig, db: AsyncSession):
+    """Check that the portal is switched on *and* the module is enabled.
+
+    Two switches, and both have to hold. ``config.enabled`` is the portal's
+    own on/off; ``public_info`` is whether the department runs the Public
+    Information module at all. They are stored independently, so turning the
+    module off under Settings > Modules left ``config.enabled`` true and this
+    router kept serving organization details, events and member statistics to
+    every issued API key — an external website, still publishing from a
+    feature the department had retired.
+
+    Gating the authenticated ``/api/v1/public-portal`` router is not enough on
+    its own: this router is mounted separately at ``/api/public/v1`` by
+    ``main.py``, its callers authenticate with an API key rather than a
+    session, and ``require_module`` resolves the organization from a session.
+    So the module check belongs here, resolved from the key's organization.
+
+    503 for both, deliberately. The caller is a website, not an officer: it
+    cannot act on the difference between "switched off" and "not licensed",
+    and 503 is the status it already handles for a portal that is off.
+    """
     if not config.enabled:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Public portal is currently disabled",
+        )
+
+    from app.services.organization_service import OrganizationService
+
+    enabled_modules = (
+        await OrganizationService(db).get_enabled_modules(config.organization_id)
+    ).enabled_modules
+    if "public_info" not in enabled_modules:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Public portal is currently disabled",
@@ -204,7 +234,7 @@ async def get_organization_info(
                 status_code=status.HTTP_404_NOT_FOUND, detail="Organization not found"
             )
 
-        await check_portal_enabled(config)
+        await check_portal_enabled(config, db)
 
         # Get organization
         result = await db.execute(
@@ -310,7 +340,7 @@ async def get_organization_stats(
                 status_code=status.HTTP_404_NOT_FOUND, detail="Organization not found"
             )
 
-        await check_portal_enabled(config)
+        await check_portal_enabled(config, db)
 
         # Get organization
         result = await db.execute(
@@ -409,7 +439,7 @@ async def get_public_events(
                 status_code=status.HTTP_404_NOT_FOUND, detail="Organization not found"
             )
 
-        await check_portal_enabled(config)
+        await check_portal_enabled(config, db)
 
         # Query public-facing events (community events, public education)
         org_id_str = str(api_key.organization_id)

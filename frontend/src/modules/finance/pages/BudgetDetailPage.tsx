@@ -25,12 +25,19 @@ interface BudgetInfoProps {
 }
 
 const BudgetInfoCard: React.FC<BudgetInfoProps> = ({ budget, categoryName }) => {
-  const remaining = budget.amountBudgeted - budget.amountSpent - budget.amountEncumbered;
+  const remaining = Number(budget.amountBudgeted) - Number(budget.amountSpent) - Number(budget.amountEncumbered);
   const pctUsed =
-    budget.amountBudgeted > 0 ? ((budget.amountSpent + budget.amountEncumbered) / budget.amountBudgeted) * 100 : 0;
-  const spentPct = budget.amountBudgeted > 0 ? Math.min((budget.amountSpent / budget.amountBudgeted) * 100, 100) : 0;
+    Number(budget.amountBudgeted) > 0
+      ? ((Number(budget.amountSpent) + Number(budget.amountEncumbered)) / Number(budget.amountBudgeted)) * 100
+      : 0;
+  const spentPct =
+    Number(budget.amountBudgeted) > 0
+      ? Math.min((Number(budget.amountSpent) / Number(budget.amountBudgeted)) * 100, 100)
+      : 0;
   const encPct =
-    budget.amountBudgeted > 0 ? Math.min((budget.amountEncumbered / budget.amountBudgeted) * 100, 100 - spentPct) : 0;
+    Number(budget.amountBudgeted) > 0
+      ? Math.min((Number(budget.amountEncumbered) / Number(budget.amountBudgeted)) * 100, 100 - spentPct)
+      : 0;
 
   return (
     <div className="card p-6">
@@ -48,15 +55,17 @@ const BudgetInfoCard: React.FC<BudgetInfoProps> = ({ budget, categoryName }) => 
       <div className="mb-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
         <div>
           <p className="text-theme-text-secondary text-sm">Budgeted</p>
-          <p className="text-theme-text-primary text-xl font-bold">{formatCurrencyWhole(budget.amountBudgeted)}</p>
+          <p className="text-theme-text-primary text-xl font-bold">
+            {formatCurrencyWhole(Number(budget.amountBudgeted))}
+          </p>
         </div>
         <div>
           <p className="text-theme-text-secondary text-sm">Spent</p>
-          <p className="text-xl font-bold text-blue-600">{formatCurrencyWhole(budget.amountSpent)}</p>
+          <p className="text-xl font-bold text-blue-600">{formatCurrencyWhole(Number(budget.amountSpent))}</p>
         </div>
         <div>
           <p className="text-theme-text-secondary text-sm">Encumbered</p>
-          <p className="text-xl font-bold text-yellow-600">{formatCurrencyWhole(budget.amountEncumbered)}</p>
+          <p className="text-xl font-bold text-yellow-600">{formatCurrencyWhole(Number(budget.amountEncumbered))}</p>
         </div>
         <div>
           <p className="text-theme-text-secondary text-sm">Remaining</p>
