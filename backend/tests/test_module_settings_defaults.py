@@ -188,3 +188,76 @@ async def test_resolving_an_empty_settings_dict_yields_the_declared_defaults():
     resolved = await _service()._resolve_module_settings({})
 
     assert resolved.model_dump() == ModuleSettings().model_dump()
+
+
+# ── "configured" — the difference the navigation cannot infer ──────────────
+#
+# An organization that has deliberately switched every optional module off
+# returns exactly what an organization that has never configured anything
+# returns: an enabled list carrying nothing but the essentials. The frontend
+# used to conclude "unconfigured" from that shape and fall back to showing
+# everything, so the department that had switched it all off saw every gate
+# pass and every disabled route render. The flag is what tells them apart.
+
+
+def _org(settings):
+    return SimpleNamespace(id="org-a", name="Test FD", settings=settings)
+
+
+async def _enabled_modules(settings):
+    service = _service()
+    service.get_organization = AsyncMock(return_value=_org(settings))
+    # The unconfigured paths fall through to the OnboardingStatus lookup, so
+    # that query has to answer "no row" rather than an AsyncMock whose
+    # children are themselves coroutines.
+    service.db.execute = AsyncMock(
+        return_value=SimpleNamespace(
+            scalars=lambda: SimpleNamespace(first=lambda: None)
+        )
+    )
+    return await service.get_enabled_modules("org-a")
+
+
+async def test_an_all_off_configuration_is_reported_as_configured():
+    """The case the essentials-only heuristic could not see."""
+    stored = {field: False for field in ModuleSettings.model_fields}
+    stored["_user_configured"] = True
+
+    response = await _enabled_modules({"modules": stored})
+
+    assert response.configured is True
+    # And it really is all-off, so the two together are unambiguous.
+    assert not [m for m in response.enabled_modules if m not in _ESSENTIAL]
+
+
+async def test_an_organization_with_no_settings_is_reported_as_unconfigured():
+    response = await _enabled_modules({})
+
+    assert response.configured is False
+
+
+async def test_a_normal_configuration_is_reported_as_configured():
+    stored = {field: False for field in ModuleSettings.model_fields}
+    stored["training"] = True
+
+    response = await _enabled_modules({"modules": stored})
+
+    assert response.configured is True
+    assert "training" in response.enabled_modules
+
+
+async def test_the_failed_dual_write_signature_is_not_reported_as_configured():
+    """All-off with no marker is onboarding's failure, not a decision.
+
+    The resolver already falls back to defaults for this shape; reporting it
+    as configured would tell the navigation to trust a list the backend
+    itself declined to trust.
+    """
+    stored = {field: False for field in ModuleSettings.model_fields}
+
+    response = await _enabled_modules({"modules": stored})
+
+    assert response.configured is False
+
+
+_ESSENTIAL = {"members", "events", "documents", "roles", "settings"}

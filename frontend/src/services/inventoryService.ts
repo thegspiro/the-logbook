@@ -14,6 +14,8 @@ import type {
   StorageAreaResponse,
   StorageAreaCreate,
   EquipmentRequestItem,
+  RequestTypeLiteral,
+  RequestPriorityLiteral,
   WriteOffRequestItem,
   InventoryItemCreate,
   InventoryItemBulkEntry,
@@ -29,6 +31,7 @@ import type {
   ScanLookupResponse,
   DistributeItemsRequest,
   DistributeItemsResponse,
+  InventoryTransferRequest,
   BatchReturnRequest,
   BatchReturnResponse,
   LabelFormat,
@@ -529,6 +532,10 @@ export const inventoryService = {
     return response.data;
   },
 
+  async transferItem(data: InventoryTransferRequest): Promise<void> {
+    await api.post('/inventory/transfer', data);
+  },
+
   async batchReturn(data: BatchReturnRequest): Promise<BatchReturnResponse> {
     const response = await api.post<BatchReturnResponse>('/inventory/batch-return', data);
     return response.data;
@@ -628,8 +635,8 @@ export const inventoryService = {
     item_id?: string | undefined;
     category_id?: string | undefined;
     quantity?: number;
-    request_type?: string;
-    priority?: string;
+    request_type?: RequestTypeLiteral;
+    priority?: RequestPriorityLiteral;
     reason?: string | undefined;
   }): Promise<{ id: string; item_name: string; status: string; message: string }> {
     const response = await api.post<{ id: string; item_name: string; status: string; message: string }>(

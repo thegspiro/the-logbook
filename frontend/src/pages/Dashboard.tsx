@@ -184,7 +184,7 @@ const Dashboard: React.FC = () => {
   const canManageMessages = canViewLegacyAdmin || checkPermission('notifications.manage');
   const canManageAdminHours = checkPermission('admin_hours.manage');
   const canViewScheduling = checkPermission('scheduling.manage');
-  const { isModuleOn } = useEnabledModules();
+  const { isModuleOn, isLoading: modulesLoading } = useEnabledModules();
   const [adminSummary, setAdminSummary] = useState<AdminSummary | null>(null);
   const [loadingAdmin, setLoadingAdmin] = useState(canViewLegacyAdmin);
   const [adminError, setAdminError] = useState(false);
@@ -313,18 +313,41 @@ const Dashboard: React.FC = () => {
         });
     }
 
+    void loadDeptMessages();
+    void loadUpcomingEvents();
+  }, []);
+
+  // Module-owned loaders, held until the module config lands.
+  //
+  // Each of these calls a router the module gate now refuses outright, so
+  // firing them before the answer is known costs a 403 per disabled module on
+  // every dashboard visit — and `classifyApiError` reports a 403 as
+  // API_FORBIDDEN, so a department's deliberate configuration would read as a
+  // fault in the error log, on the app's most-visited screen. Medical
+  // Screening makes it concrete: it is opt-in, so every organization that has
+  // not turned it on is in this case.
+  //
+  // The wait is what makes the guards inside the loaders meaningful.
+  // `isModuleOn` answers permissively while the config is unknown — right for
+  // a nav bar, which must render before the answer arrives, and wrong here,
+  // where it would wave through the very request this exists to avoid. The
+  // hook settles either way, so the cost is one tick.
+  //
+  // Each loader clears its own panel's loading flag on the way out, so a
+  // disabled module shows that panel's empty state rather than a skeleton
+  // that never resolves.
+  useEffect(() => {
+    if (modulesLoading) return;
     void loadNotifications();
     void loadMyShifts();
     void loadOpenShifts();
-    void loadDeptMessages();
-    void loadHours();
     void loadMySeats();
     void loadMyScreenings();
     void loadTrainingProgress();
     void loadMyEquipment();
-    void loadUpcomingEvents();
+    void loadHours();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [modulesLoading]);
 
   // Do not fetch department-wide reporting merely because a leader opened the
   // dashboard. The personal view is the default; department-wide data is loaded
@@ -371,6 +394,10 @@ const Dashboard: React.FC = () => {
   };
 
   const loadMyEquipment = async () => {
+    if (!isModuleOn('inventory')) {
+      setLoadingMyEquipment(false);
+      return;
+    }
     if (!currentUser?.id) {
       setLoadingMyEquipment(false);
       return;
@@ -425,6 +452,11 @@ const Dashboard: React.FC = () => {
   };
 
   const loadNotifications = async () => {
+    if (!isModuleOn('notifications')) {
+      setNotifications([]);
+      setLoadingNotifications(false);
+      return;
+    }
     try {
       // The unread count is maintained by useNotificationPoller (mounted
       // in AppLayout), so we only need to fetch the notification list here.
@@ -507,6 +539,11 @@ const Dashboard: React.FC = () => {
   };
 
   const loadMyShifts = async () => {
+    if (!isModuleOn('scheduling')) {
+      setMyShifts([]);
+      setLoadingMyShifts(false);
+      return;
+    }
     try {
       const today = getTodayLocalDate(tz);
       const nextMonth = toLocalDateString(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), tz);
@@ -524,6 +561,11 @@ const Dashboard: React.FC = () => {
   };
 
   const loadOpenShifts = async () => {
+    if (!isModuleOn('scheduling')) {
+      setOpenShifts([]);
+      setLoadingOpenShifts(false);
+      return;
+    }
     try {
       const today = getTodayLocalDate(tz);
       const nextMonth = toLocalDateString(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), tz);
@@ -573,6 +615,10 @@ const Dashboard: React.FC = () => {
   };
 
   const loadMySeats = async () => {
+    if (!isModuleOn('scheduling')) {
+      setMySeats([]);
+      return;
+    }
     try {
       // No shift id: the positions the member may hold in general, not the
       // ones open on a particular shift.
@@ -588,6 +634,10 @@ const Dashboard: React.FC = () => {
   };
 
   const loadMyScreenings = async () => {
+    if (!isModuleOn('medical_screening')) {
+      setMyScreenings(null);
+      return;
+    }
     try {
       setMyScreenings(await medicalScreeningService.getMyCompliance());
     } catch {
@@ -639,6 +689,11 @@ const Dashboard: React.FC = () => {
   };
 
   const loadTrainingProgress = async () => {
+    if (!isModuleOn('training')) {
+      setEnrollments([]);
+      setLoadingTraining(false);
+      return;
+    }
     try {
       const data = await trainingProgramService.getMyEnrollments('active');
       setEnrollments(data);
@@ -901,16 +956,16 @@ const Dashboard: React.FC = () => {
 
   const refreshDashboard = useCallback(async () => {
     await Promise.all([
+      loadDeptMessages(),
+      loadHours(),
+      loadUpcomingEvents(),
       loadNotifications(),
       loadMyShifts(),
       loadOpenShifts(),
-      loadDeptMessages(),
-      loadHours(),
       loadMySeats(),
       loadMyScreenings(),
       loadTrainingProgress(),
       loadMyEquipment(),
-      loadUpcomingEvents(),
       ...(activeTab === 'department' && canViewLegacyAdmin ? [loadAdminSummary(), loadSetupProgress()] : []),
       ...(activeTab === 'department' && canViewChiefOperations ? [loadOperations()] : []),
       ...(activeTab === 'department' && canViewAssets ? [loadAssetWidgets()] : []),
