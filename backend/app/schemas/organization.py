@@ -755,6 +755,18 @@ class ModuleSettings(BaseModel):
         default=True, description="Prospective Members Pipeline module"
     )
     public_info: bool = Field(default=True, description="Public Information module")
+    # Both default True because they shipped with no switch at all, so "on" is
+    # the behaviour every existing installation already has. A new flag that
+    # defaults False would silently take a live module away on upgrade
+    # (CLAUDE.md pitfall 19: absence means current behaviour, never "off").
+    finance: bool = Field(
+        default=True,
+        description="Finance module (budgets, dues, expenses, purchase requests)",
+    )
+    medical_screening: bool = Field(
+        default=True,
+        description="Medical Screening module (physicals, clearances, expirations)",
+    )
 
     # ── Niche / premium modules (disabled by default) ──
     communications: bool = Field(
@@ -782,8 +794,10 @@ class ModuleSettings(BaseModel):
         # Essential modules are always enabled
         enabled = ["members", "events", "documents", "roles", "settings"]
 
-        # Add configurable modules that are enabled
-        for field_name in self.model_fields:
+        # Add configurable modules that are enabled. Read off the class:
+        # instance access to model_fields is deprecated in Pydantic 2.11 and
+        # removed in 3.
+        for field_name in type(self).model_fields:
             if getattr(self, field_name):
                 enabled.append(field_name)
 
@@ -817,6 +831,8 @@ class ModuleSettingsUpdate(BaseModel):
     medical_supplies: Optional[bool] = None
     prospective_members: Optional[bool] = None
     public_info: Optional[bool] = None
+    finance: Optional[bool] = None
+    medical_screening: Optional[bool] = None
 
 
 class OrganizationSettings(BaseModel):

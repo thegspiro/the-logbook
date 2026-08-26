@@ -38,6 +38,8 @@ import {
   Key,
   Store,
   Stethoscope,
+  HeartPulse,
+  Wallet,
   Printer,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -253,6 +255,18 @@ const STANDARD_MODULES: ConfigurableModule[] = [
     name: 'Public Information',
     description: 'Public-facing pages, community outreach, and fire safety education',
     icon: <Globe className="h-5 w-5" />,
+  },
+  {
+    key: 'finance',
+    name: 'Finance',
+    description: 'Budgets, member dues, expenses, purchase requests, and check requests',
+    icon: <Wallet className="h-5 w-5" />,
+  },
+  {
+    key: 'medical_screening',
+    name: 'Medical Screening',
+    description: 'Member physicals, clearances, and expiration tracking',
+    icon: <HeartPulse className="h-5 w-5" />,
   },
 ];
 

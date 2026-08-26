@@ -119,13 +119,28 @@ async def get_asset_widgets(
     counts and fixed links/messages, so sensitive facility fields (codes,
     accounts, budgets, leases, and similar protected data) cannot leak through
     this general dashboard endpoint.
+
+    Each block also requires its module to be switched on for the
+    organization, matching ``/operations`` and ``/widgets``.  A permission
+    says the caller may see a module's figures; it does not say the
+    department runs that module.  Without this gate a department that turned
+    Facilities off still got compliance-deadline and work-order counts on
+    everybody's dashboard, linking into pages it had chosen to retire.
     """
     org_id = str(current_user.organization_id)
     today = date.today()
+    enabled = set(
+        (
+            await OrganizationService(db).get_enabled_modules(
+                current_user.organization_id
+            )
+        ).enabled_modules
+    )
     widgets: list[AssetWidget] = []
 
-    if user_has_permission(current_user, "inventory.manage") or user_has_permission(
-        current_user, "settings.manage"
+    if "inventory" in enabled and (
+        user_has_permission(current_user, "inventory.manage")
+        or user_has_permission(current_user, "settings.manage")
     ):
         inventory = InventoryService(db)
         summary = await inventory.get_inventory_summary(org_id)
@@ -214,8 +229,9 @@ async def get_asset_widgets(
     # links into a management view and `apparatus.view` is a baseline member
     # grant, so viewing is not authority to see the department's deficiency
     # and overdue-check tallies.  Mirrors the inventory gate above.
-    if user_has_permission(current_user, "apparatus.manage") or user_has_permission(
-        current_user, "settings.manage"
+    if "apparatus" in enabled and (
+        user_has_permission(current_user, "apparatus.manage")
+        or user_has_permission(current_user, "settings.manage")
     ):
         fleet = await ApparatusService(db).get_fleet_summary(org_id)
         defects = await db.scalar(
@@ -276,8 +292,9 @@ async def get_asset_widgets(
     # Same reasoning as apparatus: `facilities.view` is a baseline member
     # grant, while overdue work orders and compliance deadlines are facility
     # management reporting.
-    if user_has_permission(current_user, "facilities.manage") or user_has_permission(
-        current_user, "settings.manage"
+    if "facilities" in enabled and (
+        user_has_permission(current_user, "facilities.manage")
+        or user_has_permission(current_user, "settings.manage")
     ):
         maintenance = await db.scalar(
             select(func.count(FacilityMaintenance.id))
@@ -794,9 +811,15 @@ async def get_main_dashboard_widgets(
 ) -> MainDashboardWidgets:
     """Return privacy-preserving aggregates authorized per module.
 
-    ``settings.manage`` is intentionally not financial access. Organization
-    monetary totals require ``finance.manage``; fundraising totals require
-    ``fundraising.view``; outreach totals require ``events.manage``.
+    Every block is gated twice, and the two gates answer different questions.
+    The permission asks whether *this* caller may see the figures:
+    ``settings.manage`` is intentionally not financial access, so organization
+    monetary totals require ``finance.manage``, fundraising totals require
+    ``fundraising.view``, and outreach totals require ``events.manage``. The
+    module flag asks whether the *organization* runs that part of the app at
+    all — a department that has switched Finance off should not be shown its
+    dues and cash-flow on the dashboard, however senior the viewer is, and
+    these cards are the only link into ``/finance`` anywhere in the UI.
     """
     org_id = str(current_user.organization_id)
     enabled = set(
@@ -809,7 +832,7 @@ async def get_main_dashboard_widgets(
     service = DashboardWidgetService(db)
     finance = (
         await service.finance(org_id, period)
-        if user_has_permission(current_user, "finance.manage")
+        if "finance" in enabled and user_has_permission(current_user, "finance.manage")
         else None
     )
     fundraising = (
@@ -819,7 +842,7 @@ async def get_main_dashboard_widgets(
     )
     community = (
         await service.community(org_id, period)
-        if user_has_permission(current_user, "events.manage")
+        if "events" in enabled and user_has_permission(current_user, "events.manage")
         else None
     )
     return MainDashboardWidgets(
