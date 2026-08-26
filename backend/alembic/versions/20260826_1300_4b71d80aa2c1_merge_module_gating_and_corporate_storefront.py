@@ -2,7 +2,7 @@
 
 Two heads, both descended from ``a1f7c34e9b02``:
 
-* ``20260826_0001`` — this branch, which itself merged the three heads left by
+* ``cff6124cbb3f`` — this branch, which itself merged the three heads left by
   the storefront-variant, storefront-backfill and baseline-grant pull requests
 * ``b3e8d1f45a27`` — main's crew-seat rename, storefront personalization and
   corporate-position store grants
@@ -21,14 +21,14 @@ other landing first, and the merge needs no reconciliation beyond the graph.
 Nothing is created here. Alembic runs each revision exactly once regardless of
 how many merge paths reach it.
 
-Revision ID: 20260826_1300
-Revises: 20260826_0001, b3e8d1f45a27
+Revision ID: 4b71d80aa2c1
+Revises: cff6124cbb3f, b3e8d1f45a27
 Create Date: 2026-08-26 13:00:00.000000
 """
 
 # revision identifiers
-revision = "20260826_1300"
-down_revision = ("20260826_0001", "b3e8d1f45a27")
+revision = "4b71d80aa2c1"
+down_revision = ("cff6124cbb3f", "b3e8d1f45a27")
 branch_labels = None
 depends_on = None
 

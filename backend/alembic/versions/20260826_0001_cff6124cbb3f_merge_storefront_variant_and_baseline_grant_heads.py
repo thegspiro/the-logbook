@@ -21,13 +21,13 @@ other finds them already present and skips the row.
 Nothing is created here. Alembic runs each revision exactly once regardless of
 how many merge paths reach it.
 
-Revision ID: 20260826_0001
+Revision ID: cff6124cbb3f
 Revises: c6a3f8b41e29, c4f8a2e70d19, a1f7c34e9b02
 Create Date: 2026-08-26 00:01:00.000000
 """
 
 # revision identifiers
-revision = "20260826_0001"
+revision = "cff6124cbb3f"
 down_revision = ("c6a3f8b41e29", "c4f8a2e70d19", "a1f7c34e9b02")
 branch_labels = None
 depends_on = None
