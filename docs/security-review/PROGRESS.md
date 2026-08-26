@@ -16,13 +16,7 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-PR #1902 (feature 20, compliance) — open, subscribed. 7 fixes: silent
-500-record cap on `get_incomplete_records`, null-clear bug on
-`update_compliance_config`/`update_compliance_profile`, a config first-write
-race, `report_type` schema drift, dict-key id-normalization parity, and an
-attestation percentage range check. CS-8 attestation dual-control and CS-9
-monthly windowing remain flagged (product decisions). See
-`docs/security-review/CMP-20-compliance.md`.
+None — PR #1902 (feature 20, compliance) merged. Next iteration starts feature 21 (admin hours).
 
 ---
 
@@ -70,8 +64,8 @@ data-carrying modules, then the supporting infrastructure.
 | 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`                                                                                   | ✅ #1851        |
 | 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ✅ #1873        |
 | 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3723 L)                                                                                                          | ✅ #1901        |
-| 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ⏳ #1902        |
-| 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ⬜              |
+| 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ✅ #1902        |
+| 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | 🔄              |
 | 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ⬜              |
 | 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ⬜              |
 | 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ⬜              |
@@ -744,3 +738,15 @@ re-runs the whole-codebase sweeps against whatever has landed since.
     migrations validated, 269/269 compliance-scoped and 8833/8833 full backend
     suite pass. Findings doc: `docs/security-review/CMP-20-compliance.md`. PR
     #1902 opened and subscribed. Next: 21 admin hours, once #1902 merges.
+- **20 Compliance ✅ merged** — PR #1902 merged 2026-08-26. Codex review
+  caught one real regression in the CMP-4 fix before merge: the SQL
+  location predicate checked only `location IS NULL`, but the Python
+  fallback logic (`not r.location`) also treats `location=""` as missing —
+  a value the training schemas allow — so a completed record with
+  `location=""` and no `location_id` was silently excluded from the new SQL
+  scan, the opposite of what the fix was for. Corrected to
+  `location IS NULL OR location = ''`, matching the Python check exactly;
+  replied and resolved the review thread. Full local completion gate
+  re-verified green (270/270 compliance-scoped, 8834/8834 full suite)
+  before the final push; CI came back 16/16 green with no further comments.
+  Next: 21 admin hours.
