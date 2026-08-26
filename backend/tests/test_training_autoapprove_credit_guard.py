@@ -23,6 +23,11 @@ def _svc(config):
     svc.db.add = MagicMock()
     svc.db.commit = AsyncMock()
     svc.db.refresh = AsyncMock()
+    # A submitted category_id must resolve in-org (TRX-7 guard); tests here
+    # exercise credit-routing, not FK scoping, so treat any category as found.
+    svc.db.execute = AsyncMock(
+        return_value=MagicMock(scalar_one_or_none=MagicMock(return_value="cat1"))
+    )
     # Guard against the auto-approve side effects touching the mocked DB.
     svc._check_duplicate = AsyncMock(return_value=None)
     svc._create_record_from_submission = AsyncMock(return_value=None)

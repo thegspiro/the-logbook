@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### A skills-testing officer could void or return their own result, and the attempt cap could race (2026-08-26)
+
+**Fixed**
+
+- `void_test` and `return_test_for_correction` had no separation-of-duties
+  check, unlike their siblings `create_test` and `validate_test`. An
+  officer-candidate could void their own unfavorable official result out of
+  the pass-rate and average-score totals, or repeatedly return their own
+  pending submission for unlimited free redo cycles with no attempt spent.
+  Both now enforce the same `assert_different_person` check as
+  `validate_test`.
+- `assert_attempts_remaining`'s `max_attempts` cap counted validated tests
+  with a plain `SELECT` and no row lock, so two officers validating
+  different pending tests for the same candidate and requirement at the same
+  moment could both read the count as under the cap before either commits.
+  Fixed with a `FOR UPDATE` lock on the candidate's `RequirementProgress`
+  row plus a locking read on the count itself — a lock elsewhere does not
+  refresh an already-open transaction's snapshot.
+- `update_template` applied its payload with a blind `setattr` loop; an
+  explicit `null` against `name`, `sections`, or `score_pass_fail_criteria`
+  (all NOT NULL) raised an unhandled `IntegrityError` instead of a clean 400. Now routes through `apply_updates`.
+
 ### The chief was missing from every notification meant to include them (2026-08-26)
 
 **Fixed**
