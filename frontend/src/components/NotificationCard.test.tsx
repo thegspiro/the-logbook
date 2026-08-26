@@ -105,6 +105,21 @@ describe('NotificationCard', () => {
       expect(screen.queryByRole('button', { name: /View/ })).not.toBeInTheDocument();
       expect(screen.getByRole('button', { name: /Pin/ })).toBeInTheDocument();
     });
+
+    it('labels a department communication action clearly', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(
+        <NotificationCard
+          notification={makeNotification({ category: 'department_message', action_url: '/messages/msg-1' })}
+          onMarkRead={vi.fn()}
+          onTogglePin={vi.fn()}
+        />
+      );
+
+      await expand(user);
+
+      expect(screen.getByRole('button', { name: /Read Message/ })).toBeInTheDocument();
+    });
   });
 
   describe('read state', () => {
