@@ -34,6 +34,11 @@ class RecordingSession:
         self.added = []
         self.commit = AsyncMock()
         self.refresh = AsyncMock()
+        # A real AsyncSession flushes; _finalize_training_records does so
+        # before syncing qualifications, so the records it just added are
+        # visible to that read. The double stands in for a session and needs
+        # the same surface.
+        self.flush = AsyncMock()
 
     def add(self, obj):
         self.added.append(obj)
