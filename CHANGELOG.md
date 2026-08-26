@@ -7,6 +7,68 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### An EMT rank granted nothing, and EMS-only agencies were seeded firefighters (2026-08-26)
+
+**Fixed**
+
+- **A seeded rank that conferred no permissions at all.** Operational ranks
+  are seeded from `DEFAULT_RANKS` but resolve their permissions from a
+  separate registry, `OPERATIONAL_RANKS`, and the two had drifted: `emt` was
+  in the first and missing from the second. `get_rank_default_permissions("emt")`
+  answered `[]`, so a member whose only standing was the EMT rank held
+  nothing.
+
+  Unlike Firefighter there is no mirroring entry in `DEFAULT_POSITIONS`, so
+  nothing made up the difference — every other seeded rank had that backstop,
+  which is why the gap stayed invisible. EMT now carries the same
+  rank-and-file grants as Firefighter, from one shared list rather than two
+  that can drift.
+
+  **Firefighter and EMT are independent ranks, not a progression.** Plenty of
+  firefighters never certify as EMTs and plenty of EMTs never ride the engine;
+  neither implies the other. They share a permission list only because
+  standing at the bottom of the operational ladder is what decides what a
+  member may _see_, and that is the same question for both.
+
+- **An EMS-only agency was seeded a fire department's rank ladder.**
+  `seed_defaults` wrote the same eight ranks to every organization regardless
+  of `organization_type`, so an EMS-only service was handed "Fire Chief",
+  "Engineer" and "Firefighter" — a rank nobody there can ever hold. The seed
+  only ever fires into an empty table, so whatever it wrote on day one was
+  what the department lived with.
+
+  Ranks are now chosen by agency type: every agency gets the full officer
+  ladder, an EMS-only service gets EMT without Firefighter, and its
+  fire-specific labels are renamed (Chief, Driver / Operator). The rank
+  _codes_ stay shared across agency types deliberately — they key the
+  permission registry and the shift-eligibility fallback, so a code must mean
+  the same thing everywhere — and only the selection and labels vary. An
+  unknown or missing type falls back to the full set, because a department
+  seeded one rank too many can delete it while one seeded too few has no
+  indication anything is absent.
+
+- **A custom rank silently conferred nothing.** Rank defaults resolve from a
+  code-level registry keyed by `rank_code`, so a rank a department invents for
+  itself — Battalion Chief, Firefighter II — grants no permissions. That is
+  the intended design (positions are the primary source), but the editor
+  rendered a custom rank identically to a seeded one, leaving an admin to
+  discover it from a member who could not see anything. `RankResponse` now
+  reports `default_permission_count` and the rank editor marks a rank that
+  grants none.
+
+**Removed**
+
+- `OPERATIONAL_ROLE_SLUGS` and `ADMINISTRATIVE_ROLE_SLUGS` from
+  `core.constants`. Each had exactly one reference in the codebase — its own
+  definition. They were not harmless: they read as a third authority on the
+  rank vocabulary and agreed with neither real one, listing `chief` where the
+  seed writes `fire_chief`, and offering `driver` and `paramedic`, which are
+  not ranks at all and grant nothing.
+
+`tests/test_rank_registry_agreement.py` now asserts the seed and the
+permission registry describe the same set in both directions, so a rank cannot
+again be offered to departments while conferring nothing.
+
 ### Embroidery and engraving are not the same job (2026-08-26)
 
 **Fixed**
