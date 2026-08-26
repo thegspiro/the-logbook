@@ -108,6 +108,7 @@ class DocumentResponse(UTCResponseBase):
     file_name: Optional[str] = None
     file_size: int = 0
     file_type: Optional[str] = None
+    has_file: bool = True
     status: str = "active"
     version: int = 1
     tags: Optional[str] = None
