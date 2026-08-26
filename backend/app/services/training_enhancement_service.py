@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.training import (
     CompetencyMatrix,
+    ExternalTrainingProvider,
     InstructorQualification,
     MemberCompetency,
     MultiAgencyTraining,
@@ -36,6 +37,7 @@ from app.models.training import (
 from app.models.user import User, UserStatus
 from app.utils.csv_export import SafeCsvWriter
 from app.utils.model_updates import apply_updates
+from app.utils.org_scoping import assert_all_in_org, assert_in_org
 
 
 def _stringify_uuids(data: dict) -> dict:
@@ -81,11 +83,57 @@ class RecertificationService:
         )
         return result.scalar_one_or_none()
 
+    async def _validate_references(self, organization_id: str, data: dict) -> None:
+        """Ensure every client-supplied pathway FK belongs to the current tenant."""
+        await assert_in_org(
+            self.db,
+            TrainingRequirement,
+            data.get("source_requirement_id"),
+            organization_id,
+            allow_none=True,
+            label="source requirement",
+        )
+        await assert_in_org(
+            self.db,
+            TrainingCourse,
+            data.get("assessment_course_id"),
+            organization_id,
+            allow_none=True,
+            label="assessment course",
+        )
+        await assert_all_in_org(
+            self.db,
+            TrainingCourse,
+            data.get("required_courses"),
+            organization_id,
+            label="required course",
+        )
+        await assert_all_in_org(
+            self.db,
+            RecertificationPathway,
+            data.get("prerequisite_pathway_ids"),
+            organization_id,
+            label="prerequisite pathway",
+        )
+        category_ids = [
+            entry.get("category_id")
+            for entry in (data.get("category_hour_requirements") or [])
+            if isinstance(entry, dict)
+        ]
+        await assert_all_in_org(
+            self.db,
+            TrainingCategory,
+            category_ids,
+            organization_id,
+            label="category",
+        )
+
     async def create_pathway(
         self, organization_id: str, data: dict, created_by: str
     ) -> RecertificationPathway:
         """Create a new recertification pathway"""
         data = _stringify_uuids(data)
+        await self._validate_references(organization_id, data)
         pathway = RecertificationPathway(
             organization_id=organization_id,
             created_by=created_by,
@@ -107,7 +155,9 @@ class RecertificationService:
         pathway = await self.get_pathway(pathway_id, organization_id)
         if not pathway:
             raise ValueError("Pathway not found")
-        apply_updates(pathway, _stringify_uuids(data))
+        data = _stringify_uuids(data)
+        await self._validate_references(organization_id, data)
+        apply_updates(pathway, data)
         await self.db.flush()
         # `updated_at` is server-side (onupdate=func.now()), so the flush leaves
         # it expired rather than fetching the new value back. The endpoint
@@ -587,11 +637,31 @@ class MultiAgencyService:
         )
         return result.scalars().all()
 
+    async def _validate_references(self, organization_id: str, data: dict) -> None:
+        """Ensure client-supplied exercise FKs belong to the current tenant."""
+        await assert_in_org(
+            self.db,
+            TrainingSession,
+            data.get("training_session_id"),
+            organization_id,
+            allow_none=True,
+            label="training session",
+        )
+        await assert_in_org(
+            self.db,
+            TrainingRecord,
+            data.get("training_record_id"),
+            organization_id,
+            allow_none=True,
+            label="training record",
+        )
+
     async def create_exercise(
         self, organization_id: str, data: dict, created_by: str
     ) -> MultiAgencyTraining:
         """Create a multi-agency training record"""
         data = _stringify_uuids(data)
+        await self._validate_references(organization_id, data)
         # Convert participating_organizations to serializable format
         if "participating_organizations" in data:
             orgs = data["participating_organizations"]
@@ -626,6 +696,7 @@ class MultiAgencyService:
             raise ValueError("Exercise not found")
 
         data = _stringify_uuids(data)
+        await self._validate_references(organization_id, data)
         if "participating_organizations" in data:
             orgs = data["participating_organizations"]
             if orgs and hasattr(orgs[0], "model_dump"):
@@ -652,6 +723,14 @@ class XAPIService:
         source_provider_id: Optional[str] = None,
     ) -> XAPIStatement:
         """Ingest a single xAPI statement"""
+        await assert_in_org(
+            self.db,
+            ExternalTrainingProvider,
+            source_provider_id,
+            organization_id,
+            allow_none=True,
+            label="source provider",
+        )
         actor = raw_statement.get("actor", {})
         verb = raw_statement.get("verb", {})
         obj = raw_statement.get("object", {})

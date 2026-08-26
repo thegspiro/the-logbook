@@ -402,13 +402,25 @@ async def get_effectiveness_evaluations(
     db: AsyncSession = Depends(get_db),
     current_user=Depends(get_current_user),
 ):
-    """Get training effectiveness evaluations"""
+    """Get training effectiveness evaluations.
+
+    Non-officers are confined to their own submitted evaluations — these
+    carry free-text comments/ratings members would not expect coworkers to
+    read, the same PII class ``get_member_competencies`` gates. Holders of
+    ``training.manage`` see the whole organization.
+    """
+    from app.api.dependencies import _collect_user_permissions, _has_permission
+
+    is_officer = _has_permission(
+        "training.manage", _collect_user_permissions(current_user)
+    )
     service = TrainingEffectivenessService(db)
     evals = await service.get_evaluations(
         current_user.organization_id,
         course_id=course_id,
         session_id=session_id,
         level=level,
+        user_id=None if is_officer else str(current_user.id),
     )
     return evals
 
@@ -519,6 +531,9 @@ async def ingest_xapi_statement(
         )
         await db.commit()
         return statement
+    except ValueError as e:
+        await db.rollback()
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
     except Exception as e:
         await db.rollback()
         raise HTTPException(status_code=500, detail=safe_error_detail(e))
