@@ -95,7 +95,7 @@ const NeedsAttention: React.FC<{
       </h2>
       {!loading && (
         <span
-          className="rounded-full bg-red-600 px-2 py-0.5 text-xs font-bold text-white"
+          className="rounded-full bg-red-800 px-2 py-0.5 text-xs font-bold text-white"
           aria-label={`${rows.length} work items awaiting action`}
         >
           {rows.length}
