@@ -1170,7 +1170,8 @@ OPERATIONAL_RANKS: dict[str, dict] = {
             APPARATUS_MAINTENANCE.name,
             FACILITIES_VIEW.name,
             LOCATIONS_VIEW.name,
-            NOTIFICATIONS_VIEW.name,
+            # No notifications.view — see the `member` position in
+            # DEFAULT_POSITIONS. The Send Log it opens is org-wide.
         ],
     },
     "firefighter": {
@@ -1194,7 +1195,8 @@ OPERATIONAL_RANKS: dict[str, dict] = {
             APPARATUS_VIEW.name,
             FACILITIES_VIEW.name,
             LOCATIONS_VIEW.name,
-            NOTIFICATIONS_VIEW.name,
+            # No notifications.view — see the `member` position in
+            # DEFAULT_POSITIONS. The Send Log it opens is org-wide.
         ],
     },
 }
@@ -1963,7 +1965,13 @@ DEFAULT_POSITIONS: dict[str, dict] = {
             APPARATUS_VIEW.name,
             FACILITIES_VIEW.name,
             LOCATIONS_VIEW.name,
-            NOTIFICATIONS_VIEW.name,
+            # notifications.view is deliberately absent. A member's own
+            # inbox (`GET /notifications/my`) is gated on authentication
+            # alone, so withholding this costs them nothing they can act
+            # on — while holding it opens `GET /notifications/logs`, which
+            # is scoped to the organization and not to the recipient: every
+            # subject and body the department has sent anyone, readable by
+            # anyone.
         ],
     },
 }

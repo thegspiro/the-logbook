@@ -7,6 +7,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Every member could read every other member's notifications (2026-08-25)
+
+**Fixed**
+
+- **The Send Log is no longer part of the day-one grant set.** Three admin
+  tabs on the Notifications screen — Notification Rules, Email Templates and
+  Send Log — hang off `notifications.view`, and that permission was seeded to
+  the `member` position and to the Firefighter and Engineer ranks. Every
+  member had it.
+
+  The Send Log is the one that matters. `GET /notifications/logs` filters on
+  `organization_id` and nothing else, and each row carries the recipient's
+  email address, the subject and the full message body. So any member could
+  page through every notification the department had ever sent anyone else.
+
+  `notifications.view` is revoked at all three seed sites, and by
+  `20260825_2015_a1f7c34e9b02` on departments that have already onboarded —
+  the registry alone would not have done it, because
+  `DEFAULT_POSITIONS[rank]["permissions"]` _is_ the rank's list, so onboarding
+  writes those grants into system `positions` rows. The migration is scoped to
+  `is_system = True`; a position a department has customized is left as they
+  set it.
+
+  **Members lose nothing they can act on.** Their own inbox is
+  `GET /notifications/my`, which is gated on being signed in and no permission
+  at all, and the navigation entry points at `?tab=inbox`. What changes is
+  that Notifications now opens on their notifications, with no admin tabs
+  beside them.
+
+- **The Email Templates tab is gated on the permission it actually needs.**
+  The tab holds no editor — its only control navigates to
+  `/communications/email-templates`, which is behind `settings.manage`. Anyone
+  holding `notifications.view` alone was shown the tab, read a description of
+  what they could customize, clicked the button and landed on Access Denied.
+  It now follows `settings.manage`, on the `?tab=templates` deep link as well
+  as the button.
+
 ### Photo-use consent is readable in one place, by the people who publish (2026-08-25)
 
 Every member can allow or refuse the use of their photo from their own
