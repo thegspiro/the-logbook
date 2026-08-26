@@ -97,12 +97,22 @@ export const getMembershipRoutes = () => {
           </Suspense>
         }
       />
+      {/* A member's training history is Training's data on a Membership
+          route, and the page's only fetch is trainingService.getRecords().
+          Without the module gate a department that switched Training off
+          reached this from the member profile and got the page's generic
+          "check your connection" error, because the gate answers 403 and the
+          page cannot tell that apart from a network fault. Gated on the
+          module alone: who may read another member's training record is a
+          separate question this route already answers its own way. */}
       <Route
         path="/members/:userId/training"
         element={
-          <Suspense fallback={null}>
-            <MemberTrainingHistoryPage />
-          </Suspense>
+          <ProtectedRoute requiredModule="training" moduleLabel="Training">
+            <Suspense fallback={null}>
+              <MemberTrainingHistoryPage />
+            </Suspense>
+          </ProtectedRoute>
         }
       />
       <Route

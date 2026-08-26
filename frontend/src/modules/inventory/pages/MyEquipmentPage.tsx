@@ -25,7 +25,13 @@ import {
   Ruler,
 } from 'lucide-react';
 import { inventoryService } from '../../../services/api';
-import type { UserInventoryResponse, InventoryItem, EquipmentRequestItem, ReturnRequestItem } from '../types';
+import type {
+  UserInventoryResponse,
+  InventoryItem,
+  EquipmentRequestItem,
+  ReturnRequestItem,
+  RequestTypeLiteral,
+} from '../types';
 import { getConditionColor, REQUEST_STATUS_BADGES } from '../types';
 import { useAuthStore } from '../../../stores/authStore';
 import { useRanks } from '../../../hooks/useRanks';
@@ -118,7 +124,7 @@ const MyEquipmentPage: React.FC = () => {
   const [reqSearch, setReqSearch] = useState('');
   const [reqResults, setReqResults] = useState<InventoryItem[]>([]);
   const [reqSelected, setReqSelected] = useState<InventoryItem | null>(null);
-  const [reqType, setReqType] = useState<'checkout' | 'assignment'>('checkout');
+  const [reqType, setReqType] = useState<RequestTypeLiteral>('checkout');
   const [reqQty, setReqQty] = useState(1);
   const [reqReason, setReqReason] = useState('');
   const [reqSearching, setReqSearching] = useState(false);
@@ -682,11 +688,12 @@ const MyEquipmentPage: React.FC = () => {
                 <label className={labelClass}>Request Type</label>
                 <select
                   value={reqType}
-                  onChange={(e) => setReqType(e.target.value as 'checkout' | 'assignment')}
+                  onChange={(e) => setReqType(e.target.value as RequestTypeLiteral)}
                   className={selectClass}
                 >
                   <option value="checkout">Checkout</option>
-                  <option value="assignment">Assignment</option>
+                  <option value="issuance">Issuance</option>
+                  <option value="purchase">Purchase</option>
                 </select>
               </div>
             </div>

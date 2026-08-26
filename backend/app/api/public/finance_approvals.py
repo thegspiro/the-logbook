@@ -22,7 +22,7 @@ from app.core.database import get_db
 from app.core.security_middleware import get_client_ip, public_rate_limit
 from app.core.utils import safe_error_detail
 from app.models.finance import ApprovalStepRecord, ApprovalStepStatus
-from app.services.finance_service import FinanceService
+from app.services.finance_service import BudgetLimitExceededError, FinanceService
 
 router = APIRouter(
     prefix="/public/v1/finance/approvals", tags=["public-finance-approvals"]
@@ -145,6 +145,8 @@ async def approve_via_token(
     try:
         record = await service.approve_by_token(token, body.notes or None)
         await db.commit()
+    except BudgetLimitExceededError as e:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
@@ -176,6 +178,8 @@ async def deny_via_token(
     try:
         record = await service.deny_by_token(token, body.notes or None)
         await db.commit()
+    except BudgetLimitExceededError as e:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(e))
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
