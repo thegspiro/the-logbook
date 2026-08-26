@@ -53,11 +53,56 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `ShiftPosition` and parses `ApparatusBasicPage.tsx` for a non-canonical seat
   value, so the two vocabularies cannot drift apart again.
 
-- **`alembic upgrade head` failed outright on three heads.** The #1819/#1822
-  merges left `c4a91b7e2f08` with three children — `c6a3f8b41e29`,
-  `c4f8a2e70d19` and `a1f7c34e9b02` — so every fresh database and both CI
-  matrix jobs stopped at `Multiple head revisions are present for given
-argument 'head'`. The chain is relinearized; no migration body changed.
+### Documents could be uploaded but never downloaded, and a dozen other Documents/Legal fixes (2026-08-26)
+
+**Added**
+
+- A Download action is now available wherever a document is listed —
+  members with `documents.manage` could previously upload and delete a
+  file but never open or download what was uploaded. It is hidden on
+  generated documents (published meeting minutes, property returns) that
+  have no separate file to download, and it applies the same folder access
+  rules as viewing the document.
+- A document uploaded with no folder previously had no way to be seen,
+  downloaded, or managed afterward — the upload succeeded, but the file
+  vanished from the page. An "All Documents" view now lists every document
+  the caller can see, including ones with no folder.
+
+**Fixed**
+
+- A malformed folder or document id in a request returned a server error
+  instead of a clean rejection.
+- Editing a folder to clear its parent, its owner, or a document's folder
+  reported success but silently left the old value in place. Clearing now
+  actually clears.
+- A folder could be moved into itself or one of its own sub-folders,
+  making it disappear from folder navigation. This is now rejected with a
+  clear error.
+- Clearing a folder's color or icon to blank could leave it in a state
+  that broke every later attempt to list or view it. Both fields now
+  require a value, matching how every folder already has one.
+- Uploading a document with the Document Name field left blank
+  (advertised in the UI as optional) returned an error instead of
+  defaulting to the file name, as promised.
+- A failed receipt-printer connection returned the printer's configured
+  network address to whoever triggered the print, including staff with no
+  access to printer settings. It now returns a generic message.
+- Publishing two proposed revisions of the same legal document (privacy
+  policy or terms of service) at nearly the same time could leave both
+  marked live, with the public page showing whichever write happened to
+  land last. Publishing is now serialized.
+- A department publishing custom privacy-policy and terms-of-service text
+  with different revision dates could have publishing one silently change
+  the date shown on the other. Each document keeps its own date, and an
+  org that migrated from the old shared-date format no longer has a stale
+  date resurface after it republishes.
+- The public legal-text endpoint keeps returning its original `lastUpdated`
+  field alongside the newer per-document dates, so an external client built
+  against the documented shape does not lose a field it may still rely on.
+- A tampered or corrupted document record could theoretically resolve to a
+  file outside the caller's own organization's upload directory; the
+  download endpoint now confines every resolved path to that directory.
+- Downloading a document is now recorded in the audit log.
 
 ### Every member could read every other member's notifications (2026-08-25)
 

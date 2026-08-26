@@ -27,12 +27,9 @@ _MIGRATION = (
 
 _STOREFRONT_GRANTS = ("storefront.view", "storefront.order", "storefront.manage")
 
-# ``a4f8c1b92d17`` runs *before* this one in the chain, so a grant this later
-# migration strips is still on a pristine row at the moment the backfill runs
-# and must still appear in its frozen snapshot. Read from the revoking
-# migration's own constants rather than restated here, so the allowance cannot
-# outlive the revocation it stands for.
-_REVOKED_LATER = (
+# A migration that runs *after* the backfill and takes a permission back off
+# some of the same slugs. See ``_pristine_registry_set``.
+_LATER_REVOCATION = (
     Path(__file__).resolve().parents[1]
     / "alembic"
     / "versions"
@@ -40,31 +37,35 @@ _REVOKED_LATER = (
 )
 
 
+def _load_module(path: Path, name: str):
+    spec = importlib.util.spec_from_file_location(name, path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def _load_migration():
-    spec = importlib.util.spec_from_file_location("_backfill_storefront", _MIGRATION)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
+    return _load_module(_MIGRATION, "_backfill_storefront")
 
 
-def _load_revocation():
-    spec = importlib.util.spec_from_file_location("_revoke_later", _REVOKED_LATER)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
+def _pristine_registry_set(slug: str) -> set[str]:
+    """The registry as the backfill meets it, not as it stands today.
 
-
-def _grants_revoked_after_the_backfill(slug: str) -> set[str]:
-    """Grants a pristine row still carried when ``a4f8c1b92d17`` ran.
-
-    The registry is the *current* seed set. A grant revoked by a migration
-    ordered after the backfill has since left the registry but was still on the
-    row the backfill had to match, so the snapshot legitimately carries it.
+    ``_PRIOR_DEFAULTS`` freezes what a pristine pre-storefront row looks like
+    at the point ``a4f8c1b92d17`` runs, and it is matched against real stored
+    rows — so it must keep describing them exactly. ``a1f7c34e9b02`` runs later
+    in the chain and revokes ``notifications.view`` from three of the same
+    slugs, which leaves today's registry one permission short of the row the
+    backfill actually encounters. Add it back rather than editing the frozen
+    snapshot: the snapshot is right, and trimming it to match a registry that
+    moved on afterwards is what would stop it matching a pristine row and quietly
+    turn the backfill into a no-op that still reports success.
     """
-    revocation = _load_revocation()
+    permissions = set(DEFAULT_POSITIONS[slug].get("permissions") or [])
+    revocation = _load_module(_LATER_REVOCATION, "_revoke_notifications_view")
     if slug in revocation._SLUGS:
-        return {revocation._PERMISSION}
-    return set()
+        permissions.add(revocation._PERMISSION)
+    return permissions
 
 
 def _registry_grants(slug: str) -> tuple[str, ...]:
@@ -125,12 +126,8 @@ class TestFrozenPriorDefaults:
     @pytest.mark.parametrize("slug", sorted(_seeded_slugs_with_storefront()))
     def test_snapshot_is_the_registry_set_minus_the_added_grants(self, slug):
         module = _load_migration()
-        # The registry as it stands, plus what a later migration has since
-        # revoked — which together are what a pristine row held when this
-        # backfill ran, and so what its snapshot must describe.
-        pristine = set(DEFAULT_POSITIONS[slug]["permissions"])
-        pristine |= _grants_revoked_after_the_backfill(slug)
-        assert module._PRIOR_DEFAULTS[slug] == pristine - set(module._BACKFILL[slug])
+        registry = _pristine_registry_set(slug)
+        assert module._PRIOR_DEFAULTS[slug] == registry - set(module._BACKFILL[slug])
 
     def test_the_snapshot_never_already_carries_a_grant(self):
         # If it did, a pristine row would never match and nothing would be

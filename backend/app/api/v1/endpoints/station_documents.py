@@ -19,6 +19,7 @@ printed document can never surface more than the screen would.
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
+from loguru import logger
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -97,5 +98,16 @@ async def print_station_document(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
     except PrinterUnreachableError as e:
-        # 502: the application worked and a downstream device did not.
-        raise HTTPException(status_code=502, detail=str(e))
+        # 502: the application worked and a downstream device did not. The
+        # transport's own message embeds the printer's configured
+        # host/IP/port, and this endpoint is reachable by ordinary
+        # scheduling/equipment-check holders who need not have printer-config
+        # access — unlike labels.py's printer endpoints, which are gated on
+        # settings.manage and can safely echo that detail back to the same
+        # admin who configured it. Log the real error, return a generic one.
+        logger.error(f"Station document print failed: {e}")
+        raise HTTPException(
+            status_code=502,
+            detail="The printer could not be reached. Contact whoever manages "
+            "the station printer.",
+        )
