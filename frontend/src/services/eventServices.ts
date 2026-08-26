@@ -947,6 +947,10 @@ export interface StorageAreaCreate {
   sort_order?: number | null | undefined;
 }
 
+/** Values accepted by the backend's inventory EquipmentRequestCreate schema. */
+export type RequestTypeLiteral = 'checkout' | 'issuance' | 'purchase' | 'return';
+export type RequestPriorityLiteral = 'low' | 'normal' | 'high';
+
 export interface EquipmentRequestItem {
   id: string;
   requester_id: string;
@@ -955,8 +959,8 @@ export interface EquipmentRequestItem {
   item_id?: string;
   category_id?: string;
   quantity: number;
-  request_type: string;
-  priority: string;
+  request_type: RequestTypeLiteral;
+  priority: RequestPriorityLiteral;
   reason?: string;
   status: string;
   reviewed_by?: string;

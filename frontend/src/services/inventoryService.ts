@@ -14,6 +14,8 @@ import type {
   StorageAreaResponse,
   StorageAreaCreate,
   EquipmentRequestItem,
+  RequestTypeLiteral,
+  RequestPriorityLiteral,
   WriteOffRequestItem,
   InventoryItemCreate,
   InventoryItemBulkEntry,
@@ -589,8 +591,8 @@ export const inventoryService = {
     item_id?: string | undefined;
     category_id?: string | undefined;
     quantity?: number;
-    request_type?: string;
-    priority?: string;
+    request_type?: RequestTypeLiteral;
+    priority?: RequestPriorityLiteral;
     reason?: string | undefined;
   }): Promise<{ id: string; item_name: string; status: string; message: string }> {
     const response = await api.post<{ id: string; item_name: string; status: string; message: string }>(

@@ -26,6 +26,8 @@ export type {
   StorageAreaResponse,
   StorageAreaCreate,
   EquipmentRequestItem,
+  RequestTypeLiteral,
+  RequestPriorityLiteral,
   WriteOffRequestItem,
   ScanLookupResponse,
   DistributeItemsRequest,
