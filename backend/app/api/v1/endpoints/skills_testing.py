@@ -21,6 +21,7 @@ from app.api.dependencies import (
 )
 from app.core.audit import log_audit_event
 from app.core.database import get_db
+from app.core.utils import safe_error_detail
 from app.data.skill_sheet_library import (
     SKILL_SHEETS,
     build_template_payload,
@@ -81,6 +82,7 @@ from app.services.skills_testing_service import (
     revert_test_pass_from_pipeline,
     viewer_positions_for,
 )
+from app.utils.model_updates import apply_updates
 from app.utils.sql_search import LIKE_ESCAPE_CHAR, like_pattern
 
 router = APIRouter()
@@ -671,8 +673,12 @@ async def update_template(
     if template.status == "published" and structural_fields & set(update_data.keys()):
         template.version = (template.version or 1) + 1
 
-    for field, value in update_data.items():
-        setattr(template, field, value)
+    try:
+        apply_updates(template, update_data)
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
+        )
 
     await db.commit()
     await db.refresh(template)
@@ -2653,6 +2659,19 @@ async def void_test(
             detail="Test is already voided",
         )
 
+    # SEC: the same self-dealing risk validate_test blocks (CS-8) — an
+    # officer-candidate could otherwise void their own unfavorable result and
+    # walk it out of the pass-rate/average-score totals themselves.
+    try:
+        assert_different_person(
+            current_user.id,
+            str(test.candidate_id),
+            action="void",
+            record="skills test",
+        )
+    except SeparationOfDutiesError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
     # Snapshot before the status is overwritten — the audit entry records what
     # was withdrawn, which is the whole point of voiding over deleting.
     prior_status = test.status
@@ -2808,6 +2827,20 @@ async def return_test_for_correction(
                 "spent."
             ),
         )
+
+    # SEC: same self-dealing risk as validate_test (CS-8) and void_test — an
+    # officer-candidate could otherwise unilaterally force unlimited redo
+    # cycles on their own submission with no attempt spent until a result
+    # they like is validated.
+    try:
+        assert_different_person(
+            current_user.id,
+            str(test.candidate_id),
+            action="return",
+            record="skills test",
+        )
+    except SeparationOfDutiesError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
     test.status = SkillTestStatus.IN_PROGRESS.value
     # The outcome goes with the status. Leaving a stale pass/fail on a reopened

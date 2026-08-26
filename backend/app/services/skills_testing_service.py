@@ -631,6 +631,30 @@ async def assert_attempts_remaining(
     if not max_attempts:
         return
 
+    # Lock the candidate's RequirementProgress row for this requirement before
+    # either read below. Two officers validating two different completed
+    # SkillTest rows for the same candidate+requirement at once would
+    # otherwise both read "spent" before either commits (Pitfall #27) — the
+    # count comes from the SkillTest table, not this row, so the row itself
+    # is only a serialization point, but it is the one stable parent shared
+    # by every attempt against this requirement, the same role it plays for
+    # the knowledge-test path below. A candidate with no enrollment (and so
+    # no RequirementProgress row to lock) has nothing to serialize on; the
+    # cap is meaningful only in the pipeline context this row represents.
+    await db.execute(
+        select(RequirementProgress.id)
+        .join(
+            ProgramEnrollment,
+            RequirementProgress.enrollment_id == ProgramEnrollment.id,
+        )
+        .where(
+            ProgramEnrollment.user_id == str(candidate_id),
+            ProgramEnrollment.status == EnrollmentStatus.ACTIVE,
+            RequirementProgress.requirement_id == str(requirement_id),
+        )
+        .with_for_update(of=RequirementProgress)
+    )
+
     # Already satisfied — nothing to ration. Matches the knowledge-test path,
     # and keeps recertification testing possible for a completed requirement.
     satisfied = (
@@ -657,9 +681,14 @@ async def assert_attempts_remaining(
     if satisfied:
         return
 
+    # A locking read, not a plain SELECT: under REPEATABLE READ, acquiring the
+    # RequirementProgress lock above does not by itself refresh this
+    # transaction's snapshot, so a plain count here could still answer with
+    # the count from before the other transaction committed (Pitfall #27).
     spent = (
         await db.execute(
-            select(func.count(SkillTest.id)).where(
+            select(func.count(SkillTest.id))
+            .where(
                 SkillTest.organization_id == str(organization_id),
                 SkillTest.candidate_id == str(candidate_id),
                 SkillTest.requirement_id == str(requirement_id),
@@ -667,6 +696,7 @@ async def assert_attempts_remaining(
                 SkillTest.status == SkillTestStatus.COMPLETED.value,
                 SkillTest.validated_at.isnot(None),
             )
+            .with_for_update(of=SkillTest)
         )
     ).scalar() or 0
 

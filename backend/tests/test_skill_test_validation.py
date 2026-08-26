@@ -185,6 +185,7 @@ class TestAttemptsSpentOnValidation:
         db = MagicMock()
         results = [
             _scalar(requirement),
+            MagicMock(),  # RequirementProgress row lock; result discarded
             _scalar(satisfied_count),
             _scalar(spent_count),
         ]
@@ -212,7 +213,12 @@ class TestAttemptsSpentOnValidation:
         captured = []
 
         db = MagicMock()
-        results = [_scalar(SimpleNamespace(max_attempts=2)), _scalar(0), _scalar(0)]
+        results = [
+            _scalar(SimpleNamespace(max_attempts=2)),
+            MagicMock(),  # RequirementProgress row lock; result discarded
+            _scalar(0),
+            _scalar(0),
+        ]
 
         async def execute(stmt, *_args, **_kwargs):
             captured.append(stmt)
