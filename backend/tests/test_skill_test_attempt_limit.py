@@ -36,9 +36,11 @@ def _scalar_one(value):
 class QueuedSession:
     """AsyncSession stand-in returning queued results in call order.
 
-    assert_attempts_remaining issues up to three queries in a fixed order:
-    the requirement, the satisfied-progress count, then the spent-attempt
-    count. Short-circuits mean later ones may never run.
+    assert_attempts_remaining issues up to three queries in a fixed order: a
+    locking read of the requirement (which doubles as the attempt-cap
+    serialization lock — see ``lock_attempt_capacity``), the satisfied-progress
+    count, then the spent-attempt count. Short-circuits mean later ones may
+    never run.
     """
 
     def __init__(self, results):
@@ -127,3 +129,48 @@ class TestAttemptLimit:
         await _run(db)
         # Stops before counting spent attempts.
         assert db.calls == 2
+
+
+class TestCapacityLocking:
+    """Pitfall #27: two officers validating two different completed SkillTest
+    rows for the same candidate+requirement at once must not both read "spent"
+    before either commits. A lock alone is not enough — the count itself must
+    also be a locking read, or it can still answer from the snapshot taken
+    before the lock was acquired."""
+
+    async def test_the_requirement_row_is_locked_before_any_count(self):
+        """The requirement fetch doubles as the capacity-serialization lock
+        (`lock_attempt_capacity`) — it must be a locking read on
+        TrainingRequirement, not a plain SELECT."""
+        captured = []
+
+        db = MagicMock()
+        results = [_scalar_one(_requirement(2)), _scalar(0), _scalar(0)]
+
+        async def execute(stmt, *_args, **_kwargs):
+            captured.append(stmt)
+            return results.pop(0)
+
+        db.execute = execute
+        await _run(db)
+
+        assert "FOR UPDATE" in str(captured[0])
+        assert "training_requirements" in str(captured[0]).lower()
+
+    async def test_the_spent_count_is_itself_a_locking_read(self):
+        """A plain SELECT here would still answer from the transaction's
+        REPEATABLE READ snapshot even with the parent row locked."""
+        captured = []
+
+        db = MagicMock()
+        results = [_scalar_one(_requirement(2)), _scalar(0), _scalar(0)]
+
+        async def execute(stmt, *_args, **_kwargs):
+            captured.append(stmt)
+            return results.pop(0)
+
+        db.execute = execute
+        await _run(db)
+
+        assert "FOR UPDATE" in str(captured[-1])
+        assert "skill_tests" in str(captured[-1]).lower()

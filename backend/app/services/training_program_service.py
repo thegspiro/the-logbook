@@ -5195,10 +5195,15 @@ class TrainingProgramService:
         if not program:
             return [], ["Training program not found"]
 
-        # Batch-fetch user names for error messages (single query)
+        # Batch-fetch user names for error messages (single query). Org-scoped:
+        # a foreign user_id must not resolve to that org's member's real name
+        # in the returned error strings — it falls back to the raw id instead.
         user_id_strs = [str(uid) for uid in user_ids]
         users_result = await self.db.execute(
-            select(User).where(User.id.in_(user_id_strs))
+            select(User).where(
+                User.id.in_(user_id_strs),
+                User.organization_id == str(organization_id),
+            )
         )
         user_map = {str(u.id): u for u in users_result.scalars().all()}
 
