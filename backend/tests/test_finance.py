@@ -6,14 +6,10 @@ check requests, dues, and approval chains.
 """
 
 import uuid
-
-import pytest
-
-pytestmark = [pytest.mark.integration]
-
 from datetime import datetime, timezone
 
-from sqlalchemy import text
+import pytest
+from sqlalchemy import event, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.finance import (
@@ -26,6 +22,8 @@ from app.models.finance import (
 )
 from app.models.user import User
 from app.services.finance_service import FinanceService
+
+pytestmark = [pytest.mark.integration]
 
 
 @pytest.fixture
@@ -702,27 +700,30 @@ class TestApprovalChainService:
         pr_mine = await make_pending_pr(org_id, user_id)
         pr_other = await make_pending_pr(other_org_id, other_admin_id)
 
-        original_get_entity_info = service._get_entity_info
-        queried_entity_ids: list[str] = []
+        query_count = 0
 
-        async def spy_get_entity_info(entity_type, entity_id, org):
-            queried_entity_ids.append(entity_id)
-            return await original_get_entity_info(entity_type, entity_id, org)
+        def count_queries(*_args):
+            nonlocal query_count
+            query_count += 1
 
-        service._get_entity_info = spy_get_entity_info
+        event.listen(
+            db_session.bind.sync_engine, "before_cursor_execute", count_queries
+        )
         try:
             pending = await service.get_pending_approvals(user_id, org_id)
         finally:
-            service._get_entity_info = original_get_entity_info
+            event.remove(
+                db_session.bind.sync_engine, "before_cursor_execute", count_queries
+            )
 
-        # The response being filtered isn't enough on its own — the record
-        # query itself must never have surfaced the other org's step.
-        assert pr_other.id not in queried_entity_ids
-        assert pr_mine.id in queried_entity_ids
+        # Entity projection, active-step selection, and requester display data
+        # must remain set based rather than regressing to per-record lookups.
+        assert query_count == 1
 
         entity_ids = {a["entity_id"] for a in pending}
         assert pr_mine.id in entity_ids
         assert pr_other.id not in entity_ids
+        assert pending[0]["requester_name"] == "Fin Admin"
 
     async def test_denial_does_not_release_other_prs_encumbrance(
         self, db_session: AsyncSession, sample_org_data

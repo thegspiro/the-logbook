@@ -561,12 +561,16 @@ async def preview_approval_chain(
 
 @router.get("/approvals/pending", response_model=list[PendingApprovalResponse])
 async def get_pending_approvals(
+    pagination: PaginationParams = Depends(),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("finance.approve")),
 ):
     service = FinanceService(db)
     return await service.get_pending_approvals(
-        str(current_user.id), str(current_user.organization_id)
+        str(current_user.id),
+        str(current_user.organization_id),
+        skip=pagination.skip,
+        limit=pagination.limit,
     )
 
 
