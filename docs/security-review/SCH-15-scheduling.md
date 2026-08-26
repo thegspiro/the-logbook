@@ -17,15 +17,21 @@ since the last pass); none touched this iteration
 
 ## Revision note
 
-A Codex review of the draft caught three issues: a real efficiency gap
-(SCH-9's original per-id validation loop, up to 100 serial queries) and two
-inaccurate claims in the draft's own write-up — SCH-9's cross-tenant impact
-was overstated (there is no cross-tenant failure scenario; corrected below),
-and a "Verified good" claim that `calcom_service.py` closes the DNS-rebinding
-TOCTOU was wrong (it narrows the window; a repo-wide gap, now SCH-10,
-flagged). SCH-9's fix (in-org validation) survives, batched; SCH-10 is
-flagged rather than fixed, since closing it is a cross-cutting change
-spanning six files, not a scheduling-specific one.
+Two rounds of Codex review corrected this draft. The first caught three
+issues: a real efficiency gap (SCH-9's original per-id validation loop, up
+to 100 serial queries) and two inaccurate claims in the draft's own
+write-up — SCH-9's cross-tenant impact was overstated (there is no
+cross-tenant failure scenario; corrected below), and a "Verified good" claim
+that `calcom_service.py` closes the DNS-rebinding TOCTOU was wrong (it
+narrows the window; filed as SCH-10, flagged). The second round caught that
+the SCH-10 correction itself undercounted the affected surface — six files
+sharing one fix, when it's actually **seven callers across three distinct
+transports**, two of which (a hand-built `httpx.AsyncClient` in
+`audit_ship_service.py`, and `pywebpush` in `push_service.py`) would not be
+reached by the single shared-client fix the first correction implied.
+SCH-9's fix (in-org validation) survives, batched; SCH-10 is flagged rather
+than fixed either way, since closing it is a cross-cutting change spanning
+multiple transports, not a scheduling-specific one.
 
 ## Scope
 
@@ -250,13 +256,24 @@ docstring is accurate about this and the draft's "Verified good" claim was
 not: it says the check "shrink[s] the rebinding window... versus
 save-time-to-send," not that it closes it.
 
-**Where:** not specific to this feature. The same `assert_outbound_url_safe`
+**Where:** not specific to this feature. `assert_outbound_url_safe` has
+**seven** callers across three transports — corrected after a second Codex
+review caught this write-up's own first draft undercounting them as six and
+implying one shared fix would cover all of them:
 
-- plain-`httpx` shape is used identically in `app/services/audit_ship_
-service.py`, `push_service.py`, and `integration_services/{teams,webhook,
-slack,discord,calcom}_service.py` — six files, all with the same residual
-  window. `calcom_service.py` follows the established repo pattern correctly;
-  the pattern itself is the gap.
+- Five go through the shared `create_integration_client()` (plain
+  `httpx.AsyncClient`) and would share one remediation:
+  `integration_services/{teams,webhook,slack,discord,calcom}_service.py`.
+- `audit_ship_service.py` constructs its own `httpx.AsyncClient` directly,
+  not through `create_integration_client` — a fix to the shared factory
+  alone would not reach it.
+- `push_service.py`'s `_send_one` dispatches through `pywebpush.webpush()`,
+  not `httpx` at all — a synchronous library with its own connection
+  handling, needing its own transport-specific fix rather than the
+  httpx-level one the other five share.
+
+`calcom_service.py` follows the established repo pattern correctly; the
+pattern itself is the gap, and it is not one gap but (at least) three.
 
 **Impact:** LOW/MED. Requires an attacker who controls DNS for a domain an
 org has configured as an integration endpoint (webhook URL, self-hosted
@@ -266,9 +283,9 @@ SSRF variant, not a trivially exploitable one.
 
 **Fix:** not applied here. Closing this properly means pinning the
 validated, resolved address for the actual connection (while preserving the
-original Host header / SNI) — a shared-infrastructure change to
-`create_integration_client`/the calling convention across all six files, not
-a scheduling-module fix, and a behavior change to how every integration
+original Host header / SNI), separately for each of the three transports
+above — not one shared-infrastructure change, and not a scheduling-module
+fix, and a behavior change to how every integration
 connects. Flagged for a dedicated cross-cutting pass (the shape SEC-00 exists
 for), not fixed unilaterally here. Mirrored into `docs/KNOWN_LIMITATIONS.md`.
 

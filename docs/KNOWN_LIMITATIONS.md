@@ -2116,26 +2116,41 @@ reason. (Security review EC-14 residual,
 `assert_outbound_url_safe()` (`app/utils/url_validator.py`) re-resolves an
 org-configured integration URL's hostname via `socket.getaddrinfo()`
 immediately before an outbound request, to catch a hostname that was
-repointed at an internal address since it was saved. Six services call it
-this way — `audit_ship_service.py`, `push_service.py`, and
-`integration_services/{teams,webhook,slack,discord,calcom}_service.py` — and
-in every one, the actual request is a separate, ordinary
-`httpx.AsyncClient.get()`/`.post()` call that performs its **own**
-independent DNS resolution when it connects. A hostname that resolves to a
-public IP for the check and an internal one moments later (classic DNS
-rebinding) passes the check and still reaches the internal address. The
-function's own docstring says it "shrink[s] the rebinding window... versus
+repointed at an internal address since it was saved. **Seven** call sites
+share the gap, across three distinct transports:
+
+- **Five** go through the shared `create_integration_client()` (plain
+  `httpx.AsyncClient`) and share one remediation:
+  `integration_services/{teams,webhook,slack,discord,calcom}_service.py`.
+- **`audit_ship_service.py`** constructs its own `httpx.AsyncClient`
+  directly rather than going through `create_integration_client` — a
+  `create_integration_client` fix alone would not reach it; it needs either
+  migrating onto the shared client or its own equivalent fix.
+- **`push_service.py`** doesn't use `httpx` at all — `_send_one` dispatches
+  through `pywebpush.webpush()`, a synchronous library with its own
+  connection handling. Pinning a resolved address here needs a
+  transport-specific approach, not the httpx-level fix the other six share;
+  it would remain vulnerable if a fix were scoped only to
+  `create_integration_client`.
+
+In every one of the seven, the actual request performs its **own**
+independent DNS resolution when it connects, separate from the
+`assert_outbound_url_safe` check. A hostname that resolves to a public IP
+for the check and an internal one moments later (classic DNS rebinding)
+passes the check and still reaches the internal address. The function's own
+docstring says it "shrink[s] the rebinding window... versus
 save-time-to-send" — narrows, not closes — which is accurate; a security
-review draft that read this as "closed" was corrected (SCH-10).
+review draft that read this as "closed," and then first wrote it up as six
+files sharing one fix, was corrected twice (SCH-10, then a Codex review of
+that correction itself).
 
 Not fixed: closing it means pinning the address `assert_outbound_url_safe`
 resolved for the actual connection (while preserving the original Host
-header / SNI) — a shared-infrastructure change to
-`create_integration_client`/the calling convention across all six files,
-not a fix scoped to any one of them, and a change to how every integration
-connects. Needs a dedicated cross-cutting pass (the shape SEC-00 exists
-for), not a unilateral fix inside a feature-scoped review. (Security review
-SCH-10, `docs/security-review/SCH-15-scheduling.md`.)
+header / SNI), separately for each of the three transports above — not one
+shared-infrastructure change, and not a fix scoped to any single file. Needs
+a dedicated cross-cutting pass (the shape SEC-00 exists for) that accounts
+for all three transports, not a unilateral fix inside a feature-scoped
+review. (Security review SCH-10, `docs/security-review/SCH-15-scheduling.md`.)
 
 ## Process
 
