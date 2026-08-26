@@ -152,6 +152,26 @@ concurrent **first** mappings for a brand-new source. A DB-level unique/
 check constraint would close that gap completely; that's a schema decision
 left for a future pass, not attempted here.
 
+**Revised after Codex review:** the first version of `update_event_hour_mapping`'s
+fix locked only the _other_ mappings for the source, excluding the target
+row being updated (`EventHourMapping.id != mapping_id`). Codex correctly
+identified a lock-order inversion this introduces: two concurrent updates
+to two _different_ mappings under the same source could each lock the row
+the other was about to write to (via the exclusion-based sum), then each
+block writing their own row at flush — InnoDB resolves that by killing one
+side as a deadlock, surfaced to the caller as a 500. Fixed by locking the
+**complete** set of mappings for the source — including the target itself —
+in one query, ordered consistently by `id`, before reading or writing any
+of them; `other_total` is then computed in Python from that locked set. A
+second transaction reaching the same source now queues behind the first
+instead of each holding what the other needs. `create_event_hour_mapping`
+does not have this failure mode (a fresh `INSERT` never needs to acquire a
+write lock on an existing row, so there is nothing for its own write to
+deadlock against). Guard test:
+`test_locked_set_includes_the_target_row_itself` in
+`tests/test_admin_hours_service.py`, asserting the target's own id is not
+excluded from the locked query.
+
 ### AH-12 — LOW — `edit_pending_entry` skipped the guards `create_manual_entry` enforces — ✅ FIXED
 
 **What:** editing a pending entry's times only checked ordering
@@ -250,6 +270,10 @@ All in `tests/test_admin_hours_service.py` unless noted:
 - `tests/test_event_attendance_lock.py` — updated the existing
   `delete_event_attendance_entries` call-signature assertion for the new
   `organization_id` argument.
+- `test_locked_set_includes_the_target_row_itself` in
+  `TestEventHourMappingPercentageLocking` — guards the Codex-caught
+  lock-order deadlock: the target mapping's own id must not be excluded
+  from the locked source set.
 
 ## Completion gate
 
@@ -260,4 +284,4 @@ All in `tests/test_admin_hours_service.py` unless noted:
 | `isort --check-only` (changed files)               | clean                   |
 | `python3 scripts/validate_migrations.py --strict`  | PASSED (no migrations)  |
 | backend tests, scope (`-k "admin_hours or event"`) | 604 passed, 1 skipped   |
-| backend tests, full suite                          | 8845 passed, 22 skipped |
+| backend tests, full suite                          | 8846 passed, 22 skipped |
