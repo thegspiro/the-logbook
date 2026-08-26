@@ -151,4 +151,4 @@ None — no model or migration changes this iteration.
 | `isort --check-only` (changed files)                 | clean                                |
 | `python3 scripts/validate_migrations.py --strict`    | PASSED (no migrations)               |
 | backend tests, scope (`inventory` + `medical_suppl`) | 553 passed, 1 skipped (pre-existing) |
-| backend tests, full suite                            | pending                              |
+| backend tests, full suite                            | 8897 passed, 22 skipped              |
