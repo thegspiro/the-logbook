@@ -84,9 +84,9 @@ def test_delete_permission_is_granular_across_every_destructive_route():
         )
         if is_destructive:
             destructive.append(f"{sorted(route.methods)} {route.path}")
-            assert accepts_delete, (
-                f"Destructive route missing facilities.delete: {route.path}"
-            )
+            assert (
+                accepts_delete
+            ), f"Destructive route missing facilities.delete: {route.path}"
             assert any(
                 {"facilities.delete", "facilities.manage"} <= permissions
                 for permissions in _permission_sets(route)
@@ -94,9 +94,9 @@ def test_delete_permission_is_granular_across_every_destructive_route():
         elif accepts_delete:
             unexpected.append(f"{sorted(route.methods)} {route.path}")
 
-    assert len(destructive) == 20, (
-        f"Expected all 19 DELETE routes plus archive, found {destructive}"
-    )
+    assert (
+        len(destructive) == 20
+    ), f"Expected all 19 DELETE routes plus archive, found {destructive}"
     assert not unexpected, (
         "facilities.delete must grant destructive operations only, found on: "
         f"{unexpected}"
@@ -140,12 +140,12 @@ def test_view_sensitive_grants_sensitive_reads_but_never_writes():
             # Any non-GET route, and any GET outside the sensitive families,
             # has no business accepting the read-only sensitive grant.
             writable.append(f"{sorted(route.methods)} {route.path}")
-    assert not missing_read, (
-        f"Sensitive GETs missing facilities.view_sensitive: {missing_read}"
-    )
-    assert not writable, (
-        f"facilities.view_sensitive must stay read-only, found on: {writable}"
-    )
+    assert (
+        not missing_read
+    ), f"Sensitive GETs missing facilities.view_sensitive: {missing_read}"
+    assert (
+        not writable
+    ), f"facilities.view_sensitive must stay read-only, found on: {writable}"
 
 
 def test_default_positions_grant_sensitive_read_only_to_org_wide_roles():
