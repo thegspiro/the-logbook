@@ -197,6 +197,7 @@ function getCtaActions(notification: NotificationLogRecord): CtaAction[] {
   else if (actionUrl.startsWith('/training')) label = 'View Training';
   else if (actionUrl.startsWith('/maintenance') || actionUrl.startsWith('/apparatus')) label = 'View Details';
   else if (actionUrl.startsWith('/members') || actionUrl.startsWith('/users')) label = 'View Member';
+  else if (actionUrl.startsWith('/messages')) label = 'Read Message';
   else if (category === 'scheduling') label = 'View Shift';
   else if (category === 'events') label = 'View Event';
   else if (category === 'training') label = 'View Training';

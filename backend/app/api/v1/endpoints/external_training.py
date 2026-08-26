@@ -51,6 +51,7 @@ from app.schemas.training import (
     TestConnectionResponse,
 )
 from app.services.external_training_service import ExternalTrainingSyncService
+from app.utils.model_updates import apply_updates
 from app.utils.org_scoping import is_in_org
 from app.utils.url_validator import validate_integration_url
 
@@ -304,9 +305,15 @@ async def update_provider(
         "default_category_id",
         "active",
     }
-    for field, value in update_data.items():
-        if field in ALLOWED_PROVIDER_FIELDS:
-            setattr(provider, field, value)
+    try:
+        apply_updates(
+            provider,
+            {k: v for k, v in update_data.items() if k in ALLOWED_PROVIDER_FIELDS},
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
+        )
 
     # Reset connection verification if credentials changed
     if any(
