@@ -947,6 +947,10 @@ export interface StorageAreaCreate {
   sort_order?: number | null | undefined;
 }
 
+/** Values accepted by the backend's inventory EquipmentRequestCreate schema. */
+export type RequestTypeLiteral = 'checkout' | 'issuance' | 'purchase' | 'return';
+export type RequestPriorityLiteral = 'low' | 'normal' | 'high';
+
 export interface EquipmentRequestItem {
   id: string;
   requester_id: string;
@@ -955,8 +959,8 @@ export interface EquipmentRequestItem {
   item_id?: string;
   category_id?: string;
   quantity: number;
-  request_type: string;
-  priority: string;
+  request_type: RequestTypeLiteral;
+  priority: RequestPriorityLiteral;
   reason?: string;
   status: string;
   reviewed_by?: string;
@@ -1532,29 +1536,52 @@ export interface BatchScanItem {
   code: string;
   item_id?: string;
   quantity?: number;
+  operation: 'permanent_assignment' | 'temporary_loan';
+  expected_return_at?: string;
 }
 
-export interface BatchCheckoutRequest {
+export interface DistributeItemsRequest {
   user_id: string;
   items: BatchScanItem[];
   reason?: string;
 }
 
-export interface BatchCheckoutResultItem {
+export interface DistributeItemsResultItem {
   code: string;
   item_name: string;
   item_id: string;
   action: string;
   success: boolean;
   error?: string;
+  conflict?: InventoryHoldingConflict;
 }
 
-export interface BatchCheckoutResponse {
+export interface InventoryHoldingConflict {
+  holder_id: string;
+  holder_name: string;
+  holding_type: 'assignment' | 'checkout';
+  record_id: string;
+  held_since: string;
+  expected_return_date?: string;
+}
+
+export interface InventoryTransferRequest {
+  item_id: string;
+  new_holder_id: string;
+  current_holder_id: string;
+  current_record_id: string;
+  holding_type: 'assignment' | 'checkout';
+  return_condition: string;
+  transfer_reason: string;
+  immediate: boolean;
+}
+
+export interface DistributeItemsResponse {
   user_id: string;
   total_scanned: number;
   successful: number;
   failed: number;
-  results: BatchCheckoutResultItem[];
+  results: DistributeItemsResultItem[];
 }
 
 export interface BatchReturnItem {

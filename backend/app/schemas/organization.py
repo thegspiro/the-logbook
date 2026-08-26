@@ -1072,6 +1072,17 @@ class EnabledModulesResponse(BaseModel):
         default_factory=ModuleSettings,
         description="Detailed module enablement settings",
     )
+    configured: bool = Field(
+        default=False,
+        description=(
+            "True when the organization has actually chosen its modules. "
+            "False means these values are declared defaults, not a decision. "
+            "The navigation needs the difference: it shows everything for an "
+            "organization that has not configured its modules, and must not "
+            "read a department that deliberately switched them all off as "
+            "that same case."
+        ),
+    )
 
     def is_module_enabled(self, module_id: str) -> bool:
         """Check if a specific module is enabled"""

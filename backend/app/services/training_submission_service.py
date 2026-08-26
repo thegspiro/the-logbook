@@ -20,6 +20,7 @@ from app.core.utils import generate_uuid
 from app.models.training import (
     SelfReportConfig,
     SubmissionStatus,
+    TrainingCategory,
     TrainingCourse,
     TrainingRecord,
     TrainingStatus,
@@ -29,6 +30,7 @@ from app.models.training import (
 from app.models.user import User
 from app.services.separation_of_duties import assert_different_person
 from app.utils.model_updates import apply_updates
+from app.utils.org_scoping import assert_in_org
 
 
 class TrainingSubmissionService:
@@ -99,6 +101,15 @@ class TrainingSubmissionService:
             raise ValueError("Hours completed must be greater than zero")
 
         self._assert_within_department_limits(config, training_type, hours_completed)
+
+        await assert_in_org(
+            self.db,
+            TrainingCategory,
+            kwargs.get("category_id"),
+            organization_id,
+            allow_none=True,
+            label="training category",
+        )
 
         if save_as_draft:
             # A draft is a note to oneself; it is not in front of anybody yet.
@@ -417,6 +428,16 @@ class TrainingSubmissionService:
         ):
             raise ValueError(
                 "Cannot edit a submission that has been approved or rejected"
+            )
+
+        if "category_id" in kwargs:
+            await assert_in_org(
+                self.db,
+                TrainingCategory,
+                kwargs["category_id"],
+                organization_id,
+                allow_none=True,
+                label="training category",
             )
 
         apply_updates(submission, kwargs)

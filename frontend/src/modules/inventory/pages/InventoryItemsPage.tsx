@@ -629,7 +629,7 @@ const InventoryItemsPage: React.FC = () => {
     if (canManage)
       a.push({
         id: 'assign',
-        label: 'Assign Items',
+        label: 'Distribute Items',
         icon: <UserPlus className="h-5 w-5" />,
         onClick: () => setMemberPickerOpen(true),
         color: 'bg-blue-600',
@@ -1093,7 +1093,7 @@ const InventoryItemsPage: React.FC = () => {
       <MemberPickerModal
         isOpen={memberPickerOpen}
         onClose={() => setMemberPickerOpen(false)}
-        title="Assign Items — Select a Member"
+        title="Distribute Items — Select a Member"
         onSelect={(member) => {
           setMemberPickerOpen(false);
           setAssignTarget(member);
@@ -1102,7 +1102,7 @@ const InventoryItemsPage: React.FC = () => {
       <InventoryScanModal
         isOpen={assignTarget !== null}
         onClose={() => setAssignTarget(null)}
-        mode="checkout"
+        mode="distribute"
         userId={assignTarget?.userId ?? ''}
         memberName={assignTarget?.memberName ?? ''}
         onComplete={() => {
