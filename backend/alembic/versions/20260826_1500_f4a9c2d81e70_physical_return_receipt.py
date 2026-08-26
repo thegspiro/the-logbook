@@ -1,7 +1,7 @@
 """Add physical receipt evidence and return-request stages.
 
 Revision ID: f4a9c2d81e70
-Revises: e2c8f5a71d40
+Revises: 472a1e34aa84
 Create Date: 2026-08-26 15:00:00
 """
 
@@ -9,7 +9,7 @@ from alembic import op
 import sqlalchemy as sa
 
 revision = "f4a9c2d81e70"
-down_revision = "e2c8f5a71d40"
+down_revision = "472a1e34aa84"
 branch_labels = None
 depends_on = None
 
