@@ -2152,6 +2152,50 @@ a dedicated cross-cutting pass (the shape SEC-00 exists for) that accounts
 for all three transports, not a unilateral fix inside a feature-scoped
 review. (Security review SCH-10, `docs/security-review/SCH-15-scheduling.md`.)
 
+## Training — Bulk/Historical-Import Enum Fields Have No Request-Level Validators (2026-08-26)
+
+`BulkTrainingRecordEntry.training_type`/`.status`,
+`HistoricalImportConfirmRequest.default_status`/`.default_training_type`,
+and `CourseMappingEntry.new_training_type` have no `@field_validator`,
+unlike the single-record `TrainingRecordCreate`/`TrainingRecordUpdate`
+schemas, which do. All three are DB-level `Enum` columns on
+`TrainingRecord`, so a bad value still reaches the database layer instead
+of 422ing at the Pydantic boundary.
+
+Not currently a crash risk: both bulk paths wrap each row's insert in its
+own error boundary (`create_records_bulk` flushes per row inside a
+try/except; `confirm_historical_import` runs each row in its own
+`db.begin_nested()`), so an invalid enum value fails only that one row with
+a sanitized message — the rest of the batch still imports.
+
+Not fixed: adding a `@field_validator` to a `List[...]`-carried field
+changes the failure mode from per-row partial success to whole-request
+rejection, since Pydantic validates the full payload before the endpoint
+runs at all. Whether that's the right trade-off for a bulk-import UX (fail
+the whole file on one bad row vs. import what's valid and report the rest)
+is a product decision, not a drive-by fix. (Security review TR-17 residual,
+`docs/security-review/TR-17-training-core.md`.)
+
+## Training — `enroll_member`'s Duplicate-Active-Enrollment Guard Is a Race (2026-08-26)
+
+`TrainingProgramService.enroll_member` checks for an existing ACTIVE
+enrollment (SELECT), then inserts a new `ProgramEnrollment` row — with no
+unique constraint or row lock backing the check. Two concurrent enroll
+calls for the same (user, program) pair can both pass the SELECT before
+either commits, producing two ACTIVE enrollment rows for the same member on
+the same program.
+
+Data-integrity, not a tenant-isolation or capacity-abuse issue — no
+cross-org effect, and the practical impact is a duplicate enrollment record
+rather than anything security-relevant.
+
+Not fixed: closing it needs a schema change (a partial unique index on
+`(user_id, program_id)` where `status = 'active'`, or an equivalent
+row-locking guard matching CLAUDE.md Pitfall #27's shape), which this
+rotation's process reserves for a flagged item rather than a drive-by
+fix inside an unrelated finding. (Security review TR-17 residual,
+`docs/security-review/TR-17-training-core.md`.)
+
 ## Process
 
 The review loop (see [review-log.md](./review-log.md)) advances through one area

@@ -193,7 +193,10 @@ class TrainingService:
                 from app.models.user import User as _User
 
                 user_result = await self.db.execute(
-                    select(_User).where(_User.id == str(user_id))
+                    select(_User).where(
+                        _User.id == str(user_id),
+                        _User.organization_id == str(organization_id),
+                    )
                 )
                 _member = user_result.scalar_one_or_none()
                 if _member:
@@ -943,7 +946,10 @@ class TrainingService:
         # Get user's roles
         user_result = await self.db.execute(
             select(User)
-            .where(User.id == str(user_id))
+            .where(
+                User.id == str(user_id),
+                User.organization_id == str(organization_id),
+            )
             .options(selectinload(User.roles))
         )
         user = user_result.scalar_one_or_none()
