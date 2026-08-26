@@ -1,6 +1,6 @@
 # Security Review 13 — Apparatus & NFC
 
-**Prefix:** `AP` · **Iteration:** 13 · **Reviewed:** 2026-08-26 · **PR:** (opened this iteration)
+**Prefix:** `AP` · **Iteration:** 13 · **Reviewed:** 2026-08-26 · **PR:** [#1838](https://github.com/thegspiro/the-logbook/pull/1838)
 
 **Backend:** `api/v1/endpoints/apparatus.py` (88 routes), `services/apparatus_service.py`,
 `evoc_level_service.py`, `services/driver_exception_service.py` (new),
