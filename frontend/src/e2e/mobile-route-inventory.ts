@@ -176,6 +176,13 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
     detail: 'fast route-level mobile presentation ratchet',
   },
   {
+    path: '/messages/:messageId',
+    source: 'src/modules/communications/routes.tsx',
+    coverage: 'exempt',
+    detail:
+      'parameterized detail view of one message; every message renders the same single-column card at max-w-3xl, its back link and acknowledge button carry max-md:min-h-[44px], and the chrome is the shared card utility — so /messages stays the representative route',
+  },
+  {
     path: '/documents',
     source: 'src/modules/documents/routes.tsx',
     coverage: 'ratchet',

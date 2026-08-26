@@ -959,6 +959,7 @@ lot's number or expiration date require `equipment_check.manage` or
 | URL                                 | Page                      | Permission                                                                           |
 | ----------------------------------- | ------------------------- | ------------------------------------------------------------------------------------ |
 | `/messages`                         | Messages                  | Authenticated                                                                        |
+| `/messages/:messageId`              | Message Detail            | Authenticated _(2026-08-26)_                                                         |
 | `/communications/messages`          | Message Administration    | `notifications.manage`                                                               |
 | `/communications/email-templates`   | Email Template Management | `settings.manage`                                                                    |
 | `/communications/photo-use-consent` | Photo Use Consent         | any of `users.view_consents`, `notifications.manage`, `members.manage`, `users.edit` |
