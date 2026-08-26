@@ -141,9 +141,24 @@ not a column).
 ## Guard tests added
 
 - `test_admin_hours_service.py::TestOrgScopedQueries::test_clock_out_by_category_query_is_org_scoped`
-  — asserts the compiled statement contains `organization_id`, matching the
-  existing pattern in the same test class for the module's other two
-  org-scoped queries. Fails on AP-6 reintroduction.
+  — asserts `organization_id` appears in the compiled **WHERE clause**
+  specifically (`stmt.whereclause`), not the whole statement. **A Codex
+  review caught that the first version of this test was hollow**: a
+  substring check against `str(stmt)` passes regardless of the WHERE clause,
+  because `select(AdminHoursEntry)` always lists `organization_id` in its
+  SELECT columns as a plain model field — the test would have kept passing
+  even with the fix fully reverted. Fixed to inspect `.whereclause`; verified
+  by hand that it now fails against a reconstructed pre-fix query and passes
+  against the actual fixed one. While fixing it, found and fixed the
+  **identical hollow-assertion flaw already present** in this same test
+  class's `test_get_active_session_query_is_org_scoped` (pre-dating this
+  PR, not something Codex flagged directly — the same mechanism, same file,
+  caught by inspection once the pattern was known). `_get_active_session`
+  also does `select(AdminHoursEntry)`, so that test was equally hollow.
+  `test_check_overlap_query_is_org_scoped` is unaffected — `_check_overlap`
+  selects `func.count(AdminHoursEntry.id)`, not the whole model, so
+  `organization_id` only appears there via the WHERE clause. Both fixed
+  tests fail on AP-6 reintroduction, for real this time.
 
 ## Completion gate
 
