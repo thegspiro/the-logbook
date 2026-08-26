@@ -21,9 +21,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import PaginationParams, get_current_user, require_permission
 from app.core.database import get_db
-from app.core.utils import ensure_found, generate_uuid
-from app.models.training import TrainingWaiver, TrainingWaiverType
+from app.core.utils import ensure_found, generate_uuid, safe_error_detail
+from app.models.training import TrainingRequirement, TrainingWaiver, TrainingWaiverType
 from app.models.user import User
+from app.utils.model_updates import apply_updates
+from app.utils.org_scoping import assert_all_in_org
 
 router = APIRouter()
 
@@ -91,6 +93,17 @@ async def create_training_waiver(
     )
     if member_result.scalar_one_or_none() is None:
         raise HTTPException(status_code=404, detail="Member not found")
+
+    try:
+        await assert_all_in_org(
+            db,
+            TrainingRequirement,
+            data.requirement_ids,
+            current_user.organization_id,
+            label="training requirement",
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
 
     # Validate waiver type
     try:
@@ -186,8 +199,17 @@ async def update_training_waiver(
         except ValueError:
             updates["waiver_type"] = TrainingWaiverType.OTHER
 
-    for key, value in updates.items():
-        setattr(waiver, key, value)
+    try:
+        await assert_all_in_org(
+            db,
+            TrainingRequirement,
+            updates.get("requirement_ids"),
+            current_user.organization_id,
+            label="training requirement",
+        )
+        apply_updates(waiver, updates)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
 
     waiver.updated_at = datetime.now(timezone.utc)
     await db.commit()
