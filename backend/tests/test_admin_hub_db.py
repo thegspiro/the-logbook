@@ -45,11 +45,26 @@ HUB_ADMIN_PERMISSIONS = ["members.manage", "medical_screening.view"]
 
 
 async def _org(db_session, **columns) -> Organization:
+    """A department that runs Medical Screening.
+
+    Stated rather than assumed: ``medical_screening`` is an opt-in module, so
+    a bare organization has it off and the screening metrics and attention
+    rows correctly resolve to nothing. Every test here is about what those
+    rows say once the department does run it, so the flag is part of the
+    fixture — and a test that means to assert the module-off behaviour passes
+    its own ``settings``.
+    """
     org = Organization(
         id=str(uuid.uuid4()),
         name="Admin Hub Test Department",
         slug=f"adminhub-{uuid.uuid4().hex[:8]}",
-        **{"timezone": "UTC", **columns},
+        **{
+            "timezone": "UTC",
+            "settings": {
+                "modules": {"medical_screening": True, "_user_configured": True}
+            },
+            **columns,
+        },
     )
     db_session.add(org)
     await db_session.flush()

@@ -776,14 +776,41 @@ class ModuleSettings(BaseModel):
         "expiration tracking) — separate from gear and uniforms so a "
         "department can appoint its own supply officer",
     )
+    # Opt-in, and deliberately not "preserve what the deployment does today".
+    # Both shipped with no ModuleSettings field, so the resolver's
+    # absent-key-means-default rule decides what an upgrade sees, and for
+    # these two "default" has to mean off: a department that never enabled
+    # Finance was still shown its dues, cash-flow and budget cards, which are
+    # the only link into /finance anywhere in the UI. Defaulting them on would
+    # have left that exact complaint unanswered on every installation that had
+    # not asked for the module. Medical Screening is the clearer case still —
+    # SideNavigation has always gated its entry on a field that did not exist,
+    # so the entry was hidden for every configured organization, and off is
+    # what restores that rather than what changes it.
+    #
+    # This is the documented exception to CLAUDE.md pitfall 19, not an
+    # oversight of it: the rule protects a module a department is *using*, and
+    # neither of these could be reached from the navigation. A department that
+    # does keep its books here turns Finance back on under Settings > Modules,
+    # where both now appear alongside the other opt-in modules.
+    finance: bool = Field(
+        default=False,
+        description="Finance module (budgets, dues, expenses, purchase requests)",
+    )
+    medical_screening: bool = Field(
+        default=False,
+        description="Medical Screening module (physicals, clearances, expirations)",
+    )
 
     def get_enabled_modules(self) -> list[str]:
         """Get list of all enabled module IDs including essential modules"""
         # Essential modules are always enabled
         enabled = ["members", "events", "documents", "roles", "settings"]
 
-        # Add configurable modules that are enabled
-        for field_name in self.model_fields:
+        # Add configurable modules that are enabled. Read off the class:
+        # instance access to model_fields is deprecated in Pydantic 2.11 and
+        # removed in 3.
+        for field_name in type(self).model_fields:
             if getattr(self, field_name):
                 enabled.append(field_name)
 
@@ -817,6 +844,8 @@ class ModuleSettingsUpdate(BaseModel):
     medical_supplies: Optional[bool] = None
     prospective_members: Optional[bool] = None
     public_info: Optional[bool] = None
+    finance: Optional[bool] = None
+    medical_screening: Optional[bool] = None
 
 
 class OrganizationSettings(BaseModel):

@@ -345,6 +345,8 @@ export interface ModuleSettingsData {
   medical_supplies: boolean;
   prospective_members: boolean;
   public_info: boolean;
+  finance: boolean;
+  medical_screening: boolean;
 }
 
 export interface OrganizationProfile {

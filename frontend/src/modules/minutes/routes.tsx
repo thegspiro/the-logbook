@@ -8,6 +8,7 @@
 
 import React, { Suspense } from 'react';
 import { Route } from 'react-router';
+import { ProtectedRoute } from '../../components/ProtectedRoute';
 import { lazyWithRetry } from '../../utils/lazyWithRetry';
 
 const MinutesPage = lazyWithRetry(() => import('./pages/MinutesPage'));
@@ -19,17 +20,21 @@ export const getMinutesRoutes = () => (
     <Route
       path="/minutes"
       element={
-        <Suspense fallback={null}>
-          <MinutesPage />
-        </Suspense>
+        <ProtectedRoute requiredModule="minutes" moduleLabel="Meeting Minutes">
+          <Suspense fallback={null}>
+            <MinutesPage />
+          </Suspense>
+        </ProtectedRoute>
       }
     />
     <Route
       path="/minutes/:minutesId"
       element={
-        <Suspense fallback={null}>
-          <MinutesDetailPage />
-        </Suspense>
+        <ProtectedRoute requiredModule="minutes" moduleLabel="Meeting Minutes">
+          <Suspense fallback={null}>
+            <MinutesDetailPage />
+          </Suspense>
+        </ProtectedRoute>
       }
     />
   </React.Fragment>

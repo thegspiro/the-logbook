@@ -56,6 +56,7 @@ class ErrorCode(str, Enum):
 
     # --- Organization / tenancy ---------------------------------------
     ORG_NOT_FOUND = "LB-ORG-001"
+    ORG_MODULE_DISABLED = "LB-ORG-002"
 
     # --- System --------------------------------------------------------
     SYS_INTERNAL_ERROR = "LB-SYS-001"
@@ -264,6 +265,23 @@ ERROR_CODE_CATALOG: dict[ErrorCode, ErrorCodeInfo] = {
         resolution=(
             "Escalate to the system administrator — the account's "
             "organization link needs to be repaired in the database.",
+        ),
+    ),
+    ErrorCode.ORG_MODULE_DISABLED: ErrorCodeInfo(
+        title="Module not enabled",
+        description=(
+            "The request targeted a feature the department has switched "
+            "off under Settings > Modules. This is a configuration "
+            "choice, not a permission problem: the member may well hold "
+            "the permission, and would regain access the moment the "
+            "module is switched back on."
+        ),
+        resolution=(
+            "If the feature is wanted, an administrator turns it on "
+            "under Settings > Modules.",
+            "If it is not wanted, the request came from a stale browser "
+            "tab, a bookmark, or a client that has not reloaded since "
+            "the module was switched off — reload the page.",
         ),
     ),
     ErrorCode.SYS_INTERNAL_ERROR: ErrorCodeInfo(
