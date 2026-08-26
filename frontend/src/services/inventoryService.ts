@@ -766,11 +766,11 @@ export const inventoryService = {
     requestId: string,
     data: {
       status: 'received' | 'denied';
-      review_notes?: string;
-      observed_condition?: string;
-      verified_identifier?: string;
-      received_quantity?: number;
-      follow_up?: 'auto' | 'none' | 'maintenance' | 'charge_review' | 'write_off';
+      review_notes?: string | undefined;
+      observed_condition?: string | undefined;
+      verified_identifier?: string | undefined;
+      received_quantity?: number | undefined;
+      follow_up?: 'auto' | 'none' | 'maintenance' | 'charge_review' | 'write_off' | undefined;
     }
   ): Promise<{ id: string; status: string; message: string }> {
     const response = await api.put<{ id: string; status: string; message: string }>(

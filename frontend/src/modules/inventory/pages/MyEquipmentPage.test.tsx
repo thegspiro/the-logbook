@@ -102,15 +102,6 @@ const availableItem: InventoryItem = {
   updated_at: '2026-01-01T00:00:00Z',
 };
 
-// Modal submit buttons can share a label with row action buttons; the modal
-// renders last in the DOM.
-const lastButton = (name: string | RegExp): HTMLElement => {
-  const btns = screen.getAllByRole('button', { name });
-  const btn = btns[btns.length - 1];
-  if (!btn) throw new Error(`button not found: ${String(name)}`);
-  return btn;
-};
-
 const firstButton = (name: string | RegExp): HTMLElement => {
   const [btn] = screen.getAllByRole('button', { name });
   if (!btn) throw new Error(`button not found: ${String(name)}`);

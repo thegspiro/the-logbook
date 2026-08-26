@@ -972,11 +972,6 @@ export interface EquipmentRequestItem {
   received_quantity?: number;
   follow_up_type?: string;
   follow_up_id?: string;
-  observed_condition?: string;
-  verified_identifier?: string;
-  received_quantity?: number;
-  follow_up_type?: string;
-  follow_up_id?: string;
   fulfilled_by?: string;
   fulfilled_at?: string;
   fulfillment_type?: string;
