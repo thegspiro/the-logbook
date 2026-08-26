@@ -255,11 +255,11 @@ async def create_member(
     # a client-chosen rank must clear the same ceiling as a granted role — a
     # bare users.create/members.manage holder must not mint a member at a rank
     # that outranks their own permissions.
-    await _enforce_rank_grant_ceiling(
-        current_user, user_data.rank, db, get_client_ip(request)
-    )
     canonical_rank = await _canonical_rank_or_400(
         user_data.rank, str(current_user.organization_id), db
+    )
+    await _enforce_rank_grant_ceiling(
+        current_user, canonical_rank, db, get_client_ip(request)
     )
 
     # Auto-generate membership number if not provided and auto-generation is on
@@ -1481,11 +1481,14 @@ async def update_user_profile(
         # permissions — so a rank change must also clear the permission-grant
         # ceiling, or a secretary could self-promote to a chief rank and gain
         # settings.manage/security.manage. Only enforced on an actual change.
-        if "rank" in update_data and update_data["rank"] != user.rank:
-            await _enforce_rank_grant_ceiling(perm_user, update_data["rank"], db, None)
+        if "rank" in update_data:
             update_data["rank"] = await _canonical_rank_or_400(
                 update_data["rank"], str(current_user.organization_id), db
             )
+            if update_data["rank"] != user.rank:
+                await _enforce_rank_grant_ceiling(
+                    perm_user, update_data["rank"], db, None
+                )
 
     # Handle emergency_contacts separately (needs serialization)
     if "emergency_contacts" in update_data:
