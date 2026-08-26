@@ -47,6 +47,23 @@ from app.services.admin_hours_service import AdminHoursService
 router = APIRouter()
 
 
+def _parse_optional_date(value: str | None, field_name: str) -> Optional[datetime]:
+    """Parse an optional ISO-8601 query param, or a clean 400 for a bad one.
+
+    A bare `datetime.fromisoformat(value)` raises ValueError, which reaches
+    the client as an unhandled 500 rather than a 400 for a malformed date
+    string — a caller-input error should never surface as a server error.
+    """
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(value)
+    except ValueError:
+        raise HTTPException(
+            status_code=400, detail=f"Invalid {field_name}: must be an ISO-8601 date"
+        )
+
+
 # =============================================================================
 # Categories
 # =============================================================================
@@ -247,6 +264,7 @@ async def clock_out(
         entry = await service.clock_out(
             entry_id=entry_id,
             user_id=str(current_user.id),
+            organization_id=str(current_user.organization_id),
         )
         category = await service.get_category(
             entry.category_id, str(current_user.organization_id)
@@ -486,8 +504,8 @@ async def list_my_entries(
     current_user: User = Depends(get_current_user),
 ):
     """List the current user's admin hours entries with pagination."""
-    parsed_start = datetime.fromisoformat(start_date) if start_date else None
-    parsed_end = datetime.fromisoformat(end_date) if end_date else None
+    parsed_start = _parse_optional_date(start_date, "start_date")
+    parsed_end = _parse_optional_date(end_date, "end_date")
 
     service = AdminHoursService(db)
     entries, total = await service.list_my_entries(
@@ -520,8 +538,8 @@ async def list_all_entries(
     current_user: User = Depends(require_permission("admin_hours.manage")),
 ):
     """List all admin hours entries for the organization (admin view)."""
-    parsed_start = datetime.fromisoformat(start_date) if start_date else None
-    parsed_end = datetime.fromisoformat(end_date) if end_date else None
+    parsed_start = _parse_optional_date(start_date, "start_date")
+    parsed_end = _parse_optional_date(end_date, "end_date")
 
     service = AdminHoursService(db)
     entries, total = await service.list_all_entries(
@@ -735,8 +753,8 @@ async def export_entries(
     current_user: User = Depends(require_permission("admin_hours.manage")),
 ):
     """Export admin hours entries as CSV."""
-    parsed_start = datetime.fromisoformat(start_date) if start_date else None
-    parsed_end = datetime.fromisoformat(end_date) if end_date else None
+    parsed_start = _parse_optional_date(start_date, "start_date")
+    parsed_end = _parse_optional_date(end_date, "end_date")
 
     service = AdminHoursService(db)
     try:
@@ -799,12 +817,8 @@ async def get_summary(
     """Get admin hours summary for reporting."""
     service = AdminHoursService(db)
 
-    parsed_start = None
-    parsed_end = None
-    if start_date:
-        parsed_start = datetime.fromisoformat(start_date)
-    if end_date:
-        parsed_end = datetime.fromisoformat(end_date)
+    parsed_start = _parse_optional_date(start_date, "start_date")
+    parsed_end = _parse_optional_date(end_date, "end_date")
 
     # Non-admins can only see their own summary
     effective_user_id = user_id

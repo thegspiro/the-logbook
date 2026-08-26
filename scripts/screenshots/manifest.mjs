@@ -11900,6 +11900,26 @@ export const SHOTS = [
     selector: "div[role='dialog']",
   },
   {
+    // The healthy status line the marker asked for cannot be produced here,
+    // and the reason is a fact worth teaching rather than a fixture gap.
+    // `LABEL_PRINTER_ALLOWED_NETWORKS` is a *platform* setting -- an
+    // organization administrator cannot change it -- and it is empty by
+    // default, so `Check status` refuses before it opens a socket. The
+    // documentation addresses the marker mandates are the one range that can
+    // never be in it. Producing an emerald line would mean either putting a
+    // routable printer address in a public repository or mocking the response,
+    // and a mocked status line is a screenshot of a lie. The guide now states
+    // the allowlist and quotes what a healthy line reads; the picture shows
+    // the two registrations, which is the part that is real.
+    id: "19-33-label-printers",
+    doc: "19-august-2026-release-changes.md",
+    line: 1362,
+    anchor: "Settings → Label Printers",
+    alt: "Settings → Label Printers with two registrations: a ZPL watch-desk printer marked default and an ESC/POS printer in the supply room, each on a documentation address",
+    route: "/settings?tab=labelPrinters",
+    fullPage: true,
+  },
+  {
     // The first half of the pair the marker asks for. Framed on the whole page
     // rather than the ballot alone, because the two facts that change sit in
     // different places: the item count inside the builder, and the voting

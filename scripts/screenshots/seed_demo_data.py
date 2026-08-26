@@ -13880,6 +13880,54 @@ class Seeder:
 
     # -- run ---------------------------------------------------------
 
+    # Documentation addresses (RFC 5737). Never a routable one: this file is
+    # public, and a host recorded here is a host the demo backend will try to
+    # open a socket to.
+    LABEL_PRINTERS = [
+        {
+            "name": "Watch Desk (Zebra ZD421)",
+            "host": "192.0.2.41",
+            "port": 9100,
+            "language": "zpl",
+            "dpi": 203,
+            "label_format": "zebra_2x1",
+            "location": "Station 1 \u2014 watch desk",
+            "is_default": True,
+        },
+        {
+            "name": "Quartermaster (Epson TM-T88)",
+            "host": "192.0.2.57",
+            "port": 9100,
+            "language": "escpos",
+            "dpi": 203,
+            "label_format": "escpos_80mm",
+            "location": "Station 1 \u2014 supply room",
+            "is_default": False,
+        },
+    ]
+
+    def seed_label_printers(self) -> int:
+        """Two registered printers, one per command language, one default.
+
+        Deliberately unreachable. `LABEL_PRINTER_ALLOWED_NETWORKS` is a
+        platform setting that is empty by default, so `Check status` refuses
+        before it opens a socket -- on this demo and on any stock install. That
+        is the honest state of the screen, and guide 19 now says so rather than
+        promising a healthy status line the fixture cannot produce without
+        putting a real printer address in a public repository.
+        """
+        existing = {
+            str(pick(printer, "name") or "")
+            for printer in items(self.api.get("/label-printers"), "printers")
+        }
+        created = 0
+        for printer in self.LABEL_PRINTERS:
+            if printer["name"] in existing:
+                continue
+            self.api.post("/label-printers", printer)
+            created += 1
+        return created
+
     def run(self) -> int:
         print("Seeding demo data...")
         self.step("enable all modules", self.enable_all_modules)
@@ -14072,6 +14120,7 @@ class Seeder:
             "close-out wizard fixture",
             lambda: self.seed_call_tracking_closeout(members),
         )
+        self.step("label printers", self.seed_label_printers)
 
         print(f"\nMembers on file: {len(members)}")
         if self.blocked:

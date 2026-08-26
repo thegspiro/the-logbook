@@ -7,6 +7,7 @@ check requests, dues, and approval chains.
 
 import uuid
 from datetime import datetime, timezone
+from decimal import Decimal
 
 import pytest
 from sqlalchemy import event, text
@@ -21,7 +22,9 @@ from app.models.finance import (
     PurchaseRequestStatus,
 )
 from app.models.user import User
-from app.services.finance_service import FinanceService
+from app.services.finance_service import BudgetLimitExceededError, FinanceService
+
+pytestmark = [pytest.mark.integration]
 
 pytestmark = [pytest.mark.integration]
 
@@ -250,6 +253,84 @@ class TestBudgetService:
         assert summary["total_spent"] == 0
         assert summary["total_remaining"] == 50000.00
         assert summary["percent_used"] == 0
+
+
+class TestBudgetMutationPolicy:
+    """Database-backed coverage of the hard, non-overridable budget ceiling."""
+
+    async def _budget(self, db_session, sample_org_data, amount="100.00"):
+        service = FinanceService(db_session)
+        org_id = sample_org_data["id"]
+        fy = await service.create_fiscal_year(
+            org_id=org_id,
+            created_by=sample_org_data["admin_id"],
+            name=f"Mutation {uuid.uuid4()}",
+            start_date=datetime(2026, 1, 1, tzinfo=timezone.utc),
+            end_date=datetime(2026, 12, 31, tzinfo=timezone.utc),
+        )
+        category = await service.create_budget_category(
+            org_id=org_id, name=f"Mutation {uuid.uuid4()}"
+        )
+        budget = await service.create_budget(
+            org_id=org_id,
+            created_by=sample_org_data["admin_id"],
+            fiscal_year_id=fy.id,
+            category_id=category.id,
+            amount_budgeted=Decimal(amount),
+        )
+        return service, budget
+
+    async def test_boundary_equal_spending(self, db_session, sample_org_data):
+        service, budget = await self._budget(db_session, sample_org_data)
+        await service._add_to_spent(budget.id, Decimal("100.00"), sample_org_data["id"])
+        assert budget.amount_spent == Decimal("100.00")
+
+    async def test_insufficient_funds_and_rollback(self, db_session, sample_org_data):
+        service, budget = await self._budget(db_session, sample_org_data)
+        with pytest.raises(BudgetLimitExceededError) as exc:
+            await service._encumber_budget(
+                budget.id, Decimal("100.01"), sample_org_data["id"]
+            )
+        assert exc.value.code == "budget_limit_exceeded"
+        await db_session.refresh(budget)
+        assert budget.amount_encumbered == Decimal("0.00")
+
+    async def test_serialized_encumbrances_cannot_overspend(
+        self, db_session, sample_org_data
+    ):
+        service, budget = await self._budget(db_session, sample_org_data)
+        await service._encumber_budget(
+            budget.id, Decimal("60.00"), sample_org_data["id"]
+        )
+        with pytest.raises(BudgetLimitExceededError):
+            await service._encumber_budget(
+                budget.id, Decimal("50.00"), sample_org_data["id"]
+            )
+        assert budget.amount_encumbered == Decimal("60.00")
+
+    async def test_encumbrance_to_spend_is_one_mutation(
+        self, db_session, sample_org_data
+    ):
+        service, budget = await self._budget(db_session, sample_org_data)
+        await service._encumber_budget(
+            budget.id, Decimal("80.00"), sample_org_data["id"]
+        )
+        await service._mutate_budget(
+            budget.id,
+            sample_org_data["id"],
+            encumbered_delta=Decimal("-80.00"),
+            spent_delta=Decimal("90.00"),
+        )
+        assert (budget.amount_encumbered, budget.amount_spent) == (
+            Decimal("0.00"),
+            Decimal("90.00"),
+        )
+
+    async def test_cross_organization_isolation(self, db_session, sample_org_data):
+        service, budget = await self._budget(db_session, sample_org_data)
+        await service._add_to_spent(budget.id, Decimal("25.00"), str(uuid.uuid4()))
+        await db_session.refresh(budget)
+        assert budget.amount_spent == Decimal("0.00")
 
 
 # ============================================
