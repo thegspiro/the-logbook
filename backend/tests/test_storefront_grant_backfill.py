@@ -77,6 +77,22 @@ def test_plain_member_is_backfilled_with_browsing_but_not_management():
     assert backfill["member"] == ("storefront.view", "storefront.order")
 
 
+# Permissions a *later*, independently-authored migration off the same parent
+# (c4a91b7e2f08) also revoked from these slugs' stored rows, after this
+# migration's snapshot was frozen. a1f7c34e9b02 (20260825_2015) strips
+# notifications.view unconditionally, from whatever a row has at the point it
+# runs — and it runs after a4f8c1b92d17 for this revision graph, so a real
+# stored row still carries the permission when a4f8c1b92d17's exact-match
+# check fires. The frozen snapshot is correct to still include it; comparing
+# against the *current* registry must add it back, or a1f7c34e9b02's own
+# revocation reads as snapshot drift here.
+_REVOKED_BY_A_LATER_SIBLING_MIGRATION = {
+    "member": {"notifications.view"},
+    "firefighter": {"notifications.view"},
+    "engineer": {"notifications.view"},
+}
+
+
 class TestFrozenPriorDefaults:
     """The snapshot must describe a pristine row at the moment this runs.
 
@@ -94,6 +110,7 @@ class TestFrozenPriorDefaults:
     def test_snapshot_is_the_registry_set_minus_the_added_grants(self, slug):
         module = _load_migration()
         registry = set(DEFAULT_POSITIONS[slug]["permissions"])
+        registry |= _REVOKED_BY_A_LATER_SIBLING_MIGRATION.get(slug, set())
         assert module._PRIOR_DEFAULTS[slug] == registry - set(module._BACKFILL[slug])
 
     def test_the_snapshot_never_already_carries_a_grant(self):

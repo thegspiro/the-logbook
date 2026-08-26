@@ -16,38 +16,47 @@ therefore reached the store fine; a member with no rank recorded — a new
 volunteer, an administrative member — did not. That is the account this was
 reported from.
 
-Scoped to ``is_system = True`` and to the grants a fresh install would seed
-today, so a department's own customized position is left alone.
+**No-op as of the #1831 merge-heads review.** This revision and
+``a4f8c1b92d17`` were written independently, off the same parent
+(``c4a91b7e2f08``), for the identical bug — same 14 slugs, same
+``storefront.view``/``storefront.order`` grants. ``a4f8c1b92d17`` guards
+correctly: it only rewrites a row whose stored permissions still exactly
+equal its frozen snapshot of the pre-storefront defaults, so a department
+that customized the position — including one that deliberately removed
+storefront access — is left alone. This revision's own guard checked only
+``slug``/``is_system``/grant-absence, with no defaults comparison, so it
+would silently re-grant storefront access to a customized row a department
+had trimmed it from. A Codex review on #1831 (the PR that merged this fork
+back into a single head) caught it. Rather than duplicate the unsafe check's
+job, ``upgrade``/``downgrade`` are now no-ops — ``a4f8c1b92d17`` already
+covers ``storefront.view``/``storefront.order`` for every slug listed below.
+The revision id and ``_SLUGS`` stay, since ``test_storefront_baseline_grants.py``
+checks the latter against the registry and the id may already be recorded as
+applied in some environment.
 
-``storefront.manage`` is deliberately NOT backfilled. It is an administrative
-power (catalog, pricing, other members' orders) rather than baseline access,
-and unlike view/order its absence on a row cannot be told apart from an
-administrator having removed it. Chiefs reach the admin console through their
-rank defaults regardless; a department that wants its Quartermaster back in
-there grants it explicitly.
+``storefront.manage`` was deliberately never backfilled here. It is an
+administrative power (catalog, pricing, other members' orders) rather than
+baseline access, and unlike view/order its absence on a row cannot be told
+apart from an administrator having removed it.
 
 Revision ID: c4f8a2e70d19
 Revises: c4a91b7e2f08
 Create Date: 2026-08-25 20:00:00.000000
 """
 
-import json
-
-import sqlalchemy as sa
-from alembic import op
-
 revision = "c4f8a2e70d19"
 down_revision = "c4a91b7e2f08"
 branch_labels = None
 depends_on = None
 
-_PERMISSIONS = ("storefront.view", "storefront.order")
-
-# Every seeded slug whose registry entry carries these grants today. The rank
-# names are here for the reason Pitfall #23 in CLAUDE.md gives: onboarding
-# writes rank-mirroring *positions* holding a copy of the rank's list, and a
-# member can hold the Firefighter position with no rank recorded on their
-# user row, which is exactly the case the runtime rank union does not cover.
+# Every seeded slug whose registry entry carries these grants today. Kept
+# (unlike the rest of this revision's former logic) because
+# test_storefront_baseline_grants.py checks it against the registry directly.
+# The rank names are here for the reason Pitfall #23 in CLAUDE.md gives:
+# onboarding writes rank-mirroring *positions* holding a copy of the rank's
+# list, and a member can hold the Firefighter position with no rank recorded
+# on their user row, which is exactly the case the runtime rank union does
+# not cover.
 _SLUGS = (
     "fire_chief",
     "deputy_chief",
@@ -65,62 +74,16 @@ _SLUGS = (
     "member",
 )
 
-# A wildcard already covers the grants; adding them would only clutter the row.
-_COVERING = ("*", "storefront.*")
 
-
-def _load_permissions(raw):
-    """Normalize JSON values returned by different database drivers."""
-    if isinstance(raw, str):
-        raw = json.loads(raw or "[]")
-    return list(raw or [])
-
-
-def _apply(add: bool) -> None:
-    bind = op.get_bind()
-    # `positions` is one of the tables no migration creates — create_all()
-    # builds it on first boot (Pitfall #26). A database that has not started
-    # the app yet has nothing to rewrite, and the rows create_all() writes
-    # later come from the registry, which already carries these grants.
-    if "positions" not in sa.inspect(bind).get_table_names():
-        return
-
-    for slug in _SLUGS:
-        rows = bind.execute(
-            sa.text(
-                "SELECT id, permissions FROM positions "
-                "WHERE slug = :slug AND is_system = :is_system"
-            ),
-            {"slug": slug, "is_system": True},
-        ).fetchall()
-        for row in rows:
-            permissions = _load_permissions(row.permissions)
-            if any(covering in permissions for covering in _COVERING):
-                continue
-            if add:
-                missing = [p for p in _PERMISSIONS if p not in permissions]
-                if not missing:
-                    continue
-                permissions.extend(missing)
-            else:
-                if not any(p in permissions for p in _PERMISSIONS):
-                    continue
-                permissions = [p for p in permissions if p not in _PERMISSIONS]
-            bind.execute(
-                sa.text(
-                    "UPDATE positions SET permissions = :permissions WHERE id = :id"
-                ),
-                {"permissions": json.dumps(permissions), "id": row.id},
-            )
+# No-op — see the module docstring. a4f8c1b92d17 backfills the same grants
+# for the same slugs with a defaults-equality guard this revision never had;
+# duplicating its job here with a weaker check would re-grant storefront
+# access to a position a department had deliberately trimmed it from.
 
 
 def upgrade() -> None:
-    _apply(add=True)
+    pass
 
 
 def downgrade() -> None:
-    # Lossy in the same way every seed backfill is: a department that already
-    # had these grants (onboarded after the store shipped) loses them too,
-    # since nothing records which rows this revision actually wrote. Re-running
-    # the upgrade restores them.
-    _apply(add=False)
+    pass
