@@ -1729,14 +1729,24 @@ class AdminHoursService:
         from app.models.compliance_config import ComplianceConfig, ComplianceProfile
         from app.models.user import User as UserModel
 
-        # Get user to check membership type and roles. Org-scoped: the
-        # endpoint only restricts non-admin callers to their own id, so an
-        # admin_hours.manage/compliance.view holder could otherwise pass any
-        # user_id — including one from another organization — and have this
-        # method resolve that user's membership_type/positions and match
-        # them against the caller's own org's compliance profiles.
+        # Get user to check membership type and roles.
+        #
+        # Org-scoped: the endpoint only restricts non-admin callers to their
+        # own id, so an admin_hours.manage/compliance.view holder could
+        # otherwise pass any user_id — including one from another organization
+        # — and have this method resolve that user's membership_type/positions
+        # and match them against the caller's own org's compliance profiles.
+        #
+        # `positions` is eager-loaded because it is read below, and a lazy load
+        # inside an async session raises MissingGreenlet rather than emitting
+        # the query. That failure hid behind SQLAlchemy's identity map: asking
+        # for your own compliance returns the already-loaded `current_user`
+        # instance, whose positions the auth dependency populated, so it only
+        # ever 500ed when an officer looked at somebody else.
         user_result = await self.db.execute(
-            select(UserModel).where(
+            select(UserModel)
+            .options(selectinload(UserModel.positions))
+            .where(
                 UserModel.id == user_id,
                 UserModel.organization_id == organization_id,
             )
