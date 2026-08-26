@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### An officer with compliance access could look up any member's admin-hours progress, in any department (2026-08-27)
+
+**Fixed**
+
+- `GET /admin-hours/compliance/{user_id}` restricted ordinary members to
+  their own id, but an officer holding compliance access could pass any
+  member's id — including one from a different department on the same
+  server — and get back that member's role/position data used to pick a
+  compliance profile. Now scoped to the officer's own department.
+- Two admin-hours entries clocked in at the same moment (a double-tap, or
+  two open tabs) could both succeed, leaving a member with two simultaneous
+  active sessions and no clean way to clock out of either. Clock-in now
+  serializes per member so only one can win.
+- An officer editing a still-pending admin-hours entry could set times that
+  span more than 24 hours, land in the future, or overlap another entry for
+  the same member — all guards the original entry already enforced, just
+  not re-checked on edit.
+- Two officers creating or updating event-to-admin-hours mappings for the
+  same event type at the same time could push the combined percentage over
+  100%, double-crediting part of an event's duration.
+- A malformed date on four admin-hours report/export endpoints crashed with
+  a server error instead of a clean "invalid date" message.
+- A few remaining internal admin-hours queries added since the last review
+  were missing the department filter every other query in the module
+  already carries — closed for consistency, though none were reachable
+  from outside the department in practice.
+
 ### A compliance officer's "what's missing" report silently stopped at the newest 500 records (2026-08-26)
 
 **Fixed**
