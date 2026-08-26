@@ -79,6 +79,11 @@ query param — the search branch is unreachable from the API. Not a bug; a
 wired-but-unexposed feature. **Status:** flagged (adding the query param is a
 small API addition, left for deliberate feature work rather than auto-applied).
 
+**✅ Closed (security-review 12, 2026-08-26):** `GET /facilities` and
+`GET /facilities/page` both now accept and forward `search`, and
+`FacilitiesDashboard.tsx` calls it. See
+`docs/security-review/FAC-12-facilities.md`.
+
 ### FAC-5 — HIGH access control — sensitive facility data readable with baseline `facilities.view` — ✅ FIXED (2026-08-13)
 
 The default **member** position holds `facilities.view`, and once FAC-P1

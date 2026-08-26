@@ -3632,11 +3632,22 @@ async def get_facility_folders(
         facility_id=facility_id,
     )
 
+    # Every generic folder/document/summary read in the Documents module
+    # requires documents.view; a document_count here is the same aggregate
+    # disclosure DOC-4 already flags for that module's own summary endpoint.
+    # A facilities.view-only caller sees the folders (they're a fixed part
+    # of the facility record) but not how many documents are inside them.
+    can_see_counts = user_has_permission(
+        current_user, "documents.view"
+    ) or user_has_permission(current_user, "documents.manage")
+
     return {
         "folders": [
             {
                 **{c.key: getattr(f, c.key) for c in f.__table__.columns},
-                "document_count": getattr(f, "document_count", 0),
+                "document_count": (
+                    getattr(f, "document_count", 0) if can_see_counts else None
+                ),
             }
             for f in sub_folders
         ],
