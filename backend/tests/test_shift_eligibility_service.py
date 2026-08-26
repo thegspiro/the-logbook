@@ -65,6 +65,11 @@ def _rank_rows(entries):
     )
 
 
+def _qual_rows(codes=()):
+    """Qualification codes, as _get_qualification_positions selects them."""
+    return _rows([(code,) for code in codes])
+
+
 def _held_rows(slugs):
     """The member's own position slugs, as _get_held_position_slugs sees them."""
     return _rows([(slug,) for slug in slugs])
@@ -135,6 +140,7 @@ class TestGetEligiblePositions:
                 _one(org),
                 _rank_rows([("ff", ["driver"])]),
                 _held_rows([]),
+                _qual_rows(),
                 _rows([("officer",)]),
             ]
         )
@@ -151,6 +157,7 @@ class TestGetEligiblePositions:
                 _one(org),
                 _rank_rows([("emt", ["ems", "firefighter"])]),
                 _held_rows(["emt", "member"]),
+                _qual_rows(),
                 _rows([]),
             ]
         )
@@ -163,7 +170,9 @@ class TestGetEligiblePositions:
         # An org onboarded before "emt" joined DEFAULT_RANKS has no row for it
         # — seed_defaults only fires on an empty table — so the built-in
         # default answers rather than leaving the member with nothing.
-        db = _db([_one(_org()), _rank_rows([]), _held_rows(["emt"]), _rows([])])
+        db = _db(
+            [_one(_org()), _rank_rows([]), _held_rows(["emt"]), _qual_rows(), _rows([])]
+        )
         out = await ShiftEligibilityService(db).get_eligible_positions(
             _user(rank=None), "org-1"
         )
@@ -176,6 +185,7 @@ class TestGetEligiblePositions:
                 _one(_org()),
                 _rank_rows([("emt", ["ems"])]),
                 _held_rows(["emt"]),
+                _qual_rows(),
                 _rows([]),
             ]
         )
@@ -191,6 +201,7 @@ class TestGetEligiblePositions:
                 _one(_org()),
                 _rank_rows([("emt", ["ems", "firefighter"], False)]),
                 _held_rows(["emt"]),
+                _qual_rows(),
                 _rows([]),
             ]
         )
@@ -206,6 +217,7 @@ class TestGetEligiblePositions:
                 _one(_org()),
                 _rank_rows([]),
                 _held_rows(["treasurer", "member"]),
+                _qual_rows(),
                 _rows([]),
             ]
         )
@@ -223,6 +235,7 @@ class TestGetEligiblePositions:
                 _one(shift),
                 _rank_rows([("ff", ["driver"])]),
                 _held_rows([]),
+                _qual_rows(),
                 _rows([("officer",)]),
             ]
         )
@@ -244,6 +257,7 @@ class TestGetEligiblePositions:
                 _one(shift),
                 _rank_rows([("ff", ["driver"])]),
                 _held_rows([]),
+                _qual_rows(),
                 _rows([]),
             ]
         )
@@ -700,6 +714,7 @@ class TestAmbulanceEmtSeatIsFillable:
                 _one(shift),
                 _rank_rows([("emt", ["ems", "firefighter"])]),
                 _held_rows(["emt"]),
+                _qual_rows(),
                 _rows([]),
             ]
         )
@@ -725,6 +740,7 @@ class TestAmbulanceEmtSeatIsFillable:
                 _one(shift),
                 _rank_rows([("emt", ["ems", "firefighter"])]),
                 _held_rows([]),
+                _qual_rows(),
                 _rows([]),
             ]
         )

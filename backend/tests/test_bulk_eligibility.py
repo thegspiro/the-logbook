@@ -39,6 +39,7 @@ def _service(
     held=(),
     grants=None,
     training=(),
+    qualifications=(),
     open_positions=(),
     excluded=(),
 ):
@@ -52,6 +53,10 @@ def _service(
     service._get_slug_eligibility_map = AsyncMock(return_value=slug_map)
     service._get_held_position_slugs = AsyncMock(return_value=list(held))
     service._get_training_positions = AsyncMock(return_value=list(training))
+    # Qualifications are the one source resolved per shift *date* rather than
+    # once per member, because a certification can lapse between two shifts in
+    # the same query.
+    service._get_qualification_positions = AsyncMock(return_value=set(qualifications))
     return service
 
 

@@ -7,6 +7,79 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Member class, member status, and qualifications become separate facts (2026-08-26)
+
+**Added**
+
+- **`member_class` and `member_status` on every member.** `membership_type`
+  held two independent facts in one column: what kind of member somebody is
+  (operational / administrative / social) and where they sit on the membership
+  ladder (prospective → probationary → regular → life → retired). Because they
+  shared a field, neither could be stated without losing the other — there was
+  no way to record a _probationary treasurer_, and nothing said whether a _life
+  member_ still rides.
+
+  The clearest symptom was in elections. `ElectionService` could only answer
+  "is this member operational" as `membership_type == "active"`, because that
+  was the one value that meant it — so a bylaws question put to the operational
+  members never reached anyone who had earned life membership, or anyone still
+  on probation. It now reads the member's **class**, and every operational
+  standing counts. "regular", "life" and "probationary" stay **status** checks,
+  because they name a status.
+
+  `membership_type` is kept and kept correct: ~160 call sites read it, and it
+  is now derived from the pair by `app/utils/membership.py`, reconciled on
+  every flush by a listener on `User`. Whichever side a caller writes wins, so
+  existing code is unchanged. The derivation is lossy in one direction on
+  purpose — the legacy vocabulary cannot express an administrative probationer
+  — and the two new columns are the authority when they disagree.
+
+  `honorary` backfills to the **social** class. That is not a new judgement
+  about honorary members; it is what the system already did with them, since
+  `honorary` has always sat in `DEFAULT_EXCLUDED_MEMBERSHIP_TYPES` beside
+  administrative and retired. Mapping them anywhere else would have widened
+  shift access on upgrade.
+
+  Neither column takes a database default, deliberately. A DDL default is
+  applied to raw-SQL inserts that name only `membership_type`, and would be
+  wrong for exactly the members who are not plain operational regulars —
+  silently promoting an administrative member into the operational class. NULL
+  means "nobody has set this" and readers derive from the legacy field; ORM
+  writes never leave it NULL.
+
+- **`member_qualifications` — what a member is certified to do.** Rank says
+  where a member sits in the chain of command; a qualification says what they
+  are trained to do. `User.rank` is one string, so a **Captain who is also a
+  Paramedic** — an entirely ordinary member of a volunteer department — had
+  nowhere to be recorded as both.
+
+  The standards already draw the line: Firefighter I/II is NFPA 1001,
+  apparatus operator is NFPA 1002, the officer ladder is NFPA 1021, and
+  EMT/Paramedic are EMS credentials on a separate track again.
+
+  Qualifications expire and ranks do not, which is the other half of why they
+  cannot share a column. Shift eligibility reads `expires_on` **as of the shift
+  date**, not as of today — the rule EVOC certifications already use for
+  drivers, and for the same reason: a card that is current when the roster is
+  built and expired when the truck rolls qualifies nobody to be on it. The
+  bulk path resolves this per distinct shift date rather than once per member,
+  since that is the one eligibility source that is not shift-independent.
+
+  The table starts empty. Nothing is inferred from existing rank or position
+  rows: a department that recorded somebody as an EMT _rank_ has said where
+  they sit, not which card they hold or when it expires, and inventing an
+  expiry date would be worse than having none.
+
+**Note**
+
+Ranks are unchanged. An EMS-only agency keeps EMT as its line rank, and a
+department that models EMT as a rank can carry on doing so — `emt` is now both
+a rank code and a qualification code, meaning two different things on purpose.
+Neither implies the other, and a department may use either or both.
+
+Admin screens for entering qualifications are not in this change; the model,
+the service and the eligibility reader are.
+
 ### An EMT rank granted nothing, and EMS-only agencies were seeded firefighters (2026-08-26)
 
 **Fixed**

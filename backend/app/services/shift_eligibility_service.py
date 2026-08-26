@@ -31,6 +31,10 @@ from app.models.user import Organization, Position, User, user_positions
 from app.services.driver_exception_service import DriverExceptionService
 from app.services.evoc_level_service import EvocLevelService
 from app.services.operational_rank_service import DEFAULT_RANKS
+from app.services.qualification_service import (
+    QualificationService,
+    positions_for_qualifications,
+)
 
 # Mapping from training program target_position values to the shift
 # position they unlock upon completion.
@@ -202,8 +206,10 @@ class ShiftEligibilityService:
            a) Rank-based eligible_positions
            b) Position-based eligible_positions (the member's held
               positions, resolved through the same rank config)
-           c) Training-completion-unlocked positions
-           d) Org-wide open positions
+           c) Qualification-based positions (what the member is *certified*
+              to do, as of the shift date)
+           d) Training-completion-unlocked positions
+           e) Org-wide open positions
         4. If a shift_id is provided, intersect with the shift's
            defined positions (only return positions that are actually
            on the shift).
@@ -236,7 +242,22 @@ class ShiftEligibilityService:
         held_slugs = await self._get_held_position_slugs(str(user.id), organization_id)
         eligible.update(self._positions_for_slugs(held_slugs, slug_map))
 
-        # 3c: Training-completion-based
+        # 3c: Qualification-based.
+        #
+        # Rank says where a member sits in the chain of command; a
+        # qualification says what they are trained to do, and the two are
+        # independent. A Captain may also be a Paramedic, and until
+        # qualifications existed there was nowhere to record the second half
+        # of that. Asked as of the shift date rather than today: a
+        # certification that is current now and lapses before the shift
+        # qualifies nobody to work it.
+        eligible.update(
+            await self._get_qualification_positions(
+                str(user.id), organization_id, self._shift_date(shift)
+            )
+        )
+
+        # 3d: Training-completion-based
         training_positions = await self._get_training_positions(
             str(user.id), organization_id
         )
@@ -308,6 +329,21 @@ class ShiftEligibilityService:
             )
             base.update(self.get_open_positions(org))
 
+        # Qualifications are the one source that is *not* shift-independent:
+        # a certification current today may have lapsed by a shift three months
+        # out, and that shift must not offer the seat. Resolved per distinct
+        # shift date rather than per shift — a day panel has one date and a
+        # month view a few dozen, against one query each, so the base-computed-
+        # once shape survives.
+        quals_by_date: Dict[date, Set[str]] = {}
+        if not blocked:
+            for shift in shifts.values():
+                as_of = self._shift_date(shift)
+                if as_of not in quals_by_date:
+                    quals_by_date[as_of] = await self._get_qualification_positions(
+                        str(user.id), organization_id, as_of
+                    )
+
         answers: Dict[str, List[str]] = {}
         for shift_id in shift_ids:
             shift = shifts.get(str(shift_id))
@@ -324,6 +360,7 @@ class ShiftEligibilityService:
                 answers[str(shift_id)] = []
                 continue
             eligible = set(base)
+            eligible.update(quals_by_date.get(self._shift_date(shift), set()))
             shift_positions = set(self._shift_position_list(shift))
             if shift_positions:
                 eligible &= shift_positions
@@ -625,6 +662,31 @@ class ShiftEligibilityService:
             if slug:
                 granted.update(slug_map.get(slug, []))
         return granted
+
+    @staticmethod
+    def _shift_date(shift) -> date:
+        """The day the member would actually work, for currency checks.
+
+        Falls back to today when a shift carries no date, and when eligibility
+        is asked without a shift at all — a qualification list has to be
+        resolved as of *some* day, and today is the only defensible one when
+        no shift is in hand.
+        """
+        if shift is None:
+            return date.today()
+        value = getattr(shift, "shift_date", None) or getattr(shift, "start_time", None)
+        if value is None:
+            return date.today()
+        return value.date() if hasattr(value, "date") else value
+
+    async def _get_qualification_positions(
+        self, user_id: str, organization_id: str, as_of: date
+    ) -> Set[str]:
+        """Shift seats the member's current certifications clear them for."""
+        codes = await QualificationService(self.db).get_member_codes(
+            user_id, organization_id, as_of
+        )
+        return positions_for_qualifications(codes)
 
     async def _get_held_position_slugs(
         self, user_id: str, organization_id: str
