@@ -184,7 +184,7 @@ class TestAttemptsSpentOnValidation:
     def _db(requirement, satisfied_count, spent_count):
         db = MagicMock()
         results = [
-            _scalar(requirement),
+            _scalar(requirement),  # also the capacity-serialization lock
             _scalar(satisfied_count),
             _scalar(spent_count),
         ]
@@ -212,7 +212,11 @@ class TestAttemptsSpentOnValidation:
         captured = []
 
         db = MagicMock()
-        results = [_scalar(SimpleNamespace(max_attempts=2)), _scalar(0), _scalar(0)]
+        results = [
+            _scalar(SimpleNamespace(max_attempts=2)),  # also the capacity lock
+            _scalar(0),
+            _scalar(0),
+        ]
 
         async def execute(stmt, *_args, **_kwargs):
             captured.append(stmt)

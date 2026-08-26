@@ -20,13 +20,12 @@ import {
 import { inventoryService } from '../../../services/api';
 import type { InventoryItem, MaintenanceRecord, MaintenanceRecordCreate } from '../types';
 import { getConditionColor } from '../types';
-import { useAuthStore } from '../../../stores/authStore';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { ITEM_CONDITION_OPTIONS } from '../../../constants/enums';
 import { Modal } from '../../../components/Modal';
 import { useTimezone } from '../../../hooks/useTimezone';
 import toast from 'react-hot-toast';
-import { formatDate, getTodayLocalDate, formatNumber } from '../../../utils/dateFormatting';
+import { formatDate, formatNumber } from '../../../utils/dateFormatting';
 
 const MAINTENANCE_TYPES = [
   { value: 'inspection', label: 'Inspection' },
@@ -62,11 +61,13 @@ function getDueLabel(days: number | null): string {
 }
 
 const INITIAL_FORM = {
+  operation: 'schedule' as 'schedule' | 'repair' | 'inspection' | 'complete',
   maintenance_type: 'inspection',
   description: '',
-  is_completed: true,
+  scheduled_date: '',
+  is_completed: false,
   completed_date: '',
-  passed: true,
+  passed: '' as '' | 'pass' | 'fail',
   condition_after: '',
   next_due_date: '',
   cost: '',
@@ -76,7 +77,6 @@ const INITIAL_FORM = {
 
 const InventoryMaintenancePage: React.FC = () => {
   const tz = useTimezone();
-  const user = useAuthStore((s) => s.user);
   const [dueItems, setDueItems] = useState<InventoryItem[]>([]);
   const [inMaintenanceItems, setInMaintenanceItems] = useState<InventoryItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -86,6 +86,7 @@ const InventoryMaintenancePage: React.FC = () => {
   const [historyLoading, setHistoryLoading] = useState(false);
   const [modalItem, setModalItem] = useState<InventoryItem | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [completedItem, setCompletedItem] = useState<InventoryItem | null>(null);
   const [formData, setFormData] = useState(INITIAL_FORM);
 
   const loadData = useCallback(async () => {
@@ -144,34 +145,57 @@ const InventoryMaintenancePage: React.FC = () => {
 
   const openModal = (item: InventoryItem) => {
     setModalItem(item);
-    setFormData({ ...INITIAL_FORM, completed_date: getTodayLocalDate(tz), condition_after: item.condition || '' });
+    setFormData({ ...INITIAL_FORM, condition_after: item.condition || '' });
   };
 
   const handleSave = async () => {
     if (!modalItem) return;
     if (!formData.description.trim()) {
-      toast.error('Description is required');
+      toast.error(formData.operation === 'complete' ? 'Performed work is required' : 'Task description is required');
+      return;
+    }
+    if (formData.operation === 'schedule' && !formData.scheduled_date) {
+      toast.error('Due date is required for scheduled work');
+      return;
+    }
+    if (formData.operation === 'complete' && !formData.completed_date) {
+      toast.error('Completion date is required');
+      return;
+    }
+    if (formData.operation === 'complete' && (!formData.vendor_name.trim() || !formData.condition_after)) {
+      toast.error('Technician/vendor and condition after work are required');
+      return;
+    }
+    if (formData.operation === 'inspection' && !formData.passed) {
+      toast.error('Select a pass/fail result');
       return;
     }
     setIsSaving(true);
     try {
       const payload: MaintenanceRecordCreate = {
         item_id: modalItem.id,
-        maintenance_type: formData.maintenance_type,
-        is_completed: formData.is_completed,
-        passed: formData.passed,
+        maintenance_type:
+          formData.operation === 'repair' || formData.operation === 'complete'
+            ? 'repair'
+            : formData.operation === 'inspection'
+              ? 'inspection'
+              : formData.maintenance_type,
+        is_completed: formData.operation === 'inspection' || formData.operation === 'complete',
       };
+      if (formData.operation === 'inspection') payload.passed = formData.passed === 'pass';
       payload.description = formData.description.trim();
       if (formData.condition_after) payload.condition_after = formData.condition_after;
       if (formData.completed_date) payload.completed_date = formData.completed_date;
+      if (formData.scheduled_date) payload.scheduled_date = formData.scheduled_date;
       if (formData.next_due_date) payload.next_due_date = formData.next_due_date;
-      const performedBy = user?.full_name || user?.email;
-      if (performedBy) payload.performed_by = performedBy;
       if (formData.cost) payload.cost = Number(formData.cost);
       if (formData.vendor_name.trim()) payload.vendor_name = formData.vendor_name.trim();
       if (formData.notes.trim()) payload.notes = formData.notes.trim();
       await inventoryService.createMaintenanceRecord(payload);
-      toast.success('Maintenance record logged');
+      toast.success('Maintenance record saved');
+      if (formData.operation === 'complete' || (formData.operation === 'inspection' && formData.passed === 'pass')) {
+        setCompletedItem(modalItem);
+      }
       setModalItem(null);
       void loadData();
       if (selectedItem?.id === modalItem.id) void loadHistory(modalItem);
@@ -179,6 +203,18 @@ const InventoryMaintenancePage: React.FC = () => {
       toast.error(getErrorMessage(err, 'Failed to save maintenance record'));
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const returnToService = async () => {
+    if (!completedItem) return;
+    try {
+      await inventoryService.updateItem(completedItem.id, { status: 'available' });
+      toast.success(`${completedItem.name} returned to service`);
+      setCompletedItem(null);
+      void loadData();
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to return item to service'));
     }
   };
 
@@ -451,45 +487,87 @@ const InventoryMaintenancePage: React.FC = () => {
         }
       >
         <div className="space-y-4">
-          <div>
-            <label className={labelCls}>Maintenance Type *</label>
-            <select
-              value={formData.maintenance_type}
-              onChange={(e) => setField('maintenance_type', e.target.value)}
-              className={inputCls}
-            >
-              {MAINTENANCE_TYPES.map((t) => (
-                <option key={t.value} value={t.value}>
-                  {t.label}
-                </option>
+          <fieldset>
+            <legend className={labelCls}>Action *</legend>
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+              {(
+                [
+                  ['schedule', 'Schedule maintenance'],
+                  ['repair', 'Open repair'],
+                  ['inspection', 'Record inspection'],
+                  ['complete', 'Complete work'],
+                ] as const
+              ).map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  className={formData.operation === value ? 'btn-info btn-sm' : 'btn-secondary btn-sm'}
+                  onClick={() =>
+                    setFormData((prev) => ({
+                      ...INITIAL_FORM,
+                      operation: value,
+                      condition_after: prev.condition_after,
+                      completed_date:
+                        value === 'complete' || value === 'inspection' ? new Date().toISOString().slice(0, 10) : '',
+                    }))
+                  }
+                >
+                  {label}
+                </button>
               ))}
-            </select>
-          </div>
+            </div>
+          </fieldset>
+
+          {formData.operation === 'schedule' && (
+            <div>
+              <label htmlFor="maintenance-due-date" className={labelCls}>
+                Due Date *
+              </label>
+              <input
+                id="maintenance-due-date"
+                type="date"
+                value={formData.scheduled_date}
+                onChange={(e) => setField('scheduled_date', e.target.value)}
+                className={inputCls}
+              />
+            </div>
+          )}
+          {formData.operation === 'schedule' && (
+            <div>
+              <label className={labelCls}>Maintenance Type *</label>
+              <select
+                value={formData.maintenance_type}
+                onChange={(e) => setField('maintenance_type', e.target.value)}
+                className={inputCls}
+              >
+                {MAINTENANCE_TYPES.map((type) => (
+                  <option key={type.value} value={type.value}>
+                    {type.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
           <div>
-            <label className={labelCls}>Description *</label>
+            <label className={labelCls}>
+              {formData.operation === 'complete' ? 'Performed Work' : 'Task Description'} *
+            </label>
             <textarea
               value={formData.description}
               onChange={(e) => setField('description', e.target.value)}
               rows={3}
               className={inputCls + ' resize-none'}
-              placeholder="Describe the maintenance performed..."
+              placeholder={
+                formData.operation === 'complete'
+                  ? 'Describe the work performed...'
+                  : 'Describe the maintenance task...'
+              }
             />
           </div>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <div className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                id="maint-completed"
-                checked={formData.is_completed}
-                onChange={(e) => setField('is_completed', e.target.checked)}
-                className="border-theme-input-border rounded"
-              />
-              <label htmlFor="maint-completed" className="text-theme-text-primary text-sm">
-                Completed
-              </label>
-            </div>
+
+          {(formData.operation === 'complete' || formData.operation === 'inspection') && (
             <div>
-              <label className={labelCls}>Completed Date</label>
+              <label className={labelCls}>Completion Date *</label>
               <input
                 type="date"
                 value={formData.completed_date}
@@ -497,93 +575,106 @@ const InventoryMaintenancePage: React.FC = () => {
                 className={inputCls}
               />
             </div>
-          </div>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <div>
-              <fieldset>
-                <legend className={labelCls}>Result (for inspections)</legend>
-                <div className="mt-1 flex items-center gap-4">
-                  <label className="text-theme-text-primary flex cursor-pointer items-center gap-1.5 text-sm">
+          )}
+          {formData.operation === 'inspection' && (
+            <fieldset>
+              <legend className={labelCls}>Result *</legend>
+              <div className="flex gap-4">
+                {(['pass', 'fail'] as const).map((result) => (
+                  <label key={result} className="text-theme-text-primary flex items-center gap-2 text-sm capitalize">
                     <input
                       type="radio"
                       name="passed"
-                      checked={formData.passed}
-                      onChange={() => setField('passed', true)}
-                    />
-                    <CheckCircle2 className="h-4 w-4 text-emerald-500" aria-hidden="true" /> Passed
+                      checked={formData.passed === result}
+                      onChange={() => setField('passed', result)}
+                    />{' '}
+                    {result}
                   </label>
-                  <label className="text-theme-text-primary flex cursor-pointer items-center gap-1.5 text-sm">
-                    <input
-                      type="radio"
-                      name="passed"
-                      checked={!formData.passed}
-                      onChange={() => setField('passed', false)}
-                    />
-                    <XCircle className="h-4 w-4 text-red-500" aria-hidden="true" /> Failed
-                  </label>
-                </div>
-              </fieldset>
-            </div>
-            <div>
-              <label className={labelCls}>Condition After</label>
-              <select
-                value={formData.condition_after}
-                onChange={(e) => setField('condition_after', e.target.value)}
-                className={inputCls}
-              >
-                <option value="">Select condition...</option>
-                {ITEM_CONDITION_OPTIONS.map((c) => (
-                  <option key={c.value} value={c.value}>
-                    {c.label}
-                  </option>
                 ))}
-              </select>
-            </div>
-          </div>
-          <div>
-            <label className={labelCls}>Next Due Date</label>
-            <input
-              type="date"
-              value={formData.next_due_date}
-              onChange={(e) => setField('next_due_date', e.target.value)}
-              className={inputCls}
-            />
-          </div>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <div>
-              <label className={labelCls}>Cost ($)</label>
-              <input
-                type="number"
-                value={formData.cost}
-                onChange={(e) => setField('cost', e.target.value)}
-                className={inputCls}
-                placeholder="0.00"
-                min="0"
-                step="0.01"
-              />
-            </div>
-            <div>
-              <label className={labelCls}>Vendor Name</label>
-              <input
-                type="text"
-                value={formData.vendor_name}
-                onChange={(e) => setField('vendor_name', e.target.value)}
-                className={inputCls}
-                placeholder="External service provider"
-              />
-            </div>
-          </div>
-          <div>
-            <label className={labelCls}>Notes</label>
-            <textarea
-              value={formData.notes}
-              onChange={(e) => setField('notes', e.target.value)}
-              rows={2}
-              className={inputCls + ' resize-none'}
-              placeholder="Additional notes..."
-            />
+              </div>
+            </fieldset>
+          )}
+          {formData.operation === 'complete' && (
+            <>
+              <div>
+                <label className={labelCls}>Technician / Vendor *</label>
+                <input
+                  type="text"
+                  value={formData.vendor_name}
+                  onChange={(e) => setField('vendor_name', e.target.value)}
+                  className={inputCls}
+                  placeholder="Person or service provider"
+                />
+              </div>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div>
+                  <label className={labelCls}>Condition After Work *</label>
+                  <select
+                    value={formData.condition_after}
+                    onChange={(e) => setField('condition_after', e.target.value)}
+                    className={inputCls}
+                  >
+                    <option value="">Select condition...</option>
+                    {ITEM_CONDITION_OPTIONS.map((condition) => (
+                      <option key={condition.value} value={condition.value}>
+                        {condition.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className={labelCls}>Cost ($)</label>
+                  <input
+                    type="number"
+                    value={formData.cost}
+                    onChange={(e) => setField('cost', e.target.value)}
+                    className={inputCls}
+                    min="0"
+                    step="0.01"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className={labelCls}>Next Due Date</label>
+                <input
+                  type="date"
+                  value={formData.next_due_date}
+                  onChange={(e) => setField('next_due_date', e.target.value)}
+                  className={inputCls}
+                />
+              </div>
+            </>
+          )}
+          <div
+            className="text-theme-text-primary rounded-md border border-orange-500/30 bg-orange-500/10 p-3 text-sm"
+            role="status"
+          >
+            {formData.operation === 'repair' || (formData.operation === 'inspection' && formData.passed === 'fail')
+              ? 'This will mark the item out of service.'
+              : formData.operation === 'complete' || (formData.operation === 'inspection' && formData.passed === 'pass')
+                ? 'The item will remain out of service until you deliberately return it to service.'
+                : 'This will schedule work without changing the item status.'}
           </div>
         </div>
+      </Modal>
+      <Modal
+        isOpen={completedItem !== null}
+        onClose={() => setCompletedItem(null)}
+        title="Work completed successfully"
+        footer={
+          <>
+            <button className="btn-secondary btn-md" onClick={() => setCompletedItem(null)}>
+              Keep out of service
+            </button>
+            <button className="btn-success btn-md" onClick={() => void returnToService()}>
+              Return to service
+            </button>
+          </>
+        }
+      >
+        <p className="text-theme-text-secondary">
+          {completedItem?.name} remains out of service. Confirm that it is safe and ready before making it available.
+        </p>
       </Modal>
     </div>
   );

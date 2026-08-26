@@ -783,7 +783,7 @@ class EventService:
 
         # Same reasoning as delete_event: a reopened event that is cancelled
         # rather than re-finalized would leave its credited hours standing.
-        await self._revoke_event_attendance_credit(event_id)
+        await self._revoke_event_attendance_credit(event_id, organization_id)
 
         event.is_cancelled = True
         event.cancellation_reason = reason
@@ -970,7 +970,7 @@ class EventService:
         # Reachable on a reopened event, where entries from the earlier
         # finalize are still on the ledger waiting to be resynced by a
         # re-finalize that is now never going to happen.
-        await self._revoke_event_attendance_credit(event_id)
+        await self._revoke_event_attendance_credit(event_id, organization_id)
 
         await self.db.delete(event)
         try:
@@ -1753,7 +1753,9 @@ class EventService:
         # an ondelete="SET NULL" FK, so without this the entry survives the
         # delete pointing at nothing and the member keeps credit for an event
         # they are no longer recorded at.
-        await AdminHoursService(self.db).delete_event_attendance_entries(str(rsvp.id))
+        await AdminHoursService(self.db).delete_event_attendance_entries(
+            str(rsvp.id), str(organization_id)
+        )
 
         await self.db.delete(rsvp)
         await self.db.commit()
@@ -2181,7 +2183,9 @@ class EventService:
 
         return updated_count, None
 
-    async def _revoke_event_attendance_credit(self, event_id: UUID) -> None:
+    async def _revoke_event_attendance_credit(
+        self, event_id: UUID, organization_id: UUID
+    ) -> None:
         """Drop the admin-hours entries derived from this event's attendance.
 
         Reopening leaves the entries in place on the assumption that
@@ -2192,11 +2196,18 @@ class EventService:
         keeps hours with no attendance behind them. Called from both paths.
         """
         rsvp_result = await self.db.execute(
-            select(EventRSVP.id).where(EventRSVP.event_id == str(event_id))
+            select(EventRSVP.id)
+            .join(Event, Event.id == EventRSVP.event_id)
+            .where(
+                EventRSVP.event_id == str(event_id),
+                Event.organization_id == str(organization_id),
+            )
         )
         admin_hours = AdminHoursService(self.db)
         for rsvp_id in rsvp_result.scalars().all():
-            await admin_hours.delete_event_attendance_entries(str(rsvp_id))
+            await admin_hours.delete_event_attendance_entries(
+                str(rsvp_id), str(organization_id)
+            )
 
     @staticmethod
     def _stamp_attendance_finalized(

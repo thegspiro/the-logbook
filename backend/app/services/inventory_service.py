@@ -1889,12 +1889,11 @@ class InventoryService:
                 return None, "Member not found"
 
             # Check if item is available
-            if item.status not in [ItemStatus.AVAILABLE, ItemStatus.ASSIGNED]:
+            # Reassignment is a chain-of-custody transfer, never an ordinary
+            # assignment.  Callers must use transfer_item_holding so the old
+            # record cannot be silently closed.
+            if item.status != ItemStatus.AVAILABLE:
                 return None, f"Item is not available (status: {item.status})"
-
-            # Unassign from previous user if needed
-            if item.assigned_to_user_id and item.assigned_to_user_id != user_id:
-                await self.unassign_item(item_id, organization_id, assigned_by)
 
             # Create assignment record
             assignment = ItemAssignment(
@@ -2637,6 +2636,17 @@ class InventoryService:
                             )
                         elif maintenance_data.get("next_due_date"):
                             item.next_inspection_due = maintenance_data["next_due_date"]
+
+                    # Completion never silently returns equipment to service. A
+                    # failed inspection must remain unavailable; successful work
+                    # has a separate, deliberate "Return to service" action.
+                    if maintenance_data.get("passed") is False:
+                        item.status = ItemStatus.IN_MAINTENANCE
+                        item.condition = ItemCondition.OUT_OF_SERVICE
+            elif maintenance_data.get("maintenance_type") == "repair":
+                item = await self._get_item_locked(item_id, organization_id)
+                if item:
+                    item.status = ItemStatus.IN_MAINTENANCE
 
             await self.db.commit()
             await self.db.refresh(maintenance)
@@ -3414,10 +3424,10 @@ class InventoryService:
         return results[:limit]
 
     # ============================================
-    # Batch Checkout (scan-to-assign)
+    # Item distribution (scan-to-assign or loan)
     # ============================================
 
-    async def batch_checkout(
+    async def distribute_items(
         self,
         user_id: UUID,
         organization_id: UUID,
@@ -3426,9 +3436,9 @@ class InventoryService:
         reason: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
-        Process a batch of scanned items: assign, checkout, or issue
-        each one to the specified user based on the item's tracking type
-        and current status.
+        Distribute scanned items using the explicitly requested operation for
+        individual gear. Quantity-tracked stock always follows pool issuance
+        policy, independently of the requested duration.
 
         Returns a summary with per-item results.
         """
@@ -3440,6 +3450,8 @@ class InventoryService:
             code = scan["code"]
             quantity = scan.get("quantity", 1)
             scan_item_id = scan.get("item_id")
+            operation = scan["operation"]
+            expected_return_at = scan.get("expected_return_at")
 
             # Prefer direct item_id lookup when available (avoids
             # mismatch when item was found by name search)
@@ -3479,8 +3491,19 @@ class InventoryService:
                         else (successful, failed + 1)
                     )
 
-                elif item.status in (ItemStatus.AVAILABLE, ItemStatus.ASSIGNED):
-                    # Individual available/assigned item → (re)assign
+                elif (
+                    operation == "permanent_assignment"
+                    and item.status == ItemStatus.AVAILABLE
+                ):
+                    # AVAILABLE only, deliberately. `assign_item_to_user`
+                    # refuses anything else outright -- "reassignment is a
+                    # chain-of-custody transfer, never an ordinary assignment"
+                    # -- so admitting ASSIGNED here only produced a failed
+                    # result with no custody data attached. An item someone
+                    # already holds falls to the conflict branch below, which
+                    # reports who holds it so the scanner can offer the
+                    # transfer endpoint; that path closes the old record and
+                    # opens its successor atomically, which a bare scan cannot.
                     assignment, err = await self.assign_item_to_user(
                         item_id=UUID(item.id),
                         user_id=user_id,
@@ -3490,7 +3513,30 @@ class InventoryService:
                         reason=reason,
                     )
                     results.append(
-                        self._batch_result(code, item, "assigned", not err, err)
+                        self._batch_result(
+                            code, item, "permanent_assignment", not err, err
+                        )
+                    )
+                    successful, failed = (
+                        (successful + 1, failed)
+                        if not err
+                        else (successful, failed + 1)
+                    )
+
+                elif (
+                    operation == "temporary_loan"
+                    and item.status == ItemStatus.AVAILABLE
+                ):
+                    checkout, err = await self.checkout_item(
+                        item_id=UUID(item.id),
+                        user_id=user_id,
+                        organization_id=organization_id,
+                        checked_out_by=performed_by,
+                        expected_return_at=expected_return_at,
+                        reason=reason,
+                    )
+                    results.append(
+                        self._batch_result(code, item, "temporary_loan", not err, err)
                     )
                     successful, failed = (
                         (successful + 1, failed)
@@ -3499,6 +3545,9 @@ class InventoryService:
                     )
 
                 else:
+                    conflict = await self._active_holding_conflict(
+                        item, organization_id
+                    )
                     results.append(
                         self._batch_result(
                             code,
@@ -3506,6 +3555,7 @@ class InventoryService:
                             "none",
                             False,
                             f"Item is not available (status: {item.status.value})",
+                            conflict=conflict,
                         )
                     )
                     failed += 1
@@ -3533,8 +3583,9 @@ class InventoryService:
         action: str,
         success: bool,
         error: Optional[str] = None,
+        conflict: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
-        """Build a single result entry for batch checkout/return operations."""
+        """Build a single result entry for distribution/return operations."""
         return {
             "code": code,
             "item_name": item.name if item else "Unknown",
@@ -3542,7 +3593,178 @@ class InventoryService:
             "action": action,
             "success": success,
             "error": error,
+            "conflict": conflict,
         }
+
+    async def _active_holding_conflict(
+        self, item: InventoryItem, organization_id: UUID
+    ) -> Optional[Dict[str, Any]]:
+        """Return structured custody data for an active individual holding."""
+        assignment_result = await self.db.execute(
+            select(ItemAssignment, User)
+            .join(User, User.id == ItemAssignment.user_id)
+            .where(ItemAssignment.organization_id == str(organization_id))
+            .where(ItemAssignment.item_id == str(item.id))
+            .where(ItemAssignment.is_active.is_(True))
+            .order_by(ItemAssignment.assigned_date.desc())
+            .limit(1)
+        )
+        row = assignment_result.first()
+        if row:
+            holding, holder = row
+            return {
+                "holder_id": holding.user_id,
+                "holder_name": holder.full_name,
+                "holding_type": "assignment",
+                "record_id": holding.id,
+                "held_since": holding.assigned_date,
+                "expected_return_date": holding.expected_return_date,
+            }
+        checkout_result = await self.db.execute(
+            select(CheckOutRecord, User)
+            .join(User, User.id == CheckOutRecord.user_id)
+            .where(CheckOutRecord.organization_id == str(organization_id))
+            .where(CheckOutRecord.item_id == str(item.id))
+            .where(CheckOutRecord.is_returned.is_(False))
+            .order_by(CheckOutRecord.checked_out_at.desc())
+            .limit(1)
+        )
+        row = checkout_result.first()
+        if row:
+            holding, holder = row
+            return {
+                "holder_id": holding.user_id,
+                "holder_name": holder.full_name,
+                "holding_type": "checkout",
+                "record_id": holding.id,
+                "held_since": holding.checked_out_at,
+                "expected_return_date": holding.expected_return_at,
+            }
+        return None
+
+    async def transfer_item_holding(
+        self,
+        *,
+        item_id: UUID,
+        new_holder_id: UUID,
+        current_holder_id: UUID,
+        current_record_id: UUID,
+        holding_type: str,
+        return_condition: ItemCondition,
+        transfer_reason: str,
+        immediate: bool,
+        organization_id: UUID,
+        performed_by: UUID,
+    ) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
+        """Atomically close one custody record and open its successor."""
+        try:
+            item = await self._get_item_locked(item_id, organization_id)
+            if not item or item.tracking_type != TrackingType.INDIVIDUAL:
+                return None, "Individual item not found"
+            if not await is_in_org(self.db, User, new_holder_id, organization_id):
+                return None, "New holder not found"
+            if str(new_holder_id) == str(current_holder_id):
+                return None, "New holder must be different from current holder"
+
+            now = datetime.now(timezone.utc)
+            if holding_type == "assignment":
+                result = await self.db.execute(
+                    select(ItemAssignment)
+                    .where(
+                        ItemAssignment.id == str(current_record_id),
+                        ItemAssignment.organization_id == str(organization_id),
+                        ItemAssignment.item_id == str(item_id),
+                        ItemAssignment.user_id == str(current_holder_id),
+                        ItemAssignment.is_active.is_(True),
+                    )
+                    .with_for_update()
+                )
+                old = result.scalar_one_or_none()
+                if not old:
+                    return None, "Holding changed; rescan the item"
+                old.is_active = False
+                old.returned_date = now
+                old.returned_by = str(performed_by)
+                old.return_condition = return_condition
+                old.return_notes = transfer_reason
+                new = ItemAssignment(
+                    organization_id=str(organization_id),
+                    item_id=str(item_id),
+                    user_id=str(new_holder_id),
+                    assigned_by=str(performed_by),
+                    assignment_type=old.assignment_type,
+                    assignment_reason=transfer_reason,
+                    expected_return_date=old.expected_return_date,
+                    is_active=True,
+                )
+                item.status = ItemStatus.ASSIGNED
+            else:
+                result = await self.db.execute(
+                    select(CheckOutRecord)
+                    .where(
+                        CheckOutRecord.id == str(current_record_id),
+                        CheckOutRecord.organization_id == str(organization_id),
+                        CheckOutRecord.item_id == str(item_id),
+                        CheckOutRecord.user_id == str(current_holder_id),
+                        CheckOutRecord.is_returned.is_(False),
+                    )
+                    .with_for_update()
+                )
+                old = result.scalar_one_or_none()
+                if not old:
+                    return None, "Holding changed; rescan the item"
+                old.is_returned = True
+                old.checked_in_at = now
+                old.checked_in_by = str(performed_by)
+                old.return_condition = return_condition
+                old.damage_notes = transfer_reason
+                new = CheckOutRecord(
+                    organization_id=str(organization_id),
+                    item_id=str(item_id),
+                    user_id=str(new_holder_id),
+                    checked_out_by=str(performed_by),
+                    expected_return_at=old.expected_return_at,
+                    checkout_reason=transfer_reason,
+                    checkout_condition=return_condition,
+                    is_returned=False,
+                )
+                item.status = ItemStatus.CHECKED_OUT
+            self.db.add(new)
+            item.assigned_to_user_id = (
+                str(new_holder_id) if holding_type == "assignment" else None
+            )
+            item.assigned_date = now if holding_type == "assignment" else None
+            await self.db.flush()
+            await log_audit_event(
+                db=self.db,
+                event_type="inventory_item_transferred",
+                event_category="inventory",
+                severity="warning",
+                event_data={
+                    "item_id": str(item_id),
+                    "old_record_id": old.id,
+                    "new_record_id": new.id,
+                    "old_holder_id": str(current_holder_id),
+                    "new_holder_id": str(new_holder_id),
+                    "holding_type": holding_type,
+                    "return_condition": return_condition.value,
+                    "reason": transfer_reason,
+                    "immediate": immediate,
+                },
+                organization_id=str(organization_id),
+            )
+            await self.db.commit()
+            return {
+                "item_id": str(item_id),
+                "old_record_id": old.id,
+                "new_record_id": new.id,
+                "old_holder_id": str(current_holder_id),
+                "new_holder_id": str(new_holder_id),
+                "holding_type": holding_type,
+            }, None
+        except Exception as exc:
+            await self.db.rollback()
+            return None, str(exc)
 
     async def batch_return(
         self,
