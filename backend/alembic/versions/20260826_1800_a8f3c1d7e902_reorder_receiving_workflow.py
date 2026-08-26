@@ -1,14 +1,14 @@
 """reorder receiving workflow and receipt history
 
 Revision ID: a8f3c1d7e902
-Revises: e2c8f5a71d40
+Revises: 472a1e34aa84
 """
 
 import sqlalchemy as sa
 from alembic import op
 
 revision = "a8f3c1d7e902"
-down_revision = "e2c8f5a71d40"
+down_revision = "472a1e34aa84"
 branch_labels = None
 depends_on = None
 
