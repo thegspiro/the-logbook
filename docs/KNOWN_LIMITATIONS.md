@@ -2111,6 +2111,32 @@ already records this pairing as deliberately unadjudicated, for the same
 reason. (Security review EC-14 residual,
 `docs/security-review/EC-14-equipment-check-shifts.md`.)
 
+## Outbound Integration Requests — The DNS-Rebinding TOCTOU Is Narrowed, Not Closed (2026-08-26)
+
+`assert_outbound_url_safe()` (`app/utils/url_validator.py`) re-resolves an
+org-configured integration URL's hostname via `socket.getaddrinfo()`
+immediately before an outbound request, to catch a hostname that was
+repointed at an internal address since it was saved. Six services call it
+this way — `audit_ship_service.py`, `push_service.py`, and
+`integration_services/{teams,webhook,slack,discord,calcom}_service.py` — and
+in every one, the actual request is a separate, ordinary
+`httpx.AsyncClient.get()`/`.post()` call that performs its **own**
+independent DNS resolution when it connects. A hostname that resolves to a
+public IP for the check and an internal one moments later (classic DNS
+rebinding) passes the check and still reaches the internal address. The
+function's own docstring says it "shrink[s] the rebinding window... versus
+save-time-to-send" — narrows, not closes — which is accurate; a security
+review draft that read this as "closed" was corrected (SCH-10).
+
+Not fixed: closing it means pinning the address `assert_outbound_url_safe`
+resolved for the actual connection (while preserving the original Host
+header / SNI) — a shared-infrastructure change to
+`create_integration_client`/the calling convention across all six files,
+not a fix scoped to any one of them, and a change to how every integration
+connects. Needs a dedicated cross-cutting pass (the shape SEC-00 exists
+for), not a unilateral fix inside a feature-scoped review. (Security review
+SCH-10, `docs/security-review/SCH-15-scheduling.md`.)
+
 ## Process
 
 The review loop (see [review-log.md](./review-log.md)) advances through one area

@@ -1,6 +1,6 @@
 # Security Review 15 — Scheduling
 
-**Prefix:** `SCH` · **Iteration:** 15 · **Reviewed:** 2026-08-26 · **PR:** TBD
+**Prefix:** `SCH` · **Iteration:** 15 · **Reviewed:** 2026-08-26 · **PR:** [#1846](https://github.com/thegspiro/the-logbook/pull/1846)
 
 **Backend:** `api/v1/endpoints/scheduling.py` (3,437 L, 92 routes),
 `api/v1/endpoints/scheduling_module_config.py` (3 routes),
@@ -14,6 +14,18 @@
 since the last pass); none touched this iteration
 
 ---
+
+## Revision note
+
+A Codex review of the draft caught three issues: a real efficiency gap
+(SCH-9's original per-id validation loop, up to 100 serial queries) and two
+inaccurate claims in the draft's own write-up — SCH-9's cross-tenant impact
+was overstated (there is no cross-tenant failure scenario; corrected below),
+and a "Verified good" claim that `calcom_service.py` closes the DNS-rebinding
+TOCTOU was wrong (it narrows the window; a repo-wide gap, now SCH-10,
+flagged). SCH-9's fix (in-org validation) survives, batched; SCH-10 is
+flagged rather than fixed, since closing it is a cross-cutting change
+spanning six files, not a scheduling-specific one.
 
 ## Scope
 
@@ -142,12 +154,13 @@ PUT/DELETE `scheduling.manage`) and `calcom_sync.py` (1/1 route:
   `apply_updates` exists to provide (though this file predates that shared
   utility and doesn't import it — no divergence in behavior found across any
   of the five sites).
-- **`calcom_service.py` re-validates its outbound URL at send time.**
-  `_assert_base_url_safe()` (→ `assert_outbound_url_safe`) is called
-  immediately before every outbound request in both `test_connection` and
-  `list_bookings`, closing the DNS-rebinding TOCTOU the checklist calls for —
-  this integration's `api_base_url` is org-configurable (self-hosted Cal.com
-  support), so it's exactly the case the check exists for.
+- **`calcom_service.py` re-validates its outbound URL immediately before
+  every outbound request** (`_assert_base_url_safe()` in both
+  `test_connection` and `list_bookings`) — the pattern the checklist calls
+  for, applied correctly to this integration's org-configurable
+  `api_base_url` (self-hosted Cal.com support). **Correction, not a finding:**
+  this narrows the DNS-rebinding TOCTOU window, it does not close it — see
+  SCH-10, a pre-existing, repo-wide gap rather than a defect in this file.
 - **`scheduling_module_config_service.py` deep-copies its module-level
   defaults** before returning them (`copy.deepcopy(DEFAULT_SHIFT_SETTINGS)`,
   with a comment naming Pitfall #12 explicitly) and builds fresh dicts on every
@@ -173,7 +186,7 @@ PUT/DELETE `scheduling.manage`) and `calcom_sync.py` (1/1 route:
 
 ## Findings
 
-### SCH-9 — LOW (XC-1) — `ShiftCall.responding_members` accepted a foreign user id — ✅ FIXED
+### SCH-9 — NIT (referential integrity, not cross-tenant) — `ShiftCall.responding_members` accepted a foreign user id — ✅ FIXED
 
 **What:** `create_shift_call` and `update_shift_call` stored a client-supplied
 `responding_members` list (user-id strings) straight into the `ShiftCall.
@@ -187,35 +200,77 @@ before persisting).
 **Where:** `app/services/scheduling_service.py` — `create_shift_call`
 (was line 2052) and `update_shift_call` (was line 2100).
 
-**Failure scenario:** `compute_member_call_counts` sums `responding_members`
-across a shift's calls to credit each member a call count
-(`app/services/scheduling_service.py:677-691`), and
-`ShiftCompletionService._get_trainee_call_data_from_shift` searches the same
-column for a trainee's user id to compute their call-response count on a
-training report. A caller with `scheduling.manage` (or shift-officer access
-via `_authorize_shift_management`) who supplies a foreign org's user id in
-`responding_members` would, if that id happened to be known and reused,
-inflate that unrelated user's call count on a report they have nothing to do
-with. Not a read-leak — nothing resolves the id to a name from this column —
-but a data-integrity write outside the caller's org, the class Pitfall #14c
-exists to close.
+**Corrected impact (was overstated in the draft; caught by Codex review):**
+the draft claimed a foreign id here could "inflate an unrelated org's
+member's call count." It cannot. `compute_member_call_counts` is scoped to
+one shift's own (already org-validated) attendance rows and only looks up
+each attendee's own id in the count map
+(`app/services/scheduling_service.py:6401-6403`) — a foreign id in the map
+simply has no attendee to match. `ShiftCompletionService`'s trainee lookup is
+the same shape: it validates `trainee_id` is in-org (or the shift is)
+_before_ searching `responding_members` for it
+(`shift_completion_service.py:282-310`), and searches only the one
+already-org-scoped `shift_id` passed in — never scans other shifts or other
+orgs for a matching id. So a foreign id here can never attribute a count to,
+or affect a report for, another organization's member. There is no
+cross-tenant failure scenario.
 
-**Impact:** LOW. Requires already holding shift-management access, and the
-only effect is a miscounted statistic on an unrelated org's member (no PII
-disclosed, no write to another org's own tables). Recorded as a finding rather
-than skipped because it's the one exception to an otherwise-universal
-discipline in this file, and the fix is small and low-risk.
+**Actual impact:** within-org referential integrity only. An org could store
+an arbitrary or foreign-looking string as a "responder" on its own shift
+call, which is inert noise (no attendee will ever match it) rather than a
+security issue — but it's still the one write path in this file that didn't
+validate a client-supplied user id, and the fix costs nothing.
 
-**Fix:** both methods now validate every id in `responding_members` via the
-same `_user_in_org` helper used everywhere else in this file, rejecting with
-"One or more members are not in your organization" before the write — `create
-_shift_call` before `self.db.add(call)`, `update_shift_call` before the
-`setattr` loop (only when the key is present in the update payload, so an
-update that doesn't touch `responding_members` isn't penalized with an extra
-query). Guard tests:
-`test_scheduling_org_scoping.py::TestShiftCallRespondingMembersScoping` (2
-tests: create and update each reject a foreign id and leave no row
-written/changed).
+**Fix:** both methods now validate every id in `responding_members` via a new
+batched `_all_users_in_org` helper (one `IN` query rather than one
+`_user_in_org` call per id — the schema allows up to 100 entries per payload,
+so a per-id loop could cost 100 serial round trips; also caught by Codex
+review), rejecting with "One or more members are not in your organization"
+before the write — `create_shift_call` before `self.db.add(call)`,
+`update_shift_call` before the `setattr` loop (only when the key is present
+in the update payload). Guard tests:
+`test_scheduling_org_scoping.py::TestShiftCallRespondingMembersScoping` (4
+tests: create/update each reject a foreign id and a partial match, and
+create accepts a fully in-org list).
+
+### SCH-10 — LOW/MED (correction; repo-wide, not scheduling-specific) — the DNS-rebinding TOCTOU is narrowed, not closed — 🚩 FLAGGED
+
+**What:** the draft of this review claimed `calcom_service.py` "closes the
+DNS-rebinding TOCTOU" by calling `assert_outbound_url_safe()` immediately
+before each outbound request. Caught by Codex review: it does not close it.
+`assert_outbound_url_safe` resolves the hostname once via
+`socket.getaddrinfo()` to check it isn't private (`app/utils/
+url_validator.py:105-116`), then returns — the actual request is a separate,
+ordinary `httpx.AsyncClient.get()` call (`calcom_service.py:106-111,132-137`)
+that performs its **own** independent DNS resolution when it connects. A
+hostname that resolves to a public IP for the validation check and an
+internal IP moments later for the connection (classic DNS rebinding) passes
+the check and still reaches the internal address. The function's own
+docstring is accurate about this and the draft's "Verified good" claim was
+not: it says the check "shrink[s] the rebinding window... versus
+save-time-to-send," not that it closes it.
+
+**Where:** not specific to this feature. The same `assert_outbound_url_safe`
+
+- plain-`httpx` shape is used identically in `app/services/audit_ship_
+service.py`, `push_service.py`, and `integration_services/{teams,webhook,
+slack,discord,calcom}_service.py` — six files, all with the same residual
+  window. `calcom_service.py` follows the established repo pattern correctly;
+  the pattern itself is the gap.
+
+**Impact:** LOW/MED. Requires an attacker who controls DNS for a domain an
+org has configured as an integration endpoint (webhook URL, self-hosted
+Cal.com host, audit-ship collector) to flip its resolution within the
+narrow window between the check and the connect — a real but hard-to-land
+SSRF variant, not a trivially exploitable one.
+
+**Fix:** not applied here. Closing this properly means pinning the
+validated, resolved address for the actual connection (while preserving the
+original Host header / SNI) — a shared-infrastructure change to
+`create_integration_client`/the calling convention across all six files, not
+a scheduling-module fix, and a behavior change to how every integration
+connects. Flagged for a dedicated cross-cutting pass (the shape SEC-00 exists
+for), not fixed unilaterally here. Mirrored into `docs/KNOWN_LIMITATIONS.md`.
 
 ## Schema & migration notes
 
@@ -229,10 +284,12 @@ chain validated at a single head (`b272a5d5535c`, 371 revisions).
 
 ## Guard tests added
 
-- `test_scheduling_org_scoping.py::TestShiftCallRespondingMembersScoping` — 2
-  tests (create, update), asserting SCH-9: a foreign `responding_members` id
-  is rejected before any write, with the same message and mechanism
-  (`_user_in_org`) as the file's other client-supplied-user-id checks.
+- `test_scheduling_org_scoping.py::TestShiftCallRespondingMembersScoping` — 4
+  tests, asserting SCH-9: create and update each reject a foreign
+  `responding_members` id, update rejects a partial match (one valid id
+  alongside one foreign id), and create accepts a fully in-org list —
+  exercising the batched `_all_users_in_org` check rather than the
+  since-replaced per-id loop.
 
 ## Completion gate
 
@@ -242,6 +299,6 @@ chain validated at a single head (`b272a5d5535c`, 371 revisions).
 | `black --check app/ tests/ alembic/` (changed files)                                                                                                                                     | ✅ clean                                                        |
 | `isort --check-only app/ tests/ alembic/` (changed files)                                                                                                                                | ✅ clean                                                        |
 | `python3 scripts/validate_migrations.py --strict`                                                                                                                                        | ✅ single head, 371 revisions                                   |
-| `pytest tests/test_scheduling_org_scoping.py tests/test_scheduling.py tests/test_call_tracking.py tests/test_scheduling_module_config_service.py tests/test_calcom_bookings_endpoint.py` | ✅ 194 passed                                                   |
-| `pytest tests/` (full backend suite)                                                                                                                                                     | ✅ 8544 passed, 22 skipped (pre-existing Docker/no-MySQL skips) |
+| `pytest tests/test_scheduling_org_scoping.py tests/test_scheduling.py tests/test_call_tracking.py tests/test_scheduling_module_config_service.py tests/test_calcom_bookings_endpoint.py` | ✅ 196 passed                                                   |
+| `pytest tests/` (full backend suite)                                                                                                                                                     | ✅ 8546 passed, 22 skipped (pre-existing Docker/no-MySQL skips) |
 | `tsc --noEmit` / `eslint .`                                                                                                                                                              | n/a — no frontend file changed this iteration                   |
