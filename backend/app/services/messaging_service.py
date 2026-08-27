@@ -8,7 +8,7 @@ Handles creation, targeting, delivery, and read tracking.
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
-from sqlalchemy import desc, func, or_, select
+from sqlalchemy import desc, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -18,6 +18,8 @@ from app.models.notification import (
     DepartmentMessageRead,
     MessagePriority,
     MessageTargetType,
+    NotificationChannel,
+    NotificationLog,
 )
 from app.models.user import Role, User, UserStatus
 from app.utils.sql_search import LIKE_ESCAPE_CHAR, like_pattern
@@ -640,6 +642,31 @@ class MessagingService:
     # Read / Acknowledge Tracking
     # ============================================
 
+    async def _mark_message_notification_read(
+        self, message_id: str, user_id: str, organization_id: str
+    ) -> bool:
+        """Apply the department-message receipt to its in-app notification.
+
+        ``metadata.message_id`` is the delivery service's existing link between
+        the two records.  Keep all recipient and tenant predicates here so a
+        receipt can never affect another member's notification.
+        """
+        now = datetime.now(timezone.utc)
+        result = await self.db.execute(
+            update(NotificationLog)
+            .where(
+                NotificationLog.organization_id == organization_id,
+                NotificationLog.recipient_id == user_id,
+                NotificationLog.channel == NotificationChannel.IN_APP,
+                NotificationLog.category == "department_message",
+                NotificationLog.read.is_(False),
+                NotificationLog.notification_metadata["message_id"].as_string()
+                == message_id,
+            )
+            .values(read=True, read_at=now)
+        )
+        return bool(result.rowcount)
+
     async def _visible_message_or_none(
         self, message_id: str, user_id: str, organization_id: str
     ) -> Optional[DepartmentMessage]:
@@ -694,6 +721,10 @@ class MessagingService:
             )
             record = existing.scalar_one_or_none()
             if record:
+                if await self._mark_message_notification_read(
+                    message_id, user_id, organization_id
+                ):
+                    await self.db.commit()
                 return True, None  # Already read
 
             read_record = DepartmentMessageRead(
@@ -702,6 +733,9 @@ class MessagingService:
                 user_id=user_id,
             )
             self.db.add(read_record)
+            await self._mark_message_notification_read(
+                message_id, user_id, organization_id
+            )
             await self.db.commit()
             return True, None
         except Exception as e:
@@ -731,8 +765,15 @@ class MessagingService:
 
             if record:
                 if record.acknowledged_at:
+                    if await self._mark_message_notification_read(
+                        message_id, user_id, organization_id
+                    ):
+                        await self.db.commit()
                     return True, None, False
                 record.acknowledged_at = datetime.now(timezone.utc)
+                await self._mark_message_notification_read(
+                    message_id, user_id, organization_id
+                )
                 await self.db.commit()
             else:
                 read_record = DepartmentMessageRead(
@@ -742,6 +783,9 @@ class MessagingService:
                     acknowledged_at=datetime.now(timezone.utc),
                 )
                 self.db.add(read_record)
+                await self._mark_message_notification_read(
+                    message_id, user_id, organization_id
+                )
                 await self.db.commit()
 
             return True, None, True

@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../test/utils';
+import { useLocation } from 'react-router';
 import NotificationCard from './NotificationCard';
 import type { NotificationLogRecord } from '../services/adminServices';
 
@@ -126,6 +127,33 @@ describe('NotificationCard', () => {
   });
 
   describe('read state', () => {
+    it('marks an unread notification read before following its CTA', async () => {
+      const user = userEvent.setup();
+      const calls: string[] = [];
+      const Location = () => {
+        const location = useLocation();
+        return <span data-testid="location">{location.pathname}</span>;
+      };
+      renderWithRouter(
+        <>
+          <NotificationCard
+            notification={makeNotification({ action_url: '/messages/msg-1' })}
+            onMarkRead={async (id) => {
+              calls.push(id);
+            }}
+            onTogglePin={vi.fn()}
+          />
+          <Location />
+        </>
+      );
+
+      await expand(user);
+      await user.click(screen.getByRole('button', { name: /Read Message/ }));
+
+      expect(calls).toEqual(['notif-1']);
+      expect(screen.getByTestId('location')).toHaveTextContent('/messages/msg-1');
+    });
+
     it('marks read on collapse, not on expand', async () => {
       const user = userEvent.setup();
       const onMarkRead = vi.fn();
