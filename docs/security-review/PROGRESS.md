@@ -16,8 +16,9 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-None. Feature 08 (membership pipeline, pass 2) reviewed — no findings, no
-code changes. Next: 09 medical screening (PHI), pass 2.
+[PR #1950](https://github.com/thegspiro/the-logbook/pull/1950) — feature 08
+(membership pipeline, pass 2), no findings, documentation only. Awaiting
+merge before starting feature 09 (medical screening, PHI), pass 2.
 
 ---
 
