@@ -3,15 +3,15 @@ import { DialogPanel } from '../components/ux/DialogPanel';
 import { ArrowDownToLine, CheckCircle, XCircle, Clock } from 'lucide-react';
 import { inventoryService } from '../services/inventoryService';
 import type { ReturnRequestItem } from '../services/eventServices';
+import { RequestStatus } from '../constants/enums';
 import { getErrorMessage } from '../utils/errorHandling';
 import { formatDate } from '../utils/dateFormatting';
 import { useTimezone } from '../hooks/useTimezone';
 import toast from 'react-hot-toast';
-import { RequestStatus } from '../constants/enums';
 
 const STATUS_BADGES: Record<string, string> = {
-  pending: 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400',
-  approved: 'bg-green-500/10 text-green-700 dark:text-green-400',
+  requested: 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400',
+  received: 'bg-green-500/10 text-green-700 dark:text-green-400',
   denied: 'bg-red-500/10 text-red-700 dark:text-red-400',
   completed: 'bg-blue-500/10 text-blue-700 dark:text-blue-400',
 };
@@ -22,14 +22,17 @@ const ReturnRequestsPanel: React.FC = () => {
   const tz = useTimezone();
   const [requests, setRequests] = useState<ReturnRequestItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState<string>('pending');
+  const [filter, setFilter] = useState<string>('requested');
   const [reviewModal, setReviewModal] = useState<{ open: boolean; request: ReturnRequestItem | null }>({
     open: false,
     request: null,
   });
-  const [reviewAction, setReviewAction] = useState<'approved' | 'denied'>('approved');
+  const [reviewAction, setReviewAction] = useState<'received' | 'denied'>('received');
   const [reviewNotes, setReviewNotes] = useState('');
-  const [overrideCondition, setOverrideCondition] = useState('');
+  const [observedCondition, setObservedCondition] = useState('');
+  const [verifiedIdentifier, setVerifiedIdentifier] = useState('');
+  const [receivedQuantity, setReceivedQuantity] = useState(1);
+  const [followUp, setFollowUp] = useState<'auto' | 'maintenance' | 'charge_review' | 'write_off'>('auto');
   const [submitting, setSubmitting] = useState(false);
 
   const loadRequests = useCallback(async () => {
@@ -55,12 +58,20 @@ const ReturnRequestsPanel: React.FC = () => {
       await inventoryService.reviewReturnRequest(reviewModal.request.id, {
         status: reviewAction,
         review_notes: reviewNotes || undefined,
-        override_condition: overrideCondition || undefined,
+        observed_condition: reviewAction === 'received' ? observedCondition : undefined,
+        verified_identifier:
+          reviewAction === 'received' && reviewModal.request.return_type !== 'issuance'
+            ? verifiedIdentifier.trim()
+            : undefined,
+        received_quantity:
+          reviewAction === 'received' && reviewModal.request.return_type === 'issuance' ? receivedQuantity : undefined,
+        follow_up: reviewAction === 'received' ? followUp : undefined,
       });
       toast.success(`Return request ${reviewAction}`);
       setReviewModal({ open: false, request: null });
       setReviewNotes('');
-      setOverrideCondition('');
+      setObservedCondition('');
+      setVerifiedIdentifier('');
       await loadRequests();
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to review request'));
@@ -69,7 +80,7 @@ const ReturnRequestsPanel: React.FC = () => {
     }
   };
 
-  const pendingCount = requests.filter((r) => r.status === RequestStatus.PENDING).length;
+  const pendingCount = requests.filter((r) => r.status === 'requested').length;
 
   return (
     <div className="space-y-4">
@@ -94,7 +105,7 @@ const ReturnRequestsPanel: React.FC = () => {
           onChange={(e) => setFilter(e.target.value)}
           className="form-input max-w-[200px] text-sm"
         >
-          <option value="pending">Pending</option>
+          <option value="requested">Requested</option>
           <option value="">All</option>
           <option value="completed">Completed</option>
           <option value="denied">Denied</option>
@@ -143,17 +154,18 @@ const ReturnRequestsPanel: React.FC = () => {
                   >
                     {req.status}
                   </span>
-                  {req.status === RequestStatus.PENDING && (
+                  {req.status === 'requested' && (
                     <div className="flex gap-1">
                       <button
                         onClick={() => {
                           setReviewModal({ open: true, request: req });
-                          setReviewAction('approved');
-                          setOverrideCondition('');
+                          setReviewAction('received');
+                          setObservedCondition('');
+                          setVerifiedIdentifier('');
                           setReviewNotes('');
                         }}
                         className="rounded-lg bg-green-600 p-1.5 text-white transition-colors hover:bg-green-700"
-                        title="Approve return"
+                        title="Receive item"
                       >
                         <CheckCircle className="h-4 w-4" />
                       </button>
@@ -161,7 +173,8 @@ const ReturnRequestsPanel: React.FC = () => {
                         onClick={() => {
                           setReviewModal({ open: true, request: req });
                           setReviewAction('denied');
-                          setOverrideCondition('');
+                          setObservedCondition('');
+                          setVerifiedIdentifier('');
                           setReviewNotes('');
                         }}
                         className="rounded-lg bg-red-800 p-1.5 text-white transition-colors hover:bg-red-900"
@@ -200,7 +213,7 @@ const ReturnRequestsPanel: React.FC = () => {
             >
               <div className="px-4 pt-5 pb-4 sm:px-6">
                 <h3 className="text-theme-text-primary mb-4 text-lg font-medium">
-                  {reviewAction === RequestStatus.APPROVED ? 'Approve Return' : 'Deny Return'}
+                  {reviewAction === 'received' ? 'Receive Item' : 'Deny Request'}
                 </h3>
                 <div className="space-y-4">
                   <div className="bg-theme-surface-secondary rounded-lg p-3">
@@ -218,28 +231,77 @@ const ReturnRequestsPanel: React.FC = () => {
                     )}
                   </div>
 
-                  {reviewAction === RequestStatus.APPROVED && (
+                  {reviewAction === 'received' && (
                     <div>
                       <label
                         htmlFor="override-condition"
                         className="text-theme-text-secondary mb-1 block text-sm font-medium"
                       >
-                        Actual Condition (override if different)
+                        Observed condition (required)
                       </label>
                       <select
                         id="override-condition"
-                        value={overrideCondition}
-                        onChange={(e) => setOverrideCondition(e.target.value)}
+                        value={observedCondition}
+                        onChange={(e) => setObservedCondition(e.target.value)}
                         className="form-input"
                       >
-                        <option value="">
-                          Use member&apos;s report ({reviewModal.request.reported_condition.replace('_', ' ')})
-                        </option>
+                        <option value="">Select the condition you observe…</option>
                         {CONDITION_OPTIONS.map((c) => (
                           <option key={c} value={c}>
                             {c.replace('_', ' ')}
                           </option>
                         ))}
+                      </select>
+                    </div>
+                  )}
+
+                  {reviewAction === 'received' && reviewModal.request.return_type !== 'issuance' && (
+                    <div>
+                      <label htmlFor="verified-id" className="form-label">
+                        Scanned barcode / asset ID (required)
+                      </label>
+                      <input
+                        id="verified-id"
+                        className="form-input"
+                        value={verifiedIdentifier}
+                        onChange={(e) => setVerifiedIdentifier(e.target.value)}
+                        autoComplete="off"
+                      />
+                    </div>
+                  )}
+                  {reviewAction === 'received' && reviewModal.request.return_type === 'issuance' && (
+                    <div>
+                      <label htmlFor="received-quantity" className="form-label">
+                        Quantity physically received (required)
+                      </label>
+                      <input
+                        id="received-quantity"
+                        type="number"
+                        min={1}
+                        max={reviewModal.request.quantity_returning}
+                        className="form-input"
+                        value={receivedQuantity}
+                        onChange={(e) => setReceivedQuantity(Number(e.target.value))}
+                      />
+                    </div>
+                  )}
+                  {reviewAction === 'received' && ['poor', 'damaged', 'out_of_service'].includes(observedCondition) && (
+                    <div>
+                      <label htmlFor="follow-up" className="form-label">
+                        Safety follow-up
+                      </label>
+                      <select
+                        id="follow-up"
+                        className="form-input"
+                        value={followUp}
+                        onChange={(e) => setFollowUp(e.target.value as typeof followUp)}
+                      >
+                        <option value="auto">Automatic (recommended)</option>
+                        <option value="maintenance">Maintenance</option>
+                        {reviewModal.request.return_type === 'issuance' && (
+                          <option value="charge_review">Charge review</option>
+                        )}
+                        <option value="write_off">Write-off review</option>
                       </select>
                     </div>
                   )}
@@ -270,14 +332,19 @@ const ReturnRequestsPanel: React.FC = () => {
                   onClick={() => {
                     void handleReview();
                   }}
-                  disabled={submitting}
+                  disabled={
+                    submitting ||
+                    (reviewAction === 'received' &&
+                      (!observedCondition ||
+                        (reviewModal.request.return_type !== 'issuance'
+                          ? !verifiedIdentifier.trim()
+                          : receivedQuantity < 1)))
+                  }
                   className={`rounded-lg px-4 py-2 text-white transition-colors disabled:opacity-50 ${
-                    reviewAction === RequestStatus.APPROVED
-                      ? 'bg-green-600 hover:bg-green-700'
-                      : 'bg-red-800 hover:bg-red-900'
+                    reviewAction === 'received' ? 'bg-green-600 hover:bg-green-700' : 'bg-red-800 hover:bg-red-900'
                   }`}
                 >
-                  {submitting ? 'Processing...' : reviewAction === RequestStatus.APPROVED ? 'Approve & Return' : 'Deny'}
+                  {submitting ? 'Processing...' : reviewAction === 'received' ? 'Receive item' : 'Deny'}
                 </button>
               </div>
             </DialogPanel>

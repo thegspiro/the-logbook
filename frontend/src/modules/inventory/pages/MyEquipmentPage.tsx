@@ -91,10 +91,6 @@ const MyEquipmentPage: React.FC = () => {
 
   /* ---------- Modals ---------- */
   const [requestModal, setRequestModal] = useState(false);
-  const [checkInModal, setCheckInModal] = useState<{ open: boolean; checkoutId: string }>({
-    open: false,
-    checkoutId: '',
-  });
   const [extendModal, setExtendModal] = useState<{ open: boolean; checkoutId: string }>({
     open: false,
     checkoutId: '',
@@ -107,10 +103,6 @@ const MyEquipmentPage: React.FC = () => {
     maxQty: number;
   }>({ open: false, returnType: 'assignment', itemId: '', refId: '', maxQty: 1 });
   const [submitting, setSubmitting] = useState(false);
-
-  /* ---------- Check-in form ---------- */
-  const [ciCondition, setCiCondition] = useState('good');
-  const [ciNotes, setCiNotes] = useState('');
 
   /* ---------- Extend form ---------- */
   const [extendDate, setExtendDate] = useState('');
@@ -247,23 +239,6 @@ const MyEquipmentPage: React.FC = () => {
     setReqReason('');
   };
 
-  /* ---------- Check in ---------- */
-  const handleCheckIn = async () => {
-    setSubmitting(true);
-    try {
-      await inventoryService.checkInItem(checkInModal.checkoutId, ciCondition, ciNotes.trim() || undefined);
-      toast.success('Item checked in');
-      setCheckInModal({ open: false, checkoutId: '' });
-      setCiCondition('good');
-      setCiNotes('');
-      void loadInventory();
-    } catch (err: unknown) {
-      toast.error(getErrorMessage(err, 'Failed to check in'));
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
   /* ---------- Extend checkout ---------- */
   const handleExtend = async () => {
     if (!extendDate) {
@@ -302,7 +277,7 @@ const MyEquipmentPage: React.FC = () => {
         reported_condition: retCondition || undefined,
         member_notes: retNotes.trim() || undefined,
       });
-      toast.success('Return request submitted');
+      toast.success('Quartermaster notified; keep the item until it is physically received');
       setReturnModal({ open: false, returnType: 'assignment', itemId: '', refId: '', maxQty: 1 });
       setRetCondition('good');
       setRetNotes('');
@@ -505,7 +480,7 @@ const MyEquipmentPage: React.FC = () => {
                 className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-secondary rounded border px-3 py-1.5 text-xs whitespace-nowrap transition-colors"
               >
                 <CornerDownLeft className="mr-1 inline h-3 w-3" />
-                Request Return
+                Notify quartermaster of return
               </button>
             </div>
           ))}
@@ -546,17 +521,6 @@ const MyEquipmentPage: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => {
-                    setCiCondition('good');
-                    setCiNotes('');
-                    setCheckInModal({ open: true, checkoutId: c.checkout_id });
-                  }}
-                  className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-secondary active:bg-theme-surface-secondary rounded border px-3 py-2 text-xs whitespace-nowrap transition-colors sm:py-1.5"
-                >
-                  Check In
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
                     setExtendDate('');
                     setExtendModal({ open: true, checkoutId: c.checkout_id });
                   }}
@@ -579,7 +543,7 @@ const MyEquipmentPage: React.FC = () => {
                   className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-secondary active:bg-theme-surface-secondary rounded border px-3 py-2 text-xs whitespace-nowrap transition-colors sm:py-1.5"
                 >
                   <CornerDownLeft className="mr-1 inline h-3 w-3" />
-                  Request Return
+                  Notify quartermaster of return
                 </button>
               </div>
             </div>
@@ -622,7 +586,7 @@ const MyEquipmentPage: React.FC = () => {
                 className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-secondary rounded border px-3 py-1.5 text-xs whitespace-nowrap transition-colors"
               >
                 <CornerDownLeft className="mr-1 inline h-3 w-3" />
-                Request Return
+                Notify quartermaster of return
               </button>
             </div>
           ))}
@@ -760,54 +724,6 @@ const MyEquipmentPage: React.FC = () => {
           </div>
         </Modal>
 
-        {/* Check-In Modal */}
-        <Modal
-          isOpen={checkInModal.open}
-          onClose={() => setCheckInModal({ open: false, checkoutId: '' })}
-          title="Check In Item"
-          size="sm"
-        >
-          <div className="space-y-4">
-            <div>
-              <label className={labelClass}>Condition</label>
-              <select value={ciCondition} onChange={(e) => setCiCondition(e.target.value)} className={selectClass}>
-                {RETURN_CONDITION_OPTIONS.map((o) => (
-                  <option key={o.value} value={o.value}>
-                    {o.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className={labelClass}>Damage Notes (optional)</label>
-              <textarea
-                rows={3}
-                value={ciNotes}
-                onChange={(e) => setCiNotes(e.target.value)}
-                className={inputClass}
-                placeholder="Describe any damage..."
-              />
-            </div>
-            <div className="flex flex-col-reverse items-stretch justify-end gap-2 pt-2 sm:flex-row sm:items-center">
-              <button
-                type="button"
-                onClick={() => setCheckInModal({ open: false, checkoutId: '' })}
-                className="btn-secondary btn-md"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={() => void handleCheckIn()}
-                disabled={submitting}
-                className="btn-info btn-md text-center disabled:opacity-50"
-              >
-                {submitting ? <Loader2 className="mr-1 inline h-4 w-4 animate-spin" /> : null}Check In
-              </button>
-            </div>
-          </div>
-        </Modal>
-
         {/* Extend Checkout Modal */}
         <Modal
           isOpen={extendModal.open}
@@ -849,7 +765,7 @@ const MyEquipmentPage: React.FC = () => {
         <Modal
           isOpen={returnModal.open}
           onClose={() => setReturnModal({ open: false, returnType: 'assignment', itemId: '', refId: '', maxQty: 1 })}
-          title="Request Return"
+          title="Notify quartermaster of return"
           size="sm"
         >
           <div className="space-y-4">

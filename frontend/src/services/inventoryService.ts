@@ -810,7 +810,14 @@ export const inventoryService = {
 
   async reviewReturnRequest(
     requestId: string,
-    data: { status: string; review_notes?: string | undefined; override_condition?: string | undefined }
+    data: {
+      status: 'received' | 'denied';
+      review_notes?: string | undefined;
+      observed_condition?: string | undefined;
+      verified_identifier?: string | undefined;
+      received_quantity?: number | undefined;
+      follow_up?: 'auto' | 'none' | 'maintenance' | 'charge_review' | 'write_off' | undefined;
+    }
   ): Promise<{ id: string; status: string; message: string }> {
     const response = await api.put<{ id: string; status: string; message: string }>(
       `/inventory/return-requests/${requestId}/review`,

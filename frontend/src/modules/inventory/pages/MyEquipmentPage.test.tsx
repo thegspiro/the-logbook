@@ -102,15 +102,6 @@ const availableItem: InventoryItem = {
   updated_at: '2026-01-01T00:00:00Z',
 };
 
-// Modal submit buttons can share a label with row action buttons; the modal
-// renders last in the DOM.
-const lastButton = (name: string | RegExp): HTMLElement => {
-  const btns = screen.getAllByRole('button', { name });
-  const btn = btns[btns.length - 1];
-  if (!btn) throw new Error(`button not found: ${String(name)}`);
-  return btn;
-};
-
 const firstButton = (name: string | RegExp): HTMLElement => {
   const [btn] = screen.getAllByRole('button', { name });
   if (!btn) throw new Error(`button not found: ${String(name)}`);
@@ -158,18 +149,13 @@ describe('MyEquipmentPage', () => {
     expect(screen.getByText('Work Gloves')).toBeInTheDocument();
   });
 
-  it('checks in an active checkout', async () => {
+  it('does not let a member mark an active checkout physically received', async () => {
     mockGetUserInventory.mockResolvedValue(fullInv);
-    const user = userEvent.setup();
     renderWithRouter(<MyEquipmentPage />);
     await screen.findByText('Thermal Camera');
-
-    await user.click(screen.getByRole('button', { name: 'Check In' }));
-    await user.click(lastButton('Check In'));
-
-    await waitFor(() => expect(mockCheckInItem).toHaveBeenCalledTimes(1));
-    expect(mockCheckInItem.mock.calls[0]?.[0]).toBe('co-1');
-    expect(mockToastSuccess).toHaveBeenCalledWith('Item checked in');
+    expect(screen.queryByRole('button', { name: 'Check In' })).not.toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: /Notify quartermaster of return/ })).not.toHaveLength(0);
+    expect(mockCheckInItem).not.toHaveBeenCalled();
   });
 
   it('submits a return request for an assignment', async () => {
@@ -178,8 +164,9 @@ describe('MyEquipmentPage', () => {
     renderWithRouter(<MyEquipmentPage />);
     await screen.findByText('Turnout Coat');
 
-    // The assignment row has the first "Request Return" button.
-    await user.click(firstButton(/Request Return/));
+    // The assignment row has the first notification action; this does not
+    // claim the member has already handed the gear in.
+    await user.click(firstButton(/Notify quartermaster of return/));
     await user.click(screen.getByRole('button', { name: 'Submit' }));
 
     await waitFor(() => expect(mockCreateReturnRequest).toHaveBeenCalledTimes(1));
