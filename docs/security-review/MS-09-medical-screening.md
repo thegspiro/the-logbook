@@ -80,12 +80,11 @@ parameter, subject is always the caller) and still requires authentication
 regardless of the module flag.
 
 No migrations touch `screening_records`/`screening_requirements` since pass
-
-1. Completion gate: `test_module_api_gating.py` (parity test covering this
-   router) + `test_medical_screening_service.py` +
-   `test_medical_screening_update_guards.py` +
-   `test_my_medical_compliance_route.py` — 67 passed, 0 failed. No code
-   changes needed. Rotation row 09 -> done.
+1's merge. Completion gate: `test_module_api_gating.py` (parity test
+covering this router) + `test_medical_screening_service.py` +
+`test_medical_screening_update_guards.py` +
+`test_my_medical_compliance_route.py` — 67 passed, 0 failed. No code
+changes needed. Rotation row 09 -> done.
 
 ---
 
