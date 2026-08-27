@@ -38,3 +38,21 @@ def test_update_user_profile_calls_rank_ceiling():
         "its rank-change branch -- this is the exact ORU-7d self-escalation "
         "regression (a caller setting their own rank to gain permissions)"
     )
+
+
+def test_create_member_ceiling_check_runs_before_the_user_is_flushed():
+    """A denied _enforce_role_grant_ceiling call reports a CRITICAL alert via
+    report_privilege_escalation_attempt, which commits the whole transaction
+    so the alert survives the 403 about to be raised (see its docstring).
+    If db.add(new_user) / db.flush() ran BEFORE that check, the commit would
+    also persist the should-be-rejected user -- a live, ACTIVE, password-set
+    account with no roles, behind a request the caller believes failed
+    outright. The check must appear before the flush in source order."""
+    source = inspect.getsource(create_member)
+    ceiling_at = source.index("_enforce_role_grant_ceiling(")
+    flush_at = source.index("db.flush()")
+    assert ceiling_at < flush_at, (
+        "create_member now flushes the new user before the role-grant "
+        "ceiling check -- a denied check's alert-commit would persist the "
+        "orphaned, should-be-rejected user account"
+    )

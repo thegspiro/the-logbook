@@ -6,7 +6,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router';
-import { ArrowLeft, FileX, RefreshCw, Check, XCircle, Loader2, Filter } from 'lucide-react';
+import { ArrowLeft, FileX, RefreshCw, Check, XCircle, Loader2, Filter, AlertTriangle } from 'lucide-react';
 import { FloatingActionButton } from '../../../components/ux/FloatingActionButton';
 import { inventoryService } from '../../../services/api';
 import type { WriteOffRequestItem } from '../types';
@@ -27,6 +27,7 @@ const WriteOffsPage: React.FC = () => {
     item: null,
   });
   const [reviewNotes, setReviewNotes] = useState('');
+  const [acknowledged, setAcknowledged] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   const loadWriteOffs = useCallback(async () => {
@@ -47,15 +48,23 @@ const WriteOffsPage: React.FC = () => {
 
   const handleReview = async (decision: 'approved' | 'denied') => {
     if (!reviewModal.item) return;
+    if (!reviewNotes.trim()) {
+      toast.error('A review note is required');
+      return;
+    }
     setSubmitting(true);
     try {
       await inventoryService.reviewWriteOff(reviewModal.item.id, {
         status: decision,
-        review_notes: reviewNotes || undefined,
+        review_notes: reviewNotes.trim(),
+        acknowledgement: acknowledged,
+        expected_item_status: reviewModal.item.current_status,
+        expected_holder_signature: reviewModal.item.holder_signature,
       });
       toast.success(`Write-off ${decision}`);
       setReviewModal({ open: false, item: null });
       setReviewNotes('');
+      setAcknowledged(false);
       void loadWriteOffs();
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to review write-off'));
@@ -168,6 +177,7 @@ const WriteOffsPage: React.FC = () => {
                       onClick={() => {
                         setReviewModal({ open: true, item: wo });
                         setReviewNotes('');
+                        setAcknowledged(false);
                       }}
                       className="btn-info shrink-0 px-3 py-1.5 text-xs"
                     >
@@ -218,16 +228,65 @@ const WriteOffsPage: React.FC = () => {
           isOpen={reviewModal.open}
           onClose={() => setReviewModal({ open: false, item: null })}
           title={`Review Write-Off: ${reviewModal.item?.item_name ?? ''}`}
-          size="sm"
+          size="lg"
         >
           {reviewModal.item && (
             <div className="space-y-4">
-              <div className="text-theme-text-secondary space-y-1 text-sm">
+              <div className="rounded-lg border border-red-300 bg-red-50 p-3 text-sm text-red-950 dark:border-red-800 dark:bg-red-950/30 dark:text-red-100">
+                <div className="mb-2 flex items-center gap-2 font-semibold">
+                  <AlertTriangle className="h-4 w-4" />
+                  Destructive inventory action
+                </div>
+                <p>
+                  Approval will mark this item{' '}
+                  <strong>
+                    {reviewModal.item.reason === 'lost'
+                      ? 'lost'
+                      : reviewModal.item.reason === 'stolen'
+                        ? 'stolen'
+                        : 'retired'}
+                  </strong>
+                  . It will close {reviewModal.item.active_assignment_count || 0} active assignment(s),{' '}
+                  {reviewModal.item.active_checkout_count || 0} checkout(s), and{' '}
+                  {reviewModal.item.active_issuance_count || 0} issuance(s).
+                </p>
+              </div>
+
+              <dl className="grid grid-cols-1 gap-x-4 gap-y-2 text-sm sm:grid-cols-2">
+                <div>
+                  <dt className="text-theme-text-muted">Current holder</dt>
+                  <dd className="text-theme-text-primary font-medium">{reviewModal.item.current_holder || 'None'}</dd>
+                </div>
+                <div>
+                  <dt className="text-theme-text-muted">Current status</dt>
+                  <dd className="text-theme-text-primary font-medium">
+                    {reviewModal.item.current_status || 'Unknown'}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-theme-text-muted">Serial / asset tag</dt>
+                  <dd>{reviewModal.item.item_serial_number || reviewModal.item.item_asset_tag || 'None'}</dd>
+                </div>
+                <div>
+                  <dt className="text-theme-text-muted">Replacement value</dt>
+                  <dd>
+                    {reviewModal.item.replacement_value != null
+                      ? `$${Number(reviewModal.item.replacement_value).toFixed(2)}`
+                      : 'Not recorded'}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-theme-text-muted">Charge / clearance</dt>
+                  <dd>{reviewModal.item.linked_charge_record || reviewModal.item.clearance_record || 'None'}</dd>
+                </div>
+                <div>
+                  <dt className="text-theme-text-muted">Open maintenance</dt>
+                  <dd>{reviewModal.item.open_maintenance_record || 'None'}</dd>
+                </div>
+              </dl>
+              <div className="text-theme-text-secondary text-sm">
                 <p>Reason: {reviewModal.item.reason}</p>
                 <p>Description: {reviewModal.item.description}</p>
-                {reviewModal.item.item_value != null && (
-                  <p>Item Value: ${Number(reviewModal.item.item_value).toFixed(2)}</p>
-                )}
               </div>
 
               <div>
@@ -235,7 +294,7 @@ const WriteOffsPage: React.FC = () => {
                   htmlFor="writeoff-review-notes"
                   className="text-theme-text-primary mb-1 block text-sm font-medium"
                 >
-                  Review Notes (optional)
+                  Review note <span className="text-red-600">*</span>
                 </label>
                 <textarea
                   id="writeoff-review-notes"
@@ -243,16 +302,32 @@ const WriteOffsPage: React.FC = () => {
                   value={reviewNotes}
                   onChange={(e) => setReviewNotes(e.target.value)}
                   className="form-input"
-                  placeholder="Optional notes..."
+                  placeholder="Document the reason for this decision..."
+                  required
                 />
               </div>
+
+              {reviewModal.item.acknowledgement_required && (
+                <label className="flex items-start gap-2 rounded-lg border border-amber-400 bg-amber-50 p-3 text-sm text-amber-950 dark:bg-amber-950/30 dark:text-amber-100">
+                  <input
+                    type="checkbox"
+                    checked={acknowledged}
+                    onChange={(e) => setAcknowledged(e.target.checked)}
+                    className="mt-0.5"
+                  />
+                  <span>
+                    I acknowledge that this item is currently held or exceeds the organization’s $
+                    {Number(reviewModal.item.acknowledgement_threshold || 0).toFixed(2)} review threshold.
+                  </span>
+                </label>
+              )}
 
               <div className="flex flex-col-reverse items-stretch justify-end gap-2 sm:flex-row sm:items-center sm:gap-3">
                 <button
                   onClick={() => {
                     void handleReview('denied');
                   }}
-                  disabled={submitting}
+                  disabled={submitting || !reviewNotes.trim()}
                   className="btn-primary btn-md flex items-center justify-center gap-1.5 disabled:opacity-50"
                 >
                   <XCircle className="h-4 w-4" />
@@ -262,11 +337,17 @@ const WriteOffsPage: React.FC = () => {
                   onClick={() => {
                     void handleReview('approved');
                   }}
-                  disabled={submitting}
-                  className="btn-success btn-md flex items-center justify-center gap-1.5 disabled:opacity-50"
+                  disabled={
+                    submitting || !reviewNotes.trim() || (reviewModal.item.acknowledgement_required && !acknowledged)
+                  }
+                  className="btn-danger btn-md flex items-center justify-center gap-1.5 disabled:opacity-50"
                 >
                   <Check className="h-4 w-4" />
-                  Approve
+                  {reviewModal.item.reason === 'lost'
+                    ? 'Approve and mark lost'
+                    : reviewModal.item.reason === 'stolen'
+                      ? 'Approve and mark stolen'
+                      : 'Approve and retire item'}
                 </button>
               </div>
             </div>

@@ -55,6 +55,14 @@ const EquipmentRequestsPage: React.FC = () => {
   const [substitutionOverride, setSubstitutionOverride] = useState(false);
   const [substitutionReason, setSubstitutionReason] = useState('');
   const [items, setItems] = useState<InventoryItem[]>([]);
+  const selectedFulfillItem = items.find((item) => item.id === fulfillItemId);
+  const fulfillmentOperation = selectedFulfillItem
+    ? selectedFulfillItem.tracking_type === 'pool'
+      ? 'issuance'
+      : fulfillModal.request?.request_type === 'checkout'
+        ? 'checkout'
+        : 'assignment'
+    : null;
 
   const loadRequests = useCallback(async () => {
     setLoading(true);
@@ -177,6 +185,7 @@ const EquipmentRequestsPage: React.FC = () => {
         quantity: Number(fulfillQuantity) || undefined,
         expected_return_at: fulfillReturnAt || undefined,
         override_allowance: fulfillOverride,
+        ...(fulfillmentOperation ? { fulfillment_type: fulfillmentOperation } : {}),
         substitution_override_reason: substitutionOverride ? substitutionReason.trim() : undefined,
       });
       toast.success('Request fulfilled');
@@ -505,7 +514,11 @@ const EquipmentRequestsPage: React.FC = () => {
             <div className="space-y-4">
               <div className="text-theme-text-secondary text-sm">
                 <p>Requester: {fulfillModal.request.requester_name ?? 'Unknown'}</p>
-                <p>Type: {fulfillModal.request.request_type}</p>
+                <p>Requester intent: {fulfillModal.request.request_type}</p>
+                <p>
+                  Operation to perform:{' '}
+                  <strong className="text-theme-text-primary">{fulfillmentOperation ?? 'Select an item'}</strong>
+                </p>
               </div>
 
               <div>

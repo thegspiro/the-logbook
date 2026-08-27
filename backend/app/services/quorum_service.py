@@ -63,10 +63,18 @@ class QuorumService:
 
         Returns: (quorum_met, present_count, required_count, quorum_description)
         """
+        # Locked (Pitfall #27): two check-ins recalculating quorum for the
+        # same meeting at nearly the same instant would otherwise each read
+        # `attendees` before the other's commit landed and each write back a
+        # `quorum_met`/`quorum_count` that undercounts who was actually
+        # present — whichever write lands last overwrites the other's. A
+        # locking read serializes them and always sees the latest committed
+        # attendee list.
         result = await self.db.execute(
             select(MeetingMinutes)
             .where(MeetingMinutes.id == minutes_id)
             .where(MeetingMinutes.organization_id == str(organization_id))
+            .with_for_update()
         )
         minutes = result.scalar_one_or_none()
         if not minutes:

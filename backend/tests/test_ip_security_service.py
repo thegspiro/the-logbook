@@ -291,3 +291,54 @@ class TestAuditLogOrgScoping:
         # Joins to the parent exception and filters on its org.
         assert "organization_id" in sql
         assert "org-A" in sql
+
+
+class TestAddBlockedCountry:
+    """country_code is unique, and remove_blocked_country soft-deletes
+    (sets is_blocked=False, never deletes the row) — a country blocked,
+    then unblocked, then re-blocked must update the existing row rather
+    than insert a second one and hit the unique constraint."""
+
+    async def test_reblocking_an_unblocked_country_updates_in_place(self, svc):
+        existing = SimpleNamespace(
+            id="rule-1",
+            country_code="RU",
+            country_name="Russia",
+            is_blocked=False,
+            reason="old reason",
+            risk_level="low",
+            created_by="admin-1",
+            updated_by=None,
+        )
+        db = _db(existing)
+
+        rule = await svc.add_blocked_country(
+            db=db,
+            country_code="ru",
+            reason="renewed threat intel",
+            admin_id="admin-2",
+            risk_level="critical",
+        )
+
+        db.add.assert_not_called()
+        assert rule is existing
+        assert existing.is_blocked is True
+        assert existing.reason == "renewed threat intel"
+        assert existing.risk_level == "critical"
+        assert existing.updated_by == "admin-2"
+
+    async def test_blocking_a_new_country_inserts(self, svc):
+        db = _db(None)
+
+        await svc.add_blocked_country(
+            db=db,
+            country_code="kp",
+            reason="initial block",
+            admin_id="admin-1",
+            risk_level="high",
+        )
+
+        db.add.assert_called_once()
+        inserted = db.add.call_args.args[0]
+        assert inserted.country_code == "KP"
+        assert inserted.is_blocked is True

@@ -10,7 +10,7 @@ from uuid import uuid4
 
 import pytest
 
-from app.services.reports_service import ReportsService
+from app.services.reports_service import ReportsService, _is_valid_stage_groups
 
 
 @pytest.fixture
@@ -41,6 +41,46 @@ def _scalar(value):
     r = MagicMock()
     r.scalar.return_value = value
     return r
+
+
+class TestIsValidStageGroups:
+    """pipeline_overview's `filters.stage_groups` is client-supplied,
+    unvalidated JSON (ReportRequest.filters is Dict[str, Any]) used in place
+    of the pipeline's saved config. A malformed override must fall back
+    rather than crash the report (RPT2-29-1)."""
+
+    def test_missing_is_invalid(self):
+        assert _is_valid_stage_groups(None) is False
+
+    def test_empty_list_is_invalid(self):
+        assert _is_valid_stage_groups([]) is False
+
+    def test_non_list_is_invalid(self):
+        assert _is_valid_stage_groups({"name": "x"}) is False
+
+    def test_list_of_strings_is_invalid(self):
+        assert _is_valid_stage_groups(["x", "y"]) is False
+
+    def test_entry_missing_name_is_invalid(self):
+        assert _is_valid_stage_groups([{"step_ids": ["s1"]}]) is False
+
+    def test_entry_missing_step_ids_is_invalid(self):
+        assert _is_valid_stage_groups([{"name": "Early"}]) is False
+
+    def test_entry_with_wrong_types_is_invalid(self):
+        assert _is_valid_stage_groups([{"name": 123, "step_ids": "s1"}]) is False
+
+    def test_non_string_step_id_is_invalid(self):
+        """A dict inside step_ids passes a container-type-only check but is
+        unhashable, so set.update(group_step_ids) downstream would still
+        raise TypeError — this must be rejected here, not just the container."""
+        assert _is_valid_stage_groups([{"name": "Early", "step_ids": [{}]}]) is False
+
+    def test_well_formed_list_is_valid(self):
+        assert (
+            _is_valid_stage_groups([{"name": "Early", "step_ids": ["s1", "s2"]}])
+            is True
+        )
 
 
 class TestGenerateReport:

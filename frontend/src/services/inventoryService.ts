@@ -640,6 +640,7 @@ export const inventoryService = {
       quantity?: number | undefined;
       expected_return_at?: string | undefined;
       override_allowance?: boolean;
+      fulfillment_type?: 'issuance' | 'checkout' | 'assignment';
       substitution_override_reason?: string | undefined;
     }
   ): Promise<{
@@ -676,7 +677,13 @@ export const inventoryService = {
 
   async reviewWriteOff(
     writeOffId: string,
-    data: { status: string; review_notes?: string | undefined }
+    data: {
+      status: string;
+      review_notes: string;
+      acknowledgement?: boolean;
+      expected_item_status?: string | undefined;
+      expected_holder_signature?: string | undefined;
+    }
   ): Promise<{ id: string; status: string; message: string }> {
     const response = await api.put<{ id: string; status: string; message: string }>(
       `/inventory/write-offs/${writeOffId}/review`,
@@ -802,6 +809,19 @@ export const inventoryService = {
 
   async updateReorderRequest(id: string, data: ReorderRequestUpdate): Promise<ReorderRequest> {
     const response = await api.patch<ReorderRequest>(`/inventory/reorder-requests/${id}`, data);
+    return response.data;
+  },
+
+  async transitionReorderRequest(
+    id: string,
+    data: import('./eventServices').ReorderTransition
+  ): Promise<ReorderRequest> {
+    const response = await api.post<ReorderRequest>(`/inventory/reorder-requests/${id}/transition`, data);
+    return response.data;
+  },
+
+  async receiveReorderStock(id: string, data: import('./eventServices').ReorderReceiptCreate): Promise<ReorderRequest> {
+    const response = await api.post<ReorderRequest>(`/inventory/reorder-requests/${id}/receipts`, data);
     return response.data;
   },
 
