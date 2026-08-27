@@ -16,13 +16,32 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-None. Feature 34 (frontend shared) merged — see log entry below. Every
-feature 00–34 is now ✅: this is a full-pass completion. Rows reset to ⬜
-below for the next pass; the next iteration starts at 00 (cross-cutting
-baseline), re-running the whole-codebase sweeps against whatever has landed
-since the last pass.
+Feature 00 (cross-cutting baseline, pass 2) — branch
+`claude/security-review-cross-cutting-00-pass2`, PR pending open. Re-swept all
+five pass-1 classes plus route auth coverage against everything that landed in
+pass 1; no findings, no code changes (docs only). See log entry below and
+`SEC-00-cross-cutting-baseline.md`'s "Pass 2" section.
 
 ---
+
+### 2026-08-27 — Feature 00 (Cross-cutting baseline), pass 2 — no findings
+
+Re-ran all five pass-1 sweeps (formula-injection exports, `SET NULL`
+nullability, proxy-IP attribution, Alembic chain integrity, LIKE-wildcard
+escaping) plus the route-auth-coverage AST walk against current `main`
+(381 Alembic revisions, up from 355; one new file in `api/`,
+`prospect_privacy.py`, which is a `Depends()` helper module with no routes of
+its own). All five sweeps clean; the two pass-1 guard tests
+(`test_like_escaping.py`, `test_set_null_fks_are_nullable`) both pass with no
+edits needed. Route auth coverage: 68 unauthenticated routes (pass 1: 69),
+all still confined to the same five already-accounted-for features (auth,
+event_requests public routes, elections token routes, onboarding bootstrap,
+`api/public/*`) — no new ungated route. No findings, no code changes.
+Completion gate: flake8/black/isort clean, `validate_migrations.py --strict`
+passed, guard tests pass, `tsc --noEmit` 0 errors, `eslint .` 0 errors (10
+pre-existing warnings). Full detail in
+`SEC-00-cross-cutting-baseline.md`. Next: 01 auth & session lifecycle, once
+this PR merges.
 
 ### 2026-08-27 — Rotation pass complete; reset for pass 2
 
@@ -696,7 +715,7 @@ each row's prior PR is recorded in the Log, not repeated here.
 
 | #   | Feature                   | Prefix | Principal code                                                                                                                                  | Status |
 | --- | ------------------------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
-| 00  | Cross-cutting baseline    | SEC    | whole-codebase sweeps; see `SEC-00-cross-cutting-baseline.md`                                                                                   | ⬜     |
+| 00  | Cross-cutting baseline    | SEC    | whole-codebase sweeps; see `SEC-00-cross-cutting-baseline.md`                                                                                   | ⏳     |
 | 01  | Auth & session lifecycle  | AUTH   | `endpoints/auth.py`, `auth_service.py`, `mfa_service.py`, `oauth_service.py`                                                                    | ⬜     |
 | 02  | Permissions & roles       | PERM   | `dependencies.py`, `core/permissions.py`, `roles.py`, `operational_ranks.py`, `officers.py`, `org_chart.py`                                     | ⬜     |
 | 03  | Public surface & webhooks | PUB    | `api/public/*` (20 unauth routes), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`                                      | ⬜     |
