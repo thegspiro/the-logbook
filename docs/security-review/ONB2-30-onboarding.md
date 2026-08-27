@@ -177,42 +177,50 @@ first — timing race, not duplicated effort by design). Confirmed
 ONB2-30-1/2's caps and the ONB-8 reset re-auth / template mass-assignment
 fixes are present and unchanged. Two items the original pass didn't reach:
 
-### ONB2-30-7 — LOW — `validate_logo_image`'s generic-exception path echoed the raw exception to an unauthenticated caller — ✅ FIXED
+### ONB2-30-7 — LOW — `validate_logo_image`'s error paths echoed raw exception text to an unauthenticated caller — ✅ FIXED
 
 `backend/app/utils/image_validator.py`'s `validate_logo_image` catches
-`ImageValidationError` correctly (safe, curated message) but its `except
-Exception` fallback returned `f"Image processing failed: {str(e)}"` directly
-as the HTTP 500 detail — bypassing `safe_error_detail()`, unlike every other
-error path in this module and the rest of onboarding. Reachable from three
-unauthenticated-but-session-based routes (`create_organization`,
-`save_department_info`, `save_session_organization`) whenever Pillow's
-re-encode step throws something other than `ImageValidationError` (e.g. a
-`MemoryError` or a Pillow internal error carrying buffer/format details).
+`ImageValidationError` and returns `f"Invalid image: {str(e)}"` on the 400
+branch — safe for the library's own curated messages (size/dimension/format
+checks), but four internal wrapping sites (`_decode_base64`,
+`_validate_mime_type`, `_open_and_validate_image`, `_sanitize_image`) each
+caught an arbitrary underlying exception and embedded its raw `str(e)`
+_into_ the `ImageValidationError` message — so a Pillow internal error
+during `image.load()`/`.save()` (buffer/format details, or a corrupted-file
+parser error) reached the client verbatim through the very 400 branch meant
+to be safe, never through the `except Exception` 500 fallback. The initial
+fix in this PR only patched that 500 fallback (via `safe_error_detail`),
+which a Codex review round correctly flagged as not covering the actual
+reachable path — the regression test had mocked `validate_and_process`
+directly, bypassing the four real wrapping sites entirely.
 
-**Fix:** route through `safe_error_detail(e)` (logs the real error at ERROR
-level server-side, returns the generic message to the client), matching the
-pattern used everywhere else. Added
-`test_validate_logo_image_generic_failure_does_not_leak_exception_text` to
-`tests/test_image_validator.py` as a guard against reintroduction.
+**Fix:** all four sites now log the real exception server-side
+(`loguru.logger.warning`) and raise `ImageValidationError` with a fixed,
+non-interpolated message — no internal exception text reaches the 400
+branch either. Replaced the test with two that patch `Image.Image.load`/
+`.save()` directly (exercising the actual wrapping code, not a bypass) and
+assert the sensitive text set on the raised `OSError` doesn't appear in the
+resulting `HTTPException.detail`.
 
 ### ONB2-30-8 — LOW (flagged) — Onboarding session TTL has no absolute cap, only a sliding 30-minute window
 
 `validate_session` renews `expires_at` by another `SESSION_EXPIRY_HOURS`
-(30 min) on **every** successful call, including lightweight reads like
-`GET /session/data` — there is no maximum age tracked from session creation.
-A holder of a compromised session id + CSRF token (the same prerequisite
-ONB-7 already assumes) can keep the pre-completion exploitation window open
-indefinitely by polling any session-scoped GET, rather than it expiring 30
-minutes after issuance as the user-facing message and (now-corrected) model
-docstring both imply. Capping absolute session lifetime is a policy choice
-(what should the cap be, and should routine wizard navigation ever hit it) —
-flagged rather than fixed. Also fixed in this pass: the model docstring
-claimed "2 hours," the actual constant is 30 minutes
-(`backend/app/models/onboarding.py`).
+(30 min) on **every** successful call. Three routes — `GET /system-info`,
+`/security-check`, `/database-check` — call it with `require_csrf=False`,
+so the **session id alone** (no CSRF token) is enough to keep sliding the
+expiry forever by polling any of those three; there is no maximum age
+tracked from session creation. (A Codex review round caught that the
+initial write-up here cited `GET /session/data` as an example of this
+bearer-only path — it isn't: that route uses the default `require_csrf=True`
+and is not part of it. Corrected above and in `KNOWN_LIMITATIONS.md`.)
+Capping absolute session lifetime is a policy choice (what should the cap
+be, and should routine wizard navigation ever hit it) — flagged rather than
+fixed. Also fixed in this pass: the model docstring claimed "2 hours," the
+actual constant is 30 minutes (`backend/app/models/onboarding.py`).
 
 ## Completion gate (follow-up pass)
 
 - `flake8` / `black --check` / `isort --check-only` on
   `app/utils/image_validator.py`, `app/models/onboarding.py`,
   `tests/test_image_validator.py` — clean.
-- `pytest tests/test_image_validator.py` — 22/22 passed (1 new).
+- `pytest tests/test_image_validator.py` — 24/24 passed (3 new).
