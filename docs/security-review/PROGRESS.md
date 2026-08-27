@@ -17,13 +17,14 @@ feature. The rotation cannot outrun its own review queue.
 ## Open PR
 
 Feature 05 (finance & approvals, pass 2) —
-[PR #1944](https://github.com/thegspiro/the-logbook/pull/1944). #1942 (the
-docs-only "no findings" push) merged before Codex's review comments landed
-and before this fix could be pushed to it — #1944 is a fresh branch/PR
-carrying the fix, rebased onto current `main` per the "PR already merged"
-branch-reuse rule. A second Codex round against #1944 itself caught one
-more real bug (FIN-15, approval-chain step ordering) — fixed and pushed.
-Next after merge: 06 elections & ballots, pass 2.
+[PR #1946](https://github.com/thegspiro/the-logbook/pull/1946). Chain so
+far: #1942 (docs-only "no findings") merged before Codex's review landed ->
+#1944 (fix for FIN-10 through FIN-14) also merged before a second Codex
+round on it caught FIN-15 (approval-chain step ordering) -> #1946 is a
+fresh branch/PR carrying that fix, rebased onto current `main`, per the
+"PR already merged" branch-reuse rule (twice in a row now — this repo
+appears to auto-merge these PRs as soon as CI goes green, faster than a
+follow-up commit can land). Next after merge: 06 elections & ballots, pass 2.
 
 ---
 
@@ -46,7 +47,9 @@ regression tests (one DB-backed multi-step-chain test, one mock-based
 token-path test), both confirmed to fail pre-fix via `git stash`. Full
 completion gate re-run clean (flake8/black/isort, migrations 383 revisions,
 scoped tests 243 passed/1 skipped, full backend suite 9060 passed/22
-skipped/0 failed, frontend gates clean). Pushed to PR #1944.
+skipped/0 failed, frontend gates clean). Pushed to PR #1944, which itself
+merged before this commit landed — re-pushed as a fresh PR, #1946, rebased
+onto current `main` (see Open PR above).
 
 ### 2026-08-27 — Feature 05 (Finance & approvals), pass 2 — Codex caught 5 real bugs, all fixed
 
