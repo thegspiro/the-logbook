@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security monitoring for session hijacking and data exfiltration was never actually running (2026-08-27)
+
+**Fixed**
+
+- A background security-monitoring check meant to detect session hijacking
+  and unusual bulk data downloads never ran, for any request, due to a
+  timing and naming bug — it looked for the signed-in user before the
+  request had been authenticated, under an attribute name nothing ever set.
+  Both checks now run correctly.
+- Rate limiting on the once-an-hour data-export endpoint could be reset
+  early by unrelated traffic in the fallback used during a Redis outage,
+  letting the hourly limit be worked around by spacing requests out.
+- A total database-connection failure at startup could include the
+  database password in the error message reaching logs/monitoring, on a
+  different code path than a similar issue fixed previously.
+- Three configuration checks that previously failed silently now warn at
+  startup instead: an unsupported JWT signing algorithm (previously only
+  caught an exact "none" value), a bot-challenge feature turned on without
+  its required secret key, and a dedicated audit-log signing key being
+  left unset.
+- An overly broad trusted-proxy network range (letting a client spoof
+  their IP address) is now flagged at startup instead of accepted silently.
+- A request-tracing ID supplied by the client was previously trusted and
+  echoed back verbatim into logs and a response header without validation;
+  it's now validated against the expected format first.
+
 ### Administration dashboard settings could show a protected metric's name to the wrong admin, or fail to save under a race (2026-08-27)
 
 **Fixed**

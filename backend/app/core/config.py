@@ -379,13 +379,34 @@ class Settings(BaseSettings):
 
         # --- Checks that apply in ALL environments ---
 
-        # SEC: Reject weak or dangerous JWT algorithms
-        _dangerous_algorithms = {"none", "None", "NONE", ""}
-        if self.ALGORITHM in _dangerous_algorithms:
+        # SEC: JWT signing/verification is pinned to HS256 everywhere
+        # (decode_token()'s allowlist is hardcoded to ["HS256"]). Anything
+        # else previously booted silently as long as it wasn't a
+        # null-signature spelling ("none") — a typo or an unsupported
+        # algorithm would then sign tokens decode_token() rejects, taking
+        # out all auth at runtime with no boot-time signal.
+        if self.ALGORITHM != "HS256":
             warnings.append(
-                "CRITICAL: ALGORITHM is set to a dangerous value "
-                f"({self.ALGORITHM!r}). Only 'HS256' is supported."
+                "CRITICAL: ALGORITHM is set to "
+                f"{self.ALGORITHM!r}. Only 'HS256' is supported — tokens "
+                "signed with any other value are rejected at verification."
             )
+
+        # SEC: an overly broad TRUSTED_PROXY_IPS range trusts X-Forwarded-For
+        # from far more than the actual reverse proxy — a direct-connecting
+        # attacker inside that range could spoof their apparent IP and bypass
+        # every IP-keyed control downstream (suspicious-IP throttle,
+        # geo-blocking, rate-limit exemptions). Only unparseable entries were
+        # previously flagged; a valid-but-permissive one gave no signal.
+        _MIN_TRUSTED_PROXY_PREFIX = 8
+        for _network in self.get_trusted_proxy_networks():
+            if _network.prefixlen < _MIN_TRUSTED_PROXY_PREFIX:
+                warnings.append(
+                    f"WARNING: TRUSTED_PROXY_IPS includes {_network}, a range "
+                    f"wider than /{_MIN_TRUSTED_PROXY_PREFIX} — X-Forwarded-For "
+                    "is trusted from anyone connecting within it, letting a "
+                    "direct-connecting attacker in that range spoof their IP."
+                )
 
         _insecure_patterns = ("INSECURE_DEFAULT", "CHANGE_ME", "change_me")
 
@@ -525,6 +546,26 @@ class Settings(BaseSettings):
                     "WARNING: VOTE_SIGNING_KEY should be set for any organization "
                     "using the elections module. Without it, vote signatures use "
                     "SECRET_KEY and will be invalidated if SECRET_KEY is rotated."
+                )
+
+            if self.CAPTCHA_ENABLED and not self.CAPTCHA_SECRET_KEY:
+                warnings.append(
+                    "WARNING: CAPTCHA_ENABLED is True but CAPTCHA_SECRET_KEY is "
+                    'empty — app/core/captcha.py treats this as "not '
+                    'configured" and silently skips the challenge on every '
+                    "request rather than rejecting them, so the abuse control "
+                    "is believed live and is not."
+                )
+
+            if not self.AUDIT_LOG_SIGNING_KEY:
+                warnings.append(
+                    "WARNING: AUDIT_LOG_SIGNING_KEY should be set to a dedicated "
+                    "value stored outside the application database. Without it, "
+                    "the audit-log tamper-evidence chain and off-host shipping "
+                    "HMAC fall back to SECRET_KEY, which an attacker with only "
+                    "SQL access to the audit table already cannot use to forge "
+                    "entries — but an attacker who also compromises SECRET_KEY "
+                    "then can, defeating the dedicated-key design entirely."
                 )
 
             # NOTE: this flag has no reader anywhere in the backend — nothing

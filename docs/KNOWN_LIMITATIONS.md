@@ -2295,6 +2295,24 @@ API-surface decision, not a correction. The department decision is the same
 as it was — delete this endpoint, or give it a caller and bring it in line
 with its public sibling on all three points before that caller ships.
 
+## CI2-33-13 — Injection-Attempt Detection Was Never Implemented (2026-08-27)
+
+`SecurityMonitoringMiddleware`'s docstring claimed "Detect injection
+attempts" among its capabilities. The code buffered up to 1MB of every
+non-GET/HEAD/OPTIONS request body — including `/api/v1/auth/login` and
+`/api/v1/users/password` — into a `request_data["body"]` dict that no code
+anywhere in the file ever read back out. `SENSITIVE_ENDPOINTS` was likewise
+defined and never consulted. No injection analysis happened at all, ever.
+
+Found by `docs/security-review/CI2-33-core-infra.md` (feature 33). The dead
+buffering was removed and the docstring corrected to state plainly that
+injection-attempt analysis is not implemented, rather than silently dropping
+the claim — but implementing real detection is a product decision this
+security-review pass did not make on its own: what patterns to flag, the
+false-positive tolerance for a log-only alert vs. a blocking one, and
+whether `SENSITIVE_ENDPOINTS` should gate it or every write request should
+be in scope. Left as documented future work.
+
 ## Process
 
 The review loop (see [review-log.md](./review-log.md)) advances through one area

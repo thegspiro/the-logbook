@@ -74,6 +74,8 @@ class DatabaseManager:
         Uses exponential backoff for retries to handle MySQL startup delays.
         """
         last_exception = None
+        last_exception_type: str | None = None
+        last_scrubbed_detail: str | None = None
         retry_delay = settings.DB_CONNECT_RETRY_DELAY
 
         for attempt in range(1, settings.DB_CONNECT_RETRIES + 1):
@@ -114,16 +116,22 @@ class DatabaseManager:
                 last_exception = TimeoutError(
                     f"Database connection timed out after {settings.DB_CONNECT_TIMEOUT}s"
                 )
+                last_exception_type = "TimeoutError"
+                last_scrubbed_detail = str(last_exception)
                 logger.warning(f"Database connection attempt {attempt} timed out")
             except Exception as e:
                 last_exception = e
                 # Some async-driver exceptions embed the connection DSN (which
                 # carries DB_PASSWORD). Log the exception type plus a message
-                # scrubbed of the password so credentials never reach the logs.
+                # scrubbed of the password so credentials never reach the logs
+                # — and keep the scrubbed form as the only thing re-raised
+                # below, so a total-failure re-raise can't leak it either.
                 detail = str(e)
                 db_password = getattr(settings, "DB_PASSWORD", "") or ""
                 if db_password:
                     detail = detail.replace(db_password, "***")
+                last_exception_type = type(e).__name__
+                last_scrubbed_detail = detail
                 logger.warning(
                     f"Database connection attempt {attempt} failed: "
                     f"{type(e).__name__}: {detail}"
@@ -150,12 +158,26 @@ class DatabaseManager:
         logger.error(
             f"Database connection failed after {settings.DB_CONNECT_RETRIES} attempts"
         )
-        raise last_exception or ConnectionError("Failed to connect to database")
+        # Re-raise the scrubbed detail rather than the original exception
+        # object — the raw exception can embed the DSN (DB_PASSWORD), and
+        # re-raising it here (the only path with no surrounding try/except at
+        # the call site) would otherwise let it reach Uvicorn's startup
+        # output and Sentry uncredentialed-log-scrub notwithstanding. `from
+        # None` suppresses chaining, so the raw exception is never attached
+        # as this one's __cause__/__context__ either.
+        if last_exception is not None:
+            raise ConnectionError(
+                f"Database connection failed after {settings.DB_CONNECT_RETRIES} "
+                f"attempts: {last_exception_type}: {last_scrubbed_detail}"
+            ) from None
+        raise ConnectionError("Failed to connect to database")
 
     async def disconnect(self):
         """Close database connection"""
         if self.engine:
             await self.engine.dispose()
+            self.engine = None
+            self.session_factory = None
             logger.info("Database connection closed")
 
     async def get_session(self) -> AsyncGenerator[AsyncSession]:
