@@ -16,8 +16,12 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-None — PR #1913 (feature 30, onboarding) merged. Feature 31 (scheduled
-tasks) starting next.
+**#1918** (branch `claude/security-review-frontend-shared`) — feature 34
+(frontend shared) review, opened after PR #1917 merged. CI was green;
+picked up a merge conflict against `main` when #1914 (onboarding follow-up,
+a separate tend-while-open item) merged first, since both touched
+CHANGELOG.md and this file. Conflict resolved, re-validating. Next feature
+once #1918 merges: 35.
 
 ---
 
@@ -224,6 +228,397 @@ Next: 31 scheduled tasks.
 
 ---
 
+### 2026-08-27 — Feature 31 (Scheduled tasks) — PR #1915 opened
+
+`services/scheduled_tasks.py` is 5,446 lines (~44 task runners), and the
+prior app-review pass explicitly did NOT read it line-by-line ("at 4570 L
+that would not be an honest single-iteration claim") — it reviewed
+structural patterns and sampled a few runners. Four parallel background
+agents split the file by line range and did the line-by-line read that
+pass skipped, with extra scrutiny on the +19% growth since the last audit.
+
+No regressions in any prior CRON finding (CRON-1 through CRON-6, the
+registry-sync test). Registry sync re-confirmed 43/43 (grown from 38/39),
+no drift.
+
+12 findings, 10 fixed (4 MED, 6 LOW), 2 flagged:
+
+- CRON2-31-1 (MED): `InventoryNotificationService.process_pending_notifications`
+  had no per-group commit/rollback — a failed (org, member) group poisoned
+  the session for every later group in the batch, invisible to the
+  existing structural test since the loop lives outside
+  `scheduled_tasks.py`. Fixed.
+- CRON2-31-2 (MED): `run_post_shift_validation` never excluded cancelled
+  shifts, generating bogus "validate attendance" emails for the common
+  case of a same-day cancellation. Fixed.
+- CRON2-31-3 (MED): reminder dedup flags (`start_reminder_sent`,
+  `eos_checklist_reminder_sent`) were stamped permanently `True` even when
+  nothing was sent because a precondition (crew/apparatus/templates) wasn't
+  ready yet — silently suppressing the reminder forever, even once the
+  precondition was met later in the same window. Fixed.
+- CRON2-31-4 (LOW): `run_end_of_shift_checklist_reminders` notified
+  deactivated members, unlike its sibling which explicitly filters
+  `User.is_active`. Fixed.
+- CRON2-31-5 (MED): `run_scheduled_emails` had no per-item commit/rollback
+  across up to 100 pending emails spanning many orgs — one bad item could
+  cascade failures to every later item and, in the worst case, cause
+  already-sent emails to re-send on the next run. Fixed.
+- CRON2-31-6 (MED): `RetentionService.enforce()` had zero per-org isolation
+  (unlike every other multi-org runner in the file) and never audit-logged
+  its PII-bearing deletes. Fixed with per-org commit/rollback plus a
+  `log_audit_event()` call when an org had deletions.
+- CRON2-31-7 (LOW): `run_audit_log_archival`'s except block didn't roll
+  back, so a DB-level failure turned its intended graceful 200-with-errors
+  response into an unhandled 500 anyway. Fixed.
+- CRON2-31-8 (LOW, latent): `run_officer_directory_sync` used a bare
+  `where(Organization.active)` instead of `.isnot(False)`, excluding NULL
+  rows. Fixed.
+- CRON2-31-9 (MED, SSRF-adjacent): Salesforce's cached-access-token path
+  never validated `instance_url` — only the token-refresh path did — so an
+  org-admin-editable `instance_url` with a cached token became an
+  unvalidated outbound-request target hit every 30 minutes unattended, with
+  the org's bearer token attached. Fixed by validating in `_api_url()`
+  itself, the one call site every request goes through.
+- CRON2-31-10 (informational, now fixed): the naive-datetime issue in
+  `run_rolling_recurrence_extend`, flagged-not-fixed by the prior review
+  pending verification of aiomysql's actual return type for
+  `DateTime(timezone=True)` columns on this stack — now verified
+  naive-but-UTC (via two other sites in the same file), unblocking the fix
+  the prior review explicitly deferred.
+- CRON2-31-11 (LOW, latent): three more org-scoped loops
+  (`run_compliance_auto_reports`, `run_external_training_auto_sync`,
+  `run_salesforce_auto_sync`) skipped the active-org filter entirely since
+  they iterate a child table keyed by `organization_id` rather than
+  `Organization` directly — the same shape as CRON-2, invisible to its
+  regression test's `select(Organization)` detection heuristic. Fixed with
+  joins.
+
+Flagged, not fixed: CRON2-31-12 (`run_action_item_reminders` has no org
+loop at all, so it was never in scope for CRON-2 either — closing it means
+joining two different action-item tables through two different parents,
+a structural change beyond a drive-by) and CRON2-31-13
+(`run_admin_hours_auto_close` has no audit trail — a design choice for the
+admin-hours feature to make deliberately). Both mirrored to
+`KNOWN_LIMITATIONS.md`.
+
+Completion gate: 299/299 scoped tests across every touched runner/service,
+8971/8971 full suite (22 pre-existing skips), black/isort/flake8 clean,
+migration validation passed (no schema change — this feature's fixes are
+pure application logic; separately repaired unrelated schema drift from a
+prior merge's inventory-reorder migration via `repair_schema.py` +
+`alembic stamp head` to unblock the sandbox's DB-backed tests).
+
+### 2026-08-27 — Feature 31 (Scheduled tasks) — PR #1915, Codex review round
+
+Codex reviewed #1915's own fix commit and found 5 real bugs, all one root
+cause: the CRON2-31-1/CRON2-31-5/CRON2-31-6 fixes (commit-per-unit,
+rollback-on-failure over a _pre-fetched_ list of ORM objects sharing one
+`AsyncSession`) missed that `AsyncSession.rollback()` expires every
+persistent object in the session, not just the failed unit's. Once one
+unit's rollback fires, the next pre-fetched-but-not-yet-processed unit's ORM
+attributes are expired, and reading one outside the async greenlet bridge
+raises `MissingGreenlet` — a class of bug the `db_session` test fixture
+cannot catch, since its savepoint-based rollback doesn't expire objects the
+same way a production session does. Verified by reproducing the crash
+directly against a real `async_session_factory()` session before trusting
+the finding.
+
+All 5 fixed:
+
+- `inventory_notification_service.py` (CRON2-31-1) and `scheduled_tasks.py`'s
+  `run_scheduled_emails` (CRON2-31-5): **refresh-after-rollback pattern** — a
+  `needs_refresh` flag flips `True` after any unit's rollback; every
+  subsequent unit's records are explicitly refreshed (`db.refresh()`, plus
+  `db.get(..., populate_existing=True)` for the email loop's `organization`
+  relationship) before their attributes are read again. Used here rather
+  than a snapshot because both loops keep mutating the _same_ ORM rows across
+  iterations for the eventual UPDATE to persist.
+- `retention_service.py` (CRON2-31-6): **snapshot pattern** instead — `(id,
+config)` tuples are extracted for every org in one pass before the loop,
+  since nothing here needs to keep mutating the pre-fetched `Organization`
+  rows themselves.
+- `scheduled_tasks.py`'s `run_end_of_shift_checklist_reminders`: a smaller,
+  related bug in the CRON2-31-3/CRON2-31-4 fix — the `User.is_active` filter
+  added for CRON2-31-4 can leave a shift with assignments but zero _active_
+  recipients, and the dedup flag was still being stamped `True` in that case.
+  Added a fourth continue-without-stamping guard.
+
+Regression tests: `test_inventory_notification_group_isolation.py` (new),
+`test_scheduled_email_group_isolation.py` (new), `test_retention_service.py`
+(the isolation test rewritten to 3 orgs — a 2-org version can't distinguish
+this bug class from a plain try/except, since it only manifests on the unit
+_after_ a failure), `test_shift_scheduled_tasks.py` (2 new tests for the
+empty-active-member-list case). Full detail:
+`docs/security-review/CRON2-31-scheduled-tasks.md`.
+
+Completion gate (this round): 96/96 scoped tests, black/isort/flake8 clean
+on every touched file. Full suite: 8938 passed, 38 failed, 22 skipped — the
+38 failures (`test_public_legal.py`, `test_agency_position_seeding.py`,
+`test_onboarding_integration.py`, `test_facilities_onboarding.py`) reproduced
+identically with this round's diff stashed out, confirmed pre-existing and
+unrelated.
+
+All 5 Codex threads replied to and resolved. CI green (16/16 checks),
+`mergeable_state: clean`, no Claude Approvals check configured on this repo.
+
+### 2026-08-27 — Feature 31 (Scheduled tasks) merged — PR #1915
+
+Merged (squash, `c19ecc0f`). Registry sync, CRON-1/CRON-2/CRON-5/CRON-6
+invariants, and the Codex-caught MissingGreenlet class of bug are all
+resolved on `main`. Rotation row 31 -> done.
+
+### 2026-08-27 — Feature 32 (Locations & kiosk) — PR #1916 opened
+
+Five parallel background agents: four read `admin_hub_service.py`
+(1,798 lines, never previously reviewed — headline metrics and "needs
+attention" queues for the administration dashboard, one per module in
+`MODULE_REGISTRY`) by line range; one re-verified `locations.py`/
+`location_service.py`/`public/display.py`/the kiosk frontend against the
+prior app-review pass's LOC-1 through LOC-4.
+
+3 findings, all fixed (1 LOW, 2 MED):
+
+- LOC2-32-1 (LOW): `_events_attendance_rate` joined `Event` without
+  independently filtering its `organization_id`, relying on (rather than
+  verifying) the invariant that a joined RSVP's org always matches its
+  parent Event's org. Defense-in-depth fix; not independently exploitable
+  today. Fixed.
+- LOC2-32-2 (MED): `AdminHubService._sanitize()`'s slot-padding loop (fills
+  empty slots from a module's defaults) skipped the permission/module gate
+  its own primary loop applies — a permission-gated default metric could
+  reach a resolved selection for an admin who lacks that permission, and
+  `_render_metric`'s redacted-value branch would still show the metric's
+  _label_. Latent under the current registry (no module has a gated
+  default today) but live the moment one is added. Fixed by sharing one
+  gate check between both loops.
+- LOC2-32-3 (LOW/MED): concurrent first-time settings saves for the same
+  (org, module, scope) could both observe no existing row, both insert,
+  and the second commit's `IntegrityError` was uncaught — surfacing as a
+  500 that silently dropped the second admin's save. Fixed with a
+  bounded (2-attempt) retry: catch, roll back, re-read/re-apply once, then
+  re-raise if it conflicts again.
+
+Also re-confirmed LOC-1/LOC-2/LOC-4 still hold, and investigated a LOW an
+agent flagged in `RoomQRCodesPage.tsx` (a kiosk-URL card with no
+`display_code` null-guard) — found **not reproducible**: `groupByStation()`
+already filters out codeless locations before any card is built, with
+existing test coverage asserting it. No code change made there.
+
+LOC-3 (the dead-code authenticated display endpoint, flagged not fixed in
+the 2026-08-08 app-review pass) is still open and has grown a third gap
+since then (event descriptions, unlike its public sibling, are not
+redacted) — mirrored to `KNOWN_LIMITATIONS.md`.
+
+Completion gate: flake8/black/isort clean on all touched files, migration
+validation passed (no schema change), 174/174 scoped backend tests passed
+(5 new: 2 for LOC2-32-1, 1 for LOC2-32-2, 2 for LOC2-32-3), full backend
+suite 8943 passed / 38 failed (same pre-existing onboarding/facilities/
+legal-doc failures confirmed unrelated in the prior feature's pass,
+reproduced identically with this diff stashed out) / 22 skipped, `tsc
+--noEmit` and `eslint` clean.
+
+A Codex review of #1916's own fix commit found one real bug, the same
+root cause named above: the LOC2-32-3 retry's `self.db.rollback()` expired
+`ctx.user` (the same `User` object the caller and the endpoint's post-save
+audit-log call keep using), and a retry's `user_has_permission()` reading
+`user.positions` would then raise `MissingGreenlet` — turning the race into
+a _different_ 500. Fixed by explicitly refreshing `ctx.user` (columns, then
+the `positions` relationship) right after the rollback. Regression test
+extended; thread replied to and resolved.
+
+### 2026-08-27 — Feature 32 (Locations & kiosk) merged — PR #1916
+
+Merged (squash, `1a0a35c8`). LOC-1/2/4 re-confirmed, LOC-3 still flagged
+(now 3 gaps, mirrored to `KNOWN_LIMITATIONS.md`), `admin_hub_service.py`
+fully reviewed for the first time. Rotation row 32 -> done.
+
+### 2026-08-27 — Feature 33 (Core infrastructure) — PR #1917 opened
+
+Corrected a stale rotation-table entry first: `core/middleware.py` does not
+exist (only `security_middleware.py` does) — the file list above is fixed.
+
+Four prior passes (module audit iteration 24, app-review `core-infra.md`
+passes 1-4) fixed 8 findings and left CI-9/CI-10-residual deliberately
+flagged as ops/design decisions — but every one of those passes explicitly
+noted `security_middleware.py` (1,380 L) and `config.py` (964 L, grown from
+603 L reviewed last time) were checked "for security invariants, not
+line-by-line." Four parallel background agents did that line-by-line read
+for the first time (security_middleware.py split in half, config.py and
+database.py each read whole), plus a spot-check re-verification of the 6
+fixable prior findings (all still hold, no regressions) and the CI-9/CI-10
+residual items (unchanged, not re-flagged; DB/Redis TLS posture confirmed
+already upgraded past the original WARN-only characterization since the
+last pass).
+
+14 findings, all fixed (1 HIGH, 8 MED, 5 LOW):
+
+- CI2-33-1 (HIGH): `SecurityMonitoringMiddleware` read
+  `request.state.user` — an attribute no auth path ever sets
+  (`get_current_user` sets `.authenticated_user`) — and read it _before_
+  `self.app()` ran, before any route dependency could populate anything.
+  Session-hijack and data-exfiltration detection, two of the four
+  capabilities the class docstring advertises, silently never ran for any
+  request, ever. Fixed by reading the correct attribute after `self.app()`
+  returns, once it's genuinely populated.
+- CI2-33-2 (MED): the shared in-memory rate limiter's eviction sweep judged
+  every tracked key's staleness against whichever call's `window_seconds`
+  triggered the sweep, not the key's own — so a 3600s-window key
+  (`data_export`, limit 3/hour) could be evicted/reset by a 60s-window
+  sweep, letting an attacker exceed the hourly limit by spacing requests
+  ~65s+ apart during exactly the Redis-outage window this fallback exists
+  for. Fixed by recording and evicting against each key's own window.
+- CI2-33-3 (MED): `database.py`'s connect() retry loop scrubbed
+  `DB_PASSWORD` from per-attempt _log_ lines (the original CI-2 fix) but
+  re-raised the raw, unscrubbed exception on total failure — reaching
+  Uvicorn's startup output and Sentry with no surrounding try/except at the
+  call site. Fixed by re-raising only the already-scrubbed detail, `from
+None` to suppress cause-chain leakage too.
+- CI2-33-4 (MED): the `ALGORITHM` boot check blocklisted only null-signature
+  spellings ("none"), not enforced the pinned `HS256` value `decode_token()`
+  hardcodes — a typo or different-but-real algorithm booted silently, then
+  broke all authentication at runtime with zero boot signal. Fixed to
+  `!= "HS256"`.
+- CI2-33-5 (MED): `AUDIT_LOG_SIGNING_KEY` (signs the audit tamper-evidence
+  chain and off-host shipping HMAC — ISO 27001 A.8.15) had no boot warning,
+  unlike its sibling `VOTE_SIGNING_KEY` with the identical rationale. Fixed
+  by mirroring that warning.
+- CI2-33-6 (MED): `CAPTCHA_ENABLED=True` with an empty
+  `CAPTCHA_SECRET_KEY` was only caught per-request (a silent skip, logged
+  once), never at boot — an operator fat-fingering the 2026-08-16 red-team
+  CAPTCHA rollout would believe the control was live indefinitely. Fixed
+  with a boot-time warning mirroring `is_captcha_configured()`'s own
+  condition.
+- CI2-33-7 (MED): an unvalidated client-supplied `X-Request-ID` was
+  interpolated verbatim into log lines and the response header, letting a
+  client forge what reads as a genuine, distinct security-audit-trail
+  entry (e.g. via embedded newlines). Fixed by only reusing an incoming id
+  that matches the exact format this app generates.
+- CI2-33-8 (LOW/MED): no sanity bound on `TRUSTED_PROXY_IPS` CIDR width — a
+  misconfigured `0.0.0.0/0` (or similarly broad range) would trust
+  `X-Forwarded-For` from any direct-connecting client within it, letting
+  IP spoofing bypass every IP-keyed control downstream. Fixed with a
+  boot-time warning above `/8` (a typical container network is never
+  flagged).
+- CI2-33-9 (LOW): `InputSanitizer.sanitize_string` truncated before
+  HTML-escaping, so the escaped output could exceed `max_length`. Fixed by
+  escaping first.
+- CI2-33-10 (LOW): the CSRF onboarding bypass used a substring match
+  instead of the anchored-prefix pattern this codebase already uses
+  correctly one class over (`IPBlockingMiddleware.BYPASS_PREFIXES`); not
+  exploitable against any route that exists today, but would silently
+  widen the CSRF exemption to any future endpoint whose path merely
+  contains "onboarding". Fixed to match the existing pattern.
+- CI2-33-11 (LOW): `disconnect()` left `is_connected` stale (True) after
+  closing the connection — no live caller checks it post-disconnect today,
+  but a latent trap for future reconnect-on-demand logic. Fixed.
+- CI2-33-12 (LOW/INFO): `InputSanitizer.validate_url` accepted a bare IPv4
+  host literal (e.g. an internal/link-local address); the function has no
+  callers today, but would need this closed the moment one appears. Fixed
+  as defense in depth.
+- CI2-33-13 (MED): injection-attempt detection was never implemented —
+  the docstring claimed it, and the code buffered every write-request body
+  (including login/password-change) into memory for an analysis step that
+  read nothing back. Fixed by removing the dead buffering and correcting
+  the docstring; real detection is a product decision, mirrored to
+  `KNOWN_LIMITATIONS.md` as documented future work, not an open finding
+  (nothing is broken — the capability is simply absent).
+
+Completion gate: flake8/black/isort clean on all touched files, migration
+validation passed (no schema change), 149/149 scoped backend tests passed
+(23 new across the four touched test files), full backend suite 8972
+passed / 38 failed (the identical pre-existing onboarding/facilities/
+legal-doc set confirmed unrelated in the immediately preceding feature's
+pass) / 22 skipped, no frontend changes this iteration.
+
+Codex reviewed the fix commit and found 6 more real bugs — each time, my
+original fix addressed the surface symptom but missed a deeper reason the
+control still didn't work: (1) the rebuilt `EXPORT_ENDPOINTS` set still
+didn't match any real route (fixed with a full grep-and-resolve of every
+export route in the app, 15 real paths, one parameterized route
+structurally excluded); (2) `session_id` came from `X-Session-ID`, a
+header real clients never send (fixed by deriving it from the same
+credential `get_current_user` authenticates with, hashed); (3) password
+scrubbing missed the percent-encoded form `DATABASE_URL` actually embeds
+(fixed to scrub both forms); (4) the CAPTCHA boot check only covered the
+secret key, missing two more silent-failure pairings, site key and
+provider (fixed, both added); (5) truncation could still cut an HTML
+entity in half (fixed to trim back to the last complete entity); (6) the
+`/8` trusted-proxy threshold was IPv6-blind (split into a v4/v6-aware
+pair, `/8` and `/64`). All 6 verified against actual code before fixing,
+per this rotation's standing rule. Full findings and guard tests in
+`CI2-33-core-infra.md`'s "Revised after Codex review" section. Completion
+gate re-run clean: flake8/black/isort clean, 103/103 scoped tests passed
+(9 new/updated), full backend suite 8980 passed / 38 failed (same
+pre-existing set, reconfirmed unrelated with this round's diff stashed
+out) / 22 skipped.
+
+Next: 34 frontend shared, once this PR merges.
+
+### 2026-08-27 — Feature 34 (Frontend shared) — PR opened
+
+This layer carries four prior app-review passes and one module-audit pass, all
+of which explicitly noted the module axios instances and most of the shared
+core were checked "for invariants, not line-by-line." Three parallel
+background agents did that line-by-line read for the first time: (A) the
+shared API/cache/error core (`apiClient.ts`, `apiCache.ts`, `errorHandling.ts`,
+`errorTracking.ts`), (B) `createApiClient.ts` + all 12 module axios instances,
+(C) `ProtectedRoute.tsx` + `authStore.ts`/`learningProgressStore.ts`/
+`pendingSyncStore.ts`/`skillsTestingStore.ts` — including independently
+re-verifying two items the module audit left open (FE-6, FE-7) against current
+code rather than trusting the doc.
+
+9 findings, all fixed (3 HIGH, 2 MEDIUM, 4 LOW):
+
+- FE2-34-1/2/3 (HIGH/HIGH/MED-HIGH): three training endpoints
+  (`/training/cohorts/{id}`, `/training/programs/programs/{id}/eligibility`,
+  `/training/external/providers/{id}/user-mappings`) each return a
+  member roster with resolved names/emails and had no entry in
+  `UNCACHEABLE_PREFIXES` at all — held in the in-memory 90s cache on every
+  page load. Fixed by adding all three (each as a trailing-slash prefix so
+  the roster-free bare list stays cacheable).
+- FE2-34-4 (MED): `/forms` bare list escaped its own exclusion — a live
+  recurrence of the FE-2 trailing-slash bug class (`'/forms/'` doesn't match
+  `'/forms'.startsWith(...)`), missed when the other six were fixed
+  2026-08-08. Fixed.
+- FE2-34-5/6 (LOW, defense-in-depth): `/grants` had the same trailing-slash
+  shape (currently inert — that module doesn't use the cached global
+  instance) and `/analytics/export` (raw per-user events) had no exclusion
+  at all. Both fixed.
+- FE2-34-7 (LOW): `authStore.getCsrfCookie` didn't `decodeURIComponent` the
+  cookie value, unlike `apiClient.getCookie` — flagged as FE-7 in the
+  original module audit and left unfixed across four app-review passes.
+  Re-verified still present (currently inert — the backend's token alphabet
+  has nothing to decode) and fixed to match.
+- FE2-34-8 (LOW): `scheduling/services/api.ts`'s `getMyAttendance` swallowed
+  _any_ error (network failure, 500, 403) as "not checked in," masking
+  operational failures. Fixed to only swallow a confirmed 404, mirroring
+  the correct pattern already used elsewhere in the codebase. Also removed
+  a dead duplicate `_retry` type-augmentation block in the same file.
+- FE2-34-9: re-verified FE-6 (module-audit MEDIUM — PII drafts/offline
+  queue surviving logout) and found it already resolved by an intervening
+  change (`purgeLocalMemberData()` wired into `authStore.logout()`, the
+  idle-timeout path, and the session-expiry catch branch) — no code change
+  needed, documented so it isn't re-flagged as open.
+- Corrected a stale LOW finding in `docs/app-review/frontend-shared.md`:
+  the `createApiClient.ts` 401-handler note didn't match current code (it
+  imports and calls the same `handleExpiredSession` the global client
+  uses, onboarding guard and `clearCache()` included).
+
+Completion gate: flake8/black/isort n/a (no backend changes); `tsc --noEmit`
+0 errors; `eslint` 0 errors (10 pre-existing warnings, unrelated files,
+within budget); `npm run build` succeeds; full frontend suite 5242/5242
+passed (397 files).
+
+Next: 00 cross-cutting baseline (second full pass), once this PR merges.
+
+### 2026-08-27 — Feature 33 (Core infrastructure) merged — PR #1917
+
+Merged (squash, `5a1f859c`). Codex round confirmed and fixed (see the
+Codex-round log entry above); the 14 original findings plus the 6 Codex
+findings are all resolved with no open items. Rotation row 33 -> done.
+
+---
+
 ## Relationship to the existing review passes
 
 This rotation is **not** a replacement for the two that came before it, and it
@@ -279,10 +674,10 @@ data-carrying modules, then the supporting infrastructure.
 | 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`                                                                    | ✅              |
 | 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                              | ✅              |
 | 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (24 unauth bootstrap routes)                                                                                             | ✅              |
-| 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                   | ⬜              |
-| 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                  | ⬜              |
-| 33  | Core infrastructure       | CORE   | `core/security_middleware.py`, `core/middleware.py`, `core/database.py`, `core/config.py`                                                       | ⬜              |
-| 34  | Frontend shared           | FE     | `utils/apiCache.ts`, module axios instances, `ProtectedRoute`, global stores                                                                    | ⬜              |
+| 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                   | ✅              |
+| 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                  | ✅              |
+| 33  | Core infrastructure       | CORE   | `core/security_middleware.py`, `core/database.py`, `core/config.py`                                                                             | ✅              |
+| 34  | Frontend shared           | FE     | `utils/apiCache.ts`, module axios instances, `ProtectedRoute`, global stores                                                                    | ⏳              |
 
 **35 iterations per full pass.** After 34 the rotation wraps to 00, which
 re-runs the whole-codebase sweeps against whatever has landed since.

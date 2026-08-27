@@ -1899,8 +1899,10 @@ class ChargeManagementResponse(BaseModel):
 # ============================================
 
 ReturnRequestTypeLiteral = Literal["assignment", "issuance", "checkout"]
-ReturnRequestStatusLiteral = Literal["pending", "approved", "denied", "completed"]
-ReturnReviewStatusLiteral = Literal["approved", "denied"]
+ReturnRequestStatusLiteral = Literal[
+    "requested", "received", "inspected", "denied", "completed"
+]
+ReturnReviewStatusLiteral = Literal["received", "denied"]
 
 
 class ReturnRequestCreate(BaseModel):
@@ -1917,12 +1919,17 @@ class ReturnRequestCreate(BaseModel):
 
 
 class ReturnRequestReview(BaseModel):
-    """Quartermaster reviews a return request."""
+    """Quartermaster either denies the request or physically receives the item."""
 
-    status: ReturnReviewStatusLiteral = Field(..., description="approved or denied")
+    status: ReturnReviewStatusLiteral = Field(..., description="received or denied")
     review_notes: Optional[FreeText] = None
-    override_condition: Optional[ReturnConditionLiteral] = Field(
-        None, description="Override the condition reported by the member"
+    observed_condition: Optional[ReturnConditionLiteral] = Field(
+        None, description="Condition independently observed during physical receipt"
+    )
+    verified_identifier: Optional[str] = Field(None, max_length=255)
+    received_quantity: Optional[int] = Field(None, ge=1)
+    follow_up: Literal["auto", "none", "maintenance", "charge_review", "write_off"] = (
+        "auto"
     )
 
 
@@ -1947,6 +1954,11 @@ class ReturnRequestResponse(UTCResponseBase):
     reviewer_name: Optional[str] = None
     reviewed_at: Optional[datetime] = None
     review_notes: Optional[str] = None
+    observed_condition: Optional[str] = None
+    verified_identifier: Optional[str] = None
+    received_quantity: Optional[int] = None
+    follow_up_type: Optional[str] = None
+    follow_up_id: Optional[UUID] = None
     created_at: datetime
     updated_at: datetime
 

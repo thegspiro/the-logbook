@@ -5,13 +5,13 @@ Implements rate limiting, CSRF protection, security headers,
 input sanitization, and other security features.
 """
 
+import hashlib
 import html
 import re
 import secrets
 import time
 from collections import defaultdict
 from datetime import datetime, timezone
-from typing import Any
 
 from fastapi import Depends, HTTPException, Request, status
 
@@ -47,10 +47,20 @@ class RateLimiter:
     def __init__(self):
         self.requests: dict[str, list[float]] = defaultdict(list)
         self.lockouts: dict[str, float] = {}
+        # Each key's own window_seconds, as last passed to is_rate_limited()
+        # for it — callers share this one limiter instance across scopes
+        # with very different windows (most are 60s, but e.g. data_export is
+        # 3600s), so eviction must judge each key's staleness against its
+        # own window, not whichever call happened to trigger the sweep.
+        self._key_windows: dict[str, int] = {}
         self._last_eviction: float = 0.0
 
     def _evict_stale(self, now: float, window_seconds: int) -> None:
         """Remove entries that have no recent requests and expired lockouts.
+
+        ``window_seconds`` is used only as the fallback for a key this
+        limiter has somehow never recorded a window for; every key evicts
+        against its own recorded window via ``_key_windows``.
 
         Also enforces ``_MAX_KEYS`` by force-evicting the oldest entries
         when the key count exceeds the limit (prevents unbounded memory
@@ -68,14 +78,17 @@ class RateLimiter:
         for k in expired_lockouts:
             del self.lockouts[k]
 
-        # Evict request entries with no recent activity
+        # Evict request entries with no recent activity, each against its
+        # own window.
         stale_keys = [
             k
             for k, timestamps in self.requests.items()
-            if not timestamps or (now - timestamps[-1]) > window_seconds
+            if not timestamps
+            or (now - timestamps[-1]) > self._key_windows.get(k, window_seconds)
         ]
         for k in stale_keys:
             del self.requests[k]
+            self._key_windows.pop(k, None)
 
         # Enforce _MAX_KEYS: if still over the limit after removing stale
         # entries, force-evict the keys with the oldest last-request time.
@@ -88,6 +101,7 @@ class RateLimiter:
             for key, _ in by_recency[:to_remove]:
                 del self.requests[key]
                 self.lockouts.pop(key, None)
+                self._key_windows.pop(key, None)
 
     def is_rate_limited(
         self,
@@ -109,6 +123,11 @@ class RateLimiter:
             (is_limited, reason)
         """
         current_time = time.time()
+
+        # Record this key's own window before eviction runs, so a sweep
+        # triggered by a different scope's window doesn't judge this key's
+        # staleness against the wrong duration.
+        self._key_windows[key] = window_seconds
 
         # Periodic eviction to bound memory usage
         self._evict_stale(current_time, window_seconds)
@@ -282,11 +301,23 @@ class InputSanitizer:
         if not isinstance(value, str):
             return ""
 
+        # HTML escape *before* truncating — each escaped character (&<>"')
+        # expands 3-5x, so truncating first let the escaped output exceed
+        # max_length, breaking any caller relying on this as a true bound.
+        value = html.escape(value)
+
         # Truncate to max length
         value = value[:max_length]
 
-        # HTML escape
-        value = html.escape(value)
+        # The cut above can land inside an escaped entity (e.g. "&amp;" ->
+        # "&am"), which then renders as literal text instead of the escaped
+        # character it stood for (Codex, PR #1917). Every "&" html.escape
+        # produced is the start of a "&...;" entity, so if the last one in
+        # the truncated tail has no closing ";", the cut landed inside it —
+        # drop the partial entity rather than emit corrupted output.
+        last_amp = value.rfind("&")
+        if last_amp != -1 and ";" not in value[last_amp:]:
+            value = value[:last_amp]
 
         # Remove null bytes
         value = value.replace("\x00", "")
@@ -390,6 +421,15 @@ class InputSanitizer:
         # Basic URL validation
         if not re.match(r"^https?://[a-zA-Z0-9.-]+(?:\.[a-zA-Z]{2,})?(?:/.*)?$", url):
             raise ValueError("Invalid URL format")
+
+        # Reject bare IPv4 host literals (e.g. 169.254.169.254, 127.0.0.1) —
+        # this function has no callers today, but a raw IP bypassing here
+        # would need its own SSRF check before being fetched server-side.
+        host = re.match(r"^https?://([^/]+)", url)
+        if host and re.fullmatch(
+            r"\d{1,3}(?:\.\d{1,3}){3}", host.group(1).split(":")[0]
+        ):
+            raise ValueError("URL host must be a domain name, not a bare IP address")
 
         return url
 
@@ -775,7 +815,7 @@ async def verify_csrf_token(request: HTTPConnection) -> None:
     # conflicts after createSystemOwner sets the auth csrf_token cookie while
     # the onboarding client continues sending its own session CSRF token.
     request_path = request.scope.get("path", "")
-    if "/onboarding/" in request_path or request_path.endswith("/onboarding"):
+    if request_path.startswith("/api/v1/onboarding"):
         return
 
     # Double-submit cookie pattern: compare header value against cookie
@@ -1103,6 +1143,11 @@ class IPBlockingMiddleware:
 # IP Logging Middleware
 # ============================================
 
+# Matches generate_request_id()'s output (uuid4().hex[:16]) exactly, so an
+# incoming X-Request-ID is only ever reused when it can't carry anything but
+# hex characters — never interpolated into logs/headers unvalidated.
+_REQUEST_ID_RE = re.compile(r"[0-9a-f]{16}")
+
 
 class IPLoggingMiddleware:
     """
@@ -1133,9 +1178,17 @@ class IPLoggingMiddleware:
 
         request = Request(scope)
 
-        # Generate or reuse incoming request ID
-        request_id = request.headers.get("X-Request-ID") or generate_request_id()
-        request_id_ctx.set(request_id)
+        # Reuse an incoming request ID only if it matches the format we
+        # generate (16 lowercase hex chars) — an unvalidated client-supplied
+        # value is interpolated verbatim into log lines and the response
+        # header below, so accepting anything let a client inject fake log
+        # entries (e.g. embedded newlines) under a forged, distinct id.
+        _incoming_request_id = request.headers.get("X-Request-ID")
+        if _incoming_request_id and _REQUEST_ID_RE.fullmatch(_incoming_request_id):
+            request_id = _incoming_request_id
+            request_id_ctx.set(request_id)
+        else:
+            request_id = generate_request_id()
 
         client_ip = get_client_ip(request)
         user_agent = get_user_agent(request)
@@ -1200,27 +1253,44 @@ class SecurityMonitoringMiddleware:
     (SEC-15).
 
     Integrates with the SecurityMonitoringService to:
-    - Detect injection attempts
-    - Monitor for brute force attacks
+    - Monitor for brute force attacks (wired separately, see auth.py)
     - Track session anomalies
     - Monitor data exfiltration
+
+    Does NOT analyze request bodies for injection attempts — no such
+    detection is implemented (CI2-33-13). An earlier version buffered every
+    non-GET/HEAD/OPTIONS body under 1MB into memory for exactly that purpose
+    and never read it back out; the buffering was removed since it did
+    nothing but add per-request memory copying on every login/password-change
+    POST.
     """
 
-    # Sensitive endpoints that need extra monitoring
-    SENSITIVE_ENDPOINTS = {
-        "/api/v1/auth/login",
-        "/api/v1/auth/register",
-        "/api/v1/users/password",
-        "/api/v1/roles",
-        "/api/v1/organization",
-    }
-
-    # Export endpoints for data exfiltration monitoring
+    # Export endpoints for data exfiltration monitoring. None of the
+    # original four entries matched a real route (Codex, PR #1917) — this
+    # set is now every non-parameterized GET/POST route in app/api/v1
+    # whose path contains "export" (grep '@router\.(get|post)([^)]*export'
+    # across app/api/v1/endpoints/*.py, each resolved against its router's
+    # registered prefix). One real export route is excluded on purpose:
+    # training_programs.py's "/programs/{program_id}/export" takes a path
+    # parameter, so the request's actual path never equals a fixed string
+    # here — this exact-match set structurally cannot cover it without a
+    # prefix/pattern check, which is a larger change than this fix's scope.
     EXPORT_ENDPOINTS = {
-        "/api/v1/users/export",
-        "/api/v1/events/export",
-        "/api/v1/audit/export",
-        "/api/v1/reports",
+        "/api/v1/admin-hours/entries/export",
+        "/api/v1/analytics/export",
+        "/api/v1/compliance/annual-report/export",
+        "/api/v1/equipment-checks/reports/export/csv",
+        "/api/v1/equipment-checks/reports/export/pdf",
+        "/api/v1/errors/export",
+        "/api/v1/finance/export/transactions",
+        "/api/v1/inventory/items/export",
+        "/api/v1/organization/template/export",
+        "/api/v1/security/audit-log/export",
+        "/api/v1/store/orders/export",
+        "/api/v1/training/module-config/my-training/export",
+        "/api/v1/training/reports/export",
+        "/api/v1/training/skills-testing/tests/export/csv",
+        "/api/v1/users/me/data-export",
     }
 
     def __init__(self, app: ASGIApp) -> None:
@@ -1238,105 +1308,36 @@ class SecurityMonitoringMiddleware:
         client_ip = get_client_ip(request)
         user_agent = get_user_agent(request)
         path: str = scope.get("path", "")
-        method: str = scope.get("method", "GET")
 
-        # Build request data for analysis
-        request_data: dict[str, Any] = {
-            "ip_address": client_ip,
-            "user_agent": user_agent,
-            "path": path,
-            "method": method,
-            "query_params": dict(request.query_params),
-        }
-
-        # Try to get user ID if authenticated
+        # The authenticated user isn't known yet at this point in the ASGI
+        # chain: get_current_user (which sets request.state.authenticated_user)
+        # is a route dependency that only runs inside self.app() below, not
+        # before it. Re-read it after self.app() returns, once it exists —
+        # reading it here (as this code previously did, and under the wrong
+        # attribute name "user") meant it was always None, silently
+        # disabling both the session-hijack and data-exfiltration monitoring
+        # below.
         user_id = None
-        session_id = None
-        try:
-            if hasattr(request, "state") and hasattr(request.state, "user"):
-                user_id = str(request.state.user.id)
-        except Exception:
-            pass
 
-        # Get session ID from header
-        session_id = request.headers.get("X-Session-ID")
-
-        # Analyze request for threats (only for write operations)
-        actual_receive = receive
-        # Only buffer the body for inline analysis when its declared size is
-        # known and small. Large or unknown-length bodies (file uploads,
-        # streaming) bypass analysis and stream straight through, so the
-        # middleware never holds an unbounded request body in memory.
-        MAX_ANALYSIS_BODY_BYTES = 1_000_000  # 1 MB
-        _content_length = request.headers.get("content-length")
-        try:
-            _declared_len = (
-                int(_content_length) if _content_length is not None else None
-            )
-        except ValueError:
-            _declared_len = None
-        _should_buffer = (
-            request.method not in {"GET", "HEAD", "OPTIONS"}
-            and _declared_len is not None
-            and _declared_len <= MAX_ANALYSIS_BODY_BYTES
+        # session_id is only ever used as an in-memory dict key inside
+        # SecurityMonitoringService.detect_session_hijack (never a DB lookup)
+        # — it just needs to stay stable across requests in one login session
+        # and differ across logins/devices. X-Session-ID is never sent by
+        # regular authenticated clients (it's onboarding-only), so hijack
+        # detection still never ran for real users even after the timing fix
+        # above (Codex, PR #1917). Derive it from the same credential
+        # get_current_user authenticates with instead, using the same
+        # cookie-then-header resolution order — hashed so the raw token
+        # itself never lands in memory or logs.
+        raw_token = request.cookies.get("access_token")
+        if not raw_token:
+            auth_header = request.headers.get("authorization", "")
+            scheme, _, bearer_token = auth_header.partition(" ")
+            if scheme.lower() == "bearer" and bearer_token:
+                raw_token = bearer_token
+        session_id = (
+            hashlib.sha256(raw_token.encode()).hexdigest() if raw_token else None
         )
-        if _should_buffer:
-            try:
-                body_chunks: list[bytes] = []
-                while True:
-                    message = await receive()
-                    chunk = message.get("body", b"")
-                    if chunk:
-                        body_chunks.append(chunk)
-                    if not message.get("more_body", False):
-                        break
-                body_for_analysis = b"".join(body_chunks)
-
-                if body_for_analysis:
-                    try:
-                        request_data["body"] = body_for_analysis.decode("utf-8")[
-                            :10000
-                        ]  # Limit size
-                    except UnicodeDecodeError:
-                        pass  # Binary data, skip
-
-                # Create a replay receive callable so downstream can read the body
-                _body_sent = False
-
-                async def _replay_receive() -> Message:
-                    nonlocal _body_sent
-                    if not _body_sent:
-                        _body_sent = True
-                        return {
-                            "type": "http.request",
-                            "body": body_for_analysis,
-                            "more_body": False,
-                        }
-                    # Subsequent calls return empty body (ASGI protocol)
-                    return {"type": "http.request", "body": b"", "more_body": False}
-
-                actual_receive = _replay_receive
-            except Exception as e:
-                logger.debug(f"Could not read request body: {e}")
-
-        # Check for session hijacking on authenticated requests
-        if user_id and session_id and client_ip:
-            try:
-                from app.core.database import async_session_factory
-                from app.services.security_monitoring import security_monitor
-
-                async with async_session_factory() as db:
-                    alert = await security_monitor.detect_session_hijack(
-                        db=db,
-                        session_id=session_id,
-                        current_ip=client_ip,
-                        user_agent=user_agent or "",
-                        user_id=user_id,
-                    )
-                    if alert:
-                        logger.critical(f"Session hijack detected: {alert.description}")
-            except Exception as e:
-                logger.debug(f"Session monitoring error: {e}")
 
         # Track response status and content-length for exfiltration monitoring
         response_status = 0
@@ -1352,7 +1353,45 @@ class SecurityMonitoringMiddleware:
                         break
             await send(message)
 
-        await self.app(scope, actual_receive, send_with_monitoring)
+        await self.app(scope, receive, send_with_monitoring)
+
+        # Now that route dependencies have run, request.state.authenticated_user
+        # is populated for an authenticated request — read it here rather than
+        # before self.app(), where it never exists.
+        try:
+            if hasattr(request, "state") and hasattr(
+                request.state, "authenticated_user"
+            ):
+                user_id = str(request.state.authenticated_user.id)
+        except Exception:
+            pass
+
+        # Check for session hijacking on authenticated requests. Detection
+        # only — never gates the response, so running it after rather than
+        # before is a pure availability fix, not a behavior change.
+        if user_id and session_id and client_ip:
+            try:
+                from app.core.database import async_session_factory
+                from app.services.security_monitoring import security_monitor
+
+                async with async_session_factory() as db:
+                    alert = await security_monitor.detect_session_hijack(
+                        db=db,
+                        session_id=session_id,
+                        current_ip=client_ip,
+                        user_agent=user_agent or "",
+                        user_id=user_id,
+                    )
+                    # This is a bare AsyncSession context manager, not the
+                    # get_session() request dependency — nothing else commits
+                    # it, so the audit-log row and persisted alert
+                    # detect_session_hijack writes were rolled back on scope
+                    # exit until this call was added (Codex, PR #1917).
+                    await db.commit()
+                    if alert:
+                        logger.critical(f"Session hijack detected: {alert.description}")
+            except Exception as e:
+                logger.debug(f"Session monitoring error: {e}")
 
         # Monitor data exfiltration on export endpoints (post-response)
         if path in self.EXPORT_ENDPOINTS and user_id:
@@ -1371,6 +1410,9 @@ class SecurityMonitoringMiddleware:
                             endpoint=path,
                             ip_address=client_ip,
                         )
+                        # Same bare-session gap as the hijack check above:
+                        # nothing else commits this session (Codex, PR #1917).
+                        await db.commit()
             except Exception as e:
                 logger.debug(f"Data exfiltration monitoring error: {e}")
 
