@@ -668,6 +668,27 @@ class FinanceService:
                 return record
         return None
 
+    async def _ensure_current_step(
+        self, record: ApprovalStepRecord, org_id: str
+    ) -> None:
+        """Reject acting on a step out of chain order.
+
+        Every step is created PENDING up front (create_approval_records), and
+        an EMAIL-type step's token is emailed immediately regardless of its
+        position -- so without this, a later-step approver (or anyone who
+        knows/is emailed a later record's id/token) can approve or deny
+        before an earlier step has been acted on. Denying finalizes the
+        whole entity immediately, so an out-of-order deny doesn't just
+        skip ahead -- it kills the request while earlier reviewers never
+        weighed in, defeating the point of a multi-step chain. Called with
+        `record` already status==PENDING and already locked by the caller.
+        """
+        current = await self.get_current_pending_step(
+            record.entity_type, record.entity_id, org_id
+        )
+        if current is None or current.id != record.id:
+            raise ValueError("An earlier approval step is still pending")
+
     async def approve_step(
         self,
         step_record_id: str,
@@ -695,6 +716,7 @@ class FinanceService:
             raise ValueError("Approval step record not found")
         if record.status != ApprovalStepStatus.PENDING:
             raise ValueError("This step is not pending approval")
+        await self._ensure_current_step(record, org_id)
 
         # SEC (FIN-4): holding finance.approve says nothing about *whose*
         # request this is. Without this, a treasurer could raise a check
@@ -758,6 +780,7 @@ class FinanceService:
             raise ValueError("Approval step record not found")
         if record.status != ApprovalStepStatus.PENDING:
             raise ValueError("This step is not pending approval")
+        await self._ensure_current_step(record, org_id)
 
         now = datetime.now(timezone.utc)
         record.status = ApprovalStepStatus.DENIED
@@ -808,6 +831,7 @@ class FinanceService:
             timezone.utc
         ):
             raise ValueError("Approval token has expired")
+        await self._ensure_current_step(record, org_id)
 
         step = record.step
         if (
@@ -871,6 +895,7 @@ class FinanceService:
             timezone.utc
         ):
             raise ValueError("Approval token has expired")
+        await self._ensure_current_step(record, org_id)
 
         record.status = ApprovalStepStatus.DENIED
         record.acted_at = datetime.now(timezone.utc)

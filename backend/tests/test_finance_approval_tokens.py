@@ -43,6 +43,7 @@ async def test_token_action_locks_and_consumes_token(action):
     db.execute = AsyncMock(return_value=_result(record))
     db.flush = AsyncMock()
     service = FinanceService(db)
+    service.get_current_pending_step = AsyncMock(return_value=record)
     service._advance_notification_steps = AsyncMock()
     service._check_all_steps_complete = AsyncMock(return_value=False)
     service._finalize_denial = AsyncMock()
@@ -64,6 +65,26 @@ async def test_token_action_locks_and_consumes_token(action):
         )
 
 
+@pytest.mark.parametrize("action", ["approve_by_token", "deny_by_token"])
+async def test_token_action_rejects_a_later_step_out_of_order(action):
+    """Every step in a chain is created PENDING up front and an EMAIL step's
+    token is emailed immediately regardless of chain position, so without an
+    order check whoever holds a later step's token could act before an
+    earlier step resolves -- and a deny finalizes the whole entity right
+    away, killing the request before earlier reviewers weighed in."""
+    record = _pending_record()
+    earlier_step = _pending_record()  # a different, still-pending record
+    db = MagicMock()
+    db.execute = AsyncMock(return_value=_result(record))
+    service = FinanceService(db)
+    service.get_current_pending_step = AsyncMock(return_value=earlier_step)
+
+    with pytest.raises(ValueError, match="earlier approval step"):
+        await getattr(service, action)(record.approval_token, "too soon")
+
+    assert record.status == ApprovalStepStatus.PENDING  # never mutated
+
+
 class TestApproveByTokenSelfApprovalGuard:
     """Codex review (PR #1806): an EMAIL-type step whose approver_value is
 
@@ -80,6 +101,7 @@ class TestApproveByTokenSelfApprovalGuard:
         db.execute = AsyncMock(return_value=_result(record))
         db.flush = AsyncMock()
         service = FinanceService(db)
+        service.get_current_pending_step = AsyncMock(return_value=record)
         service._entity_creator_email = AsyncMock(return_value=requester_email)
         service._advance_notification_steps = AsyncMock()
         service._check_all_steps_complete = AsyncMock(return_value=False)

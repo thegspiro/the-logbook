@@ -16,6 +16,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   approvers acting on the same step within the same moment could both pass
   that check and both finalize it — encumbering the associated budget twice
   for what was really a single approval.
+- A multi-step approval chain (e.g. Supervisor, then Treasurer, then Chief)
+  didn't enforce that steps be acted on in order. A later reviewer — an
+  internal user, or an external emailed approver, who could each act at any
+  time — could approve or deny their step before earlier reviewers acted.
+  A denial finalizes the whole request immediately, so an out-of-order
+  denial could kill a request before earlier reviewers ever weighed in.
+  Approving or denying a step now requires that every earlier step in the
+  chain has already been resolved.
 - Editing a budget's total amount didn't check it against what was already
   spent or committed against that budget. A budget could be reduced below
   its already-committed total and the reduction would be accepted, silently

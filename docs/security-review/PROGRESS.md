@@ -21,9 +21,32 @@ Feature 05 (finance & approvals, pass 2) —
 docs-only "no findings" push) merged before Codex's review comments landed
 and before this fix could be pushed to it — #1944 is a fresh branch/PR
 carrying the fix, rebased onto current `main` per the "PR already merged"
-branch-reuse rule. Next after merge: 06 elections & ballots, pass 2.
+branch-reuse rule. A second Codex round against #1944 itself caught one
+more real bug (FIN-15, approval-chain step ordering) — fixed and pushed.
+Next after merge: 06 elections & ballots, pass 2.
 
 ---
+
+### 2026-08-27 — Feature 05 (Finance & approvals), pass 2 — Codex round 2 on #1944 caught FIN-15 (approval-chain ordering), fixed
+
+`create_approval_records` marks every step in a chain `PENDING` up front —
+including emailing an EMAIL-type step's token immediately, regardless of
+its position — but none of `approve_step`/`deny_step`/`approve_by_token`/
+`deny_by_token` checked that the acted-on record was the chain's _current_
+step (earliest `step_order` still `PENDING`), only that its own status was
+`PENDING`. A `get_current_pending_step` helper already existed to answer
+that and was never called anywhere — dead code next to the gap it should
+have closed. A later-step approver (by record id, or by the token emailed
+to them at the same moment as everyone else's) could act out of order;
+denial is the sharp edge, since a single deny finalizes the whole entity
+immediately, killing the request before earlier reviewers ever weighed in.
+Fixed with a shared `_ensure_current_step` check wired into all four action
+paths, inside the same lock each already holds for FIN-10. Two new
+regression tests (one DB-backed multi-step-chain test, one mock-based
+token-path test), both confirmed to fail pre-fix via `git stash`. Full
+completion gate re-run clean (flake8/black/isort, migrations 383 revisions,
+scoped tests 243 passed/1 skipped, full backend suite 9060 passed/22
+skipped/0 failed, frontend gates clean). Pushed to PR #1944.
 
 ### 2026-08-27 — Feature 05 (Finance & approvals), pass 2 — Codex caught 5 real bugs, all fixed
 

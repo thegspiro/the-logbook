@@ -88,6 +88,35 @@ claimed no findings. Codex caught six real defects the initial sweep missed
   against an empty database before `create_all` ever creates the table.
   Corrected above; the migration code itself was already right.
 
+**FIN-15, found on a second Codex round against the fix PR (#1944) — the
+significant one.** `create_approval_records` marks every step in a chain
+PENDING immediately when the entity is submitted, not just the first —
+including emailing an EMAIL-type step's token the moment the record is
+created, regardless of that step's position in the chain. None of
+`approve_step`/`deny_step`/`approve_by_token`/`deny_by_token` checked that
+the record being acted on was the chain's _current_ step (the earliest
+`step_order` record still `PENDING`) — only that its own status was
+`PENDING`. A `get_current_pending_step` helper already existed to answer
+exactly that question and was never called from any of the four action
+paths — dead code sitting next to the gap it should have closed. Consequence:
+a later-step approver (internal, by record id — exposed in entity detail
+responses — or external, by the token emailed to them the same moment as
+everyone else's) could approve or deny before an earlier step acted.
+Approving out of order doesn't by itself finalize anything early (the
+entity still needs every step non-pending), but denying does: `deny_step`/
+`deny_by_token` finalize the whole entity immediately on a single denial,
+so a later-step denial kills the request before earlier reviewers ever
+weighed in — defeating the point of a sequential chain of custody entirely.
+Fixed with a shared `_ensure_current_step` check (calls the existing
+`get_current_pending_step`, raises `ValueError` — already mapped to 400 on
+every one of the four endpoints — when the record isn't the current step),
+wired into all four action paths, inside the same lock each already
+acquired for FIN-10. Guarded by
+`test_a_later_step_cannot_be_acted_on_before_an_earlier_one`
+(`test_finance.py`, DB-backed, real multi-step chain) and
+`test_token_action_rejects_a_later_step_out_of_order`
+(`test_finance_approval_tokens.py`, mock-based, both token actions).
+
 **Read in full and independently re-verified by direct code read** (not
 taken on an agent's word alone, and this pass's own miss above is exactly
 why): `_mutate_budget` (`finance_service.py:2564`) — org-scoped,
@@ -102,19 +131,21 @@ can leak another org's pending approvals into the merged result.
 Two background agents independently reviewed `finance_service.py`'s budget/
 export logic and `finance.py`+`schemas.py`+`models.py` respectively; both
 reported no findings. Codex's review, posted after this PR opened, is what
-actually caught FIN-10 through FIN-14 — all verified independently against
-the real code (reproduced each schema TypeError directly, confirmed the
-missing `.with_for_update()` by reading the token-path sibling, confirmed
-the frontend gap and the backend schema it feeds by reading both sides)
-before fixing, not taken on the bot's word.
+actually caught FIN-10 through FIN-14 (and, on a second round against the
+fix PR, FIN-15) — all verified independently against the real code
+(reproduced each schema TypeError directly, confirmed the missing
+`.with_for_update()` and the missing order check by reading the sibling
+methods, confirmed the frontend gap and the backend schema it feeds by
+reading both sides) before fixing, not taken on the bot's word.
 
-**5 real findings, all fixed; 1 documentation correction.** No open items.
+**6 real findings, all fixed; 1 documentation correction.** No open items.
 
 **Completion gate (pass 2):** flake8/black/isort clean on `app/ tests/
-alembic/`; `validate_migrations.py --strict` passed (382 revisions, single
+alembic/`; `validate_migrations.py --strict` passed (383 revisions, single
 head); scoped backend tests (`-k "finance or dues or approval or budget or
-export"`) 240 passed, 1 skipped (pre-existing), 0 failed; full backend suite
-9049 passed, 22 skipped (pre-existing, Docker-unavailable), 0 failed.
+export"`) 243 passed, 1 skipped (pre-existing), 0 failed; full backend suite
+9060 passed, 22 skipped (pre-existing, Docker/roles-table/API-contract
+opt-ins), 0 failed.
 `tsc --noEmit` 0 errors; `eslint src/modules/finance/` 0 errors; `vitest run
 src/modules/finance/` 2 files, 80 tests, all passed. Each new guard test
 confirmed to fail against the pre-fix code (`git stash` on the fix, re-run,

@@ -783,6 +783,61 @@ class TestApprovalChainService:
         approved = await service.approve_step(records[0].id, user_id, org_id=org_id)
         assert approved.status == ApprovalStepStatus.APPROVED
 
+    async def test_a_later_step_cannot_be_acted_on_before_an_earlier_one(
+        self, db_session: AsyncSession, sample_org_data
+    ):
+        """create_approval_records marks every step PENDING up front, so
+        without an explicit order check a later-step approver (or anyone who
+        knows/is emailed that record's id/token) could approve or deny out
+        of turn -- and a deny finalizes the whole entity immediately,
+        killing the request before earlier reviewers ever weighed in.
+        """
+        service = FinanceService(db_session)
+        org_id = sample_org_data["id"]
+        user_id = sample_org_data.get("admin_id", "test-user-id")
+
+        chain = await service.create_approval_chain(
+            org_id=org_id,
+            created_by=user_id,
+            name="Sequential",
+            applies_to=ApprovalEntityType.PURCHASE_REQUEST,
+            is_default=True,
+            steps=[
+                {
+                    "step_order": 1,
+                    "name": "Supervisor",
+                    "step_type": ApprovalStepType.APPROVAL,
+                    "approver_type": ApproverType.PERMISSION,
+                    "approver_value": "finance.approve",
+                },
+                {
+                    "step_order": 2,
+                    "name": "Treasurer",
+                    "step_type": ApprovalStepType.APPROVAL,
+                    "approver_type": ApproverType.PERMISSION,
+                    "approver_value": "finance.approve",
+                },
+            ],
+        )
+        records = await service.create_approval_records(
+            chain,
+            ApprovalEntityType.PURCHASE_REQUEST,
+            "order-entity",
+            1000.00,
+            user_id,
+        )
+        step1, step2 = records[0], records[1]
+
+        with pytest.raises(ValueError, match="earlier approval step"):
+            await service.approve_step(step2.id, user_id, org_id=org_id)
+        with pytest.raises(ValueError, match="earlier approval step"):
+            await service.deny_step(step2.id, user_id, "no", org_id=org_id)
+
+        # Once step 1 is resolved, step 2 becomes the current step.
+        await service.approve_step(step1.id, user_id, org_id=org_id)
+        approved = await service.approve_step(step2.id, user_id, org_id=org_id)
+        assert approved.status == ApprovalStepStatus.APPROVED
+
     async def test_get_pending_approvals_is_confined_to_the_caller_org(
         self, db_session: AsyncSession, sample_org_data
     ):
