@@ -1,12 +1,14 @@
 /**
  * An administrative member's rank field, on the screen that can change either.
  *
- * The server refuses the pair outright, so the point of the disabled control is
- * that an operator never reaches that 400. The clear matters more than the
- * greying: this page saves in two requests — the profile PATCH, then the
- * membership-type PATCH — so a rank left in the form would be re-asserted by
- * the first request moments before the second one removed the member from the
- * chain of command.
+ * The server refuses the pair outright, so the disabled control exists so that
+ * an operator never reaches that 400. What it must NOT do is clear the rank
+ * itself: this page saves in two requests — the profile PATCH, then the
+ * membership-type PATCH — so a cleared rank would be persisted by the first
+ * request before the second one justified it, and that second request can
+ * legitimately fail on a tier the organization has not configured. The rank is
+ * therefore left untouched in the form (so `handleSave` omits it entirely) and
+ * cleared server-side, in the same transaction as the class change.
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
