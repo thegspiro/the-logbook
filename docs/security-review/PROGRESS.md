@@ -16,10 +16,10 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-Feature 01 (auth & session lifecycle, pass 2) — branch
-`claude/security-review-auth-01-pass2`, PR pending open. No findings, no code
-changes (docs only). See log entry below and `AUTH-01-auth-session.md`'s
-"Pass 2" section.
+Feature 01 (auth & session lifecycle, pass 2) — [PR #1929](https://github.com/thegspiro/the-logbook/pull/1929),
+branch `claude/security-review-auth-01-pass2`. No findings, no code changes
+(docs only). See log entry below and `AUTH-01-auth-session.md`'s "Pass 2"
+section.
 
 ---
 
