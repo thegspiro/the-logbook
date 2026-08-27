@@ -245,6 +245,18 @@ class TestBuildShell:
         assert body.count('class="{{content_class}}"') == 1
         assert body.count("{{footer_html}}") == 1
 
+    def test_cache_false_does_not_grow_shell_colourways(self):
+        # Pitfall #9: wrap_email_body builds one unique shell per send with
+        # no caller that ever reads it back via colourway_for — if it kept
+        # caching, _SHELL_COLOURWAYS (no cap, no eviction) would grow by one
+        # entry per email sent for the life of the worker process.
+        from app.services import email_theme
+
+        before = len(email_theme._SHELL_COLOURWAYS)
+        body = build_shell("T", "        <p>unique-body-for-this-test</p>", cache=False)
+        assert len(email_theme._SHELL_COLOURWAYS) == before
+        assert colourway_for(body) == {}
+
 
 class TestLogoCell:
     def test_a_department_without_a_logo_leads_with_its_name(self):

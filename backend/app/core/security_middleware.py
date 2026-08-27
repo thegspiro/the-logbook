@@ -923,9 +923,18 @@ class IPBlockingMiddleware:
 
     Features:
     - Blocks requests from specified countries (geo-blocking)
-    - Supports IP allowlist exceptions
     - Logs all blocked attempts for security auditing
     - Integrates with GeoIP service for country lookup
+
+    Per-tenant IP allowlist exceptions (``IPException``) are NOT applied
+    here and never have been reachable from this middleware: this layer
+    runs pre-auth, before any tenant context exists, so honoring an
+    org-scoped exception would mean one org's approved travel exception
+    silently relaxing the geo-block for every other org's traffic too (the
+    cross-tenant bypass PR #1544 closed by passing an empty set to
+    ``is_ip_blocked`` unconditionally, below). The ``IPException`` request/
+    approve workflow still exists in the API for other purposes, but has no
+    effect on this middleware's enforcement decision.
     """
 
     # Paths that bypass IP blocking (health checks, onboarding, etc.)
@@ -1047,6 +1056,7 @@ class IPBlockingMiddleware:
             try:
                 from app.core.audit import log_audit_event
                 from app.core.database import async_session_factory
+                from app.models.ip_security import BlockedAccessAttempt
 
                 async with async_session_factory() as db:
                     await log_audit_event(
@@ -1063,6 +1073,21 @@ class IPBlockingMiddleware:
                             "user_agent": request.headers.get("user-agent", ""),
                         },
                         ip_address=client_ip,
+                    )
+                    # The GET /ip-security/blocked-attempts admin view reads
+                    # this table directly (not audit_logs), so a block that
+                    # never inserts one is invisible there even though it
+                    # was correctly denied and audit-logged above.
+                    db.add(
+                        BlockedAccessAttempt(
+                            ip_address=client_ip,
+                            country_code=geo_info.get("country_code"),
+                            country_name=geo_info.get("country_name"),
+                            block_reason=reason,
+                            request_path=str(request.url.path)[:500],
+                            request_method=request.method[:10],
+                            user_agent=request.headers.get("user-agent", ""),
+                        )
                     )
                     await db.commit()
             except Exception as db_err:

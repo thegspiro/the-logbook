@@ -22,6 +22,7 @@ from app.models.meeting import (
     MeetingType,
 )
 from app.models.user import User
+from app.utils.model_updates import apply_updates
 from app.utils.org_scoping import assert_in_org
 from app.utils.sql_search import LIKE_ESCAPE_CHAR, like_pattern
 
@@ -246,8 +247,7 @@ class MeetingsService:
             if not meeting:
                 return None, "Meeting not found"
 
-            for key, value in update_data.items():
-                setattr(meeting, key, value)
+            apply_updates(meeting, update_data, skip={"organization_id", "id"})
 
             await self.db.commit()
             await self.db.refresh(meeting)
@@ -400,6 +400,18 @@ class MeetingsService:
             if not item:
                 return None, "Action item not found"
 
+            # MM-4 (XC-1): a reassigned owner must be in-org, same as
+            # create_action_item already requires.
+            if "assigned_to" in update_data:
+                await assert_in_org(
+                    self.db,
+                    User,
+                    update_data.get("assigned_to"),
+                    organization_id,
+                    allow_none=True,
+                    label="assignee",
+                )
+
             # Handle status changes
             if "status" in update_data:
                 new_status = update_data["status"]
@@ -409,8 +421,9 @@ class MeetingsService:
                 ):
                     item.completed_at = datetime.now(timezone.utc)
 
-            for key, value in update_data.items():
-                setattr(item, key, value)
+            apply_updates(
+                item, update_data, skip={"organization_id", "id", "meeting_id"}
+            )
 
             await self.db.commit()
             await self.db.refresh(item)
@@ -455,7 +468,7 @@ class MeetingsService:
         )
 
         if assigned_to:
-            query = query.where(MeetingActionItem.assigned_to == assigned_to)
+            query = query.where(MeetingActionItem.assigned_to == str(assigned_to))
 
         query = query.order_by(MeetingActionItem.due_date.asc())
         result = await self.db.execute(query)
@@ -526,23 +539,38 @@ class MeetingsService:
         from app.core.utils import generate_uuid
         from app.models.event import Event, EventRSVP, RSVPStatus
 
-        # Get the event
+        # Get the event, locked: two coordinators bridging the same event at
+        # nearly the same instant would otherwise both read "no meeting yet"
+        # below and both insert one (Pitfall #27 — a TOCTOU race on the
+        # uniqueness check, not a capacity check, but the same shape). The
+        # lock serializes them on the event row.
         result = await self.db.execute(
-            select(Event).where(
+            select(Event)
+            .where(
                 Event.id == str(event_id),
                 Event.organization_id == str(organization_id),
             )
+            .with_for_update()
         )
         event = result.scalar_one_or_none()
         if not event:
             return None, "Event not found"
 
-        # Check if meeting already exists for this event
+        # Check if meeting already exists for this event. This must ALSO be a
+        # locking read, not just the Event fetch above: under REPEATABLE READ,
+        # a plain SELECT answers from the snapshot taken at the transaction's
+        # first *consistent* read, and a locking read doesn't reliably start
+        # that snapshot — an earlier query elsewhere in the same session (e.g.
+        # get_current_user resolving the caller) may already have established
+        # it before this method even runs. Relying on "the Event fetch is
+        # first" is not safe; the existence check has to lock too.
         existing = await self.db.execute(
-            select(Meeting).where(
+            select(Meeting)
+            .where(
                 Meeting.event_id == str(event_id),
                 Meeting.organization_id == str(organization_id),
             )
+            .with_for_update()
         )
         if existing.scalar_one_or_none():
             return None, "Meeting already exists for this event"
