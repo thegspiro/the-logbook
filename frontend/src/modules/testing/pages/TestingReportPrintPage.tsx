@@ -19,7 +19,7 @@ import { formatDate, formatDateTime } from '../../../utils/dateFormatting';
 import { SEE_ALL_TESTERS_PERMISSION, useTestingChecklist } from '../useTestingChecklist';
 import { TESTING_GROUPS } from '../testingRegistry';
 import { describeGate } from '../pageAccess';
-import { GATE_VERDICT_LABELS, gateVerdict, isGateMismatch } from '../gateVerdict';
+import { GATE_VERDICT_LABELS, gateVerdict, isGateMismatch, needsGateConfirmation } from '../gateVerdict';
 import { flattenRun } from '../exportRun';
 import type { TestStatus } from '../useTestingChecklist';
 
@@ -54,7 +54,7 @@ export const TestingReportPrintPage: React.FC = () => {
   const tz = useTimezone();
   const canSeeAllTesters = checkPermission(SEE_ALL_TESTERS_PERMISSION);
 
-  const { results, otherMarks, run, summary, coveredByAnyone, testerCount, gateTally, staleCount, isLoading, viewRun } =
+  const { results, otherMarks, run, summary, testerCount, gateTally, staleCount, isLoading, viewRun } =
     useTestingChecklist({ includeAllTesters: canSeeAllTesters });
 
   // `?run=<id>` prints an earlier pass; without it the current one.
@@ -75,6 +75,7 @@ export const TestingReportPrintPage: React.FC = () => {
     run,
     results,
     otherMarks,
+    viewerId: user?.id ?? 'me',
     viewerName: user?.full_name || user?.username || 'you',
     viewerPositions: user?.positions ?? [],
     formatTimestamp: (iso) => formatDateTime(iso, tz),
@@ -94,11 +95,38 @@ export const TestingReportPrintPage: React.FC = () => {
     const held = pageStatus.get(mark.page.path) ?? 'untested';
     if (RANK[mark.status] > RANK[held]) pageStatus.set(mark.page.path, mark.status);
   }
+
+  /**
+   * The headline counts, over the same marks the rest of the report shows.
+   *
+   * `summary` from the hook counts only the reader's own marks. On a shared
+   * run that produced a report claiming to cover every tester while printing
+   * "Failed 0" above a failures table listing another tester's failure.
+   */
+  const countPages = (status: TestStatus) => [...pageStatus.values()].filter((held) => held === status).length;
+  const totals = canSeeAllTesters
+    ? {
+        checked: pageStatus.size,
+        pass: countPages('pass'),
+        fail: countPages('fail'),
+        blocked: countPages('blocked'),
+        untested: summary.total - pageStatus.size,
+      }
+    : {
+        checked: summary.total - summary.untested,
+        pass: summary.pass,
+        fail: summary.fail,
+        blocked: summary.blocked,
+        untested: summary.untested,
+      };
   const failures = recorded.filter((mark) => mark.status === 'fail');
-  const mismatches = recorded.filter((mark) =>
-    isGateMismatch(
-      gateVerdict({ status: mark.status, ...(mark.expectedAccess ? { expectedAccess: mark.expectedAccess } : {}) })
-    )
+  const verdictOf = (mark: (typeof recorded)[number]) =>
+    gateVerdict({ status: mark.status, ...(mark.expectedAccess ? { expectedAccess: mark.expectedAccess } : {}) });
+  // Findings and questions together, told apart by the label on each row: a
+  // block on a page the account should open may be a refusal or may be a page
+  // the tester could not reach, and only they can say which.
+  const gateFindings = recorded.filter(
+    (mark) => isGateMismatch(verdictOf(mark)) || needsGateConfirmation(verdictOf(mark))
   );
 
   if (isLoading) {
@@ -134,25 +162,28 @@ export const TestingReportPrintPage: React.FC = () => {
                 <td style={CELL}>Pages in the application</td>
                 <td style={CELL}>{summary.total}</td>
                 <td style={CELL}>Covered by somebody</td>
-                <td style={CELL}>{canSeeAllTesters ? coveredByAnyone : summary.total - summary.untested}</td>
+                <td style={CELL}>{totals.checked}</td>
               </tr>
               <tr>
                 <td style={CELL}>Passed</td>
-                <td style={CELL}>{summary.pass}</td>
+                <td style={CELL}>{totals.pass}</td>
                 <td style={CELL}>Failed</td>
-                <td style={CELL}>{summary.fail}</td>
+                <td style={CELL}>{totals.fail}</td>
               </tr>
               <tr>
                 <td style={CELL}>Blocked</td>
-                <td style={CELL}>{summary.blocked}</td>
+                <td style={CELL}>{totals.blocked}</td>
                 <td style={CELL}>Not tested</td>
-                <td style={CELL}>{summary.untested}</td>
+                <td style={CELL}>{totals.untested}</td>
               </tr>
               <tr>
                 <td style={CELL}>Gate refusals verified</td>
                 <td style={CELL}>{gateTally.verified}</td>
                 <td style={CELL}>Gate mismatches</td>
-                <td style={CELL}>{gateTally.mismatches}</td>
+                <td style={CELL}>
+                  {gateTally.mismatches}
+                  {gateTally.needsConfirmation > 0 && ` (+${gateTally.needsConfirmation} to confirm)`}
+                </td>
               </tr>
               <tr>
                 <td style={CELL}>Testers</td>
@@ -189,8 +220,8 @@ export const TestingReportPrintPage: React.FC = () => {
             </table>
           )}
 
-          <h2 style={SECTION}>Gate mismatches</h2>
-          {mismatches.length === 0 ? (
+          <h2 style={SECTION}>Gate findings</h2>
+          {gateFindings.length === 0 ? (
             <p style={{ margin: 0 }}>Every gate behaved as the application predicted.</p>
           ) : (
             <table style={TABLE}>
@@ -203,7 +234,7 @@ export const TestingReportPrintPage: React.FC = () => {
                 </tr>
               </thead>
               <tbody>
-                {mismatches.map((mark) => {
+                {gateFindings.map((mark) => {
                   const verdict = gateVerdict({
                     status: mark.status,
                     ...(mark.expectedAccess ? { expectedAccess: mark.expectedAccess } : {}),

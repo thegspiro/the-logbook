@@ -20,6 +20,7 @@ import {
   type TestingAccessExpectation,
   type TestingCheckEntry,
   type TestingCheckStatus,
+  type TestingCheckUpsert,
   type TestingRun,
 } from './services/api';
 import { getCurrentBuildId } from '../../utils/appVersion';
@@ -56,6 +57,13 @@ export interface TestResult {
   buildId?: string;
   /** What the screen predicted when the mark was made. */
   expectedAccess?: TestingAccessExpectation;
+  /**
+   * The positions this account held when the mark was made, as the server
+   * recorded them. Kept rather than re-derived from the signed-in account: a
+   * member promoted since is not the seat that made the observation, which is
+   * the drift the snapshot exists to prevent.
+   */
+  testedAs?: string[];
   /** What went wrong, or what still needs proving. */
   note?: string;
   /** Sample record ids for a route with `:params`, keyed by parameter name. */
@@ -88,6 +96,7 @@ const toResult = (entry: TestingCheckEntry): TestResult => ({
   status: entry.status,
   ...(entry.buildId ? { buildId: entry.buildId } : {}),
   ...(entry.expectedAccess ? { expectedAccess: entry.expectedAccess } : {}),
+  ...(entry.testedAs?.length ? { testedAs: entry.testedAs } : {}),
   ...(entry.note ? { note: entry.note } : {}),
   ...(entry.params ? { params: entry.params } : {}),
   ...(entry.checkedAt ? { checkedAt: entry.checkedAt } : {}),
@@ -197,8 +206,17 @@ export const useTestingChecklist = ({
 
   // Keyed by route path so a second keystroke on one page replaces its pending
   // save rather than queueing another, and typing in two notes still saves
-  // both.
-  const textTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  // both. Each entry carries the write it would perform, so a pending one can
+  // be sent early rather than dropped when the run on screen changes.
+  const textTimers = useRef<Record<string, { timer: ReturnType<typeof setTimeout>; flush: () => void }>>({});
+
+  /** Send every pending note/parameter write now, in the run it was typed in. */
+  const flushPendingWrites = useCallback(() => {
+    for (const pending of Object.values(textTimers.current)) {
+      clearTimeout(pending.timer);
+      pending.flush();
+    }
+  }, []);
   const resultsRef = useRef<ChecklistState>({});
   resultsRef.current = results;
   // Held in a ref so `save` stays stable: the prediction depends on the
@@ -207,10 +225,23 @@ export const useTestingChecklist = ({
   const expectationRef = useRef(expectationFor);
   expectationRef.current = expectationFor;
 
+  /**
+   * Which load is the live one.
+   *
+   * Picking an archived run starts a second request while the first is still
+   * in flight, and whichever answered last used to win — so the current run
+   * could overwrite the archived one the tester asked for, and on the print
+   * page could print the wrong run. Only the newest request applies.
+   */
+  const loadGeneration = useRef(0);
+
   const load = useCallback(async () => {
+    const generation = (loadGeneration.current += 1);
+    const isStale = () => loadGeneration.current !== generation;
     setIsLoading(true);
     try {
       const loaded = await testingChecklistService.getRun(includeAllTesters, selectedRunId ?? undefined);
+      if (isStale()) return;
       const mine: ChecklistState = {};
       const others: Record<string, OtherTesterMark[]> = {};
       for (const entry of loaded.entries) {
@@ -237,10 +268,11 @@ export const useTestingChecklist = ({
       setLoadError(null);
       setIsModuleDisabled(false);
     } catch (err: unknown) {
+      if (isStale()) return;
       setIsModuleDisabled(toAppError(err).code === MODULE_DISABLED_CODE);
       setLoadError(getErrorMessage(err, 'Could not load the testing run'));
     } finally {
-      setIsLoading(false);
+      if (!isStale()) setIsLoading(false);
     }
   }, [includeAllTesters, selectedRunId]);
 
@@ -251,22 +283,21 @@ export const useTestingChecklist = ({
   useEffect(() => {
     const timers = textTimers.current;
     return () => {
-      for (const timer of Object.values(timers)) clearTimeout(timer);
+      for (const pending of Object.values(timers)) clearTimeout(pending.timer);
     };
   }, []);
 
-  /** Persist one page's row, putting the previous state back if it fails. */
-  const save = useCallback(async (path: string, previous: TestResult | undefined) => {
-    const current = resultsRef.current[path];
+  /**
+   * Persist one page's row, putting the previous state back if it fails.
+   *
+   * Takes the payload built when the write was *scheduled*, not whatever state
+   * holds when the timer fires. A note typed and then followed by picking an
+   * archived run used to send the archived page's status and note — into the
+   * current run, which is the only run the endpoint writes to.
+   */
+  const save = useCallback(async (path: string, previous: TestResult | undefined, payload: TestingCheckUpsert) => {
     try {
-      await testingChecklistService.saveEntry({
-        routePath: path,
-        status: current?.status ?? 'untested',
-        note: current?.note?.trim() || null,
-        params: current?.params ?? null,
-        buildId: getCurrentBuildId() ?? null,
-        expectedAccess: expectationRef.current?.(path) ?? current?.expectedAccess ?? null,
-      });
+      await testingChecklistService.saveEntry(payload);
     } catch (err: unknown) {
       // Reverted rather than left on screen: a mark that looks recorded and is
       // not turns into a page nobody tests.
@@ -297,15 +328,30 @@ export const useTestingChecklist = ({
       setResults((state) => ({ ...state, [path]: next }));
       resultsRef.current = { ...resultsRef.current, [path]: next };
 
+      const payload: TestingCheckUpsert = {
+        routePath: path,
+        status: next.status,
+        note: next.note?.trim() || null,
+        params: next.params ?? null,
+        buildId: buildId ?? null,
+        expectedAccess: expectedAccess ?? next.expectedAccess ?? null,
+      };
+
       const pending = textTimers.current[path];
-      if (pending) clearTimeout(pending);
+      if (pending) clearTimeout(pending.timer);
       if (debounce) {
-        textTimers.current[path] = setTimeout(() => {
-          delete textTimers.current[path];
-          void save(path, previous);
-        }, TEXT_SAVE_DELAY_MS);
+        textTimers.current[path] = {
+          timer: setTimeout(() => {
+            delete textTimers.current[path];
+            void save(path, previous, payload);
+          }, TEXT_SAVE_DELAY_MS),
+          flush: () => {
+            delete textTimers.current[path];
+            void save(path, previous, payload);
+          },
+        };
       } else {
-        void save(path, previous);
+        void save(path, previous, payload);
       }
     },
     [save]
@@ -319,11 +365,14 @@ export const useTestingChecklist = ({
           // Tapping the mark that is already set is how a mis-click is undone;
           // without it the only way back to "untested" is clearing the run.
           const next: TestStatus = previous.status === status ? 'untested' : status;
-          return {
-            ...previous,
-            status: next,
-            ...(next === 'untested' ? {} : { checkedAt: new Date().toISOString() }),
-          };
+          if (next === 'untested') {
+            // Drop the timestamp with the mark it belonged to: the server
+            // clears it, and until the next reload an export would otherwise
+            // date a page nobody has tested.
+            const { checkedAt: _cleared, ...rest } = previous;
+            return { ...rest, status: next };
+          }
+          return { ...previous, status: next, checkedAt: new Date().toISOString() };
         },
         false
       );
@@ -357,9 +406,15 @@ export const useTestingChecklist = ({
     [load]
   );
 
-  const viewRun = useCallback((runId: string | null) => {
-    setSelectedRunId(runId);
-  }, []);
+  const viewRun = useCallback(
+    (runId: string | null) => {
+      // Writes always target the current run, so anything still pending has to
+      // go before the screen moves to a different one.
+      flushPendingWrites();
+      setSelectedRunId(runId);
+    },
+    [flushPendingWrites]
+  );
 
   const startRun = useCallback(
     async (label: string) => {
@@ -446,7 +501,11 @@ export const useTestingChecklist = ({
       if (run) {
         lines.push(`- Run: ${run.label} (run ${run.sequence}, started ${formatTimestamp(run.startedAt)})`);
       }
-      if (currentBuildId) lines.push(`- Build under test: ${currentBuildId}`);
+      // The run's own build, not the one serving this browser: exporting an
+      // archived run after a deployment would otherwise credit its results to
+      // a build nobody tested it on.
+      const buildUnderTest = run?.buildId ?? (run?.isCurrent === false ? undefined : currentBuildId);
+      if (buildUnderTest) lines.push(`- Build under test: ${buildUnderTest}`);
       if (testedBy) lines.push(`- Tested by: ${testedBy}`);
       lines.push(
         `- Your result: ${summary.pass} passed, ${summary.fail} failed, ${summary.blocked} blocked, ${summary.untested} not tested (${summary.total} pages)`

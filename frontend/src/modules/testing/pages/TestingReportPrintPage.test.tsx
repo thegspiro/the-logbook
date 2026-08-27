@@ -105,6 +105,15 @@ describe('TestingReportPrintPage', () => {
     expect(screen.getByText('Events administration hub')).toBeInTheDocument();
   });
 
+  it('asks about a block on a page the account should open, without calling it a defect', async () => {
+    savedEntries.push(mark({ status: 'blocked', note: null, expectedAccess: 'allowed' }));
+    renderWithRouter(<TestingReportPrintPage />);
+
+    expect(await screen.findByText('Blocked, though this account should be able to open it')).toBeInTheDocument();
+    // Counted apart from the defects, which is what "(+1 to confirm)" says.
+    expect(cellsOfRowNamed('Gate refusals verified')[3]).toBe('0 (+1 to confirm)');
+  });
+
   it('reports a gate that did not behave, and names the seat', async () => {
     savedEntries.push(
       mark({
@@ -128,6 +137,17 @@ describe('TestingReportPrintPage', () => {
 
     expect(await screen.findByText('No page was recorded as failing.')).toBeInTheDocument();
     expect(screen.getByText('Every gate behaved as the application predicted.')).toBeInTheDocument();
+  });
+
+  it('counts the headline totals over every tester it prints', async () => {
+    // The report claims its counts cover the department; a failure listed
+    // below must not sit above a "Failed 0".
+    savedEntries.push(mark({ status: 'fail', userId: 'u2', userName: 'Firefighter Jones', isMine: false }));
+    renderWithRouter(<TestingReportPrintPage />);
+
+    await screen.findByText('Summary');
+    expect(cellsOfRowNamed('Passed')).toEqual(['Passed', '0', 'Failed', '1']);
+    expect(cellsOfRowNamed('Blocked')[1]).toBe('0');
   });
 
   it('counts a page another tester failed as failed', async () => {

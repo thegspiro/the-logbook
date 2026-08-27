@@ -56,8 +56,10 @@ def upgrade() -> None:
         sa.Column(
             "user_id",
             sa.String(36),
-            sa.ForeignKey("users.id", ondelete="CASCADE"),
-            nullable=False,
+            # SET NULL, so nullable (pitfall #2): a hard-deleted member must
+            # not take an archived run's evidence with them. See the model.
+            sa.ForeignKey("users.id", ondelete="SET NULL"),
+            nullable=True,
         ),
         sa.Column("route_path", sa.String(200), nullable=False),
         sa.Column(

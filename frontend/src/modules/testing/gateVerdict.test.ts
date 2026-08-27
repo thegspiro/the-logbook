@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { gateVerdict, isGateMismatch, tallyGateVerdicts } from './gateVerdict';
+import { gateVerdict, isGateMismatch, needsGateConfirmation, tallyGateVerdicts } from './gateVerdict';
 
 describe('gateVerdict', () => {
   it('counts a refusal that happened as predicted', () => {
@@ -12,9 +12,14 @@ describe('gateVerdict', () => {
     expect(gateVerdict({ status: 'pass', expectedAccess: 'module-off' })).toBe('opened-when-refused');
   });
 
-  it('flags a page that refused an account it should have let in', () => {
-    expect(gateVerdict({ status: 'blocked', expectedAccess: 'allowed' })).toBe('refused-when-allowed');
-    expect(gateVerdict({ status: 'blocked', expectedAccess: 'open' })).toBe('refused-when-allowed');
+  it('asks for confirmation, rather than asserting a defect, when a page this account should open is blocked', () => {
+    // "Blocked" also covers a page the tester could not reach — no sample
+    // record, no data yet — so calling it a refusal would report permissions
+    // failures that never happened.
+    expect(gateVerdict({ status: 'blocked', expectedAccess: 'allowed' })).toBe('blocked-where-expected-open');
+    expect(gateVerdict({ status: 'blocked', expectedAccess: 'open' })).toBe('blocked-where-expected-open');
+    expect(isGateMismatch('blocked-where-expected-open')).toBe(false);
+    expect(needsGateConfirmation('blocked-where-expected-open')).toBe(true);
   });
 
   it('says nothing about the gate for an ordinary defect', () => {
@@ -30,10 +35,12 @@ describe('gateVerdict', () => {
   });
 
   it('separates findings from confirmations', () => {
+    // Only one direction is unambiguous: the tester got into a page the app
+    // predicted would refuse them, which missing data cannot explain.
     expect(isGateMismatch('opened-when-refused')).toBe(true);
-    expect(isGateMismatch('refused-when-allowed')).toBe(true);
     expect(isGateMismatch('refusal-verified')).toBe(false);
     expect(isGateMismatch('none')).toBe(false);
+    expect(needsGateConfirmation('none')).toBe(false);
   });
 
   it('tallies a run', () => {
@@ -46,6 +53,6 @@ describe('gateVerdict', () => {
         { status: 'pass', expectedAccess: 'allowed' },
         { status: 'untested' },
       ])
-    ).toEqual({ verified: 2, mismatches: 2 });
+    ).toEqual({ verified: 2, mismatches: 1, needsConfirmation: 1 });
   });
 });

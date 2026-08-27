@@ -22,8 +22,16 @@ export type GateVerdict =
   | 'refusal-verified'
   /** Expected to refuse, and it opened. A gate defect. */
   | 'opened-when-refused'
-  /** Expected to open, and it refused. A grant defect. */
-  | 'refused-when-allowed';
+  /**
+   * Expected to open, and the tester marked it blocked.
+   *
+   * Deliberately **not** counted as a defect. "Blocked" covers more than a
+   * refusal — the module is off, the sample record does not exist, the data
+   * has not been created yet — so a parameterized page marked blocked for want
+   * of an id would otherwise be reported as a permissions failure that never
+   * happened. Worth surfacing for a human to confirm; not worth asserting.
+   */
+  | 'blocked-where-expected-open';
 
 export interface GateVerdictInput {
   status: TestStatus;
@@ -44,35 +52,49 @@ export const gateVerdict = ({ status, expectedAccess }: GateVerdictInput): GateV
     return 'none';
   }
 
-  // Expected to open. A refusal here is a missing grant, not a bug on the page.
-  return status === 'blocked' ? 'refused-when-allowed' : 'none';
+  // Expected to open. A block here *may* be a missing grant — or simply a page
+  // the tester could not reach for want of data. Flagged for confirmation
+  // rather than counted as a finding; see the verdict's own doc comment.
+  return status === 'blocked' ? 'blocked-where-expected-open' : 'none';
 };
 
-/** The two verdicts that are findings rather than confirmations. */
-export type GateMismatch = 'opened-when-refused' | 'refused-when-allowed';
+/**
+ * The verdict that is a finding rather than a confirmation.
+ *
+ * Only this direction is unambiguous: the tester got into a page the app
+ * predicted would refuse them, which no amount of missing data explains.
+ */
+export type GateMismatch = 'opened-when-refused';
 
 /** A type guard, so a caller that has narrowed can index the label table. */
-export const isGateMismatch = (verdict: GateVerdict): verdict is GateMismatch =>
-  verdict === 'opened-when-refused' || verdict === 'refused-when-allowed';
+export const isGateMismatch = (verdict: GateVerdict): verdict is GateMismatch => verdict === 'opened-when-refused';
+
+/** Needs a human to say which it was; not counted as a defect. */
+export const needsGateConfirmation = (verdict: GateVerdict): verdict is 'blocked-where-expected-open' =>
+  verdict === 'blocked-where-expected-open';
 
 export const GATE_VERDICT_LABELS: Record<Exclude<GateVerdict, 'none'>, string> = {
   'refusal-verified': 'Refusal verified',
   'opened-when-refused': 'Opened when it should have refused',
-  'refused-when-allowed': 'Refused when it should have opened',
+  'blocked-where-expected-open': 'Blocked, though this account should be able to open it',
 };
 
 export interface GateVerdictTally {
   verified: number;
   mismatches: number;
+  /** Blocks on pages this account should have been able to open. */
+  needsConfirmation: number;
 }
 
 export const tallyGateVerdicts = (marks: readonly GateVerdictInput[]): GateVerdictTally => {
   let verified = 0;
   let mismatches = 0;
+  let needsConfirmation = 0;
   for (const mark of marks) {
     const verdict = gateVerdict(mark);
     if (verdict === 'refusal-verified') verified += 1;
     else if (isGateMismatch(verdict)) mismatches += 1;
+    else if (needsGateConfirmation(verdict)) needsConfirmation += 1;
   }
-  return { verified, mismatches };
+  return { verified, mismatches, needsConfirmation };
 };

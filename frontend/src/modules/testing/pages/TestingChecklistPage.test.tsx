@@ -52,6 +52,9 @@ const currentRun = {
   isCurrent: true,
 };
 const mockStartRun = vi.fn();
+/** Which run the screen is showing, and the history beside it. */
+let shownRun = currentRun;
+const runsList = [currentRun];
 const mockSaveEntry = vi.fn();
 const mockClearRun = vi.fn();
 vi.mock('../services/api', () => ({
@@ -63,8 +66,8 @@ vi.mock('../services/api', () => ({
           })
         : Promise.resolve({
             entries: savedEntries,
-            run: currentRun,
-            runs: [currentRun],
+            run: shownRun,
+            runs: runsList,
             includesAllTesters: Boolean(includeAll),
             testerCount: new Set(savedEntries.map((entry) => entry.userId)).size,
           }),
@@ -103,6 +106,8 @@ describe('TestingChecklistPage', () => {
     savedEntries.length = 0;
     modulesOff.length = 0;
     moduleDisabled = false;
+    shownRun = currentRun;
+    runsList.splice(0, runsList.length, currentRun);
     currentPermissions = ['events.view'];
   });
 
@@ -307,6 +312,17 @@ describe('TestingChecklistPage', () => {
 
     // The group holding the first untested page opens so the card is reachable.
     expect(await screen.findByText('Dashboard')).toBeInTheDocument();
+  });
+
+  it('will not clear from a run it is not showing', async () => {
+    // Clearing always deletes from the *current* run, so offering it while an
+    // archived run is on screen would delete evidence nobody is looking at.
+    const archived = { ...currentRun, id: 'run-0', label: 'First pass', isCurrent: false };
+    runsList.splice(0, runsList.length, currentRun, archived);
+    shownRun = archived;
+    renderWithRouter(<TestingChecklistPage />);
+
+    expect(await screen.findByRole('button', { name: /Clear my marks/ })).toBeDisabled();
   });
 
   it('names the run the marks belong to', async () => {

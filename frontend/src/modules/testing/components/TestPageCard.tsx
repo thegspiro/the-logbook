@@ -14,7 +14,7 @@ import { buildTestUrl, routeParams } from '../testingRegistry';
 import type { PageAccess } from '../pageAccess';
 import { describeGate } from '../pageAccess';
 import type { OtherTesterMark, TestResult, TestStatus } from '../useTestingChecklist';
-import { GATE_VERDICT_LABELS, gateVerdict, isGateMismatch } from '../gateVerdict';
+import { GATE_VERDICT_LABELS, gateVerdict, isGateMismatch, needsGateConfirmation } from '../gateVerdict';
 
 interface TestPageCardProps {
   page: TestPageEntry;
@@ -222,6 +222,12 @@ const TestPageCardComponent: React.FC<TestPageCardProps> = ({
         <p className="inline-flex items-start gap-1.5 text-xs font-semibold text-red-800 dark:text-red-400">
           <ShieldAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
           {GATE_VERDICT_LABELS[verdict]} — worth reporting as a permissions defect.
+        </p>
+      )}
+      {needsGateConfirmation(verdict) && (
+        <p className="inline-flex items-start gap-1.5 text-xs text-amber-800 dark:text-amber-300">
+          <ShieldAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+          {GATE_VERDICT_LABELS[verdict]} — was it refused, or could you not reach it? Say which in the note.
         </p>
       )}
       {verdict === 'refusal-verified' && (

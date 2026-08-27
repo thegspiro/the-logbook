@@ -14,6 +14,7 @@ from typing import Collection, Optional, Sequence
 from sqlalchemy import delete
 from sqlalchemy import inspect as sa_inspect
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.testing_checklist import (
@@ -80,6 +81,7 @@ class TestingChecklistService:
         label: str,
         started_by: Optional[User] = None,
         build_id: Optional[str] = None,
+        reuse_existing: bool = False,
     ) -> TestingRun:
         """Open a new run, which retires the previous one by being newer.
 
@@ -96,6 +98,15 @@ class TestingChecklistService:
             .where(Organization.id == organization_id)
             .with_for_update()
         )
+        if reuse_existing:
+            # The implicit first run: two testers recording the department's
+            # first mark both saw no run before either got here, and creating
+            # one each would file their marks in different runs — hiding one of
+            # them in history the moment it was made. Re-checked *inside* the
+            # lock, which is the only place the answer is stable.
+            existing_run = await self.current_run(organization_id)
+            if existing_run is not None:
+                return existing_run
         # A locking read, not a plain one: under REPEATABLE READ a plain SELECT
         # answers from the snapshot taken at the transaction's first read,
         # which predates the lock — so the count, and the next sequence number,
@@ -144,7 +155,11 @@ class TestingChecklistService:
         if build_id:
             label = f"{label} · build {build_id[:8]}"
         return await self.start_run(
-            organization_id, label, started_by=user, build_id=build_id
+            organization_id,
+            label,
+            started_by=user,
+            build_id=build_id,
+            reuse_existing=True,
         )
 
     async def list_entries(
@@ -213,17 +228,9 @@ class TestingChecklistService:
         what was found then, and a mark made today does not belong in it.
         """
         run = await self._run_for_writing(organization_id, user, payload.build_id)
+        positions = await self._positions_of(user)
 
-        result = await self.db.execute(
-            select(TestingChecklistEntry).where(
-                TestingChecklistEntry.organization_id == organization_id,
-                TestingChecklistEntry.run_id == run.id,
-                TestingChecklistEntry.user_id == user.id,
-                TestingChecklistEntry.route_path == payload.route_path,
-            )
-        )
-        entry = result.scalar_one_or_none()
-
+        entry = await self._find_entry(organization_id, run.id, str(user.id), payload)
         if entry is None:
             count = len(
                 await self.list_entries(organization_id, str(user.id), run_id=run.id)
@@ -240,6 +247,59 @@ class TestingChecklistService:
             )
             self.db.add(entry)
 
+        self._apply(entry, payload, positions)
+
+        try:
+            await self.db.commit()
+        except IntegrityError:
+            # Two saves for a page this tester had not marked yet — two taps in
+            # quick succession — can both read no row and both insert. The
+            # unique index refuses the second, and without this the tester sees
+            # a failed save (and the mark reverted on screen) for a page that
+            # was in fact recorded. Take the row the winner wrote and apply this
+            # update to it, which is what "replacing their previous one" means.
+            await self.db.rollback()
+            # The row this call tried to insert has to leave the session too,
+            # or the retry's commit flushes the same INSERT a second time and
+            # raises the very error being recovered from.
+            if entry in self.db:
+                self.db.expunge(entry)
+            entry = await self._find_entry(
+                organization_id, run.id, str(user.id), payload
+            )
+            if entry is None:
+                raise
+            self._apply(entry, payload, positions)
+            await self.db.commit()
+
+        await self.db.refresh(entry)
+        return entry
+
+    async def _find_entry(
+        self,
+        organization_id: str,
+        run_id: str,
+        user_id: str,
+        payload: TestingCheckUpsert,
+    ) -> Optional[TestingChecklistEntry]:
+        """This tester's existing mark on this page, in this run."""
+        result = await self.db.execute(
+            select(TestingChecklistEntry).where(
+                TestingChecklistEntry.organization_id == organization_id,
+                TestingChecklistEntry.run_id == run_id,
+                TestingChecklistEntry.user_id == user_id,
+                TestingChecklistEntry.route_path == payload.route_path,
+            )
+        )
+        return result.scalar_one_or_none()
+
+    @staticmethod
+    def _apply(
+        entry: TestingChecklistEntry,
+        payload: TestingCheckUpsert,
+        positions: list[str],
+    ) -> None:
+        """Write the payload onto a row, new or existing."""
         entry.status = payload.status
         entry.build_id = payload.build_id
         entry.expected_access = payload.expected_access
@@ -249,16 +309,12 @@ class TestingChecklistService:
         # (pitfall #1, update side).
         entry.note = payload.note
         entry.params = payload.params
-        entry.tested_as = await self._positions_of(user)
+        entry.tested_as = positions
         entry.checked_at = (
             None
             if payload.status == TestingCheckStatus.UNTESTED
             else datetime.now(timezone.utc)
         )
-
-        await self.db.commit()
-        await self.db.refresh(entry)
-        return entry
 
     async def clear_run(
         self,

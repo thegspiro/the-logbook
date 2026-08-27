@@ -15,6 +15,7 @@ const context = (overrides: Partial<RunExportContext> = {}): RunExportContext =>
   },
   results: {},
   otherMarks: {},
+  viewerId: 'u1',
   viewerName: 'Ivy Manager',
   viewerPositions: ['System Owner'],
   formatTimestamp: () => 'Aug 27, 2026, 9:00 AM',
@@ -133,6 +134,43 @@ describe('buildPermissionMatrixCsv', () => {
     // Exactly one page row: nothing else was marked.
     expect(rows).toHaveLength(2);
     expect(rows[1]?.slice(4)).toEqual(['blocked', 'pass (mismatch)']);
+  });
+});
+
+describe('the matrix keys columns by account', () => {
+  it('keeps two testers who share a display name apart', () => {
+    // Names are not unique; keying columns by name collapsed them into one and
+    // dropped one account's mark on every page they both tested.
+    const csv = buildPermissionMatrixCsv(
+      context({
+        results: { '/events/admin': { status: 'pass' } },
+        otherMarks: {
+          '/events/admin': [{ userId: 'u2', testerName: 'Ivy Manager', testedAs: ['firefighter'], status: 'blocked' }],
+        },
+        viewerId: 'u1',
+        viewerName: 'Ivy Manager',
+        viewerPositions: ['System Owner'],
+      })
+    );
+
+    const rows = csv.split('\r\n').map((line) => line.split(','));
+    expect(rows[0]).toHaveLength(6);
+    expect(rows[1]?.slice(4)).toEqual(['pass', 'blocked']);
+  });
+
+  it('attributes a mark to the seat held when it was made', () => {
+    const csv = buildRunCsv(
+      context({
+        results: { '/dashboard': { status: 'pass', testedAs: ['Lieutenant'] } },
+        viewerPositions: ['Captain'],
+      })
+    );
+
+    const row = csv
+      .split('\r\n')
+      .map((line) => line.split(','))
+      .find((cells) => cells[3] === '/dashboard');
+    expect(row?.[11]).toBe('Lieutenant');
   });
 });
 

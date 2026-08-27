@@ -15,7 +15,7 @@
 import { buildCsv, type CsvValue } from '../../utils/csv';
 import { describeGate } from './pageAccess';
 import { TESTING_GROUPS, type TestGroupEntry, type TestPageEntry } from './testingRegistry';
-import { GATE_VERDICT_LABELS, gateVerdict } from './gateVerdict';
+import { GATE_VERDICT_LABELS, gateVerdict, isGateMismatch, needsGateConfirmation } from './gateVerdict';
 import type { OtherTesterMark, TestResult, TestStatus } from './useTestingChecklist';
 import type { TestingRun } from './services/api';
 
@@ -24,7 +24,9 @@ export interface RunExportContext {
   results: Record<string, TestResult>;
   otherMarks: Record<string, OtherTesterMark[]>;
   /** Who is signed in — their own marks carry no tester name from the server. */
+  viewerId: string;
   viewerName: string;
+  /** Fallback seats for the viewer's own marks made before the snapshot existed. */
   viewerPositions: string[];
   /** Formats an ISO timestamp in the department's timezone. */
   formatTimestamp: (iso: string) => string;
@@ -34,6 +36,8 @@ export interface RunExportContext {
 interface FlatMark {
   group: TestGroupEntry;
   page: TestPageEntry;
+  /** The account, not the name: two members can share a display name. */
+  testerId: string;
   testerName: string;
   testedAs: string[];
   status: TestStatus;
@@ -57,15 +61,18 @@ export const flattenRun = (context: RunExportContext): FlatMark[] => {
       const mine = context.results[page.path];
       const others = context.otherMarks[page.path] ?? [];
       if (!mine && others.length === 0) {
-        rows.push({ group, page, testerName: '', testedAs: [], status: 'untested' });
+        rows.push({ group, page, testerId: '', testerName: '', testedAs: [], status: 'untested' });
         continue;
       }
       if (mine) {
         rows.push({
           group,
           page,
+          testerId: context.viewerId,
           testerName: context.viewerName,
-          testedAs: context.viewerPositions,
+          // The snapshot the server stored, so a promotion since does not
+          // re-attribute an old observation to a seat that never made it.
+          testedAs: mine.testedAs ?? context.viewerPositions,
           status: mine.status,
           note: mine.note,
           buildId: mine.buildId,
@@ -77,6 +84,7 @@ export const flattenRun = (context: RunExportContext): FlatMark[] => {
         rows.push({
           group,
           page,
+          testerId: other.userId,
           testerName: other.testerName,
           testedAs: other.testedAs,
           status: other.status,
@@ -145,18 +153,28 @@ export const buildRunCsv = (context: RunExportContext): string => {
  */
 export const buildPermissionMatrixCsv = (context: RunExportContext): string => {
   const marks = flattenRun(context).filter((mark) => mark.status !== 'untested');
-  const testers = [...new Set(marks.map((mark) => mark.testerName))].filter(Boolean).sort();
+
+  // Columns are one per *account*. Two members can resolve to the same display
+  // name, and keying by name would collapse them into one column and drop one
+  // of their marks on every page they both tested.
+  const labelOf = new Map<string, string>();
   const seatOf = new Map<string, string[]>();
-  for (const mark of marks) seatOf.set(mark.testerName, mark.testedAs);
+  for (const mark of marks) {
+    if (!mark.testerId) continue;
+    labelOf.set(mark.testerId, mark.testerName);
+    seatOf.set(mark.testerId, mark.testedAs);
+  }
+  const testerIds = [...labelOf.keys()].sort((a, b) => (labelOf.get(a) ?? '').localeCompare(labelOf.get(b) ?? ''));
 
   const header: CsvValue[] = [
     'Area',
     'Page',
     'Route',
     'Gate',
-    ...testers.map((tester) => {
-      const seats = seatOf.get(tester) ?? [];
-      return seats.length > 0 ? `${tester} (${seats.join(', ')})` : tester;
+    ...testerIds.map((id) => {
+      const seats = seatOf.get(id) ?? [];
+      const name = labelOf.get(id) ?? id;
+      return seats.length > 0 ? `${name} (${seats.join(', ')})` : name;
     }),
   ];
 
@@ -177,16 +195,15 @@ export const buildPermissionMatrixCsv = (context: RunExportContext): string => {
         page.label,
         page.path,
         describeGate(page),
-        ...testers.map((tester) => {
-          const mark = pageMarks.find((entry) => entry.testerName === tester);
+        ...testerIds.map((testerId) => {
+          const mark = pageMarks.find((entry) => entry.testerId === testerId);
           if (!mark) return '—';
           const verdict = gateVerdict({
             status: mark.status,
             ...(mark.expectedAccess ? { expectedAccess: mark.expectedAccess } : {}),
           });
-          return verdict === 'opened-when-refused' || verdict === 'refused-when-allowed'
-            ? `${mark.status} (mismatch)`
-            : mark.status;
+          if (isGateMismatch(verdict)) return `${mark.status} (mismatch)`;
+          return needsGateConfirmation(verdict) ? `${mark.status} (confirm)` : mark.status;
         }),
       ]);
     }

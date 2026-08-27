@@ -7,6 +7,8 @@ two administrators pressing "start a run" together get one run rather than two.
 """
 
 import uuid
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from sqlalchemy import select
@@ -193,6 +195,99 @@ class TestRunLifecycle:
 
         with pytest.raises(ValueError, match="maximum number of testing runs"):
             await service.start_run(org.id, "Three")
+
+
+class TestConcurrentWrites:
+    """Two saves landing together must not cost a tester their mark."""
+
+    async def test_a_duplicate_insert_becomes_an_update(self):
+        """The losing request recovers instead of reporting a failed save.
+
+        Driven against a stub session rather than the database: the recovery
+        turns on `rollback()`, and the db_session fixture nests every test in
+        one transaction, so a real rollback would unwind the winning row this
+        test had to plant. What is under test is the control flow — insert,
+        refuse, rollback, re-read, update — not MySQL's constraint, which the
+        re-marking tests above already exercise.
+        """
+        existing = SimpleNamespace(
+            status=CheckStatus.FAIL,
+            note=None,
+            params=None,
+            tested_as=None,
+            build_id=None,
+            expected_access=None,
+            checked_at=None,
+        )
+        db = MagicMock()
+        db.add = MagicMock()
+        db.expunge = MagicMock()
+        db.__contains__ = MagicMock(return_value=False)
+        db.commit = AsyncMock(
+            side_effect=[IntegrityError("insert", {}, Exception("duplicate")), None]
+        )
+        db.rollback = AsyncMock()
+        db.refresh = AsyncMock()
+
+        service = ChecklistService(db)
+        service._run_for_writing = AsyncMock(return_value=SimpleNamespace(id="run-1"))
+        service._positions_of = AsyncMock(return_value=["Firefighter"])
+        service.list_entries = AsyncMock(return_value=[])
+        # Nothing there on the first read; the winner's row on the second.
+        service._find_entry = AsyncMock(side_effect=[None, existing])
+
+        entry = await service.upsert_entry(
+            "org-1", SimpleNamespace(id="u1"), _mark(status=CheckStatus.PASS)
+        )
+
+        assert entry is existing
+        assert existing.status == CheckStatus.PASS
+        assert db.rollback.await_count == 1
+        assert db.commit.await_count == 2
+
+    async def test_the_implicit_first_run_is_decided_under_the_lock(self, db_session):
+        # `_run_for_writing` checks for a run before taking the lock; the
+        # re-check inside it is what stops two first marks opening two runs.
+        org = await _make_org(db_session)
+        user = await _make_user(db_session, org)
+        service = ChecklistService(db_session)
+        existing = await service.start_run(org.id, "Already open")
+
+        reused = await service.start_run(
+            org.id, "Would be second", started_by=user, reuse_existing=True
+        )
+
+        assert reused.id == existing.id
+        assert len(await service.list_runs(org.id)) == 1
+
+
+class TestDepartedTesters:
+    async def test_a_hard_deleted_tester_leaves_the_evidence_behind(self, db_session):
+        """An archived run is the record of what was found then.
+
+        Deleting the account that made a mark releases the attribution — the
+        way `release_user_references` releases every other nullable owner — but
+        must not rewrite the run. `tested_as` still says which seat found it.
+        """
+        org = await _make_org(db_session)
+        user = await _make_user(db_session, org)
+        service = ChecklistService(db_session)
+        await service.upsert_entry(org.id, user, _mark(status=CheckStatus.FAIL))
+        run = await service.current_run(org.id)
+        assert run is not None
+
+        await db_session.delete(user)
+        await db_session.flush()
+
+        entries = await service.list_entries(
+            org.id, "nobody", include_all_testers=True, run_id=run.id
+        )
+        assert len(entries) == 1
+        assert entries[0].user_id is None
+        assert entries[0].status == CheckStatus.FAIL
+        # The snapshot is whatever the account held; the point is that it is
+        # still there once the account is not.
+        assert entries[0].tested_as is not None
 
 
 class TestOneRunAtATime:

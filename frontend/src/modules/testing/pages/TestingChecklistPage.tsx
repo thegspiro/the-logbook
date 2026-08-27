@@ -228,6 +228,7 @@ export const TestingChecklistPage: React.FC = () => {
     run,
     results,
     otherMarks,
+    viewerId: user?.id ?? 'me',
     viewerName: user?.full_name || user?.username || 'you',
     viewerPositions: user?.positions ?? [],
     formatTimestamp: (iso: string) => formatDateTime(iso, tz),
@@ -371,7 +372,7 @@ export const TestingChecklistPage: React.FC = () => {
               style={{ width: `${percent}%` }}
             />
           </div>
-          {(gateTally.verified > 0 || gateTally.mismatches > 0) && (
+          {(gateTally.verified > 0 || gateTally.mismatches > 0 || gateTally.needsConfirmation > 0) && (
             <p className="mt-2 text-sm">
               <ShieldCheck className="mr-1 inline h-4 w-4 align-text-bottom" aria-hidden="true" />
               <span className="text-theme-text-secondary">
@@ -383,6 +384,12 @@ export const TestingChecklistPage: React.FC = () => {
                   <span className="font-semibold text-red-800 dark:text-red-400">
                     {gateTally.mismatches} gate {gateTally.mismatches === 1 ? 'mismatch' : 'mismatches'}
                   </span>
+                </>
+              )}
+              {gateTally.needsConfirmation > 0 && (
+                <>
+                  {' · '}
+                  <span className="text-amber-800 dark:text-amber-300">{gateTally.needsConfirmation} to confirm</span>
                 </>
               )}
             </p>
@@ -605,6 +612,10 @@ export const TestingChecklistPage: React.FC = () => {
         <button
           type="button"
           className="btn-secondary btn-sm inline-flex items-center gap-1.5"
+          // Clearing always deletes from the current run — the server writes
+          // nowhere else — so offering it while an archived run is on screen
+          // would delete evidence the tester is not even looking at.
+          disabled={isViewingArchivedRun}
           onClick={() => void handleClear()}
         >
           <RotateCcw className="h-4 w-4" aria-hidden="true" />
@@ -615,6 +626,7 @@ export const TestingChecklistPage: React.FC = () => {
           <button
             type="button"
             className="btn-secondary btn-sm inline-flex items-center gap-1.5"
+            disabled={isViewingArchivedRun}
             onClick={() => void handleClearEveryone()}
           >
             <RotateCcw className="h-4 w-4" aria-hidden="true" />

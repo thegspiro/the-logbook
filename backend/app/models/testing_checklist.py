@@ -162,8 +162,16 @@ class TestingChecklistEntry(Base):
     )
     user_id = Column(
         String(36),
-        ForeignKey("users.id", ondelete="CASCADE"),
-        nullable=False,
+        # SET NULL, so nullable — MySQL 1830 rejects the pair otherwise
+        # (CLAUDE.md pitfall #2). A mark is evidence about a *run*, and an
+        # archived run is the record of what was found then: hard-deleting a
+        # member must not rewrite it. Attribution is released the way
+        # `release_user_references` releases every other nullable owner, and
+        # `tested_as` still says which seat made the observation. The unique
+        # index tolerates the NULLs: MySQL permits repeats of NULL there, so
+        # two departed testers' marks on one page coexist.
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
     )
     # The route pattern as declared in the frontend router, ":id" segments and
     # all — not a resolved URL. The pattern is what the checklist is a list of.

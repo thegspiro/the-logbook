@@ -322,6 +322,102 @@ describe('useTestingChecklist', () => {
     );
   });
 
+  it('ignores a run response that has been overtaken', async () => {
+    // Picking an archived run starts a second request while the first is in
+    // flight; the current run's late answer must not overwrite it.
+    let releaseFirst: (value: TestingChecklistRun) => void = () => {};
+    mockGetRun.mockImplementationOnce(() => new Promise<TestingChecklistRun>((resolve) => (releaseFirst = resolve)));
+    const archived = makeRun({ id: 'run-0', label: 'First pass', isCurrent: false });
+    mockGetRun.mockResolvedValueOnce(run([], { run: archived, runs: [makeRun(), archived] }));
+
+    const { result } = renderHook(() => useTestingChecklist({}));
+    act(() => result.current.viewRun('run-0'));
+    await waitFor(() => expect(result.current.run?.id).toBe('run-0'));
+
+    // The overtaken request answers late with the current run.
+    act(() => releaseFirst(run([], { run: makeRun(), runs: [makeRun(), archived] })));
+    await waitFor(() => expect(mockGetRun).toHaveBeenCalledTimes(2));
+
+    expect(result.current.run?.id).toBe('run-0');
+  });
+
+  it('sends a pending note before moving to another run', async () => {
+    vi.useFakeTimers();
+    try {
+      const hook = renderHook(() => useTestingChecklist({}));
+      await vi.waitFor(() => expect(hook.result.current.isLoading).toBe(false));
+      act(() => hook.result.current.setNote('/dashboard', 'half typed'));
+      expect(mockSaveEntry).not.toHaveBeenCalled();
+
+      act(() => hook.result.current.viewRun('run-0'));
+
+      // Flushed with what was typed, in the run it was typed in — the save
+      // endpoint only ever writes to the current run.
+      expect(mockSaveEntry).toHaveBeenCalledWith(
+        expect.objectContaining({ routePath: '/dashboard', note: 'half typed' })
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('sends what was typed, not what loaded afterwards', async () => {
+    vi.useFakeTimers();
+    try {
+      const hook = renderHook(() => useTestingChecklist({}));
+      await vi.waitFor(() => expect(hook.result.current.isLoading).toBe(false));
+      act(() => hook.result.current.setStatus('/dashboard', 'fail'));
+      mockSaveEntry.mockClear();
+      act(() => hook.result.current.setNote('/dashboard', 'roster empty'));
+
+      // A reload lands while the note is still pending.
+      mockGetRun.mockResolvedValue(run([entry({ routePath: '/dashboard', status: 'pass', note: 'something else' })]));
+      await act(async () => {
+        await hook.result.current.reload();
+        await vi.advanceTimersByTimeAsync(1000);
+      });
+
+      expect(mockSaveEntry).toHaveBeenCalledWith(expect.objectContaining({ status: 'fail', note: 'roster empty' }));
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('drops the timestamp when a mark is taken back', async () => {
+    mockGetRun.mockResolvedValue(run([entry({ routePath: '/dashboard', status: 'pass' })]));
+    const { result } = await loaded();
+    expect(result.current.results['/dashboard']?.checkedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+
+    act(() => result.current.setStatus('/dashboard', 'pass'));
+
+    expect(result.current.results['/dashboard']?.status).toBe('untested');
+    expect(result.current.results['/dashboard']?.checkedAt).toBeUndefined();
+  });
+
+  it('keeps the seats the server recorded for a mark', async () => {
+    mockGetRun.mockResolvedValue(run([entry({ routePath: '/dashboard', testedAs: ['Lieutenant'] })]));
+
+    const { result } = await loaded();
+
+    expect(result.current.results['/dashboard']?.testedAs).toEqual(['Lieutenant']);
+  });
+
+  it('credits an archived run to the build it was tested on', async () => {
+    vi.stubGlobal('__BUILD_ID__', 'build-now');
+    try {
+      const archived = makeRun({ id: 'run-0', label: 'First pass', isCurrent: false, buildId: 'build-then' });
+      mockGetRun.mockResolvedValue(run([], { run: archived, runs: [makeRun(), archived] }));
+      const { result } = await loaded();
+
+      const markdown = result.current.toMarkdown({ formatTimestamp: () => 'then' });
+
+      expect(markdown).toContain('- Build under test: build-then');
+      expect(markdown).not.toContain('build-now');
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it('reports a run it could not load, and does not pretend it is empty', async () => {
     mockGetRun.mockRejectedValue(new Error('network down'));
 
