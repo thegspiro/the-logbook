@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### A denied role assignment during member creation could leave behind a live, unauthorized account (2026-08-27)
+
+**Fixed**
+
+- Creating a new member with roles the creator wasn't allowed to grant
+  correctly showed an error and blocked the request — but could silently
+  leave behind a real, active account with a working password and no
+  roles at all, because the account had already been saved to the
+  database before the permission check ran. Member creation now checks
+  role permissions before the account is created, so a denied request
+  leaves nothing behind.
+- The audit trail's tamper-detection didn't cover a log entry's category
+  or severity level, so someone with direct database access could have
+  quietly downgraded a critical security incident to a routine one
+  without leaving any trace of the change.
+- The blocked-access-attempts report was always empty — blocked requests
+  were being recorded to the audit log but never to the report itself,
+  so an admin checking for attack patterns would see nothing regardless
+  of how much traffic had actually been blocked.
+- Blocking a country that had previously been blocked and then unblocked
+  failed with a generic server error instead of succeeding.
+
 ### Editing a form, form field, or form integration could turn a cleared field into a confusing server error (2026-08-27)
 
 **Fixed**
