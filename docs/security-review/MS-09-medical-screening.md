@@ -55,12 +55,15 @@ is None` → return), reserved for routers that also carry
   covered for `/api/v1/medical-screening` specifically in
   `test_module_api_gating.py:207,466`.
 - `ModuleSettings.medical_screening` (`schemas/organization.py`) defaults to
-  `False`, and `onboarding.py`'s module list only _offers_ it during setup
-  rather than defaulting it on for existing installations — matches this
-  rotation's own CLAUDE.md Pitfall #19 concern (a switch must have a reader,
-  and must not silently change existing behavior on upgrade). Not this
-  pass's to re-litigate; already reasoned through in the change's own
-  comments and consistent with the pattern.
+  `False`. **Correction (Codex review on this PR):** `onboarding.py` does
+  not offer it during setup at all — `medical_screening` is in
+  `ONBOARDING_SETTINGS_ONLY_MODULES` (`onboarding.py:71-80`), the list the
+  wizard deliberately never asks about; it can only be turned on afterward,
+  from Settings → Modules. Either way the module starts off and existing
+  installations are unaffected on upgrade, matching this rotation's own
+  CLAUDE.md Pitfall #19 concern (a switch must have a reader, and must not
+  silently change existing behavior) — but "settings-only", not "offered
+  during setup", is the accurate description.
 - `admin_hub_service.py`'s metric resolver now skips the
   medical-screening lapse/overdue tiles when the module is off
   (`requires_module="medical_screening"`) — display-only, and the
@@ -72,12 +75,32 @@ to the existing `<ProtectedRoute requiredPermission="medical_screening.view">`.
 Confirmed in `ProtectedRoute.tsx:178-224` that the permission/role checks
 run strictly before the module gate (`if (requiredModule)` at line 219) —
 additive, not a weakening, the same ordering already verified for MP-08's
-equivalent change. `Dashboard.tsx`'s `loadMyScreenings` now skips calling
-`medicalScreeningService.getMyCompliance()` when the module is off
-client-side — a UX/API-call-avoidance convenience with no security
+equivalent change. `Dashboard.tsx`'s `loadMyScreenings` skips calling
+`medicalScreeningService.getMyCompliance()` when `isModuleOn('medical_screening')`
+is false — a UX/API-call-avoidance convenience with no security
 implication, since `/compliance/me` was already safe by construction (no id
 parameter, subject is always the caller) and still requires authentication
 regardless of the module flag.
+
+**Correction (Codex review on this PR):** that skip is not universal.
+`useEnabledModules.ts:52,68` makes `isModuleOn` return `true` for every
+module — including `medical_screening` — whenever the organization has no
+stored module configuration at all (`enabledModules === null`, distinct
+from "configured, and this module is off"; the hook's own comment names
+this "permissive when unconfigured", by design, and applies to every
+module's nav gate, not something introduced by this change). In that
+narrow, genuinely-unconfigured state, `loadMyScreenings` does call the
+endpoint even though the backend's `ModuleSettings.medical_screening`
+defaults to `False` and will reject it — so the two gates can disagree for
+an org that has never touched Settings → Modules. This is not a security
+gap: the backend module gate is authoritative and correctly returns 403,
+and `loadMyScreenings`'s `catch` silently clears the state to `null`
+(`Dashboard.tsx:643-649`, written to avoid showing a stale answer on any
+failure) rather than throwing, crashing, or leaking anything. It is a
+UX-only mismatch — one predictably-failing request for an org in that
+transient state — and changing `useEnabledModules`' permissive-when-
+unconfigured default is a cross-cutting change to every module's nav gate,
+not something scoped to medical screening or to this PR.
 
 No migrations touch `screening_records`/`screening_requirements` since pass
 1's merge. Completion gate: `test_module_api_gating.py` (parity test
