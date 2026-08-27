@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**257 tables · 4398 columns · 831 foreign keys**
+**258 tables · 4408 columns · 834 foreign keys**
 
 ---
 
@@ -420,9 +420,10 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 | Table | Model | Columns | Purpose |
 |---|---|---|---|
+| [`department_message_deliveries`](#department_message_deliveries) | `DepartmentMessageDelivery` | 9 | Durable, per-recipient claim and result for an external delivery. |
 | [`department_message_reads`](#department_message_reads) | `DepartmentMessageRead` | 5 | Tracks which users have read/acknowledged a department message. |
 | [`department_messages`](#department_messages) | `DepartmentMessage` | 19 | Department Message model |
-| [`notification_logs`](#notification_logs) | `NotificationLog` | 19 | Notification Log model |
+| [`notification_logs`](#notification_logs) | `NotificationLog` | 20 | Notification Log model |
 | [`notification_rules`](#notification_rules) | `NotificationRule` | 12 | Notification Rule model |
 | [`push_subscriptions`](#push_subscriptions) | `PushSubscription` | 10 | A single browser/device Web Push endpoint belonging to a user. |
 
@@ -6093,6 +6094,33 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 ## Notifications
 
+### `department_message_deliveries`
+
+**DepartmentMessageDelivery** · `app/models/notification.py`
+
+> Durable, per-recipient claim and result for an external delivery.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `message_id` | VARCHAR(36) | no | FK, IDX |  | → `department_messages.id` ON DELETE CASCADE |
+| `recipient_id` | VARCHAR(36) | no | FK |  | → `users.id` ON DELETE CASCADE |
+| `channel` | VARCHAR(16) | no |  |  |  |
+| `status` | VARCHAR(16) | no |  | `pending` |  |
+| `idempotency_key` | VARCHAR(255) | no | UQ |  |  |
+| `attempted_at` | DATETIME | yes |  | `now()` |  |
+| `delivered_at` | DATETIME | yes |  |  |  |
+| `error` | TEXT | yes |  |  |  |
+
+**Indexes**
+
+- `idx_dept_msg_delivery_message` (`message_id`)
+
+**Constraints**
+
+- UNIQUE `uq_department_message_deliveries_idempotency_key` (`idempotency_key`)
+- UNIQUE `uq_dept_msg_delivery_recipient_channel` (`message_id`, `recipient_id`, `channel`)
+
 ### `department_message_reads`
 
 **DepartmentMessageRead** · `app/models/notification.py`
@@ -6162,6 +6190,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `rule_id` | VARCHAR(36) | yes | FK, IDX |  | → `notification_rules.id` ON DELETE SET NULL |
 | `recipient_id` | VARCHAR(36) | yes | FK, IDX |  | → `users.id` ON DELETE SET NULL |
 | `recipient_email` | VARCHAR(255) | yes |  |  |  |
+| `department_message_id` | VARCHAR(36) | yes | FK |  | → `department_messages.id` ON DELETE CASCADE |
 | `channel` | ENUM(`email`, `in_app`) | no |  |  |  |
 | `subject` | VARCHAR(500) | yes |  |  |  |
 | `message` | TEXT | yes |  |  |  |
@@ -6184,6 +6213,10 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 - `ix_notification_logs_category` (`category`)
 - `ix_notification_logs_expires_at` (`expires_at`)
 - `ix_notification_logs_rule_id` (`rule_id`)
+
+**Constraints**
+
+- UNIQUE `uq_notif_dept_message_recipient_channel` (`department_message_id`, `recipient_id`, `channel`)
 
 ### `notification_rules`
 
@@ -9107,7 +9140,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 Every foreign key in the schema, grouped by the table it points at — the map of which id lives where.
 
-### → `users` (310 references)
+### → `users` (311 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -9166,6 +9199,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `course_cohort_members` | `user_id` | CASCADE | no |
 | `course_cohorts` | `created_by` | SET NULL | yes |
 | `course_cohorts` | `generated_by` | SET NULL | yes |
+| `department_message_deliveries` | `recipient_id` | CASCADE | no |
 | `department_message_reads` | `user_id` | CASCADE | no |
 | `department_messages` | `posted_by` | SET NULL | yes |
 | `departure_clearance_items` | `resolved_by` | NO ACTION | yes |
@@ -9981,6 +10015,14 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `expense_line_items` | `budget_id` | SET NULL | yes |
 | `purchase_requests` | `budget_id` | SET NULL | yes |
 
+### → `department_messages` (3 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `department_message_deliveries` | `message_id` | CASCADE | no |
+| `department_message_reads` | `message_id` | CASCADE | no |
+| `notification_logs` | `department_message_id` | CASCADE | yes |
+
 ### → `equipment_check_templates` (3 references)
 
 | From table | Column | On delete | Nullable |
@@ -10233,12 +10275,6 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 |---|---|---|---|
 | `course_cohort_classes` | `course_class_id` | SET NULL | yes |
 
-### → `department_messages` (1 references)
-
-| From table | Column | On delete | Nullable |
-|---|---|---|---|
-| `department_message_reads` | `message_id` | CASCADE | no |
-
 ### → `dues_schedules` (1 references)
 
 | From table | Column | On delete | Nullable |
@@ -10461,6 +10497,7 @@ These tables are not directly tenant-scoped. Each must reach its organization th
 | `check_template_items` | `apparatus_equipment`, `check_template_compartments`, `inventory_items`, `users` |
 | `compliance_profiles` | `compliance_configs` |
 | `country_block_rules` | `users` |
+| `department_message_deliveries` | `department_messages`, `users` |
 | `department_message_reads` | `department_messages`, `users` |
 | `email_attachments` | `email_templates`, `users` |
 | `equipment_kit_items` | `equipment_kits`, `inventory_categories`, `inventory_items` |
