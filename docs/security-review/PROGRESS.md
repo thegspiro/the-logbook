@@ -25,20 +25,32 @@ branch `claude/security-review-sf-04-pass2`. No findings, no code changes
 
 ### 2026-08-27 — Feature 04 (Storefront & payments), pass 2 — no findings
 
-Only 2 of the 7 in-scope files changed since pass 1: `storefront.py` (two
-new display fields) and `storefront_service.py` (an embroidery
-thread-color/personalization-method feature, closed-enum validated end to
-end — Pydantic schemas type the fields as the enums directly, every read
-path normalizes defensively, the CSV export's new columns resolve only to
-fixed enum-label strings, never client input; plus a variant `sort_order`
-fix making it fully server-computed instead of honoring a client value).
-SF-6's separation-of-duties guard in `record_payment` re-verified present
-and unmodified; SF-5's guard tests still pass. No findings, no code
-changes. Completion gate: flake8/black/isort clean,
-`validate_migrations.py --strict` passed, 644/644 scoped tests pass (up
-from 533 at pass 1, reflecting the new feature's own coverage), full
-backend suite 9040 passed / 22 skipped (pre-existing) / 0 failed. No
-frontend files touched. Full detail in
+Only 2 of the 7 pass-1-declared files changed on their own: `storefront.py`
+(two new display fields) and `storefront_service.py` (an embroidery
+thread-color/personalization-method feature plus a variant `sort_order`
+fix making it fully server-computed). SF-6's separation-of-duties guard in
+`record_payment` re-verified present and unmodified; SF-5's guard tests
+still pass.
+
+**Update:** Codex reviewed PR #1935 and found the initial pass scoped its
+diff only to the 7 files pass 1's header literally listed, missing that
+the same embroidery feature also touched `models/storefront.py`,
+`schemas/storefront.py`, a new `utils/size_order.py`, 6 migrations
+(including 3 seeded-grant backfills needing Pitfall #23 scrutiny), and 11
+frontend files — and the doc had wrongly claimed "no frontend files
+touched." Re-swept properly: all of it is clean — closed-enum validation
+end to end on both backend and frontend, the grant migrations correctly
+`is_system`/frozen-snapshot scoped, no raw client value ever reaches a
+frontend `style` attribute (always resolved server-side or from a fixed
+catalog), no `dangerouslySetInnerHTML`. No findings, no code changes;
+`tsc`/`eslint`/frontend tests now actually run and pass. Replied and
+resolved.
+
+Completion gate: flake8/black/isort clean, `validate_migrations.py
+--strict` passed, 644/644 scoped backend tests pass (up from 533 at pass
+1), full backend suite 9040 passed / 22 skipped (pre-existing) / 0 failed,
+`tsc --noEmit` 0 errors, `eslint src/modules/storefront/` 0 errors,
+`vitest run src/modules/storefront/` 170/170 passed. Full detail in
 `SF-04-storefront-payments.md`. Next: 05 finance & approvals, once this PR
 merges.
 
