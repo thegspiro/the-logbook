@@ -16,8 +16,7 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-None — PR #1912 (feature 29, reports & analytics) merged. Feature 30
-(onboarding) starting next.
+PR #1913 (feature 30, onboarding) — open, awaiting CI/review.
 
 ---
 
@@ -158,6 +157,70 @@ Next: 30 onboarding.
 
 ---
 
+### 2026-08-27 — Feature 30 (Onboarding) — PR #1913 opened
+
+Two parallel background agents did the first-ever true line-by-line read of
+this module (both prior review passes explicitly skipped it due to file
+size) — one covering `api/v1/onboarding.py` (2,255 L, endpoint layer), one
+covering `services/onboarding.py` + `models/onboarding.py` +
+`utils/onboarding_security.py` + org-template services (service layer).
+Extra scrutiny on the ~15%/~11% growth in each file since the last audit,
+given this is unauthenticated bootstrap surface (creates the first org,
+owner, and roles before any auth exists).
+
+No regressions in ONB-1 through ONB-9/ONB2-1/ONB2-2. One doc correction:
+ONB-8's reset-re-authentication sub-item was listed open in both prior docs,
+but the code already fixed it (landed 2026-08-21, commit `3d445eb2`,
+undocumented at the time) — corrected in both docs and
+`KNOWN_LIMITATIONS.md`.
+
+Six findings fixed:
+
+- ONB2-30-1 (HIGH): `ITTeamRequest.it_team` had no length cap or item
+  schema, unlike every sibling collection in the file — a single request
+  could drive unbounded password-hashing/DB work at `/complete`. Fixed with
+  a typed `ITTeamMemberRequest` + `max_length=50` (matching
+  stations/apparatus); also fixed a bug the change surfaced along the way —
+  `save_it_team` was about to store pydantic model instances directly into
+  a JSON column, which isn't serializable.
+- ONB2-30-2 (HIGH/MED): `RolesSetupRequest.roles`/`PositionsSetupRequest.positions`
+  had no cap — immediate unbounded `Role` row creation on a single POST.
+  Fixed with `max_length=200`.
+- ONB2-30-3 (LOW): six of twelve `/session/*` mutation endpoints
+  (department, email, file-storage, auth, it-team, modules) never got the
+  post-completion `needs_onboarding()` replay guard their siblings have.
+  Fixed — added to all six.
+- ONB2-30-4 (LOW/MED): all 7 rate-limited onboarding routes shared one
+  `check_rate_limit` "auth" bucket — retrying `/test/email` or `/reset` a
+  few times could lock the whole bootstrap process out for 30 minutes.
+  Fixed with a scoped wrapper per route, matching the established
+  `_rate_limit_admin_reset` pattern.
+- ONB2-30-5 (LOW): undocumented `# noqa: E712` in `template_service.py`
+  that the prior ONB2-1/ONB2-2 sweeps never reached (they only covered
+  `api/v1/onboarding.py`). Swept.
+- ONB-8 residual (template mass-assignment fragility, previously flagged):
+  `template_service` create/update now strip `organization_id`/`created_by`
+  defensively and route updates through `apply_updates(skip=...)` instead
+  of a blind `setattr` loop.
+
+Plus a NIT: `"incidents"` was listed in both `ONBOARDING_SETTINGS_ONLY_MODULES`
+and `ONBOARDING_LEGACY_MODULES`, contradicting the latter's own "not a
+ModuleSettings field" docstring (inert, but fixed for consistency).
+
+Still flagged: ONB-7 (role editor accepts client-supplied
+permissions/priority/system-flag — product decision), ONB-8's audit
+durability sub-point (transaction-boundary change, deferred for care),
+pre-existing role/position dedup gap and `/organization`'s missing
+`except Exception` (both app-review pass 2, unchanged).
+
+Completion gate: 106/106 scoped tests (`-k "onboard or template_service"`),
+8962/8962 full suite (22 pre-existing skips), black/isort/flake8 clean,
+migration validation passed (no schema change).
+
+Next: 31 scheduled tasks, once #1913 merges.
+
+---
+
 ## Relationship to the existing review passes
 
 This rotation is **not** a replacement for the two that came before it, and it
@@ -212,7 +275,7 @@ data-carrying modules, then the supporting infrastructure.
 | 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                         | ✅              |
 | 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`                                                                    | ✅              |
 | 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                              | ✅              |
-| 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (24 unauth bootstrap routes)                                                                                             | ⬜              |
+| 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (24 unauth bootstrap routes)                                                                                             | ⏳              |
 | 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                   | ⬜              |
 | 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                  | ⬜              |
 | 33  | Core infrastructure       | CORE   | `core/security_middleware.py`, `core/middleware.py`, `core/database.py`, `core/config.py`                                                       | ⬜              |
