@@ -23,6 +23,11 @@ from app.services.messaging_service import MessagingService
 router = APIRouter()
 
 
+def _raise_message_error(error: str) -> None:
+    """Expose service validation failures as clear client errors."""
+    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
+
+
 # ============================================
 # Pydantic Schemas
 # ============================================
@@ -223,7 +228,7 @@ async def create_message(
         scheduled_at=data.scheduled_at,
     )
     if error:
-        raise HTTPException(status_code=400, detail=error)
+        _raise_message_error(error)
     await log_audit_event(
         db=db,
         event_type="message_created",
@@ -343,7 +348,7 @@ async def update_message(
         message_id, current_user.organization_id, updates
     )
     if error:
-        raise HTTPException(status_code=400, detail=error)
+        _raise_message_error(error)
     await log_audit_event(
         db=db,
         event_type="message_updated",

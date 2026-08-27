@@ -1,7 +1,7 @@
 """Add idempotency records for department message delivery.
 
 Revision ID: d4e5f6a7b8c9
-Revises: 8fb3757b80ec
+Revises: c7e2b9a41f83
 Create Date: 2026-08-26 16:00:00
 """
 
@@ -9,7 +9,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision = "d4e5f6a7b8c9"
-down_revision = "8fb3757b80ec"
+down_revision = "c7e2b9a41f83"
 branch_labels = None
 depends_on = None
 

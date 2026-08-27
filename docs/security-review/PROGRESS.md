@@ -16,12 +16,145 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-Feature 01 (auth & session lifecycle, pass 2) — [PR #1929](https://github.com/thegspiro/the-logbook/pull/1929),
-branch `claude/security-review-auth-01-pass2`. No findings, no code changes
-(docs only). See log entry below and `AUTH-01-auth-session.md`'s "Pass 2"
-section.
+Feature 04 (storefront & payments, pass 2) — [PR #1935](https://github.com/thegspiro/the-logbook/pull/1935),
+branch `claude/security-review-sf-04-pass2`. No findings, no code changes
+(docs only). See log entry below and `SF-04-storefront-payments.md`'s
+"Pass 2" section.
 
 ---
+
+### 2026-08-27 — Feature 04 (Storefront & payments), pass 2 — no findings
+
+Only 2 of the 7 pass-1-declared files changed on their own: `storefront.py`
+(two new display fields) and `storefront_service.py` (an embroidery
+thread-color/personalization-method feature plus a variant `sort_order`
+fix making it fully server-computed). SF-6's separation-of-duties guard in
+`record_payment` re-verified present and unmodified; SF-5's guard tests
+still pass.
+
+**Update:** Codex reviewed PR #1935 and found the initial pass scoped its
+diff only to the 7 files pass 1's header literally listed, missing that
+the same embroidery feature also touched `models/storefront.py`,
+`schemas/storefront.py`, a new `utils/size_order.py`, 6 migrations
+(including 3 seeded-grant backfills needing Pitfall #23 scrutiny), and 11
+frontend files — and the doc had wrongly claimed "no frontend files
+touched." Re-swept properly: all of it is clean — closed-enum validation
+end to end on both backend and frontend, the grant migrations correctly
+`is_system`/frozen-snapshot scoped, no raw client value ever reaches a
+frontend `style` attribute (always resolved server-side or from a fixed
+catalog), no `dangerouslySetInnerHTML`. No findings, no code changes;
+`tsc`/`eslint`/frontend tests now actually run and pass. Replied and
+resolved.
+
+Completion gate: flake8/black/isort clean, `validate_migrations.py
+--strict` passed, 644/644 scoped backend tests pass (up from 533 at pass
+1), full backend suite 9040 passed / 22 skipped (pre-existing) / 0 failed,
+`tsc --noEmit` 0 errors, `eslint src/modules/storefront/` 0 errors,
+`vitest run src/modules/storefront/` 170/170 passed. Full detail in
+`SF-04-storefront-payments.md`. Next: 05 finance & approvals, once this PR
+merges.
+
+### 2026-08-27 — Feature 03 (Public surface & webhooks), pass 2 ✅ merged — PR #1934
+
+Merged. No findings — the three changed files (finance_approvals.py,
+legal.py, portal.py) were already-complete fixes for other rotation
+findings plus one new defense-in-depth improvement. Rotation row 03 -> done
+for pass 2. Next: 04 storefront & payments.
+
+### 2026-08-27 — Feature 03 (Public surface & webhooks), pass 2 — no findings
+
+Only 3 of the 12 in-scope files changed since pass 1: `finance_approvals.py`
+(a new fail-closed budget-limit error mapped to 409 — verified PUB-4's
+self-approval guard and the Pitfall-#27 locking read are both still present
+and correctly ordered ahead of it), `legal.py` (a correctness fix for
+independently-dated privacy/terms text, DOC-10 — no security-relevant
+change), and `portal.py` (a genuine new defense-in-depth fix: the portal's
+API-key-authenticated router now also checks the `public_info` module is
+enabled, closing a gap where feature 02's new `require_module` mechanism
+didn't reach this separately-mounted router — confirmed applied to all
+three relevant routes, correctly not applied to the two that don't need
+it). File count unchanged at 12, no new public endpoint. No findings, no
+code changes. Completion gate: flake8/black/isort clean,
+`validate_migrations.py --strict` passed, pass-1 guard tests 10/10 pass,
+366/366 broader scoped tests pass, full backend suite 9040 passed / 22
+skipped (pre-existing) / 0 failed. No frontend files touched. Full detail in
+`PUB-03-public-surface-webhooks.md`. Next: 04 storefront & payments, once
+this PR merges.
+
+### 2026-08-27 — Feature 02 (Permissions & roles), pass 2 ✅ merged — PR #1931
+
+Merged. Two HIGH privilege-escalation findings (PERM-3, PERM-4), both fixed;
+Codex's follow-up (PERM-3's fix could still generate spurious CRITICAL
+security alerts for an unresolvable prospect) also fixed and its thread
+resolved before merge. Rotation row 02 -> done for pass 2. Next: 03 public
+surface & webhooks.
+
+### 2026-08-27 — Feature 02 (Permissions & roles), pass 2 — 2 HIGH findings, both fixed
+
+Unlike feature 01, this feature's files grew substantially since pass 1 (up
+to +450 net lines in `org_chart_service.py`). Three parallel background
+agents reviewed org_chart, roles/role_service, and operational_ranks against
+the full diff; I reviewed `dependencies.py`'s new per-request auth/module
+caching and the `core/permissions.py` registry churn (new `EMT` rank, new
+`training.configure` permission with its Pitfall-#23-compliant migration)
+directly. org_chart and roles/role_service came back clean (one LOW
+informational note on dead code in role_service). operational_ranks
+surfaced two real HIGH findings, both independently verified by reading the
+actual code before fixing (per this rotation's standing rule) rather than
+trusting the agent report as-is:
+
+**PERM-3 (HIGH, fixed):** `POST /prospects/{id}/transfer` creates a full,
+live `User` account with a client-supplied `rank`, validated only for
+"is this rank configured" — never for whether the caller's permissions cover
+what that rank grants. Gated on `members.manage`/`prospective_members.manage`
+only, neither of which implies `security.manage`. A caller holding either
+could transfer a prospect in at `rank="fire_chief"` and mint a tenant-admin-
+equivalent account — the exact scenario `_enforce_rank_grant_ceiling`'s own
+docstring names for `create_member`, reachable through a second, unguarded
+door. Fixed by wiring the same (unmodified) ceiling helper into
+`transfer_prospect` before the service call.
+
+**PERM-4 (HIGH, fixed):** `OperationalRankService.update_rank` bulk-rewrites
+`User.rank` for every member currently holding a rank whose `rank_code` is
+renamed, with no ceiling check — renaming any currently-held rank to a
+reserved code like `fire_chief` retroactively escalates every one of its
+holders at once. Endpoint required only `settings.manage`. Fixed by
+enforcing the ceiling against the new code before the rename, only when the
+code actually changes (a rename to a non-reserved custom code, the common
+case, resolves to zero default permissions and passes trivially).
+
+Both fixes reuse `_enforce_rank_grant_ceiling` unmodified — no duplicated
+ceiling logic. Guard tests added to `test_privilege_ceiling_wiring.py`
+(source-inspection, matching this file's established pattern for exactly
+this failure class — the ORU-1/ORU-7d regressions it already guards were
+also "call site silently dropped", not broken helper logic), both verified
+to fail against the pre-fix endpoints. Two pre-existing tests needed
+updates for the new `request` parameter / extra `get_rank` lookup, not for
+any behavior change. Completion gate: flake8/black/isort clean,
+`validate_migrations.py --strict` passed, 945/945 scoped tests pass, full
+backend suite 9039 passed / 22 skipped (pre-existing) / 0 failed. No
+frontend files touched.
+
+**Update:** Codex reviewed PR #1931 and found the PERM-3 fix still let a
+caller generate a committed CRITICAL security alert for a prospect id that
+could never have been transferred (nonexistent, wrong-org, or already
+transferred) alongside `rank="fire_chief"` — not an escalation gap (still
+correctly blocked), but alert-noise that could degrade the monitoring
+channel's signal. Fixed by resolving and validating the prospect _before_
+the ceiling check, returning the same 404/400 the service would eventually
+have produced. New guard test verified to fail against the pre-correction
+ordering. Replied and resolved. Scoped tests re-run: 946/946 pass.
+
+Full detail in `PERM-02-permissions-roles.md`. Next: 03 public surface &
+webhooks, once this PR merges.
+
+### 2026-08-27 — Feature 01 (Auth & session lifecycle), pass 2 ✅ merged — PR #1929
+
+Merged. AUTH-3 (stale-response race, fixed) and AUTH-4 (unbounded roster
+query, flagged) both came from Codex's review, not the initial pass — see the
+"Update" note below. AUTH-4's thread was left open on the PR for the owner;
+it did not block the merge. Rotation row 01 -> done for pass 2. Next: 02
+permissions & roles.
 
 ### 2026-08-27 — Feature 01 (Auth & session lifecycle), pass 2
 
@@ -770,10 +903,10 @@ each row's prior PR is recorded in the Log, not repeated here.
 | #   | Feature                   | Prefix | Principal code                                                                                                                                  | Status |
 | --- | ------------------------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
 | 00  | Cross-cutting baseline    | SEC    | whole-codebase sweeps; see `SEC-00-cross-cutting-baseline.md`                                                                                   | ✅     |
-| 01  | Auth & session lifecycle  | AUTH   | `endpoints/auth.py`, `auth_service.py`, `mfa_service.py`, `oauth_service.py`                                                                    | ⏳     |
-| 02  | Permissions & roles       | PERM   | `dependencies.py`, `core/permissions.py`, `roles.py`, `operational_ranks.py`, `officers.py`, `org_chart.py`                                     | ⬜     |
-| 03  | Public surface & webhooks | PUB    | `api/public/*` (20 unauth routes), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`                                      | ⬜     |
-| 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                              | ⬜     |
+| 01  | Auth & session lifecycle  | AUTH   | `endpoints/auth.py`, `auth_service.py`, `mfa_service.py`, `oauth_service.py`                                                                    | ✅     |
+| 02  | Permissions & roles       | PERM   | `dependencies.py`, `core/permissions.py`, `roles.py`, `operational_ranks.py`, `officers.py`, `org_chart.py`                                     | ✅     |
+| 03  | Public surface & webhooks | PUB    | `api/public/*` (20 unauth routes), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`                                      | ✅     |
+| 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                              | ⏳     |
 | 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                     | ⬜     |
 | 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | ⬜     |
 | 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ⬜     |

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { DialogPanel } from '../components/ux/DialogPanel';
 import { useNavigate, useSearchParams } from 'react-router';
 import {
@@ -137,6 +137,7 @@ const NotificationsPage: React.FC = () => {
   const [summary, setSummary] = useState<NotificationsSummary | null>(null);
   const [myNotifications, setMyNotifications] = useState<NotificationLogRecord[]>([]);
   const [inboxTotal, setInboxTotal] = useState(0);
+  const markingReadIds = useRef(new Set<string>());
 
   // UI states
   const [loading, setLoading] = useState(true);
@@ -309,12 +310,18 @@ const NotificationsPage: React.FC = () => {
   };
 
   const handleMarkInboxNotificationRead = async (logId: string) => {
+    if (markingReadIds.current.has(logId)) return;
+    const notification = myNotifications.find((item) => item.id === logId);
+    if (!notification || notification.read) return;
+    markingReadIds.current.add(logId);
     try {
       await notificationsService.markMyNotificationRead(logId);
       setMyNotifications((prev) => prev.map((n) => (n.id === logId ? { ...n, read: true } : n)));
       decrementGlobalUnread();
     } catch {
       setError('Failed to mark notification as read');
+    } finally {
+      markingReadIds.current.delete(logId);
     }
   };
 
@@ -568,9 +575,7 @@ const NotificationsPage: React.FC = () => {
                     <NotificationCard
                       key={notification.id}
                       notification={notification}
-                      onMarkRead={(id) => {
-                        void handleMarkInboxNotificationRead(id);
-                      }}
+                      onMarkRead={handleMarkInboxNotificationRead}
                       onTogglePin={(id, pinned) => {
                         void handleTogglePin(id, pinned);
                       }}

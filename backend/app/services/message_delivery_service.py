@@ -137,6 +137,16 @@ class MessageDeliveryService:
         additionally best-effort so a failure in one doesn't suppress the rest.
         """
         try:
+            expires_at = getattr(message, "expires_at", None)
+            if expires_at is not None:
+                if expires_at.tzinfo is None:
+                    expires_at = expires_at.replace(tzinfo=timezone.utc)
+                else:
+                    expires_at = expires_at.astimezone(timezone.utc)
+                if expires_at <= datetime.now(timezone.utc):
+                    logger.info("Skipping expired department message {}", message.id)
+                    return
+
             # Reuse the exact targeting the inbox uses so escalation and in-app
             # visibility never disagree about who the audience is.
             from app.services.messaging_service import MessagingService

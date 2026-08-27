@@ -1,6 +1,118 @@
 # Security Review — Storefront & Payments
 
-**Prefix:** `SF` · **Iteration:** 04 · **Reviewed:** 2026-08-25 · **PR:** #1807
+**Prefix:** `SF` · **Iteration:** 04 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2) · **PR:** #1807 (pass 1)
+
+---
+
+## Pass 2 (2026-08-27)
+
+**Scope correction (Codex review on PR #1935):** the first draft of this
+section scoped its diff to only the 7 files pass 1's header literally
+listed under "Backend"/"Frontend", missing that a real feature had landed
+touching this domain's models, schemas, a new utility module, six
+migrations, and eleven frontend files — none of which the security-review
+command's own procedure permits skipping (it asks for everything that
+changed in the feature's area, not just the files a prior pass happened to
+enumerate). Re-swept properly below, and the frontend completion-gate rows
+this draft had wrongly marked "n/a" are now filled in for real.
+
+`git diff` between PR #1807's merge commit (`311aa196`) and this PR's base
+(`36ce7595`, the tip of `main` when this branch was cut) touches, in the
+storefront domain:
+
+- **Backend, declared scope:** `storefront.py` (+2, two new display fields
+  added to the product-serialization allowlist) and `storefront_service.py`
+  (+131/-6, the embroidery feature plus a size-aware variant-ordering fix).
+  The other 5 declared files are byte-identical.
+- **Backend, outside the literal file list, all part of the same feature:**
+  `app/models/storefront.py` (+17 — two new nullable `String` columns each
+  on `StoreProduct`/`StoreOrderItem`, no FK/`SET NULL` concern),
+  `app/schemas/storefront.py` (+98 — the Pydantic schema half of the
+  enum validation below), `app/utils/size_order.py` (new file, 162 L, a
+  pure regex-based size-label sort key with no injection surface — reviewed
+  in full), and 6 new/merge migrations (below).
+- **Frontend, previously unreviewed this pass:** `OrderDetailModal.tsx`,
+  `ProductFormModal.tsx`, `StoreProductCard.tsx`, `StoreWindowsTab.tsx`
+  (all changed), `ThreadSwatch.tsx` (new), `types/index.ts` (+107, type
+  mirrors of the backend enums), `utils/personalization.ts` (new),
+  `utils/threadPreview.ts` (new) — all read in full.
+
+**Embroidery thread color / personalization method is a closed-enum
+feature end to end**, on both sides of the API boundary:
+
+- Backend: `EmbroideryThreadColor`/`PersonalizationMethod` are `(str, Enum)`
+  types; the create/update Pydantic schemas type the fields as those enums
+  directly (an invalid value 422s before reaching the service); every read
+  path normalizes defensively via `normalize_thread_color`/
+  `normalize_personalization_method` (falls back to a default rather than
+  raising on an unrecognized stored value). The CSV export's two new
+  columns resolve only to fixed strings from the enum's own label table,
+  never client input — the existing `SafeCsvWriter` is unchanged.
+- Frontend: the product-edit picker (`ProductFormModal.tsx`) offers only
+  the fixed `EMBROIDERY_THREAD_COLORS`/`PERSONALIZATION_METHODS` arrays
+  (mirroring the backend enums); the one inline `style={{ backgroundColor:
+... }}`/`style={{ color: ... }}` per swatch (`ThreadSwatch.tsx`,
+  `StoreProductCard.tsx`) always resolves from that fixed catalog or from
+  `personalizationThreadColorHex`, which the backend computes server-side
+  from the same closed enum (`_resolve_thread_color_hex` model validator) —
+  never a raw client-supplied string reaching a `style` attribute. Member-
+  entered `personalizationText`/`trimmedText` renders as plain JSX text
+  content in every location (React's default escaping applies) — no
+  `dangerouslySetInnerHTML` anywhere in the diff. No `window.confirm`/
+  `alert`/`prompt`.
+- `size_order.py`'s regexes are simple and anchored (no nested quantifiers)
+  — no ReDoS surface — and only ever order already-fetched, already-org-
+  scoped rows; they make no access-control decision.
+
+**The 6 new migrations, all reviewed:** `add_embroidery_thread_color` and
+`add_personalization_method` each add two nullable `String` columns,
+correctly guarded on table existence (Pitfall #26) since `store_products`/
+`store_order_items` predate this and could theoretically not exist yet in
+a fresh-DB CI run. `settle_variant_size_order` re-sorts existing variant
+rows into size order using an inlined, frozen copy of the ranking (Pitfall
+#20 — a migration must keep transforming rows the way it did the day it
+ran, independent of `size_order.py`'s own freedom to grow new spellings
+later); table-existence guarded, `downgrade` is a documented no-op (the
+replaced values carried no information worth restoring). Two independent
+grant backfills (`a4f8c1b92d17`, `c4f8a2e70d19`) were written for the same
+bug from the same parent revision; the losing one is a documented no-op
+deferring to the other, which correctly follows the Pitfall #23 shape
+(`is_system`-scoped, rewrites a row only when its stored permissions still
+exactly equal a frozen `_PRIOR_DEFAULTS` snapshot). A third grant migration
+(`grant_corporate_storefront_access`) follows the identical shape for 13
+corporate positions that had no storefront grant at all. Two more are pure
+Alembic multi-head merges with no data changes. All guard tests
+(`test_corporate_storefront_grants.py`, `test_storefront_baseline_grants.py`,
+`test_storefront_grant_backfill.py`) pass.
+
+- **`_ordered_variants`** makes `sort_order` fully server-computed (size
+  order), where it previously honored a client-supplied `sort_order` on
+  create. Not itself a security boundary (display ordering only), but a
+  reduction in client influence over stored data, not an increase.
+- **SF-6's separation-of-duties guard is confirmed still present and
+  unmodified** — `record_payment`'s `assert_different_person(...)` call
+  (`storefront_service.py:1826`) sits outside this diff's changed line
+  ranges, re-verified by direct read. SF-5's guard tests
+  (`test_refund_amount_must_be_positive`/`_may_be_omitted`) still pass
+  unmodified.
+
+**No findings.** No code changes this pass — the changes since pass 1 are a
+well-built feature addition with proper enum-level validation throughout,
+on both the backend and frontend.
+
+**Completion gate (pass 2, corrected):** flake8/black/isort clean on
+`app/ tests/ alembic/`; `validate_migrations.py --strict` passed (381
+revisions, single head); scoped backend tests (`-k "storefront"`) 644
+passed, 1 skipped (pre-existing) — SF-6/SF-5's four guard tests and all six
+new grant/thread-color/variant-ordering guard-test files individually
+re-confirmed passing; full backend suite 9040 passed, 22 skipped
+(pre-existing), 0 failed. `tsc --noEmit` 0 errors; `eslint
+src/modules/storefront/` 0 errors; `vitest run src/modules/storefront/`
+15 files, 170 tests, all passed.
+
+---
+
+## Pass 1 (2026-08-25)
 
 **Backend:** `app/api/v1/endpoints/storefront.py` (1650 L, 48 endpoints),
 `app/services/storefront_service.py` (3184 L),
