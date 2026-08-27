@@ -49,6 +49,13 @@ from app.core.utils import generate_uuid
 class TestingCheckStatus(str, enum.Enum):
     """What a tester found on one page."""
 
+    # `python_classes = Test*` in pytest.ini means pytest tries to collect
+    # anything named like this as a test class, and warns once per test module
+    # that imports it. These are the only Test-prefixed classes in the models,
+    # so they opt out here rather than by loosening the collection pattern for
+    # the whole suite.
+    __test__ = False
+
     # Recorded but not yet judged — the row exists because a note or a sample
     # record id was typed before the page was opened.
     UNTESTED = "untested"
@@ -69,6 +76,8 @@ class TestingAccessExpectation(str, enum.Enum):
     somebody it should refuse becomes visible instead of being read as a pass.
     """
 
+    __test__ = False  # see TestingCheckStatus
+
     OPEN = "open"
     ALLOWED = "allowed"
     DENIED = "denied"
@@ -82,6 +91,8 @@ class TestingRun(Base):
     current one. Nothing is closed, so there is no "two active runs" state to
     repair, and every earlier run stays readable and exportable.
     """
+
+    __test__ = False  # see TestingCheckStatus
 
     __tablename__ = "testing_runs"
 
@@ -149,6 +160,8 @@ class TestingChecklistEntry(Base):
     two observations, and the one made by the account holding fewer grants is
     usually the interesting one.
     """
+
+    __test__ = False  # see TestingCheckStatus
 
     __tablename__ = "testing_checklist_entries"
 

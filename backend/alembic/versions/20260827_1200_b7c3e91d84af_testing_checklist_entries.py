@@ -23,12 +23,14 @@ import sqlalchemy as sa
 from alembic import op
 
 revision = "b7c3e91d84af"
-# Re-pointed onto main's head when this branch was brought up to date: main
-# gained c7e2b9a41f83 -> d4e5f6a7b8c9 from the same parent, and two heads make
-# `alembic upgrade head` abort outright — which takes out every CI job that
-# builds the schema, not merely the newest revision. Safe to re-point rather
-# than add a merge node: these two revisions have never left this branch.
-down_revision = "d4e5f6a7b8c9"
+# Re-pointed onto main's head each time this branch is brought up to date —
+# d4e5f6a7b8c9 first, now a7c4e9b13f58, both of which branched from the same
+# parent as this one. Two heads make `alembic upgrade head` abort outright,
+# which takes out every CI job that builds a schema rather than merely the
+# newest revision. Safe to re-point rather than add a merge node: these two
+# revisions have never left this branch, so no deployed database has recorded
+# a parentage this contradicts.
+down_revision = "a7c4e9b13f58"
 branch_labels = None
 depends_on = None
 
