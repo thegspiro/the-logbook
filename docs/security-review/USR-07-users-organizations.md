@@ -1,6 +1,187 @@
 # Security Review 07 — Users & Organizations
 
-**Prefix:** `USR` · **Iteration:** 07 · **Reviewed:** 2026-08-25 · **PR:** TBD
+**Prefix:** `USR` · **Iteration:** 07 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2) · **PR:** [#1814](https://github.com/thegspiro/the-logbook/pull/1814) (pass 1)
+
+---
+
+## Pass 2 (2026-08-27)
+
+Scoped to the **full domain** since pass 1's merge commit (`5f610f1f`,
+PR #1814): `endpoints/users.py`, `endpoints/organizations.py`,
+`endpoints/member_status.py`, `endpoints/member_leaves.py`,
+`services/user_service.py`, `services/organization_service.py`,
+`models/user.py`, `schemas/user.py`, every migration since (checked by
+content, not filename), and — since this module has **no dedicated
+frontend module directory** (noted in pass 1's own scope, and exactly the
+condition that hid `BallotBuilder.tsx` from ELEC-06's first pass) — a
+`git diff --stat` against `frontend/src/` broadly, grepped for
+user/organization/rank/membership terms, rather than any directory glob.
+
+Two real feature changes since pass 1, both reviewed in full:
+
+- **The member-class/status split** (`20260826_1400_f1a2b3c4d5e6`,
+  already read in full during ELEC-06's pass 2 for its voter-eligibility
+  angle) reaches this module directly: `models/user.py` owns the
+  `member_class`/`member_status` columns and the `_reconcile_membership`
+  listener, and `users.py`/`member_status.py`/`schemas/user.py` are where
+  a client actually sets them. Re-read from this module's angle
+  (authorization and tenant isolation, not eligibility):
+  - `MembershipClassificationFields`' two field validators reject any
+    value outside the closed `MemberClass`/`MemberStatus` vocabularies —
+    a typo 422s rather than silently landing a member in no class at all
+    (unlike `membership_type`, which doubles as a free-form,
+    org-configurable tier id and genuinely cannot be enum-constrained;
+    confirmed by reading `split_membership_type`'s own docstring on why).
+  - `member_class`/`member_status` were added to `update_user_profile`'s
+    `restricted_fields` set — gated behind the same
+    leadership/secretary/membership-coordinator check as `rank`,
+    `hire_date`, `station`. Without this, any `users.edit` holder could
+    move themselves from social/administrative into operational and vote
+    on ballots restricted to that class. Also added to the actual
+    `allowed_fields` write-set below the gate — the two sets are
+    separate, and a field present in one but not the other is a real,
+    previously-seen bug shape in this codebase (a permission-checked,
+    audited request that silently no-ops). Confirmed both sets agree.
+  - **A cross-endpoint race the first draft called closed — it wasn't,
+    on three separate counts (Codex, all confirmed and fixed).** An
+    administrative member holds no operational rank — a rank's default
+    permissions are unioned into effective permissions regardless of
+    class, so an unranked-by-policy administrative member with a rank
+    would carry chain-of-command authority they are by definition outside
+    of. Setting a rank and setting the class to administrative are
+    different requests that can each read an operational, rankless
+    member, each pass their own check, and each write only their own
+    column — landing a row that is administrative _and_ ranked, which
+    neither request alone would have allowed.
+    1. **A fourth, unlocked writer.** `MembershipTierService.advance_all`
+       — the scheduled/unattended tier-advancement scan — also clears
+       rank on a move into an administrative tier, but its batch
+       `select(User)` carried no `.with_for_update()` at all. The
+       `TestEveryWriterIsCovered`/`TestTheTwoWritersSerialize` tests this
+       pass's first draft cited as proof only covered three writers,
+       not four, and never actually asserted the fourth's lock (which did
+       not exist). Fixed: each member `advance_all` is about to mutate is
+       now re-selected with `.with_for_update()` immediately before the
+       write, re-checking eligibility under the lock rather than locking
+       the whole batch upfront (hundreds of rows for the scan's whole
+       duration would have been its own contention problem). Guarded by
+       a new `TestTheTwoWritersSerialize` test asserting the lock via
+       source inspection.
+    2. **The lock alone wasn't enough on a self-update.** Neither locking
+       `SELECT` in `update_user_profile`/`change_membership_type` carried
+       `populate_existing=True`. On a self-update specifically,
+       `get_current_user` already loaded the same `User` row into this
+       request's session; with `expire_on_commit=False` (`core/database.py`)
+       that instance sits in the identity map, and a re-`SELECT` for a row
+       already there returns the cached pre-lock object without copying
+       the new row's columns onto it — the lock is acquired at the SQL
+       level, but `user.member_class`/`user.rank` could still read
+       whatever they were before a concurrent request's commit. The exact
+       shape ELEC-06 already found and fixed in `quorum_service.py`; this
+       file hadn't caught up. Fixed on both locking reads.
+    3. **An explicit `member_class: null` was judged against the wrong
+       value.** `resulting_class = update_data.get("member_class") or
+user.member_class` can't distinguish "the client omitted this
+       field" from "the client explicitly cleared it" — both read back as
+       `None` from `.get()`. An explicit null is a request to reset to
+       `DEFAULT_CLASS` (operational, per `_reconcile_membership`), not
+       "leave the old class in place" — so clearing an administrative
+       member's class while assigning a rank in the same request was
+       wrongly refused, judged against the stale administrative value
+       instead of the operational one the save would actually land on.
+       Fixed by checking `"member_class" in update_data` before falling
+       back to the stored value.
+
+    All three fixed and guarded: `test_the_automatic_tier_advancement_
+locks_each_member_it_advances`, `populate_existing` assertions added to
+    the two existing lock tests, and
+    `test_an_explicit_null_class_is_judged_as_the_resulting_default`
+    (all `test_administrative_rank_restriction.py`).
+
+  - `_canonical_rank_or_400` closes a real, previously-live gap:
+    `User.rank` is a plain unconstrained `String(100)`, so a typo'd rank
+    silently resolved to no eligible seats and no default permissions
+    (looks like the app is broken, not like a typo). Now resolved through
+    `OperationalRankService.resolve_rank_code` at write time, on every
+    writer (`create_member`, `update_user_profile`) — confirmed the
+    canonicalized value is what gets persisted, not the caller's original
+    string, which is the exact reuse of a checked-then-discarded value
+    that would have re-created the bug one layer down.
+  - `_valid_emails`/scheduling-settings reconstruction in
+    `organization_service.py` is a read-path robustness fix (a legacy
+    `cc_emails` value saved before `EmailStr` tightened the field no
+    longer raises on every future settings read for that org, including
+    an unrelated module toggle) — confirmed read-only, never on the write
+    path, which stays strictly validated.
+  - `_trusted_stored_modules`/the module-settings dual-write recovery
+    logic: re-derived the "empty dict vs. real all-off configuration"
+    distinction (Pitfall #19 territory) and confirmed the two callers
+    (`_resolve_module_settings`, `get_enabled_modules`'s new `configured`
+    field) share the one implementation rather than risking drift.
+- **`schemas/user.py` — a production-breaking regression the first draft
+  read straight past (Codex, P1).** Refactoring `AdminUserCreate` to
+  inherit `MembershipClassificationFields` also silently dropped
+  `password`, `role_ids`, `send_welcome_email`, every address field
+  (`address_street`/`_city`/`_state`/`_zip`/`_country`), and
+  `emergency_contacts` — fields the diff's own removed lines showed, but
+  the first pass never checked against what `create_member` actually
+  reads. Pydantic discards a request key the schema no longer declares,
+  so `POST /api/v1/users` reached `if user_data.password` with no such
+  attribute and raised `AttributeError` on every single call — **member
+  creation was completely broken** on `main`. Fixed by restoring the
+  dropped fields to `AdminUserCreate`. Every existing test for this route
+  was source-inspection style (asserting a ceiling-check call appears in
+  the right order), so none of them constructed a real schema instance or
+  would ever have caught a field silently disappearing — confirmed by
+  checking each one before concluding this needed a new test, not a
+  stronger assertion on an existing one. Guarded by
+  `test_create_member_reads_only_declared_admin_user_create_fields`
+  (`test_privilege_ceiling_wiring.py`): extracts every `user_data.<attr>`
+  access from the route's own source via regex and asserts each is a
+  field `AdminUserCreate` declares, so a hardcoded field list can't rot
+  out of sync with either side and the two can never drift silently
+  again.
+- **`frontend/src/hooks/ranksCache.ts`/`useRanks.ts` — a real prior bug
+  fixed, not introduced.** The rank list cache was previously a single
+  module-level variable shared across the whole browser session,
+  unscoped by organization — a user who switched organizations without a
+  full page reload could see the _previous_ org's rank list in a
+  rank-selection dropdown. Now keyed by `(organizationId, activeOnly)`.
+  Also guards the exact stale-response race this rotation's AUTH-3 found
+  in `PhotoUseConsentPage.tsx` (a ref holding the current cache key,
+  checked before an async fetch's result is applied) — confirmed present
+  and correct by direct read, and covered by a dedicated
+  `does not expose ranks cached for another organization` test.
+
+**5 real findings, all fixed** (a production-breaking schema regression,
+three separate gaps in the class/rank invariant's enforcement — an
+unlocked fourth writer, a missing `populate_existing` on the two locked
+ones, and an explicit-null misjudgment — caught across two Codex review
+rounds on this PR). Everything else read either closed a real,
+previously-live gap (unconstrained rank strings, cross-org rank-cache
+leakage, a read-path settings crash) or correctly re-derived an
+already-solved pattern from elsewhere in the codebase (Pitfall #19
+dual-write recovery, the stale-response ref guard). All fixes
+independently verified against the real code (reproduced the
+`AttributeError` directly, traced the identity-map/`expire_on_commit`
+behavior the same way as the ELEC-06 quorum fix, traced
+`model_dump(exclude_unset=True)`'s omitted-vs-null distinction) before
+fixing — not taken on Codex's word.
+
+**Completion gate (pass 2):** flake8/black/isort clean on `app/ tests/
+alembic/`; `validate_migrations.py --strict` passed (single head); scoped
+backend tests (`-k "users or organization or member_status or
+member_class or rank or administrative or tier"`) 430 passed, 1 skipped
+(pre-existing), 0 failed; full backend suite 9110 passed, 22 skipped
+(pre-existing), 0 failed; `tsc --noEmit` 0 errors; `eslint` on every
+changed frontend file 0 errors; `vitest run` on the two new/changed
+frontend test files 9 passed. Every new/modified guard test confirmed to
+fail against the pre-fix code via `git stash` before being counted as
+covering its finding.
+
+---
+
+## Pass 1 (2026-08-25)
 
 **Backend:** `api/v1/endpoints/users.py` (2,484 L, 23 routes),
 `api/v1/endpoints/organizations.py` (1,272 L, 19 routes),

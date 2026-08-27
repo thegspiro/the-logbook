@@ -23,31 +23,40 @@ import pytest
 from fastapi import Depends, FastAPI
 from httpx import ASGITransport, AsyncClient
 
-from app.api.dependencies import (
-    get_optional_current_user,
-    require_module,
-)
+from app.api.dependencies import require_module
 from app.core.database import get_db
 from app.core.error_codes import CodedHTTPException, ErrorCode
 
 ORG = "org-a"
 
 
-def _app(*, user, enabled):
-    """A one-route app behind the same gate the real routers mount."""
+def _app(*, user=None, enabled, user_error=None):
+    """A one-route app behind the same gate the real routers mount.
+
+    ``get_optional_current_user`` is patched at the module level, not via
+    ``app.dependency_overrides``: ``get_request_enabled_modules`` calls it
+    directly (a plain call it can wrap in try/except) rather than through a
+    ``Depends`` of its own, precisely so an invalid/expired credential can
+    be caught here instead of raising before the gate's body ever runs —
+    ``dependency_overrides`` only intercepts FastAPI's own Depends graph.
+    """
     api = FastAPI()
 
     @api.get("/thing", dependencies=[Depends(require_module("finance", "Finance"))])
     async def read_thing():
         return {"ok": True}
 
-    api.dependency_overrides[get_optional_current_user] = lambda: user
     api.dependency_overrides[get_db] = lambda: SimpleNamespace()
     modules = SimpleNamespace(enabled_modules=enabled)
-    return api, patch(
+    user_patch = patch(
+        "app.api.dependencies.get_optional_current_user",
+        new=AsyncMock(side_effect=user_error, return_value=user),
+    )
+    modules_patch = patch(
         "app.services.organization_service.OrganizationService.get_enabled_modules",
         new=AsyncMock(return_value=modules),
     )
+    return api, user_patch, modules_patch
 
 
 async def _get(app):
@@ -58,8 +67,8 @@ async def _get(app):
 
 async def test_a_disabled_module_refuses_the_request():
     user = SimpleNamespace(id="u1", organization_id=ORG)
-    app, modules = _app(user=user, enabled=["members", "events"])
-    with modules:
+    app, user_patch, modules_patch = _app(user=user, enabled=["members", "events"])
+    with user_patch, modules_patch:
         response = await _get(app)
 
     assert response.status_code == 403
@@ -87,8 +96,8 @@ async def test_the_refusal_carries_its_own_error_code():
 async def test_an_enabled_module_is_served_normally():
     """The gate has to let the enabled case through, or it is just a removal."""
     user = SimpleNamespace(id="u1", organization_id=ORG)
-    app, modules = _app(user=user, enabled=["members", "finance"])
-    with modules:
+    app, user_patch, modules_patch = _app(user=user, enabled=["members", "finance"])
+    with user_patch, modules_patch:
         response = await _get(app)
 
     assert response.status_code == 200
@@ -98,8 +107,8 @@ async def test_an_enabled_module_is_served_normally():
 async def test_the_error_names_the_module_not_the_internal_key():
     """An officer reads this, so it says "Finance", not "finance"."""
     user = SimpleNamespace(id="u1", organization_id=ORG)
-    app, modules = _app(user=user, enabled=[])
-    with modules:
+    app, user_patch, modules_patch = _app(user=user, enabled=[])
+    with user_patch, modules_patch:
         body = str((await _get(app)).json())
 
     assert "Finance module" in body
@@ -113,9 +122,38 @@ async def test_a_request_with_no_session_is_not_turned_into_a_401():
     session — the token authorizes them. A gate built on the mandatory
     current-user dependency would reject them before their own handler ran.
     """
-    app, modules = _app(user=None, enabled=[])
+    app, user_patch, modules_patch = _app(user=None, enabled=[])
     # No organization lookup should even be attempted for an anonymous caller.
-    with modules as mocked:
+    with user_patch, modules_patch as mocked:
+        response = await _get(app)
+
+    assert response.status_code == 200
+    mocked.assert_not_awaited()
+
+
+async def test_an_invalid_session_cookie_does_not_block_a_public_route_either():
+    """A voter clicking an emailed ballot link may also carry a stale/expired
+    ``access_token`` cookie from an unrelated, since-ended main-app session.
+
+    ``get_optional_current_user`` deliberately raises for a credential that
+    is present but rejected rather than silently treating it as anonymous
+    (right for routes that read who is asking). But that raise happens
+    before ``require_module``'s own body runs, and for the module flag
+    specifically an unusable session carries no more organization
+    information than no session at all -- so it must not turn a public
+    token route into a 401 either, the same as the true-anonymous case
+    above.
+    """
+    from app.core.error_codes import CodedHTTPException as _Coded
+    from app.core.error_codes import ErrorCode as _Code
+
+    invalid_session = _Coded(
+        status_code=401,
+        detail="Could not validate credentials",
+        error_code=_Code.AUTH_SESSION_INVALID,
+    )
+    app, user_patch, modules_patch = _app(enabled=[], user_error=invalid_session)
+    with user_patch, modules_patch as mocked:
         response = await _get(app)
 
     assert response.status_code == 200
@@ -132,10 +170,12 @@ async def test_the_module_lookup_happens_once_per_request():
         return {"ok": True}
 
     user = SimpleNamespace(id="u1", organization_id=ORG)
-    api.dependency_overrides[get_optional_current_user] = lambda: user
     api.dependency_overrides[get_db] = lambda: SimpleNamespace()
     modules = SimpleNamespace(enabled_modules=["finance"])
     with patch(
+        "app.api.dependencies.get_optional_current_user",
+        new=AsyncMock(return_value=user),
+    ), patch(
         "app.services.organization_service.OrganizationService.get_enabled_modules",
         new=AsyncMock(return_value=modules),
     ) as mocked:

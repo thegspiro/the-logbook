@@ -64,19 +64,20 @@ const BALLOT_TYPE_LABELS: Record<string, string> = {
 
 // ─── Shared constants ───────────────────────────────────────────
 
-// Two different questions, deliberately labelled as such.
+// `administrative` and `social` are the member's **class** alone — what kind
+// of member they are — answered for every standing. `regular`, `life` and
+// `probationary` are the member's **status** alone. `operational` is neither:
+// it is a legacy category preserved for its pre-split meaning
+// (membership_type == "active"), so it requires class == operational AND
+// status == regular — it does NOT include probationary, life or retired
+// members, even though those are all operational-class. Use `regular` (which
+// includes life) or a specific status option to reach a wider operational
+// slice.
 //
-// `operational`, `administrative` and `social` are the member's **class** —
-// what kind of member they are — and are answered for every standing, so
-// "operational" includes probationary, life and retired members. `regular`,
-// `life` and `probationary` are the member's **status**, and mean only
-// themselves.
-//
-// The labels have to say which is which. "Operational Members (Active)" was
-// accurate only while the two facts shared one column and "operational" could
-// not mean anything wider than active; keeping that wording now would have an
-// administrator choose what reads as active-only and send the ballot to a
-// materially broader electorate.
+// The labels have to say which is which, and get `operational`'s narrower
+// meaning right — a label implying it spans every status would have an
+// administrator omit probationary/life members from a ballot they intended
+// to include.
 //
 // See ElectionService._user_has_role_type() for the authoritative mapping and
 // app/utils/membership.py for the vocabulary.
@@ -88,7 +89,7 @@ const VOTER_TYPE_OPTIONS = [
   { value: 'probationary', label: 'Probationary Members (status)' },
   {
     value: 'operational',
-    label: 'Operational Members — any status, incl. probationary & life',
+    label: 'Operational Members (Regular status only)',
   },
   { value: 'administrative', label: 'Administrative Members — any status' },
   { value: 'social', label: 'Social / Associate Members — any status' },
