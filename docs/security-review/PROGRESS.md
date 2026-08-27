@@ -16,11 +16,59 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-None. Feature 01 (auth & session lifecycle, pass 2) merged as
-[PR #1929](https://github.com/thegspiro/the-logbook/pull/1929) — see log entry
-below. Next: 02 permissions & roles, pass 2.
+Feature 02 (permissions & roles, pass 2) — branch
+`claude/security-review-perm-02-pass2`, PR pending open. Two HIGH
+privilege-escalation findings (PERM-3, PERM-4), both fixed. See log entry
+below and `PERM-02-permissions-roles.md`'s "Pass 2" section.
 
 ---
+
+### 2026-08-27 — Feature 02 (Permissions & roles), pass 2 — 2 HIGH findings, both fixed
+
+Unlike feature 01, this feature's files grew substantially since pass 1 (up
+to +450 net lines in `org_chart_service.py`). Three parallel background
+agents reviewed org_chart, roles/role_service, and operational_ranks against
+the full diff; I reviewed `dependencies.py`'s new per-request auth/module
+caching and the `core/permissions.py` registry churn (new `EMT` rank, new
+`training.configure` permission with its Pitfall-#23-compliant migration)
+directly. org_chart and roles/role_service came back clean (one LOW
+informational note on dead code in role_service). operational_ranks
+surfaced two real HIGH findings, both independently verified by reading the
+actual code before fixing (per this rotation's standing rule) rather than
+trusting the agent report as-is:
+
+**PERM-3 (HIGH, fixed):** `POST /prospects/{id}/transfer` creates a full,
+live `User` account with a client-supplied `rank`, validated only for
+"is this rank configured" — never for whether the caller's permissions cover
+what that rank grants. Gated on `members.manage`/`prospective_members.manage`
+only, neither of which implies `security.manage`. A caller holding either
+could transfer a prospect in at `rank="fire_chief"` and mint a tenant-admin-
+equivalent account — the exact scenario `_enforce_rank_grant_ceiling`'s own
+docstring names for `create_member`, reachable through a second, unguarded
+door. Fixed by wiring the same (unmodified) ceiling helper into
+`transfer_prospect` before the service call.
+
+**PERM-4 (HIGH, fixed):** `OperationalRankService.update_rank` bulk-rewrites
+`User.rank` for every member currently holding a rank whose `rank_code` is
+renamed, with no ceiling check — renaming any currently-held rank to a
+reserved code like `fire_chief` retroactively escalates every one of its
+holders at once. Endpoint required only `settings.manage`. Fixed by
+enforcing the ceiling against the new code before the rename, only when the
+code actually changes (a rename to a non-reserved custom code, the common
+case, resolves to zero default permissions and passes trivially).
+
+Both fixes reuse `_enforce_rank_grant_ceiling` unmodified — no duplicated
+ceiling logic. Guard tests added to `test_privilege_ceiling_wiring.py`
+(source-inspection, matching this file's established pattern for exactly
+this failure class — the ORU-1/ORU-7d regressions it already guards were
+also "call site silently dropped", not broken helper logic), both verified
+to fail against the pre-fix endpoints. Two pre-existing tests needed
+updates for the new `request` parameter / extra `get_rank` lookup, not for
+any behavior change. Completion gate: flake8/black/isort clean,
+`validate_migrations.py --strict` passed, 945/945 scoped tests pass, full
+backend suite run separately. No frontend files touched. Full detail in
+`PERM-02-permissions-roles.md`. Next: 03 public surface & webhooks, once
+this PR merges.
 
 ### 2026-08-27 — Feature 01 (Auth & session lifecycle), pass 2 ✅ merged — PR #1929
 
@@ -778,7 +826,7 @@ each row's prior PR is recorded in the Log, not repeated here.
 | --- | ------------------------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
 | 00  | Cross-cutting baseline    | SEC    | whole-codebase sweeps; see `SEC-00-cross-cutting-baseline.md`                                                                                   | ✅     |
 | 01  | Auth & session lifecycle  | AUTH   | `endpoints/auth.py`, `auth_service.py`, `mfa_service.py`, `oauth_service.py`                                                                    | ✅     |
-| 02  | Permissions & roles       | PERM   | `dependencies.py`, `core/permissions.py`, `roles.py`, `operational_ranks.py`, `officers.py`, `org_chart.py`                                     | 🔄     |
+| 02  | Permissions & roles       | PERM   | `dependencies.py`, `core/permissions.py`, `roles.py`, `operational_ranks.py`, `officers.py`, `org_chart.py`                                     | ⏳     |
 | 03  | Public surface & webhooks | PUB    | `api/public/*` (20 unauth routes), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`                                      | ⬜     |
 | 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                              | ⬜     |
 | 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                     | ⬜     |

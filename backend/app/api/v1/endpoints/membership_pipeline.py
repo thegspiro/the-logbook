@@ -19,6 +19,7 @@ from fastapi import (
     Form,
     HTTPException,
     Query,
+    Request,
     UploadFile,
     status,
 )
@@ -38,9 +39,14 @@ from app.api.prospect_privacy import (
     block_self_prospect_access,
     get_hidden_prospect_ids,
 )
+from app.api.v1.endpoints.users import (
+    _canonical_rank_or_400,
+    _enforce_rank_grant_ceiling,
+)
 from app.core.audit import log_audit_event
 from app.core.database import get_db
 from app.core.error_codes import CodedHTTPException, ErrorCode
+from app.core.security_middleware import get_client_ip
 from app.core.utils import safe_error_detail
 from app.models.event import Event
 from app.models.user import User
@@ -1488,6 +1494,7 @@ async def regress_prospect(
 async def transfer_prospect(
     prospect_id: UUID,
     data: TransferProspectRequest,
+    request: Request,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(
         require_permission("members.manage", "prospective_members.manage")
@@ -1498,6 +1505,19 @@ async def transfer_prospect(
 
     **Requires permission: members.manage or prospective_members.manage**
     """
+    # A rank grants its default permissions (_collect_user_permissions unions
+    # them in), so minting a new member at a rank is the same escalation
+    # surface as granting one directly -- a bare members.manage/
+    # prospective_members.manage holder must not transfer a prospect in at a
+    # rank that outranks their own permissions. Same check, same helper,
+    # users.create_member enforces on the other path that creates a User row.
+    canonical_rank = await _canonical_rank_or_400(
+        data.rank, str(current_user.organization_id), db
+    )
+    await _enforce_rank_grant_ceiling(
+        current_user, canonical_rank, db, get_client_ip(request)
+    )
+
     service = MembershipPipelineService(db)
     result = await service.transfer_to_membership(
         prospect_id=str(prospect_id),
@@ -1505,7 +1525,7 @@ async def transfer_prospect(
         transferred_by=current_user.id,
         username=data.username,
         membership_id=data.membership_id,
-        rank=data.rank,
+        rank=canonical_rank,
         station=data.station,
         role_ids=[str(rid) for rid in data.role_ids] if data.role_ids else None,
         send_welcome_email=data.send_welcome_email,

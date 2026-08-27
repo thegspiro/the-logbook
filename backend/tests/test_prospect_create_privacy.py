@@ -82,6 +82,8 @@ async def test_transfer_conflict_does_not_disclose_existing_member_identity():
     )
     data = TransferProspectRequest(username="new-member")
 
+    request = SimpleNamespace(client=None, headers={})
+
     with patch(
         "app.api.v1.endpoints.membership_pipeline.MembershipPipelineService",
         return_value=service,
@@ -90,6 +92,7 @@ async def test_transfer_conflict_does_not_disclose_existing_member_identity():
             await transfer_prospect(
                 prospect_id=uuid4(),
                 data=data,
+                request=request,
                 db=AsyncMock(),
                 current_user=current_user,
             )
