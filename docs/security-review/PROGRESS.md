@@ -16,11 +16,21 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-[PR #1950](https://github.com/thegspiro/the-logbook/pull/1950) — feature 08
-(membership pipeline, pass 2), no findings, documentation only. Awaiting
-merge before starting feature 09 (medical screening, PHI), pass 2.
+None. Feature 08 (membership pipeline, pass 2) fully merged as
+[PR #1950](https://github.com/thegspiro/the-logbook/pull/1950) — see log
+entry below. Confirmed on `origin/main` by ancestry check. Next: 09
+medical screening (PHI), pass 2.
 
 ---
+
+### 2026-08-27 — Feature 08 (Membership pipeline), pass 2 ✅ merged — PR #1950
+
+Merged, with the 2-bug fix commit (`6c824ed1`) included. Confirmed on
+`origin/main` by ancestry check. Both Codex P1 findings (missing
+role-grant ceiling on prospect transfer, missing row lock on the transfer's
+check-before-write) fixed, regression-tested, and their review threads
+replied to and resolved before merge. Rotation row 08 -> done. Next: 09
+medical screening (PHI).
 
 ### 2026-08-27 — Feature 08 (Membership pipeline), pass 2 — Codex caught 2 real P1 bugs, both fixed
 
