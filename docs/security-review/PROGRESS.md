@@ -16,7 +16,7 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-PR #1909 (feature 27, integrations) — open, awaiting CI/review.
+PR #1910 (feature 27, integrations) — open, awaiting CI/review.
 
 ---
 
@@ -1059,5 +1059,5 @@ re-runs the whole-codebase sweeps against whatever has landed since.
   findings; no code change this iteration. Full local completion gate
   green: existing 112/112 integrations+salesforce-scoped tests pass, no
   migration needed. Findings doc: `docs/security-review/INT-27-integrations.md`.
-  PR #1909 opened and subscribed. Next: 28 security, audit & IP, once
-  #1909 merges.
+  PR #1910 opened and subscribed. Next: 28 security, audit & IP, once
+  #1910 merges.

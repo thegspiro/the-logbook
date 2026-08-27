@@ -1,6 +1,6 @@
 # Security Review — Integrations
 
-**Prefix:** `INT` · **Iteration:** 27 · **Reviewed:** 2026-08-27 · **PR:** #1909
+**Prefix:** `INT` · **Iteration:** 27 · **Reviewed:** 2026-08-27 · **PR:** #1910
 
 **Backend:** `app/api/v1/endpoints/integrations.py` (711 L, 8 endpoints),
 `app/api/v1/endpoints/salesforce_sync.py` (586 L, 11 endpoints),
