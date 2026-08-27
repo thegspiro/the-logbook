@@ -16,7 +16,7 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-PR #1916 (feature 32, locations & kiosk) — open, awaiting CI/review.
+None — PR #1916 merged. Feature 33 (core infrastructure) starting next.
 
 ---
 
@@ -412,8 +412,22 @@ legal-doc failures confirmed unrelated in the prior feature's pass,
 reproduced identically with this diff stashed out) / 22 skipped, `tsc
 --noEmit` and `eslint` clean.
 
-Next: reply to/resolve any review threads, then merge and move to 33 core
-infrastructure.
+A Codex review of #1916's own fix commit found one real bug, the same
+root cause named above: the LOC2-32-3 retry's `self.db.rollback()` expired
+`ctx.user` (the same `User` object the caller and the endpoint's post-save
+audit-log call keep using), and a retry's `user_has_permission()` reading
+`user.positions` would then raise `MissingGreenlet` — turning the race into
+a _different_ 500. Fixed by explicitly refreshing `ctx.user` (columns, then
+the `positions` relationship) right after the rollback. Regression test
+extended; thread replied to and resolved.
+
+### 2026-08-27 — Feature 32 (Locations & kiosk) merged — PR #1916
+
+Merged (squash, `1a0a35c8`). LOC-1/2/4 re-confirmed, LOC-3 still flagged
+(now 3 gaps, mirrored to `KNOWN_LIMITATIONS.md`), `admin_hub_service.py`
+fully reviewed for the first time. Rotation row 32 -> done.
+
+Next: 33 core infrastructure.
 
 ---
 
@@ -473,7 +487,7 @@ data-carrying modules, then the supporting infrastructure.
 | 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                              | ✅              |
 | 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (24 unauth bootstrap routes)                                                                                             | ✅              |
 | 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                   | ✅              |
-| 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                  | ⏳              |
+| 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                  | ✅              |
 | 33  | Core infrastructure       | CORE   | `core/security_middleware.py`, `core/middleware.py`, `core/database.py`, `core/config.py`                                                       | ⬜              |
 | 34  | Frontend shared           | FE     | `utils/apiCache.ts`, module axios instances, `ProtectedRoute`, global stores                                                                    | ⬜              |
 
