@@ -16,7 +16,8 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-PR #1913 (feature 30, onboarding) — open, awaiting CI/review.
+None — PR #1913 (feature 30, onboarding) merged. Feature 31 (scheduled
+tasks) starting next.
 
 ---
 
@@ -157,7 +158,7 @@ Next: 30 onboarding.
 
 ---
 
-### 2026-08-27 — Feature 30 (Onboarding) — PR #1913 opened
+### 2026-08-27 — Feature 30 (Onboarding) merged — PR #1913
 
 Two parallel background agents did the first-ever true line-by-line read of
 this module (both prior review passes explicitly skipped it due to file
@@ -217,7 +218,9 @@ Completion gate: 106/106 scoped tests (`-k "onboard or template_service"`),
 8962/8962 full suite (22 pre-existing skips), black/isort/flake8 clean,
 migration validation passed (no schema change).
 
-Next: 31 scheduled tasks, once #1913 merges.
+**Update:** Codex was over its usage limit on this PR — no review produced. All checks (CI, Secret Scan, Supply Chain) green, no unresolved threads. Merged (squash, `5da36a73`).
+
+Next: 31 scheduled tasks.
 
 ---
 
@@ -275,7 +278,7 @@ data-carrying modules, then the supporting infrastructure.
 | 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                         | ✅              |
 | 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`                                                                    | ✅              |
 | 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                              | ✅              |
-| 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (24 unauth bootstrap routes)                                                                                             | ⏳              |
+| 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (24 unauth bootstrap routes)                                                                                             | ✅              |
 | 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                   | ⬜              |
 | 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                  | ⬜              |
 | 33  | Core infrastructure       | CORE   | `core/security_middleware.py`, `core/middleware.py`, `core/database.py`, `core/config.py`                                                       | ⬜              |
