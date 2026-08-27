@@ -929,3 +929,45 @@ class TestIPBlockingMiddlewareBlockedAttemptLogging:
         assert row.request_path == "/api/v1/events"
         assert row.request_method == "GET"
         db.commit.assert_awaited_once()
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_request_method_is_truncated_to_column_width(self):
+        """request_method is String(10). A malformed/overlong method must be
+        truncated before insert, or the commit fails and the exception
+        handler drops the row from both security logs (Codex P2, PR #1911)."""
+        request = MagicMock()
+        request.url.path = "/api/v1/events"
+        request.method = "X" * 50
+        request.headers = {"user-agent": "curl/8.0"}
+
+        db = MagicMock()
+        db.add = MagicMock()
+        db.commit = AsyncMock()
+
+        @asynccontextmanager
+        async def fake_session_factory():
+            yield db
+
+        geoip = MagicMock()
+        geoip.lookup_ip.return_value = {
+            "country_code": "RU",
+            "country_name": "Russia",
+        }
+
+        middleware = IPBlockingMiddleware(app=None)
+        with (
+            patch("app.core.geoip.get_geoip_service", return_value=geoip),
+            patch(
+                "app.core.database.async_session_factory",
+                fake_session_factory,
+            ),
+            patch("app.core.audit.log_audit_event", AsyncMock()),
+        ):
+            await middleware._log_blocked_attempt(
+                request, "203.0.113.9", "country_blocked"
+            )
+
+        row = db.add.call_args.args[0]
+        assert len(row.request_method) <= 10
+        assert row.request_method == "X" * 10

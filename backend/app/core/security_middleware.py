@@ -1085,7 +1085,7 @@ class IPBlockingMiddleware:
                             country_name=geo_info.get("country_name"),
                             block_reason=reason,
                             request_path=str(request.url.path)[:500],
-                            request_method=request.method,
+                            request_method=request.method[:10],
                             user_agent=request.headers.get("user-agent", ""),
                         )
                     )
