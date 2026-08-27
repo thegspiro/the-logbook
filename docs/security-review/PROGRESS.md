@@ -16,7 +16,8 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-Feature 05 (finance & approvals, pass 2) — PR pending push. No findings;
+Feature 05 (finance & approvals, pass 2) —
+[PR #1942](https://github.com/thegspiro/the-logbook/pull/1942). No findings;
 docs-only change. Next after merge: 06 elections & ballots, pass 2.
 
 ---
