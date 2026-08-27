@@ -1,6 +1,68 @@
 # Security Review — Public Surface & Webhooks
 
-**Prefix:** `PUB` · **Iteration:** 03 · **Reviewed:** 2026-08-25 · **PR:** #1806
+**Prefix:** `PUB` · **Iteration:** 03 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2) · **PR:** #1806 (pass 1)
+
+---
+
+## Pass 2 (2026-08-27)
+
+`git diff` between PR #1806's merge commit (`91406252`) and current `main`
+touches only 3 of the 12 files in scope — `finance_approvals.py` (+6/-1),
+`legal.py` (+33/-6), `portal.py` (+40/-4). The other 9, including
+`display.py` (re-read in full at pass 1 for its guest-check-in growth), are
+byte-identical. File count is unchanged at 12 (11 + `__init__.py`) — no new
+public endpoint file since pass 1.
+
+- **`finance_approvals.py`:** a new `BudgetLimitExceededError` (fail-closed
+  overspend guard, feature 05's territory — `finance_service.py` itself grew
+  +519 net lines, out of this feature's declared scope) is now caught and
+  mapped to 409 in both `approve_via_token`/`deny_via_token`. Its message is
+  a fixed, generic string (`"Insufficient available budget"`, no
+  interpolated data) — safe to return raw. Verified PUB-4's self-approval
+  guard (`approve_by_token`'s `SeparationOfDutiesError` check) and the
+  `.with_for_update()` locking read (Pitfall #27) are both still present and
+  still ordered before any state mutation — the new budget check fires later,
+  inside `_finalize_approval`, after the guard, so it doesn't disturb the
+  ordering PUB-4 depends on.
+- **`legal.py`:** a correctness fix (DOC-10 finding: privacy policy and
+  terms of service previously shared one `lastUpdated` date, so publishing
+  one could misdate the other) — now two independent dated fields, with a
+  deprecated `lastUpdated` kept for backward compatibility with the
+  documented v1 API shape (a Codex finding on an earlier PR, already
+  resolved before this pass). `_clean_text` (blocks HTML injection into the
+  unauthenticated response) still wraps both new fields; the single-org
+  guard (PUB-2) is untouched. No security-relevant change.
+- **`portal.py`:** a genuine defense-in-depth fix connecting to feature 02's
+  new `require_module` mechanism — `check_portal_enabled` now also checks
+  the `public_info` module is enabled (via `OrganizationService
+.get_enabled_modules(config.organization_id)`), because this router is
+  mounted separately from the session-authenticated `/api/v1` tree
+  `require_module` covers, so an API-key caller could keep reading
+  organization info/stats/events after an admin turned the module off.
+  Applied to all three of this router's module-gated routes
+  (`get_organization_info`/`get_organization_stats`/`get_public_events`) —
+  confirmed by checking every `check_portal_enabled` call site. The other
+  two public routes in this file (`get_application_status`,
+  a per-prospect-token endpoint unrelated to the portal API-key system; and
+  `health_check`) were correctly left alone — neither was gated by portal
+  enablement before this diff either.
+
+**No findings.** No code changes this pass — the changes since pass 1 were
+already-complete fixes for other rotation findings (PUB-4 area, DOC-10) and
+one new defense-in-depth improvement, none of which introduced a gap.
+
+**Completion gate (pass 2):** flake8/black/isort clean on `app/ tests/
+alembic/`; `validate_migrations.py --strict` passed (381 revisions, single
+head); pass-1 guard tests (`test_salesforce_webhook.py`,
+`test_finance_approval_tokens.py`) 10/10 pass; broader scoped tests (`-k
+"finance or legal or public_portal or portal or webhook or salesforce or
+display or calendar or security_txt or forms"`) 366 passed, 1 skipped
+(pre-existing); full backend suite 9040 passed, 22 skipped (pre-existing),
+0 failed. No frontend files touched.
+
+---
+
+## Pass 1 (2026-08-25)
 
 **Backend:** all 12 files under `app/api/public/` (2317 L total) —
 `portal.py`, `core/public_portal_security.py`, `calendar.py`, `display.py`,
