@@ -16,7 +16,12 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-PR #1918 (feature 34, frontend shared) — open, awaiting CI/review.
+**#1918** (branch `claude/security-review-frontend-shared`) — feature 34
+(frontend shared) review, opened after PR #1917 merged. CI was green;
+picked up a merge conflict against `main` when #1914 (onboarding follow-up,
+a separate tend-while-open item) merged first, since both touched
+CHANGELOG.md and this file. Conflict resolved, re-validating. Next feature
+once #1918 merges: 35.
 
 ---
 
