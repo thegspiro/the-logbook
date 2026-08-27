@@ -188,6 +188,20 @@ class TestGuards:
         assert exc.value.status_code == 400
         assert "void" in exc.value.detail.lower()
 
+    async def test_an_officer_may_not_return_their_own_submission(self, monkeypatch):
+        """Same self-dealing risk validate_test blocks (CS-8): an
+        officer-candidate could otherwise force unlimited free redo cycles on
+        their own submission, spending no attempt, until they like a result."""
+        user = _officer()
+        test = _test(candidate_id=str(user.id))
+        session = QueuedSession([_scalar(test)])
+        with pytest.raises(HTTPException) as exc:
+            await endpoint.return_test_for_correction(
+                test_id=TEST_ID, return_data=REASON, db=session, current_user=user
+            )
+        assert exc.value.status_code == 400
+        assert "cannot return your own" in exc.value.detail.lower()
+
 
 class TestTransition:
     async def test_reopens_the_test_to_its_examiner(self, monkeypatch):

@@ -463,6 +463,13 @@ export interface SavedReportConfig {
   email_recipients?: string[];
   last_run_at?: string;
   next_run_at?: string;
+  // No scheduler reads is_scheduled/schedule_frequency/next_run_at yet, so
+  // this is always false — see backend/app/models/analytics.py. A future
+  // saved-reports UI must show this rather than badging is_scheduled as
+  // "Active" (no such UI exists yet; ReportsPage.tsx doesn't currently
+  // render saved reports at all, despite reportsStore/api.ts having full
+  // CRUD support for them).
+  enforced: boolean;
   created_by: string;
   created_at: string;
   updated_at: string;

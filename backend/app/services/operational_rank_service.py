@@ -451,8 +451,13 @@ class OperationalRankService:
         self,
         organization_id: str,
     ) -> List[Dict]:
-        """Return active members whose rank code does not match any
-        configured rank for the organization.
+        """Return active members whose rank is unknown or noncanonical.
+
+        A rank may be supplied by either the organization's stored rows or the
+        built-in defaults, matching :meth:`resolve_rank_code`. Recognizable
+        legacy spellings with different case or surrounding whitespace remain
+        issues because downstream permission and eligibility lookups require
+        the canonical value stored in ``User.rank``.
 
         Only members with statuses that indicate they are still actively
         interacting with the platform are checked.  Archived, retired,
@@ -462,13 +467,23 @@ class OperationalRankService:
         Returns a list of dicts:
             [{ "member_id", "member_name", "rank_code" }, ...]
         """
-        # Collect all configured rank codes for the org.
+        # Load the small organization-specific vocabulary once.  Do not call
+        # resolve_rank_code for each member: besides producing an N+1 query,
+        # that would make this audit needlessly dependent on database
+        # collation.  The map mirrors resolve_rank_code's precedence (built-in
+        # codes first) and its strip/lower matching while retaining the
+        # canonical spelling that downstream exact lookups require.
         result = await self.db.execute(
             select(OperationalRank.rank_code).where(
                 OperationalRank.organization_id == organization_id,
             )
         )
-        valid_codes = {row[0] for row in result.all()}
+        canonical_codes = {code: code for code in DEFAULT_RANK_CODES}
+        for row in result.all():
+            stored_code = row[0]
+            normalized = (stored_code or "").strip().lower()
+            if normalized:
+                canonical_codes.setdefault(normalized, stored_code)
 
         # Find active-status members whose rank is set but unrecognised.
         members_q = select(User.id, User.first_name, User.last_name, User.rank).where(
@@ -481,7 +496,12 @@ class OperationalRankService:
         members_result = await self.db.execute(members_q)
         issues: List[Dict] = []
         for row in members_result.all():
-            if row.rank not in valid_codes:
+            normalized = (row.rank or "").strip().lower()
+            canonical = canonical_codes.get(normalized)
+            # A recognizable but noncanonical legacy spelling still needs
+            # repair. User.rank feeds exact dictionary lookups, so accepting
+            # " Captain " here would hide a member receiving no permissions.
+            if canonical is None or row.rank != canonical:
                 issues.append(
                     {
                         "member_id": row.id,

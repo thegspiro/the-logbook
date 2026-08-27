@@ -474,6 +474,15 @@ export const EventForm: React.FC<EventFormProps> = ({
 
   const selectedLocation = locations.find((l) => l.id === formData.location_id);
 
+  // A facility room's Location name includes its full containment path and
+  // facility (for example, "Storage — Office — Station 1"). That context is
+  // useful when an organization has multiple facilities, but is redundant and
+  // harder to scan when every facility-backed location belongs to one building.
+  const hasSingleFacility = useMemo(
+    () => new Set(locations.map((location) => location.facility_id).filter(Boolean)).size === 1,
+    [locations]
+  );
+
   const formatLocationAddress = (loc: Location) => {
     const parts: string[] = [];
     if (loc.address) parts.push(loc.address);
@@ -487,7 +496,9 @@ export const EventForm: React.FC<EventFormProps> = ({
   };
 
   const formatLocationLabel = (loc: Location) => {
-    const parts = [loc.name];
+    const roomName = hasSingleFacility && loc.facility_room_id ? loc.name.split(' — ', 1)[0] : loc.name;
+    if (hasSingleFacility && loc.facility_room_id) return roomName;
+    const parts = [roomName];
     if (loc.building) parts.push(`(${loc.building})`);
     const addr = [loc.address, loc.city].filter(Boolean).join(', ');
     if (addr) parts.push(`— ${addr}`);

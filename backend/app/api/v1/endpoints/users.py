@@ -272,6 +272,39 @@ async def create_member(
             current_user.organization_id
         )
 
+    # Resolve and ceiling-check the requested roles BEFORE the user row is
+    # created. A denied ceiling check reports a CRITICAL alert via
+    # report_privilege_escalation_attempt, which commits the transaction so
+    # the alert survives the 403 about to be raised — if that ran after
+    # db.add(new_user)/flush() below, the commit would also persist the
+    # should-be-rejected user, leaving a live, ACTIVE, password-set account
+    # with no roles behind a request the caller believes failed outright.
+    roles: list[Role] = []
+    if user_data.role_ids:
+        # Verify all role IDs exist and belong to the organization
+        result = await db.execute(
+            select(Role)
+            .where(Role.id.in_([str(rid) for rid in user_data.role_ids]))
+            .where(Role.organization_id == str(current_user.organization_id))
+        )
+        roles = result.scalars().all()
+
+        if len(roles) != len(user_data.role_ids):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="One or more role IDs are invalid",
+            )
+
+        # Same privilege ceiling the assign/add-role paths enforce: a caller may
+        # only grant roles whose permissions are a subset of their own. Without
+        # this, a plain `users.create` holder could create an account, set its
+        # password, attach a wildcard/"System Owner" role, and log in as it —
+        # full-tenant escalation through the create path instead of the (already
+        # guarded) assign path.
+        await _enforce_role_grant_ceiling(
+            current_user, list(roles), db, get_client_ip(request)
+        )
+
     # Create new user
     new_user = User(
         id=str(uuid4()),
@@ -309,32 +342,9 @@ async def create_member(
     db.add(new_user)
     await db.flush()  # Flush to get the user ID
 
-    # Assign initial roles if provided
+    # Assign initial roles if provided (already resolved and ceiling-checked
+    # above, before this user row existed).
     if user_data.role_ids:
-        # Verify all role IDs exist and belong to the organization
-        result = await db.execute(
-            select(Role)
-            .where(Role.id.in_([str(rid) for rid in user_data.role_ids]))
-            .where(Role.organization_id == str(current_user.organization_id))
-        )
-        roles = result.scalars().all()
-
-        if len(roles) != len(user_data.role_ids):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="One or more role IDs are invalid",
-            )
-
-        # Same privilege ceiling the assign/add-role paths enforce: a caller may
-        # only grant roles whose permissions are a subset of their own. Without
-        # this, a plain `users.create` holder could create an account, set its
-        # password, attach a wildcard/"System Owner" role, and log in as it —
-        # full-tenant escalation through the create path instead of the (already
-        # guarded) assign path.
-        await _enforce_role_grant_ceiling(
-            current_user, list(roles), db, get_client_ip(request)
-        )
-
         for role in roles:
             await db.execute(
                 user_roles.insert().values(

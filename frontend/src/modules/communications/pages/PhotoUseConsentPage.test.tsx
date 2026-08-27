@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen, waitFor, within } from '@testing-library/react';
+import { act, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../../../test/utils';
 import PhotoUseConsentPage from './PhotoUseConsentPage';
@@ -134,5 +134,49 @@ describe('PhotoUseConsentPage', () => {
     renderWithRouter(<PhotoUseConsentPage />);
 
     await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('boom'));
+  });
+
+  it('ignores a stale response that resolves after a newer request for a different toggle state', async () => {
+    // Checking the box fires a request that is left pending; unchecking it
+    // again immediately after fires a second request that resolves right
+    // away. The first request, now stale, resolves last. The roster shown
+    // must reflect the toggle's current (unchecked) value — the stale
+    // response must not overwrite it just because it arrived later.
+    const rosterWithInactive: ConsentRoster = {
+      ...roster,
+      summary: { ...roster.summary, total: 4 },
+      members: [...roster.members, makeMember({ user_id: 'user-4', first_name: 'Ivy', last_name: 'Inactive' })],
+    };
+    let resolveStale: (value: ConsentRoster) => void = () => {};
+    const stalePending = new Promise<ConsentRoster>((resolve) => {
+      resolveStale = resolve;
+    });
+
+    mockGetRoster
+      .mockResolvedValueOnce(roster) // initial mount, includeInactive=false
+      .mockReturnValueOnce(stalePending) // checked -> includeInactive=true
+      .mockResolvedValueOnce(roster); // unchecked again -> includeInactive=false
+
+    const user = userEvent.setup();
+    renderWithRouter(<PhotoUseConsentPage />);
+    expect(await screen.findByText('Dana Agreed')).toBeInTheDocument();
+
+    const checkbox = screen.getByLabelText('Include inactive members');
+    await user.click(checkbox);
+    await user.click(checkbox);
+    await waitFor(() => expect(mockGetRoster).toHaveBeenCalledTimes(3));
+
+    // The newer (unchecked) request already resolved with no Ivy.
+    expect(screen.queryByText('Ivy Inactive')).not.toBeInTheDocument();
+
+    // The stale checked-state request resolves after the fact; it must be
+    // ignored rather than replacing the current, correct roster. `act` flushes
+    // the state update (if any) synchronously so the assertion below is not a
+    // race against React's own scheduling.
+    await act(async () => {
+      resolveStale(rosterWithInactive);
+      await stalePending;
+    });
+    expect(screen.queryByText('Ivy Inactive')).not.toBeInTheDocument();
   });
 });

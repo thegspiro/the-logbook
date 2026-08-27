@@ -419,7 +419,7 @@ class TestRemovingAnAttendeeTakesTheHoursWithIt:
             err = await svc.remove_attendee("event-1", "user-1", "org-1")
 
         assert err is None
-        delete_entries.assert_awaited_once_with("rsvp-1")
+        delete_entries.assert_awaited_once_with("rsvp-1", "org-1")
 
 
 class TestBackfillMigration:

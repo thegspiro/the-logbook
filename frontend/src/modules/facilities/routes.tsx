@@ -19,6 +19,9 @@ import { Route } from 'react-router';
 import { ProtectedRoute } from '../../components/ProtectedRoute';
 import { lazyWithRetry } from '../../utils/lazyWithRetry';
 
+/** Permissions that may enter the Facilities module from any discovery surface. */
+export const FACILITY_ENTRY_PERMISSIONS = ['facilities.view', 'facilities.manage'] as const;
+
 const FacilitiesDashboard = lazyWithRetry(() => import('./pages/FacilitiesDashboard'));
 const FacilityLabelPrintPage = lazyWithRetry(() => import('./pages/FacilityLabelPrintPage'));
 const FacilityDetailPage = lazyWithRetry(() => import('./pages/FacilityDetailPage'));
@@ -30,6 +33,7 @@ const ApparatusBasicPage = lazyWithRetry(() => import('../../pages/ApparatusBasi
 const LocationKioskPage = lazyWithRetry(() => import('../../pages/LocationKioskPage'));
 const GuestCheckInPage = lazyWithRetry(() => import('../../pages/GuestCheckInPage'));
 
+/** Entry permission shared by every page in the Facilities workspace. */
 /** Protected facilities routes (rendered inside AppLayout). */
 export const getFacilitiesRoutes = () => (
   <React.Fragment>
@@ -40,7 +44,7 @@ export const getFacilitiesRoutes = () => (
           <ProtectedRoute
             requiredModule="facilities"
             moduleLabel="Facilities"
-            requiredAnyPermission={['facilities.view', 'facilities.manage']}
+            requiredAnyPermission={[...FACILITY_ENTRY_PERMISSIONS]}
           >
             <FacilityLabelPrintPage />
           </ProtectedRoute>
@@ -55,7 +59,7 @@ export const getFacilitiesRoutes = () => (
           <ProtectedRoute
             requiredModule="facilities"
             moduleLabel="Facilities"
-            requiredAnyPermission={['facilities.view', 'facilities.manage']}
+            requiredAnyPermission={[...FACILITY_ENTRY_PERMISSIONS]}
           >
             <MaintenanceListPage />
           </ProtectedRoute>
@@ -69,7 +73,7 @@ export const getFacilitiesRoutes = () => (
           <ProtectedRoute
             requiredModule="facilities"
             moduleLabel="Facilities"
-            requiredAnyPermission={['facilities.view', 'facilities.manage']}
+            requiredAnyPermission={[...FACILITY_ENTRY_PERMISSIONS]}
           >
             <InspectionsListPage />
           </ProtectedRoute>
@@ -84,7 +88,7 @@ export const getFacilitiesRoutes = () => (
           <ProtectedRoute
             requiredModule="facilities"
             moduleLabel="Facilities"
-            requiredAnyPermission={['facilities.view', 'facilities.manage']}
+            requiredAnyPermission={[...FACILITY_ENTRY_PERMISSIONS]}
           >
             <FacilityDetailPage />
           </ProtectedRoute>
@@ -99,7 +103,7 @@ export const getFacilitiesRoutes = () => (
           <ProtectedRoute
             requiredModule="facilities"
             moduleLabel="Facilities"
-            requiredAnyPermission={['facilities.view', 'facilities.manage']}
+            requiredAnyPermission={[...FACILITY_ENTRY_PERMISSIONS]}
           >
             <FacilitiesDashboard />
           </ProtectedRoute>

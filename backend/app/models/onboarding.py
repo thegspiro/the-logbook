@@ -80,7 +80,8 @@ class OnboardingSessionModel(Base):
     - Admin user credentials (encrypted)
     - IT team information
 
-    Sessions expire after 2 hours of inactivity.
+    Sessions expire after 30 minutes of inactivity (see SESSION_EXPIRY_HOURS
+    in api/v1/onboarding.py); each validated call slides the expiry forward.
     """
 
     __tablename__ = "onboarding_sessions"

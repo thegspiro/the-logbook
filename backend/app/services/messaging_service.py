@@ -201,6 +201,13 @@ class MessagingService:
                         "Cannot reschedule a message that has already been "
                         "published",
                     )
+                # A past/current value here would leave scheduled_at non-null
+                # on an already-published message, making the next publish
+                # sweep (run_publish_scheduled_messages) treat it as newly
+                # due and deliver it a second time. Collapse it the same way
+                # create_message does, so this is a no-op rather than a
+                # re-trigger.
+                updates["scheduled_at"] = None
 
             audience_fields = {
                 "target_type",

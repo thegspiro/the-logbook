@@ -1,6 +1,137 @@
 # Security Review — Auth & Session Lifecycle
 
-**Prefix:** `AUTH` · **Iteration:** 01 · **Reviewed:** 2026-08-25 · **PR:** #1804
+**Prefix:** `AUTH` · **Iteration:** 01 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2) · **PR:** #1804 (pass 1)
+
+---
+
+## Pass 2 (2026-08-27)
+
+`git diff` between PR #1804's merge commit (`9a58e352`) and current `main`
+shows **zero changes** to `auth.py`, `auth_service.py`, `mfa_service.py`, or
+`oauth_service.py` — byte-identical. AUTH-1's fix
+(`Organization.active.is_(True)` + fail-closed `(None, "no_account")` in
+`oauth_service.py:57-77`) is confirmed still present, and its guard test
+(`test_resolve_user_no_active_organization`) still passes. The route count is
+unchanged at 26.
+
+`consent_service.py` is the one file in this feature's scope that grew
+(84 L → 211 L) since pass 1, entirely from a new "Photo Use Consent" feature
+(commits `4b68b3da`, `d5bb37ce`, `fd3c797f` — a new `roster()` method, a new
+`GET /users/consents/photo-use` endpoint in `users.py`, a new
+`users.view_consents` permission, and a frontend `PhotoUseConsentPage.tsx`).
+Read in full against all seven checklist dimensions, since none of it existed
+at pass 1:
+
+- **Tenant isolation (dim. 3):** `roster()` takes `organization_id` as a
+  parameter and filters `User.organization_id` directly, plus a belt-and-
+  suspenders `UserConsent.organization_id == organization_id` on the outer
+  join condition (commented as "redundant against the org filter on User,
+  kept so the join can never pull a row from another tenant"). Correct.
+- **Authorization fit (dim. 2):** the endpoint's `require_permission` list
+  (`users.view_consents`, `notifications.manage`, `members.manage`,
+  `users.edit`) was deliberately built to avoid the XC-2 pattern this
+  checklist watches for — the code comment explains why `users.view` (held by
+  25 of 30 default positions) was rejected as too broad for a whole-department
+  consent roster, and why the new narrow permission exists instead of
+  widening an existing broad one. This is the checklist's own dimension-2
+  concern, already reasoned through by the author.
+- **Data exposure (dim. 5):** `roster()`'s docstring and code both explicitly
+  exclude contact fields ("Returns no contact fields... a second list carrying
+  it unconditionally would quietly undo [the member directory's
+  contact-visibility gate]") — returns only name/rank/station/membership
+  number/photo_url, which is what identifies someone on a photo call sheet.
+  Caching: `/users` (no trailing slash) is already in `UNCACHEABLE_PREFIXES`
+  and matches every consent sub-path via `startsWith` — no separate entry
+  needed, verified by grep rather than assumed.
+- **Fan-out helper `granted_user_ids`** (used by
+  `notification_channels.resolve_sms_recipients`) does not itself filter
+  `organization_id`, but its only caller passes an already org-scoped `users`
+  list and the function can only _narrow_ that set (intersect with consent),
+  never add ids beyond what the caller supplied — resolves through an
+  already-org-scoped parent, not a gap.
+- **Schema & migration integrity (dim. 7):** `ConsentType.PHOTO_USE` already
+  existed at pass 1 (no model/column change needed); the new
+  `20260825_1900_c4a91b7e2f08_grant_users_view_consents.py` migration is a
+  seeded-grant backfill and does everything Pitfall #23 + #26 require: scoped
+  to `is_system = True`, rewrites a row only when its stored permissions still
+  exactly equal a frozen `_PRIOR_DEFAULTS` snapshot (so a department that
+  already customized the position is left alone), guards on the `positions`
+  table's existence before reflecting it (`create_all`-only table, Pitfall
+  #26), and ships both `upgrade()` and a symmetric `downgrade()`.
+- No `window.confirm`/`alert`/`prompt`, no direct `fetch`/raw `axios` in
+  `PhotoUseConsentPage.tsx` (grep-confirmed — it goes through the shared
+  service layer feature 34 already reviewed).
+
+**Correction (Codex review on PR #1929):** the "no findings" conclusion above
+was wrong on two counts, both raised by Codex against `PhotoUseConsentPage.tsx`
+and `consent_service.py`.
+
+### AUTH-3 — LOW — Stale roster response could overwrite a newer one — ✅ FIXED
+
+**What:** `PhotoUseConsentPage.tsx`'s `loadRoster` fired a new
+`getPhotoUseConsentRoster(includeInactive)` request on every change to the
+`includeInactive` toggle with no cancellation or staleness check. Toggling the
+checkbox twice in quick succession (check, then uncheck before the first
+request resolves) let the two requests resolve out of order; whichever
+response landed last overwrote `roster` via `setRoster`, regardless of whether
+it still matched the toggle's current value.
+
+**Where:** `frontend/src/modules/communications/pages/PhotoUseConsentPage.tsx`
+(the `useEffect`/`loadRoster` pair).
+
+**Failure scenario:** a PIO toggles "Include inactive members" on and then
+immediately back off while choosing photos. If the first (checked) request is
+slow and resolves after the second (unchecked) one, the roster silently
+reverts to including inactive members — with the checkbox itself showing
+unchecked, a display state inconsistent with what's on screen. Each member's
+own `granted`/`declined` value is unaffected (the race is only over which
+members appear, not their consent state), but the page is documented as "the
+operational enforcement point" for photo consent, so a PIO trusting the
+checkbox to reflect what's listed is a real, if narrow, correctness bug.
+
+**Fix:** moved the fetch into the `useEffect` body with the codebase's
+existing `let cancelled = false` / cleanup-sets-`cancelled=true` idiom (same
+pattern as `PipelineDetailPage.tsx`), so a response belonging to a superseded
+effect run is never applied to state.
+
+**Guard test:** `ignores a stale response that resolves after a newer request
+for a different toggle state` in `PhotoUseConsentPage.test.tsx` — two requests
+in flight, the older one resolved last; asserts the newer request's roster
+wins. Verified to fail against the pre-fix component (confirmed by stashing
+the fix and re-running) and pass against it.
+
+### AUTH-4 — INFORMATIONAL — Unbounded roster query, flagged not fixed
+
+**What:** `ConsentService.roster()` has no `LIMIT`/pagination and materializes
+every matching member with `result.all()`; `GET /users/consents/photo-use`
+passes that straight through. Checklist dimension 6 names "no `all()` over an
+org-wide table" as a pattern to catch.
+
+**Where:** `backend/app/services/consent_service.py:118-143`.
+
+**Why flagged, not fixed:** this is not a defect unique to the new code —
+grepping `select(User` across `app/` finds **255+ other call sites** with the
+identical unbounded shape (`/officers`, the base `/users` list, and most other
+whole-department rosters). The application's own scale assumption throughout
+is a single fire department's membership (tens to a few hundred rows), not an
+org-wide table that grows without bound the way `audit_logs` or
+`message_history` do — dimension 6's concern is real for those, and this
+codebase already bounds or paginates them. Adding a `LIMIT` to this one new
+endpoint while its 255 siblings stay unbounded would be an arbitrary,
+inconsistent fix, not a security improvement. Recorded here for awareness
+rather than actioned as a drive-by; a genuine fix would be an app-wide
+pagination pass, out of scope for this iteration.
+
+**Completion gate (pass 2, after AUTH-3):** flake8/black/isort clean on `app/
+tests/ alembic/`; `validate_migrations.py --strict` passed (381 revisions,
+single head); scoped backend tests (`-k "oauth or auth_service or mfa or
+consent"`) 70 passed, 1 skipped (pre-existing, missing optional dependency);
+`tsc --noEmit` 0 errors; `eslint .` 0 errors (1 file, 0 warnings);
+`PhotoUseConsentPage.test.tsx` 7/7 passed (1 new).
+
+---
+
+## Pass 1 (2026-08-25)
 
 **Backend:** `app/api/v1/endpoints/auth.py` (1405 L, 26 endpoints),
 `app/services/auth_service.py` (970 L), `app/services/mfa_service.py` (121 L),

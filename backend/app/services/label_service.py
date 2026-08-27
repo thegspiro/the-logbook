@@ -315,7 +315,7 @@ class LabelService:
         extra_lines: Optional[List[str]] = None,
         exclude_ids: Optional[Set[str]] = None,
         symbology: str = SYMBOLOGY_CODE128,
-    ) -> Tuple[BytesIO, int]:
+    ) -> Tuple[BytesIO, int, int]:
         entry = MODULE_LABELS.get(module)
         if entry is None:
             raise ValueError(f"Labels are not available for module: {module}")
@@ -330,7 +330,7 @@ class LabelService:
         pdf = render_labels(
             specs, label_format, custom_width, custom_height, auto_rotate, symbology
         )
-        return pdf, auto_populated
+        return pdf, auto_populated, len(specs)
 
     async def preview(
         self,

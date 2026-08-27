@@ -17,7 +17,7 @@
  * in without widening to a grant that means something else.
  */
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { AlertCircle, Camera, Check, HelpCircle, Search, X } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { Avatar, Breadcrumbs, EmptyState, SkeletonPage } from '../../../components/ux';
@@ -64,21 +64,24 @@ const PhotoUseConsentPage: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [includeInactive, setIncludeInactive] = useState(false);
 
-  const loadRoster = useCallback(async () => {
+  useEffect(() => {
+    let cancelled = false;
     setIsLoading(true);
     setError(null);
-    try {
-      setRoster(await userService.getPhotoUseConsentRoster(includeInactive));
-    } catch (err: unknown) {
-      setError(getErrorMessage(err, 'Could not load photo use consents.'));
-    } finally {
-      setIsLoading(false);
-    }
+    void (async () => {
+      try {
+        const data = await userService.getPhotoUseConsentRoster(includeInactive);
+        if (!cancelled) setRoster(data);
+      } catch (err: unknown) {
+        if (!cancelled) setError(getErrorMessage(err, 'Could not load photo use consents.'));
+      } finally {
+        if (!cancelled) setIsLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [includeInactive]);
-
-  useEffect(() => {
-    void loadRoster();
-  }, [loadRoster]);
 
   const members = useMemo(() => roster?.members ?? [], [roster]);
 
