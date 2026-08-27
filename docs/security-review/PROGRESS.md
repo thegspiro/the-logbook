@@ -16,7 +16,8 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-PR #1910 (feature 27, integrations) — open, awaiting CI/review.
+None — PR #1910 (feature 27, integrations) merged. Feature 28 (security,
+audit & IP) starting next.
 
 ---
 
@@ -71,7 +72,7 @@ data-carrying modules, then the supporting infrastructure.
 | 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ✅              |
 | 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ✅              |
 | 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                         | ✅              |
-| 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                         | ⏳              |
+| 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                         | ✅              |
 | 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`                                                                    | ⬜              |
 | 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                              | ⬜              |
 | 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (24 unauth bootstrap routes)                                                                                             | ⬜              |
@@ -1061,3 +1062,7 @@ re-runs the whole-codebase sweeps against whatever has landed since.
   migration needed. Findings doc: `docs/security-review/INT-27-integrations.md`.
   PR #1910 opened and subscribed. Next: 28 security, audit & IP, once
   #1910 merges.
+- **27 Integrations ✅ merged** — PR #1910 merged 2026-08-27. Codex reported
+  it was over its usage limit for security reviews (no review produced,
+  informational only); CI ran clean on the first push, no review threads
+  to resolve. Next: 28 security, audit & IP.
