@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**256 tables · 4374 columns · 827 foreign keys**
+**256 tables · 4379 columns · 827 foreign keys**
 
 ---
 
@@ -332,7 +332,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`nfpa_item_compliance`](#nfpa_item_compliance) | `NFPAItemCompliance` | 20 | NFPA 1851/1852 compliance record for PPE and SCBA items. |
 | [`property_return_reminders`](#property_return_reminders) | `PropertyReturnReminder` | 10 | Tracks which property-return reminder notices have been sent to |
 | [`reorder_requests`](#reorder_requests) | `ReorderRequest` | 24 | Tracks reorder requests for inventory items that have dropped below |
-| [`return_requests`](#return_requests) | `ReturnRequest` | 18 | Member-initiated return request. |
+| [`return_requests`](#return_requests) | `ReturnRequest` | 23 | Member-initiated return request. |
 | [`storage_areas`](#storage_areas) | `StorageArea` | 14 | Storage Area model |
 
 ### Label_Printer
@@ -5306,7 +5306,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 **ReturnRequest** · `app/models/inventory.py`
 
-> Member-initiated return request. Members can declare they want to return equipment. A quartermaster reviews and either approves (triggering the actual return) or denies the request. This prevents members from simply claiming they returned an item without physical validation.
+> Member-initiated return request. Members notify the quartermaster that they intend to return equipment. Only a quartermaster recording physical receipt can close the holding; the member's report remains alongside the independent inspection.
 
 | Column | Type | Null | Key | Default | References |
 |---|---|---|---|---|---|
@@ -5322,10 +5322,15 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `quantity_returning` | INTEGER | no |  | `1` |  |
 | `reported_condition` | ENUM(`excellent`, `good`, `fair`, `poor`, `damaged`, `out_of_service`, `retired`) | no |  | `'good'` |  |
 | `member_notes` | TEXT | yes |  |  |  |
-| `status` | ENUM(`pending`, `approved`, `denied`, `completed`) | no | IDX | `'pending'` |  |
+| `status` | ENUM(`requested`, `received`, `inspected`, `denied`, `completed`) | no | IDX | `'requested'` |  |
 | `reviewed_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
 | `reviewed_at` | DATETIME | yes |  |  |  |
 | `review_notes` | TEXT | yes |  |  |  |
+| `observed_condition` | ENUM(`excellent`, `good`, `fair`, `poor`, `damaged`, `out_of_service`, `retired`) | yes |  |  |  |
+| `verified_identifier` | VARCHAR(255) | yes |  |  |  |
+| `received_quantity` | INTEGER | yes |  |  |  |
+| `follow_up_type` | VARCHAR(32) | yes |  |  |  |
+| `follow_up_id` | VARCHAR(36) | yes |  |  |  |
 | `created_at` | DATETIME | yes |  | `now()` |  |
 | `updated_at` | DATETIME | yes |  | `now()` |  |
 
