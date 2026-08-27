@@ -40,7 +40,6 @@ import { getErrorMessage } from '../../../utils/errorHandling';
 import { RETURN_CONDITION_OPTIONS } from '../../../constants/enums';
 import { Modal } from '../../../components/Modal';
 import { VariantCapsules } from '../components/VariantCapsules';
-import { equipmentRequestTypeLabel } from '../terminology';
 import { SizePreferencesModal } from '../components/SizePreferencesModal';
 import toast from 'react-hot-toast';
 
@@ -116,7 +115,7 @@ const MyEquipmentPage: React.FC = () => {
   const [reqSearch, setReqSearch] = useState('');
   const [reqResults, setReqResults] = useState<InventoryItem[]>([]);
   const [reqSelected, setReqSelected] = useState<InventoryItem | null>(null);
-  const [reqType, setReqType] = useState<'checkout' | 'issuance'>('checkout');
+  const [reqDuration, setReqDuration] = useState<'temporary' | 'ongoing'>('temporary');
   const [reqQty, setReqQty] = useState(1);
   const [reqReason, setReqReason] = useState('');
   const [reqSearching, setReqSearching] = useState(false);
@@ -216,7 +215,7 @@ const MyEquipmentPage: React.FC = () => {
         item_id: reqSelected.id,
         category_id: reqSelected.category_id || undefined,
         quantity: reqSelected.tracking_type === 'pool' ? reqQty : 1,
-        request_type: reqType,
+        requested_duration: reqDuration,
         reason: reqReason.trim() || undefined,
       });
       toast.success('Equipment request submitted');
@@ -234,7 +233,7 @@ const MyEquipmentPage: React.FC = () => {
     setReqSearch('');
     setReqResults([]);
     setReqSelected(null);
-    setReqType('checkout');
+    setReqDuration('temporary');
     setReqQty(1);
     setReqReason('');
   };
@@ -394,7 +393,8 @@ const MyEquipmentPage: React.FC = () => {
                           {r.item_name}
                         </span>
                         <span className="text-theme-text-muted ml-0 block text-xs sm:ml-2 sm:inline">
-                          {equipmentRequestTypeLabel(r.request_type)} &middot; {formatDate(r.created_at, tz)}
+                          {r.requested_duration === 'ongoing' ? 'Ongoing need' : 'Temporary need'} &middot;{' '}
+                          {formatDate(r.created_at, tz)}
                         </span>
                       </div>
                       <span
@@ -631,7 +631,6 @@ const MyEquipmentPage: React.FC = () => {
                           setReqSelected(item);
                           setReqSearch(item.name);
                           setReqResults([]);
-                          setReqType(item.tracking_type === 'pool' ? 'issuance' : 'checkout');
                         }}
                         className="hover:bg-theme-surface-secondary/50 text-theme-text-primary w-full px-3 py-2 text-left text-sm"
                       >
@@ -654,25 +653,23 @@ const MyEquipmentPage: React.FC = () => {
 
             <div>
               <div>
-                <label className={labelClass}>Request Intent</label>
-                {reqSelected?.tracking_type === 'pool' ? (
-                  <div className="text-theme-text-secondary text-sm">
-                    <p className="font-medium">Quantity issue</p>
-                    <p className="text-theme-text-muted mt-1 text-xs">
-                      Pool stock is issued by quantity and handled under your department&apos;s return policy.
-                    </p>
-                  </div>
-                ) : (
-                  <select
-                    value={reqType}
-                    onChange={(e) => setReqType(e.target.value as 'checkout' | 'issuance')}
-                    className={selectClass}
-                    disabled={!reqSelected}
-                  >
-                    <option value="checkout">Temporary checkout</option>
-                    <option value="issuance">Permanent assignment</option>
-                  </select>
-                )}
+                <label className={labelClass} htmlFor="requested-duration">
+                  How long do you need it?
+                </label>
+                <select
+                  id="requested-duration"
+                  value={reqDuration}
+                  onChange={(e) => setReqDuration(e.target.value as 'temporary' | 'ongoing')}
+                  className={selectClass}
+                >
+                  <option value="temporary">Temporary — I expect to return it</option>
+                  <option value="ongoing">Ongoing — I need it as regular assigned gear</option>
+                </select>
+                <p className="text-theme-text-muted mt-1 text-xs">
+                  Choose Temporary if you expect to return the item, or Ongoing if you need it as regular assigned gear.
+                  The quartermaster will determine the final issue method based on item availability and department
+                  policy.
+                </p>
               </div>
             </div>
 

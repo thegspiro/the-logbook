@@ -188,22 +188,23 @@ describe('MyEquipmentPage', () => {
     });
   });
 
-  // #1875 removed the member-facing priority selector. What is left is the
-  // request intent, and this branch derives it from how the item is tracked:
-  // pool stock is always a quantity issue, so it gets no picker at all, and an
-  // individual item gets the two intents a member can actually express.
-  //
-  // #1876's parameterized test went with the flat three-option picker it
-  // exercised. `purchase` is deliberately not offered here: this form makes
-  // you search and select an existing available item, which a request to buy a
-  // new one is not. Its "no priority combobox" assertion is kept below.
-  it('submits a temporary checkout after searching and selecting an item', async () => {
+  // This branch replaces the request-type picker with a duration picker: the
+  // member states how long they need the item and the quartermaster decides
+  // how to fulfill it. #1876's parameterized request-type test goes with the
+  // control it exercised — there is no request-type combobox on this form any
+  // more — but its "no priority combobox" assertion is carried into the first
+  // test below so #1875's removal still cannot be silently undone.
+  it('submits a temporary duration intent after searching and selecting an item', async () => {
     mockGetItems.mockResolvedValue({ items: [availableItem], total: 1 });
     const user = userEvent.setup();
     renderWithRouter(<MyEquipmentPage />);
     await screen.findByRole('heading', { name: 'My Issued Gear' });
 
     await user.click(screen.getByRole('button', { name: /Request Equipment/ }));
+    expect(screen.getByLabelText('How long do you need it?')).toBeInTheDocument();
+    expect(screen.getByText(/quartermaster will determine the final issue method/i)).toBeInTheDocument();
+    // #1875 took the member's priority picker away; this branch must not bring
+    // it back while replacing request_type with requested_duration.
     expect(screen.queryByRole('combobox', { name: /priority/i })).not.toBeInTheDocument();
     await user.type(await screen.findByPlaceholderText('Search available items...'), 'Radio');
     await user.click(await screen.findByRole('button', { name: /Spare Radio/ }));
@@ -216,29 +217,25 @@ describe('MyEquipmentPage', () => {
       item_name: 'Spare Radio',
       quantity: 1,
       reason: undefined,
-      request_type: 'checkout',
+      requested_duration: 'temporary',
     });
   });
 
-  it('only offers quantity issuance for pool stock', async () => {
-    mockGetItems.mockResolvedValue({
-      items: [{ ...availableItem, id: 'pool-1', name: 'Work Gloves', tracking_type: 'pool', quantity: 12 }],
-      total: 1,
-    });
+  it('submits ongoing duration intent independently of fulfillment', async () => {
+    mockGetItems.mockResolvedValue({ items: [availableItem], total: 1 });
     const user = userEvent.setup();
     renderWithRouter(<MyEquipmentPage />);
-    await user.click(await screen.findByRole('button', { name: /Request Equipment/ }));
-    await user.type(await screen.findByPlaceholderText('Search available items...'), 'Gloves');
-    await user.click(await screen.findByRole('button', { name: /Work Gloves/ }));
+    await screen.findByRole('heading', { name: 'My Issued Gear' });
 
-    expect(screen.getByText('Quantity issue')).toBeInTheDocument();
-    expect(screen.getByText(/handled under your department's return policy/i)).toBeInTheDocument();
-    expect(screen.queryByRole('option', { name: /checkout/i })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /Request Equipment/ }));
+    await user.selectOptions(screen.getByLabelText('How long do you need it?'), 'ongoing');
+    await user.type(screen.getByPlaceholderText('Search available items...'), 'Radio');
+    await user.click(await screen.findByRole('button', { name: /Spare Radio/ }));
     await user.click(screen.getByRole('button', { name: /Submit Request/ }));
 
     await waitFor(() =>
       expect(mockCreateEquipmentRequest).toHaveBeenCalledWith(
-        expect.objectContaining({ item_id: 'pool-1', request_type: 'issuance' })
+        expect.objectContaining({ requested_duration: 'ongoing' })
       )
     );
   });

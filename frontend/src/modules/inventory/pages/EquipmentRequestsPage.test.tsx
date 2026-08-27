@@ -33,6 +33,7 @@ const makeRequest = (overrides: Record<string, unknown> = {}) => ({
   item_name: 'Radio XTS 5000',
   status: 'pending',
   request_type: 'checkout',
+  requested_duration: 'temporary',
   requester_name: 'John Doe',
   quantity: 1,
   reason: 'Need for shift',
@@ -74,7 +75,7 @@ describe('EquipmentRequestsPage', () => {
       expect(screen.getByText('Radio XTS 5000')).toBeInTheDocument();
     });
     expect(screen.getByText('pending')).toBeInTheDocument();
-    expect(screen.getByText('Temporary loan')).toBeInTheDocument();
+    expect(screen.getByText('Temporary need')).toBeInTheDocument();
     expect(screen.getByText(/John Doe/)).toBeInTheDocument();
     expect(screen.getByText(/Need for shift/)).toBeInTheDocument();
   });
@@ -221,7 +222,7 @@ describe('EquipmentRequestsPage', () => {
   it('shows Fulfill button for approved requests and fulfills with the request item', async () => {
     const user = userEvent.setup();
     mockGetEquipmentRequests.mockResolvedValue({
-      requests: [makeRequest({ status: 'approved', request_type: 'issuance', item_id: 'item-9', quantity: 2 })],
+      requests: [makeRequest({ status: 'approved', requested_duration: 'ongoing', item_id: 'item-9', quantity: 2 })],
     });
     mockFulfillEquipmentRequest.mockResolvedValue({
       id: 'req-1',
@@ -235,15 +236,16 @@ describe('EquipmentRequestsPage', () => {
       expect(screen.getByText('Radio XTS 5000')).toBeInTheDocument();
     });
     await user.click(screen.getByText('Fulfill'));
+    await user.selectOptions(await screen.findByLabelText('Final fulfillment method'), 'assignment');
     // Modal pre-fills the request's item and quantity
     await user.click(await screen.findByRole('button', { name: /Fulfill Request/ }));
     await waitFor(() => {
       expect(mockFulfillEquipmentRequest).toHaveBeenCalledWith('req-1', {
+        fulfillment_type: 'assignment',
         item_id: 'item-9',
         quantity: 2,
         expected_return_at: undefined,
         override_allowance: false,
-        fulfillment_type: 'assignment',
       });
     });
     expect(mockToastSuccess).toHaveBeenCalledWith('Request fulfilled');

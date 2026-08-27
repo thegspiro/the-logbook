@@ -14,7 +14,6 @@ import type {
   StorageAreaResponse,
   StorageAreaCreate,
   EquipmentRequestItem,
-  RequestTypeLiteral,
   RequestPriorityLiteral,
   WriteOffRequestItem,
   InventoryItemCreate,
@@ -635,7 +634,7 @@ export const inventoryService = {
     item_id?: string | undefined;
     category_id?: string | undefined;
     quantity?: number;
-    request_type?: RequestTypeLiteral;
+    requested_duration: 'temporary' | 'ongoing';
     priority?: RequestPriorityLiteral;
     reason?: string | undefined;
   }): Promise<{ id: string; item_name: string; status: string; message: string }> {
@@ -674,12 +673,12 @@ export const inventoryService = {
 
   async fulfillEquipmentRequest(
     requestId: string,
-    data?: {
+    data: {
+      fulfillment_type: 'checkout' | 'assignment' | 'issuance';
       item_id?: string | undefined;
       quantity?: number | undefined;
       expected_return_at?: string | undefined;
       override_allowance?: boolean;
-      fulfillment_type?: 'issuance' | 'checkout' | 'assignment';
       substitution_override_reason?: string | undefined;
     }
   ): Promise<{
@@ -695,7 +694,7 @@ export const inventoryService = {
       fulfillment_type: string | null;
       fulfillment_reference_id: string | null;
       message: string;
-    }>(`/inventory/requests/${requestId}/fulfill`, data ?? {});
+    }>(`/inventory/requests/${requestId}/fulfill`, data);
     return response.data;
   },
 

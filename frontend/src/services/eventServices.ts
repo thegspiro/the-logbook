@@ -968,6 +968,7 @@ export interface EquipmentRequestItem {
   };
   quantity: number;
   request_type: RequestTypeLiteral;
+  requested_duration: 'temporary' | 'ongoing';
   priority: RequestPriorityLiteral;
   reason?: string;
   status: string;

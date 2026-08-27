@@ -110,6 +110,8 @@ RequestTypeLiteral = Literal["checkout", "issuance", "purchase", "return"]
 RequestStatusLiteral = Literal["pending", "approved", "denied", "fulfilled"]
 RequestPriorityLiteral = Literal["low", "normal", "high"]
 ReviewStatusLiteral = Literal["approved", "denied"]
+RequestedDurationLiteral = Literal["temporary", "ongoing"]
+FulfillmentTypeLiteral = Literal["checkout", "assignment", "issuance"]
 
 StorageTypeLiteral = Literal[
     "rack", "shelf", "box", "cabinet", "drawer", "bin", "other"
@@ -1433,7 +1435,7 @@ class EquipmentRequestCreate(BaseModel):
     item_id: Optional[UUID] = None
     category_id: Optional[UUID] = None
     quantity: int = Field(default=1, ge=1)
-    request_type: RequestTypeLiteral = Field(default="checkout")
+    requested_duration: RequestedDurationLiteral
     priority: RequestPriorityLiteral = Field(default="normal")
     reason: Optional[FreeText] = None
 
@@ -1454,11 +1456,11 @@ class EquipmentRequestFulfill(BaseModel):
     member's per-category cap when issuing a pool item.
     """
 
+    fulfillment_type: FulfillmentTypeLiteral
     item_id: Optional[UUID] = None
     quantity: Optional[int] = Field(default=None, ge=1)
     expected_return_at: Optional[datetime] = None
     override_allowance: bool = False
-    fulfillment_type: Optional[Literal["issuance", "checkout", "assignment"]] = None
     substitution_override_reason: Optional[FreeText] = Field(
         default=None,
         description="Required justification when fulfilling with an item outside the requested item/category",

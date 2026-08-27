@@ -3557,7 +3557,12 @@ async def create_equipment_request(
         item_id=str(request_data.item_id) if request_data.item_id else None,
         category_id=str(request_data.category_id) if request_data.category_id else None,
         quantity=request_data.quantity,
-        request_type=request_data.request_type,
+        # Keep the legacy transaction-oriented field populated for older
+        # integrations; requested_duration is the authoritative member intent.
+        request_type=(
+            "checkout" if request_data.requested_duration == "temporary" else "issuance"
+        ),
+        requested_duration=request_data.requested_duration,
         priority=request_data.priority,
         reason=request_data.reason,
     )
@@ -3573,7 +3578,7 @@ async def create_equipment_request(
         event_data={
             "request_id": str(req.id),
             "item_name": req.item_name,
-            "request_type": request_data.request_type,
+            "requested_duration": request_data.requested_duration,
         },
         user_id=str(current_user.id),
         username=current_user.username,
@@ -3688,6 +3693,7 @@ async def list_equipment_requests(
                     if isinstance(r.request_type, str)
                     else r.request_type.value
                 ),
+                "requested_duration": r.requested_duration,
                 "priority": (
                     r.priority if isinstance(r.priority, str) else r.priority.value
                 ),

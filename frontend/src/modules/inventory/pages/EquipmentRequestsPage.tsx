@@ -27,7 +27,6 @@ import { useTimezone } from '../../../hooks/useTimezone';
 import { formatDate } from '../../../utils/dateFormatting';
 import { Modal } from '../../../components/Modal';
 import toast from 'react-hot-toast';
-import { equipmentRequestTypeLabel } from '../terminology';
 
 const EquipmentRequestsPage: React.FC = () => {
   const pageSize = 25;
@@ -52,18 +51,11 @@ const EquipmentRequestsPage: React.FC = () => {
   const [fulfillItemId, setFulfillItemId] = useState('');
   const [fulfillQuantity, setFulfillQuantity] = useState('1');
   const [fulfillReturnAt, setFulfillReturnAt] = useState('');
+  const [fulfillmentType, setFulfillmentType] = useState<'checkout' | 'assignment' | 'issuance'>('checkout');
   const [fulfillOverride, setFulfillOverride] = useState(false);
   const [substitutionOverride, setSubstitutionOverride] = useState(false);
   const [substitutionReason, setSubstitutionReason] = useState('');
   const [items, setItems] = useState<InventoryItem[]>([]);
-  const selectedFulfillItem = items.find((item) => item.id === fulfillItemId);
-  const fulfillmentOperation = selectedFulfillItem
-    ? selectedFulfillItem.tracking_type === 'pool'
-      ? 'issuance'
-      : fulfillModal.request?.request_type === 'checkout'
-        ? 'checkout'
-        : 'assignment'
-    : null;
 
   const loadRequests = useCallback(async () => {
     setLoading(true);
@@ -117,6 +109,7 @@ const EquipmentRequestsPage: React.FC = () => {
     setFulfillItemId(req.item_id ?? '');
     setFulfillQuantity(String(req.quantity || 1));
     setFulfillReturnAt('');
+    setFulfillmentType(req.requested_duration === 'ongoing' ? 'assignment' : 'checkout');
     setFulfillOverride(false);
     setSubstitutionOverride(false);
     setSubstitutionReason('');
@@ -182,11 +175,11 @@ const EquipmentRequestsPage: React.FC = () => {
     setSubmitting(true);
     try {
       await inventoryService.fulfillEquipmentRequest(fulfillModal.request.id, {
+        fulfillment_type: fulfillmentType,
         item_id: fulfillItemId.trim() || undefined,
         quantity: Number(fulfillQuantity) || undefined,
         expected_return_at: fulfillReturnAt || undefined,
         override_allowance: fulfillOverride,
-        ...(fulfillmentOperation ? { fulfillment_type: fulfillmentOperation } : {}),
         substitution_override_reason: substitutionOverride ? substitutionReason.trim() : undefined,
       });
       toast.success('Request fulfilled');
@@ -279,7 +272,7 @@ const EquipmentRequestsPage: React.FC = () => {
                         {req.status}
                       </span>
                       <span className="bg-theme-surface-secondary text-theme-text-muted rounded-full px-2 py-0.5 text-xs">
-                        {equipmentRequestTypeLabel(req.request_type)}
+                        {req.requested_duration === 'ongoing' ? 'Ongoing need' : 'Temporary need'}
                       </span>
                     </div>
                     <p className="text-theme-text-muted text-xs">
@@ -408,7 +401,8 @@ const EquipmentRequestsPage: React.FC = () => {
                   <strong>Requester:</strong> {reviewModal.request.requester_name ?? 'Unknown'}
                 </p>
                 <p>
-                  <strong>Member intent:</strong> {equipmentRequestTypeLabel(reviewModal.request.request_type)} —{' '}
+                  <strong>Member intent:</strong>{' '}
+                  {reviewModal.request.requested_duration === 'ongoing' ? 'Ongoing need' : 'Temporary need'} —{' '}
                   {reviewModal.request.reason || 'No reason provided'}
                 </p>
                 <p>
@@ -442,9 +436,9 @@ const EquipmentRequestsPage: React.FC = () => {
                 </p>
                 <p>
                   <strong>Expected return:</strong>{' '}
-                  {reviewModal.request.request_type === 'checkout'
+                  {reviewModal.request.requested_duration === 'temporary'
                     ? 'Required at fulfillment'
-                    : 'Not required (optional temporary assignment)'}
+                    : 'Not required (ongoing assignment)'}
                 </p>
               </div>
 
@@ -515,10 +509,26 @@ const EquipmentRequestsPage: React.FC = () => {
             <div className="space-y-4">
               <div className="text-theme-text-secondary text-sm">
                 <p>Requester: {fulfillModal.request.requester_name ?? 'Unknown'}</p>
-                <p>Requester intent: {equipmentRequestTypeLabel(fulfillModal.request.request_type)}</p>
-                <p>
-                  Operation to perform:{' '}
-                  <strong className="text-theme-text-primary">{fulfillmentOperation ?? 'Select an item'}</strong>
+                <p>Requested duration: {fulfillModal.request.requested_duration}</p>
+              </div>
+
+              <div>
+                <label htmlFor="fulfillment-type" className="text-theme-text-primary mb-1 block text-sm font-medium">
+                  Final fulfillment method
+                </label>
+                <select
+                  id="fulfillment-type"
+                  value={fulfillmentType}
+                  onChange={(e) => setFulfillmentType(e.target.value as 'checkout' | 'assignment' | 'issuance')}
+                  className="form-input w-full"
+                >
+                  <option value="checkout">Checkout — returnable individual item</option>
+                  <option value="assignment">Assignment — assigned individual gear</option>
+                  <option value="issuance">Issuance — pool-tracked stock</option>
+                </select>
+                <p className="text-theme-text-muted mt-1 text-xs">
+                  Select the actual transaction based on availability and department policy. Pool-tracked stock must use
+                  issuance.
                 </p>
               </div>
 
@@ -547,8 +557,7 @@ const EquipmentRequestsPage: React.FC = () => {
                     })}
                 </select>
                 <p className="text-theme-text-muted mt-1 text-xs">
-                  Quantity-tracked stock creates an issuance; serialized gear creates a{' '}
-                  {fulfillModal.request.request_type === 'checkout' ? 'temporary loan' : 'assignment'}.
+                  The selected item must support the final fulfillment method above.
                 </p>
               </div>
 
@@ -566,7 +575,7 @@ const EquipmentRequestsPage: React.FC = () => {
                     className="form-input w-full"
                   />
                 </div>
-                {fulfillModal.request.request_type === 'checkout' && (
+                {fulfillmentType === 'checkout' && (
                   <div>
                     <label htmlFor="fulfill-return" className="text-theme-text-primary mb-1 block text-sm font-medium">
                       Expected Return

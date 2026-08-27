@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.inventory import (
     AssignmentType,
+    CheckOutRecord,
     EquipmentRequest,
     InventoryActionType,
     InventoryNotificationQueue,
@@ -283,6 +284,41 @@ class TestRetirementNotificationQueued:
 class TestEquipmentRequestFulfillment:
 
     @pytest.mark.asyncio
+    async def test_quartermaster_can_choose_checkout_without_changing_intent(
+        self, db_session, setup_org_and_user
+    ):
+        org_id, user_id, member_id = setup_org_and_user
+        svc = InventoryService(db_session)
+        item = await _make_individual_item(svc, org_id, user_id)
+        req = EquipmentRequest(
+            organization_id=org_id,
+            requester_id=member_id,
+            item_name="Spare Radio",
+            item_id=item.id,
+            requested_duration="ongoing",
+            request_type=RequestType.ISSUANCE,
+            status=RequestStatus.APPROVED,
+        )
+        db_session.add(req)
+        await db_session.flush()
+
+        fulfilled, err = await svc.fulfill_equipment_request(
+            request_id=uuid.UUID(req.id),
+            organization_id=uuid.UUID(org_id),
+            fulfilled_by=uuid.UUID(user_id),
+            fulfillment_type="checkout",
+        )
+
+        assert err is None
+        assert fulfilled.requested_duration == "ongoing"
+        assert fulfilled.fulfillment_type == "checkout"
+        checkout = await db_session.get(
+            CheckOutRecord, fulfilled.fulfillment_reference_id
+        )
+        assert checkout is not None
+        assert checkout.user_id == member_id
+
+    @pytest.mark.asyncio
     async def test_fulfill_pool_request_creates_issuance(
         self, db_session, setup_org_and_user
     ):
@@ -306,6 +342,7 @@ class TestEquipmentRequestFulfillment:
             request_id=uuid.UUID(req.id),
             organization_id=uuid.UUID(org_id),
             fulfilled_by=uuid.UUID(user_id),
+            fulfillment_type="issuance",
         )
         assert err is None
         assert fulfilled.status == RequestStatus.FULFILLED
@@ -355,6 +392,7 @@ class TestEquipmentRequestFulfillment:
             organization_id=uuid.UUID(org_id),
             fulfilled_by=uuid.UUID(user_id),
             expected_return_at=due,
+            fulfillment_type="assignment",
         )
         assert err is None
         assert fulfilled.fulfillment_type == "assignment"
@@ -393,6 +431,7 @@ class TestEquipmentRequestFulfillment:
             request_id=uuid.UUID(req.id),
             organization_id=uuid.UUID(org_id),
             fulfilled_by=uuid.UUID(user_id),
+            fulfillment_type="assignment",
         )
         assert err is None
 
@@ -406,10 +445,14 @@ class TestEquipmentRequestFulfillment:
         assert assignment.assignment_type == AssignmentType.PERMANENT
         assert assignment.expected_return_date is None
 
+    # The quartermaster now chooses the transaction outright rather than having
+    # it derived from the member's request_type, so these three assert the
+    # tracking-type invariants against that explicit choice. The old
+    # "operation must match the member's intent" rule is what this branch
+    # removes; what survives is that pool stock is only ever issued and an
+    # individual item is never issued.
     @pytest.mark.asyncio
-    async def test_rejects_checkout_intent_for_pool_item(
-        self, db_session, setup_org_and_user
-    ):
+    async def test_rejects_checkout_of_pool_stock(self, db_session, setup_org_and_user):
         org_id, user_id, member_id = setup_org_and_user
         svc = InventoryService(db_session)
         _, item = await _make_pool_item(svc, org_id, user_id)
@@ -429,12 +472,13 @@ class TestEquipmentRequestFulfillment:
             request_id=uuid.UUID(req.id),
             organization_id=uuid.UUID(org_id),
             fulfilled_by=uuid.UUID(user_id),
+            fulfillment_type="checkout",
         )
         assert fulfilled is None
-        assert "Pool items only support issuance" in err
+        assert "Pool-tracked stock must be fulfilled through an issuance" in err
 
     @pytest.mark.asyncio
-    async def test_rejects_wrong_explicit_operation_for_individual_item(
+    async def test_rejects_issuance_of_an_individual_item(
         self, db_session, setup_org_and_user
     ):
         org_id, user_id, member_id = setup_org_and_user
@@ -456,10 +500,38 @@ class TestEquipmentRequestFulfillment:
             request_id=uuid.UUID(req.id),
             organization_id=uuid.UUID(org_id),
             fulfilled_by=uuid.UUID(user_id),
-            fulfillment_type="assignment",
+            fulfillment_type="issuance",
         )
         assert fulfilled is None
-        assert "must use checkout" in err
+        assert "Individual items must be fulfilled through a checkout" in err
+
+    @pytest.mark.asyncio
+    async def test_rejects_an_unrecognised_fulfillment_type(
+        self, db_session, setup_org_and_user
+    ):
+        org_id, user_id, member_id = setup_org_and_user
+        svc = InventoryService(db_session)
+        item = await _make_individual_item(svc, org_id, user_id)
+        req = EquipmentRequest(
+            organization_id=org_id,
+            requester_id=member_id,
+            item_name="Spare Radio",
+            item_id=item.id,
+            quantity=1,
+            request_type=RequestType.CHECKOUT,
+            status=RequestStatus.APPROVED,
+        )
+        db_session.add(req)
+        await db_session.flush()
+
+        fulfilled, err = await svc.fulfill_equipment_request(
+            request_id=uuid.UUID(req.id),
+            organization_id=uuid.UUID(org_id),
+            fulfilled_by=uuid.UUID(user_id),
+            fulfillment_type="loan",
+        )
+        assert fulfilled is None
+        assert "A valid fulfillment type is required" in err
 
     @pytest.mark.asyncio
     async def test_fulfill_requires_approved_status(
@@ -485,6 +557,7 @@ class TestEquipmentRequestFulfillment:
             request_id=uuid.UUID(req.id),
             organization_id=uuid.UUID(org_id),
             fulfilled_by=uuid.UUID(user_id),
+            fulfillment_type="assignment",
         )
         assert fulfilled is None
         assert err is not None
@@ -515,6 +588,7 @@ class TestEquipmentRequestFulfillment:
             organization_id=uuid.UUID(org_id),
             fulfilled_by=uuid.UUID(user_id),
             item_id=uuid.UUID(substitute.id),
+            fulfillment_type="assignment",
         )
         assert fulfilled is None
         assert "documented substitution override" in err
@@ -549,6 +623,7 @@ class TestEquipmentRequestFulfillment:
             request_id=uuid.UUID(req.id),
             organization_id=uuid.UUID(org_id),
             fulfilled_by=uuid.UUID(user_id),
+            fulfillment_type="issuance",
         )
         assert fulfilled is None
         assert err is not None
@@ -583,6 +658,7 @@ class TestEquipmentRequestFulfillment:
             request_id=uuid.UUID(req.id),
             organization_id=uuid.UUID(org_id),
             fulfilled_by=uuid.UUID(user_id),
+            fulfillment_type="issuance",
         )
         assert err is None
         assert fulfilled.status == RequestStatus.FULFILLED

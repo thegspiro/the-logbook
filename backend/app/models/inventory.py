@@ -1435,6 +1435,9 @@ class EquipmentRequest(Base):
         nullable=False,
         default=RequestType.CHECKOUT,
     )
+    # The member's intent is deliberately separate from the transaction the
+    # quartermaster ultimately chooses to satisfy the request.
+    requested_duration = Column(String(20), nullable=False, default="temporary")
     priority = Column(
         Enum(RequestPriority, values_callable=_enum_values),
         nullable=False,
