@@ -16,11 +16,46 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-[PR #1950](https://github.com/thegspiro/the-logbook/pull/1950) — feature 08
-(membership pipeline, pass 2), no findings, documentation only. Awaiting
-merge before starting feature 09 (medical screening, PHI), pass 2.
+[PR #1952](https://github.com/thegspiro/the-logbook/pull/1952) — feature 09
+(medical screening, PHI, pass 2), no findings, documentation only. Awaiting
+merge before starting feature 10 (documents & legal), pass 2.
 
 ---
+
+### 2026-08-27 — Feature 09 (Medical screening, PHI), pass 2 — no findings
+
+Scoped to the full domain since pass 1's merge (`daf5eaca`, PR #1816). Zero
+changes to any of the 4 declared backend files, and no new migrations
+touching the module's tables. One real, non-trivial change landed outside
+those files: `medical_screening.router` is now gated server-side by a new
+`module_gate("medical_screening", ...)` dependency in `api/v1/api.py`,
+mirrored client-side in `routes.tsx`/`Dashboard.tsx`. Traced the whole
+mechanism rather than taking it at face value: `require_module`'s resolver
+is `get_request_enabled_modules`, the exact function this rotation already
+hardened in ELEC-06 pass 2 (invalid-session-cookie handling); the module
+gate is a pure AND on top of each route's existing permission check, never
+a substitute; the one route with no permission string (`/compliance/me`)
+still requires `Depends(get_current_user)` independently, so the module
+gate's "anonymous passes through" clause (there for routers with
+token-authenticated public routes) is a no-op on this router, not a gap.
+Frontend module gating confirmed to run strictly after the existing
+permission/role checks in `ProtectedRoute.tsx`, same ordering already
+verified for MP-08's equivalent change. `test_module_api_gating.py` +
+3 medical-screening test files: 67 passed, 0 failed. No code changes, no
+new PR needed beyond the doc update. Full detail in
+`MS-09-medical-screening.md`. Rotation row 09 -> done. Next: 10 documents &
+legal.
+
+---
+
+### 2026-08-27 — Feature 08 (Membership pipeline), pass 2 ✅ merged — PR #1950
+
+Merged, with the 2-bug fix commit (`6c824ed1`) included. Confirmed on
+`origin/main` by ancestry check. Both Codex P1 findings (missing
+role-grant ceiling on prospect transfer, missing row lock on the transfer's
+check-before-write) fixed, regression-tested, and their review threads
+replied to and resolved before merge. Rotation row 08 -> done. Next: 09
+medical screening (PHI).
 
 ### 2026-08-27 — Feature 08 (Membership pipeline), pass 2 — Codex caught 2 real P1 bugs, both fixed
 
@@ -1229,8 +1264,8 @@ each row's prior PR is recorded in the Log, not repeated here.
 | 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | ✅     |
 | 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ✅     |
 | 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ✅     |
-| 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | 🔄     |
-| 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ⬜     |
+| 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ✅     |
+| 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | 🔄     |
 | 11  | Inventory                 | INV    | `endpoints/inventory.py` (6539 L), `inventory_service.py`                                                                                       | ⬜     |
 | 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ⬜     |
 | 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | ⬜     |
