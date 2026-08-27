@@ -16,8 +16,14 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-None — PR #1913 (feature 30, onboarding) merged. Feature 31 (scheduled
-tasks) starting next.
+**#1914** (branch `claude/security-review-onboarding-followup`) — a small
+follow-up from the 30-minute monitoring pass, opened _after_ PR #1913
+(feature 30) had already merged: fixes a raw-exception leak in the onboarding
+logo-upload error path and flags an onboarding session-TTL absolute-cap
+decision. Feature 30 stays ✅ (its own review, #1913, is done); this PR does
+not block feature 31 from being picked up — it's a tend-while-open item, not
+a new feature in the rotation. Next feature once #1914 merges: 31 (scheduled
+tasks).
 
 ---
 
