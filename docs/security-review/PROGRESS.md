@@ -16,8 +16,7 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-None — PR #1907 (feature 25, messaging & notifications) merged. Feature 26
-(forms) starting next.
+PR #1908 (feature 26, forms) — open, awaiting CI/review.
 
 ---
 
@@ -71,7 +70,7 @@ data-carrying modules, then the supporting infrastructure.
 | 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ✅              |
 | 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ✅              |
 | 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ✅              |
-| 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                         | ⬜              |
+| 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                         | ⏳              |
 | 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                         | ⬜              |
 | 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`                                                                    | ⬜              |
 | 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                              | ⬜              |
@@ -1008,3 +1007,31 @@ re-runs the whole-codebase sweeps against whatever has landed since.
   raw dict, never through Pydantic. 3 regression tests added. Full local
   completion gate re-verified green (8917/8917 full suite) before the
   final push; CI came back green with no further comments. Next: 26 forms.
+- **26 Forms** — already has thorough prior coverage (module audit
+  iteration 13, FORM-1 through FORM-7, plus a 4-pass app-review). Read
+  `forms.py`, `public/forms.py`, and `forms_service.py` directly in full
+  (~3,600 L combined, moderate size with deep existing coverage — not
+  fanned out). Re-verified FORM-1/2/3/6/7 all hold. **FORM-5** (flagged in
+  every prior pass as needing a product decision on
+  `require_authentication`/`allow_multiple_submissions` enforcement) turned
+  out to already be resolved — shipped correctly since the last review pass
+  but never reflected in `module-audit/forms.md` or `app-review/forms.md`
+  (only `KNOWN_LIMITATIONS.md` had it right); corrected both docs. Reviewed
+  the ~300-line growth in full: a new `event_request` integration type
+  (creates a coordinator-review record from free-text contact fields, no
+  submitter-supplied FK to another module's row, so no FORM-1/2-shaped
+  cross-org write risk exists structurally) and a new
+  `reprocess_submission_integrations` endpoint (org-scoped submission
+  fetch, reuses the same `_entity_in_org`-guarded processors as the
+  original submit path). **FORM-8 (LOW, fixed)** — `update_form`,
+  `update_field`, and `update_integration` all used blind `setattr` loops;
+  an explicit null against a NOT NULL column (`Form.name`,
+  `FormField.label`/`field_type`, `FormIntegration.target_module`/
+  `integration_type`) reached `commit()` and raised an `IntegrityError`
+  caught by a generic exception handler — not a crash, but a confusing
+  error instead of a specific one. All three now route through
+  `apply_updates`. Full local completion gate green: flake8/black/isort
+  clean, migrations validated (no schema change), 64/64 forms-scoped and
+  8922/8922 full backend suite pass. Findings doc:
+  `docs/security-review/FORM-26-forms.md`. PR #1908 opened and subscribed.
+  Next: 27 integrations, once #1908 merges.

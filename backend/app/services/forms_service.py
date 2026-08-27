@@ -31,6 +31,7 @@ from app.models.forms import (
     IntegrationType,
 )
 from app.models.user import Organization, User, UserStatus
+from app.utils.model_updates import apply_updates
 from app.utils.sql_search import LIKE_ESCAPE_CHAR, like_pattern
 
 if TYPE_CHECKING:
@@ -619,8 +620,9 @@ class FormsService:
                 ):
                     update_data["published_at"] = datetime.now(timezone.utc)
 
-            for key, value in update_data.items():
-                setattr(form, key, value)
+            apply_updates(
+                form, update_data, skip={"id", "organization_id", "created_by"}
+            )
 
             await self.db.commit()
             await self.db.refresh(form)
@@ -812,8 +814,7 @@ class FormsService:
             if not field:
                 return None, "Field not found"
 
-            for key, value in update_data.items():
-                setattr(field, key, value)
+            apply_updates(field, update_data, skip={"id", "form_id"})
 
             await self.db.flush()
 
@@ -1249,8 +1250,11 @@ class FormsService:
                     if mapping_error:
                         return None, mapping_error
 
-            for key, value in update_data.items():
-                setattr(integration, key, value)
+            apply_updates(
+                integration,
+                update_data,
+                skip={"id", "form_id", "organization_id"},
+            )
 
             await self.db.commit()
             await self.db.refresh(integration)

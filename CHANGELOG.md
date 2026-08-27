@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Editing a form, form field, or form integration could turn a cleared field into a confusing server error (2026-08-27)
+
+**Fixed**
+
+- Clearing certain required fields while editing a form, one of its fields,
+  or a cross-module integration (e.g. equipment assignment, event
+  registration) returned a generic error instead of a clear message
+  explaining which field couldn't be empty.
+
 ### An already-sent department message could go out a second time; email headers weren't fully sanitized (2026-08-27)
 
 **Fixed**
