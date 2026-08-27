@@ -49,6 +49,7 @@ from app.core.error_codes import CodedHTTPException, ErrorCode
 from app.core.security_middleware import get_client_ip
 from app.core.utils import safe_error_detail
 from app.models.event import Event
+from app.models.membership_pipeline import ProspectStatus
 from app.models.user import User
 from app.schemas.membership_pipeline import (
     ActivityLogResponse,
@@ -1505,6 +1506,26 @@ async def transfer_prospect(
 
     **Requires permission: members.manage or prospective_members.manage**
     """
+    service = MembershipPipelineService(db)
+
+    # Resolved before the ceiling check below, which reports a committed
+    # CRITICAL security alert on denial (see _enforce_rank_grant_ceiling).
+    # An id that doesn't exist, isn't in this org, or was already transferred
+    # can never be transferred regardless of the requested rank, so it must
+    # not generate that alert -- Codex review on PR #1931.
+    prospect = await service.get_prospect(
+        str(prospect_id), str(current_user.organization_id)
+    )
+    if not prospect:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Prospect not found"
+        )
+    if prospect.status == ProspectStatus.TRANSFERRED:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Prospect has already been transferred",
+        )
+
     # A rank grants its default permissions (_collect_user_permissions unions
     # them in), so minting a new member at a rank is the same escalation
     # surface as granting one directly -- a bare members.manage/
@@ -1518,7 +1539,6 @@ async def transfer_prospect(
         current_user, canonical_rank, db, get_client_ip(request)
     )
 
-    service = MembershipPipelineService(db)
     result = await service.transfer_to_membership(
         prospect_id=str(prospect_id),
         organization_id=current_user.organization_id,

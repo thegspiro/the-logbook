@@ -109,6 +109,26 @@ asserting the ceiling call is present and appears before
 `service.transfer_to_membership(...)` in source order. Verified to fail
 against the pre-fix endpoint.
 
+**Correction (Codex review on PR #1931):** the fix above still let a caller
+generate a **committed CRITICAL privilege-escalation alert**
+(`report_privilege_escalation_attempt` inside `_enforce_rank_grant_ceiling`
+commits on denial) for a prospect id that could never have been transferred
+regardless of rank — nonexistent, wrong-org, or already
+`ProspectStatus.TRANSFERRED` — since the ceiling check ran before the service
+resolved and validated the prospect. Not a privilege-escalation gap (the
+escalation itself was still correctly blocked), but real alert-noise: a
+caller could spam garbage prospect ids alongside `rank="fire_chief"` to
+generate CRITICAL alerts for requests that could never succeed, degrading
+the signal value of that monitoring channel. Fixed by resolving the prospect
+via `service.get_prospect(...)` and checking existence + transferred-status
+**before** the ceiling check — same 404/400 responses the service would
+eventually have produced, just returned before the alert-generating check
+runs. Guard test:
+`test_transfer_unknown_prospect_does_not_report_privilege_escalation` in
+`test_prospect_create_privacy.py` — patches `_enforce_rank_grant_ceiling` to
+raise if called, asserts a 404 for a `get_prospect() -> None` case. Verified
+to fail against the pre-correction ordering.
+
 ### PERM-4 — HIGH — Renaming a rank's code could escalate every member currently holding it — ✅ FIXED
 
 **What:** `OperationalRankService.update_rank` bulk-rewrites
@@ -150,12 +170,13 @@ to a non-reserved code) continues to pass unmodified in behavior, confirming
 the fix doesn't block legitimate renames — it needed only a mock-sequencing
 update for the endpoint's one added `get_rank` lookup.
 
-**Completion gate (pass 2):** flake8/black/isort clean on `app/ tests/
-alembic/`; `validate_migrations.py --strict` passed (381 revisions, single
-head); scoped tests (`-k "rank or permission or role or membership_pipeline or
-transfer or org_chart or officer or prospect"`) 945 passed, 2 skipped
-(pre-existing); full backend suite 9039 passed, 22 skipped (pre-existing),
-0 failed. No frontend files touched.
+**Completion gate (pass 2, after the Codex correction):** flake8/black/isort
+clean on `app/ tests/ alembic/`; `validate_migrations.py --strict` passed
+(381 revisions, single head); scoped tests (`-k "rank or permission or role
+or membership_pipeline or transfer or org_chart or officer or prospect"`)
+946 passed, 2 skipped (pre-existing); full backend suite 9039 passed, 22
+skipped (pre-existing), 0 failed (pre-correction baseline — the correction
+itself is covered by the scoped run above). No frontend files touched.
 
 ---
 

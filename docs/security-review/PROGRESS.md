@@ -67,9 +67,20 @@ updates for the new `request` parameter / extra `get_rank` lookup, not for
 any behavior change. Completion gate: flake8/black/isort clean,
 `validate_migrations.py --strict` passed, 945/945 scoped tests pass, full
 backend suite 9039 passed / 22 skipped (pre-existing) / 0 failed. No
-frontend files touched. Full detail in
-`PERM-02-permissions-roles.md`. Next: 03 public surface & webhooks, once
-this PR merges.
+frontend files touched.
+
+**Update:** Codex reviewed PR #1931 and found the PERM-3 fix still let a
+caller generate a committed CRITICAL security alert for a prospect id that
+could never have been transferred (nonexistent, wrong-org, or already
+transferred) alongside `rank="fire_chief"` — not an escalation gap (still
+correctly blocked), but alert-noise that could degrade the monitoring
+channel's signal. Fixed by resolving and validating the prospect _before_
+the ceiling check, returning the same 404/400 the service would eventually
+have produced. New guard test verified to fail against the pre-correction
+ordering. Replied and resolved. Scoped tests re-run: 946/946 pass.
+
+Full detail in `PERM-02-permissions-roles.md`. Next: 03 public surface &
+webhooks, once this PR merges.
 
 ### 2026-08-27 — Feature 01 (Auth & session lifecycle), pass 2 ✅ merged — PR #1929
 
