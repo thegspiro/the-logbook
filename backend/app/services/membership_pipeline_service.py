@@ -2394,7 +2394,14 @@ class MembershipPipelineService:
         membership_type: Optional[str] = None,
     ) -> Optional[Dict[str, Any]]:
         """Transfer a prospect to a full User record"""
-        prospect = await self.get_prospect(prospect_id, organization_id)
+        # Serialize on the prospect row: without the lock, two concurrent
+        # transfer requests can both observe ACTIVE before either commits and
+        # each create a User record for the same prospect, with the loser's
+        # write merely overwriting transferred_user_id (Codex review on this
+        # PR; same read-then-write shape as Pitfall #27's capacity checks).
+        prospect = await self.get_prospect(
+            prospect_id, organization_id, lock_for_update=True
+        )
         if not prospect:
             return None
 

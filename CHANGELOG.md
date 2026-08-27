@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Transferring a prospect to full membership could grant more access than the transferring member had, and a double-click could create two accounts for one prospect (2026-08-27)
+
+**Fixed**
+
+- Converting a prospective member into a full member could assign that new
+  account a role carrying more permissions than the staff member doing the
+  conversion actually had, including a role that controls the whole
+  organization — the same safeguard already applied when creating a member
+  directly now also applies when converting one from the prospect pipeline.
+- Two transfer requests submitted for the same prospect at nearly the same
+  time (e.g. a double-click, or two coordinators acting at once) could each
+  create a separate member account for that one prospect. The transfer now
+  serializes so only one account is ever created.
+
 ### Creating a new member was completely broken, and a member's rank/class safeguard had three gaps (2026-08-27)
 
 **Fixed**
