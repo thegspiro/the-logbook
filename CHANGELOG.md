@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### A logo-upload failure during setup could echo internal error details (2026-08-27)
+
+**Fixed**
+
+- If a logo image uploaded during first-time setup failed to process for an
+  unexpected reason, the error message shown could include raw internal
+  detail instead of a generic message — a follow-up finding from the
+  monitoring pass on the fixes below.
+
 ### First-time setup had a few unbounded requests and inconsistent safeguards (2026-08-27)
 
 **Fixed**

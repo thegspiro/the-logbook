@@ -18,6 +18,8 @@ import magic
 from fastapi import HTTPException
 from PIL import Image
 
+from app.core.utils import safe_error_detail
+
 
 class ImageValidationError(Exception):
     """Custom exception for image validation failures"""
@@ -353,6 +355,4 @@ def validate_logo_image(base64_data: Optional[str]) -> Optional[str]:
     except ImageValidationError as e:
         raise HTTPException(status_code=400, detail=f"Invalid image: {str(e)}")
     except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Image processing failed: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=safe_error_detail(e))

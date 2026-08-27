@@ -165,3 +165,54 @@ regression; the export path remains correctly org-scoped.
 - `pytest tests/ -k "onboard or template_service"` — 106/106 passed.
 - Full backend suite (`pytest tests/`) — 8962 passed, 22 skipped (all
   pre-existing Docker/optional-dependency skips), 0 failures.
+
+---
+
+## Follow-up pass (2026-08-27) — post-merge monitoring sweep
+
+PR #1913 above had already merged when this pass started; the 30-minute
+rotation monitor re-verified the feature's re-verification and did an
+independent fresh read of the same files (unaware of the concurrent PR at
+first — timing race, not duplicated effort by design). Confirmed
+ONB2-30-1/2's caps and the ONB-8 reset re-auth / template mass-assignment
+fixes are present and unchanged. Two items the original pass didn't reach:
+
+### ONB2-30-7 — LOW — `validate_logo_image`'s generic-exception path echoed the raw exception to an unauthenticated caller — ✅ FIXED
+
+`backend/app/utils/image_validator.py`'s `validate_logo_image` catches
+`ImageValidationError` correctly (safe, curated message) but its `except
+Exception` fallback returned `f"Image processing failed: {str(e)}"` directly
+as the HTTP 500 detail — bypassing `safe_error_detail()`, unlike every other
+error path in this module and the rest of onboarding. Reachable from three
+unauthenticated-but-session-based routes (`create_organization`,
+`save_department_info`, `save_session_organization`) whenever Pillow's
+re-encode step throws something other than `ImageValidationError` (e.g. a
+`MemoryError` or a Pillow internal error carrying buffer/format details).
+
+**Fix:** route through `safe_error_detail(e)` (logs the real error at ERROR
+level server-side, returns the generic message to the client), matching the
+pattern used everywhere else. Added
+`test_validate_logo_image_generic_failure_does_not_leak_exception_text` to
+`tests/test_image_validator.py` as a guard against reintroduction.
+
+### ONB2-30-8 — LOW (flagged) — Onboarding session TTL has no absolute cap, only a sliding 30-minute window
+
+`validate_session` renews `expires_at` by another `SESSION_EXPIRY_HOURS`
+(30 min) on **every** successful call, including lightweight reads like
+`GET /session/data` — there is no maximum age tracked from session creation.
+A holder of a compromised session id + CSRF token (the same prerequisite
+ONB-7 already assumes) can keep the pre-completion exploitation window open
+indefinitely by polling any session-scoped GET, rather than it expiring 30
+minutes after issuance as the user-facing message and (now-corrected) model
+docstring both imply. Capping absolute session lifetime is a policy choice
+(what should the cap be, and should routine wizard navigation ever hit it) —
+flagged rather than fixed. Also fixed in this pass: the model docstring
+claimed "2 hours," the actual constant is 30 minutes
+(`backend/app/models/onboarding.py`).
+
+## Completion gate (follow-up pass)
+
+- `flake8` / `black --check` / `isort --check-only` on
+  `app/utils/image_validator.py`, `app/models/onboarding.py`,
+  `tests/test_image_validator.py` — clean.
+- `pytest tests/test_image_validator.py` — 22/22 passed (1 new).

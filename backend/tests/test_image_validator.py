@@ -174,3 +174,20 @@ class TestConvenienceHelpers:
 
     def test_get_image_validator_is_singleton(self):
         assert get_image_validator() is get_image_validator()
+
+    def test_validate_logo_image_generic_failure_does_not_leak_exception_text(
+        self, monkeypatch
+    ):
+        """A non-ImageValidationError failure must go through safe_error_detail,
+        never echo the raw exception (which can carry internal buffer/format
+        details) straight to an unauthenticated onboarding caller."""
+
+        def _boom(self, *args, **kwargs):
+            raise RuntimeError("internal buffer overrun at 0xdeadbeef")
+
+        monkeypatch.setattr(ImageValidator, "validate_and_process", _boom)
+        with pytest.raises(HTTPException) as exc_info:
+            validate_logo_image(_png_b64())
+        assert exc_info.value.status_code == 500
+        assert "0xdeadbeef" not in str(exc_info.value.detail)
+        assert "internal buffer overrun" not in str(exc_info.value.detail)
