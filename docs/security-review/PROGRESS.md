@@ -17,9 +17,11 @@ feature. The rotation cannot outrun its own review queue.
 ## Open PR
 
 Feature 05 (finance & approvals, pass 2) —
-[PR #1942](https://github.com/thegspiro/the-logbook/pull/1942). Codex caught
-5 real bugs after the initial "no findings" push (see log below); all fixed
-and pushed. Next after merge: 06 elections & ballots, pass 2.
+[PR #1944](https://github.com/thegspiro/the-logbook/pull/1944). #1942 (the
+docs-only "no findings" push) merged before Codex's review comments landed
+and before this fix could be pushed to it — #1944 is a fresh branch/PR
+carrying the fix, rebased onto current `main` per the "PR already merged"
+branch-reuse rule. Next after merge: 06 elections & ballots, pass 2.
 
 ---
 
@@ -27,7 +29,9 @@ and pushed. Next after merge: 06 elections & ballots, pass 2.
 
 Codex reviewed PR #1942 (the "no findings" doc-only push below) and flagged
 6 issues; 5 verified as real defects (not just documentation gaps) and
-fixed, 1 was a documentation correction:
+fixed, 1 was a documentation correction. #1942 merged (docs-only, as
+originally pushed) before this fix commit could be pushed to it, so the fix
+went out as a fresh PR, #1944, rebased onto current `main`:
 
 - **FIN-10** — `approve_step`/`deny_step` read `ApprovalStepRecord` without
   `.with_for_update()`, unlike the token-based `approve_by_token`/
@@ -67,8 +71,9 @@ path; confirmed the frontend gap against the backend schema it feeds) before
 fixing — not taken on Codex's word. Six new regression tests added, each
 confirmed to fail on the pre-fix code via `git stash`. Completion gate:
 flake8/black/isort clean, migrations valid, scoped tests 240 passed/1
-skipped, full backend suite 9049 passed/22 skipped/0 failed, frontend
-`tsc`/`eslint`/`vitest` (80 tests) clean. Pushed to PR #1942.
+skipped, full backend suite green (re-confirmed after the rebase onto
+`main`), frontend `tsc`/`eslint`/`vitest` (80 tests) clean. Pushed as
+PR #1944.
 
 ### 2026-08-27 — Feature 05 (Finance & approvals), pass 2 — no findings
 
