@@ -16,7 +16,57 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-PR #1911 (feature 28, security, audit & IP) — open, awaiting CI/review.
+None — PR #1911 (feature 28, security, audit & IP) merged. Feature 29
+(reports & analytics) starting next.
+
+---
+
+### 2026-08-27 — Feature 28 (Security, audit & IP) merged — PR #1911
+
+Merged (squash, `03916fdd`). Three parallel background agents re-verified
+module-audit SEC-1 through SEC-10 against current code, with extra scrutiny
+on files that had grown significantly since the last full read
+(`core/audit.py` +60%, `error_logs.py` +38%). Six findings surfaced; four
+fixed:
+
+- SEC2-28-1 (MEDIUM, most severe): `create_member` flushed the new `User` row
+  before checking the caller's permissions covered the requested `role_ids`.
+  A denied ceiling check's alert-reporting helper commits the whole
+  transaction by design, which also persisted the should-be-rejected user —
+  a live, ACTIVE, password-set account with no roles, behind a request the
+  admin believed failed outright. Fixed by resolving/ceiling-checking roles
+  before the user row is created.
+- SEC2-28-2 (MEDIUM): the audit hash chain's `calculate_hash` never covered
+  `event_category`/`severity` despite both being read into the hash-input
+  dict — a DB-write-level attacker could rewrite either with no hash
+  mismatch. Fixed with a hash-version bump (v3 → v4); old rows verify
+  unchanged.
+- SEC2-28-3 (LOW/MED): `GET /ip-security/blocked-attempts` was permanently
+  empty — the block-logging path wrote only to `audit_logs`, never to the
+  table the endpoint reads. Fixed by wiring the write.
+- SEC2-28-4 (LOW/MED): `add_blocked_country` always inserted despite
+  `country_code` being unique and unblock being a soft delete, so
+  re-blocking a previously-unblocked country 500'd. Fixed with an
+  update-in-place lookup.
+
+Flagged, not fixed: approved IP-allowlist exceptions have had zero effect on
+geo-blocking enforcement since PR #1544 correctly closed a cross-tenant
+bypass by hard-coding an empty allowlist, without a safe replacement or doc
+update. Needs an owner decision — corrected the stale docstring/doc claims
+instead of guessing at a fix.
+
+Codex review found one real P2 during the round: `request_method` was
+written to a `String(10)` column with no length bound (unlike `request_path`
+immediately above it), so a malformed/overlong HTTP method would overflow
+the column, fail the commit, and silently drop the row from both security
+logs. Fixed by truncating to 10 chars, with a regression test; replied and
+resolved the thread.
+
+Completion gate: 268/268 scoped tests, 8927/8927 full suite (22 pre-existing
+skips), black/isort/flake8 clean, migration validation passed (no
+migrations — hash-version bump is pure application logic).
+
+Next: 29 reports & analytics.
 
 ---
 
@@ -72,7 +122,7 @@ data-carrying modules, then the supporting infrastructure.
 | 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ✅              |
 | 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                         | ✅              |
 | 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                         | ✅              |
-| 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`                                                                    | ⏳              |
+| 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`                                                                    | ✅              |
 | 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                              | ⬜              |
 | 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (24 unauth bootstrap routes)                                                                                             | ⬜              |
 | 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                   | ⬜              |
