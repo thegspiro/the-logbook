@@ -39,9 +39,19 @@ event_requests public routes, elections token routes, onboarding bootstrap,
 `api/public/*`) — no new ungated route. No findings, no code changes.
 Completion gate: flake8/black/isort clean, `validate_migrations.py --strict`
 passed, guard tests pass, `tsc --noEmit` 0 errors, `eslint .` 0 errors (10
-pre-existing warnings). Full detail in
-`SEC-00-cross-cutting-baseline.md`. Next: 01 auth & session lifecycle, once
-this PR merges.
+pre-existing warnings); full backend suite 9036 passed, 22 skipped
+(pre-existing), 0 failed. Full detail in `SEC-00-cross-cutting-baseline.md`.
+
+**Update:** Codex reviewed PR #1924 and found the route-auth-coverage walk's
+file list (`endpoints/*.py` glob) was narrower than pass 1's actual scope and
+missed `app/api/v1/public_portal_admin.py` — a router mounted directly in
+`api.py` outside the `endpoints/` package, 13 routes. Re-scanned with the file
+list derived from `api.py`'s router registrations instead of a directory
+glob: 1526 routes total (up from 1513), same 68 ungated, all 13
+`public_portal_admin.py` routes already `Depends(get_current_user)`-gated —
+conclusion unchanged, denominator corrected. Replied and resolved.
+
+Next: 01 auth & session lifecycle, once this PR merges.
 
 ### 2026-08-27 — Rotation pass complete; reset for pass 2
 

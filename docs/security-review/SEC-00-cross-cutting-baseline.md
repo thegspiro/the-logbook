@@ -34,6 +34,18 @@ elections.py's 4 token-scoped routes, onboarding.py's 24 bootstrap routes, and
 the public/* surface (22, including `salesforce_sync.py`'s OAuth callback).
 **No new ungated route outside those five features.**
 
+**Correction (Codex review on PR #1924):** the walk above was scoped by
+directory glob (`endpoints/*.py`), which is narrower than pass 1's actual
+"whole `app/api/`" scope and silently excluded
+`app/api/v1/public_portal_admin.py` — a router mounted directly in
+`api.py` (`from app.api.v1 import onboarding, public_portal_admin`, not
+`from app.api.v1.endpoints import ...`) with 13 real route decorators. Derived
+the file list from `api.py`'s router registrations instead of a directory
+glob and re-ran: 80 files, 1526 routes (up from 1513 — the 13 newly-included
+routes), same 68 ungated routes as above. All 13 `public_portal_admin.py`
+routes carry `Depends(get_current_user)`; the corrected scan changes the
+denominator, not the finding. **No new ungated route.**
+
 No findings this pass. All five pass-1 invariants hold; two are now enforced
 by tests rather than by review, exactly as pass 1 intended.
 
