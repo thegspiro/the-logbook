@@ -16,8 +16,9 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-None. Feature 10 (documents & legal, pass 2) reviewed — 1 real finding,
-fixed. Next: 11 inventory, pass 2.
+[PR #1953](https://github.com/thegspiro/the-logbook/pull/1953) — feature 10
+(documents & legal, pass 2), 1 real finding (facility-folder locking gap),
+fixed. Awaiting merge before starting feature 11 (inventory), pass 2.
 
 ---
 
