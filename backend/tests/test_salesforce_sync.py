@@ -305,6 +305,28 @@ async def test_token_response_rejects_untrusted_instance_url(monkeypatch):
         await sf._refresh_access_token()
 
 
+def test_api_url_rejects_untrusted_instance_url_on_the_cached_token_path():
+    """CRON2-31-12: _refresh_access_token validates instance_url, but
+    _ensure_access_token skips it entirely whenever an access_token is
+    already cached. _api_url is the one call site every outbound request
+    goes through regardless of token state, so it must validate too — an
+    org-admin-editable instance_url pointing at an internal address, with a
+    cached token attached, would otherwise become an unvalidated SSRF
+    target hit every 30 minutes by the unattended sync task."""
+    sf = SalesforceService(
+        {"instance_url": "https://internal.example", "access_token": "cached-token"}
+    )
+    with pytest.raises(Exception, match="invalid"):
+        sf._api_url("/query")
+
+
+def test_api_url_accepts_a_valid_instance_url():
+    sf = SalesforceService(
+        {"instance_url": "https://acme.my.salesforce.com", "access_token": "t"}
+    )
+    assert sf._api_url("/query").startswith("https://acme.my.salesforce.com/")
+
+
 async def test_query_fails_instead_of_returning_partial_pages(monkeypatch):
     sf = SalesforceService(
         {"instance_url": "https://acme.my.salesforce.com", "access_token": "token"}

@@ -1884,10 +1884,11 @@ class NFPAExposureRecord(Base):
 class ReturnRequestStatus(str, enum.Enum):
     """Status of a member-initiated return request"""
 
-    PENDING = "pending"
-    APPROVED = "approved"
+    REQUESTED = "requested"
+    RECEIVED = "received"
+    INSPECTED = "inspected"
     DENIED = "denied"
-    COMPLETED = "completed"  # Approved and physically returned
+    COMPLETED = "completed"
 
 
 class ReturnRequestType(str, enum.Enum):
@@ -1902,10 +1903,9 @@ class ReturnRequest(Base):
     """
     Member-initiated return request.
 
-    Members can declare they want to return equipment.  A quartermaster
-    reviews and either approves (triggering the actual return) or denies
-    the request.  This prevents members from simply claiming they returned
-    an item without physical validation.
+    Members notify the quartermaster that they intend to return equipment.
+    Only a quartermaster recording physical receipt can close the holding;
+    the member's report remains alongside the independent inspection.
     """
 
     __tablename__ = "return_requests"
@@ -1964,7 +1964,7 @@ class ReturnRequest(Base):
     status = Column(
         Enum(ReturnRequestStatus, values_callable=_enum_values),
         nullable=False,
-        default=ReturnRequestStatus.PENDING,
+        default=ReturnRequestStatus.REQUESTED,
         index=True,
     )
     reviewed_by = Column(
@@ -1972,6 +1972,11 @@ class ReturnRequest(Base):
     )
     reviewed_at = Column(DateTime(timezone=True))
     review_notes = Column(Text)
+    observed_condition = Column(Enum(ItemCondition, values_callable=_enum_values))
+    verified_identifier = Column(String(255))
+    received_quantity = Column(Integer)
+    follow_up_type = Column(String(32))
+    follow_up_id = Column(String(36))
 
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())

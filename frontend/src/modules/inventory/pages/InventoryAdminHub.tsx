@@ -518,8 +518,8 @@ export const InventoryAdminHub: React.FC = () => {
             <ProminentCard
               to="/inventory/checkouts"
               icon={<ArrowDownToLine className="h-5 w-5 text-amber-600 dark:text-amber-400" />}
-              title="Checkouts"
-              description="Manage active and overdue equipment checkouts"
+              title="Temporary Loans"
+              description="Manage serialized gear due back on a specific date"
               stat={summary?.overdue_checkouts}
               statLabel="overdue"
               iconBg="bg-amber-500/10"

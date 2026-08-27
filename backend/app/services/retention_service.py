@@ -30,6 +30,7 @@ from loguru import logger
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.audit import log_audit_event
 from app.core.config import settings
 from app.models.email_template import MessageHistory
 from app.models.error_log import ErrorLog
@@ -257,30 +258,80 @@ class RetentionService:
         instead of its original hardcoded 90 days.
         """
         now = datetime.now(UTC)
-        results: dict[str, Any] = {"orgs_processed": 0, "deleted": {}}
+        results: dict[str, Any] = {"orgs_processed": 0, "deleted": {}, "errors": []}
 
+        # Deliberately not filtered on Organization.active: retention exists
+        # to keep PII-bearing operational records from piling up
+        # indefinitely, and a decommissioned department's stale records are
+        # the case this most needs to run against, not an exception to it.
+        #
+        # Snapshot id + config into plain values *before* the loop, rather
+        # than reading org.id/org.settings from the ORM object inside it.
+        # await self.db.rollback() expires every persistent object in the
+        # session, not just the failed org's — so once any org's rollback
+        # fires, every later org's pre-fetched Organization row is expired,
+        # and touching one of its attributes (org.settings, even org.id)
+        # triggers an implicit reload that AsyncSession cannot do outside
+        # the greenlet bridge, raising MissingGreenlet and aborting every
+        # remaining org (Codex review, PR #1915).
         orgs = (await self.db.execute(select(Organization))).scalars().all()
-        for org in orgs:
-            config = self._org_config(org)
-            for rc in RECORD_CLASSES:
-                if only_class is not None and rc.key != only_class:
-                    continue
-                days = self._effective_days(config, rc)
-                if days is None:
-                    continue
-                # Defense in depth: a floor also applies at enforcement
-                # time, in case settings were edited outside the API.
-                deleted = await self._delete_expired(
-                    rc.model,
-                    rc.timestamp_attr,
-                    now - timedelta(days=days),
-                    org.id,
-                    rc.row_filter,
-                )
-                if deleted:
-                    key = f"{org.id}:{rc.key}"
-                    results["deleted"][key] = deleted
-            results["orgs_processed"] += 1
+        org_snapshots = [(str(org.id), self._org_config(org)) for org in orgs]
+
+        for org_id, config in org_snapshots:
+            try:
+                org_deleted: dict[str, int] = {}
+                for rc in RECORD_CLASSES:
+                    if only_class is not None and rc.key != only_class:
+                        continue
+                    days = self._effective_days(config, rc)
+                    if days is None:
+                        continue
+                    # Defense in depth: a floor also applies at enforcement
+                    # time, in case settings were edited outside the API.
+                    deleted = await self._delete_expired(
+                        rc.model,
+                        rc.timestamp_attr,
+                        now - timedelta(days=days),
+                        org_id,
+                        rc.row_filter,
+                    )
+                    if deleted:
+                        org_deleted[rc.key] = deleted
+                if org_deleted:
+                    results["deleted"].update(
+                        {f"{org_id}:{k}": v for k, v in org_deleted.items()}
+                    )
+                    await log_audit_event(
+                        db=self.db,
+                        event_type="retention_enforcement",
+                        event_category="security",
+                        severity="info",
+                        event_data={"deleted": org_deleted},
+                        organization_id=org_id,
+                    )
+                # Commit this org's deletions (and its audit event, via the
+                # nested savepoint log_audit_event uses) before moving to the
+                # next. Orgs share one session with no per-org isolation
+                # here — unlike every multi-org loop elsewhere in the
+                # scheduled-tasks file — so one org's failed delete/flush
+                # would otherwise poison the session for every org after it
+                # (CRON2-31-7), and a failure anywhere in the run would
+                # discard every earlier org's deletions when the outer
+                # caller's eventual rollback fires. orgs_processed/errors are
+                # only recorded after commit succeeds, so a rolled-back org
+                # is never reported as processed or its deletions as real.
+                await self.db.commit()
+                results["orgs_processed"] += 1
+            except Exception as e:
+                logger.error(f"Retention enforcement failed for org {org_id}: {e}")
+                results["errors"].append({"org_id": org_id, "error": str(e)})
+                for key in list(results["deleted"]):
+                    if key.startswith(f"{org_id}:"):
+                        del results["deleted"][key]
+                try:
+                    await self.db.rollback()
+                except Exception:
+                    pass
 
         # Platform-level: blocked access attempts carry IP/user-agent PII
         # and have no org column. Env-configured, 0/None disables.

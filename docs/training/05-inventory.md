@@ -1,5 +1,19 @@
 # Inventory Management
 
+## Canonical quartermaster terms
+
+| Term               | Meaning                                                                          |
+| ------------------ | -------------------------------------------------------------------------------- |
+| **Assignment**     | Serialized gear held on an ongoing basis.                                        |
+| **Temporary loan** | Serialized gear expected back by a date.                                         |
+| **Issuance**       | Quantity-tracked stock given to a member.                                        |
+| **Return**         | Physically receiving assigned or issued gear.                                    |
+| **Check-in**       | Closing a temporary loan.                                                        |
+| **Transfer**       | Moving serialized gear between holders.                                          |
+| **Distribution**   | The umbrella action for a mixed batch that may create several transaction types. |
+
+“Checkout” is retained only in legacy database fields and URLs for compatibility; it is not the name of either a temporary-loan record or a distribution operation in the user interface.
+
 The Inventory module tracks department equipment, supplies, and gear. It supports permanent item assignments, temporary checkouts, pool issuances, maintenance scheduling, barcode/QR scanning, thermal label printing, low-stock alerts, batch operations, and departure clearance for departing members.
 
 ---

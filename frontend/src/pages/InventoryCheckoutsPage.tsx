@@ -1,5 +1,5 @@
 /**
- * Inventory Checkouts Page
+ * Temporary Loans Page
  *
  * Displays active and overdue inventory checkouts with check-in capability.
  */
@@ -49,13 +49,13 @@ export const InventoryCheckoutsPage: React.FC = () => {
     setError(null);
     try {
       const [activeData, overdueData] = await Promise.all([
-        inventoryService.getActiveCheckouts(),
-        inventoryService.getOverdueCheckouts(),
+        inventoryService.getActiveTemporaryLoans(),
+        inventoryService.getOverdueTemporaryLoans(),
       ]);
       setActiveCheckouts(activeData.checkouts || []);
       setOverdueCheckouts(overdueData.checkouts || []);
     } catch (err: unknown) {
-      setError(getErrorMessage(err, 'Failed to load checkouts'));
+      setError(getErrorMessage(err, 'Failed to load temporary loans'));
     } finally {
       setLoading(false);
     }
@@ -69,7 +69,7 @@ export const InventoryCheckoutsPage: React.FC = () => {
     if (!checkInModal.checkoutId) return;
     setSubmitting(true);
     try {
-      await inventoryService.checkInItem(checkInModal.checkoutId, returnCondition, damageNotes || undefined);
+      await inventoryService.checkInTemporaryLoan(checkInModal.checkoutId, returnCondition, damageNotes || undefined);
       toast.success(`${checkInModal.itemName} checked in successfully`);
       setCheckInModal({ open: false, checkoutId: '', itemName: '' });
       setReturnCondition('good');
@@ -92,13 +92,13 @@ export const InventoryCheckoutsPage: React.FC = () => {
     if (!extendModal.checkoutId || !extendDate) return;
     setSubmitting(true);
     try {
-      await inventoryService.extendCheckout(extendModal.checkoutId, new Date(extendDate).toISOString());
+      await inventoryService.extendTemporaryLoan(extendModal.checkoutId, new Date(extendDate).toISOString());
       toast.success('Return date extended');
       setExtendModal({ open: false, checkoutId: '', itemName: '', currentDue: '' });
       setExtendDate('');
       await fetchCheckouts();
     } catch (err: unknown) {
-      toast.error(getErrorMessage(err, 'Failed to extend checkout'));
+      toast.error(getErrorMessage(err, 'Failed to extend temporary loan'));
     } finally {
       setSubmitting(false);
     }
@@ -129,7 +129,7 @@ export const InventoryCheckoutsPage: React.FC = () => {
       <div className="flex min-h-screen items-center justify-center">
         <div className="flex flex-col items-center space-y-4" role="status" aria-live="polite">
           <RefreshCw className="text-theme-text-muted h-10 w-10 animate-spin" aria-hidden="true" />
-          <p className="text-theme-text-secondary text-sm">Loading checkouts...</p>
+          <p className="text-theme-text-secondary text-sm">Loading temporary loans...</p>
         </div>
       </div>
     );
@@ -145,9 +145,9 @@ export const InventoryCheckoutsPage: React.FC = () => {
               <Package className="h-6 w-6 text-white" aria-hidden="true" />
             </div>
             <div className="min-w-0">
-              <h1 className="text-theme-text-primary text-xl font-bold sm:text-2xl">Inventory Checkouts</h1>
+              <h1 className="text-theme-text-primary text-xl font-bold sm:text-2xl">Temporary Loans</h1>
               <p className="text-theme-text-secondary hidden text-sm sm:block">
-                Manage active and overdue equipment checkouts
+                Manage serialized gear expected back by a date
               </p>
             </div>
           </div>
@@ -174,7 +174,7 @@ export const InventoryCheckoutsPage: React.FC = () => {
         )}
 
         {/* Tabs */}
-        <div className="tab-scroll mb-6" role="tablist" aria-label="Checkout views">
+        <div className="tab-scroll mb-6" role="tablist" aria-label="Temporary loan views">
           <button
             onClick={() => setActiveTab('active')}
             role="tab"
@@ -186,7 +186,7 @@ export const InventoryCheckoutsPage: React.FC = () => {
             }`}
           >
             <Clock className="h-4 w-4" aria-hidden="true" />
-            Active Checkouts
+            Active Temporary Loans
             {activeCheckouts.length > 0 && (
               <span className="ml-1 rounded-full bg-blue-500/10 px-2 py-0.5 text-xs text-blue-700 dark:bg-blue-500/20 dark:text-blue-400">
                 {activeCheckouts.length}
@@ -221,7 +221,7 @@ export const InventoryCheckoutsPage: React.FC = () => {
               aria-hidden="true"
             />
             <label htmlFor="checkout-search" className="sr-only">
-              Search checkouts
+              Search temporary loans
             </label>
             <input
               autoCapitalize="none"
@@ -244,12 +244,12 @@ export const InventoryCheckoutsPage: React.FC = () => {
             <div className="card-secondary p-8 text-center">
               <Package className="text-theme-text-muted mx-auto mb-4 h-12 w-12" aria-hidden="true" />
               <h3 className="text-theme-text-primary mb-2 text-lg font-semibold">
-                {activeTab === 'active' ? 'No Active Checkouts' : 'No Overdue Checkouts'}
+                {activeTab === 'active' ? 'No Active Temporary Loans' : 'No Overdue Temporary Loans'}
               </h3>
               <p className="text-theme-text-muted">
                 {activeTab === 'active'
-                  ? 'There are no items currently checked out.'
-                  : 'All checked out items are within their expected return dates.'}
+                  ? 'There are no active temporary loans.'
+                  : 'All temporary loans are within their expected return dates.'}
               </p>
             </div>
           ) : (
@@ -277,7 +277,7 @@ export const InventoryCheckoutsPage: React.FC = () => {
                   />
                 ))}
                 <div className="text-theme-text-muted py-2 text-center text-xs">
-                  {filteredList.length} checkout{filteredList.length !== 1 ? 's' : ''}
+                  {filteredList.length} temporary loan{filteredList.length !== 1 ? 's' : ''}
                 </div>
               </div>
               {/* Desktop table view */}
@@ -299,7 +299,7 @@ export const InventoryCheckoutsPage: React.FC = () => {
                           scope="col"
                           className="text-theme-text-muted hidden p-3 text-left text-xs font-medium uppercase sm:table-cell"
                         >
-                          Checkout Date
+                          Loaned Date
                         </th>
                         <th
                           scope="col"
@@ -379,7 +379,7 @@ export const InventoryCheckoutsPage: React.FC = () => {
                   </table>
                 </div>
                 <div className="border-theme-surface-border text-theme-text-muted border-t p-3 text-xs">
-                  {filteredList.length} checkout{filteredList.length !== 1 ? 's' : ''}
+                  {filteredList.length} temporary loan{filteredList.length !== 1 ? 's' : ''}
                 </div>
               </div>
             </>
@@ -473,7 +473,7 @@ export const InventoryCheckoutsPage: React.FC = () => {
           </div>
         )}
 
-        {/* Extend Checkout Modal */}
+        {/* Extend Temporary Loan Modal */}
         {extendModal.open && (
           <div
             className="fixed inset-0 z-50 overflow-y-auto"
