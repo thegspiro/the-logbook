@@ -269,6 +269,27 @@ class TestProfileUpdate:
         assert target.member_class == "social"
         assert target.member_status == "junior"
 
+    async def test_an_explicit_null_class_is_judged_as_the_resulting_default(self):
+        """USR-07 pass 2 (Codex): an explicit ``member_class: null`` clears
+        the class, and _reconcile_membership resolves that to DEFAULT_CLASS
+        (operational) -- not "leave the old class in place". Judging the
+        rank-contradiction check against the stale stored class instead of
+        the resulting one wrongly refused a rank the save would actually
+        have landed as operational, non-administrative.
+        """
+        caller = _caller()
+        target = _target(rank=None, member_class="administrative")
+        db = self._db(caller, target)
+
+        await self._run(
+            caller,
+            target,
+            db,
+            UserUpdate(member_class=None, rank="captain"),
+        )
+
+        assert target.rank == "captain"
+
 
 # ---------------------------------------------------------------------------
 # PATCH /users/{id}/membership-type
@@ -495,6 +516,7 @@ class TestAutomaticTierAdvancement:
             membership_type=membership_type,
             membership_type_changed_at=None,
             hire_date=date(date.today().year - 30, 1, 1),
+            deleted_at=None,
         )
 
     @staticmethod
@@ -512,6 +534,10 @@ class TestAutomaticTierAdvancement:
         db.execute.side_effect = [
             _Result(org),
             SimpleNamespace(scalars=lambda: SimpleNamespace(all=lambda: [member])),
+            # The per-member locked re-select advance_all takes before
+            # mutating (Codex, USR-07 pass 2): returns the same object, as
+            # if nothing else changed it between the batch read and the lock.
+            _Result(member),
         ]
         service = MembershipTierService(db)
         with patch(
@@ -547,13 +573,17 @@ class TestAutomaticTierAdvancement:
 
 
 class TestTheTwoWritersSerialize:
-    """The rule is a read-then-write split across two endpoints.
+    """The rule is a read-then-write split across three writers.
 
-    One request sets a rank while another sets the class to administrative;
-    both read an operational, rankless member, both pass their own check, and
+    One request sets a rank while another sets the class to administrative
+    (or an unattended scan advances a member into an administrative tier);
+    each reads an operational, rankless member, each passes its own check, and
     each writes only its own column — leaving a row that is administrative and
-    ranked, which neither request would have permitted on its own. Both writers
-    have to take the row lock, or neither is serialized.
+    ranked, which none of them would have permitted alone. Every writer has to
+    take the row lock (and re-populate from it -- a plain re-SELECT for a row
+    already in this session's identity map, e.g. the caller's own row on a
+    self-update, would not otherwise pick up the fresh values even under the
+    lock), or none of them are serialized against each other.
     """
 
     @staticmethod
@@ -561,15 +591,33 @@ class TestTheTwoWritersSerialize:
         source = inspect.getsource(func)
         return ".with_for_update()" in source
 
+    @staticmethod
+    def _repopulates(func) -> bool:
+        source = inspect.getsource(func)
+        return "populate_existing=True" in source
+
     def test_the_profile_endpoint_locks_the_row(self):
         from app.api.v1.endpoints import users as users_ep
 
         assert self._locks(users_ep.update_user_profile)
+        assert self._repopulates(users_ep.update_user_profile)
 
     def test_the_membership_type_endpoint_locks_the_row(self):
         from app.api.v1.endpoints import member_status as status_ep
 
         assert self._locks(status_ep.change_membership_type)
+        assert self._repopulates(status_ep.change_membership_type)
+
+    def test_the_automatic_tier_advancement_locks_each_member_it_advances(self):
+        """The unattended writer -- caught missing its lock entirely on
+        USR-07 pass 2 review (Codex): the batch SELECT that finds candidates
+        was never locked, so a concurrent profile update racing the scan
+        could still land the administrative-member-with-a-rank contradiction
+        the other two writers were built to prevent."""
+        from app.services.membership_tier_service import MembershipTierService
+
+        assert self._locks(MembershipTierService.advance_all)
+        assert self._repopulates(MembershipTierService.advance_all)
 
 
 if __name__ == "__main__":  # pragma: no cover
