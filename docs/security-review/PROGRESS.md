@@ -16,7 +16,7 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-PR #1917 (feature 33, core infrastructure) — open, awaiting CI/review.
+None — PR #1917 merged. Feature 34 (frontend shared) starting next.
 
 ---
 
@@ -549,6 +549,12 @@ out) / 22 skipped.
 
 Next: 34 frontend shared, once this PR merges.
 
+### 2026-08-27 — Feature 33 (Core infrastructure) merged — PR #1917
+
+Merged (squash, `5a1f859c`). Codex round confirmed and fixed (see the
+Codex-round log entry above); the 14 original findings plus the 6 Codex
+findings are all resolved with no open items. Rotation row 33 -> done.
+
 ---
 
 ## Relationship to the existing review passes
@@ -608,7 +614,7 @@ data-carrying modules, then the supporting infrastructure.
 | 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (24 unauth bootstrap routes)                                                                                             | ✅              |
 | 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                   | ✅              |
 | 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                  | ✅              |
-| 33  | Core infrastructure       | CORE   | `core/security_middleware.py`, `core/database.py`, `core/config.py`                                                                             | ⏳              |
+| 33  | Core infrastructure       | CORE   | `core/security_middleware.py`, `core/database.py`, `core/config.py`                                                                             | ✅              |
 | 34  | Frontend shared           | FE     | `utils/apiCache.ts`, module axios instances, `ProtectedRoute`, global stores                                                                    | ⬜              |
 
 **35 iterations per full pass.** After 34 the rotation wraps to 00, which
