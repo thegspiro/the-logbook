@@ -5,10 +5,11 @@ Business logic for organization-related operations.
 """
 
 import copy
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 from uuid import UUID
 
 from loguru import logger
+from pydantic import EmailStr, TypeAdapter
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -23,10 +24,36 @@ from app.schemas.organization import (
     MembershipIdSettings,
     ModuleSettings,
     OrganizationSettings,
+    SchedulingNotificationSettings,
     SetupProgressSettings,
     decrypt_settings_secrets,
     encrypt_settings_secrets,
 )
+
+_EMAIL_ADAPTER = TypeAdapter(EmailStr)
+
+
+def _valid_emails(values: Any) -> List[str]:
+    """Filter to syntactically valid addresses, dropping anything a
+    since-tightened schema would reject.
+
+    Used only when reconstructing *stored* settings for a read (never on a
+    write, which stays strictly validated by ``OrganizationSettingsUpdate``).
+    Without this, a legacy value saved back when ``cc_emails`` was a plain
+    ``List[str]`` would make ``get_organization_settings`` raise a
+    ``ValidationError`` on every future read of that org's settings —
+    including the read at the end of an unrelated settings update (e.g.
+    toggling a module), locking an admin out of fixing anything.
+    """
+    if not isinstance(values, list):
+        return []
+    out: List[str] = []
+    for value in values:
+        try:
+            out.append(_EMAIL_ADAPTER.validate_python(value))
+        except Exception:
+            continue
+    return out
 
 
 def _deep_merge_settings(
@@ -296,6 +323,28 @@ class OrganizationService:
             ]
         )
 
+        # Parse scheduling notification settings. Reconstructed explicitly
+        # (rather than left in extra_settings for Pydantic to validate
+        # blindly) so a legacy cc_emails entry saved before EmailStr
+        # tightened the field is dropped rather than raising — see
+        # _valid_emails' docstring.
+        scheduling = settings_dict.get("scheduling", {})
+        scheduling_settings = (
+            SchedulingNotificationSettings(
+                **{
+                    k: (
+                        _valid_emails(scheduling[k])
+                        if k == "cc_emails"
+                        else scheduling[k]
+                    )
+                    for k in scheduling
+                    if k in SchedulingNotificationSettings.model_fields
+                }
+            )
+            if scheduling
+            else SchedulingNotificationSettings()
+        )
+
         # Collect extra/custom settings (e.g. station_mode) that aren't
         # covered by a dedicated sub-schema so they round-trip through the API.
         known_keys = {
@@ -310,6 +359,7 @@ class OrganizationService:
             "membership_id",
             "department_email",
             "setup",
+            "scheduling",
         }
         extra_settings = {k: v for k, v in settings_dict.items() if k not in known_keys}
 
@@ -322,6 +372,7 @@ class OrganizationService:
             membership_id=membership_id_settings,
             department_email=dept_email_settings,
             setup=setup_settings,
+            scheduling=scheduling_settings,
             **extra_settings,
         )
 

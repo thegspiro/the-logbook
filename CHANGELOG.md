@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### An already-sent department message could go out a second time; email headers weren't fully sanitized (2026-08-27)
+
+**Fixed**
+
+- Rescheduling an already-sent department message to a time in the past
+  (rather than the future, which was already blocked) could make the
+  background delivery task treat it as newly due and send it out again —
+  a duplicate in-app notification, a duplicate email, and, for an urgent
+  message, a duplicate text to everyone it was targeted at.
+- A notification rule's description or configuration couldn't actually be
+  cleared through the update endpoint — the request appeared to succeed
+  but the old value silently remained.
+- The shared email-sending layer sanitized the Subject line and sender
+  name against header-injection characters but not the To, Cc, Reply-To,
+  or unsubscribe-link fields, and one settings field that feeds a Cc
+  address wasn't validated as an email address at all before reaching it.
+- Large email attachments sent to many recipients at once (e.g. a
+  generated election package sent to the full voter roster) had no size
+  limit and could consume a large amount of memory; a connection failure
+  partway through such a send could also crash the whole batch instead of
+  reporting which messages went out.
+- An internal cache used to remember an email's color scheme grew by one
+  entry for every email ever sent, with nothing ever clearing it out —
+  a slow, unbounded memory leak in any long-running server process.
+
 ### A secretary could submit and approve their own meeting minutes; a foreign member could be assigned an action item (2026-08-27)
 
 **Fixed**
