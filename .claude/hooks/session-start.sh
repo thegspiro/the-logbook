@@ -130,7 +130,24 @@ fi
 
 # utf8mb4_unicode_ci matches docker-compose's --collation-server. Migrations
 # create some tables with an explicit unicode_ci collation and a foreign key
-# across two collations fails with MySQL error 3780.
+# across two collations fails with MySQL error 3780 (errno 150 on MariaDB).
+#
+# ALTER DATABASE only changes the default for tables created *after* it, so a
+# database that already holds general_ci tables cannot be repaired that way. A
+# resumed session inherits whatever the previous one left behind, and anything
+# that recreated this database without an explicit COLLATE — a scratch script,
+# a hand-run CREATE DATABASE — leaves exactly that. The upgrade then dies on
+# 20260120_0013's locations FK, which reads as "the migration chain is broken"
+# when the truth is "this sandbox's database is stale". Drop it and start over:
+# it holds nothing but the last session's test rows.
+existing_collation="$(mysql -u root -N -B -e \
+  "SELECT DEFAULT_COLLATION_NAME FROM information_schema.SCHEMATA \
+   WHERE SCHEMA_NAME='$DB_NAME';" 2>/dev/null || true)"
+if [ -n "$existing_collation" ] && [ "$existing_collation" != "utf8mb4_unicode_ci" ]; then
+  log "rebuilding $DB_NAME: collation is $existing_collation, not utf8mb4_unicode_ci"
+  mysql -u root -e "DROP DATABASE $DB_NAME;" >/dev/null 2>&1 || true
+fi
+
 mysql -u root <<SQL >/dev/null 2>&1 || true
 CREATE DATABASE IF NOT EXISTS $DB_NAME CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 ALTER DATABASE $DB_NAME CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
@@ -169,9 +186,13 @@ log "building the schema (alembic upgrade head, then repair_schema)"
   # is already broken — the exact false reassurance this hook exists to
   # prevent. Report it and leave the database as CI would find it.
   if ! python3 -m alembic upgrade head >/tmp/session-alembic.log 2>&1; then
-    log "ERROR: alembic upgrade head failed — CI will fail here too."
+    log "ERROR: alembic upgrade head failed."
+    log "       CI migrates an empty database, so this reproduces there ONLY if"
+    log "       $DB_NAME was empty. If a previous session left tables behind,"
+    log "       drop the database and re-run this hook before believing it:"
+    log "         mysql -u root -e 'DROP DATABASE $DB_NAME'"
     log "       Not running repair_schema: it would build the models' tables"
-    log "       directly and hide this behind a green local suite."
+    log "       directly and hide a real failure behind a green local suite."
     tail -n 15 /tmp/session-alembic.log | sed 's/^/       | /'
     exit 1
   fi
