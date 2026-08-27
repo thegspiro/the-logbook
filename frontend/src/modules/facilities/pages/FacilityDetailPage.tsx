@@ -18,6 +18,7 @@ import MaintenanceSection from '../components/MaintenanceSection';
 import InspectionsSection from '../components/InspectionsSection';
 import ContactsSection from '../components/ContactsSection';
 import ComplianceSection from '../components/ComplianceSection';
+import FilesSection from '../components/FilesSection';
 import { useFacilitiesAccess } from '../hooks/useFacilitiesAccess';
 import {
   AccessKeysSection,
@@ -254,6 +255,15 @@ export default function FacilityDetailPage() {
           )}
           {section === 'compliance' && (
             <ComplianceSection facilityId={facility.id} canCreate={canCreate} canDelete={canManage} />
+          )}
+          {section === 'files' && (
+            <FilesSection
+              facilityId={facility.id}
+              canCreate={canCreate}
+              canEdit={canEdit}
+              canDelete={canManage}
+              canViewSensitive={canViewSensitive}
+            />
           )}
         </div>
       </div>
