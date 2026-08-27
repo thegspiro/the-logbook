@@ -213,7 +213,7 @@ function getCtaActions(notification: NotificationLogRecord): CtaAction[] {
 
 interface NotificationCardProps {
   notification: NotificationLogRecord;
-  onMarkRead: (id: string) => void;
+  onMarkRead: (id: string) => void | Promise<void>;
   onTogglePin: (id: string, pinned: boolean) => void;
 }
 
@@ -256,11 +256,15 @@ const NotificationCard: React.FC<NotificationCardProps> = ({ notification, onMar
     // Mark as read when the user collapses after their first open
     if (!willExpand && !hasBeenOpened && !notification.read) {
       setHasBeenOpened(true);
-      onMarkRead(notification.id);
+      void onMarkRead(notification.id);
     }
   };
 
-  const handleNavigate = (url: string) => {
+  const handleNavigate = async (url: string) => {
+    if (!notification.read && !hasBeenOpened) {
+      setHasBeenOpened(true);
+      await onMarkRead(notification.id);
+    }
     if (url.startsWith('/')) {
       void navigate(url);
     }
@@ -345,7 +349,7 @@ const NotificationCard: React.FC<NotificationCardProps> = ({ notification, onMar
             {ctaActions.map((action, idx) => (
               <button
                 key={action.label}
-                onClick={() => handleNavigate(action.url)}
+                onClick={() => void handleNavigate(action.url)}
                 className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors max-md:min-h-[44px] ${
                   idx === 0
                     ? 'bg-orange-600 text-white hover:bg-orange-700'

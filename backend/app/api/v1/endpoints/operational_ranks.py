@@ -10,6 +10,7 @@ from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import PaginationParams, get_current_user, require_permission
+from app.api.v1.endpoints.users import _enforce_rank_grant_ceiling
 from app.core.database import get_db
 from app.core.utils import ensure_found, handle_service_errors
 from app.models.user import User
@@ -142,6 +143,24 @@ async def update_rank(
     **Permissions required:** settings.manage
     """
     service = OperationalRankService(db)
+
+    # A rank code is the runtime key get_rank_default_permissions() resolves
+    # against, and update_rank() cascades a code change to every member who
+    # currently holds it -- so renaming one to a code that grants more than
+    # the caller's own permissions is the same escalation settings.manage
+    # alone must not authorize (CLAUDE.md pitfall 23's aliasing note is the
+    # same failure mode: a rank's grants reach the database by a side door).
+    # Enforced only on an actual change, matching _enforce_rank_grant_ceiling's
+    # other call sites.
+    update_data = data.model_dump(exclude_unset=True)
+    if "rank_code" in update_data:
+        existing = ensure_found(
+            await service.get_rank(rank_id, current_user.organization_id), "Rank"
+        )
+        if update_data["rank_code"] != existing.rank_code:
+            await _enforce_rank_grant_ceiling(
+                current_user, update_data["rank_code"], db, None
+            )
 
     async with handle_service_errors("Failed to update rank"):
         rank = await service.update_rank(

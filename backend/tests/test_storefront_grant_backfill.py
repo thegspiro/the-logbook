@@ -35,6 +35,7 @@ _VERSIONS = Path(__file__).resolve().parents[1] / "alembic" / "versions"
 _LATER_REVOCATIONS = (
     _VERSIONS / "20260825_2015_a1f7c34e9b02_revoke_baseline_notifications_view.py",
     _VERSIONS / "20260826_1700_e4f5a6b7c8d9_revoke_regular_member_facilities_view.py",
+    _VERSIONS / "20260827_1000_c7e2b9a41f83_revoke_officer_facilities_view.py",
 )
 
 

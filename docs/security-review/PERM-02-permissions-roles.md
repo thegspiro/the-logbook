@@ -1,6 +1,186 @@
 # Security Review — Permissions & Roles
 
-**Prefix:** `PERM` · **Iteration:** 02 · **Reviewed:** 2026-08-25 · **PR:** #1805
+**Prefix:** `PERM` · **Iteration:** 02 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2) · **PR:** #1805 (pass 1)
+
+---
+
+## Pass 2 (2026-08-27)
+
+Unlike feature 01, this feature's files grew substantially since pass 1
+(`git diff 33f8f8ec HEAD`, the PR #1805 merge commit): `dependencies.py` +108
+net, `core/permissions.py` +240 net, `role_service.py` +270 net,
+`operational_rank_service.py` +271 net, `org_chart_service.py` +450 net,
+`roles.py` +50, `org_chart.py` +21, `operational_ranks.py` +3.
+`officers.py`/`officer_service.py` are unchanged. Three parallel background
+agents reviewed org_chart, roles/role_service, and operational_ranks against
+the full diff and current file content; I reviewed `dependencies.py` and the
+`core/permissions.py` registry churn directly.
+
+### Verified good ✅ (new since pass 1)
+
+- **`dependencies.py`'s new per-request auth/module-enablement caching**
+  (`request.state.authenticated_user`, `get_request_enabled_modules`) —
+  the auth cache is populated only after every rejection check in
+  `get_current_user` passes, so a second resolution within the same request
+  can only replay an already-granted result, never short-circuit a refusal
+  into an approval. `require_module`'s pass-through for a sessionless caller
+  is deliberately scoped to `get_optional_current_user`, which itself still
+  fails closed on a present-but-invalid credential (delegates to the
+  mandatory `get_current_user`) — only a genuinely absent credential
+  resolves to `None`. Confirmed the one place this matters in practice
+  (`salesforce_sync.router`'s public OAuth callback, gated by
+  `module_gate("integrations", ...)`) is exactly the case the function's
+  own docstring names.
+- **New `EMT` rank and `_LINE_MEMBER_PERMISSIONS` extraction** — a real bug
+  fix (EMT-only members previously resolved to zero default permissions,
+  per the code comment referencing #1833) rather than a new gap: rank
+  defaults are computed at request time by `get_rank_default_permissions()`,
+  never persisted, so there is no Pitfall #23 staleness to backfill — unlike
+  `firefighter`, `emt` has no mirroring `DEFAULT_POSITIONS` entry, confirmed
+  by grep.
+- **New `training.configure` permission**, added to several officer ranks'
+  `default_permissions` and to matching `DEFAULT_POSITIONS` entries — the
+  migration `20260825_1400_e3b7c25f9a41_grant_training_configure.py`
+  backfills exactly the seeded rows Pitfall #23 requires, and goes further:
+  it only re-grants a position that still holds the permission
+  (`training.manage`) it's mirroring, so a department that already
+  deliberately stripped `training.manage` from a customized position isn't
+  silently re-granted the sibling capability.
+- **`org_chart_service.py`'s multi-holder rework** (new `position_id`/
+  `rank_code`/`holders[]` on a node) — every new client-supplied reference
+  is validated in-org before persisting (`assert_in_org` for `position_id`/
+  holder `user_id`, an explicit org-scoped query for `rank_code`), every new
+  read path re-derives holder identity through an org-filtered query, and
+  the new `MAX_HOLDERS_PER_NODE = 25` is enforced in both the schema and the
+  service. New FK `position_id` is `SET NULL` + `nullable=True`. No findings.
+- **`role_service.py`'s transactional-audit rework** — the ceiling
+  machinery (`_enforce_permission_grant_ceiling`, `_enforce_role_edit_ceiling`)
+  is byte-for-byte unchanged; the diff only makes an audit-write failure roll
+  back its role mutation instead of leaving them inconsistent. One
+  LOW/informational note: `set_user_roles`/`assign_role_to_user` enforce only
+  the administrator-retention guard, not the grant ceiling — inert today
+  (confirmed via grep: no endpoint calls either), a trap only if a future
+  bulk-assignment endpoint calls them directly without its own ceiling check.
+
+### Findings
+
+### PERM-3 — HIGH — Prospect-to-member transfer could mint an admin via a client-supplied rank — ✅ FIXED
+
+**What:** `POST /prospects/{id}/transfer` creates a full `User` account
+(active, password set) with a client-supplied `rank`, validated only for
+"is this rank configured" (`OperationalRankService.resolve_rank_code`), never
+for whether the caller's own permissions cover what that rank grants.
+`_enforce_rank_grant_ceiling` exists specifically to close this class —
+its own docstring names the exact scenario — but was never wired into this
+path.
+
+**Where:** `backend/app/api/v1/endpoints/membership_pipeline.py`
+(`transfer_prospect`, pre-fix); `backend/app/services/membership_pipeline_service.py`
+(`_do_transfer`).
+
+**Failure scenario:** the endpoint is gated on `members.manage` OR
+`prospective_members.manage` — neither implies `settings.manage` or
+`security.manage`. A caller holding only one of those two (e.g. a Membership
+Coordinator position) transfers a prospect in with `rank="fire_chief"` in the
+request body. `resolve_rank_code` confirms `fire_chief` is a configured rank
+and lets it through; the new `User` row is created with that rank and a
+generated password, live immediately. `get_rank_default_permissions()`
+resolves rank grants purely by code string at request time, so the new
+account — or the caller's own account, if they transfer themselves in as a
+"prospect" — now carries `security.manage`, `users.delete`, and every other
+`fire_chief` default, gained through a parallel, previously-unguarded
+permission source. Exactly the escalation `_enforce_rank_grant_ceiling`'s
+docstring on `users.py` describes for `create_member`, reachable through a
+second, un-audited door.
+
+**Impact:** HIGH — full tenant-admin-equivalent privilege escalation from a
+comparatively low, plausibly-held permission pair, requiring only a form
+submission (no code execution, no existing admin cooperation).
+
+**Fix:** `transfer_prospect` now resolves the canonical rank and enforces
+`_enforce_rank_grant_ceiling` (the same helper `create_member` and
+`update_user_profile` already use) before calling the service — no
+duplicated ceiling logic, one owner. The already-canonicalized rank is
+passed through to the service so its own redundant resolution is a no-op.
+
+**Guard test:** `test_transfer_prospect_calls_rank_ceiling` in
+`test_privilege_ceiling_wiring.py` — source-inspects `transfer_prospect`,
+asserting the ceiling call is present and appears before
+`service.transfer_to_membership(...)` in source order. Verified to fail
+against the pre-fix endpoint.
+
+**Correction (Codex review on PR #1931):** the fix above still let a caller
+generate a **committed CRITICAL privilege-escalation alert**
+(`report_privilege_escalation_attempt` inside `_enforce_rank_grant_ceiling`
+commits on denial) for a prospect id that could never have been transferred
+regardless of rank — nonexistent, wrong-org, or already
+`ProspectStatus.TRANSFERRED` — since the ceiling check ran before the service
+resolved and validated the prospect. Not a privilege-escalation gap (the
+escalation itself was still correctly blocked), but real alert-noise: a
+caller could spam garbage prospect ids alongside `rank="fire_chief"` to
+generate CRITICAL alerts for requests that could never succeed, degrading
+the signal value of that monitoring channel. Fixed by resolving the prospect
+via `service.get_prospect(...)` and checking existence + transferred-status
+**before** the ceiling check — same 404/400 responses the service would
+eventually have produced, just returned before the alert-generating check
+runs. Guard test:
+`test_transfer_unknown_prospect_does_not_report_privilege_escalation` in
+`test_prospect_create_privacy.py` — patches `_enforce_rank_grant_ceiling` to
+raise if called, asserts a 404 for a `get_prospect() -> None` case. Verified
+to fail against the pre-correction ordering.
+
+### PERM-4 — HIGH — Renaming a rank's code could escalate every member currently holding it — ✅ FIXED
+
+**What:** `OperationalRankService.update_rank` bulk-rewrites
+`User.rank` for every member currently holding the rank's old code when the
+`rank_code` field is changed (`update(User).where(User.rank == old_rank_code)
+.values(rank=new_rank_code)`), with no check on what permissions the new code
+grants versus the caller's own. The endpoint requires only `settings.manage`.
+
+**Where:** `backend/app/services/operational_rank_service.py:322-329`
+(pre-fix, unchanged this pass); `backend/app/api/v1/endpoints/operational_ranks.py`
+(`update_rank`, pre-fix).
+
+**Failure scenario:** a caller holding `settings.manage` but not
+`security.manage` renames any rank currently held by one or more members
+(including, if applicable, themselves) — e.g. a low-privilege "Probationary"
+rank — to the reserved code `fire_chief`. `get_rank_default_permissions()`
+resolves by code string with no notion of "this row was renamed rather than
+created", so every member who held the old code instantly carries every
+`fire_chief` default permission the next time their permissions are computed.
+Same underlying threat model as `_enforce_rank_grant_ceiling` protects
+against, reached through a rename instead of a direct grant.
+
+**Impact:** HIGH — same class as PERM-3, and here it retroactively escalates
+every existing holder of the renamed code at once, not just one new account.
+
+**Fix:** the endpoint now fetches the existing rank, and — only when
+`rank_code` is actually changing — calls `_enforce_rank_grant_ceiling` with
+the new code before invoking `service.update_rank`. A rename to an
+unrecognized/custom code (the common case — most departments' ranks aren't
+reserved words) resolves to `get_rank_default_permissions() == []` and
+passes trivially, so this does not block ordinary rank renames.
+
+**Guard test:** `test_update_rank_calls_rank_ceiling_before_renaming` in
+`test_privilege_ceiling_wiring.py` — source-inspects `update_rank`, asserting
+the ceiling call precedes `service.update_rank(...)`. Verified to fail
+against the pre-fix endpoint. The existing
+`test_update_endpoint_returns_renamed_rank_after_member_migration` (renaming
+to a non-reserved code) continues to pass unmodified in behavior, confirming
+the fix doesn't block legitimate renames — it needed only a mock-sequencing
+update for the endpoint's one added `get_rank` lookup.
+
+**Completion gate (pass 2, after the Codex correction):** flake8/black/isort
+clean on `app/ tests/ alembic/`; `validate_migrations.py --strict` passed
+(381 revisions, single head); scoped tests (`-k "rank or permission or role
+or membership_pipeline or transfer or org_chart or officer or prospect"`)
+946 passed, 2 skipped (pre-existing); full backend suite 9039 passed, 22
+skipped (pre-existing), 0 failed (pre-correction baseline — the correction
+itself is covered by the scoped run above). No frontend files touched.
+
+---
+
+## Pass 1 (2026-08-25)
 
 **Backend:** `app/api/dependencies.py` (381 L), `app/core/permissions.py`
 (1960 L), `app/api/v1/endpoints/roles.py` (691 L) +
