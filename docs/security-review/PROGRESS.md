@@ -16,12 +16,40 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-Feature 02 (permissions & roles, pass 2) — [PR #1931](https://github.com/thegspiro/the-logbook/pull/1931),
-branch `claude/security-review-perm-02-pass2`. Two HIGH privilege-escalation
-findings (PERM-3, PERM-4), both fixed. See log entry below and
-`PERM-02-permissions-roles.md`'s "Pass 2" section.
+Feature 03 (public surface & webhooks, pass 2) — branch
+`claude/security-review-pub-03-pass2`, PR pending open. No findings, no code
+changes (docs only). See log entry below and
+`PUB-03-public-surface-webhooks.md`'s "Pass 2" section.
 
 ---
+
+### 2026-08-27 — Feature 03 (Public surface & webhooks), pass 2 — no findings
+
+Only 3 of the 12 in-scope files changed since pass 1: `finance_approvals.py`
+(a new fail-closed budget-limit error mapped to 409 — verified PUB-4's
+self-approval guard and the Pitfall-#27 locking read are both still present
+and correctly ordered ahead of it), `legal.py` (a correctness fix for
+independently-dated privacy/terms text, DOC-10 — no security-relevant
+change), and `portal.py` (a genuine new defense-in-depth fix: the portal's
+API-key-authenticated router now also checks the `public_info` module is
+enabled, closing a gap where feature 02's new `require_module` mechanism
+didn't reach this separately-mounted router — confirmed applied to all
+three relevant routes, correctly not applied to the two that don't need
+it). File count unchanged at 12, no new public endpoint. No findings, no
+code changes. Completion gate: flake8/black/isort clean,
+`validate_migrations.py --strict` passed, pass-1 guard tests 10/10 pass,
+366/366 broader scoped tests pass, full backend suite run separately. No
+frontend files touched. Full detail in
+`PUB-03-public-surface-webhooks.md`. Next: 04 storefront & payments, once
+this PR merges.
+
+### 2026-08-27 — Feature 02 (Permissions & roles), pass 2 ✅ merged — PR #1931
+
+Merged. Two HIGH privilege-escalation findings (PERM-3, PERM-4), both fixed;
+Codex's follow-up (PERM-3's fix could still generate spurious CRITICAL
+security alerts for an unresolvable prospect) also fixed and its thread
+resolved before merge. Rotation row 02 -> done for pass 2. Next: 03 public
+surface & webhooks.
 
 ### 2026-08-27 — Feature 02 (Permissions & roles), pass 2 — 2 HIGH findings, both fixed
 
@@ -838,8 +866,8 @@ each row's prior PR is recorded in the Log, not repeated here.
 | --- | ------------------------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
 | 00  | Cross-cutting baseline    | SEC    | whole-codebase sweeps; see `SEC-00-cross-cutting-baseline.md`                                                                                   | ✅     |
 | 01  | Auth & session lifecycle  | AUTH   | `endpoints/auth.py`, `auth_service.py`, `mfa_service.py`, `oauth_service.py`                                                                    | ✅     |
-| 02  | Permissions & roles       | PERM   | `dependencies.py`, `core/permissions.py`, `roles.py`, `operational_ranks.py`, `officers.py`, `org_chart.py`                                     | ⏳     |
-| 03  | Public surface & webhooks | PUB    | `api/public/*` (20 unauth routes), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`                                      | ⬜     |
+| 02  | Permissions & roles       | PERM   | `dependencies.py`, `core/permissions.py`, `roles.py`, `operational_ranks.py`, `officers.py`, `org_chart.py`                                     | ✅     |
+| 03  | Public surface & webhooks | PUB    | `api/public/*` (20 unauth routes), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`                                      | ⏳     |
 | 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                              | ⬜     |
 | 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                     | ⬜     |
 | 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | ⬜     |
