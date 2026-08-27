@@ -272,6 +272,17 @@ export const inventoryService = {
     return response.data;
   },
 
+  /** Create a dated temporary loan. The legacy wire route remains stable. */
+  async createTemporaryLoan(data: {
+    item_id: string;
+    user_id: string;
+    expected_return_at?: string;
+    checkout_reason?: string;
+  }): Promise<{ id: string }> {
+    const response = await api.post<{ id: string }>('/inventory/checkout', data);
+    return response.data;
+  },
+
   async checkInItem(checkoutId: string, returnCondition: string, damageNotes?: string): Promise<void> {
     await api.post(`/inventory/checkout/${checkoutId}/checkin`, {
       return_condition: returnCondition,
@@ -296,6 +307,34 @@ export const inventoryService = {
   },
 
   async getOverdueCheckouts(): Promise<{ checkouts: UserCheckoutItem[]; total: number }> {
+    const response = await api.get<{ checkouts: UserCheckoutItem[]; total: number }>('/inventory/checkout/overdue');
+    return response.data;
+  },
+
+  async checkInTemporaryLoan(loanId: string, returnCondition: string, damageNotes?: string): Promise<void> {
+    await api.post(`/inventory/checkout/${loanId}/checkin`, {
+      return_condition: returnCondition,
+      damage_notes: damageNotes,
+    });
+  },
+
+  async extendTemporaryLoan(
+    loanId: string,
+    expectedReturnAt: string
+  ): Promise<{ message: string; expected_return_at: string }> {
+    const response = await api.patch<{ message: string; expected_return_at: string }>(
+      `/inventory/checkout/${loanId}/extend`,
+      { expected_return_at: expectedReturnAt }
+    );
+    return response.data;
+  },
+
+  async getActiveTemporaryLoans(): Promise<{ checkouts: UserCheckoutItem[]; total: number }> {
+    const response = await api.get<{ checkouts: UserCheckoutItem[]; total: number }>('/inventory/checkout/active');
+    return response.data;
+  },
+
+  async getOverdueTemporaryLoans(): Promise<{ checkouts: UserCheckoutItem[]; total: number }> {
     const response = await api.get<{ checkouts: UserCheckoutItem[]; total: number }>('/inventory/checkout/overdue');
     return response.data;
   },

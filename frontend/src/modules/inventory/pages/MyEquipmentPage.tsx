@@ -40,6 +40,7 @@ import { getErrorMessage } from '../../../utils/errorHandling';
 import { RETURN_CONDITION_OPTIONS } from '../../../constants/enums';
 import { Modal } from '../../../components/Modal';
 import { VariantCapsules } from '../components/VariantCapsules';
+import { equipmentRequestTypeLabel } from '../terminology';
 import { SizePreferencesModal } from '../components/SizePreferencesModal';
 import toast from 'react-hot-toast';
 
@@ -272,12 +273,12 @@ const MyEquipmentPage: React.FC = () => {
     setSubmitting(true);
     try {
       await inventoryService.extendCheckout(extendModal.checkoutId, new Date(extendDate).toISOString());
-      toast.success('Checkout extended');
+      toast.success('Temporary loan extended');
       setExtendModal({ open: false, checkoutId: '' });
       setExtendDate('');
       void loadInventory();
     } catch (err: unknown) {
-      toast.error(getErrorMessage(err, 'Failed to extend checkout'));
+      toast.error(getErrorMessage(err, 'Failed to extend temporary loan'));
     } finally {
       setSubmitting(false);
     }
@@ -356,7 +357,7 @@ const MyEquipmentPage: React.FC = () => {
           />
           <StatCard
             icon={<Clock className="h-5 w-5 text-yellow-500" />}
-            label="Checkouts"
+            label="Temporary loans"
             value={checkouts.length}
             extra={
               overdueCount > 0 ? (
@@ -418,7 +419,7 @@ const MyEquipmentPage: React.FC = () => {
                           {r.item_name}
                         </span>
                         <span className="text-theme-text-muted ml-0 block text-xs sm:ml-2 sm:inline">
-                          {r.request_type} &middot; {formatDate(r.created_at, tz)}
+                          {equipmentRequestTypeLabel(r.request_type)} &middot; {formatDate(r.created_at, tz)}
                         </span>
                       </div>
                       <span
@@ -510,9 +511,13 @@ const MyEquipmentPage: React.FC = () => {
           ))}
         </Section>
 
-        {/* Active Checkouts */}
-        <Section title="Active Checkouts" count={checkouts.length} icon={<Clock className="h-4 w-4 text-yellow-500" />}>
-          {checkouts.length === 0 && <p className="text-theme-text-muted py-2 text-sm">No active checkouts.</p>}
+        {/* Active temporary loans */}
+        <Section
+          title="Active Temporary Loans"
+          count={checkouts.length}
+          icon={<Clock className="h-4 w-4 text-yellow-500" />}
+        >
+          {checkouts.length === 0 && <p className="text-theme-text-muted py-2 text-sm">No active temporary loans.</p>}
           {checkouts.map((c) => (
             <div
               key={c.checkout_id}
@@ -533,7 +538,7 @@ const MyEquipmentPage: React.FC = () => {
                   )}
                 </div>
                 <div className="text-theme-text-muted flex flex-wrap gap-2 text-xs">
-                  <span>Out: {formatDate(c.checked_out_at, tz)}</span>
+                  <span>Loaned: {formatDate(c.checked_out_at, tz)}</span>
                   {c.expected_return_at && <span>Due: {formatDate(c.expected_return_at, tz)}</span>}
                 </div>
               </div>
@@ -807,7 +812,7 @@ const MyEquipmentPage: React.FC = () => {
         <Modal
           isOpen={extendModal.open}
           onClose={() => setExtendModal({ open: false, checkoutId: '' })}
-          title="Extend Checkout"
+          title="Extend Temporary Loan"
           size="sm"
         >
           <div className="space-y-4">
