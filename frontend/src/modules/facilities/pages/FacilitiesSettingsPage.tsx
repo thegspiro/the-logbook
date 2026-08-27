@@ -1,0 +1,252 @@
+import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import { ArrowLeft, Loader2, Pencil, Plus, Trash2 } from 'lucide-react';
+import { useNavigate } from 'react-router';
+import toast from 'react-hot-toast';
+import { facilitiesService } from '../../../services/facilitiesServices';
+import { getErrorMessage } from '../../../utils/errorHandling';
+import type { FacilityStatus, FacilityType, MaintenanceType } from '../types';
+type Lookup = FacilityType | FacilityStatus | MaintenanceType;
+type Kind = 'types' | 'statuses' | 'maintenance';
+const definitions: Record<Kind, { title: string; singular: string }> = {
+  types: { title: 'Facility Types', singular: 'facility type' },
+  statuses: { title: 'Facility Statuses', singular: 'facility status' },
+  maintenance: { title: 'Maintenance Types', singular: 'maintenance type' },
+};
+export default function FacilitiesSettingsPage() {
+  const navigate = useNavigate(),
+    [data, setData] = useState<Record<Kind, Lookup[]>>({ types: [], statuses: [], maintenance: [] }),
+    [loading, setLoading] = useState(true),
+    [editing, setEditing] = useState<{ kind: Kind; item?: Lookup } | null>(null);
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [types, statuses, maintenance] = await Promise.all([
+        facilitiesService.getTypes(),
+        facilitiesService.getStatuses(),
+        facilitiesService.getMaintenanceTypes({ limit: 500 }),
+      ]);
+      setData({ types, statuses, maintenance });
+    } catch (error) {
+      toast.error(getErrorMessage(error, 'Unable to load facility settings'));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+  useEffect(() => void load(), [load]);
+  const remove = async (kind: Kind, item: Lookup) => {
+    if ((item.usageCount ?? 0) > 0 || item.isSystem || !window.confirm(`Delete ${item.name}?`)) return;
+    try {
+      if (kind === 'types') await facilitiesService.deleteType(item.id);
+      else if (kind === 'statuses') await facilitiesService.deleteStatus(item.id);
+      else await facilitiesService.deleteMaintenanceType(item.id);
+      toast.success(`${definitions[kind].singular} deleted`);
+    } catch (error) {
+      toast.error(getErrorMessage(error, `Unable to delete ${definitions[kind].singular}`));
+    } finally {
+      await load();
+    }
+  };
+  return (
+    <div className="space-y-6">
+      <header className="flex items-start gap-3">
+        <button
+          className="btn-secondary p-2"
+          aria-label="Back to Facilities"
+          onClick={() => void navigate('/facilities')}
+        >
+          <ArrowLeft className="h-4 w-4" />
+        </button>
+        <div>
+          <h1 className="text-theme-text-primary text-2xl font-bold">Facility Settings</h1>
+          <p className="text-theme-text-secondary mt-1 text-sm">
+            Manage lookup values used by facilities and maintenance records.
+          </p>
+        </div>
+      </header>
+      {loading ? (
+        <div className="flex justify-center py-16" role="status">
+          <Loader2 className="h-7 w-7 animate-spin" />
+          <span className="sr-only">Loading facility settings</span>
+        </div>
+      ) : (
+        (Object.keys(definitions) as Kind[]).map((kind) => (
+          <LookupEditor
+            key={kind}
+            kind={kind}
+            items={data[kind]}
+            onEdit={(item) => setEditing({ kind, item })}
+            onAdd={() => setEditing({ kind })}
+            onDelete={(item) => void remove(kind, item)}
+          />
+        ))
+      )}
+      {editing && (
+        <LookupDialog
+          kind={editing.kind}
+          {...(editing.item ? { item: editing.item } : {})}
+          onClose={() => setEditing(null)}
+          onSaved={async () => {
+            setEditing(null);
+            await load();
+          }}
+        />
+      )}
+    </div>
+  );
+}
+function LookupEditor({
+  kind,
+  items,
+  onEdit,
+  onAdd,
+  onDelete,
+}: {
+  kind: Kind;
+  items: Lookup[];
+  onEdit: (item: Lookup) => void;
+  onAdd: () => void;
+  onDelete: (item: Lookup) => void;
+}) {
+  return (
+    <section className="card overflow-hidden">
+      <div className="border-theme-surface-border flex items-center justify-between border-b p-4">
+        <div>
+          <h2 className="text-theme-text-primary font-semibold">{definitions[kind].title}</h2>
+          <p className="text-theme-text-muted text-xs">Ordered as shown in facility forms.</p>
+        </div>
+        <button className="btn-primary flex items-center gap-1 text-sm" onClick={onAdd}>
+          <Plus className="h-4 w-4" /> Add
+        </button>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-left text-sm">
+          <thead>
+            <tr>
+              <th className="p-3">Order</th>
+              <th className="p-3">Name</th>
+              <th className="p-3">State</th>
+              <th className="p-3">Owner</th>
+              <th className="p-3">Usage</th>
+              <th className="p-3 text-right">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {items.map((item, index) => {
+              const used = item.usageCount ?? 0,
+                reason = item.isSystem
+                  ? 'System lookups cannot be deleted'
+                  : used
+                    ? `In use by ${used} record${used === 1 ? '' : 's'}`
+                    : undefined;
+              return (
+                <tr className="border-theme-surface-border border-t" key={item.id}>
+                  <td className="p-3">{item.sortOrder ?? index + 1}</td>
+                  <td className="p-3 font-medium">{item.name}</td>
+                  <td className="p-3">{item.isActive === false ? 'Inactive' : 'Active'}</td>
+                  <td className="p-3">{item.isSystem ? 'System' : 'Organization'}</td>
+                  <td className="p-3">{used}</td>
+                  <td className="p-3">
+                    <div className="flex justify-end gap-2">
+                      <button
+                        aria-label={`Edit ${item.name}`}
+                        className="btn-secondary p-2"
+                        onClick={() => onEdit(item)}
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </button>
+                      <button
+                        aria-label={`Delete ${item.name}`}
+                        title={reason}
+                        className="btn-secondary p-2 text-red-500 disabled:opacity-40"
+                        disabled={Boolean(reason)}
+                        onClick={() => onDelete(item)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+function LookupDialog({
+  kind,
+  item,
+  onClose,
+  onSaved,
+}: {
+  kind: Kind;
+  item?: Lookup;
+  onClose: () => void;
+  onSaved: () => Promise<void>;
+}) {
+  const [name, setName] = useState(item?.name ?? ''),
+    [active, setActive] = useState(item?.isActive !== false),
+    [order, setOrder] = useState(item?.sortOrder ?? 0),
+    [saving, setSaving] = useState(false);
+  const submit = async (event: FormEvent) => {
+    event.preventDefault();
+    setSaving(true);
+    const payload = { name: name.trim(), is_active: active, sort_order: order };
+    try {
+      if (kind === 'types')
+        item ? await facilitiesService.updateType(item.id, payload) : await facilitiesService.createType(payload);
+      else if (kind === 'statuses')
+        item ? await facilitiesService.updateStatus(item.id, payload) : await facilitiesService.createStatus(payload);
+      else
+        item
+          ? await facilitiesService.updateMaintenanceType(item.id, payload)
+          : await facilitiesService.createMaintenanceType(payload);
+      toast.success(`${definitions[kind].singular} saved`);
+      await onSaved();
+    } catch (error) {
+      toast.error(getErrorMessage(error, `Unable to save ${definitions[kind].singular}`));
+    } finally {
+      setSaving(false);
+    }
+  };
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="lookup-title"
+    >
+      <form className="card w-full max-w-md space-y-4 p-5" onSubmit={(event) => void submit(event)}>
+        <h2 id="lookup-title" className="text-lg font-semibold">
+          {item ? 'Edit' : 'Add'} {definitions[kind].singular}
+        </h2>
+        <label className="block text-sm">
+          Name
+          <input className="input mt-1 w-full" required value={name} onChange={(e) => setName(e.target.value)} />
+        </label>
+        <label className="block text-sm">
+          Order
+          <input
+            className="input mt-1 w-full"
+            type="number"
+            min="0"
+            value={order}
+            onChange={(e) => setOrder(Number(e.target.value))}
+          />
+        </label>
+        <label className="flex items-center gap-2 text-sm">
+          <input type="checkbox" checked={active} onChange={(e) => setActive(e.target.checked)} /> Active
+        </label>
+        <div className="flex justify-end gap-2">
+          <button type="button" className="btn-secondary" onClick={onClose}>
+            Cancel
+          </button>
+          <button className="btn-primary" disabled={saving || !name.trim()}>
+            {saving ? 'Saving…' : 'Save'}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}

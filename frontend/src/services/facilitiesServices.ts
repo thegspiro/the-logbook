@@ -24,6 +24,8 @@ export interface FacilityTypeCreate {
   name: string;
   description?: string;
   category?: string;
+  is_active?: boolean;
+  sort_order?: number;
 }
 
 export interface FacilityStatusCreate {
@@ -31,6 +33,8 @@ export interface FacilityStatusCreate {
   description?: string;
   color?: string;
   is_operational?: boolean;
+  is_active?: boolean;
+  sort_order?: number;
 }
 
 export interface FacilityCreate {
@@ -672,6 +676,8 @@ export const facilitiesService = {
     category?: string;
     default_interval_value?: number;
     default_interval_unit?: string;
+    is_active?: boolean;
+    sort_order?: number;
   }): Promise<MaintenanceType> {
     const response = await api.post<MaintenanceType>('/facilities/maintenance-types', data);
     return response.data;
@@ -684,6 +690,8 @@ export const facilitiesService = {
       category?: string;
       default_interval_value?: number;
       default_interval_unit?: string;
+      is_active?: boolean;
+      sort_order?: number;
     }>
   ): Promise<MaintenanceType> {
     const response = await api.patch<MaintenanceType>(`/facilities/maintenance-types/${typeId}`, data);

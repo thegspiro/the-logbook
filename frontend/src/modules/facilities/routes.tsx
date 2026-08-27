@@ -24,6 +24,7 @@ const FacilityLabelPrintPage = lazyWithRetry(() => import('./pages/FacilityLabel
 const FacilityDetailPage = lazyWithRetry(() => import('./pages/FacilityDetailPage'));
 const MaintenanceListPage = lazyWithRetry(() => import('./pages/MaintenanceListPage'));
 const InspectionsListPage = lazyWithRetry(() => import('./pages/InspectionsListPage'));
+const FacilitiesSettingsPage = lazyWithRetry(() => import('./pages/FacilitiesSettingsPage'));
 const LocationsPage = lazyWithRetry(() => import('../../pages/LocationsPage'));
 const RoomQRCodesPage = lazyWithRetry(() => import('../../pages/RoomQRCodesPage'));
 const ApparatusBasicPage = lazyWithRetry(() => import('../../pages/ApparatusBasicPage'));
@@ -48,6 +49,16 @@ export const getFacilitiesRoutes = () => (
       }
     />
     {/* Cross-facility list pages — must be before /:id to avoid route conflicts */}
+    <Route
+      path="/facilities/settings"
+      element={
+        <Suspense fallback={null}>
+          <ProtectedRoute requiredModule="facilities" moduleLabel="Facilities" requiredPermission="facilities.manage">
+            <FacilitiesSettingsPage />
+          </ProtectedRoute>
+        </Suspense>
+      }
+    />
     <Route
       path="/facilities/maintenance"
       element={
