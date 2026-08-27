@@ -10,7 +10,14 @@ from typing import Annotated, Any, Dict, List, Literal, Optional
 from urllib.parse import urlsplit
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    StringConstraints,
+    field_validator,
+    model_validator,
+)
 
 from app.schemas.base import UTCResponseBase
 
@@ -103,6 +110,8 @@ RequestTypeLiteral = Literal["checkout", "issuance", "purchase", "return"]
 RequestStatusLiteral = Literal["pending", "approved", "denied", "fulfilled"]
 RequestPriorityLiteral = Literal["low", "normal", "high"]
 ReviewStatusLiteral = Literal["approved", "denied"]
+RequestedDurationLiteral = Literal["temporary", "ongoing"]
+FulfillmentTypeLiteral = Literal["checkout", "assignment", "issuance"]
 
 StorageTypeLiteral = Literal[
     "rack", "shelf", "box", "cabinet", "drawer", "bin", "other"
@@ -931,6 +940,41 @@ class MaintenanceRecordCreate(MaintenanceRecordBase):
 
     item_id: UUID
 
+    @model_validator(mode="after")
+    def validate_maintenance_workflow(self):
+        """Keep scheduling, inspection, and completion records internally consistent."""
+        inspection_types = {
+            "inspection",
+            "routine_inspection",
+            "advanced_inspection",
+            "independent_inspection",
+        }
+        maintenance_type = str(self.maintenance_type)
+        if hasattr(self.maintenance_type, "value"):
+            maintenance_type = self.maintenance_type.value
+
+        if not self.description or not self.description.strip():
+            raise ValueError("Task description or performed work is required")
+        if (
+            not self.is_completed
+            and not self.scheduled_date
+            and maintenance_type != "repair"
+        ):
+            raise ValueError("Due date is required for scheduled work")
+        if self.completed_date and not self.is_completed:
+            raise ValueError("Completion date is only allowed for completed work")
+        if self.is_completed and not self.completed_date:
+            raise ValueError("Completion date is required for completed work")
+        if (
+            maintenance_type in inspection_types
+            and self.is_completed
+            and self.passed is None
+        ):
+            raise ValueError("A pass/fail result is required for inspections")
+        if maintenance_type not in inspection_types and self.passed is not None:
+            raise ValueError("Pass/fail result is only allowed for inspections")
+        return self
+
 
 class MaintenanceRecordUpdate(BaseModel):
     """Schema for updating a maintenance record"""
@@ -1212,35 +1256,89 @@ class BatchScanItem(BaseModel):
         default=None, description="Item ID for direct lookup (bypasses code search)"
     )
     quantity: int = Field(default=1, ge=1, description="Quantity (for pool items)")
+    operation: Literal["permanent_assignment", "temporary_loan"] = Field(
+        ...,
+        description="Operation for individually tracked items; pool items follow issuance policy",
+    )
+    expected_return_at: Optional[datetime] = Field(
+        default=None, description="Required expected return date for temporary loans"
+    )
+
+    @model_validator(mode="after")
+    def validate_temporary_loan(self):
+        if self.operation == "temporary_loan":
+            if self.expected_return_at is None:
+                raise ValueError("expected_return_at is required for a temporary loan")
+            now = datetime.now(timezone.utc)
+            expected = self.expected_return_at
+            if expected.tzinfo is None:
+                expected = expected.replace(tzinfo=timezone.utc)
+            if expected <= now:
+                raise ValueError("expected_return_at must be in the future")
+        return self
 
 
-class BatchCheckoutRequest(BaseModel):
-    """Request to assign/checkout/issue multiple scanned items to a member at once"""
+class DistributeItemsRequest(BaseModel):
+    """Request to distribute multiple scanned items to a member at once."""
 
     user_id: UUID
     items: List[BatchScanItem] = Field(..., min_length=1)
     reason: Optional[FreeText] = None
 
 
-class BatchCheckoutResultItem(BaseModel):
-    """Result for a single item in a batch checkout"""
+class DistributeItemsResultItem(BaseModel):
+    """Result for a single distributed item."""
 
     code: str
     item_name: str
     item_id: str
-    action: str  # "assigned", "checked_out", "issued"
+    action: str  # "permanent_assignment", "temporary_loan", or "issued"
     success: bool
     error: Optional[str] = None
+    conflict: Optional["InventoryHoldingConflict"] = None
 
 
-class BatchCheckoutResponse(BaseModel):
-    """Response from a batch checkout operation"""
+class InventoryHoldingConflict(BaseModel):
+    """The active chain-of-custody record that prevented distribution."""
+
+    holder_id: UUID
+    holder_name: str
+    holding_type: Literal["assignment", "checkout"]
+    record_id: UUID
+    held_since: datetime
+    expected_return_date: Optional[datetime] = None
+
+
+class InventoryTransferRequest(BaseModel):
+    """Explicit, confirmed transfer of an already-held individual item."""
+
+    item_id: UUID
+    new_holder_id: UUID
+    current_holder_id: UUID
+    current_record_id: UUID
+    holding_type: Literal["assignment", "checkout"]
+    return_condition: ReturnConditionLiteral
+    transfer_reason: FreeText
+    immediate: bool
+
+
+class InventoryTransferResponse(BaseModel):
+    item_id: UUID
+    old_record_id: UUID
+    new_record_id: UUID
+    old_holder_id: UUID
+    new_holder_id: UUID
+    holding_type: Literal["assignment", "checkout"]
+
+
+class DistributeItemsResponse(BaseModel):
+    """Response from an item distribution operation."""
 
     user_id: UUID
     total_scanned: int
     successful: int
     failed: int
-    results: List[BatchCheckoutResultItem]
+    results: List[DistributeItemsResultItem]
 
 
 class BatchReturnItem(BaseModel):
@@ -1337,7 +1435,7 @@ class EquipmentRequestCreate(BaseModel):
     item_id: Optional[UUID] = None
     category_id: Optional[UUID] = None
     quantity: int = Field(default=1, ge=1)
-    request_type: RequestTypeLiteral = Field(default="checkout")
+    requested_duration: RequestedDurationLiteral
     priority: RequestPriorityLiteral = Field(default="normal")
     reason: Optional[FreeText] = None
 
@@ -1358,10 +1456,15 @@ class EquipmentRequestFulfill(BaseModel):
     member's per-category cap when issuing a pool item.
     """
 
+    fulfillment_type: FulfillmentTypeLiteral
     item_id: Optional[UUID] = None
     quantity: Optional[int] = Field(default=None, ge=1)
     expected_return_at: Optional[datetime] = None
     override_allowance: bool = False
+    substitution_override_reason: Optional[FreeText] = Field(
+        default=None,
+        description="Required justification when fulfilling with an item outside the requested item/category",
+    )
 
 
 # ============================================
@@ -1439,7 +1542,12 @@ class WriteOffReview(BaseModel):
     """Approve or deny a write-off request"""
 
     status: ReviewStatusLiteral
-    review_notes: Optional[FreeText] = None
+    review_notes: Annotated[
+        str, StringConstraints(strip_whitespace=True, min_length=1, max_length=2000)
+    ]
+    acknowledgement: bool = False
+    expected_item_status: Optional[str] = None
+    expected_holder_signature: Optional[str] = None
 
 
 class WriteOffRequestResponse(UTCResponseBase):
@@ -1461,6 +1569,18 @@ class WriteOffRequestResponse(UTCResponseBase):
     reviewed_at: Optional[datetime] = None
     review_notes: Optional[str] = None
     clearance_id: Optional[str] = None
+    clearance_record: Optional[str] = None
+    current_holder: Optional[str] = None
+    current_status: Optional[str] = None
+    replacement_value: Optional[float] = None
+    linked_charge_record: Optional[str] = None
+    open_maintenance_record: Optional[str] = None
+    active_assignment_count: int = 0
+    active_checkout_count: int = 0
+    active_issuance_count: int = 0
+    acknowledgement_required: bool = False
+    acknowledgement_threshold: Optional[float] = None
+    holder_signature: Optional[str] = None
     created_at: Optional[datetime] = None
 
     model_config = _response_config
@@ -1783,8 +1903,10 @@ class ChargeManagementResponse(BaseModel):
 # ============================================
 
 ReturnRequestTypeLiteral = Literal["assignment", "issuance", "checkout"]
-ReturnRequestStatusLiteral = Literal["pending", "approved", "denied", "completed"]
-ReturnReviewStatusLiteral = Literal["approved", "denied"]
+ReturnRequestStatusLiteral = Literal[
+    "requested", "received", "inspected", "denied", "completed"
+]
+ReturnReviewStatusLiteral = Literal["received", "denied"]
 
 
 class ReturnRequestCreate(BaseModel):
@@ -1801,12 +1923,17 @@ class ReturnRequestCreate(BaseModel):
 
 
 class ReturnRequestReview(BaseModel):
-    """Quartermaster reviews a return request."""
+    """Quartermaster either denies the request or physically receives the item."""
 
-    status: ReturnReviewStatusLiteral = Field(..., description="approved or denied")
+    status: ReturnReviewStatusLiteral = Field(..., description="received or denied")
     review_notes: Optional[FreeText] = None
-    override_condition: Optional[ReturnConditionLiteral] = Field(
-        None, description="Override the condition reported by the member"
+    observed_condition: Optional[ReturnConditionLiteral] = Field(
+        None, description="Condition independently observed during physical receipt"
+    )
+    verified_identifier: Optional[str] = Field(None, max_length=255)
+    received_quantity: Optional[int] = Field(None, ge=1)
+    follow_up: Literal["auto", "none", "maintenance", "charge_review", "write_off"] = (
+        "auto"
     )
 
 
@@ -1831,6 +1958,11 @@ class ReturnRequestResponse(UTCResponseBase):
     reviewer_name: Optional[str] = None
     reviewed_at: Optional[datetime] = None
     review_notes: Optional[str] = None
+    observed_condition: Optional[str] = None
+    verified_identifier: Optional[str] = None
+    received_quantity: Optional[int] = None
+    follow_up_type: Optional[str] = None
+    follow_up_id: Optional[UUID] = None
     created_at: datetime
     updated_at: datetime
 
@@ -1842,7 +1974,7 @@ class ReturnRequestResponse(UTCResponseBase):
 # ============================================
 
 ReorderStatusLiteral = Literal[
-    "pending", "approved", "ordered", "received", "cancelled"
+    "pending", "approved", "ordered", "partially_received", "received", "cancelled"
 ]
 ReorderUrgencyLiteral = Literal["low", "normal", "high", "critical"]
 
@@ -1881,6 +2013,33 @@ class ReorderRequestUpdate(BaseModel):
     notes: Optional[FreeText] = None
 
 
+class ReorderTransitionRequest(BaseModel):
+    """A normal workflow transition. expected_version prevents stale writes."""
+
+    action: Literal["approve", "mark_ordered", "cancel"]
+    expected_version: int = Field(..., ge=1)
+    vendor_id: Optional[UUID] = None
+    vendor: Optional[str] = Field(None, max_length=255)
+    purchase_order_number: Optional[str] = Field(None, max_length=255)
+
+
+class ReorderCorrectionRequest(BaseModel):
+    status: ReorderStatusLiteral
+    reason: str = Field(..., min_length=3, max_length=2000)
+    expected_version: int = Field(..., ge=1)
+
+
+class ReorderReceiptCreate(BaseModel):
+    quantity: int = Field(..., gt=0)
+    expected_version: int = Field(..., ge=1)
+    idempotency_key: str = Field(..., min_length=1, max_length=100)
+    lot_number: Optional[str] = Field(None, max_length=100)
+    storage_location: str = Field(..., min_length=1, max_length=255)
+    unit_cost: Decimal = Field(..., ge=0)
+    expiration_date: Optional[date] = None
+    confirm_over_receipt: bool = False
+
+
 class ReorderRequestResponse(UTCResponseBase):
     """Schema for reorder request response"""
 
@@ -1890,7 +2049,9 @@ class ReorderRequestResponse(UTCResponseBase):
     category_id: Optional[UUID] = None
     item_name: str
     quantity_requested: int
-    quantity_received: Optional[int] = None
+    quantity_received: int = 0
+    quantity_outstanding: int = 0
+    version: int = 1
     vendor: Optional[str] = None
     vendor_contact: Optional[str] = None
     vendor_id: Optional[UUID] = None

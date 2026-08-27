@@ -519,6 +519,7 @@ class TestColumnConstraints:
             "added_at",
             "assigned_at",
             "recorded_at",
+            "received_at",
             "checked_at",
             "synced_at",
             "imported_at",

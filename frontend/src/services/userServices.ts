@@ -378,6 +378,14 @@ export interface OrganizationProfile {
 export interface EnabledModulesResponse {
   enabled_modules: string[];
   module_settings: ModuleSettingsData;
+  /**
+   * True when the organization has actually chosen its modules. False means
+   * `enabled_modules` reflects declared defaults, not a decision — the case
+   * the navigation treats permissively. Optional on the client because a
+   * response predating the field should read as "not configured", which is
+   * the permissive answer this has always defaulted to.
+   */
+  configured?: boolean;
 }
 
 export const organizationService = {

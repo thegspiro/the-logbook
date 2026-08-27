@@ -164,9 +164,17 @@ people out):**
   `False`, preserving fail-open so a lookup gap doesn't lock users out) makes
   `is_ip_blocked` return `(True, "country_unknown_failclosed")` for any IP whose
   country can't be resolved — including the missing/corrupt-DB case, closing the
-  "silently disabled app-wide" hole. Private/reserved and allowlisted IPs are
-  checked _before_ the country lookup, so a fail-closed deployment with a broken
-  DB still lets internal/LAN and allowlisted operators in to recover.
+  "silently disabled app-wide" hole. Private/reserved IPs are checked _before_
+  the country lookup, so a fail-closed deployment with a broken DB still lets
+  internal/LAN operators in to recover. **Correction (2026-08-27, security-review
+  INT2-28):** the "and allowlisted operators" half of this claim is no longer
+  true — PR #1544 (2026-08-17) closed a cross-tenant allowlist-union bypass by
+  having `IPBlockingMiddleware` call `is_ip_blocked` with a hard-coded empty
+  set unconditionally, since this middleware runs pre-auth with no tenant
+  context to scope an `IPException` to safely. The `IPException` request/
+  approve workflow still exists in the API but has had no effect on this
+  middleware's enforcement decision since that fix. See
+  `docs/security-review/SEC2-28-security-audit-ip.md`.
 - **Runtime country-rule management is a platform-operator action.** Geo-blocking
   is an edge control that runs before any tenant/auth context exists, so per-org
   `CountryBlockRule` rows don't fit the enforcement model (and there's no

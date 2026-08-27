@@ -102,15 +102,6 @@ const availableItem: InventoryItem = {
   updated_at: '2026-01-01T00:00:00Z',
 };
 
-// Modal submit buttons can share a label with row action buttons; the modal
-// renders last in the DOM.
-const lastButton = (name: string | RegExp): HTMLElement => {
-  const btns = screen.getAllByRole('button', { name });
-  const btn = btns[btns.length - 1];
-  if (!btn) throw new Error(`button not found: ${String(name)}`);
-  return btn;
-};
-
 const firstButton = (name: string | RegExp): HTMLElement => {
   const [btn] = screen.getAllByRole('button', { name });
   if (!btn) throw new Error(`button not found: ${String(name)}`);
@@ -139,7 +130,8 @@ describe('MyEquipmentPage', () => {
   it('shows empty section messaging when nothing is assigned', async () => {
     renderWithRouter(<MyEquipmentPage />);
     expect(await screen.findByText('No permanent assignments.')).toBeInTheDocument();
-    expect(screen.getByText('No active checkouts.')).toBeInTheDocument();
+    expect(screen.getByText('No active temporary loans.')).toBeInTheDocument();
+    expect(screen.getByText('Active Temporary Loans')).toBeInTheDocument();
     expect(screen.getByText('No issued items.')).toBeInTheDocument();
   });
 
@@ -157,18 +149,13 @@ describe('MyEquipmentPage', () => {
     expect(screen.getByText('Work Gloves')).toBeInTheDocument();
   });
 
-  it('checks in an active checkout', async () => {
+  it('does not let a member mark an active checkout physically received', async () => {
     mockGetUserInventory.mockResolvedValue(fullInv);
-    const user = userEvent.setup();
     renderWithRouter(<MyEquipmentPage />);
     await screen.findByText('Thermal Camera');
-
-    await user.click(screen.getByRole('button', { name: 'Check In' }));
-    await user.click(lastButton('Check In'));
-
-    await waitFor(() => expect(mockCheckInItem).toHaveBeenCalledTimes(1));
-    expect(mockCheckInItem.mock.calls[0]?.[0]).toBe('co-1');
-    expect(mockToastSuccess).toHaveBeenCalledWith('Item checked in');
+    expect(screen.queryByRole('button', { name: 'Check In' })).not.toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: /Notify quartermaster of return/ })).not.toHaveLength(0);
+    expect(mockCheckInItem).not.toHaveBeenCalled();
   });
 
   it('submits a return request for an assignment', async () => {
@@ -177,8 +164,9 @@ describe('MyEquipmentPage', () => {
     renderWithRouter(<MyEquipmentPage />);
     await screen.findByText('Turnout Coat');
 
-    // The assignment row has the first "Request Return" button.
-    await user.click(firstButton(/Request Return/));
+    // The assignment row has the first notification action; this does not
+    // claim the member has already handed the gear in.
+    await user.click(firstButton(/Notify quartermaster of return/));
     await user.click(screen.getByRole('button', { name: 'Submit' }));
 
     await waitFor(() => expect(mockCreateReturnRequest).toHaveBeenCalledTimes(1));
@@ -200,21 +188,55 @@ describe('MyEquipmentPage', () => {
     });
   });
 
-  it('submits an equipment request after searching and selecting an item', async () => {
+  // This branch replaces the request-type picker with a duration picker: the
+  // member states how long they need the item and the quartermaster decides
+  // how to fulfill it. #1876's parameterized request-type test goes with the
+  // control it exercised — there is no request-type combobox on this form any
+  // more — but its "no priority combobox" assertion is carried into the first
+  // test below so #1875's removal still cannot be silently undone.
+  it('submits a temporary duration intent after searching and selecting an item', async () => {
     mockGetItems.mockResolvedValue({ items: [availableItem], total: 1 });
     const user = userEvent.setup();
     renderWithRouter(<MyEquipmentPage />);
     await screen.findByRole('heading', { name: 'My Issued Gear' });
 
     await user.click(screen.getByRole('button', { name: /Request Equipment/ }));
+    expect(screen.getByLabelText('How long do you need it?')).toBeInTheDocument();
+    expect(screen.getByText(/quartermaster will determine the final issue method/i)).toBeInTheDocument();
+    // #1875 took the member's priority picker away; this branch must not bring
+    // it back while replacing request_type with requested_duration.
+    expect(screen.queryByRole('combobox', { name: /priority/i })).not.toBeInTheDocument();
     await user.type(await screen.findByPlaceholderText('Search available items...'), 'Radio');
     await user.click(await screen.findByRole('button', { name: /Spare Radio/ }));
     await user.click(screen.getByRole('button', { name: /Submit Request/ }));
 
     await waitFor(() => expect(mockCreateEquipmentRequest).toHaveBeenCalledTimes(1));
-    expect(mockCreateEquipmentRequest.mock.calls[0]?.[0]).toMatchObject({
+    expect(mockCreateEquipmentRequest.mock.calls[0]?.[0]).toEqual({
+      category_id: undefined,
       item_id: 'avail-1',
       item_name: 'Spare Radio',
+      quantity: 1,
+      reason: undefined,
+      requested_duration: 'temporary',
     });
+  });
+
+  it('submits ongoing duration intent independently of fulfillment', async () => {
+    mockGetItems.mockResolvedValue({ items: [availableItem], total: 1 });
+    const user = userEvent.setup();
+    renderWithRouter(<MyEquipmentPage />);
+    await screen.findByRole('heading', { name: 'My Issued Gear' });
+
+    await user.click(screen.getByRole('button', { name: /Request Equipment/ }));
+    await user.selectOptions(screen.getByLabelText('How long do you need it?'), 'ongoing');
+    await user.type(screen.getByPlaceholderText('Search available items...'), 'Radio');
+    await user.click(await screen.findByRole('button', { name: /Spare Radio/ }));
+    await user.click(screen.getByRole('button', { name: /Submit Request/ }));
+
+    await waitFor(() =>
+      expect(mockCreateEquipmentRequest).toHaveBeenCalledWith(
+        expect.objectContaining({ requested_duration: 'ongoing' })
+      )
+    );
   });
 });

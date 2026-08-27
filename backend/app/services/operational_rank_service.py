@@ -7,7 +7,7 @@ Business logic for per-organization operational rank management.
 from typing import Dict, List, Optional
 from uuid import UUID
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -297,8 +297,14 @@ class OperationalRankService:
 
         update_data = data.model_dump(exclude_unset=True)
 
-        # If rank_code is being changed, check for duplicates
-        if "rank_code" in update_data and update_data["rank_code"] != rank.rank_code:
+        old_rank_code = rank.rank_code
+        new_rank_code = update_data.get("rank_code")
+
+        # A rank code is also the denormalized key stored on every member.  A
+        # rename therefore has to move those references in the same database
+        # transaction as the rank row; otherwise members briefly (or, after a
+        # failure, permanently) lose their permissions and shift eligibility.
+        if new_rank_code is not None and new_rank_code != old_rank_code:
             dup = await self.db.execute(
                 select(OperationalRank).where(
                     OperationalRank.organization_id == organization_id,
@@ -311,11 +317,27 @@ class OperationalRankService:
                     f"Rank code '{update_data['rank_code']}' already exists"
                 )
 
-        for field, value in update_data.items():
-            setattr(rank, field, value)
+        try:
+            if new_rank_code is not None and new_rank_code != old_rank_code:
+                await self.db.execute(
+                    update(User)
+                    .where(
+                        User.organization_id == organization_id,
+                        User.rank == old_rank_code,
+                    )
+                    .values(rank=new_rank_code)
+                )
 
-        await self.db.commit()
-        await self.db.refresh(rank)
+            for field, value in update_data.items():
+                setattr(rank, field, value)
+
+            await self.db.commit()
+            await self.db.refresh(rank)
+        except Exception:
+            # commit/flush failures must undo both sides of the migration and
+            # leave the request-scoped session usable by the endpoint.
+            await self.db.rollback()
+            raise
         return rank
 
     async def delete_rank(
@@ -326,8 +348,29 @@ class OperationalRankService:
         rank = await self.get_rank(rank_id, organization_id)
         if not rank:
             return False
-        await self.db.delete(rank)
-        await self.db.commit()
+
+        # Include inactive, archived, and soft-deleted members: their records
+        # are historical references too and may later be restored or audited.
+        usage = await self.db.execute(
+            select(func.count(User.id)).where(
+                User.organization_id == organization_id,
+                User.rank == rank.rank_code,
+            )
+        )
+        member_count = usage.scalar() or 0
+        if member_count:
+            noun = "member" if member_count == 1 else "members"
+            raise ValueError(
+                f"Cannot delete rank '{rank.display_name}' while it is assigned "
+                f"to {member_count} {noun}. Reassign those members first."
+            )
+
+        try:
+            await self.db.delete(rank)
+            await self.db.commit()
+        except Exception:
+            await self.db.rollback()
+            raise
         return True
 
     async def reorder_ranks(
@@ -408,8 +451,13 @@ class OperationalRankService:
         self,
         organization_id: str,
     ) -> List[Dict]:
-        """Return active members whose rank code does not match any
-        configured rank for the organization.
+        """Return active members whose rank is unknown or noncanonical.
+
+        A rank may be supplied by either the organization's stored rows or the
+        built-in defaults, matching :meth:`resolve_rank_code`. Recognizable
+        legacy spellings with different case or surrounding whitespace remain
+        issues because downstream permission and eligibility lookups require
+        the canonical value stored in ``User.rank``.
 
         Only members with statuses that indicate they are still actively
         interacting with the platform are checked.  Archived, retired,
@@ -419,13 +467,23 @@ class OperationalRankService:
         Returns a list of dicts:
             [{ "member_id", "member_name", "rank_code" }, ...]
         """
-        # Collect all configured rank codes for the org.
+        # Load the small organization-specific vocabulary once.  Do not call
+        # resolve_rank_code for each member: besides producing an N+1 query,
+        # that would make this audit needlessly dependent on database
+        # collation.  The map mirrors resolve_rank_code's precedence (built-in
+        # codes first) and its strip/lower matching while retaining the
+        # canonical spelling that downstream exact lookups require.
         result = await self.db.execute(
             select(OperationalRank.rank_code).where(
                 OperationalRank.organization_id == organization_id,
             )
         )
-        valid_codes = {row[0] for row in result.all()}
+        canonical_codes = {code: code for code in DEFAULT_RANK_CODES}
+        for row in result.all():
+            stored_code = row[0]
+            normalized = (stored_code or "").strip().lower()
+            if normalized:
+                canonical_codes.setdefault(normalized, stored_code)
 
         # Find active-status members whose rank is set but unrecognised.
         members_q = select(User.id, User.first_name, User.last_name, User.rank).where(
@@ -438,7 +496,12 @@ class OperationalRankService:
         members_result = await self.db.execute(members_q)
         issues: List[Dict] = []
         for row in members_result.all():
-            if row.rank not in valid_codes:
+            normalized = (row.rank or "").strip().lower()
+            canonical = canonical_codes.get(normalized)
+            # A recognizable but noncanonical legacy spelling still needs
+            # repair. User.rank feeds exact dictionary lookups, so accepting
+            # " Captain " here would hide a member receiving no permissions.
+            if canonical is None or row.rank != canonical:
                 issues.append(
                     {
                         "member_id": row.id,

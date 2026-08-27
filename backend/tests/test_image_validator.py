@@ -174,3 +174,58 @@ class TestConvenienceHelpers:
 
     def test_get_image_validator_is_singleton(self):
         assert get_image_validator() is get_image_validator()
+
+    def test_validate_logo_image_generic_failure_does_not_leak_exception_text(
+        self, monkeypatch
+    ):
+        """A non-ImageValidationError failure must go through safe_error_detail,
+        never echo the raw exception (which can carry internal buffer/format
+        details) straight to an unauthenticated onboarding caller."""
+
+        def _boom(self, *args, **kwargs):
+            raise RuntimeError("internal buffer overrun at 0xdeadbeef")
+
+        monkeypatch.setattr(ImageValidator, "validate_and_process", _boom)
+        with pytest.raises(HTTPException) as exc_info:
+            validate_logo_image(_png_b64())
+        assert exc_info.value.status_code == 500
+        assert "0xdeadbeef" not in str(exc_info.value.detail)
+        assert "internal buffer overrun" not in str(exc_info.value.detail)
+
+    def test_internal_pillow_load_failure_does_not_leak_exception_text(
+        self, monkeypatch
+    ):
+        """A Pillow failure inside _open_and_validate_image is caught and
+        wrapped into ImageValidationError *before* validate_logo_image ever
+        sees it, so it surfaces on the 400 branch, not the 500 branch — the
+        wrapped message itself must not embed the raw internal exception
+        text (buffer/format internals a real Pillow failure can carry)."""
+
+        data = _png_b64()
+
+        def _boom(self, *args, **kwargs):
+            raise OSError("truncated PNG chunk at offset 0xdeadbeef")
+
+        monkeypatch.setattr(Image.Image, "load", _boom)
+        with pytest.raises(HTTPException) as exc_info:
+            validate_logo_image(data)
+        assert exc_info.value.status_code == 400
+        assert "0xdeadbeef" not in str(exc_info.value.detail)
+        assert "truncated PNG chunk" not in str(exc_info.value.detail)
+
+    def test_internal_pillow_save_failure_does_not_leak_exception_text(
+        self, monkeypatch
+    ):
+        """Same as above, for a save/re-encode failure inside _sanitize_image."""
+
+        data = _png_b64()
+
+        def _boom(self, *args, **kwargs):
+            raise OSError("encoder error at internal buffer 0xdeadbeef")
+
+        monkeypatch.setattr(Image.Image, "save", _boom)
+        with pytest.raises(HTTPException) as exc_info:
+            validate_logo_image(data)
+        assert exc_info.value.status_code == 400
+        assert "0xdeadbeef" not in str(exc_info.value.detail)
+        assert "encoder error" not in str(exc_info.value.detail)

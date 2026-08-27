@@ -20,6 +20,7 @@ from app.models.notification import (
     NotificationLog,
     NotificationRule,
 )
+from app.utils.model_updates import apply_updates
 from app.utils.sql_search import LIKE_ESCAPE_CHAR, like_pattern
 
 logger = logging.getLogger(__name__)
@@ -108,8 +109,7 @@ class NotificationsService:
             if not rule:
                 return None, "Notification rule not found"
 
-            for key, value in update_data.items():
-                setattr(rule, key, value)
+            apply_updates(rule, update_data, skip={"id", "organization_id"})
 
             await self.db.commit()
             await self.db.refresh(rule)

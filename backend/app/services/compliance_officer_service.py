@@ -10,7 +10,7 @@ from collections import defaultdict
 from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
-from sqlalchemy import func, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.audit import log_audit_event
@@ -406,6 +406,12 @@ class ComplianceAttestationService:
         compliance_pct = attestation_data.get("compliance_percentage")
         if compliance_pct is None:
             raise ValueError("compliance_percentage is required")
+        # The one current caller already bounds this via
+        # AttestationCreate's Field(ge=0, le=100); re-checked here so this
+        # service method stays safe to call directly, not only through that
+        # one schema.
+        if not 0 <= compliance_pct <= 100:
+            raise ValueError("compliance_percentage must be between 0 and 100")
 
         attestation_id = generate_uuid()
         now = datetime.now(timezone.utc)
@@ -568,15 +574,37 @@ class RecordCompletenessService:
 
         Returns list of dicts with record id, course_name, user_id, and
         missing_fields list.
+
+        The "incomplete" predicate is evaluated in SQL, not fetched-then-
+        filtered in Python: an org with more than a fixed scan window of
+        completed records would otherwise have older incomplete records
+        silently invisible to this endpoint with no signal that the scan
+        didn't cover the full dataset.
         """
+        missing_predicate = or_(
+            TrainingRecord.instructor.is_(None),
+            TrainingRecord.instructor == "",
+            and_(
+                or_(
+                    TrainingRecord.location.is_(None),
+                    TrainingRecord.location == "",
+                ),
+                TrainingRecord.location_id.is_(None),
+            ),
+            TrainingRecord.hours_completed.is_(None),
+            TrainingRecord.hours_completed <= 0,
+            TrainingRecord.course_name == "",
+        )
+
         records_result = await self.db.execute(
             select(TrainingRecord)
             .where(
                 TrainingRecord.organization_id == organization_id,
                 TrainingRecord.status == TrainingStatus.COMPLETED,
+                missing_predicate,
             )
             .order_by(TrainingRecord.completion_date.desc())
-            .limit(500)  # Fetch more than limit to allow filtering
+            .limit(limit)
         )
         records = records_result.scalars().all()
 
@@ -592,20 +620,17 @@ class RecordCompletenessService:
             if not r.course_name:
                 missing.append("course_name")
 
-            if missing:
-                incomplete.append(
-                    {
-                        "id": str(r.id),
-                        "course_name": r.course_name or "Unknown",
-                        "user_id": str(r.user_id),
-                        "completion_date": (
-                            r.completion_date.isoformat() if r.completion_date else None
-                        ),
-                        "missing_fields": missing,
-                    }
-                )
-                if len(incomplete) >= limit:
-                    break
+            incomplete.append(
+                {
+                    "id": str(r.id),
+                    "course_name": r.course_name or "Unknown",
+                    "user_id": str(r.user_id),
+                    "completion_date": (
+                        r.completion_date.isoformat() if r.completion_date else None
+                    ),
+                    "missing_fields": missing,
+                }
+            )
 
         return incomplete
 
@@ -639,7 +664,7 @@ class ContributedHoursService:
             )
         )
         members = members_result.scalars().all()
-        member_ids = [m.id for m in members]
+        member_ids = [str(m.id) for m in members]
 
         if not member_ids:
             return {
@@ -669,7 +694,7 @@ class ContributedHoursService:
         )
         training_by_user: Dict[str, float] = {}
         for uid, hrs in training_result:
-            training_by_user[uid] = float(hrs)
+            training_by_user[str(uid)] = float(hrs)
 
         # Admin hours (approved only for contributed totals)
         start_dt = datetime(year, 1, 1, tzinfo=timezone.utc)
@@ -692,7 +717,7 @@ class ContributedHoursService:
         )
         admin_by_user: Dict[str, float] = {}
         for uid, mins in admin_result:
-            admin_by_user[uid] = hours_from_minutes(mins)
+            admin_by_user[str(uid)] = hours_from_minutes(mins)
 
         # Admin hours by category
         cat_result = await self.db.execute(
@@ -732,8 +757,9 @@ class ContributedHoursService:
         member_list: List[Dict[str, Any]] = []
 
         for member in members:
-            t_hrs = round(training_by_user.get(member.id, 0.0), 1)
-            a_hrs = admin_by_user.get(member.id, 0.0)
+            uid = str(member.id)
+            t_hrs = round(training_by_user.get(uid, 0.0), 1)
+            a_hrs = admin_by_user.get(uid, 0.0)
             combined = round(t_hrs + a_hrs, 1)
             total_training += t_hrs
             total_admin += a_hrs
@@ -1128,7 +1154,7 @@ class AnnualComplianceReportService:
         for entry in entries:
             mins = entry.duration_minutes or 0
             cat_id = entry.category_id
-            uid = entry.user_id
+            uid = str(entry.user_id)
 
             cat_mins[cat_id]["entries"] += 1
             if entry.status == AdminHoursEntryStatus.APPROVED:

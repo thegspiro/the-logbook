@@ -10,6 +10,7 @@ error. DB mocked; no MySQL.
 from unittest.mock import AsyncMock, MagicMock
 
 from app.core.utils import _GENERIC_ERROR
+from app.models.notification import NotificationRule, NotificationTrigger
 from app.services.notifications_service import NotificationsService
 
 
@@ -46,6 +47,54 @@ class TestErrorSanitization:
         assert log is None
         assert err == _GENERIC_ERROR
         assert "notification_rules" not in err
+
+
+class TestUpdateRule:
+    """update_rule must route through apply_updates so an explicit null
+    actually clears an optional field (previously the endpoint used
+    model_dump(exclude_none=True), which dropped the null before the service
+    ever saw it, so PATCH .../rules/{id} with description=null returned 200
+    while silently leaving the old description in place)."""
+
+    def _db_with(self, rule):
+        db = MagicMock()
+        db.execute = AsyncMock(
+            return_value=MagicMock(scalar_one_or_none=MagicMock(return_value=rule))
+        )
+        db.commit = AsyncMock()
+        db.refresh = AsyncMock()
+        db.rollback = AsyncMock()
+        return db
+
+    async def test_clears_an_explicit_null_field(self):
+        rule = NotificationRule(
+            id="r1",
+            organization_id="org-1",
+            name="Reminder",
+            description="old description",
+            trigger=NotificationTrigger.EVENT_REMINDER,
+        )
+        db = self._db_with(rule)
+        result, err = await NotificationsService(db).update_rule(
+            "r1", "org-1", {"description": None}
+        )
+        assert err is None
+        assert result.description is None
+
+    async def test_rejects_null_against_not_null_name(self):
+        rule = NotificationRule(
+            id="r1",
+            organization_id="org-1",
+            name="Reminder",
+            trigger=NotificationTrigger.EVENT_REMINDER,
+        )
+        db = self._db_with(rule)
+        result, err = await NotificationsService(db).update_rule(
+            "r1", "org-1", {"name": None}
+        )
+        assert result is None
+        assert err is not None
+        db.rollback.assert_awaited_once()
 
 
 class TestNotificationLogEagerRelationships:
