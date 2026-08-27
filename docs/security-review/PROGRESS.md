@@ -16,13 +16,39 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-Feature 00 (cross-cutting baseline, pass 2) — [PR #1924](https://github.com/thegspiro/the-logbook/pull/1924),
-branch `claude/security-review-cross-cutting-00-pass2`. Re-swept all five
-pass-1 classes plus route auth coverage against everything that landed in
-pass 1; no findings, no code changes (docs only). See log entry below and
-`SEC-00-cross-cutting-baseline.md`'s "Pass 2" section.
+Feature 01 (auth & session lifecycle, pass 2) — branch
+`claude/security-review-auth-01-pass2`, PR pending open. No findings, no code
+changes (docs only). See log entry below and `AUTH-01-auth-session.md`'s
+"Pass 2" section.
 
 ---
+
+### 2026-08-27 — Feature 01 (Auth & session lifecycle), pass 2 — no findings
+
+`auth.py`/`auth_service.py`/`mfa_service.py`/`oauth_service.py` are
+byte-identical to PR #1804's merge commit — zero changes since pass 1.
+AUTH-1's fix and its guard test re-verified intact. The only in-scope growth
+is `consent_service.py` (84 L → 211 L), entirely a new "Photo Use Consent"
+feature (new `roster()` method, `GET /users/consents/photo-use` endpoint, a
+new `users.view_consents` permission, a frontend page) — read in full against
+all seven checklist dimensions since none of it existed at pass 1. Already
+built to this checklist's standard: org-scoped roster query with a
+belt-and-suspenders join filter, a narrow new permission chosen specifically
+to avoid the XC-2 broad-grant pattern (documented in the endpoint's own
+comment), contact fields deliberately excluded from the response, and the
+seeded-grant migration follows Pitfalls #23 and #26 exactly (frozen prior-
+defaults snapshot, `is_system` scoping, `positions`-table existence guard,
+symmetric downgrade). No findings, no code changes. Completion gate:
+flake8/black/isort clean, `validate_migrations.py --strict` passed, 70/70
+scoped tests (oauth/auth_service/mfa/consent) pass, `tsc --noEmit` 0 errors,
+`eslint .` 0 errors. Full detail in `AUTH-01-auth-session.md`. Next: 02
+permissions & roles, once this PR merges.
+
+### 2026-08-27 — Feature 00 (Cross-cutting baseline), pass 2 ✅ merged — PR #1924
+
+Merged. Codex's file-list gap (missed `public_portal_admin.py`) was caught
+before merge, fixed, replied to, and resolved — see the "Update" note below.
+Rotation row 00 -> done for pass 2. Next: 01 auth & session lifecycle.
 
 ### 2026-08-27 — Feature 00 (Cross-cutting baseline), pass 2 — no findings
 
@@ -725,8 +751,8 @@ each row's prior PR is recorded in the Log, not repeated here.
 
 | #   | Feature                   | Prefix | Principal code                                                                                                                                  | Status |
 | --- | ------------------------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
-| 00  | Cross-cutting baseline    | SEC    | whole-codebase sweeps; see `SEC-00-cross-cutting-baseline.md`                                                                                   | ⏳     |
-| 01  | Auth & session lifecycle  | AUTH   | `endpoints/auth.py`, `auth_service.py`, `mfa_service.py`, `oauth_service.py`                                                                    | ⬜     |
+| 00  | Cross-cutting baseline    | SEC    | whole-codebase sweeps; see `SEC-00-cross-cutting-baseline.md`                                                                                   | ✅     |
+| 01  | Auth & session lifecycle  | AUTH   | `endpoints/auth.py`, `auth_service.py`, `mfa_service.py`, `oauth_service.py`                                                                    | ⏳     |
 | 02  | Permissions & roles       | PERM   | `dependencies.py`, `core/permissions.py`, `roles.py`, `operational_ranks.py`, `officers.py`, `org_chart.py`                                     | ⬜     |
 | 03  | Public surface & webhooks | PUB    | `api/public/*` (20 unauth routes), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`                                      | ⬜     |
 | 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                              | ⬜     |

@@ -1,6 +1,79 @@
 # Security Review — Auth & Session Lifecycle
 
-**Prefix:** `AUTH` · **Iteration:** 01 · **Reviewed:** 2026-08-25 · **PR:** #1804
+**Prefix:** `AUTH` · **Iteration:** 01 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2) · **PR:** #1804 (pass 1)
+
+---
+
+## Pass 2 (2026-08-27)
+
+`git diff` between PR #1804's merge commit (`9a58e352`) and current `main`
+shows **zero changes** to `auth.py`, `auth_service.py`, `mfa_service.py`, or
+`oauth_service.py` — byte-identical. AUTH-1's fix
+(`Organization.active.is_(True)` + fail-closed `(None, "no_account")` in
+`oauth_service.py:57-77`) is confirmed still present, and its guard test
+(`test_resolve_user_no_active_organization`) still passes. The route count is
+unchanged at 26.
+
+`consent_service.py` is the one file in this feature's scope that grew
+(84 L → 211 L) since pass 1, entirely from a new "Photo Use Consent" feature
+(commits `4b68b3da`, `d5bb37ce`, `fd3c797f` — a new `roster()` method, a new
+`GET /users/consents/photo-use` endpoint in `users.py`, a new
+`users.view_consents` permission, and a frontend `PhotoUseConsentPage.tsx`).
+Read in full against all seven checklist dimensions, since none of it existed
+at pass 1:
+
+- **Tenant isolation (dim. 3):** `roster()` takes `organization_id` as a
+  parameter and filters `User.organization_id` directly, plus a belt-and-
+  suspenders `UserConsent.organization_id == organization_id` on the outer
+  join condition (commented as "redundant against the org filter on User,
+  kept so the join can never pull a row from another tenant"). Correct.
+- **Authorization fit (dim. 2):** the endpoint's `require_permission` list
+  (`users.view_consents`, `notifications.manage`, `members.manage`,
+  `users.edit`) was deliberately built to avoid the XC-2 pattern this
+  checklist watches for — the code comment explains why `users.view` (held by
+  25 of 30 default positions) was rejected as too broad for a whole-department
+  consent roster, and why the new narrow permission exists instead of
+  widening an existing broad one. This is the checklist's own dimension-2
+  concern, already reasoned through by the author.
+- **Data exposure (dim. 5):** `roster()`'s docstring and code both explicitly
+  exclude contact fields ("Returns no contact fields... a second list carrying
+  it unconditionally would quietly undo [the member directory's
+  contact-visibility gate]") — returns only name/rank/station/membership
+  number/photo_url, which is what identifies someone on a photo call sheet.
+  Caching: `/users` (no trailing slash) is already in `UNCACHEABLE_PREFIXES`
+  and matches every consent sub-path via `startsWith` — no separate entry
+  needed, verified by grep rather than assumed.
+- **Fan-out helper `granted_user_ids`** (used by
+  `notification_channels.resolve_sms_recipients`) does not itself filter
+  `organization_id`, but its only caller passes an already org-scoped `users`
+  list and the function can only _narrow_ that set (intersect with consent),
+  never add ids beyond what the caller supplied — resolves through an
+  already-org-scoped parent, not a gap.
+- **Schema & migration integrity (dim. 7):** `ConsentType.PHOTO_USE` already
+  existed at pass 1 (no model/column change needed); the new
+  `20260825_1900_c4a91b7e2f08_grant_users_view_consents.py` migration is a
+  seeded-grant backfill and does everything Pitfall #23 + #26 require: scoped
+  to `is_system = True`, rewrites a row only when its stored permissions still
+  exactly equal a frozen `_PRIOR_DEFAULTS` snapshot (so a department that
+  already customized the position is left alone), guards on the `positions`
+  table's existence before reflecting it (`create_all`-only table, Pitfall
+  #26), and ships both `upgrade()` and a symmetric `downgrade()`.
+- No `window.confirm`/`alert`/`prompt`, no direct `fetch`/raw `axios` in
+  `PhotoUseConsentPage.tsx` (grep-confirmed — it goes through the shared
+  service layer feature 34 already reviewed).
+
+**No findings.** No code changes this pass — the new code was already built
+to this checklist's standard.
+
+**Completion gate (pass 2):** flake8/black/isort clean on `app/ tests/
+alembic/`; `validate_migrations.py --strict` passed (381 revisions, single
+head); scoped tests (`-k "oauth or auth_service or mfa or consent"`) 70
+passed, 1 skipped (pre-existing, missing optional dependency); `tsc --noEmit`
+0 errors; `eslint .` 0 errors. No frontend files changed this pass.
+
+---
+
+## Pass 1 (2026-08-25)
 
 **Backend:** `app/api/v1/endpoints/auth.py` (1405 L, 26 endpoints),
 `app/services/auth_service.py` (970 L), `app/services/mfa_service.py` (121 L),
