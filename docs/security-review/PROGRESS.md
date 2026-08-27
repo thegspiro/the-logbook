@@ -17,10 +17,58 @@ feature. The rotation cannot outrun its own review queue.
 ## Open PR
 
 Feature 05 (finance & approvals, pass 2) —
-[PR #1942](https://github.com/thegspiro/the-logbook/pull/1942). No findings;
-docs-only change. Next after merge: 06 elections & ballots, pass 2.
+[PR #1942](https://github.com/thegspiro/the-logbook/pull/1942). Codex caught
+5 real bugs after the initial "no findings" push (see log below); all fixed
+and pushed. Next after merge: 06 elections & ballots, pass 2.
 
 ---
+
+### 2026-08-27 — Feature 05 (Finance & approvals), pass 2 — Codex caught 5 real bugs, all fixed
+
+Codex reviewed PR #1942 (the "no findings" doc-only push below) and flagged
+6 issues; 5 verified as real defects (not just documentation gaps) and
+fixed, 1 was a documentation correction:
+
+- **FIN-10** — `approve_step`/`deny_step` read `ApprovalStepRecord` without
+  `.with_for_update()`, unlike the token-based `approve_by_token`/
+  `deny_by_token` siblings. Two approvers acting on the same step at once
+  could both pass the pending check and both finalize -> double-encumbered
+  budget. Fixed by locking both reads.
+- **FIN-11** — `update_budget` (`PUT /budgets/{id}`) set `amount_budgeted`
+  with no lock and no check against `amount_spent + amount_encumbered` —
+  a silent side door around the hard ceiling `_mutate_budget` enforces.
+  Fixed: same locking read, raises `BudgetLimitExceededError` on a
+  reduction below the committed total (the endpoint's exception handler
+  for this was previously dead code).
+- **FIN-12** — `DuesScheduleUpdate.grace_period_days` had a copy-pasted
+  `decimal_places=2` constraint on an `int` field; pydantic-core raised a
+  bare `TypeError` on every valid integer, breaking the update path
+  entirely. Fixed by dropping the stray constraint.
+- **FIN-13** — `ExportRequest`'s date-range validator compared naive and
+  aware datetimes directly, raising an uncaught `TypeError` (a 500) for a
+  mixed-format request instead of a 422. Fixed with a `field_validator`
+  normalizing naive input to UTC, mirroring `schemas/election.py`'s
+  `_as_utc`.
+- **FIN-14** — `ExpenseReportFormPage.tsx` was the one finance form the
+  `MonetaryAmount`/`DecimalString` hardening pass missed (also: the frontend
+  file count was 10, not 8 as first documented) — it still sent
+  `Number(item.amount)`, a live float-precision gap since the backend
+  already required a 2-decimal `Decimal`. Fixed to `.toFixed(2)`, matching
+  the sibling forms.
+- **Doc-only correction** — the migration review wrongly said `status` was
+  nullable and its table-existence guard unnecessary; `status` is
+  `nullable=False` and the guard is required (Pitfall #26,
+  `finance_export_logs` is `create_all`-only). The migration code itself
+  was already correct.
+
+Every fix independently re-verified against the real code (reproduced each
+schema TypeError directly; confirmed the missing lock by reading the token
+path; confirmed the frontend gap against the backend schema it feeds) before
+fixing — not taken on Codex's word. Six new regression tests added, each
+confirmed to fail on the pre-fix code via `git stash`. Completion gate:
+flake8/black/isort clean, migrations valid, scoped tests 240 passed/1
+skipped, full backend suite 9049 passed/22 skipped/0 failed, frontend
+`tsc`/`eslint`/`vitest` (80 tests) clean. Pushed to PR #1942.
 
 ### 2026-08-27 — Feature 05 (Finance & approvals), pass 2 — no findings
 
