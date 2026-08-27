@@ -77,12 +77,10 @@ correctly enforced:
   same `submitted_by` — the Pitfall #27 shape, already correctly applied here).
 
 This is a real product decision that was made and shipped correctly since the
-last review pass — not something this iteration did. Recorded here as a
-**documentation correction**: `docs/module-audit/forms.md` and
-`docs/app-review/forms.md` both still list FORM-5 as open and should be
-updated to reflect this (left to the doc-accuracy lens rather than edited in
-this security-focused pass, since neither doc's finding was itself inaccurate
-at the time it was written).
+last review pass — not something this iteration did. `docs/module-audit/forms.md`
+and `docs/app-review/forms.md` both still listed FORM-5 as open (only
+`KNOWN_LIMITATIONS.md` had already been corrected, 2026-08-17); both updated
+in this pass to mark it resolved and point here.
 
 ## New surface reviewed (event_request integration + reprocess endpoint)
 
