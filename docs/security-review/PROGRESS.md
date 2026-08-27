@@ -16,7 +16,7 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-None — PR #1916 merged. Feature 33 (core infrastructure) starting next.
+PR #1917 (feature 33, core infrastructure) — open, awaiting CI/review.
 
 ---
 
@@ -427,7 +427,127 @@ Merged (squash, `1a0a35c8`). LOC-1/2/4 re-confirmed, LOC-3 still flagged
 (now 3 gaps, mirrored to `KNOWN_LIMITATIONS.md`), `admin_hub_service.py`
 fully reviewed for the first time. Rotation row 32 -> done.
 
-Next: 33 core infrastructure.
+### 2026-08-27 — Feature 33 (Core infrastructure) — PR #1917 opened
+
+Corrected a stale rotation-table entry first: `core/middleware.py` does not
+exist (only `security_middleware.py` does) — the file list above is fixed.
+
+Four prior passes (module audit iteration 24, app-review `core-infra.md`
+passes 1-4) fixed 8 findings and left CI-9/CI-10-residual deliberately
+flagged as ops/design decisions — but every one of those passes explicitly
+noted `security_middleware.py` (1,380 L) and `config.py` (964 L, grown from
+603 L reviewed last time) were checked "for security invariants, not
+line-by-line." Four parallel background agents did that line-by-line read
+for the first time (security_middleware.py split in half, config.py and
+database.py each read whole), plus a spot-check re-verification of the 6
+fixable prior findings (all still hold, no regressions) and the CI-9/CI-10
+residual items (unchanged, not re-flagged; DB/Redis TLS posture confirmed
+already upgraded past the original WARN-only characterization since the
+last pass).
+
+14 findings, all fixed (1 HIGH, 8 MED, 5 LOW):
+
+- CI2-33-1 (HIGH): `SecurityMonitoringMiddleware` read
+  `request.state.user` — an attribute no auth path ever sets
+  (`get_current_user` sets `.authenticated_user`) — and read it _before_
+  `self.app()` ran, before any route dependency could populate anything.
+  Session-hijack and data-exfiltration detection, two of the four
+  capabilities the class docstring advertises, silently never ran for any
+  request, ever. Fixed by reading the correct attribute after `self.app()`
+  returns, once it's genuinely populated.
+- CI2-33-2 (MED): the shared in-memory rate limiter's eviction sweep judged
+  every tracked key's staleness against whichever call's `window_seconds`
+  triggered the sweep, not the key's own — so a 3600s-window key
+  (`data_export`, limit 3/hour) could be evicted/reset by a 60s-window
+  sweep, letting an attacker exceed the hourly limit by spacing requests
+  ~65s+ apart during exactly the Redis-outage window this fallback exists
+  for. Fixed by recording and evicting against each key's own window.
+- CI2-33-3 (MED): `database.py`'s connect() retry loop scrubbed
+  `DB_PASSWORD` from per-attempt _log_ lines (the original CI-2 fix) but
+  re-raised the raw, unscrubbed exception on total failure — reaching
+  Uvicorn's startup output and Sentry with no surrounding try/except at the
+  call site. Fixed by re-raising only the already-scrubbed detail, `from
+None` to suppress cause-chain leakage too.
+- CI2-33-4 (MED): the `ALGORITHM` boot check blocklisted only null-signature
+  spellings ("none"), not enforced the pinned `HS256` value `decode_token()`
+  hardcodes — a typo or different-but-real algorithm booted silently, then
+  broke all authentication at runtime with zero boot signal. Fixed to
+  `!= "HS256"`.
+- CI2-33-5 (MED): `AUDIT_LOG_SIGNING_KEY` (signs the audit tamper-evidence
+  chain and off-host shipping HMAC — ISO 27001 A.8.15) had no boot warning,
+  unlike its sibling `VOTE_SIGNING_KEY` with the identical rationale. Fixed
+  by mirroring that warning.
+- CI2-33-6 (MED): `CAPTCHA_ENABLED=True` with an empty
+  `CAPTCHA_SECRET_KEY` was only caught per-request (a silent skip, logged
+  once), never at boot — an operator fat-fingering the 2026-08-16 red-team
+  CAPTCHA rollout would believe the control was live indefinitely. Fixed
+  with a boot-time warning mirroring `is_captcha_configured()`'s own
+  condition.
+- CI2-33-7 (MED): an unvalidated client-supplied `X-Request-ID` was
+  interpolated verbatim into log lines and the response header, letting a
+  client forge what reads as a genuine, distinct security-audit-trail
+  entry (e.g. via embedded newlines). Fixed by only reusing an incoming id
+  that matches the exact format this app generates.
+- CI2-33-8 (LOW/MED): no sanity bound on `TRUSTED_PROXY_IPS` CIDR width — a
+  misconfigured `0.0.0.0/0` (or similarly broad range) would trust
+  `X-Forwarded-For` from any direct-connecting client within it, letting
+  IP spoofing bypass every IP-keyed control downstream. Fixed with a
+  boot-time warning above `/8` (a typical container network is never
+  flagged).
+- CI2-33-9 (LOW): `InputSanitizer.sanitize_string` truncated before
+  HTML-escaping, so the escaped output could exceed `max_length`. Fixed by
+  escaping first.
+- CI2-33-10 (LOW): the CSRF onboarding bypass used a substring match
+  instead of the anchored-prefix pattern this codebase already uses
+  correctly one class over (`IPBlockingMiddleware.BYPASS_PREFIXES`); not
+  exploitable against any route that exists today, but would silently
+  widen the CSRF exemption to any future endpoint whose path merely
+  contains "onboarding". Fixed to match the existing pattern.
+- CI2-33-11 (LOW): `disconnect()` left `is_connected` stale (True) after
+  closing the connection — no live caller checks it post-disconnect today,
+  but a latent trap for future reconnect-on-demand logic. Fixed.
+- CI2-33-12 (LOW/INFO): `InputSanitizer.validate_url` accepted a bare IPv4
+  host literal (e.g. an internal/link-local address); the function has no
+  callers today, but would need this closed the moment one appears. Fixed
+  as defense in depth.
+- CI2-33-13 (MED): injection-attempt detection was never implemented —
+  the docstring claimed it, and the code buffered every write-request body
+  (including login/password-change) into memory for an analysis step that
+  read nothing back. Fixed by removing the dead buffering and correcting
+  the docstring; real detection is a product decision, mirrored to
+  `KNOWN_LIMITATIONS.md` as documented future work, not an open finding
+  (nothing is broken — the capability is simply absent).
+
+Completion gate: flake8/black/isort clean on all touched files, migration
+validation passed (no schema change), 149/149 scoped backend tests passed
+(23 new across the four touched test files), full backend suite 8972
+passed / 38 failed (the identical pre-existing onboarding/facilities/
+legal-doc set confirmed unrelated in the immediately preceding feature's
+pass) / 22 skipped, no frontend changes this iteration.
+
+Codex reviewed the fix commit and found 6 more real bugs — each time, my
+original fix addressed the surface symptom but missed a deeper reason the
+control still didn't work: (1) the rebuilt `EXPORT_ENDPOINTS` set still
+didn't match any real route (fixed with a full grep-and-resolve of every
+export route in the app, 15 real paths, one parameterized route
+structurally excluded); (2) `session_id` came from `X-Session-ID`, a
+header real clients never send (fixed by deriving it from the same
+credential `get_current_user` authenticates with, hashed); (3) password
+scrubbing missed the percent-encoded form `DATABASE_URL` actually embeds
+(fixed to scrub both forms); (4) the CAPTCHA boot check only covered the
+secret key, missing two more silent-failure pairings, site key and
+provider (fixed, both added); (5) truncation could still cut an HTML
+entity in half (fixed to trim back to the last complete entity); (6) the
+`/8` trusted-proxy threshold was IPv6-blind (split into a v4/v6-aware
+pair, `/8` and `/64`). All 6 verified against actual code before fixing,
+per this rotation's standing rule. Full findings and guard tests in
+`CI2-33-core-infra.md`'s "Revised after Codex review" section. Completion
+gate re-run clean: flake8/black/isort clean, 103/103 scoped tests passed
+(9 new/updated), full backend suite 8980 passed / 38 failed (same
+pre-existing set, reconfirmed unrelated with this round's diff stashed
+out) / 22 skipped.
+
+Next: 34 frontend shared, once this PR merges.
 
 ---
 
@@ -488,7 +608,7 @@ data-carrying modules, then the supporting infrastructure.
 | 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (24 unauth bootstrap routes)                                                                                             | ✅              |
 | 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                   | ✅              |
 | 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                  | ✅              |
-| 33  | Core infrastructure       | CORE   | `core/security_middleware.py`, `core/middleware.py`, `core/database.py`, `core/config.py`                                                       | ⬜              |
+| 33  | Core infrastructure       | CORE   | `core/security_middleware.py`, `core/database.py`, `core/config.py`                                                                             | ⏳              |
 | 34  | Frontend shared           | FE     | `utils/apiCache.ts`, module axios instances, `ProtectedRoute`, global stores                                                                    | ⬜              |
 
 **35 iterations per full pass.** After 34 the rotation wraps to 00, which
