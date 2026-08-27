@@ -168,6 +168,13 @@ class Organization(Base):
     name = Column(String(255), nullable=False)
     slug = Column(String(100), nullable=False, unique=True)
     description = Column(Text)
+    # Purchasing controls are explicit department policy, not client hints.
+    reorder_vendor_required = Column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
+    reorder_po_required = Column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
 
     # Organization Type
     organization_type = Column(

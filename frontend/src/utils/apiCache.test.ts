@@ -623,12 +623,37 @@ describe('apiCache', () => {
       expect(isCacheable('/notifications/my')).toBe(false); // user notifications
       expect(isCacheable('/meetings')).toBe(false); // attendee PII + minutes
       expect(isCacheable('/event-requests')).toBe(false); // external contact PII
+      expect(isCacheable('/forms')).toBe(false); // form defs: admin notification emails (Codex-round precedent)
+      expect(isCacheable('/grants')).toBe(false); // grant/donor PII
       // Sub-paths stay excluded too...
       expect(isCacheable('/users/123')).toBe(false);
       expect(isCacheable('/meetings/123')).toBe(false);
+      expect(isCacheable('/forms/submissions')).toBe(false);
+      expect(isCacheable('/grants/donors')).toBe(false);
       // ...and a similarly-named non-PII path is not accidentally caught.
       expect(isCacheable('/message-history')).toBe(false); // (its own exclusion)
       expect(isCacheable('/events')).toBe(true); // event list stays cacheable
+    });
+
+    it('returns false for training cohort/program/provider member-roster sub-paths (FE2-34)', () => {
+      // Cohort detail resolves a roster (name + email); the bare list is
+      // roster-free and stays cacheable.
+      expect(isCacheable('/training/cohorts/abc123')).toBe(false);
+      expect(isCacheable('/training/cohorts/mine')).toBe(false);
+      expect(isCacheable('/training/cohorts')).toBe(true);
+      // Per-program eligibility carries the full member roster + a reason;
+      // the program catalog list itself carries no member data.
+      expect(isCacheable('/training/programs/programs/p1/eligibility')).toBe(false);
+      expect(isCacheable('/training/programs/programs')).toBe(true);
+      // Provider user-mappings carry internal member name + email; the
+      // provider config list itself does not.
+      expect(isCacheable('/training/external/providers/p1/user-mappings')).toBe(false);
+      expect(isCacheable('/training/external/providers')).toBe(true);
+    });
+
+    it('returns false for raw per-user analytics export (FE2-34)', () => {
+      expect(isCacheable('/analytics/export')).toBe(false);
+      expect(isCacheable('/analytics/metrics')).toBe(true); // aggregate, not per-user
     });
   });
 

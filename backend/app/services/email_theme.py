@@ -192,6 +192,12 @@ TFOOT_STYLE = (
 # notice's accent, and the pair only has to disagree once for a template to
 # be stamped with a colourway its own markup does not use. Keying on the html
 # is safe: every body differs, and this is the call that produced it.
+#
+# No cap or eviction (Pitfall #9 would otherwise apply): this dict is meant
+# to hold exactly the bounded set of shipped default-template constants
+# built at import time. build_shell()'s `cache` parameter is what keeps it
+# bounded — per-send runtime callers (wrap_email_body) pass cache=False so
+# their one-off, never-looked-up shells don't accumulate here forever.
 _SHELL_COLOURWAYS: dict = {}
 
 
@@ -290,6 +296,7 @@ def build_shell(
     subtitle: str = "",
     brand: str = "{{organization_name}}",
     layout: str = DEFAULT_LAYOUT,
+    cache: bool = True,
 ) -> str:
     """Build the chrome every notice renders into.
 
@@ -333,6 +340,14 @@ def build_shell(
     reset template's columns are stamped with, and callers that do not go
     through the template system at all (``wrap_email_body``) substitute the
     tokens themselves.
+
+    *cache* records the shell in :data:`_SHELL_COLOURWAYS` for later
+    :func:`colourway_for` lookups (Pitfall #9: the module-level dict has no
+    cap or eviction, so it must stay populated only by the bounded set of
+    shipped default-template constants this module defines at import time).
+    ``wrap_email_body`` builds one unique shell per send with no caller that
+    ever reads its entry back — pass ``cache=False`` there so per-send
+    traffic does not grow the dict forever.
     """
     if layout not in _LAYOUT_CONTENT_CLASS:
         raise ValueError(f"unknown layout {layout!r}; expected one of {LAYOUTS}")
@@ -369,11 +384,12 @@ def build_shell(
             "</div>",
         ]
     )
-    _SHELL_COLOURWAYS[shell] = {
-        "accent": accent,
-        "chip": chip,
-        "layout": layout,
-    }
+    if cache:
+        _SHELL_COLOURWAYS[shell] = {
+            "accent": accent,
+            "chip": chip,
+            "layout": layout,
+        }
     return shell
 
 

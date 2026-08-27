@@ -18,12 +18,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.inventory import (
     AssignmentType,
+    CheckOutRecord,
     EquipmentRequest,
     InventoryActionType,
     InventoryNotificationQueue,
     IssuanceAllowance,
     ItemAssignment,
     ItemIssuance,
+    ItemStatus,
     NFPAInspectionDetail,
     RequestStatus,
     RequestType,
@@ -250,12 +252,17 @@ class TestRetirementNotificationQueued:
             description="Lost at a fire scene",
         )
         assert err is None
+        review = (await svc.get_write_off_requests(org_id))[0]
 
         _, err = await svc.review_write_off(
             write_off_id=wo["id"],
             organization_id=org_id,
             reviewed_by=user_id,
             decision="approved",
+            review_notes="Confirmed lost",
+            acknowledgement=True,
+            expected_item_status=review["current_status"],
+            expected_holder_signature=review["holder_signature"],
         )
         assert err is None
 
@@ -275,6 +282,41 @@ class TestRetirementNotificationQueued:
 
 
 class TestEquipmentRequestFulfillment:
+
+    @pytest.mark.asyncio
+    async def test_quartermaster_can_choose_checkout_without_changing_intent(
+        self, db_session, setup_org_and_user
+    ):
+        org_id, user_id, member_id = setup_org_and_user
+        svc = InventoryService(db_session)
+        item = await _make_individual_item(svc, org_id, user_id)
+        req = EquipmentRequest(
+            organization_id=org_id,
+            requester_id=member_id,
+            item_name="Spare Radio",
+            item_id=item.id,
+            requested_duration="ongoing",
+            request_type=RequestType.ISSUANCE,
+            status=RequestStatus.APPROVED,
+        )
+        db_session.add(req)
+        await db_session.flush()
+
+        fulfilled, err = await svc.fulfill_equipment_request(
+            request_id=uuid.UUID(req.id),
+            organization_id=uuid.UUID(org_id),
+            fulfilled_by=uuid.UUID(user_id),
+            fulfillment_type="checkout",
+        )
+
+        assert err is None
+        assert fulfilled.requested_duration == "ongoing"
+        assert fulfilled.fulfillment_type == "checkout"
+        checkout = await db_session.get(
+            CheckOutRecord, fulfilled.fulfillment_reference_id
+        )
+        assert checkout is not None
+        assert checkout.user_id == member_id
 
     @pytest.mark.asyncio
     async def test_fulfill_pool_request_creates_issuance(
@@ -300,6 +342,7 @@ class TestEquipmentRequestFulfillment:
             request_id=uuid.UUID(req.id),
             organization_id=uuid.UUID(org_id),
             fulfilled_by=uuid.UUID(user_id),
+            fulfillment_type="issuance",
         )
         assert err is None
         assert fulfilled.status == RequestStatus.FULFILLED
@@ -349,6 +392,7 @@ class TestEquipmentRequestFulfillment:
             organization_id=uuid.UUID(org_id),
             fulfilled_by=uuid.UUID(user_id),
             expected_return_at=due,
+            fulfillment_type="assignment",
         )
         assert err is None
         assert fulfilled.fulfillment_type == "assignment"
@@ -387,6 +431,7 @@ class TestEquipmentRequestFulfillment:
             request_id=uuid.UUID(req.id),
             organization_id=uuid.UUID(org_id),
             fulfilled_by=uuid.UUID(user_id),
+            fulfillment_type="assignment",
         )
         assert err is None
 
@@ -399,6 +444,94 @@ class TestEquipmentRequestFulfillment:
         assert assignment is not None
         assert assignment.assignment_type == AssignmentType.PERMANENT
         assert assignment.expected_return_date is None
+
+    # The quartermaster now chooses the transaction outright rather than having
+    # it derived from the member's request_type, so these three assert the
+    # tracking-type invariants against that explicit choice. The old
+    # "operation must match the member's intent" rule is what this branch
+    # removes; what survives is that pool stock is only ever issued and an
+    # individual item is never issued.
+    @pytest.mark.asyncio
+    async def test_rejects_checkout_of_pool_stock(self, db_session, setup_org_and_user):
+        org_id, user_id, member_id = setup_org_and_user
+        svc = InventoryService(db_session)
+        _, item = await _make_pool_item(svc, org_id, user_id)
+        req = EquipmentRequest(
+            organization_id=org_id,
+            requester_id=member_id,
+            item_name="Polo Shirt",
+            item_id=item.id,
+            quantity=1,
+            request_type=RequestType.CHECKOUT,
+            status=RequestStatus.APPROVED,
+        )
+        db_session.add(req)
+        await db_session.flush()
+
+        fulfilled, err = await svc.fulfill_equipment_request(
+            request_id=uuid.UUID(req.id),
+            organization_id=uuid.UUID(org_id),
+            fulfilled_by=uuid.UUID(user_id),
+            fulfillment_type="checkout",
+        )
+        assert fulfilled is None
+        assert "Pool-tracked stock must be fulfilled through an issuance" in err
+
+    @pytest.mark.asyncio
+    async def test_rejects_issuance_of_an_individual_item(
+        self, db_session, setup_org_and_user
+    ):
+        org_id, user_id, member_id = setup_org_and_user
+        svc = InventoryService(db_session)
+        item = await _make_individual_item(svc, org_id, user_id)
+        req = EquipmentRequest(
+            organization_id=org_id,
+            requester_id=member_id,
+            item_name="Spare Radio",
+            item_id=item.id,
+            quantity=1,
+            request_type=RequestType.CHECKOUT,
+            status=RequestStatus.APPROVED,
+        )
+        db_session.add(req)
+        await db_session.flush()
+
+        fulfilled, err = await svc.fulfill_equipment_request(
+            request_id=uuid.UUID(req.id),
+            organization_id=uuid.UUID(org_id),
+            fulfilled_by=uuid.UUID(user_id),
+            fulfillment_type="issuance",
+        )
+        assert fulfilled is None
+        assert "Individual items must be fulfilled through a checkout" in err
+
+    @pytest.mark.asyncio
+    async def test_rejects_an_unrecognised_fulfillment_type(
+        self, db_session, setup_org_and_user
+    ):
+        org_id, user_id, member_id = setup_org_and_user
+        svc = InventoryService(db_session)
+        item = await _make_individual_item(svc, org_id, user_id)
+        req = EquipmentRequest(
+            organization_id=org_id,
+            requester_id=member_id,
+            item_name="Spare Radio",
+            item_id=item.id,
+            quantity=1,
+            request_type=RequestType.CHECKOUT,
+            status=RequestStatus.APPROVED,
+        )
+        db_session.add(req)
+        await db_session.flush()
+
+        fulfilled, err = await svc.fulfill_equipment_request(
+            request_id=uuid.UUID(req.id),
+            organization_id=uuid.UUID(org_id),
+            fulfilled_by=uuid.UUID(user_id),
+            fulfillment_type="loan",
+        )
+        assert fulfilled is None
+        assert "A valid fulfillment type is required" in err
 
     @pytest.mark.asyncio
     async def test_fulfill_requires_approved_status(
@@ -424,10 +557,111 @@ class TestEquipmentRequestFulfillment:
             request_id=uuid.UUID(req.id),
             organization_id=uuid.UUID(org_id),
             fulfilled_by=uuid.UUID(user_id),
+            fulfillment_type="assignment",
         )
         assert fulfilled is None
         assert err is not None
         assert "approved" in err.lower()
+
+    @pytest.mark.asyncio
+    async def test_incompatible_substitution_requires_documented_override(
+        self, db_session, setup_org_and_user
+    ):
+        org_id, user_id, member_id = setup_org_and_user
+        svc = InventoryService(db_session)
+        _, requested = await _make_pool_item(svc, org_id, user_id)
+        substitute = await _make_individual_item(svc, org_id, user_id)
+        req = EquipmentRequest(
+            organization_id=org_id,
+            requester_id=member_id,
+            item_name=requested.name,
+            item_id=requested.id,
+            quantity=1,
+            request_type=RequestType.ISSUANCE,
+            status=RequestStatus.APPROVED,
+        )
+        db_session.add(req)
+        await db_session.flush()
+
+        fulfilled, err = await svc.fulfill_equipment_request(
+            request_id=uuid.UUID(req.id),
+            organization_id=uuid.UUID(org_id),
+            fulfilled_by=uuid.UUID(user_id),
+            item_id=uuid.UUID(substitute.id),
+            fulfillment_type="assignment",
+        )
+        assert fulfilled is None
+        assert "documented substitution override" in err
+        await db_session.refresh(req)
+        assert req.status == RequestStatus.APPROVED
+
+    @pytest.mark.asyncio
+    async def test_unavailable_inventory_leaves_request_approved(
+        self, db_session, setup_org_and_user
+    ):
+        org_id, user_id, member_id = setup_org_and_user
+        svc = InventoryService(db_session)
+        # A pool item cannot be *created* empty (create_item requires
+        # quantity >= 1), so the shortage under test is depletion after the
+        # fact -- which is the only way stock actually reaches zero.
+        _, item = await _make_pool_item(svc, org_id, user_id, quantity=1)
+        item.quantity = 0
+        await db_session.flush()
+        req = EquipmentRequest(
+            organization_id=org_id,
+            requester_id=member_id,
+            item_name=item.name,
+            item_id=item.id,
+            quantity=1,
+            request_type=RequestType.ISSUANCE,
+            status=RequestStatus.APPROVED,
+        )
+        db_session.add(req)
+        await db_session.flush()
+
+        fulfilled, err = await svc.fulfill_equipment_request(
+            request_id=uuid.UUID(req.id),
+            organization_id=uuid.UUID(org_id),
+            fulfilled_by=uuid.UUID(user_id),
+            fulfillment_type="issuance",
+        )
+        assert fulfilled is None
+        assert err is not None
+        await db_session.refresh(req)
+        assert req.status == RequestStatus.APPROVED
+
+    @pytest.mark.asyncio
+    async def test_approved_request_can_be_fulfilled_after_stock_arrives(
+        self, db_session, setup_org_and_user
+    ):
+        org_id, user_id, member_id = setup_org_and_user
+        svc = InventoryService(db_session)
+        _, item = await _make_pool_item(svc, org_id, user_id, quantity=1)
+        item.quantity = 0
+        await db_session.flush()
+        req = EquipmentRequest(
+            organization_id=org_id,
+            requester_id=member_id,
+            item_name=item.name,
+            item_id=item.id,
+            quantity=2,
+            request_type=RequestType.ISSUANCE,
+            status=RequestStatus.APPROVED,
+        )
+        db_session.add(req)
+        await db_session.flush()
+        # Approval is intentionally durable while procurement/receiving occurs.
+        item.quantity = 2
+        await db_session.commit()
+
+        fulfilled, err = await svc.fulfill_equipment_request(
+            request_id=uuid.UUID(req.id),
+            organization_id=uuid.UUID(org_id),
+            fulfilled_by=uuid.UUID(user_id),
+            fulfillment_type="issuance",
+        )
+        assert err is None
+        assert fulfilled.status == RequestStatus.FULFILLED
 
 
 # ── Write-Off Releases Holder Records ──────────────────────────────
@@ -462,11 +696,16 @@ class TestWriteOffReleasesHolders:
             description="Lost it",
         )
         assert err is None
+        review = (await svc.get_write_off_requests(org_id))[0]
         await svc.review_write_off(
             write_off_id=wo["id"],
             organization_id=org_id,
             reviewed_by=user_id,
             decision="approved",
+            review_notes="Confirmed lost",
+            acknowledgement=True,
+            expected_item_status=review["current_status"],
+            expected_holder_signature=review["holder_signature"],
         )
 
         refreshed = await svc.get_item_by_id(uuid.UUID(item.id), uuid.UUID(org_id))
@@ -501,11 +740,16 @@ class TestWriteOffReleasesHolders:
             description="Crushed",
         )
         assert err is None
+        review = (await svc.get_write_off_requests(org_id))[0]
         await svc.review_write_off(
             write_off_id=wo["id"],
             organization_id=org_id,
             reviewed_by=user_id,
             decision="approved",
+            review_notes="Confirmed damage",
+            acknowledgement=True,
+            expected_item_status=review["current_status"],
+            expected_holder_signature=review["holder_signature"],
         )
 
         refreshed = await svc.get_item_by_id(uuid.UUID(item.id), uuid.UUID(org_id))
@@ -515,6 +759,43 @@ class TestWriteOffReleasesHolders:
             select(ItemIssuance).where(ItemIssuance.item_id == item.id)
         )
         assert all(i.is_returned for i in result.scalars().all())
+
+    @pytest.mark.asyncio
+    async def test_concurrent_status_change_rejects_stale_writeoff_review(
+        self, db_session, setup_org_and_user
+    ):
+        """A reviewer cannot retire an item using facts loaded before a change."""
+        org_id, user_id, _ = setup_org_and_user
+        svc = InventoryService(db_session)
+        item, _ = await svc.create_item(
+            organization_id=uuid.UUID(org_id),
+            item_data={"name": "Radio", "condition": "good", "status": "available"},
+            created_by=uuid.UUID(user_id),
+        )
+        wo, err = await svc.create_write_off_request(
+            item_id=item.id,
+            organization_id=org_id,
+            requested_by=user_id,
+            reason="obsolete",
+            description="End of life",
+        )
+        assert err is None
+        review = (await svc.get_write_off_requests(org_id))[0]
+        item.status = ItemStatus.IN_MAINTENANCE
+        await db_session.commit()
+
+        _, err = await svc.review_write_off(
+            write_off_id=wo["id"],
+            organization_id=org_id,
+            reviewed_by=user_id,
+            decision="approved",
+            review_notes="Approved retirement",
+            expected_item_status=review["current_status"],
+            expected_holder_signature=review["holder_signature"],
+        )
+        assert err == "Item status or holder changed; refresh and review again"
+        await db_session.refresh(item)
+        assert item.status == ItemStatus.IN_MAINTENANCE
 
 
 # ── NFPA Inspection Write Path ─────────────────────────────────────

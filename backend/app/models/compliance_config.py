@@ -271,7 +271,7 @@ class ComplianceReport(Base):
     report_type = Column(
         String(20),
         nullable=False,
-        comment="monthly or yearly",
+        comment="monthly, annual, or yearly ('yearly' is an alias of 'annual')",
     )
     period_label = Column(
         String(50),

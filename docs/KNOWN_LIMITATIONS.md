@@ -316,12 +316,14 @@ Per-module docs under `docs/module-audit/` carry the full lower-severity list.
 | **Public portal: bcrypt-before-rate-limit CPU DoS + non-selective key prefix**                                | ✅ Resolved                                                 | `authenticate_api_key` now runs the client-IP rate limit as its first line — before the DB lookup and the bcrypt verify — so an unauthenticated flood of well-formed `logbook_…` keys is throttled before any expensive work; the redundant in-body IP checks were removed from the key-authenticated endpoints to avoid double-counting. The key prefix is now selective (16 chars: `"logbook_"` + 8 key chars; column widened `String(8)→String(20)`, migration `20260729_0001`) so a lookup returns one candidate → one bcrypt verify. Legacy `"logbook_"` keys self-heal to the selective prefix on next successful auth (no forced re-issue). (PP-4/PP-1)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | **Public portal: per-process rate limiter + application-status token plaintext at rest**                      | Open (MED, needs Redis/schema)                              | The in-memory public rate-limit caches are per-worker (true ceiling = workers × limit) and reset on restart — a shared Redis store is needed for a real global limit. The applicant status-check token is stored plaintext and matched by DB `==`, so a DB/backup read yields live 30-day tokens — it should be hashed at rest and looked up by hash. (PP-6) **Resolved from this cluster:** `authenticate_api_key` now throttles the `last_used_at` write (≤ once/60 s per key) and `detect_anomalies` uses 2 COUNT queries instead of 3 (PP-7); the access-log viewer auto-escapes `user-agent`/`referer`/`ip` via JSX (no stored-XSS — PP-5). Accepted design limitations: the whitelist has no per-subfield granularity (a whitelisted `mailing_address` exposes the whole nested dict — intentionally-public org data, not member PII), and the ≥36-bit display code has no per-code lockout (already bounded by the 60/min-per-IP limit).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | **Onboarding: role editor accepts client-controlled permissions / priority / system-flag**                    | Open (MED/LOW, needs design)                                | `save_session_roles` accepts fully client-supplied role `permissions`, `priority`, and `is_custom` (which sets `is_system`), and keys updates on the client-supplied slug — so an in-progress onboarding session can mint a high-priority `is_system` role, rewrite an existing system role by slug, or emit near-arbitrary `{module}.*` permission strings (a literal top-level `*` is not injectable, and the completion guard now blocks post-setup replay). Clamping priority, rejecting system-role re-mint, and allowlisting `module_id` would change what the legitimate onboarding role editor can express, so it needs a product decision. (ONB-7)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
-| **Onboarding: reset trust model, audit durability, and `/status` disclosure**                                 | Open (MED/LOW, needs decision)                              | `/reset` is gated by the onboarding session + CSRF but not the existing owner's re-authentication, so a leaked in-progress session can wipe the owner+org before completion — but blocking reset once an owner exists conflicts with legitimately restarting a botched setup. The `reset_initiated` audit event is written in the same transaction as the deletes, so a failed reset rolls it back (should commit to a durable sink first). `GET /status` returns the org name + setup state to any unauthenticated caller even post-completion (minor info disclosure). `template_service` create/update rely on the pydantic schema never exposing `organization_id`/`is_system` (mass-assignment fragility). (ONB-8)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| **Onboarding: reset-audit transaction boundary**                                                              | Open (LOW, transaction-boundary change deferred for care)   | The `reset_initiated` audit event is written in the same transaction as `/reset`'s deletes, so a failed reset rolls back the audit trail along with the data — it should commit to a durable sink first. **Correction (2026-08-27, security-review feature 30):** the other three items formerly listed in this row are fixed. Reset re-authentication (the existing System Owner must now be authenticated to reset, verified 2026-08-27 — landed 2026-08-21, commit `3d445eb2`, undocumented at the time) and `GET /status` info disclosure (returns a minimal post-completion response, per `docs/module-audit/onboarding.md` ONB-8) were already fixed; `template_service` create/update now strip `organization_id`/`created_by` and route through `apply_updates(skip=...)` instead of a blind `setattr` loop. (ONB-8)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| **Onboarding: session TTL has no absolute cap, only a sliding 30-minute window**                              | Open (LOW, policy decision)                                 | `validate_session` renews `expires_at` by another 30 minutes on every successful call — there is no maximum age tracked from session creation. Three routes (`GET /system-info`, `/security-check`, `/database-check`) call it with `require_csrf=False`, so the **session id alone** (no CSRF token) is enough to keep sliding the expiry indefinitely; a holder of just the session id can keep the pre-completion exploitation window open forever by polling any of those three, rather than it expiring 30 minutes after issuance as the user-facing message implies. (`GET /session/data`, unlike those three, does require the CSRF token — it is not itself part of the bearer-only path.) Capping absolute session lifetime is a policy choice (what the cap should be, and whether routine wizard navigation could ever hit it) rather than a drive-by fix. (ONB2-30-8)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | **Core infra: fail-open TLS/image handling + latent cache isolation gaps**                                    | Partially resolved (2026-08-07)                             | (1) ✅ **Resolved as an opt-in.** Two distinct cases, now separated. "TLS enabled but peer unverified" (`DB_SSL`/`REDIS_SSL` on with no CA → `CERT_NONE`) was already CRITICAL and blocks boot in production/staging, waivable via `SECURITY_ALLOW_UNVERIFIED_TLS` — that configuration looks secure and is not, which is worse than honest plaintext. "No TLS at all" is governed by **`SECURITY_REQUIRE_TLS`** (default `True`): absent `DB_SSL`/`REDIS_SSL` is promoted from WARNING to CRITICAL and refuses to start. A deployment with equivalent transport protection (private network, service mesh, or sidecar) must explicitly set the flag to `False`, so plaintext transport is no longer silently permitted. Covered by `tests/test_tls_required_config.py`. (2) `optimize_image` fails open — a valid-header decompression bomb or any processing error returns the original bytes unprocessed (storing the bomb, bypassing EXIF/GPS stripping) and it doesn't set a local `MAX_IMAGE_PIXELS`; making it reject changes the avatar/equipment-photo upload contract. (3) Redis TLS disables cert + hostname verification when no CA is configured (`CERT_NONE`). (4) The Redis cache manager provides no tenant namespacing — all current callers use intentionally-global keys (no PHI cached), but there's no guardrail against a future caller caching an org-scoped record under a bare id; `clear_pattern()` is an unused wildcard-delete footgun. (5) WebSocket `accept()` precedes auth (deliberate, so close codes reach the browser). (CI-9/CI-10) |
 | **Crypto: AES-256-GCM + 600k PBKDF2 done; MFA recovery-code entropy remains**                                 | Partially resolved (LOW)                                    | **Done:** at-rest field encryption now uses **AES-256-GCM** (authenticated; a tampered value fails closed via `InvalidTag`). Legacy Fernet (AES-128-CBC + HMAC) values remain readable, and `scripts/reencrypt_to_aesgcm.py` backfills existing rows to GCM (run it against staging with a DB backup first — it is dry-run by default; see `docs/AES256_GCM_BACKFILL_RUNBOOK.md`). Once the backfill is verified complete, Fernet read-support can be removed. **Also done (app-review B24):** the KDF work factor for new (`$gcm2$`) values is now **600k** PBKDF2-HMAC-SHA256 iterations (the 100k `$gcm1$` path is read-only for migration-era values). **Still open (deferred, well-mitigated):** MFA recovery codes are 40-bit unsalted SHA-256 (encrypted at rest, single-use, lockout-throttled) — changing it invalidates stored codes, so it's a deferred migration. (CI-5 + PBKDF2 done / recovery-codes CI-10 / CI-4 fail-closed)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | **Security monitoring: `security_alerts` cross-tenant alert read + suppression**                              | ✅ Resolved                                                 | `SecurityAlertRecord` now has an `organization_id` column (migration `20260728_0001`, indexed, backfilled from each alert's `user_id → users.organization_id`), populated at `_add_alert` from the acting user's org (user-less pre-auth / IP-only alerts stay NULL = platform-level). All four service methods take `organization_id` as a required parameter and filter on it: `get_recent_alerts` and `get_security_status` scope every aggregation (failed logins via the org's user ids); `acknowledge_alert`/`resolve_alert` scope the fetch so cross-tenant and missing ids both return a uniform 404 (no suppression, no existence oracle). `get_security_status` no longer returns the raw external-endpoint URL list (another tenant's exfil destinations) — only a process-global count. (SEC-6)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | **Security/IP: audit-chain rehash laundering + break-glass gate**                                             | ✅ Resolved                                                 | `rehash_chain` used to recompute `current_hash` from each row's current `event_data` for **every** row, so a privileged operator with DB write access could edit a keyed (v2) row and run rehash to launder the tamper into a valid keyed chain. Rehash now only repairs legacy (unkeyed) rows and **fails closed** (409) on a keyed-row mismatch — it never rewrites a keyed row. And because rehash rewrites the single cross-org chain and there is no platform-super-admin role, `POST /audit-log/rehash` is now disabled (403) unless a server operator sets `AUDIT_ALLOW_CHAIN_REHASH=true` (env = the de-facto platform-admin boundary), so an ordinary org admin holding `audit.export` can no longer trigger a platform-wide chain rewrite. (SEC-7)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
-| **Security/IP: global country-block table + geo fail-open**                                                   | ✅ Resolved                                                 | Geo-blocking is a platform-edge control (enforced before any tenant/auth context, against one shared MaxMind DB + one global blocked-country set), so per-org `CountryBlockRule` rows don't fit the enforcement model. Instead: (1) `GEOIP_FAIL_CLOSED` (default False) makes `is_ip_blocked` block any IP whose country can't be resolved — including the missing/corrupt-DB case — closing the "silently disabled app-wide" hole; private/reserved and allowlisted IPs are still allowed first, so an internal/allowlisted operator can recover. (2) The two mutating country-rule endpoints are gated by `GEOIP_ALLOW_COUNTRY_RULE_MANAGEMENT` (default False), so an org admin can no longer alter the shared cross-tenant blocklist via the API — the operator sets it at deploy time via `BLOCKED_COUNTRIES`. The non-destructive audit-chain ops (`/checkpoint`, read-only `/integrity`) remain on `audit.export`/`audit.view`. (SEC-8)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| **Security/IP: global country-block table + geo fail-open**                                                   | ✅ Resolved                                                 | Geo-blocking is a platform-edge control (enforced before any tenant/auth context, against one shared MaxMind DB + one global blocked-country set), so per-org `CountryBlockRule` rows don't fit the enforcement model. Instead: (1) `GEOIP_FAIL_CLOSED` (default False) makes `is_ip_blocked` block any IP whose country can't be resolved — including the missing/corrupt-DB case — closing the "silently disabled app-wide" hole; private/reserved IPs are still allowed first, so an internal operator can recover (correction 2026-08-27: allowlisted IPs are no longer part of that recovery path — see the next row). (2) The two mutating country-rule endpoints are gated by `GEOIP_ALLOW_COUNTRY_RULE_MANAGEMENT` (default False), so an org admin can no longer alter the shared cross-tenant blocklist via the API — the operator sets it at deploy time via `BLOCKED_COUNTRIES`. The non-destructive audit-chain ops (`/checkpoint`, read-only `/integrity`) remain on `audit.export`/`audit.view`. (SEC-8)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| **Security/IP: approved IP-allowlist exceptions have no effect on geo-blocking enforcement**                  | 🚩 Open — needs a product decision                          | `IPBlockingMiddleware` calls `geoip.is_ip_blocked(client_ip, set())` unconditionally — the allowlist argument is always empty. This is intentional as of PR #1544 (2026-08-17), which closed a real cross-tenant hole: the middleware previously unioned every org's approved `IPException` rows into one set, so one org's approved travel exception silently let _any_ org's geo-blocked traffic through (this middleware runs pre-auth, with no tenant context to scope an exception to safely). The fix removed the union rather than replacing it with a safe per-tenant mechanism, so the `IPException` request → approve workflow (still fully functional in the API — `PENDING` → `APPROVED`, org-scoped, gated on `security.manage`/`settings.manage`) now persists rows that enforcement never reads. A member whose exception is approved specifically so they can work from a blocked country is still blocked; nothing in the UI/API response explains why. **Needs a decision:** either (a) restore per-IP-only allowlist lookup (keyed on IP alone, not unioned across orgs — the safe version of the original feature), or (b) retire the feature explicitly (relabel/remove the create-exception UI so nobody approves a request that does nothing). Found in security-review INT2-28; see `docs/security-review/SEC2-28-security-audit-ip.md`.                                                                                                                                                                                                        |
 | **Security/Audit: residual exposure & robustness (session_id export, error-payload XSS, users-join scoping)** | Mostly ✅ resolved (one deferred)                           | **Done:** the audit export now emits a non-reversible SHA-256 fingerprint of `session_id` (raw value no longer leaked to `audit.export` holders; not in the hash chain, so integrity checks unaffected). The admin error viewer (`ErrorMonitoringPage`) and public-portal access-log viewer (`AccessLogsTab`) render error/UA/referer text via auto-escaped JSX (no `dangerouslySetInnerHTML`) — no stored-XSS path; `context` stays 4 KB-capped. The dead org-scoped `get_all_active_allowed_ips` method was removed and `IPExceptionType.BLOCKLIST` documented as a reserved placeholder. **Resolved 2026-07-30:** `audit_logs.organization_id` exists (migration `20260801_0009`, backfilled from `user_id`, hash-bound from version 3); all audit read paths filter it directly. (SEC-9)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | **Compliance/Skills: self-certification & self-attestation (no separation of duties)**                        | ⚠️ Half resolved (verified app-review A9)                   | **✅ Skills self-certification closed, at both ends:** an examiner can no longer be the candidate on a scored skills test, and **since 2026-08-08 an officer can no longer validate a test they are the candidate in** — `skills_testing.py` calls the shared `assert_different_person` guard (`app/services/separation_of_duties.py`) on both paths, with an `is_practice` carve-out for un-credited self-drilling. The second check is what keeps opening the examiner role to every member from re-opening this: without it an officer could have a peer "examine" them and then sign off their own pass, which is the same fraud one hop removed. **Still open:** `create_attestation` records a client-supplied `compliance_percentage` with nothing recomputed server-side and no second approver, so a compliance officer can attest a number they chose. Closing it needs a computed value or dual-control — a workflow change. (CS-8)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | **Compliance: reporting correctness & email abuse-surface polish**                                            | Partially resolved (LOW/MED)                                | **Fixed:** the report email HTML now `html.escape`s the org name, `report_type`, and period label (was raw interpolation of user-controlled values — mail-client HTML/script injection); `report_type` is constrained to `monthly`/`annual` (was free-form, persisted + interpolated). **Still flagged:** monthly reports return the annual dataset relabeled (needs `generate_annual_report` to support a month window — feature); report emailing accepts client-supplied recipients (external auditors are a legitimate case — **owner decision 2026-08-09: allow any recipient, but audit-log each send to a non-member address**; `_email_report` now calls `audit_external_recipients`, which writes an `external_recipient_send` audit event listing every out-of-org address); attestation history over-fetches globally (blocked on the deferred `audit_logs.organization_id` column — availability, not a leak); `records_with_certification` mislabel left as-is (ambiguous intent). (CS-9)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
@@ -2111,29 +2113,39 @@ already records this pairing as deliberately unadjudicated, for the same
 reason. (Security review EC-14 residual,
 `docs/security-review/EC-14-equipment-check-shifts.md`.)
 
-## Outbound Integration Requests — The DNS-Rebinding TOCTOU Is Narrowed, Not Closed (2026-08-26)
+## Outbound Integration Requests — The DNS-Rebinding TOCTOU Is Narrowed, Not Closed (2026-08-26, count corrected 2026-08-26)
 
 `assert_outbound_url_safe()` (`app/utils/url_validator.py`) re-resolves an
 org-configured integration URL's hostname via `socket.getaddrinfo()`
 immediately before an outbound request, to catch a hostname that was
-repointed at an internal address since it was saved. **Seven** call sites
+repointed at an internal address since it was saved. **Eight** call sites
 share the gap, across three distinct transports:
 
 - **Five** go through the shared `create_integration_client()` (plain
   `httpx.AsyncClient`) and share one remediation:
   `integration_services/{teams,webhook,slack,discord,calcom}_service.py`.
-- **`audit_ship_service.py`** constructs its own `httpx.AsyncClient`
-  directly rather than going through `create_integration_client` — a
-  `create_integration_client` fix alone would not reach it; it needs either
-  migrating onto the shared client or its own equivalent fix.
+- **Two** construct their own `httpx.AsyncClient` directly rather than going
+  through `create_integration_client` — a `create_integration_client` fix
+  alone would not reach either; each needs either migrating onto the shared
+  client or its own equivalent fix: `audit_ship_service.py`, and
+  `external_training_service.py` (`ExternalTrainingSyncService.__init__`,
+  found during the training-extended security-review pass — its provider
+  base URL is `validate_integration_url`'d at write time and re-validated
+  before every outbound call exactly like the other seven, so it shares this
+  same TOCTOU shape; not itself a new/distinct gap, just an undercounted
+  instance of this one. Its 30s timeout is deliberately longer than the
+  shared factory's 10s — a full-catalog LMS sync legitimately runs longer
+  than a webhook POST — so migrating it onto `create_integration_client`
+  isn't a drop-in swap; the factory would need a per-call timeout override
+  first).
 - **`push_service.py`** doesn't use `httpx` at all — `_send_one` dispatches
   through `pywebpush.webpush()`, a synchronous library with its own
   connection handling. Pinning a resolved address here needs a
-  transport-specific approach, not the httpx-level fix the other six share;
-  it would remain vulnerable if a fix were scoped only to
+  transport-specific approach, not the httpx-level fix the other seven
+  share; it would remain vulnerable if a fix were scoped only to
   `create_integration_client`.
 
-In every one of the seven, the actual request performs its **own**
+In every one of the eight, the actual request performs its **own**
 independent DNS resolution when it connects, separate from the
 `assert_outbound_url_safe` check. A hostname that resolves to a public IP
 for the check and an internal one moments later (classic DNS rebinding)
@@ -2142,7 +2154,8 @@ docstring says it "shrink[s] the rebinding window... versus
 save-time-to-send" — narrows, not closes — which is accurate; a security
 review draft that read this as "closed," and then first wrote it up as six
 files sharing one fix, was corrected twice (SCH-10, then a Codex review of
-that correction itself).
+that correction itself), and the count was corrected again when the
+training-extended pass found the eighth site.
 
 Not fixed: closing it means pinning the address `assert_outbound_url_safe`
 resolved for the actual connection (while preserving the original Host
@@ -2150,7 +2163,9 @@ header / SNI), separately for each of the three transports above — not one
 shared-infrastructure change, and not a fix scoped to any single file. Needs
 a dedicated cross-cutting pass (the shape SEC-00 exists for) that accounts
 for all three transports, not a unilateral fix inside a feature-scoped
-review. (Security review SCH-10, `docs/security-review/SCH-15-scheduling.md`.)
+review. (Security review SCH-10, `docs/security-review/SCH-15-scheduling.md`;
+count corrected by the training-extended pass,
+`docs/security-review/TRX-18-training-extended.md`.)
 
 ## Training — Bulk/Historical-Import Enum Fields Have No Request-Level Validators (2026-08-26)
 
@@ -2195,6 +2210,109 @@ row-locking guard matching CLAUDE.md Pitfall #27's shape), which this
 rotation's process reserves for a flagged item rather than a drive-by
 fix inside an unrelated finding. (Security review TR-17 residual,
 `docs/security-review/TR-17-training-core.md`.)
+
+## RPT2-29-2 — Saved Report Scheduling Is Stored and API-Writable, but Nothing Reads It (2026-08-27)
+
+`POST /reports/saved` and `PATCH /reports/saved/{id}` fully accept and
+persist `is_scheduled`, `schedule_frequency` (daily/weekly/monthly/quarterly),
+`schedule_day`, and `email_recipients`. `GET /reports/saved` reports
+`next_run_at` back to the caller as though it's live. But no code anywhere
+reads these fields to actually generate and email a report:
+
+- `create_saved_report` never computes `next_run_date` — it stays `None`
+  forever.
+- `scheduled_tasks.py`'s `TASK_RUNNERS` registry has no entry for saved/
+  scheduled reports (`run_compliance_auto_reports` is a distinct,
+  `ComplianceConfig`-driven feature, not `SavedReport`-driven).
+- No Celery beat / APScheduler config exists for this anywhere in the
+  backend.
+
+This is CLAUDE.md **Pitfall #19** — a config switch with no reader. A chief
+can set `is_scheduled=True`, `schedule_frequency="weekly"`, add
+`email_recipients`, see it listed as scheduled, and no report is ever
+generated or emailed, with no error at any point.
+
+**Fix applied (2026-08-27):** `SavedReportResponse.enforced` reports `False`
+(hardcoded — there is no per-row state to compute; see the comment on
+`SavedReport.is_scheduled` in `app/models/analytics.py`) and the frontend's
+`SavedReportConfig` type now carries the same field, so a future
+saved-reports screen can show a saved report as "not yet automated" rather
+than badging it Active. **No UI currently exposes this at all** —
+`ReportsPage.tsx` doesn't render saved reports despite `reportsStore.ts`/
+`services/api.ts` having full CRUD support for them — so nothing is
+mislabeled in the shipped app today; this closes the type gap Codex flagged
+on PR #1912 ahead of that screen being built. The underlying scheduling
+fields are left writable (no data-model change) — wiring a `TASK_RUNNERS`
+entry that scans due `SavedReport` rows, generates, emails via the resolved
+creator's permissions (the RPT-3 PII gate lives only in the endpoint layer
+today, so a future sender must re-derive or enforce it itself before
+emailing `member_roster`/`pipeline_overview` output), advances
+`next_run_date`, and builds the saved-reports screen itself is a feature
+addition, not a security-review drive-by fix.
+
+**Options for closing it:** (1) implement the `TASK_RUNNERS` reader, or (2)
+reject `is_scheduled=True` at the API layer with a clear "not yet supported"
+error until a sender exists, rather than the current silent-accept.
+
+## CRON2-31-12/13 — Two Scheduled-Task Gaps Left Open by This Rotation's Pass (2026-08-27)
+
+- **`run_action_item_reminders` has no org loop at all**
+  (`scheduled_tasks.py`), so it was never in scope for the CRON-2
+  deactivated-org fix or its regression test — it queries
+  `MeetingActionItem`/`MinutesActionItem` platform-wide with no join back
+  to `Organization.active`. Latent today (nothing sets `Organization.active
+= False` yet). Closing it means joining two different action-item tables
+  through two different parent tables (`Meeting`, `MeetingMinutes`) to
+  `Organization` — a structural change, not a drive-by.
+- **`run_admin_hours_auto_close` has no audit trail**
+  (`admin_hours_service.py`'s `auto_close_stale_sessions`) — force-closes a
+  member's open admin-hours session (a money-adjacent paid-hours state
+  change) with no `log_audit_event()` call anywhere in that file. What to
+  log (per-session vs. one batched summary event) is a design choice for
+  the admin-hours feature to make deliberately.
+
+See `docs/security-review/CRON2-31-scheduled-tasks.md` for the full pass
+(12 findings fixed, these 2 flagged).
+
+## LOC-3 — The Authenticated Location Display Endpoint Is Dead Code With a Growing Gap List (2026-08-27)
+
+`GET /locations/{id}/display` (`locations.py`) has had **zero frontend
+callers** since it was first reviewed on 2026-08-08 — the kiosk fetches
+`/api/public/v1/display/{code}` instead, which is a strictly better
+implementation (rate-limited, uses the canonical check-in-window helper,
+computes `is_valid` correctly, withholds event descriptions).
+
+The 2026-08-08 pass flagged two gaps that would need closing if this
+endpoint were ever wired up rather than deleted: it hardcodes
+`is_valid=True`/`can_check_in=True`, and never populates the `timezone`
+field its public sibling does. The 2026-08-27 security-review pass
+(`docs/security-review/LOC2-32-locations-kiosk.md`) found the drift grew a
+**third** gap in the meantime: it still emits
+`event_description=event.description` while the public path explicitly
+nulls that field with a comment ("Don't expose description publicly").
+
+Not fixed either pass, deliberately: deleting or wiring up an endpoint is an
+API-surface decision, not a correction. The department decision is the same
+as it was — delete this endpoint, or give it a caller and bring it in line
+with its public sibling on all three points before that caller ships.
+
+## CI2-33-13 — Injection-Attempt Detection Was Never Implemented (2026-08-27)
+
+`SecurityMonitoringMiddleware`'s docstring claimed "Detect injection
+attempts" among its capabilities. The code buffered up to 1MB of every
+non-GET/HEAD/OPTIONS request body — including `/api/v1/auth/login` and
+`/api/v1/users/password` — into a `request_data["body"]` dict that no code
+anywhere in the file ever read back out. `SENSITIVE_ENDPOINTS` was likewise
+defined and never consulted. No injection analysis happened at all, ever.
+
+Found by `docs/security-review/CI2-33-core-infra.md` (feature 33). The dead
+buffering was removed and the docstring corrected to state plainly that
+injection-attempt analysis is not implemented, rather than silently dropping
+the claim — but implementing real detection is a product decision this
+security-review pass did not make on its own: what patterns to flag, the
+false-positive tolerance for a log-only alert vs. a blocking one, and
+whether `SENSITIVE_ENDPOINTS` should gate it or every write request should
+be in scope. Left as documented future work.
 
 ## Process
 
