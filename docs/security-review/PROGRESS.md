@@ -16,7 +16,8 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-PR #1912 (feature 29, reports & analytics) — open, awaiting CI/review.
+None — PR #1912 (feature 29, reports & analytics) merged. Feature 30
+(onboarding) starting next.
 
 ---
 
@@ -69,7 +70,7 @@ Next: 29 reports & analytics.
 
 ---
 
-### 2026-08-27 — Feature 29 (Reports & analytics) — PR #1912 opened
+### 2026-08-27 — Feature 29 (Reports & analytics) merged — PR #1912
 
 Three parallel background agents covered this feature's split scope: (A)
 re-verification of the two prior review passes on `reports.py`/`analytics.py`/
@@ -131,7 +132,29 @@ dashboard or attendance or label"`), 8937/8937 full suite (22 pre-existing
 skips), black/isort/flake8 clean, migration validation passed (no schema
 change — only a model comment added).
 
-Next: 30 onboarding, once #1912 merges.
+**Update:** Codex reviewed the PR and found three real bugs in this pass's
+own fixes, all confirmed and corrected before merge:
+
+- `_is_valid_stage_groups` only checked `step_ids` was a list, not that
+  every element was a string — a payload like `{"step_ids": [{}]}` passed
+  validation, then crashed downstream anyway at `set.update()` on an
+  unhashable dict, the exact 500 the guard was meant to prevent. Fixed to
+  validate every element is a `str`.
+- The label audit-count fix (LBL-29-1) logged `len(data.ids)` — the
+  requested count, not the labels actually produced — over-counting on a
+  filtered id and under-counting when `copies > 1`. Fixed:
+  `LabelService.generate()` now also returns the specs-rendered count;
+  `print_labels` uses the already-correct `result["labels_sent"]`.
+- The `enforced` flag (RPT2-29-2's partial fix) was added to the backend
+  response but not to the frontend's `SavedReportConfig` type, and
+  `ReportsPage.tsx` doesn't render saved reports at all today — so "the
+  frontend can label it" overstated the fix. Added the frontend type field
+  for whenever that screen is built; corrected the overstated claim in
+  `CHANGELOG.md` and `KNOWN_LIMITATIONS.md`.
+
+All three replied to and resolved on the PR. Merged (squash, `721a60e7`).
+
+Next: 30 onboarding.
 
 ---
 
@@ -188,7 +211,7 @@ data-carrying modules, then the supporting infrastructure.
 | 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                         | ✅              |
 | 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                         | ✅              |
 | 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`                                                                    | ✅              |
-| 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                              | ⏳              |
+| 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                              | ✅              |
 | 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (24 unauth bootstrap routes)                                                                                             | ⬜              |
 | 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                   | ⬜              |
 | 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                  | ⬜              |
