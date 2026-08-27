@@ -494,7 +494,7 @@ export const TestingChecklistPage: React.FC = () => {
               type="button"
               aria-pressed={statusFilter === filter.value}
               onClick={() => setStatusFilter(filter.value)}
-              className={`rounded-md px-3 py-1.5 text-sm whitespace-nowrap transition-colors ${
+              className={`mobile-touch-target rounded-md px-3 py-1.5 text-sm whitespace-nowrap transition-colors ${
                 statusFilter === filter.value
                   ? 'bg-red-800 text-white'
                   : 'text-theme-text-secondary hover:bg-theme-surface-hover'

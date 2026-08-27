@@ -143,6 +143,13 @@ class TestingRun(Base):
 
 
 class TestingChecklistEntry(Base):
+    """One tester's finding on one page, in one run.
+
+    Never merged with another tester's: two accounts marking the same page are
+    two observations, and the one made by the account holding fewer grants is
+    usually the interesting one.
+    """
+
     __tablename__ = "testing_checklist_entries"
 
     id = Column(String(36), primary_key=True, default=generate_uuid)
