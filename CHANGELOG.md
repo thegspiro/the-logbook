@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### First-time setup had a few unbounded requests and inconsistent safeguards (2026-08-27)
+
+**Fixed**
+
+- The initial setup wizard's IT-team, roles, and positions steps had no
+  limit on how many entries a single request could submit, unlike every
+  other list in setup — a very large submission could tie up the server
+  hashing passwords or creating roles for far more entries than any real
+  department would ever have.
+- Six of setup's save steps (department info, email, file storage, auth,
+  IT team, module selection) could still be replayed after setup finished,
+  unlike the rest of the wizard's steps, letting an old browser tab keep
+  rewriting the saved (but no longer used) setup data indefinitely.
+- Retrying a failed test-email or reset attempt during setup a few times
+  could lock the whole setup process (including creating the first admin
+  account) for 30 minutes, because unrelated setup requests shared one
+  rate limit.
+- Editing a saved meeting-minutes template relied entirely on the request
+  never containing fields it shouldn't (organization or ownership) rather
+  than actively rejecting them — no live issue, but fragile against a
+  future change.
+
 ### Several reporting and dashboard figures were counted inconsistently, and a malformed report filter could return a server error (2026-08-27)
 
 **Fixed**
