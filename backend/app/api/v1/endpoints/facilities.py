@@ -5,10 +5,10 @@ Endpoints for facility/building management including CRUD operations,
 maintenance tracking, building systems, inspections, photos, and documents.
 
 Read-permission tiers: operational data (facilities, rooms, systems,
-maintenance, inspections, contacts, shutoffs, compliance, photos, documents)
-is readable with ``facilities.view`` — the baseline member grant. Sensitive
-data (access keys/codes, utility accounts and readings, capital projects,
-insurance policies, occupants) requires ``facilities.view_sensitive``,
+maintenance, inspections, contacts, shutoffs, compliance, photos) is readable
+with ``facilities.view`` — the baseline member grant. Facility documents and
+other sensitive data (access keys/codes, utility accounts and readings,
+capital projects, insurance policies, occupants) require ``facilities.view_sensitive``,
 ``facilities.edit``, or ``facilities.manage``: door/alarm codes, account
 numbers, budgets, and lease terms must not be exposed to every member just
 because the module is visible to them. ``facilities.view_sensitive`` exists
@@ -19,6 +19,7 @@ revoked). Keep new endpoints on the correct side of this line.
 """
 
 from datetime import date
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -121,6 +122,28 @@ _SENSITIVE_READ_PERMISSIONS = (
     "facilities.edit",
     "facilities.manage",
 )
+
+
+async def _validate_shared_document_reference(
+    db: AsyncSession, file_path: str, current_user: User
+) -> None:
+    """Reject forged/cross-organization references into shared storage."""
+    if not file_path.startswith("document:"):
+        raise HTTPException(
+            status_code=400, detail="Files must use shared document storage"
+        )
+    try:
+        document_id = UUID(file_path.removeprefix("document:"))
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=400, detail="Invalid shared document reference"
+        ) from exc
+    document = await DocumentsService(db).get_document_by_id(
+        document_id, UUID(str(current_user.organization_id))
+    )
+    if document is None:
+        # Deliberately indistinguishable from a missing same-org document.
+        raise HTTPException(status_code=404, detail="Document not found")
 
 
 def _facility_response_for(facility, current_user: User) -> FacilityResponse:
@@ -728,6 +751,9 @@ async def create_facility_photo(
     service = FacilitiesService(db)
 
     try:
+        await _validate_shared_document_reference(
+            db, photo_data.file_path, current_user
+        )
         photo = await service.create_photo(
             photo_data=photo_data,
             organization_id=current_user.organization_id,
@@ -830,15 +856,13 @@ async def list_facility_documents(
     skip: int = Query(0, ge=0, description="Number of records to skip"),
     limit: int = Query(100, ge=1, le=500, description="Maximum records to return"),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(
-        require_permission("facilities.view", "facilities.manage")
-    ),
+    current_user: User = Depends(require_permission(*_SENSITIVE_READ_PERMISSIONS)),
 ):
     """
     List facility documents
 
     **Authentication required**
-    **Permissions required:** facilities.view or facilities.manage
+    **Permissions required:** facilities.view_sensitive, facilities.edit, or facilities.manage
     """
     service = FacilitiesService(db)
     documents = await service.list_documents(
@@ -875,6 +899,9 @@ async def create_facility_document(
     service = FacilitiesService(db)
 
     try:
+        await _validate_shared_document_reference(
+            db, document_data.file_path, current_user
+        )
         document = await service.create_document(
             document_data=document_data,
             organization_id=current_user.organization_id,
