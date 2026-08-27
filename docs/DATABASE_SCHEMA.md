@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**257 tables · 4392 columns · 831 foreign keys**
+**257 tables · 4397 columns · 831 foreign keys**
 
 ---
 
@@ -333,7 +333,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`property_return_reminders`](#property_return_reminders) | `PropertyReturnReminder` | 10 | Tracks which property-return reminder notices have been sent to |
 | [`reorder_receipts`](#reorder_receipts) | `ReorderReceipt` | 10 | Immutable receipt history; one client receipt key may affect stock once. |
 | [`reorder_requests`](#reorder_requests) | `ReorderRequest` | 25 | Tracks reorder requests for inventory items that have dropped below |
-| [`return_requests`](#return_requests) | `ReturnRequest` | 18 | Member-initiated return request. |
+| [`return_requests`](#return_requests) | `ReturnRequest` | 23 | Member-initiated return request. |
 | [`storage_areas`](#storage_areas) | `StorageArea` | 14 | Storage Area model |
 
 ### Label_Printer
@@ -5341,7 +5341,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 **ReturnRequest** · `app/models/inventory.py`
 
-> Member-initiated return request. Members can declare they want to return equipment. A quartermaster reviews and either approves (triggering the actual return) or denies the request. This prevents members from simply claiming they returned an item without physical validation.
+> Member-initiated return request. Members notify the quartermaster that they intend to return equipment. Only a quartermaster recording physical receipt can close the holding; the member's report remains alongside the independent inspection.
 
 | Column | Type | Null | Key | Default | References |
 |---|---|---|---|---|---|
@@ -5357,10 +5357,15 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `quantity_returning` | INTEGER | no |  | `1` |  |
 | `reported_condition` | ENUM(`excellent`, `good`, `fair`, `poor`, `damaged`, `out_of_service`, `retired`) | no |  | `'good'` |  |
 | `member_notes` | TEXT | yes |  |  |  |
-| `status` | ENUM(`pending`, `approved`, `denied`, `completed`) | no | IDX | `'pending'` |  |
+| `status` | ENUM(`requested`, `received`, `inspected`, `denied`, `completed`) | no | IDX | `'requested'` |  |
 | `reviewed_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
 | `reviewed_at` | DATETIME | yes |  |  |  |
 | `review_notes` | TEXT | yes |  |  |  |
+| `observed_condition` | ENUM(`excellent`, `good`, `fair`, `poor`, `damaged`, `out_of_service`, `retired`) | yes |  |  |  |
+| `verified_identifier` | VARCHAR(255) | yes |  |  |  |
+| `received_quantity` | INTEGER | yes |  |  |  |
+| `follow_up_type` | VARCHAR(32) | yes |  |  |  |
+| `follow_up_id` | VARCHAR(36) | yes |  |  |  |
 | `created_at` | DATETIME | yes |  | `now()` |  |
 | `updated_at` | DATETIME | yes |  | `now()` |  |
 
@@ -6240,7 +6245,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 **OnboardingSessionModel** · `app/models/onboarding.py`
 
-> Server-side onboarding session storage SECURITY: Stores sensitive onboarding data encrypted server-side instead of in browser sessionStorage. This prevents passwords, API keys, and secrets from being exposed in the browser. Session data includes: - Department configuration - Email/authentication settings (encrypted) - File storage configuration (encrypted) - Admin user credentials (encrypted) - IT team information Sessions expire after 2 hours of inactivity.
+> Server-side onboarding session storage SECURITY: Stores sensitive onboarding data encrypted server-side instead of in browser sessionStorage. This prevents passwords, API keys, and secrets from being exposed in the browser. Session data includes: - Department configuration - Email/authentication settings (encrypted) - File storage configuration (encrypted) - Admin user credentials (encrypted) - IT team information Sessions expire after 30 minutes of inactivity (see SESSION_EXPIRY_HOURS in api/v1/onboarding.py); each validated call slides the expiry forward.
 
 | Column | Type | Null | Key | Default | References |
 |---|---|---|---|---|---|

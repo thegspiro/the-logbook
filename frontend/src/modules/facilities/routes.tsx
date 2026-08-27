@@ -33,6 +33,7 @@ const ApparatusBasicPage = lazyWithRetry(() => import('../../pages/ApparatusBasi
 const LocationKioskPage = lazyWithRetry(() => import('../../pages/LocationKioskPage'));
 const GuestCheckInPage = lazyWithRetry(() => import('../../pages/GuestCheckInPage'));
 
+/** Entry permission shared by every page in the Facilities workspace. */
 /** Protected facilities routes (rendered inside AppLayout). */
 export const getFacilitiesRoutes = () => (
   <React.Fragment>

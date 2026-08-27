@@ -3,6 +3,13 @@
 **Prefix:** `CRON` · **Iteration:** A3 · **Reviewed:** 2026-08-05 (pass 1),
 2026-08-08 (pass 2)
 
+**2026-08-27 — security-review feature 31 did the line-by-line read this
+doc's own Scope section says pass 2 could not honestly claim** (see below —
+"Individual task business logic was sampled... rather than read line-by-line
+across all 38"). 12 new findings across the file's growth to 43 runners (4
+MED, 8 LOW), all fixed except 2 flagged. Full writeup:
+`docs/security-review/CRON2-31-scheduled-tasks.md`.
+
 ## Pass 2 (2026-08-08) — six-lens sweep
 
 Re-verified pass-1 (endpoints gated; SCHEDULE/TASK_RUNNERS in sync — now 39/39;
