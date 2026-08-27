@@ -33,7 +33,7 @@ undo or block the message that was already created.
 
 import html as _html
 from datetime import datetime, timezone
-from typing import List, Optional
+from typing import List, Optional, Union
 
 from loguru import logger
 from sqlalchemy import select
@@ -107,8 +107,22 @@ class MessageDeliveryService:
             return None
 
     async def _finish_delivery(
-        self, attempt: DepartmentMessageDelivery, error: Optional[Exception] = None
+        self,
+        attempt: DepartmentMessageDelivery,
+        error: Optional[Union[Exception, str]] = None,
     ) -> None:
+        """Record the outcome. ``error`` may be an exception or a plain reason.
+
+        A reason string is how a provider that *reports* failure instead of
+        raising gets recorded — ``EmailService.send_email`` returns
+        ``(sent, failed)`` and ``SMSService.send_bulk_sms`` returns a count, so
+        a disabled provider or a rejected recipient comes back as a value, not
+        an exception. Marking those "delivered" is not a cosmetic audit error:
+        the idempotency key then suppresses every later retry, so the member
+        never receives the message and the row says they did. Email is the
+        channel of record (see the module docstring), which is exactly the
+        channel this would silently drop.
+        """
         attempt.status = "failed" if error else "delivered"
         attempt.error = str(error) if error else None
         attempt.delivered_at = None if error else datetime.now(timezone.utc)
@@ -255,14 +269,22 @@ class MessageDeliveryService:
                 if attempt is None:
                     continue
                 try:
-                    await email_svc.send_email(
+                    sent, failed = await email_svc.send_email(
                         to_emails=[user.email],
                         subject=subject,
                         html_body=html_body,
                         db=self.db,
                         template_type=MESSAGE_CATEGORY,
                     )
-                    await self._finish_delivery(attempt)
+                    if sent:
+                        await self._finish_delivery(attempt)
+                    else:
+                        await self._finish_delivery(
+                            attempt, f"email reported {failed} failed, 0 sent"
+                        )
+                        logger.warning(
+                            "Department message email not sent to {}", user.id
+                        )
                 except Exception as exc:
                     await self._finish_delivery(attempt, exc)
                     logger.warning("Department message email send failed: {}", exc)
@@ -325,8 +347,11 @@ class MessageDeliveryService:
                 if attempt is None:
                     continue
                 try:
-                    await sms.send_bulk_sms([number], body)
-                    await self._finish_delivery(attempt)
+                    if await sms.send_bulk_sms([number], body):
+                        await self._finish_delivery(attempt)
+                    else:
+                        await self._finish_delivery(attempt, "sms reported 0 sent")
+                        logger.warning("Department message SMS not sent to {}", user.id)
                 except Exception as exc:
                     await self._finish_delivery(attempt, exc)
                     logger.warning("Department message SMS send failed: {}", exc)

@@ -198,6 +198,82 @@ class TestEmailRecipientFiltering:
         assert sent["to"] == ["in@fd.co", "out@fd.co"]
 
 
+class TestReportedFailuresAreNotRecordedAsDelivered:
+    """A provider that reports failure instead of raising must not read as sent.
+
+    ``EmailService.send_email`` returns ``(sent, failed)`` and
+    ``SMSService.send_bulk_sms`` returns a count; neither raises when the
+    channel is disabled or the provider rejects a recipient. Marking those
+    attempts "delivered" is not just a wrong audit row — the idempotency key
+    then suppresses every later retry, so the member never gets the message and
+    the record says they did. Email is the channel of record, which is exactly
+    what this would silently drop.
+    """
+
+    async def test_email_reporting_zero_sent_is_recorded_as_failed(self):
+        db = _db()
+        recipients = [_user("u1", email="nobody@fd.co")]
+
+        class _FailingEmail:
+            def __init__(self, organization=None):
+                pass
+
+            async def send_email(self, to_emails, **kwargs):
+                return (0, len(to_emails))  # disabled provider / rejected recipient
+
+        svc = MessageDeliveryService(db)
+        claimed = []
+
+        async def _claim(message, user, channel):
+            attempt = SimpleNamespace(
+                status="pending", error=None, delivered_at=None, channel=channel
+            )
+            claimed.append(attempt)
+            return attempt
+
+        svc._claim_delivery = _claim
+        with patch("app.services.email_service.EmailService", _FailingEmail), patch(
+            "app.services.email_service.wrap_email_body",
+            return_value="<html></html>",
+        ):
+            await svc._send_email(_msg(priority="urgent"), recipients, org=None)
+
+        assert len(claimed) == 1
+        assert claimed[0].status == "failed"
+        assert claimed[0].delivered_at is None
+
+    async def test_sms_reporting_zero_sent_is_recorded_as_failed(self):
+        db = _db()
+        recipients = [_user("u1", mobile="+15551234567")]
+        svc = MessageDeliveryService(db)
+        claimed = []
+
+        async def _claim(message, user, channel):
+            attempt = SimpleNamespace(
+                status="pending", error=None, delivered_at=None, channel=channel
+            )
+            claimed.append(attempt)
+            return attempt
+
+        svc._claim_delivery = _claim
+        fake_sms = MagicMock()
+        fake_sms.enabled = True
+        fake_sms.send_bulk_sms = AsyncMock(return_value=0)  # Twilio rejected it
+        with patch(
+            "app.services.sms_service.SMSService", return_value=fake_sms
+        ), _patch_sms_consent("u1"):
+            await svc._send_sms(
+                _msg(priority="urgent"),
+                recipients,
+                org=SimpleNamespace(name="FD"),
+            )
+
+        fake_sms.send_bulk_sms.assert_awaited_once()
+        assert len(claimed) == 1
+        assert claimed[0].status == "failed"
+        assert claimed[0].delivered_at is None
+
+
 class TestSmsGating:
     async def test_sms_skipped_when_twilio_disabled(self):
         db = _db()
