@@ -35,13 +35,14 @@ import type {
   LowStockAlert,
 } from '../../../services/eventServices';
 
-const STATUS_OPTIONS = ['pending', 'approved', 'ordered', 'received', 'cancelled'] as const;
+const STATUS_OPTIONS = ['pending', 'approved', 'ordered', 'partially_received', 'received', 'cancelled'] as const;
 const URGENCY_OPTIONS = ['low', 'normal', 'high', 'critical'] as const;
 
 const STATUS_COLORS: Record<string, string> = {
   pending: 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400',
   approved: 'bg-blue-500/10 text-blue-700 dark:text-blue-400',
   ordered: 'bg-purple-500/10 text-purple-700 dark:text-purple-400',
+  partially_received: 'bg-cyan-500/10 text-cyan-700 dark:text-cyan-400',
   received: 'bg-green-500/10 text-green-700 dark:text-green-400',
   cancelled: 'bg-theme-surface-secondary text-theme-text-muted',
 };
@@ -57,6 +58,7 @@ const STATUS_ICONS: Record<string, React.ReactNode> = {
   pending: <Clock className="h-3.5 w-3.5" />,
   approved: <CheckCircle className="h-3.5 w-3.5" />,
   ordered: <Truck className="h-3.5 w-3.5" />,
+  partially_received: <Package className="h-3.5 w-3.5" />,
   received: <Package className="h-3.5 w-3.5" />,
   cancelled: <XCircle className="h-3.5 w-3.5" />,
 };
@@ -381,116 +383,156 @@ const ReorderFormModal: React.FC<{
   );
 };
 
-// -- Status Update Modal --
-const StatusUpdateModal: React.FC<{
+// -- Contextual workflow action modal --
+type WorkflowAction = 'approve' | 'mark_ordered' | 'receive' | 'cancel';
+const ACTION_LABELS: Record<WorkflowAction, string> = {
+  approve: 'Approve',
+  mark_ordered: 'Mark ordered',
+  receive: 'Receive stock',
+  cancel: 'Cancel request',
+};
+const WorkflowActionModal: React.FC<{
   isOpen: boolean;
   onClose: () => void;
   onSaved: () => void;
   request: ReorderRequest | null;
-}> = ({ isOpen, onClose, onSaved, request }) => {
-  const [status, setStatus] = useState('');
+  action: WorkflowAction | null;
+  vendors: InventoryVendor[];
+}> = ({ isOpen, onClose, onSaved, request, action, vendors }) => {
+  const [vendorId, setVendorId] = useState('');
   const [poNumber, setPONumber] = useState('');
-  const [actualCost, setActualCost] = useState('');
-  const [qtyReceived, setQtyReceived] = useState('');
-  const [notes, setNotes] = useState('');
+  const [quantity, setQuantity] = useState('');
+  const [unitCost, setUnitCost] = useState('');
+  const [location, setLocation] = useState('');
+  const [lotNumber, setLotNumber] = useState('');
+  const [confirmOver, setConfirmOver] = useState(false);
   const [saving, setSaving] = useState(false);
-
   useEffect(() => {
     if (!isOpen || !request) return;
-    setStatus(request.status);
+    setVendorId(request.vendor_id ?? '');
     setPONumber(request.purchase_order_number ?? '');
-    setActualCost(request.actual_unit_cost != null ? String(request.actual_unit_cost) : '');
-    setQtyReceived(request.quantity_received != null ? String(request.quantity_received) : '');
-    setNotes('');
+    setQuantity(String(request.quantity_outstanding));
+    setUnitCost(String(request.actual_unit_cost ?? request.estimated_unit_cost ?? ''));
+    setLocation('');
+    setLotNumber('');
+    setConfirmOver(false);
   }, [isOpen, request]);
-
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!request) return;
+    if (!request || !action) return;
     setSaving(true);
     try {
-      const data: ReorderRequestUpdate = {
-        status: status || undefined,
-        purchase_order_number: poNumber.trim() || undefined,
-        actual_unit_cost: actualCost ? Number(actualCost) : undefined,
-        quantity_received: qtyReceived ? Number(qtyReceived) : undefined,
-        notes: notes.trim() || undefined,
-      };
-      await inventoryService.updateReorderRequest(request.id, data);
-      toast.success('Status updated');
+      if (action === 'receive') {
+        const qty = Number(quantity);
+        if (qty <= 0 || !location.trim() || Number(unitCost) < 0 || unitCost === '') {
+          toast.error('Positive quantity, storage location, and unit cost are required');
+          return;
+        }
+        await inventoryService.receiveReorderStock(request.id, {
+          quantity: qty,
+          expected_version: request.version,
+          idempotency_key: crypto.randomUUID(),
+          storage_location: location.trim(),
+          unit_cost: Number(unitCost),
+          ...(lotNumber.trim() ? { lot_number: lotNumber.trim() } : {}),
+          confirm_over_receipt: confirmOver,
+        });
+      } else {
+        await inventoryService.transitionReorderRequest(request.id, {
+          action,
+          expected_version: request.version,
+          ...(vendorId ? { vendor_id: vendorId } : {}),
+          ...(poNumber.trim() ? { purchase_order_number: poNumber.trim() } : {}),
+        });
+      }
+      toast.success(`${ACTION_LABELS[action]} completed`);
       onSaved();
       onClose();
     } catch (err: unknown) {
-      toast.error(getErrorMessage(err, 'Failed to update status'));
+      toast.error(getErrorMessage(err, `Failed to ${ACTION_LABELS[action].toLowerCase()}`));
     } finally {
       setSaving(false);
     }
   };
-
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Update Reorder Status" size="md">
-      <form
-        onSubmit={(e) => {
-          void submit(e);
-        }}
-        className="space-y-4 p-4"
-      >
-        <div>
-          <label className={lbl}>Status</label>
-          <select className={inp} value={status} onChange={(e) => setStatus(e.target.value)}>
-            {STATUS_OPTIONS.map((s) => (
-              <option key={s} value={s}>
-                {s.charAt(0).toUpperCase() + s.slice(1)}
-              </option>
-            ))}
-          </select>
-        </div>
-        {(status === 'ordered' || status === 'received') && (
-          <div>
-            <label className={lbl}>PO Number</label>
-            <input
-              className={inp}
-              value={poNumber}
-              onChange={(e) => setPONumber(e.target.value)}
-              placeholder="Purchase order #"
-            />
-          </div>
-        )}
-        {status === 'received' && (
+    <Modal isOpen={isOpen} onClose={onClose} title={action ? ACTION_LABELS[action] : 'Update order'} size="md">
+      <form onSubmit={(e) => void submit(e)} className="space-y-4 p-4">
+        {action === 'mark_ordered' && (
           <>
             <div>
-              <label className={lbl}>Quantity Received</label>
+              <label className={lbl}>Vendor</label>
+              <select className={inp} value={vendorId} onChange={(e) => setVendorId(e.target.value)}>
+                <option value="">Select vendor</option>
+                {vendors
+                  .filter((v) => v.is_active)
+                  .map((v) => (
+                    <option key={v.id} value={v.id}>
+                      {v.name}
+                    </option>
+                  ))}
+              </select>
+            </div>
+            <div>
+              <label className={lbl}>Purchase-order reference</label>
+              <input className={inp} value={poNumber} onChange={(e) => setPONumber(e.target.value)} />
+            </div>
+          </>
+        )}
+        {action === 'receive' && (
+          <>
+            <p className="text-theme-text-muted text-sm">
+              Ordered {request?.quantity_requested ?? 0} · Received {request?.quantity_received ?? 0} · Outstanding{' '}
+              {request?.quantity_outstanding ?? 0}
+            </p>
+            <div>
+              <label className={lbl}>Quantity received</label>
               <input
                 type="number"
-                min="0"
+                min="1"
                 className={inp}
-                value={qtyReceived}
-                onChange={(e) => setQtyReceived(e.target.value)}
+                value={quantity}
+                onChange={(e) => setQuantity(e.target.value)}
               />
             </div>
             <div>
-              <label className={lbl}>Actual Unit Cost ($)</label>
+              <label className={lbl}>Storage location</label>
+              <input required className={inp} value={location} onChange={(e) => setLocation(e.target.value)} />
+            </div>
+            <div>
+              <label className={lbl}>Unit cost ($)</label>
               <input
+                required
                 type="number"
                 min="0"
                 step="0.01"
                 className={inp}
-                value={actualCost}
-                onChange={(e) => setActualCost(e.target.value)}
+                value={unitCost}
+                onChange={(e) => setUnitCost(e.target.value)}
               />
             </div>
+            <div>
+              <label className={lbl}>Lot number</label>
+              <input className={inp} value={lotNumber} onChange={(e) => setLotNumber(e.target.value)} />
+            </div>
+            {Number(quantity) > (request?.quantity_outstanding ?? 0) && (
+              <label className="flex gap-2 text-sm">
+                <input type="checkbox" checked={confirmOver} onChange={(e) => setConfirmOver(e.target.checked)} />{' '}
+                Confirm intentional over-receipt
+              </label>
+            )}
           </>
         )}
-        <div>
-          <label className={lbl}>Notes</label>
-          <textarea className={inp} rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} />
-        </div>
-        <div className="border-theme-surface-border flex flex-col-reverse items-stretch justify-end gap-2 border-t pt-2 sm:flex-row sm:items-center">
+        {action === 'cancel' && (
+          <p className="text-theme-text-secondary text-sm">
+            Cancel this request? This action is recorded in the audit log.
+          </p>
+        )}
+        <div className="border-theme-surface-border flex justify-end gap-2 border-t pt-3">
           <button type="button" onClick={onClose} className="btn-secondary btn-md">
-            Cancel
+            Back
           </button>
-          <button type="submit" disabled={saving} className="btn-info btn-md text-center disabled:opacity-50">
-            {saving ? 'Updating...' : 'Update Status'}
+          <button disabled={saving} className={action === 'cancel' ? 'btn-danger btn-md' : 'btn-info btn-md'}>
+            {saving ? 'Saving…' : action && ACTION_LABELS[action]}
           </button>
         </div>
       </form>
@@ -513,6 +555,7 @@ export const ReorderRequestsPage: React.FC = () => {
   const [showCreate, setShowCreate] = useState(false);
   const [editRequest, setEditRequest] = useState<ReorderRequest | null>(null);
   const [statusRequest, setStatusRequest] = useState<ReorderRequest | null>(null);
+  const [workflowAction, setWorkflowAction] = useState<WorkflowAction | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -754,12 +797,48 @@ export const ReorderRequestsPage: React.FC = () => {
                     </td>
                     <td data-label="" className="px-4 py-3 text-right">
                       <div className="flex justify-end gap-1">
-                        {req.status !== 'received' && req.status !== 'cancelled' && (
+                        {req.status === 'pending' && (
                           <button
-                            onClick={() => setStatusRequest(req)}
-                            className="bg-theme-surface-secondary hover:bg-theme-surface-hover text-theme-text-primary rounded px-2 py-1 text-xs"
+                            onClick={() => {
+                              setStatusRequest(req);
+                              setWorkflowAction('approve');
+                            }}
+                            className="btn-info btn-sm"
                           >
-                            Update Status
+                            Approve
+                          </button>
+                        )}
+                        {req.status === 'approved' && (
+                          <button
+                            onClick={() => {
+                              setStatusRequest(req);
+                              setWorkflowAction('mark_ordered');
+                            }}
+                            className="btn-info btn-sm"
+                          >
+                            Mark ordered
+                          </button>
+                        )}
+                        {(req.status === 'ordered' || req.status === 'partially_received') && (
+                          <button
+                            onClick={() => {
+                              setStatusRequest(req);
+                              setWorkflowAction('receive');
+                            }}
+                            className="btn-info btn-sm"
+                          >
+                            Receive stock
+                          </button>
+                        )}
+                        {!['received', 'cancelled'].includes(req.status) && (
+                          <button
+                            onClick={() => {
+                              setStatusRequest(req);
+                              setWorkflowAction('cancel');
+                            }}
+                            className="btn-secondary btn-sm"
+                          >
+                            Cancel
                           </button>
                         )}
                         {req.status === 'pending' && (
@@ -797,13 +876,18 @@ export const ReorderRequestsPage: React.FC = () => {
           lowStockAlerts={lowStockAlerts}
           editRequest={editRequest}
         />
-        <StatusUpdateModal
+        <WorkflowActionModal
           isOpen={statusRequest !== null}
-          onClose={() => setStatusRequest(null)}
+          onClose={() => {
+            setStatusRequest(null);
+            setWorkflowAction(null);
+          }}
           onSaved={() => {
             void load();
           }}
           request={statusRequest}
+          action={workflowAction}
+          vendors={vendors}
         />
       </div>
     </div>

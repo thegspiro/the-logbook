@@ -695,6 +695,8 @@ class InventoryLot(Base):
         Integer, default=0, nullable=False, server_default="0"
     )  # ready units on hand
     received_date = Column(Date, nullable=True)
+    storage_location = Column(String(255), nullable=True)
+    unit_cost = Column(Numeric(10, 2), nullable=True)
     notes = Column(Text, nullable=True)
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -1433,6 +1435,9 @@ class EquipmentRequest(Base):
         nullable=False,
         default=RequestType.CHECKOUT,
     )
+    # The member's intent is deliberately separate from the transaction the
+    # quartermaster ultimately chooses to satisfy the request.
+    requested_duration = Column(String(20), nullable=False, default="temporary")
     priority = Column(
         Enum(RequestPriority, values_callable=_enum_values),
         nullable=False,
@@ -1882,10 +1887,11 @@ class NFPAExposureRecord(Base):
 class ReturnRequestStatus(str, enum.Enum):
     """Status of a member-initiated return request"""
 
-    PENDING = "pending"
-    APPROVED = "approved"
+    REQUESTED = "requested"
+    RECEIVED = "received"
+    INSPECTED = "inspected"
     DENIED = "denied"
-    COMPLETED = "completed"  # Approved and physically returned
+    COMPLETED = "completed"
 
 
 class ReturnRequestType(str, enum.Enum):
@@ -1900,10 +1906,9 @@ class ReturnRequest(Base):
     """
     Member-initiated return request.
 
-    Members can declare they want to return equipment.  A quartermaster
-    reviews and either approves (triggering the actual return) or denies
-    the request.  This prevents members from simply claiming they returned
-    an item without physical validation.
+    Members notify the quartermaster that they intend to return equipment.
+    Only a quartermaster recording physical receipt can close the holding;
+    the member's report remains alongside the independent inspection.
     """
 
     __tablename__ = "return_requests"
@@ -1962,7 +1967,7 @@ class ReturnRequest(Base):
     status = Column(
         Enum(ReturnRequestStatus, values_callable=_enum_values),
         nullable=False,
-        default=ReturnRequestStatus.PENDING,
+        default=ReturnRequestStatus.REQUESTED,
         index=True,
     )
     reviewed_by = Column(
@@ -1970,6 +1975,11 @@ class ReturnRequest(Base):
     )
     reviewed_at = Column(DateTime(timezone=True))
     review_notes = Column(Text)
+    observed_condition = Column(Enum(ItemCondition, values_callable=_enum_values))
+    verified_identifier = Column(String(255))
+    received_quantity = Column(Integer)
+    follow_up_type = Column(String(32))
+    follow_up_id = Column(String(36))
 
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -1994,6 +2004,7 @@ class ReorderStatus(str, enum.Enum):
     PENDING = "pending"
     APPROVED = "approved"
     ORDERED = "ordered"
+    PARTIALLY_RECEIVED = "partially_received"
     RECEIVED = "received"
     CANCELLED = "cancelled"
 
@@ -2036,7 +2047,8 @@ class ReorderRequest(Base):
     )
     item_name = Column(String(255), nullable=False)
     quantity_requested = Column(Integer, nullable=False, default=1, server_default="1")
-    quantity_received = Column(Integer, nullable=True)
+    quantity_received = Column(Integer, nullable=False, default=0, server_default="0")
+    version = Column(Integer, nullable=False, default=1, server_default="1")
 
     # Vendor / ordering details. `vendor` / `vendor_contact` are the legacy
     # free-text fields; `vendor_id` links the request to a tracked vendor and
@@ -2093,10 +2105,50 @@ class ReorderRequest(Base):
     requester = relationship("User", foreign_keys=[requested_by])
     approver = relationship("User", foreign_keys=[approved_by])
     vendor_record = relationship("InventoryVendor", foreign_keys=[vendor_id])
+    receipts = relationship("ReorderReceipt", back_populates="reorder_request")
 
     __table_args__ = (
         Index("idx_reorder_org_status", "organization_id", "status"),
         Index("idx_reorder_item", "item_id"),
+    )
+
+
+class ReorderReceipt(Base):
+    """Immutable receipt history; one client receipt key may affect stock once."""
+
+    __tablename__ = "reorder_receipts"
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    organization_id = Column(
+        String(36), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False
+    )
+    reorder_request_id = Column(
+        String(36),
+        ForeignKey("reorder_requests.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    inventory_lot_id = Column(
+        String(36), ForeignKey("inventory_lots.id", ondelete="RESTRICT"), nullable=False
+    )
+    idempotency_key = Column(String(100), nullable=False)
+    quantity = Column(Integer, nullable=False)
+    unit_cost = Column(Numeric(10, 2), nullable=True)
+    storage_location = Column(String(255), nullable=True)
+    received_by = Column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    received_at = Column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    reorder_request = relationship("ReorderRequest", back_populates="receipts")
+    __table_args__ = (
+        UniqueConstraint(
+            "reorder_request_id", "idempotency_key", name="uq_reorder_receipt_key"
+        ),
+        Index("ix_reorder_receipts_request", "reorder_request_id"),
+        # Every read of this table is org-scoped first (Pitfall #14a), so
+        # organization_id has to lead an index of its own -- the request index
+        # above cannot serve a tenancy filter.
+        Index("ix_reorder_receipts_org", "organization_id", "received_at"),
     )
 
 

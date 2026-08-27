@@ -110,6 +110,8 @@ RequestTypeLiteral = Literal["checkout", "issuance", "purchase", "return"]
 RequestStatusLiteral = Literal["pending", "approved", "denied", "fulfilled"]
 RequestPriorityLiteral = Literal["low", "normal", "high"]
 ReviewStatusLiteral = Literal["approved", "denied"]
+RequestedDurationLiteral = Literal["temporary", "ongoing"]
+FulfillmentTypeLiteral = Literal["checkout", "assignment", "issuance"]
 
 StorageTypeLiteral = Literal[
     "rack", "shelf", "box", "cabinet", "drawer", "bin", "other"
@@ -1433,7 +1435,7 @@ class EquipmentRequestCreate(BaseModel):
     item_id: Optional[UUID] = None
     category_id: Optional[UUID] = None
     quantity: int = Field(default=1, ge=1)
-    request_type: RequestTypeLiteral = Field(default="checkout")
+    requested_duration: RequestedDurationLiteral
     priority: RequestPriorityLiteral = Field(default="normal")
     reason: Optional[FreeText] = None
 
@@ -1454,10 +1456,15 @@ class EquipmentRequestFulfill(BaseModel):
     member's per-category cap when issuing a pool item.
     """
 
+    fulfillment_type: FulfillmentTypeLiteral
     item_id: Optional[UUID] = None
     quantity: Optional[int] = Field(default=None, ge=1)
     expected_return_at: Optional[datetime] = None
     override_allowance: bool = False
+    substitution_override_reason: Optional[FreeText] = Field(
+        default=None,
+        description="Required justification when fulfilling with an item outside the requested item/category",
+    )
 
 
 # ============================================
@@ -1535,7 +1542,12 @@ class WriteOffReview(BaseModel):
     """Approve or deny a write-off request"""
 
     status: ReviewStatusLiteral
-    review_notes: Optional[FreeText] = None
+    review_notes: Annotated[
+        str, StringConstraints(strip_whitespace=True, min_length=1, max_length=2000)
+    ]
+    acknowledgement: bool = False
+    expected_item_status: Optional[str] = None
+    expected_holder_signature: Optional[str] = None
 
 
 class WriteOffRequestResponse(UTCResponseBase):
@@ -1557,6 +1569,18 @@ class WriteOffRequestResponse(UTCResponseBase):
     reviewed_at: Optional[datetime] = None
     review_notes: Optional[str] = None
     clearance_id: Optional[str] = None
+    clearance_record: Optional[str] = None
+    current_holder: Optional[str] = None
+    current_status: Optional[str] = None
+    replacement_value: Optional[float] = None
+    linked_charge_record: Optional[str] = None
+    open_maintenance_record: Optional[str] = None
+    active_assignment_count: int = 0
+    active_checkout_count: int = 0
+    active_issuance_count: int = 0
+    acknowledgement_required: bool = False
+    acknowledgement_threshold: Optional[float] = None
+    holder_signature: Optional[str] = None
     created_at: Optional[datetime] = None
 
     model_config = _response_config
@@ -1879,8 +1903,10 @@ class ChargeManagementResponse(BaseModel):
 # ============================================
 
 ReturnRequestTypeLiteral = Literal["assignment", "issuance", "checkout"]
-ReturnRequestStatusLiteral = Literal["pending", "approved", "denied", "completed"]
-ReturnReviewStatusLiteral = Literal["approved", "denied"]
+ReturnRequestStatusLiteral = Literal[
+    "requested", "received", "inspected", "denied", "completed"
+]
+ReturnReviewStatusLiteral = Literal["received", "denied"]
 
 
 class ReturnRequestCreate(BaseModel):
@@ -1897,12 +1923,17 @@ class ReturnRequestCreate(BaseModel):
 
 
 class ReturnRequestReview(BaseModel):
-    """Quartermaster reviews a return request."""
+    """Quartermaster either denies the request or physically receives the item."""
 
-    status: ReturnReviewStatusLiteral = Field(..., description="approved or denied")
+    status: ReturnReviewStatusLiteral = Field(..., description="received or denied")
     review_notes: Optional[FreeText] = None
-    override_condition: Optional[ReturnConditionLiteral] = Field(
-        None, description="Override the condition reported by the member"
+    observed_condition: Optional[ReturnConditionLiteral] = Field(
+        None, description="Condition independently observed during physical receipt"
+    )
+    verified_identifier: Optional[str] = Field(None, max_length=255)
+    received_quantity: Optional[int] = Field(None, ge=1)
+    follow_up: Literal["auto", "none", "maintenance", "charge_review", "write_off"] = (
+        "auto"
     )
 
 
@@ -1927,6 +1958,11 @@ class ReturnRequestResponse(UTCResponseBase):
     reviewer_name: Optional[str] = None
     reviewed_at: Optional[datetime] = None
     review_notes: Optional[str] = None
+    observed_condition: Optional[str] = None
+    verified_identifier: Optional[str] = None
+    received_quantity: Optional[int] = None
+    follow_up_type: Optional[str] = None
+    follow_up_id: Optional[UUID] = None
     created_at: datetime
     updated_at: datetime
 
@@ -1938,7 +1974,7 @@ class ReturnRequestResponse(UTCResponseBase):
 # ============================================
 
 ReorderStatusLiteral = Literal[
-    "pending", "approved", "ordered", "received", "cancelled"
+    "pending", "approved", "ordered", "partially_received", "received", "cancelled"
 ]
 ReorderUrgencyLiteral = Literal["low", "normal", "high", "critical"]
 
@@ -1977,6 +2013,33 @@ class ReorderRequestUpdate(BaseModel):
     notes: Optional[FreeText] = None
 
 
+class ReorderTransitionRequest(BaseModel):
+    """A normal workflow transition. expected_version prevents stale writes."""
+
+    action: Literal["approve", "mark_ordered", "cancel"]
+    expected_version: int = Field(..., ge=1)
+    vendor_id: Optional[UUID] = None
+    vendor: Optional[str] = Field(None, max_length=255)
+    purchase_order_number: Optional[str] = Field(None, max_length=255)
+
+
+class ReorderCorrectionRequest(BaseModel):
+    status: ReorderStatusLiteral
+    reason: str = Field(..., min_length=3, max_length=2000)
+    expected_version: int = Field(..., ge=1)
+
+
+class ReorderReceiptCreate(BaseModel):
+    quantity: int = Field(..., gt=0)
+    expected_version: int = Field(..., ge=1)
+    idempotency_key: str = Field(..., min_length=1, max_length=100)
+    lot_number: Optional[str] = Field(None, max_length=100)
+    storage_location: str = Field(..., min_length=1, max_length=255)
+    unit_cost: Decimal = Field(..., ge=0)
+    expiration_date: Optional[date] = None
+    confirm_over_receipt: bool = False
+
+
 class ReorderRequestResponse(UTCResponseBase):
     """Schema for reorder request response"""
 
@@ -1986,7 +2049,9 @@ class ReorderRequestResponse(UTCResponseBase):
     category_id: Optional[UUID] = None
     item_name: str
     quantity_requested: int
-    quantity_received: Optional[int] = None
+    quantity_received: int = 0
+    quantity_outstanding: int = 0
+    version: int = 1
     vendor: Optional[str] = None
     vendor_contact: Optional[str] = None
     vendor_id: Optional[UUID] = None

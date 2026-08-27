@@ -87,6 +87,15 @@ CONST_ARRAY_RE = re.compile(
     re.M,
 )
 PERM_TOKEN_RE = re.compile(r"[a-z_]+\.(?:\*|[a-z_]+)")
+# The array literal may itself splice a named list in:
+#
+#     requiredAnyPermission={[...FACILITY_ENTRY_PERMISSIONS]}
+#
+# which carries no `x.y` token of its own, so reading only PERM_TOKEN_RE scored
+# five gated facilities routes as authenticated-only -- the silent-empty result
+# the constant-reference support above exists to refuse. Resolve the spread the
+# same way, and raise on a name this file does not declare.
+PERM_SPREAD_RE = re.compile(r"\.\.\.([A-Za-z_][A-Za-z0-9_]*)")
 
 # A table row whose first cell is a route: | `/path` | Page | Permission |
 DOC_ROW_RE = re.compile(r"^\|\s*`?(/[^ |`]*)`?\s*\|([^|]*)\|([^|\n]*)", re.M)
@@ -156,6 +165,14 @@ def gate_for(window: str, consts: dict[str, set[str]], source: str) -> set[str]:
     perms = set(PERM_ONE_RE.findall(window))
     for group in PERM_ANY_RE.findall(window):
         perms.update(PERM_TOKEN_RE.findall(group))
+        for name in PERM_SPREAD_RE.findall(group):
+            if name not in consts:
+                raise SystemExit(
+                    f"{source}: requiredAnyPermission={{[...{name}]}} spreads a "
+                    f"permission list this script cannot resolve. Declare the "
+                    f"array in the same route file, or extend CONST_ARRAY_RE."
+                )
+            perms.update(consts[name])
     for name in PERM_CONST_REF_RE.findall(window):
         if name not in consts:
             # Silently scoring this as authenticated-only is the one outcome

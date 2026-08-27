@@ -14,7 +14,6 @@ import type {
   StorageAreaResponse,
   StorageAreaCreate,
   EquipmentRequestItem,
-  RequestTypeLiteral,
   RequestPriorityLiteral,
   WriteOffRequestItem,
   InventoryItemCreate,
@@ -272,6 +271,17 @@ export const inventoryService = {
     return response.data;
   },
 
+  /** Create a dated temporary loan. The legacy wire route remains stable. */
+  async createTemporaryLoan(data: {
+    item_id: string;
+    user_id: string;
+    expected_return_at?: string;
+    checkout_reason?: string;
+  }): Promise<{ id: string }> {
+    const response = await api.post<{ id: string }>('/inventory/checkout', data);
+    return response.data;
+  },
+
   async checkInItem(checkoutId: string, returnCondition: string, damageNotes?: string): Promise<void> {
     await api.post(`/inventory/checkout/${checkoutId}/checkin`, {
       return_condition: returnCondition,
@@ -296,6 +306,34 @@ export const inventoryService = {
   },
 
   async getOverdueCheckouts(): Promise<{ checkouts: UserCheckoutItem[]; total: number }> {
+    const response = await api.get<{ checkouts: UserCheckoutItem[]; total: number }>('/inventory/checkout/overdue');
+    return response.data;
+  },
+
+  async checkInTemporaryLoan(loanId: string, returnCondition: string, damageNotes?: string): Promise<void> {
+    await api.post(`/inventory/checkout/${loanId}/checkin`, {
+      return_condition: returnCondition,
+      damage_notes: damageNotes,
+    });
+  },
+
+  async extendTemporaryLoan(
+    loanId: string,
+    expectedReturnAt: string
+  ): Promise<{ message: string; expected_return_at: string }> {
+    const response = await api.patch<{ message: string; expected_return_at: string }>(
+      `/inventory/checkout/${loanId}/extend`,
+      { expected_return_at: expectedReturnAt }
+    );
+    return response.data;
+  },
+
+  async getActiveTemporaryLoans(): Promise<{ checkouts: UserCheckoutItem[]; total: number }> {
+    const response = await api.get<{ checkouts: UserCheckoutItem[]; total: number }>('/inventory/checkout/active');
+    return response.data;
+  },
+
+  async getOverdueTemporaryLoans(): Promise<{ checkouts: UserCheckoutItem[]; total: number }> {
     const response = await api.get<{ checkouts: UserCheckoutItem[]; total: number }>('/inventory/checkout/overdue');
     return response.data;
   },
@@ -596,7 +634,7 @@ export const inventoryService = {
     item_id?: string | undefined;
     category_id?: string | undefined;
     quantity?: number;
-    request_type?: RequestTypeLiteral;
+    requested_duration: 'temporary' | 'ongoing';
     priority?: RequestPriorityLiteral;
     reason?: string | undefined;
   }): Promise<{ id: string; item_name: string; status: string; message: string }> {
@@ -635,11 +673,13 @@ export const inventoryService = {
 
   async fulfillEquipmentRequest(
     requestId: string,
-    data?: {
+    data: {
+      fulfillment_type: 'checkout' | 'assignment' | 'issuance';
       item_id?: string | undefined;
       quantity?: number | undefined;
       expected_return_at?: string | undefined;
       override_allowance?: boolean;
+      substitution_override_reason?: string | undefined;
     }
   ): Promise<{
     id: string;
@@ -654,7 +694,7 @@ export const inventoryService = {
       fulfillment_type: string | null;
       fulfillment_reference_id: string | null;
       message: string;
-    }>(`/inventory/requests/${requestId}/fulfill`, data ?? {});
+    }>(`/inventory/requests/${requestId}/fulfill`, data);
     return response.data;
   },
 
@@ -675,7 +715,13 @@ export const inventoryService = {
 
   async reviewWriteOff(
     writeOffId: string,
-    data: { status: string; review_notes?: string | undefined }
+    data: {
+      status: string;
+      review_notes: string;
+      acknowledgement?: boolean;
+      expected_item_status?: string | undefined;
+      expected_holder_signature?: string | undefined;
+    }
   ): Promise<{ id: string; status: string; message: string }> {
     const response = await api.put<{ id: string; status: string; message: string }>(
       `/inventory/write-offs/${writeOffId}/review`,
@@ -764,7 +810,14 @@ export const inventoryService = {
 
   async reviewReturnRequest(
     requestId: string,
-    data: { status: string; review_notes?: string | undefined; override_condition?: string | undefined }
+    data: {
+      status: 'received' | 'denied';
+      review_notes?: string | undefined;
+      observed_condition?: string | undefined;
+      verified_identifier?: string | undefined;
+      received_quantity?: number | undefined;
+      follow_up?: 'auto' | 'none' | 'maintenance' | 'charge_review' | 'write_off' | undefined;
+    }
   ): Promise<{ id: string; status: string; message: string }> {
     const response = await api.put<{ id: string; status: string; message: string }>(
       `/inventory/return-requests/${requestId}/review`,
@@ -801,6 +854,19 @@ export const inventoryService = {
 
   async updateReorderRequest(id: string, data: ReorderRequestUpdate): Promise<ReorderRequest> {
     const response = await api.patch<ReorderRequest>(`/inventory/reorder-requests/${id}`, data);
+    return response.data;
+  },
+
+  async transitionReorderRequest(
+    id: string,
+    data: import('./eventServices').ReorderTransition
+  ): Promise<ReorderRequest> {
+    const response = await api.post<ReorderRequest>(`/inventory/reorder-requests/${id}/transition`, data);
+    return response.data;
+  },
+
+  async receiveReorderStock(id: string, data: import('./eventServices').ReorderReceiptCreate): Promise<ReorderRequest> {
+    const response = await api.post<ReorderRequest>(`/inventory/reorder-requests/${id}/receipts`, data);
     return response.data;
   },
 

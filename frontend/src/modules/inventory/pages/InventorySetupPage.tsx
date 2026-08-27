@@ -47,6 +47,7 @@ import { ProgressSteps } from '../../../components/ux';
 import { ItemFormModal } from '../components/ItemFormModal';
 import type { CategoryPreset, InventoryCategory, InventorySetupStatus, Location, StorageAreaResponse } from '../types';
 import { STORAGE_TYPES, ITEM_TYPES } from '../types';
+import { INVENTORY_TERMS } from '../terminology';
 
 const STEPS = [
   { label: 'Rooms', description: 'Where equipment lives' },
@@ -355,6 +356,20 @@ const InventorySetupPage: React.FC = () => {
       </div>
 
       <ProgressSteps steps={[...STEPS]} currentStep={step} />
+
+      <details className="card-secondary p-4">
+        <summary className="text-theme-text-primary cursor-pointer text-sm font-semibold">
+          Quartermaster terminology
+        </summary>
+        <dl className="mt-3 grid gap-2 sm:grid-cols-2">
+          {INVENTORY_TERMS.map(([term, definition]) => (
+            <div key={term} className="text-sm">
+              <dt className="text-theme-text-primary inline font-medium">{term}: </dt>
+              <dd className="text-theme-text-secondary inline">{definition}</dd>
+            </div>
+          ))}
+        </dl>
+      </details>
 
       {/* Step 1 — Rooms */}
       {step === 0 && (

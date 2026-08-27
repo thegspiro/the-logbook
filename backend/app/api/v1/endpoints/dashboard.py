@@ -1285,10 +1285,19 @@ async def get_community_engagement(
     )
     total_member_attendees = result.scalar() or 0
 
-    # Total external attendees
+    # Total external attendees at public events (checked in) — scoped the
+    # same way total_member_attendees is above, so the two figures in this
+    # "community engagement" response describe the same event population.
     result = await db.execute(
         select(func.count(EventExternalAttendee.id)).where(
             EventExternalAttendee.organization_id == org_id,
+            EventExternalAttendee.checked_in == True,  # noqa: E712
+            EventExternalAttendee.event_id.in_(
+                select(Event.id).where(
+                    Event.organization_id == org_id,
+                    Event.event_type.in_(public_types),
+                )
+            ),
         )
     )
     total_external = result.scalar() or 0

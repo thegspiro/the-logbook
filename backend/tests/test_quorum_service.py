@@ -72,6 +72,24 @@ class TestConfigResolution:
         assert out[3] == "Quorum checking not enabled"
 
 
+class TestQuorumRecalcLocking:
+    """Pitfall #27: two check-ins recalculating quorum for the same meeting
+    at nearly the same instant must not each read a stale attendee list and
+    overwrite the other's quorum_met/quorum_count. The minutes fetch is
+    locked."""
+
+    async def test_minutes_fetch_is_locked(self):
+        minutes = _minutes(
+            quorum_type="count", quorum_threshold=2, attendees=_attendees(2)
+        )
+        db = _db([_one(minutes)])
+
+        await QuorumService(db).calculate_quorum("min-1", "org-1")
+
+        stmt = db.execute.await_args_list[0].args[0]
+        assert "FOR UPDATE" in str(stmt)
+
+
 class TestCountQuorum:
     async def test_count_override_met(self):
         minutes = _minutes(

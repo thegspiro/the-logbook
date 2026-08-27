@@ -151,9 +151,12 @@ from app.schemas.inventory import (
     NFPAExposureRecordCreate,
     NFPAExposureRecordResponse,
     NFPASummaryResponse,
+    ReorderCorrectionRequest,
+    ReorderReceiptCreate,
     ReorderRequestCreate,
     ReorderRequestResponse,
     ReorderRequestUpdate,
+    ReorderTransitionRequest,
     ResolveClearanceItemRequest,
     ReturnRequestCreate,
     ReturnRequestResponse,
@@ -3554,7 +3557,12 @@ async def create_equipment_request(
         item_id=str(request_data.item_id) if request_data.item_id else None,
         category_id=str(request_data.category_id) if request_data.category_id else None,
         quantity=request_data.quantity,
-        request_type=request_data.request_type,
+        # Keep the legacy transaction-oriented field populated for older
+        # integrations; requested_duration is the authoritative member intent.
+        request_type=(
+            "checkout" if request_data.requested_duration == "temporary" else "issuance"
+        ),
+        requested_duration=request_data.requested_duration,
         priority=request_data.priority,
         reason=request_data.reason,
     )
@@ -3570,7 +3578,7 @@ async def create_equipment_request(
         event_data={
             "request_id": str(req.id),
             "item_name": req.item_name,
-            "request_type": request_data.request_type,
+            "requested_duration": request_data.requested_duration,
         },
         user_id=str(current_user.id),
         username=current_user.username,
@@ -3606,6 +3614,8 @@ async def list_equipment_requests(
         .options(
             selectinload(EquipmentRequest.requester),
             selectinload(EquipmentRequest.reviewer),
+            selectinload(EquipmentRequest.item),
+            selectinload(EquipmentRequest.category),
         )
     )
 
@@ -3639,12 +3649,51 @@ async def list_equipment_requests(
                 "item_name": r.item_name,
                 "item_id": r.item_id,
                 "category_id": r.category_id,
+                "category_name": r.category.name if r.category else None,
+                "requested_item": (
+                    {
+                        "tracking_type": (
+                            r.item.tracking_type.value
+                            if hasattr(r.item.tracking_type, "value")
+                            else r.item.tracking_type
+                        ),
+                        "status": (
+                            r.item.status.value
+                            if hasattr(r.item.status, "value")
+                            else r.item.status
+                        ),
+                        "available_quantity": (
+                            r.item.quantity
+                            if (
+                                r.item.tracking_type.value
+                                if hasattr(r.item.tracking_type, "value")
+                                else r.item.tracking_type
+                            )
+                            == "pool"
+                            else (
+                                1
+                                if (
+                                    r.item.status.value
+                                    if hasattr(r.item.status, "value")
+                                    else r.item.status
+                                )
+                                == "available"
+                                else 0
+                            )
+                        ),
+                        "min_rank_order": r.item.min_rank_order,
+                        "restricted_to_positions": r.item.restricted_to_positions,
+                    }
+                    if r.item
+                    else None
+                ),
                 "quantity": r.quantity,
                 "request_type": (
                     r.request_type
                     if isinstance(r.request_type, str)
                     else r.request_type.value
                 ),
+                "requested_duration": r.requested_duration,
                 "priority": (
                     r.priority if isinstance(r.priority, str) else r.priority.value
                 ),
@@ -3758,6 +3807,8 @@ async def fulfill_equipment_request(
         quantity=fulfill_data.quantity,
         expected_return_at=fulfill_data.expected_return_at,
         override_allowance=fulfill_data.override_allowance,
+        fulfillment_type=fulfill_data.fulfillment_type,
+        substitution_override_reason=fulfill_data.substitution_override_reason,
     )
 
     if error:
@@ -3775,6 +3826,7 @@ async def fulfill_equipment_request(
             "request_id": str(request_id),
             "fulfillment_type": req.fulfillment_type,
             "fulfillment_reference_id": req.fulfillment_reference_id,
+            "substitution_override_reason": fulfill_data.substitution_override_reason,
         },
         user_id=str(current_user.id),
         username=current_user.username,
@@ -4648,6 +4700,9 @@ async def review_write_off_request(
         reviewed_by=str(current_user.id),
         decision=review_data.status,
         review_notes=review_data.review_notes,
+        acknowledgement=review_data.acknowledgement,
+        expected_item_status=review_data.expected_item_status,
+        expected_holder_signature=review_data.expected_holder_signature,
     )
 
     if error:
@@ -5697,7 +5752,10 @@ async def review_return_request(
         reviewer_id=current_user.id,
         status=data.status,
         review_notes=data.review_notes,
-        override_condition=data.override_condition,
+        observed_condition=data.observed_condition,
+        verified_identifier=data.verified_identifier,
+        received_quantity=data.received_quantity,
+        follow_up=data.follow_up,
     )
 
     if not success:
@@ -5778,6 +5836,9 @@ def _reorder_response(req) -> ReorderRequestResponse:
     caller did not eager-load it, so the name is simply left unset.
     """
     resp = ReorderRequestResponse.model_validate(req)
+    resp.quantity_outstanding = max(
+        0, req.quantity_requested - (req.quantity_received or 0)
+    )
     requester = req.__dict__.get("requester")
     if requester is not None:
         resp.requester_name = (
@@ -5879,6 +5940,126 @@ async def create_reorder_request(
     )
 
     return _reorder_response(reorder)
+
+
+@router.post(
+    "/reorder-requests/{request_id}/transition", response_model=ReorderRequestResponse
+)
+async def transition_reorder_request(
+    request_id: UUID,
+    data: ReorderTransitionRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    service = InventoryService(db)
+    payload = data.model_dump(exclude_unset=True)
+    reorder, error = await service.transition_reorder_request(
+        request_id, current_user.organization_id, payload, current_user.id
+    )
+    if error:
+        raise HTTPException(
+            status_code=409 if "another user" in error else 400, detail=error
+        )
+    await log_audit_event(
+        db=db,
+        event_type="reorder_status_transition",
+        event_category="inventory",
+        severity="info",
+        event_data={
+            "resource_type": "reorder_request",
+            "resource_id": str(reorder.id),
+            "action": data.action,
+            "status": reorder.status.value,
+        },
+        user_id=str(current_user.id),
+        organization_id=str(current_user.organization_id),
+    )
+    await db.commit()
+    return _reorder_response(
+        await service.get_reorder_request(
+            request_id, current_user.organization_id, True
+        )
+    )
+
+
+@router.post(
+    "/reorder-requests/{request_id}/correct-status",
+    response_model=ReorderRequestResponse,
+)
+async def correct_reorder_status(
+    request_id: UUID,
+    data: ReorderCorrectionRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    service = InventoryService(db)
+    reorder, error = await service.correct_reorder_status(
+        request_id, current_user.organization_id, data.model_dump()
+    )
+    if error:
+        raise HTTPException(
+            status_code=409 if "another user" in error else 400, detail=error
+        )
+    await log_audit_event(
+        db=db,
+        event_type="reorder_status_corrected",
+        event_category="inventory",
+        severity="warning",
+        event_data={
+            "resource_type": "reorder_request",
+            "resource_id": str(reorder.id),
+            "status": data.status,
+            "reason": data.reason,
+        },
+        user_id=str(current_user.id),
+        organization_id=str(current_user.organization_id),
+    )
+    await db.commit()
+    return _reorder_response(
+        await service.get_reorder_request(
+            request_id, current_user.organization_id, True
+        )
+    )
+
+
+@router.post(
+    "/reorder-requests/{request_id}/receipts", response_model=ReorderRequestResponse
+)
+async def receive_reorder_stock(
+    request_id: UUID,
+    data: ReorderReceiptCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    service = InventoryService(db)
+    reorder, error = await service.receive_reorder(
+        request_id, current_user.organization_id, data.model_dump(), current_user.id
+    )
+    if error:
+        raise HTTPException(
+            status_code=409 if ("already" in error or "another user" in error) else 400,
+            detail=error,
+        )
+    await log_audit_event(
+        db=db,
+        event_type="reorder_stock_received",
+        event_category="inventory",
+        severity="info",
+        event_data={
+            "resource_type": "reorder_request",
+            "resource_id": str(reorder.id),
+            "quantity": data.quantity,
+            "idempotency_key": data.idempotency_key,
+        },
+        user_id=str(current_user.id),
+        organization_id=str(current_user.organization_id),
+    )
+    await db.commit()
+    return _reorder_response(
+        await service.get_reorder_request(
+            request_id, current_user.organization_id, True
+        )
+    )
 
 
 @router.patch("/reorder-requests/{request_id}", response_model=ReorderRequestResponse)

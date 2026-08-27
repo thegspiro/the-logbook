@@ -958,8 +958,17 @@ export interface EquipmentRequestItem {
   item_name: string;
   item_id?: string;
   category_id?: string;
+  category_name?: string;
+  requested_item?: {
+    tracking_type: string;
+    status: string;
+    available_quantity: number;
+    min_rank_order?: number | null;
+    restricted_to_positions?: string[] | null;
+  };
   quantity: number;
   request_type: RequestTypeLiteral;
+  requested_duration: 'temporary' | 'ongoing';
   priority: RequestPriorityLiteral;
   reason?: string;
   status: string;
@@ -967,6 +976,11 @@ export interface EquipmentRequestItem {
   reviewer_name?: string;
   reviewed_at?: string;
   review_notes?: string;
+  observed_condition?: string;
+  verified_identifier?: string;
+  received_quantity?: number;
+  follow_up_type?: string;
+  follow_up_id?: string;
   fulfilled_by?: string;
   fulfilled_at?: string;
   fulfillment_type?: string;
@@ -992,6 +1006,18 @@ export interface WriteOffRequestItem {
   reviewed_at?: string;
   review_notes?: string;
   clearance_id?: string;
+  clearance_record?: string;
+  current_holder?: string;
+  current_status?: string;
+  replacement_value?: number;
+  linked_charge_record?: string;
+  open_maintenance_record?: string;
+  active_assignment_count: number;
+  active_checkout_count: number;
+  active_issuance_count: number;
+  acknowledgement_required: boolean;
+  acknowledgement_threshold?: number;
+  holder_signature?: string;
   created_at?: string;
 }
 
@@ -1455,6 +1481,8 @@ export interface ReorderRequest {
   item_name: string;
   quantity_requested: number;
   quantity_received?: number;
+  quantity_outstanding: number;
+  version: number;
   vendor?: string;
   vendor_contact?: string;
   vendor_id?: string;
@@ -1506,6 +1534,24 @@ export interface ReorderRequestUpdate {
   status?: string | undefined;
   urgency?: string | undefined;
   notes?: string | null | undefined;
+}
+
+export interface ReorderTransition {
+  action: 'approve' | 'mark_ordered' | 'cancel';
+  expected_version: number;
+  vendor_id?: string;
+  vendor?: string;
+  purchase_order_number?: string;
+}
+
+export interface ReorderReceiptCreate {
+  quantity: number;
+  expected_version: number;
+  idempotency_key: string;
+  storage_location: string;
+  unit_cost: number;
+  lot_number?: string;
+  confirm_over_receipt?: boolean;
 }
 
 // Scan / Quick-Action Types
@@ -1964,7 +2010,7 @@ export interface ReturnRequestItem {
   quantity_returning: number;
   reported_condition: string;
   member_notes?: string;
-  status: 'pending' | 'approved' | 'denied' | 'completed';
+  status: 'requested' | 'received' | 'inspected' | 'denied' | 'completed';
   reviewed_by?: string;
   reviewer_name?: string;
   reviewed_at?: string;

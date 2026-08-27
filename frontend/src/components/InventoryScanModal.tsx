@@ -661,6 +661,11 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={title} size="lg" closeOnClickOutside={false}>
       <div className="space-y-4">
+        <p className="text-theme-text-secondary text-sm">
+          {mode === 'distribute'
+            ? 'Distribution is the umbrella action: each scanned item becomes an assignment, temporary loan, or issuance based on how it is tracked.'
+            : 'A return physically receives assigned or issued gear; a check-in closes a temporary loan.'}
+        </p>
         {/* Member info */}
         <div className="bg-theme-surface-secondary flex items-center gap-3 rounded-lg p-3">
           <Package className="text-theme-text-muted h-5 w-5" />

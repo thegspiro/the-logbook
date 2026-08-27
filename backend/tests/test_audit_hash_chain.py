@@ -27,7 +27,7 @@ def test_default_version_is_keyed(monkeypatch):
     monkeypatch.setattr(audit_module.settings, "AUDIT_LOG_SIGNING_KEY", "key-A")
     keyed = AuditLogger.calculate_hash(_LOG_DATA, _PREV)
     v1 = AuditLogger.calculate_hash(_LOG_DATA, _PREV, _LEGACY_HASH_VERSION)
-    assert _CURRENT_HASH_VERSION == 3
+    assert _CURRENT_HASH_VERSION == 4
     assert len(keyed) == 64
     # The default (keyed HMAC) hash must differ from the legacy unkeyed SHA-256.
     assert keyed != v1
@@ -50,6 +50,38 @@ def test_v3_includes_organization_id(monkeypatch):
         {**_LOG_DATA, "organization_id": "org-1"}, _PREV, 2
     )
     assert v2_without == v2_with
+
+
+def test_v4_includes_event_category_and_severity(monkeypatch):
+    """v4 hashes bind event_category/severity; v3 must stay byte-identical
+    for rows written before those were covered (a DB-write-level attacker
+    could previously rewrite either field with no hash mismatch)."""
+    monkeypatch.setattr(audit_module.settings, "AUDIT_LOG_SIGNING_KEY", "key-A")
+    critical = AuditLogger.calculate_hash(
+        {**_LOG_DATA, "event_category": "security", "severity": "critical"},
+        _PREV,
+        4,
+    )
+    downgraded_severity = AuditLogger.calculate_hash(
+        {**_LOG_DATA, "event_category": "security", "severity": "info"},
+        _PREV,
+        4,
+    )
+    downgraded_category = AuditLogger.calculate_hash(
+        {**_LOG_DATA, "event_category": "general", "severity": "critical"},
+        _PREV,
+        4,
+    )
+    assert critical != downgraded_severity
+    assert critical != downgraded_category
+
+    v3_without = AuditLogger.calculate_hash(_LOG_DATA, _PREV, 3)
+    v3_with = AuditLogger.calculate_hash(
+        {**_LOG_DATA, "event_category": "security", "severity": "critical"},
+        _PREV,
+        3,
+    )
+    assert v3_without == v3_with
 
 
 def test_hash_depends_on_signing_key(monkeypatch):

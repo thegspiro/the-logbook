@@ -4,6 +4,7 @@
  * Handles all API calls for the Scheduling module.
  */
 
+import { AxiosError } from 'axios';
 import { createApiClient } from '../../../utils/createApiClient';
 import { asArray } from '../../../utils/asArray';
 import type {
@@ -92,12 +93,6 @@ import type {
 } from '../types/equipmentCheck';
 import { normalizeCheckType } from '../types/equipmentCheck';
 import { blankToNull } from '@/utils/formValues';
-
-declare module 'axios' {
-  export interface InternalAxiosRequestConfig {
-    _retry?: boolean;
-  }
-}
 
 // ============================================
 // Types
@@ -729,8 +724,9 @@ export const schedulingService = {
     try {
       const response = await api.get<ShiftAttendanceRecord>(`/scheduling/shifts/${shiftId}/my-attendance`);
       return response.data;
-    } catch {
-      return null;
+    } catch (err: unknown) {
+      if (err instanceof AxiosError && err.response?.status === 404) return null;
+      throw err;
     }
   },
 

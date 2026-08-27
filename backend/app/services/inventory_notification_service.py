@@ -152,9 +152,21 @@ class InventoryNotificationService:
 
         emails_sent = 0
         records_processed = 0
+        # Set once any group's rollback fires. await self.db.rollback()
+        # expires every persistent object in the session, not just the
+        # failed group's — so every later group's pre-fetched
+        # InventoryNotificationQueue rows (grouped from `records` above) are
+        # expired, and reading one of their attributes (rec.action_type,
+        # rec.quantity, ...) triggers an implicit reload AsyncSession cannot
+        # do outside the greenlet bridge, raising MissingGreenlet and
+        # aborting every remaining group (Codex review, PR #1915).
+        needs_refresh = False
 
         for (org_id, member_id), member_records in grouped.items():
             try:
+                if needs_refresh:
+                    for rec in member_records:
+                        await self.db.refresh(rec)
                 net_items = self._net_actions(member_records)
 
                 # If everything netted out, mark processed and skip email
@@ -163,6 +175,7 @@ class InventoryNotificationService:
                         rec.processed = True
                         rec.processed_at = datetime.now(timezone.utc)
                     records_processed += len(member_records)
+                    await self.db.commit()
                     continue
 
                 # Load user + org for email
@@ -177,6 +190,7 @@ class InventoryNotificationService:
                         rec.processed = True
                         rec.processed_at = datetime.now(timezone.utc)
                     records_processed += len(member_records)
+                    await self.db.commit()
                     continue
 
                 # Build email content. Retirements get their own bucket so a
@@ -264,13 +278,23 @@ class InventoryNotificationService:
                             "will retry on next run"
                         )
 
+                # Commit this member's unit of work before moving to the next.
+                # Members share one session (grouped by org/member, not
+                # per-org), so leaving this batched until a single trailing
+                # commit meant a later member's failure could roll back every
+                # earlier member's already-processed records too (CRON2-31-1).
+                await self.db.commit()
+
             except Exception as e:
                 logger.error(
                     f"Failed to process inventory notifications for user {member_id}: {e}"
                 )
-                # Records stay unprocessed and will be retried on next scheduled run
-
-        await self.db.commit()
+                # Roll back this member's failed unit of work. Since every
+                # earlier member's work was already committed above, this
+                # only discards the current, failed unit — it cannot poison
+                # or lose any other member's processed records.
+                await self.db.rollback()
+                needs_refresh = True
 
         logger.info(
             f"Inventory notifications: {emails_sent} emails sent, {records_processed} records processed"
