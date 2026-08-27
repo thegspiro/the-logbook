@@ -194,6 +194,33 @@ are unaffected — `colourway_for()` still resolves them exactly as before.
 Guard test added asserting `_SHELL_COLOURWAYS` doesn't grow on a
 `cache=False` build.
 
+## Revised after Codex review
+
+Codex reviewed PR #1907 and caught one real regression in the MSG-6 fix
+before merge:
+
+- **P2 — the `List[EmailStr]` tightening broke reads of pre-existing
+  data.** `get_organization_settings` reconstructs the entire stored
+  settings blob via Pydantic on every read (including the read at the end
+  of an unrelated settings update), and `scheduling` flowed through
+  unvalidated `extra_settings` into that reconstruction. An org that had
+  saved a malformed `cc_emails` entry back when the field was a plain
+  `List[str]` would find `GET /organization/settings`, and any subsequent
+  settings update touching an unrelated field, raising a `ValidationError`
+  with no way to fix it through the API. Fixed by reconstructing
+  `scheduling` explicitly and filtering `cc_emails` to syntactically valid
+  addresses on the read path only — writes stay strictly validated via
+  `OrganizationSettingsUpdate`, unchanged. Traced the equivalent
+  `MemberDropNotificationSettings.cc_emails` field Codex flagged as
+  carrying the same risk and confirmed it doesn't: `member_drop_notifications`
+  is excluded from this reconstruction path entirely today (a separate,
+  pre-existing gap unrelated to this change — its stored value is never
+  read into the response model), and its only other reader accesses it as
+  a raw dict, never through Pydantic. 3 regression tests added, including
+  one that updates an unrelated field on an org with legacy bad data and
+  asserts it no longer breaks. Full completion gate re-verified green
+  (8917/8917 full suite) before the final push.
+
 ## Confirmed still open — nothing needing a product decision
 
 Everything this pass found had a mechanical fix available and was applied.
@@ -227,6 +254,10 @@ changes.
   instance, not a mock, so the nullability check is actually exercised).
 - `tests/test_email_theme_shell.py`: `TestBuildShell` — added
   `test_cache_false_does_not_grow_shell_colourways`.
+- `tests/test_organization_settings_legacy_cc_emails.py` (new, added after
+  Codex's review round) — a legacy invalid `cc_emails` entry doesn't crash
+  the read, a valid list round-trips unchanged, and an unrelated settings
+  update on an org with legacy bad data no longer breaks.
 
 ## Completion gate
 
@@ -237,4 +268,4 @@ changes.
 | `isort --check-only` (changed files)                             | clean                   |
 | `python3 scripts/validate_migrations.py --strict`                | PASSED (no migrations)  |
 | backend tests, scope (messaging/notifications/email-theme files) | 855/855 passed          |
-| backend tests, full suite                                        | 8914 passed, 22 skipped |
+| backend tests, full suite                                        | 8917 passed, 22 skipped |
