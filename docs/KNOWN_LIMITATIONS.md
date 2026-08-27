@@ -2254,6 +2254,66 @@ addition, not a security-review drive-by fix.
 reject `is_scheduled=True` at the API layer with a clear "not yet supported"
 error until a sender exists, rather than the current silent-accept.
 
+## CRON2-31-12/13 — Two Scheduled-Task Gaps Left Open by This Rotation's Pass (2026-08-27)
+
+- **`run_action_item_reminders` has no org loop at all**
+  (`scheduled_tasks.py`), so it was never in scope for the CRON-2
+  deactivated-org fix or its regression test — it queries
+  `MeetingActionItem`/`MinutesActionItem` platform-wide with no join back
+  to `Organization.active`. Latent today (nothing sets `Organization.active
+= False` yet). Closing it means joining two different action-item tables
+  through two different parent tables (`Meeting`, `MeetingMinutes`) to
+  `Organization` — a structural change, not a drive-by.
+- **`run_admin_hours_auto_close` has no audit trail**
+  (`admin_hours_service.py`'s `auto_close_stale_sessions`) — force-closes a
+  member's open admin-hours session (a money-adjacent paid-hours state
+  change) with no `log_audit_event()` call anywhere in that file. What to
+  log (per-session vs. one batched summary event) is a design choice for
+  the admin-hours feature to make deliberately.
+
+See `docs/security-review/CRON2-31-scheduled-tasks.md` for the full pass
+(12 findings fixed, these 2 flagged).
+
+## LOC-3 — The Authenticated Location Display Endpoint Is Dead Code With a Growing Gap List (2026-08-27)
+
+`GET /locations/{id}/display` (`locations.py`) has had **zero frontend
+callers** since it was first reviewed on 2026-08-08 — the kiosk fetches
+`/api/public/v1/display/{code}` instead, which is a strictly better
+implementation (rate-limited, uses the canonical check-in-window helper,
+computes `is_valid` correctly, withholds event descriptions).
+
+The 2026-08-08 pass flagged two gaps that would need closing if this
+endpoint were ever wired up rather than deleted: it hardcodes
+`is_valid=True`/`can_check_in=True`, and never populates the `timezone`
+field its public sibling does. The 2026-08-27 security-review pass
+(`docs/security-review/LOC2-32-locations-kiosk.md`) found the drift grew a
+**third** gap in the meantime: it still emits
+`event_description=event.description` while the public path explicitly
+nulls that field with a comment ("Don't expose description publicly").
+
+Not fixed either pass, deliberately: deleting or wiring up an endpoint is an
+API-surface decision, not a correction. The department decision is the same
+as it was — delete this endpoint, or give it a caller and bring it in line
+with its public sibling on all three points before that caller ships.
+
+## CI2-33-13 — Injection-Attempt Detection Was Never Implemented (2026-08-27)
+
+`SecurityMonitoringMiddleware`'s docstring claimed "Detect injection
+attempts" among its capabilities. The code buffered up to 1MB of every
+non-GET/HEAD/OPTIONS request body — including `/api/v1/auth/login` and
+`/api/v1/users/password` — into a `request_data["body"]` dict that no code
+anywhere in the file ever read back out. `SENSITIVE_ENDPOINTS` was likewise
+defined and never consulted. No injection analysis happened at all, ever.
+
+Found by `docs/security-review/CI2-33-core-infra.md` (feature 33). The dead
+buffering was removed and the docstring corrected to state plainly that
+injection-attempt analysis is not implemented, rather than silently dropping
+the claim — but implementing real detection is a product decision this
+security-review pass did not make on its own: what patterns to flag, the
+false-positive tolerance for a log-only alert vs. a blocking one, and
+whether `SENSITIVE_ENDPOINTS` should gate it or every write request should
+be in scope. Left as documented future work.
+
 ## Process
 
 The review loop (see [review-log.md](./review-log.md)) advances through one area

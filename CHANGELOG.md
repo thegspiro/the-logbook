@@ -16,6 +16,79 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   detail instead of a generic message — a follow-up finding from the
   monitoring pass on the fixes below.
 
+### Security monitoring for session hijacking and data exfiltration was never actually running (2026-08-27)
+
+**Fixed**
+
+- A background security-monitoring check meant to detect session hijacking
+  and unusual bulk data downloads never ran, for any request, due to a
+  timing and naming bug — it looked for the signed-in user before the
+  request had been authenticated, under an attribute name nothing ever set.
+  Both checks now run correctly.
+- Rate limiting on the once-an-hour data-export endpoint could be reset
+  early by unrelated traffic in the fallback used during a Redis outage,
+  letting the hourly limit be worked around by spacing requests out.
+- A total database-connection failure at startup could include the
+  database password in the error message reaching logs/monitoring, on a
+  different code path than a similar issue fixed previously.
+- Three configuration checks that previously failed silently now warn at
+  startup instead: an unsupported JWT signing algorithm (previously only
+  caught an exact "none" value), a bot-challenge feature turned on without
+  its required secret key, and a dedicated audit-log signing key being
+  left unset.
+- An overly broad trusted-proxy network range (letting a client spoof
+  their IP address) is now flagged at startup instead of accepted silently.
+- A request-tracing ID supplied by the client was previously trusted and
+  echoed back verbatim into logs and a response header without validation;
+  it's now validated against the expected format first.
+
+### Administration dashboard settings could show a protected metric's name to the wrong admin, or fail to save under a race (2026-08-27)
+
+**Fixed**
+
+- If a stored dashboard-metric selection had fewer than three usable
+  entries (for example, an admin's chosen metric became permission-gated
+  or its module was turned off), the automatic fallback that fills the
+  remaining slots from the module's defaults could pick a metric the
+  viewing admin does not have permission to see. The metric's number
+  stayed hidden, but its name could still appear on the card.
+- Saving administration dashboard settings for the first time could fail
+  with a server error if two admins (or one admin double-submitting)
+  saved the same module's settings at nearly the same moment, instead of
+  the second save simply applying on top of the first.
+- One dashboard metric (event attendance rate, last 90 days) relied on an
+  assumption that was not independently verified in the query itself; the
+  query has been made independently self-checking as defense in depth.
+
+### Several background tasks could silently skip work, re-send old messages, or stop partway through (2026-08-27)
+
+**Fixed**
+
+- A cancelled shift still generated a "please review the attendance
+  records" email to its officer, because the check that finds
+  ended-shifts-to-review never excluded cancelled ones.
+- Some shift and end-of-shift reminders could be permanently silenced if
+  the shift had no crew, apparatus, or checklist assigned yet at the
+  moment the reminder task ran — even after one was assigned later, the
+  reminder never went out.
+- End-of-shift checklist reminders were still sent to members who had
+  since been deactivated.
+- A single failing item partway through a batch of inventory
+  notifications or scheduled emails could cause every later item in that
+  batch to fail for an unrelated reason, and in the worst case could
+  cause already-sent emails to be re-sent on the next run.
+- Nightly cleanup of expired records (old messages, error logs, form
+  submissions, etc.) had no error isolation between organizations, so one
+  organization's failure could abort the run for every organization
+  after it, and successful deletions were not recorded anywhere.
+- A background sync task could keep contacting whatever address was
+  configured for a connected Salesforce integration without re-validating
+  it, once a connection had already been established.
+- Three background tasks (compliance reports, external training sync,
+  Salesforce sync) and the officer-directory sync task did not correctly
+  skip organizations marked inactive, unlike every comparable task in the
+  same file.
+
 ### First-time setup had a few unbounded requests and inconsistent safeguards (2026-08-27)
 
 **Fixed**
