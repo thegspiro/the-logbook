@@ -564,7 +564,7 @@ export const inventoryService = {
     item_id?: string | undefined;
     category_id?: string | undefined;
     quantity?: number;
-    request_type?: string;
+    requested_duration: 'temporary' | 'ongoing';
     priority?: string;
     reason?: string | undefined;
   }): Promise<{ id: string; item_name: string; status: string; message: string }> {
@@ -603,7 +603,8 @@ export const inventoryService = {
 
   async fulfillEquipmentRequest(
     requestId: string,
-    data?: {
+    data: {
+      fulfillment_type: 'checkout' | 'assignment' | 'issuance';
       item_id?: string | undefined;
       quantity?: number | undefined;
       expected_return_at?: string | undefined;
@@ -622,7 +623,7 @@ export const inventoryService = {
       fulfillment_type: string | null;
       fulfillment_reference_id: string | null;
       message: string;
-    }>(`/inventory/requests/${requestId}/fulfill`, data ?? {});
+    }>(`/inventory/requests/${requestId}/fulfill`, data);
     return response.data;
   },
 

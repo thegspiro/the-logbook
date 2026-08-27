@@ -42,6 +42,7 @@ async def test_fulfillment_request_select_is_row_locked():
         request_id=uuid4(),
         organization_id=uuid4(),
         fulfilled_by=uuid4(),
+        fulfillment_type="checkout",
     )
 
     assert req is None
@@ -78,6 +79,7 @@ async def test_fulfillment_aborts_when_claim_lost_to_concurrent_call():
         request_id=uuid4(),
         organization_id=uuid4(),
         fulfilled_by=uuid4(),
+        fulfillment_type="assignment",
     )
 
     # Must abort before any issuance rather than double-issue.

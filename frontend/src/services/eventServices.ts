@@ -956,6 +956,7 @@ export interface EquipmentRequestItem {
   category_id?: string;
   quantity: number;
   request_type: string;
+  requested_duration: 'temporary' | 'ongoing';
   priority: string;
   reason?: string;
   status: string;
