@@ -112,20 +112,21 @@ async def test_csv_export_preserves_two_decimal_money_strings() -> None:
         actual_amount=Decimal("0.30"),
         estimated_amount=Decimal("0.30"),
     )
-    empty = MagicMock()
-    empty.scalars.return_value.all.return_value = []
     purchases = MagicMock()
-    purchases.scalars.return_value.all.return_value = [purchase]
-    expenses = MagicMock()
-    expenses.scalars.return_value.unique.return_value.all.return_value = []
+    purchases.scalars.return_value = [purchase]
+    empty = MagicMock()
+    empty.scalars.return_value = []
     db = AsyncMock()
     db.add = MagicMock()
-    db.execute.side_effect = [purchases, empty, expenses]
+    # Three counts (purchase requests, check requests, expense lines) precede
+    # the stream; the stream then pages purchases, then check requests.
+    db.scalar.side_effect = [1, 0, 0]
+    db.execute.side_effect = [purchases, empty]
 
-    contents, count = await FinanceService(db).generate_export(
-        "org", "user", paid_at, paid_at
-    )
+    stream = await FinanceService(db).generate_export("org", "user", paid_at, paid_at)
+    contents = "".join([chunk async for chunk in stream])
     rows = list(csv.reader(io.StringIO(contents)))
 
-    assert count == 1
+    log = db.add.call_args[0][0]
+    assert log.record_count == 1
     assert rows[1][6] == "0.30"

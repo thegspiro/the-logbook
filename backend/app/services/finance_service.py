@@ -9,6 +9,7 @@ and QuickBooks export.
 import html
 import io
 import secrets
+from collections.abc import AsyncIterator
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Optional
@@ -2234,111 +2235,176 @@ class FinanceService:
         date_start: datetime,
         date_end: datetime,
         file_format: str = "csv",
-    ) -> tuple[str, int]:
-        """Generate a QuickBooks-compatible export file"""
-        # Gather all paid transactions in date range
-        pr_result = await self.db.execute(
-            select(PurchaseRequest).where(
-                PurchaseRequest.organization_id == org_id,
-                PurchaseRequest.status == PurchaseRequestStatus.PAID,
-                PurchaseRequest.paid_at >= date_start,
-                PurchaseRequest.paid_at <= date_end,
-            )
+        batch_size: int = 500,
+        max_records: int = 10_000,
+    ) -> AsyncIterator[str]:
+        """Prepare a bounded export and return its incremental CSV stream."""
+        filters = (
+            PurchaseRequest.organization_id == org_id,
+            PurchaseRequest.status == PurchaseRequestStatus.PAID,
+            PurchaseRequest.paid_at >= date_start,
+            PurchaseRequest.paid_at <= date_end,
         )
-        prs = list(pr_result.scalars().all())
-
-        cr_result = await self.db.execute(
-            select(CheckRequest).where(
-                CheckRequest.organization_id == org_id,
-                CheckRequest.status == CheckRequestStatus.ISSUED,
-                CheckRequest.check_date >= date_start,
-                CheckRequest.check_date <= date_end,
-            )
+        pr_count = await self.db.scalar(
+            select(func.count()).select_from(PurchaseRequest).where(*filters)
         )
-        crs = list(cr_result.scalars().all())
-
-        er_result = await self.db.execute(
-            select(ExpenseReport)
-            .options(selectinload(ExpenseReport.line_items))
-            .where(
-                ExpenseReport.organization_id == org_id,
-                ExpenseReport.status == ExpenseReportStatus.PAID,
-                ExpenseReport.paid_at >= date_start,
-                ExpenseReport.paid_at <= date_end,
-            )
+        cr_filters = (
+            CheckRequest.organization_id == org_id,
+            CheckRequest.status == CheckRequestStatus.ISSUED,
+            CheckRequest.check_date >= date_start,
+            CheckRequest.check_date <= date_end,
         )
-        ers = list(er_result.scalars().unique().all())
-
-        # Build CSV. SafeCsvWriter neutralizes spreadsheet formula injection in
-        # free-text cells (names, memos).
-        output = io.StringIO()
-        writer = SafeCsvWriter(output)
-        writer.writerow(
-            ["Date", "Type", "Num", "Name", "Memo", "Account", "Debit", "Credit"]
+        cr_count = await self.db.scalar(
+            select(func.count()).select_from(CheckRequest).where(*cr_filters)
         )
-
-        record_count = 0
-
-        for pr in prs:
-            writer.writerow(
-                [
-                    pr.paid_at.strftime("%m/%d/%Y") if pr.paid_at else "",
-                    "Bill Pmt",
-                    pr.request_number,
-                    pr.vendor or "",
-                    pr.title,
-                    "",
-                    str(pr.actual_amount or pr.estimated_amount),
-                    "",
-                ]
+        er_filters = (
+            ExpenseReport.organization_id == org_id,
+            ExpenseReport.status == ExpenseReportStatus.PAID,
+            ExpenseReport.paid_at >= date_start,
+            ExpenseReport.paid_at <= date_end,
+        )
+        line_count = await self.db.scalar(
+            select(func.count())
+            .select_from(ExpenseLineItem)
+            .join(ExpenseReport)
+            .where(*er_filters)
+        )
+        total = int(pr_count or 0) + int(cr_count or 0) + int(line_count or 0)
+        if total > max_records:
+            raise ValueError(
+                f"Synchronous exports support at most {max_records} rows; "
+                f"this request contains {total}. Narrow the date range"
             )
-            record_count += 1
 
-        for cr in crs:
-            writer.writerow(
-                [
-                    cr.check_date.strftime("%m/%d/%Y") if cr.check_date else "",
-                    "Check",
-                    cr.check_number or cr.request_number,
-                    cr.payee_name,
-                    cr.memo or cr.purpose or "",
-                    "",
-                    str(cr.amount),
-                    "",
-                ]
-            )
-            record_count += 1
-
-        for er in ers:
-            for item in er.line_items:
-                writer.writerow(
-                    [
-                        er.paid_at.strftime("%m/%d/%Y") if er.paid_at else "",
-                        "Expense",
-                        er.report_number,
-                        item.merchant or "",
-                        item.description,
-                        "",
-                        str(item.amount),
-                        "",
-                    ]
-                )
-                record_count += 1
-
-        # Log the export
         log = ExportLog(
             organization_id=org_id,
             export_type="transactions",
             date_range_start=date_start,
             date_range_end=date_end,
-            record_count=record_count,
+            record_count=0,
             file_format=file_format,
             exported_by=exported_by,
         )
         self.db.add(log)
-        await self.db.flush()
+        await self.db.commit()  # Persist pending before any bytes reach the client.
 
-        return output.getvalue(), record_count
+        async def stream() -> AsyncIterator[str]:
+            output = io.StringIO()
+            writer = SafeCsvWriter(output)
+            delivered = 0
+
+            def csv_chunk(rows: list[list[str]]) -> str:
+                output.seek(0)
+                output.truncate(0)
+                writer.writerows(rows)
+                return output.getvalue()
+
+            try:
+                yield csv_chunk(
+                    [
+                        [
+                            "Date",
+                            "Type",
+                            "Num",
+                            "Name",
+                            "Memo",
+                            "Account",
+                            "Debit",
+                            "Credit",
+                        ]
+                    ]
+                )
+                for model, where, ordering, render in (
+                    (
+                        PurchaseRequest,
+                        filters,
+                        (PurchaseRequest.paid_at, PurchaseRequest.id),
+                        lambda pr: [
+                            pr.paid_at.strftime("%m/%d/%Y"),
+                            "Bill Pmt",
+                            pr.request_number,
+                            pr.vendor or "",
+                            pr.title,
+                            "",
+                            str(pr.actual_amount or pr.estimated_amount),
+                            "",
+                        ],
+                    ),
+                    (
+                        CheckRequest,
+                        cr_filters,
+                        (CheckRequest.check_date, CheckRequest.id),
+                        lambda cr: [
+                            cr.check_date.strftime("%m/%d/%Y"),
+                            "Check",
+                            cr.check_number or cr.request_number,
+                            cr.payee_name,
+                            cr.memo or cr.purpose or "",
+                            "",
+                            str(cr.amount),
+                            "",
+                        ],
+                    ),
+                ):
+                    for offset in range(0, total, batch_size):
+                        result = await self.db.execute(
+                            select(model)
+                            .where(*where)
+                            .order_by(*ordering)
+                            .offset(offset)
+                            .limit(batch_size)
+                        )
+                        records = list(result.scalars())
+                        if not records:
+                            break
+                        delivered += len(records)
+                        yield csv_chunk([render(record) for record in records])
+
+                for offset in range(0, int(line_count or 0), batch_size):
+                    result = await self.db.execute(
+                        select(ExpenseLineItem, ExpenseReport)
+                        .join(ExpenseReport)
+                        .where(*er_filters)
+                        .order_by(
+                            ExpenseReport.paid_at, ExpenseReport.id, ExpenseLineItem.id
+                        )
+                        .offset(offset)
+                        .limit(batch_size)
+                    )
+                    records = list(result.all())
+                    if not records:
+                        break
+                    delivered += len(records)
+                    yield csv_chunk(
+                        [
+                            [
+                                er.paid_at.strftime("%m/%d/%Y"),
+                                "Expense",
+                                er.report_number,
+                                item.merchant or "",
+                                item.description,
+                                "",
+                                str(item.amount),
+                                "",
+                            ]
+                            for item, er in records
+                        ]
+                    )
+
+                log.status = "successful"
+                log.record_count = delivered
+                log.completed_at = datetime.now(timezone.utc)
+                await self.db.commit()
+            except BaseException:
+                await self.db.rollback()
+                log.status = "partial" if delivered else "failed"
+                log.record_count = delivered
+                log.error_message = "Export stream interrupted before completion"
+                log.completed_at = datetime.now(timezone.utc)
+                await self.db.commit()
+                raise
+
+        return stream()
 
     async def list_export_logs(self, org_id: str) -> list[ExportLog]:
         result = await self.db.execute(
