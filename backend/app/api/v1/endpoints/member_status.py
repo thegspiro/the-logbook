@@ -795,11 +795,18 @@ async def change_membership_type(
 
     Requires `members.manage` permission.
     """
+    # Locked, and locked here rather than only in the profile endpoint: this is
+    # the other half of the same read-then-write. A request setting a rank and
+    # this one setting the class to administrative can otherwise both read an
+    # operational, rankless member, both pass, and each write only its own
+    # column — leaving the row administrative *and* ranked. Both writers have to
+    # take the lock or neither is serialized.
     result = await db.execute(
         select(User)
         .where(User.id == str(user_id))
         .where(User.organization_id == current_user.organization_id)
         .where(User.deleted_at.is_(None))
+        .with_for_update()
     )
     member = ensure_found(result.scalar_one_or_none(), "Member")
 

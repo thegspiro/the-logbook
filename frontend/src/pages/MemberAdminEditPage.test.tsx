@@ -112,18 +112,22 @@ describe('MemberAdminEditPage rank field', () => {
     expect(rankSelect()).toBeEnabled();
   });
 
-  it('clears the held rank when the member is switched to administrative', async () => {
+  it('disables the rank field when the member is switched to administrative', async () => {
     const user = userEvent.setup();
     await renderPage();
 
-    expect(rankSelect()).toHaveValue('captain');
     await user.selectOptions(membershipSelect(), 'administrative');
 
-    await waitFor(() => expect(rankSelect()).toHaveValue(''));
-    expect(rankSelect()).toBeDisabled();
+    await waitFor(() => expect(rankSelect()).toBeDisabled());
+    expect(screen.getByText(/do not hold an operational rank/i)).toBeInTheDocument();
   });
 
-  it('sends the cleared rank before the membership type that requires it', async () => {
+  it('does not send the rank when only the membership type changed', async () => {
+    // The rank must not go out in the profile PATCH. That request lands first,
+    // and the membership-type PATCH behind it can legitimately fail — it
+    // rejects a tier the organization has not configured — which would leave
+    // the member operational and stripped of a rank nobody agreed to remove.
+    // The membership-type endpoint clears it in the same transaction instead.
     const user = userEvent.setup();
     await renderPage();
 
@@ -131,12 +135,22 @@ describe('MemberAdminEditPage rank field', () => {
     await user.click(screen.getByRole('button', { name: /save/i }));
 
     await waitFor(() => expect(mockChangeMembershipType).toHaveBeenCalled());
-    expect(mockUpdateUserProfile).toHaveBeenCalledWith('u1', { rank: '' });
     expect(mockChangeMembershipType).toHaveBeenCalledWith('u1', 'administrative');
-    // The profile PATCH must land first: the other order re-asserts the rank
-    // the membership-type PATCH is about to reject.
-    expect(mockUpdateUserProfile.mock.invocationCallOrder[0]).toBeLessThan(
-      mockChangeMembershipType.mock.invocationCallOrder[0] as number
-    );
+    expect(mockUpdateUserProfile).not.toHaveBeenCalled();
+  });
+
+  it('keeps the rank when the membership-type change is rejected', async () => {
+    const user = userEvent.setup();
+    mockChangeMembershipType.mockRejectedValue({
+      response: { status: 400, data: { detail: "Invalid membership tier 'administrative'" } },
+    });
+    await renderPage();
+
+    await user.selectOptions(membershipSelect(), 'administrative');
+    await user.click(screen.getByRole('button', { name: /save/i }));
+
+    expect(await screen.findByText(/invalid membership tier/i)).toBeInTheDocument();
+    // Nothing was persisted about the rank, so the member is still a Captain.
+    expect(mockUpdateUserProfile).not.toHaveBeenCalled();
   });
 });

@@ -151,26 +151,26 @@ export const MemberAdminEditPage: React.FC = () => {
   }, []);
 
   // An administrative member holds no operational rank — the server refuses the
-  // pair, and a rank carries its own default permissions besides. Disabling the
-  // control is only the visible half; the clear below is what makes the save
-  // actually drop a rank the member is losing.
+  // pair, and a rank carries its own default permissions besides.
+  //
+  // The control is disabled and nothing more. Clearing `form.rank` here as well
+  // looked tidier and loses data: this page saves in two requests, and the
+  // cleared rank would go out in the profile PATCH *before* the membership-type
+  // PATCH that justifies it. That second request can legitimately fail — it
+  // rejects a tier the organization has not configured, and the default tier
+  // list has no `administrative` entry — leaving the member operational and
+  // permanently stripped of the rank nobody agreed to remove.
+  //
+  // Untouched, `form.rank` still equals `initialForm.rank`, so `handleSave`
+  // omits it entirely and the rank survives a failed class change. On success
+  // the membership-type endpoint clears it in the same transaction, and the
+  // re-fetch below brings the cleared value back.
   const isAdministrative = isAdministrativeMember(undefined, form?.membership_type);
 
   const handleFieldChange = (field: keyof Omit<FormData, 'emergency_contacts'>, value: string) => {
     if (!form) return;
     setSuccessMessage(null);
-    setForm((prev) => {
-      if (!prev) return prev;
-      const next = { ...prev, [field]: value };
-      if (field === 'membership_type' && isAdministrativeMember(undefined, value)) {
-        // Clearing it here rather than only on the server keeps the two saves
-        // this page makes in agreement: the profile PATCH goes out first and
-        // would otherwise re-assert the rank the membership-type PATCH is about
-        // to remove.
-        next.rank = '';
-      }
-      return next;
-    });
+    setForm((prev) => (prev ? { ...prev, [field]: value } : prev));
   };
 
   const handleEmergencyContactChange = (index: number, field: keyof EmergencyContact, value: string | boolean) => {

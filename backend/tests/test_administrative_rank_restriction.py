@@ -473,5 +473,104 @@ class TestTheBackfillMatchesTheRule:
         assert "`rank`" in self._sql(is_mariadb=False)
 
 
+class TestAutomaticTierAdvancement:
+    """The unattended writer, and so the dangerous one.
+
+    Tier ids are organization-configurable, so a department that names a tier
+    ``administrative`` moves ranked operational members into that class on a
+    schedule. Enforcing the rule only in the manual endpoint leaves that path
+    handing out chain-of-command permissions with nobody watching.
+    """
+
+    @staticmethod
+    def _member(*, rank, hire_date, membership_type="probationary"):
+        from datetime import date
+
+        return SimpleNamespace(
+            id=str(uuid4()),
+            full_name="Dana Reyes",
+            rank=rank,
+            member_class=None,
+            member_status=None,
+            membership_type=membership_type,
+            membership_type_changed_at=None,
+            hire_date=date(date.today().year - 30, 1, 1),
+        )
+
+    @staticmethod
+    def _org(tiers):
+        return SimpleNamespace(
+            id=str(uuid4()),
+            settings={"membership_tiers": {"tiers": tiers}},
+        )
+
+    async def _advance(self, member, tiers):
+        from app.services.membership_tier_service import MembershipTierService
+
+        org = self._org(tiers)
+        db = AsyncMock()
+        db.execute.side_effect = [
+            _Result(org),
+            SimpleNamespace(scalars=lambda: SimpleNamespace(all=lambda: [member])),
+        ]
+        service = MembershipTierService(db)
+        with patch(
+            "app.services.membership_tier_service.log_audit_event", new=AsyncMock()
+        ):
+            return await service.advance_all(str(org.id), performed_by="admin")
+
+    async def test_advancing_into_an_administrative_tier_clears_the_rank(self):
+        member = self._member(rank="captain", hire_date=None)
+        result = await self._advance(
+            member,
+            [
+                {"id": "probationary", "years_required": 0, "sort_order": 0},
+                {"id": "administrative", "years_required": 1, "sort_order": 1},
+            ],
+        )
+
+        assert member.rank is None
+        assert result["members"][0]["cleared_rank"] == "captain"
+
+    async def test_an_ordinary_advancement_keeps_the_rank(self):
+        member = self._member(rank="captain", hire_date=None)
+        result = await self._advance(
+            member,
+            [
+                {"id": "probationary", "years_required": 0, "sort_order": 0},
+                {"id": "life", "years_required": 1, "sort_order": 1},
+            ],
+        )
+
+        assert member.rank == "captain"
+        assert result["members"][0]["cleared_rank"] is None
+
+
+class TestTheTwoWritersSerialize:
+    """The rule is a read-then-write split across two endpoints.
+
+    One request sets a rank while another sets the class to administrative;
+    both read an operational, rankless member, both pass their own check, and
+    each writes only its own column — leaving a row that is administrative and
+    ranked, which neither request would have permitted on its own. Both writers
+    have to take the row lock, or neither is serialized.
+    """
+
+    @staticmethod
+    def _locks(func) -> bool:
+        source = inspect.getsource(func)
+        return ".with_for_update()" in source
+
+    def test_the_profile_endpoint_locks_the_row(self):
+        from app.api.v1.endpoints import users as users_ep
+
+        assert self._locks(users_ep.update_user_profile)
+
+    def test_the_membership_type_endpoint_locks_the_row(self):
+        from app.api.v1.endpoints import member_status as status_ep
+
+        assert self._locks(status_ep.change_membership_type)
+
+
 if __name__ == "__main__":  # pragma: no cover
     raise SystemExit(pytest.main([__file__, "-v"]))

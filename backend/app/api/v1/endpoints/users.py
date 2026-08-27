@@ -1458,11 +1458,21 @@ async def update_user_profile(
                 detail="You do not have permission to update this user's profile",
             )
 
+    # Locked, because "an administrative member holds no operational rank" is a
+    # read-then-write and the two halves live in different endpoints. Without
+    # this, a request setting a rank and a request setting the class to
+    # administrative can both read an operational, rankless member, both pass
+    # their own check, and each write only its own column — leaving a row that
+    # is administrative *and* ranked, which neither request would have allowed.
+    # A locking read for the same reason the capacity checks use one: under
+    # REPEATABLE READ a plain SELECT answers from the transaction's first
+    # snapshot, so acquiring the lock without re-reading buys nothing.
     result = await db.execute(
         select(User)
         .where(User.id == str(user_id))
         .where(User.organization_id == str(current_user.organization_id))
         .where(User.deleted_at.is_(None))
+        .with_for_update()
         .options(selectinload(User.roles))
     )
     user = result.scalar_one_or_none()
