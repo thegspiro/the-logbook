@@ -23,7 +23,7 @@ section.
 
 ---
 
-### 2026-08-27 — Feature 01 (Auth & session lifecycle), pass 2 — no findings
+### 2026-08-27 — Feature 01 (Auth & session lifecycle), pass 2
 
 `auth.py`/`auth_service.py`/`mfa_service.py`/`oauth_service.py` are
 byte-identical to PR #1804's merge commit — zero changes since pass 1.
@@ -31,18 +31,36 @@ AUTH-1's fix and its guard test re-verified intact. The only in-scope growth
 is `consent_service.py` (84 L → 211 L), entirely a new "Photo Use Consent"
 feature (new `roster()` method, `GET /users/consents/photo-use` endpoint, a
 new `users.view_consents` permission, a frontend page) — read in full against
-all seven checklist dimensions since none of it existed at pass 1. Already
-built to this checklist's standard: org-scoped roster query with a
-belt-and-suspenders join filter, a narrow new permission chosen specifically
-to avoid the XC-2 broad-grant pattern (documented in the endpoint's own
-comment), contact fields deliberately excluded from the response, and the
-seeded-grant migration follows Pitfalls #23 and #26 exactly (frozen prior-
-defaults snapshot, `is_system` scoping, `positions`-table existence guard,
-symmetric downgrade). No findings, no code changes. Completion gate:
-flake8/black/isort clean, `validate_migrations.py --strict` passed, 70/70
-scoped tests (oauth/auth_service/mfa/consent) pass, `tsc --noEmit` 0 errors,
-`eslint .` 0 errors. Full detail in `AUTH-01-auth-session.md`. Next: 02
-permissions & roles, once this PR merges.
+all seven checklist dimensions since none of it existed at pass 1. Backend
+found already built to this checklist's standard: org-scoped roster query
+with a belt-and-suspenders join filter, a narrow new permission chosen
+specifically to avoid the XC-2 broad-grant pattern (documented in the
+endpoint's own comment), contact fields deliberately excluded from the
+response, and the seeded-grant migration follows Pitfalls #23 and #26 exactly
+(frozen prior-defaults snapshot, `is_system` scoping, `positions`-table
+existence guard, symmetric downgrade).
+
+**Update:** Codex reviewed PR #1929 and found two real gaps in the initial
+"no findings" pass. **AUTH-3 (LOW, fixed):** `PhotoUseConsentPage.tsx` had no
+stale-response guard on its roster fetch — toggling "include inactive" twice
+quickly could let an older response overwrite a newer one. Fixed with the
+codebase's standard `cancelled`-flag `useEffect` idiom; added a regression
+test verified to fail against the pre-fix component. **AUTH-4
+(informational, flagged not fixed):** `ConsentService.roster()` has no
+`LIMIT`/pagination — but grepping `select(User` found 255+ other call sites
+with the identical unbounded shape, so this is the application's existing,
+consistent scale assumption (a department's membership, not an unbounded
+table), not a defect unique to the new code; fixing one of 255 sites would be
+arbitrary. Both replied to on the PR; AUTH-3's thread resolved, AUTH-4's left
+open pending the owner's view on whether an app-wide pagination pass is
+wanted.
+
+Completion gate (after AUTH-3): flake8/black/isort clean,
+`validate_migrations.py --strict` passed, 70/70 scoped backend tests
+(oauth/auth_service/mfa/consent) pass, `tsc --noEmit` 0 errors, `eslint .` 0
+errors (1 file touched, 0 warnings), `PhotoUseConsentPage.test.tsx` 7/7 passed
+(1 new). Full detail in `AUTH-01-auth-session.md`. Next: 02 permissions &
+roles, once this PR merges.
 
 ### 2026-08-27 — Feature 00 (Cross-cutting baseline), pass 2 ✅ merged — PR #1924
 

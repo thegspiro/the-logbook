@@ -62,14 +62,72 @@ at pass 1:
   `PhotoUseConsentPage.tsx` (grep-confirmed — it goes through the shared
   service layer feature 34 already reviewed).
 
-**No findings.** No code changes this pass — the new code was already built
-to this checklist's standard.
+**Correction (Codex review on PR #1929):** the "no findings" conclusion above
+was wrong on two counts, both raised by Codex against `PhotoUseConsentPage.tsx`
+and `consent_service.py`.
 
-**Completion gate (pass 2):** flake8/black/isort clean on `app/ tests/
-alembic/`; `validate_migrations.py --strict` passed (381 revisions, single
-head); scoped tests (`-k "oauth or auth_service or mfa or consent"`) 70
-passed, 1 skipped (pre-existing, missing optional dependency); `tsc --noEmit`
-0 errors; `eslint .` 0 errors. No frontend files changed this pass.
+### AUTH-3 — LOW — Stale roster response could overwrite a newer one — ✅ FIXED
+
+**What:** `PhotoUseConsentPage.tsx`'s `loadRoster` fired a new
+`getPhotoUseConsentRoster(includeInactive)` request on every change to the
+`includeInactive` toggle with no cancellation or staleness check. Toggling the
+checkbox twice in quick succession (check, then uncheck before the first
+request resolves) let the two requests resolve out of order; whichever
+response landed last overwrote `roster` via `setRoster`, regardless of whether
+it still matched the toggle's current value.
+
+**Where:** `frontend/src/modules/communications/pages/PhotoUseConsentPage.tsx`
+(the `useEffect`/`loadRoster` pair).
+
+**Failure scenario:** a PIO toggles "Include inactive members" on and then
+immediately back off while choosing photos. If the first (checked) request is
+slow and resolves after the second (unchecked) one, the roster silently
+reverts to including inactive members — with the checkbox itself showing
+unchecked, a display state inconsistent with what's on screen. Each member's
+own `granted`/`declined` value is unaffected (the race is only over which
+members appear, not their consent state), but the page is documented as "the
+operational enforcement point" for photo consent, so a PIO trusting the
+checkbox to reflect what's listed is a real, if narrow, correctness bug.
+
+**Fix:** moved the fetch into the `useEffect` body with the codebase's
+existing `let cancelled = false` / cleanup-sets-`cancelled=true` idiom (same
+pattern as `PipelineDetailPage.tsx`), so a response belonging to a superseded
+effect run is never applied to state.
+
+**Guard test:** `ignores a stale response that resolves after a newer request
+for a different toggle state` in `PhotoUseConsentPage.test.tsx` — two requests
+in flight, the older one resolved last; asserts the newer request's roster
+wins. Verified to fail against the pre-fix component (confirmed by stashing
+the fix and re-running) and pass against it.
+
+### AUTH-4 — INFORMATIONAL — Unbounded roster query, flagged not fixed
+
+**What:** `ConsentService.roster()` has no `LIMIT`/pagination and materializes
+every matching member with `result.all()`; `GET /users/consents/photo-use`
+passes that straight through. Checklist dimension 6 names "no `all()` over an
+org-wide table" as a pattern to catch.
+
+**Where:** `backend/app/services/consent_service.py:118-143`.
+
+**Why flagged, not fixed:** this is not a defect unique to the new code —
+grepping `select(User` across `app/` finds **255+ other call sites** with the
+identical unbounded shape (`/officers`, the base `/users` list, and most other
+whole-department rosters). The application's own scale assumption throughout
+is a single fire department's membership (tens to a few hundred rows), not an
+org-wide table that grows without bound the way `audit_logs` or
+`message_history` do — dimension 6's concern is real for those, and this
+codebase already bounds or paginates them. Adding a `LIMIT` to this one new
+endpoint while its 255 siblings stay unbounded would be an arbitrary,
+inconsistent fix, not a security improvement. Recorded here for awareness
+rather than actioned as a drive-by; a genuine fix would be an app-wide
+pagination pass, out of scope for this iteration.
+
+**Completion gate (pass 2, after AUTH-3):** flake8/black/isort clean on `app/
+tests/ alembic/`; `validate_migrations.py --strict` passed (381 revisions,
+single head); scoped backend tests (`-k "oauth or auth_service or mfa or
+consent"`) 70 passed, 1 skipped (pre-existing, missing optional dependency);
+`tsc --noEmit` 0 errors; `eslint .` 0 errors (1 file, 0 warnings);
+`PhotoUseConsentPage.test.tsx` 7/7 passed (1 new).
 
 ---
 
