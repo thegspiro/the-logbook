@@ -306,10 +306,23 @@ class FinanceService:
         return budget
 
     async def update_budget(self, budget_id: str, org_id: str, **kwargs) -> Budget:
-        budget = await self.get_budget(budget_id, org_id)
+        await self._validate_finance_fks(org_id, kwargs)
+        # amount_budgeted changes the ceiling _mutate_budget enforces, so this
+        # read must be the same locking read that ceiling check uses -- a
+        # plain read here would let a reduction race a concurrent spend/
+        # encumbrance past it (CLAUDE.md pitfall #27).
+        result = await self.db.execute(
+            select(Budget)
+            .where(Budget.id == budget_id, Budget.organization_id == org_id)
+            .with_for_update()
+        )
+        budget = result.scalar_one_or_none()
         if not budget:
             raise ValueError("Budget not found")
-        await self._validate_finance_fks(org_id, kwargs)
+        if "amount_budgeted" in kwargs and kwargs["amount_budgeted"] is not None:
+            new_amount = Decimal(kwargs["amount_budgeted"])
+            if new_amount < budget.amount_spent + budget.amount_encumbered:
+                raise BudgetLimitExceededError()
         apply_updates(budget, kwargs)
         await self.db.flush()
         await self.db.refresh(budget, ["updated_at"])
@@ -675,6 +688,7 @@ class FinanceService:
                 ApprovalStepRecord.id == step_record_id,
                 ApprovalChain.organization_id == org_id,
             )
+            .with_for_update()
         )
         record = result.scalar_one_or_none()
         if not record:
@@ -737,6 +751,7 @@ class FinanceService:
                 ApprovalStepRecord.id == step_record_id,
                 ApprovalChain.organization_id == org_id,
             )
+            .with_for_update()
         )
         record = result.scalar_one_or_none()
         if not record:

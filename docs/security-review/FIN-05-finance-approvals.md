@@ -17,7 +17,8 @@ methodology adopted after Codex flagged the same gap on SF-04 (PR #1935).
   since), `models/finance.py` (+7), `schemas/finance.py` (+122).
 - **Migrations:** `20260826_1700_add_export_stream_status.py` — adds
   `status`/`error_message`/`completed_at` to `finance_export_logs`.
-- **Frontend:** 8 files under `modules/finance` — primarily a
+- **Frontend:** 10 files under `modules/finance` (not 8 — the first sweep
+  missed `routes.tsx` and `store/financeStore.ts`), primarily a
   `MonetaryAmount`/`DecimalString` type-hardening pass (money stays a string
   end-to-end, matching the backend's `Decimal` usage, never a float) plus a
   `requiredModule="finance"` addition to the module's `ProtectedRoute`,
@@ -25,43 +26,99 @@ methodology adopted after Codex flagged the same gap on SF-04 (PR #1935).
   frontend gate mirroring a server-side one already in place, not a new
   access-control boundary.
 
+**Correction (Codex review on PR #1942):** the first draft of this section
+claimed no findings. Codex caught six real defects the initial sweep missed
+— five of them genuine bugs, not just documentation gaps — all now fixed:
+
+- **FIN-10 (concurrency, the significant one).** `approve_step`/`deny_step`
+  read the `ApprovalStepRecord` with a plain `SELECT`, not the
+  `.with_for_update()` lock `approve_by_token`/`deny_by_token` already use on
+  the identical read. Two authorized approvers acting on the same pending
+  step at the same time both see `PENDING`, both flip it to `APPROVED`, and
+  both call `_finalize_approval` — double-encumbering the budget for one
+  purchase request. Fixed by adding `.with_for_update()` to both reads,
+  matching the token path. Guarded by
+  `TestFinanceApprovalStepLocking` in `test_capacity_locking.py` (source-
+  inspection style, matching the rest of that file's Pitfall #27 coverage).
+- **FIN-11 (ceiling bypass).** `update_budget` (the `PUT /budgets/{id}`
+  path) set `amount_budgeted` directly with no lock and no check against
+  `amount_spent + amount_encumbered` — the exact ceiling `_mutate_budget`
+  enforces on the encumber/spend side. A manager could reduce a budget below
+  what was already committed and have it persist silently; the endpoint's
+  `except BudgetLimitExceededError` handler was dead code, since nothing on
+  this path could ever raise it. Fixed: `update_budget` now takes the same
+  locking read and raises `BudgetLimitExceededError` when the new amount
+  would go under the committed total. Guarded by
+  `test_update_budget_enforces_ceiling_when_reducing` /
+  `test_update_budget_allows_reduction_above_committed_amount`
+  (`test_finance.py`) and `TestFinanceBudgetCeilingOnUpdate`
+  (`test_capacity_locking.py`).
+- **FIN-12 (schema regression).** `DuesScheduleUpdate.grace_period_days`
+  carried `decimal_places=2` copied from the neighboring `Decimal` fields
+  onto an `int` field. Pydantic-core raises a bare `TypeError` for that
+  combination on any valid integer, so every dues-schedule update touching
+  this field broke. Fixed by dropping the stray constraint (the sibling
+  create/response schemas were never affected). Guarded by
+  `test_dues_schedule_update_accepts_integer_grace_period`.
+- **FIN-13 (schema regression).** `ExportRequest.validate_date_range`
+  compares and subtracts `date_range_start`/`date_range_end` directly. A
+  request mixing a naive and a timezone-aware ISO datetime raises
+  `TypeError: can't compare offset-naive and offset-aware datetimes` —
+  a bare Python exception the `model_validator` does not turn into a 422,
+  so it reaches the client as a 500. Fixed with a `field_validator` that
+  normalizes a naive datetime to UTC before the range/span checks run,
+  mirroring `schemas/election.py`'s `_as_utc`. Guarded by
+  `test_export_request_normalizes_mixed_naive_and_aware_datetimes`.
+- **FIN-14 (data integrity, frontend).** `ExpenseReportFormPage.tsx` was the
+  one form the type-hardening pass missed: it still built the wire payload
+  with `amount: Number(item.amount)`, sending expense line-item amounts as
+  JS floats while every sibling form (`PurchaseRequestFormPage.tsx`,
+  `CheckRequestFormPage.tsx`) now sends a fixed-precision decimal string.
+  The backend's `ExpenseLineItemCreate.amount` already only accepts a
+  `Decimal` with `decimal_places=2`, so this was a live precision gap, not
+  just an incomplete rollout. Fixed by switching to `item.amount.toFixed(2)`
+  at the payload boundary, matching the sibling forms exactly, and dropping
+  the `totalAmount` payload key `ExpenseReportCreate` never accepted (dead
+  weight, silently ignored server-side).
+- **Documentation-only correction.** The first draft mischaracterized the
+  `add_export_stream_status` migration: `status` is `nullable=False` (with a
+  `server_default`), not nullable as stated, and the migration's
+  table-existence guard is _required_, not optional — `finance_export_logs`
+  is `create_all`-only (Pitfall #26), and CI runs `alembic upgrade head`
+  against an empty database before `create_all` ever creates the table.
+  Corrected above; the migration code itself was already right.
+
 **Read in full and independently re-verified by direct code read** (not
-taken on an agent's word alone): `_mutate_budget`
-(`finance_service.py:2564`) — org-scoped, `.with_for_update()` locking read
-on the budget row, with the over-budget ceiling check computed from the
-locked row's fresh value (Pitfall #27 compliant: the lock alone is not
-enough without a locking re-read, and this has both). `get_pending_approvals`
-(`finance_service.py:871`) — rewritten to a `union_all` "entities" CTE
-covering `PurchaseRequest`/`ExpenseReport`/`CheckRequest`, each arm filtered
-on `organization_id == organization_id` before the `UNION ALL`, then INNER
-JOINed to `ApprovalStepRecord` — no arm can leak another org's pending
-approvals into the merged result.
+taken on an agent's word alone, and this pass's own miss above is exactly
+why): `_mutate_budget` (`finance_service.py:2564`) — org-scoped,
+`.with_for_update()` locking read on the budget row, with the over-budget
+ceiling check computed from the locked row's fresh value (Pitfall #27
+compliant). `get_pending_approvals` (`finance_service.py:871`) — rewritten
+to a `union_all` "entities" CTE covering `PurchaseRequest`/`ExpenseReport`/
+`CheckRequest`, each arm filtered on `organization_id == organization_id`
+before the `UNION ALL`, then INNER JOINed to `ApprovalStepRecord` — no arm
+can leak another org's pending approvals into the merged result.
 
 Two background agents independently reviewed `finance_service.py`'s budget/
 export logic and `finance.py`+`schemas.py`+`models.py` respectively; both
-reported no findings, and their highest-stakes claims (the two methods
-above) were the ones re-verified by hand rather than trusted outright.
+reported no findings. Codex's review, posted after this PR opened, is what
+actually caught FIN-10 through FIN-14 — all verified independently against
+the real code (reproduced each schema TypeError directly, confirmed the
+missing `.with_for_update()` by reading the token-path sibling, confirmed
+the frontend gap and the backend schema it feeds by reading both sides)
+before fixing, not taken on the bot's word.
 
-The new migration adds three nullable columns to `finance_export_logs`
-(itself `create_all`-only — no `SET NULL` FK, no seed data, no table-
-existence guard needed since it neither creates nor alters a pre-existing
-table across a fresh-DB boundary in a way Pitfall #26 would flag). No new
-by-id or FK-accepting endpoint was added in this diff, so dimension 3/14
-(tenant isolation) reduces to re-confirming the two methods above, which
-were already org-scoped before this pass and remain so.
-
-**No findings.** The diff since pass 1 is a locking-read budget fix (already
-correct), a tenant-scoped rewrite of the pending-approvals query (already
-correct), a closed type-hardening pass on the frontend, and one additive,
-nullable, non-FK migration column set.
+**5 real findings, all fixed; 1 documentation correction.** No open items.
 
 **Completion gate (pass 2):** flake8/black/isort clean on `app/ tests/
 alembic/`; `validate_migrations.py --strict` passed (382 revisions, single
 head); scoped backend tests (`-k "finance or dues or approval or budget or
-export"`) 233 passed, 1 skipped (pre-existing), 0 failed; full backend suite
-9042 passed, 22 skipped (pre-existing, Docker-unavailable), 0 failed.
+export"`) 240 passed, 1 skipped (pre-existing), 0 failed; full backend suite
+9049 passed, 22 skipped (pre-existing, Docker-unavailable), 0 failed.
 `tsc --noEmit` 0 errors; `eslint src/modules/finance/` 0 errors; `vitest run
-src/modules/finance/` 2 files, 80 tests, all passed.
+src/modules/finance/` 2 files, 80 tests, all passed. Each new guard test
+confirmed to fail against the pre-fix code (`git stash` on the fix, re-run,
+`git stash pop`) before being counted as covering its finding.
 
 ---
 

@@ -24,6 +24,20 @@ def test_export_request_rejects_oversized_or_reversed_ranges():
         ExportRequest(date_range_start=start, date_range_end=start - timedelta(days=1))
 
 
+def test_export_request_normalizes_mixed_naive_and_aware_datetimes():
+    """A naive datetime compared against an aware one raises a bare Python
+    TypeError, not a pydantic ValidationError -- that reaches the client as
+    an unhandled 500 instead of a 422. Naive input must be treated as UTC
+    (this project's wire convention) before the range/span checks run."""
+    req = ExportRequest(
+        date_range_start="2026-01-01T00:00:00",
+        date_range_end="2026-02-01T00:00:00Z",
+    )
+    assert req.date_range_start.tzinfo is not None
+    assert req.date_range_end.tzinfo is not None
+    assert req.date_range_start == datetime(2026, 1, 1, tzinfo=timezone.utc)
+
+
 class _Result:
     def __init__(self, values):
         self._values = values

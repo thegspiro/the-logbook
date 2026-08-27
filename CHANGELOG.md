@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Two approvers acting at the same moment could double-charge a budget, and a budget's cap could be quietly bypassed (2026-08-27)
+
+**Fixed**
+
+- Approving or denying a purchase/expense/check-request approval step didn't
+  lock the step record while checking it was still pending. Two authorized
+  approvers acting on the same step within the same moment could both pass
+  that check and both finalize it — encumbering the associated budget twice
+  for what was really a single approval.
+- Editing a budget's total amount didn't check it against what was already
+  spent or committed against that budget. A budget could be reduced below
+  its already-committed total and the reduction would be accepted, silently
+  breaking the guarantee that a budget's spending never exceeds its cap.
+- Updating a dues schedule's grace period would fail every time due to a
+  copy-paste error in field validation.
+- Requesting a finance export with a date range that mixed a plain date and
+  a fully-specified (timezone-included) date could crash instead of showing
+  a normal validation error.
+- One expense-report form still converted dollar amounts through
+  floating-point math when submitting, unlike the rest of the finance
+  module's forms, which could very rarely round a line-item amount
+  incorrectly.
+
 ### Two paths could hand out permissions beyond what the requester held (2026-08-27)
 
 **Fixed**

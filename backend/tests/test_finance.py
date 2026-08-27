@@ -375,6 +375,40 @@ class TestBudgetMutationPolicy:
         await db_session.refresh(budget)
         assert budget.amount_spent == Decimal("0.00")
 
+    async def test_update_budget_enforces_ceiling_when_reducing(
+        self, db_session, sample_org_data
+    ):
+        """PUT /budgets/{id} must not be a side door around the ceiling
+        _mutate_budget enforces: reducing amount_budgeted below what is
+        already spent+encumbered has to be rejected, not silently persisted.
+        """
+        service, budget = await self._budget(db_session, sample_org_data)
+        await service._encumber_budget(
+            budget.id, Decimal("60.00"), sample_org_data["id"]
+        )
+        with pytest.raises(BudgetLimitExceededError):
+            await service.update_budget(
+                budget.id,
+                sample_org_data["id"],
+                amount_budgeted=Decimal("10.00"),
+            )
+        await db_session.refresh(budget)
+        assert budget.amount_budgeted == Decimal("100.00")
+
+    async def test_update_budget_allows_reduction_above_committed_amount(
+        self, db_session, sample_org_data
+    ):
+        service, budget = await self._budget(db_session, sample_org_data)
+        await service._encumber_budget(
+            budget.id, Decimal("60.00"), sample_org_data["id"]
+        )
+        updated = await service.update_budget(
+            budget.id,
+            sample_org_data["id"],
+            amount_budgeted=Decimal("75.00"),
+        )
+        assert updated.amount_budgeted == Decimal("75.00")
+
 
 # ============================================
 # Approval Chain Tests
@@ -1288,6 +1322,17 @@ class TestDuesService:
         summary = await service.get_dues_summary(sample_org_data["id"])
         assert summary["total_expected"] == 0
         assert summary["collection_rate"] == 0
+
+    def test_dues_schedule_update_accepts_integer_grace_period(self):
+        """grace_period_days is an int column (app/models/finance.py); a
+        decimal_places constraint copy-pasted from the neighboring Decimal
+        fields made pydantic-core raise TypeError on every valid integer
+        instead of validating it, breaking every dues-schedule update that
+        touched this field."""
+        from app.schemas.finance import DuesScheduleUpdate
+
+        update = DuesScheduleUpdate(grace_period_days=5)
+        assert update.grace_period_days == 5
 
 
 # ============================================
