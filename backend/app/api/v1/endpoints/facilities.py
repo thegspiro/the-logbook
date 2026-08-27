@@ -278,13 +278,15 @@ async def update_facility_type(
 async def delete_facility_type(
     type_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("facilities.manage")),
+    current_user: User = Depends(
+        require_permission("facilities.delete", "facilities.manage")
+    ),
 ):
     """
     Delete a facility type
 
     **Authentication required**
-    **Permissions required:** facilities.manage
+    **Permissions required:** facilities.delete or facilities.manage
 
     **Note:** Cannot delete types that are in use by facilities.
     """
@@ -415,13 +417,15 @@ async def update_facility_status(
 async def delete_facility_status(
     status_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("facilities.manage")),
+    current_user: User = Depends(
+        require_permission("facilities.delete", "facilities.manage")
+    ),
 ):
     """
     Delete a facility status
 
     **Authentication required**
-    **Permissions required:** facilities.manage
+    **Permissions required:** facilities.delete or facilities.manage
 
     **Note:** Cannot delete statuses that are in use by facilities.
     """
@@ -601,13 +605,15 @@ async def create_facility(
 async def archive_facility(
     facility_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("facilities.manage")),
+    current_user: User = Depends(
+        require_permission("facilities.delete", "facilities.manage")
+    ),
 ):
     """
     Archive a facility
 
     **Authentication required**
-    **Permissions required:** facilities.manage
+    **Permissions required:** facilities.delete or facilities.manage
     """
     service = FacilitiesService(db)
 
@@ -786,13 +792,15 @@ async def update_facility_photo(
 async def delete_facility_photo(
     photo_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("facilities.manage")),
+    current_user: User = Depends(
+        require_permission("facilities.delete", "facilities.manage")
+    ),
 ):
     """
     Delete a facility photo
 
     **Authentication required**
-    **Permissions required:** facilities.manage
+    **Permissions required:** facilities.delete or facilities.manage
     """
     service = FacilitiesService(db)
 
@@ -933,13 +941,15 @@ async def update_facility_document(
 async def delete_facility_document(
     document_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("facilities.manage")),
+    current_user: User = Depends(
+        require_permission("facilities.delete", "facilities.manage")
+    ),
 ):
     """
     Delete a facility document
 
     **Authentication required**
-    **Permissions required:** facilities.manage
+    **Permissions required:** facilities.delete or facilities.manage
     """
     service = FacilitiesService(db)
 
@@ -1065,13 +1075,15 @@ async def update_facility_maintenance_type(
 async def delete_facility_maintenance_type(
     type_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("facilities.manage")),
+    current_user: User = Depends(
+        require_permission("facilities.delete", "facilities.manage")
+    ),
 ):
     """
     Delete a facility maintenance type definition
 
     **Authentication required**
-    **Permissions required:** facilities.manage
+    **Permissions required:** facilities.delete or facilities.manage
     """
     service = FacilitiesService(db)
 
@@ -1282,13 +1294,15 @@ async def update_facility_maintenance_record(
 async def delete_facility_maintenance_record(
     record_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("facilities.manage")),
+    current_user: User = Depends(
+        require_permission("facilities.delete", "facilities.manage")
+    ),
 ):
     """
     Delete a facility maintenance record
 
     **Authentication required**
-    **Permissions required:** facilities.manage
+    **Permissions required:** facilities.delete or facilities.manage
     """
     service = FacilitiesService(db)
 
@@ -1455,13 +1469,15 @@ async def update_facility_system(
 async def delete_facility_system(
     system_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("facilities.manage")),
+    current_user: User = Depends(
+        require_permission("facilities.delete", "facilities.manage")
+    ),
 ):
     """
     Archive a building system (soft-delete)
 
     **Authentication required**
-    **Permissions required:** facilities.manage
+    **Permissions required:** facilities.delete or facilities.manage
     """
     service = FacilitiesService(db)
 
@@ -1631,13 +1647,15 @@ async def update_facility_inspection(
 async def delete_facility_inspection(
     inspection_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("facilities.manage")),
+    current_user: User = Depends(
+        require_permission("facilities.delete", "facilities.manage")
+    ),
 ):
     """
     Delete a facility inspection record
 
     **Authentication required**
-    **Permissions required:** facilities.manage
+    **Permissions required:** facilities.delete or facilities.manage
     """
     service = FacilitiesService(db)
 
@@ -1812,13 +1830,15 @@ async def update_facility_utility_account(
 async def delete_facility_utility_account(
     account_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("facilities.manage")),
+    current_user: User = Depends(
+        require_permission("facilities.delete", "facilities.manage")
+    ),
 ):
     """
     Delete a facility utility account
 
     **Authentication required**
-    **Permissions required:** facilities.manage
+    **Permissions required:** facilities.delete or facilities.manage
     """
     service = FacilitiesService(db)
 
@@ -1970,13 +1990,15 @@ async def update_facility_utility_reading(
 async def delete_facility_utility_reading(
     reading_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("facilities.manage")),
+    current_user: User = Depends(
+        require_permission("facilities.delete", "facilities.manage")
+    ),
 ):
     """
     Delete a utility reading
 
     **Authentication required**
-    **Permissions required:** facilities.manage
+    **Permissions required:** facilities.delete or facilities.manage
     """
     service = FacilitiesService(db)
 
@@ -2153,13 +2175,15 @@ async def update_facility_access_key(
 async def delete_facility_access_key(
     key_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("facilities.manage")),
+    current_user: User = Depends(
+        require_permission("facilities.delete", "facilities.manage")
+    ),
 ):
     """
     Delete a facility access key
 
     **Authentication required**
-    **Permissions required:** facilities.manage
+    **Permissions required:** facilities.delete or facilities.manage
     """
     service = FacilitiesService(db)
 
@@ -2343,13 +2367,15 @@ async def update_facility_room(
 async def delete_facility_room(
     room_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("facilities.manage")),
+    current_user: User = Depends(
+        require_permission("facilities.delete", "facilities.manage")
+    ),
 ):
     """
     Delete a facility room
 
     **Authentication required**
-    **Permissions required:** facilities.manage
+    **Permissions required:** facilities.delete or facilities.manage
     """
     service = FacilitiesService(db)
 
@@ -2520,13 +2546,15 @@ async def update_facility_emergency_contact(
 async def delete_facility_emergency_contact(
     contact_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("facilities.manage")),
+    current_user: User = Depends(
+        require_permission("facilities.delete", "facilities.manage")
+    ),
 ):
     """
     Delete a facility emergency contact
 
     **Authentication required**
-    **Permissions required:** facilities.manage
+    **Permissions required:** facilities.delete or facilities.manage
     """
     service = FacilitiesService(db)
 
@@ -2695,13 +2723,15 @@ async def update_facility_shutoff_location(
 async def delete_facility_shutoff_location(
     location_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("facilities.manage")),
+    current_user: User = Depends(
+        require_permission("facilities.delete", "facilities.manage")
+    ),
 ):
     """
     Delete a facility shutoff location
 
     **Authentication required**
-    **Permissions required:** facilities.manage
+    **Permissions required:** facilities.delete or facilities.manage
     """
     service = FacilitiesService(db)
 
@@ -2878,13 +2908,15 @@ async def update_facility_capital_project(
 async def delete_facility_capital_project(
     project_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("facilities.manage")),
+    current_user: User = Depends(
+        require_permission("facilities.delete", "facilities.manage")
+    ),
 ):
     """
     Delete a facility capital project
 
     **Authentication required**
-    **Permissions required:** facilities.manage
+    **Permissions required:** facilities.delete or facilities.manage
     """
     service = FacilitiesService(db)
 
@@ -3059,13 +3091,15 @@ async def update_facility_insurance_policy(
 async def delete_facility_insurance_policy(
     policy_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("facilities.manage")),
+    current_user: User = Depends(
+        require_permission("facilities.delete", "facilities.manage")
+    ),
 ):
     """
     Delete a facility insurance policy
 
     **Authentication required**
-    **Permissions required:** facilities.manage
+    **Permissions required:** facilities.delete or facilities.manage
     """
     service = FacilitiesService(db)
 
@@ -3236,13 +3270,15 @@ async def update_facility_occupant(
 async def delete_facility_occupant(
     occupant_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("facilities.manage")),
+    current_user: User = Depends(
+        require_permission("facilities.delete", "facilities.manage")
+    ),
 ):
     """
     Delete a facility occupant
 
     **Authentication required**
-    **Permissions required:** facilities.manage
+    **Permissions required:** facilities.delete or facilities.manage
     """
     service = FacilitiesService(db)
 
@@ -3415,13 +3451,15 @@ async def update_facility_compliance_checklist(
 async def delete_facility_compliance_checklist(
     checklist_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("facilities.manage")),
+    current_user: User = Depends(
+        require_permission("facilities.delete", "facilities.manage")
+    ),
 ):
     """
     Delete a facility compliance checklist
 
     **Authentication required**
-    **Permissions required:** facilities.manage
+    **Permissions required:** facilities.delete or facilities.manage
     """
     service = FacilitiesService(db)
 
@@ -3557,13 +3595,15 @@ async def update_facility_compliance_item(
 async def delete_facility_compliance_item(
     item_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("facilities.manage")),
+    current_user: User = Depends(
+        require_permission("facilities.delete", "facilities.manage")
+    ),
 ):
     """
     Delete a compliance item
 
     **Authentication required**
-    **Permissions required:** facilities.manage
+    **Permissions required:** facilities.delete or facilities.manage
     """
     service = FacilitiesService(db)
 

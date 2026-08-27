@@ -25,10 +25,11 @@ import { DialogPanel } from '../../../components/ux/DialogPanel';
 
 interface Props {
   facilityId: string;
-  canManage: boolean;
+  canEdit: boolean;
+  canDelete: boolean;
 }
 
-export default function InspectionsSection({ facilityId, canManage }: Props) {
+export default function InspectionsSection({ facilityId, canEdit, canDelete }: Props) {
   const tz = useTimezone();
   const {
     inspections: filtered,
@@ -55,7 +56,7 @@ export default function InspectionsSection({ facilityId, canManage }: Props) {
     <div className="card">
       <div className="border-theme-surface-border flex items-center justify-between border-b p-4">
         <h2 className="text-theme-text-primary text-sm font-semibold">Inspections</h2>
-        {canManage && (
+        {canEdit && (
           <button
             onClick={() => openCreate()}
             className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm text-red-600 transition-colors hover:bg-red-500/10 dark:text-red-400"
@@ -167,26 +168,30 @@ export default function InspectionsSection({ facilityId, canManage }: Props) {
                     )}
                   </div>
                 </div>
-                {canManage && (
+                {(canEdit || canDelete) && (
                   <div className="flex items-center gap-1 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
-                    <button
-                      onClick={() => openEdit(insp)}
-                      title="Edit"
-                      aria-label="Edit inspection"
-                      className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover rounded-lg p-1.5 transition-colors"
-                    >
-                      <Pencil className="h-3.5 w-3.5" />
-                    </button>
-                    <button
-                      onClick={() => {
-                        void handleDelete(insp);
-                      }}
-                      title="Delete"
-                      aria-label="Delete inspection"
-                      className="text-theme-text-muted rounded-lg p-1.5 transition-colors hover:bg-red-500/10 hover:text-red-500"
-                    >
-                      <X className="h-3.5 w-3.5" />
-                    </button>
+                    {canEdit && (
+                      <button
+                        onClick={() => openEdit(insp)}
+                        title="Edit"
+                        aria-label="Edit inspection"
+                        className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover rounded-lg p-1.5 transition-colors"
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                    {canDelete && (
+                      <button
+                        onClick={() => {
+                          void handleDelete(insp);
+                        }}
+                        title="Delete"
+                        aria-label="Delete inspection"
+                        className="text-theme-text-muted rounded-lg p-1.5 transition-colors hover:bg-red-500/10 hover:text-red-500"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    )}
                   </div>
                 )}
               </div>
@@ -195,7 +200,7 @@ export default function InspectionsSection({ facilityId, canManage }: Props) {
         )}
       </div>
 
-      {canManage && showModal && (
+      {canEdit && showModal && (
         <div
           className="modal-overlay z-50 flex items-center justify-center p-4"
           role="dialog"
