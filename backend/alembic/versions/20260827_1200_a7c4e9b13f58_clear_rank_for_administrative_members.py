@@ -35,7 +35,7 @@ without reverting this migration is safe — the rows are simply already
 compliant — but the cleared ranks must be re-entered by hand.
 
 Revision ID: a7c4e9b13f58
-Revises: c7e2b9a41f83
+Revises: d4e5f6a7b8c9
 Create Date: 2026-08-27 12:00:00.000000
 """
 
@@ -43,7 +43,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision = "a7c4e9b13f58"
-down_revision = "c7e2b9a41f83"
+down_revision = "d4e5f6a7b8c9"
 branch_labels = None
 depends_on = None
 
