@@ -5,6 +5,7 @@ Covers channel routing by priority/ack and the in-app fan-out. DB and the
 email/SMS services are mocked; no MySQL, no network.
 """
 
+import asyncio
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -42,6 +43,11 @@ def _db():
     db.add = MagicMock()
     db.commit = AsyncMock()
     db.rollback = AsyncMock()
+    db.flush = AsyncMock()
+    nested = MagicMock()
+    nested.__aenter__ = AsyncMock()
+    nested.__aexit__ = AsyncMock(return_value=False)
+    db.begin_nested = MagicMock(return_value=nested)
     # org lookup during escalation
     db.execute = AsyncMock(
         return_value=MagicMock(
@@ -178,7 +184,7 @@ class TestEmailRecipientFiltering:
                 pass
 
             async def send_email(self, to_emails, **kwargs):
-                sent["to"] = to_emails
+                sent.setdefault("to", []).extend(to_emails)
                 return (len(to_emails), 0)
 
         svc = MessageDeliveryService(db)
@@ -224,8 +230,8 @@ class TestSmsGating:
                 recipients,
                 org=SimpleNamespace(name="FD"),
             )
-        fake_sms.send_bulk_sms.assert_awaited_once()
-        numbers = fake_sms.send_bulk_sms.await_args.args[0]
+        assert fake_sms.send_bulk_sms.await_count == 2
+        numbers = [call.args[0][0] for call in fake_sms.send_bulk_sms.await_args_list]
         assert numbers == ["+1555mobile", "+1555phone"]
 
     async def test_sms_requires_consent_even_when_the_channel_is_on(self):
@@ -343,6 +349,51 @@ class TestPublishScheduledMessages:
         assert due.scheduled_at is None
         deliver.assert_awaited_once()
         db.commit.assert_awaited()
+        claim_statement = db.execute.await_args.args[0]
+        assert claim_statement._for_update_arg.skip_locked is True
+
+    async def test_two_publishers_and_retry_deliver_each_channel_once(self):
+        """A second publisher/retry loses the same durable delivery keys."""
+        recipient = _user("u1", email="member@fd.co", mobile="+15551234567")
+        claimed = set()
+        in_app = set()
+        channel_sends = {"email": 0, "sms": 0}
+
+        class RacingDelivery(MessageDeliveryService):
+            async def _create_in_app(self, message, recipients):
+                # Models the notification_logs unique constraint.
+                for user in recipients:
+                    in_app.add((message.id, user.id, "in_app"))
+
+            async def _send_email(self, message, recipients, org):
+                key = (message.id, recipients[0].id, "email")
+                if key not in claimed:
+                    claimed.add(key)
+                    channel_sends["email"] += 1
+
+            async def _send_sms(self, message, recipients, org):
+                key = (message.id, recipients[0].id, "sms")
+                if key not in claimed:
+                    claimed.add(key)
+                    channel_sends["sms"] += 1
+
+        first, second = RacingDelivery(_db()), RacingDelivery(_db())
+        target = MessagingService(first.db)
+        target._targeted_users = AsyncMock(return_value=[recipient])
+        # One shared patch encloses both workers, avoiding concurrent patch
+        # contexts while the deliveries themselves genuinely overlap.
+        with patch(
+            "app.services.messaging_service.MessagingService", return_value=target
+        ):
+            await asyncio.gather(
+                first.deliver(_msg(priority="urgent")),
+                second.deliver(_msg(priority="urgent")),
+            )
+            # A later task retry must also observe the durable keys.
+            await first.deliver(_msg(priority="urgent"))
+
+        assert in_app == {("m1", "u1", "in_app")}
+        assert channel_sends == {"email": 1, "sms": 1}
 
 
 if __name__ == "__main__":  # pragma: no cover

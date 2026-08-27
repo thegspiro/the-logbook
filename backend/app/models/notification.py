@@ -193,6 +193,14 @@ class NotificationLog(Base):
         nullable=True,
     )
     recipient_email = Column(String(255))
+    # A first-class link (rather than JSON-only metadata) makes department
+    # message deliveries queryable and lets the database reject duplicate
+    # fan-out when two workers race.
+    department_message_id = Column(
+        String(36),
+        ForeignKey("department_messages.id", ondelete="CASCADE"),
+        nullable=True,
+    )
     channel = Column(
         Enum(NotificationChannel, values_callable=lambda x: [e.value for e in x]),
         nullable=False,
@@ -238,6 +246,12 @@ class NotificationLog(Base):
     __table_args__ = (
         Index("idx_notif_logs_recipient", "recipient_id"),
         Index("idx_notif_logs_org_sent", "organization_id", "sent_at"),
+        UniqueConstraint(
+            "department_message_id",
+            "recipient_id",
+            "channel",
+            name="uq_notif_dept_message_recipient_channel",
+        ),
     )
 
     @property
@@ -400,6 +414,38 @@ class DepartmentMessageRead(Base):
     __table_args__ = (
         UniqueConstraint("message_id", "user_id", name="uq_dept_msg_read_user"),
         Index("idx_dept_msg_read_user", "user_id"),
+    )
+
+
+class DepartmentMessageDelivery(Base):
+    """Durable, per-recipient claim and result for an external delivery."""
+
+    __tablename__ = "department_message_deliveries"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    message_id = Column(
+        String(36),
+        ForeignKey("department_messages.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    recipient_id = Column(
+        String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    channel = Column(String(16), nullable=False)
+    status = Column(String(16), nullable=False, server_default="pending")
+    idempotency_key = Column(String(255), nullable=False, unique=True)
+    attempted_at = Column(DateTime(timezone=True), server_default=func.now())
+    delivered_at = Column(DateTime(timezone=True), nullable=True)
+    error = Column(Text, nullable=True)
+
+    __table_args__ = (
+        UniqueConstraint(
+            "message_id",
+            "recipient_id",
+            "channel",
+            name="uq_dept_msg_delivery_recipient_channel",
+        ),
+        Index("idx_dept_msg_delivery_message", "message_id"),
     )
 
 

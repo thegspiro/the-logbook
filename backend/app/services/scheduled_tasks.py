@@ -3565,21 +3565,29 @@ async def run_publish_scheduled_messages(db: AsyncSession) -> Dict[str, Any]:
     from app.services.message_delivery_service import MessageDeliveryService
 
     now = datetime.now(timezone.utc)
+    # Lock and claim in one transaction. PostgreSQL and MySQL 8 skip rows
+    # already held by another publisher; SQLAlchemy harmlessly degrades this
+    # on engines (notably SQLite in tests) that do not implement row locks.
     result = await db.execute(
-        select(DepartmentMessage).where(
+        select(DepartmentMessage)
+        .where(
             DepartmentMessage.scheduled_at.isnot(None),
             DepartmentMessage.scheduled_at <= now,
             DepartmentMessage.is_active.is_(True),
             DepartmentMessage.deleted_at.is_(None),
         )
+        .with_for_update(skip_locked=True)
     )
     due = list(result.scalars().all())
+    for message in due:
+        # Clearing the due marker is the durable claim. Commit all claims while
+        # locks are held and only then perform potentially slow network I/O.
+        message.scheduled_at = None
+    await db.commit()
 
     delivery = MessageDeliveryService(db)
     published = 0
     for message in due:
-        message.scheduled_at = None
-        await db.commit()
         await delivery.deliver(message)
         published += 1
 

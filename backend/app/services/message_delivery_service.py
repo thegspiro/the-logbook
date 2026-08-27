@@ -32,14 +32,20 @@ undo or block the message that was already created.
 """
 
 import html as _html
+from datetime import datetime, timezone
 from typing import List, Optional
 
 from loguru import logger
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.utils import generate_uuid
-from app.models.notification import DepartmentMessage, NotificationLog
+from app.models.notification import (
+    DepartmentMessage,
+    DepartmentMessageDelivery,
+    NotificationLog,
+)
 from app.models.user import Organization, User
 
 # Free-form NotificationLog category (matches how other features tag theirs,
@@ -77,6 +83,36 @@ class MessageDeliveryService:
 
     def __init__(self, db: AsyncSession):
         self.db = db
+
+    async def _claim_delivery(
+        self, message: DepartmentMessage, user: User, channel: str
+    ) -> Optional[DepartmentMessageDelivery]:
+        """Atomically reserve an external channel send for one recipient."""
+        key = f"department-message:{message.id}:{user.id}:{channel}"
+        attempt = DepartmentMessageDelivery(
+            id=generate_uuid(),
+            message_id=str(message.id),
+            recipient_id=str(user.id),
+            channel=channel,
+            status="pending",
+            idempotency_key=key,
+        )
+        try:
+            self.db.add(attempt)
+            await self.db.commit()
+            return attempt
+        except IntegrityError:
+            # A concurrent worker (or a retry after success) owns this key.
+            await self.db.rollback()
+            return None
+
+    async def _finish_delivery(
+        self, attempt: DepartmentMessageDelivery, error: Optional[Exception] = None
+    ) -> None:
+        attempt.status = "failed" if error else "delivered"
+        attempt.error = str(error) if error else None
+        attempt.delivered_at = None if error else datetime.now(timezone.utc)
+        await self.db.commit()
 
     async def deliver(self, message: DepartmentMessage) -> None:
         """Deliver ``message`` to its targeted audience across channels.
@@ -133,30 +169,36 @@ class MessageDeliveryService:
         try:
             priority = _priority_value(message)
             for user in recipients:
-                self.db.add(
-                    NotificationLog(
-                        id=generate_uuid(),
-                        organization_id=str(message.organization_id),
-                        recipient_id=str(user.id),
-                        channel="in_app",
-                        category=MESSAGE_CATEGORY,
-                        subject=message.title,
-                        message=message.body,
-                        # Take the member straight to the communication rather
-                        # than making them find it again in the inbox. The
-                        # detail endpoint still enforces audience visibility.
-                        action_url=f"/messages/{message.id}",
-                        delivered=True,
-                        expires_at=message.expires_at,
-                        notification_metadata={
-                            "message_id": str(message.id),
-                            "priority": priority,
-                            "requires_acknowledgment": bool(
-                                message.requires_acknowledgment
-                            ),
-                        },
-                    )
-                )
+                try:
+                    async with self.db.begin_nested():
+                        self.db.add(
+                            NotificationLog(
+                                id=generate_uuid(),
+                                organization_id=str(message.organization_id),
+                                recipient_id=str(user.id),
+                                department_message_id=str(message.id),
+                                channel="in_app",
+                                category=MESSAGE_CATEGORY,
+                                subject=message.title,
+                                message=message.body,
+                                # Take the member straight to the communication.
+                                action_url=f"/messages/{message.id}",
+                                delivered=True,
+                                expires_at=message.expires_at,
+                                notification_metadata={
+                                    "message_id": str(message.id),
+                                    "priority": priority,
+                                    "requires_acknowledgment": bool(
+                                        message.requires_acknowledgment
+                                    ),
+                                },
+                            )
+                        )
+                        await self.db.flush()
+                except IntegrityError:
+                    # The unique (message, recipient, channel) key means the
+                    # other worker already created this member's notification.
+                    continue
             await self.db.commit()
         except Exception as e:  # pragma: no cover - defensive
             await self.db.rollback()
@@ -173,8 +215,8 @@ class MessageDeliveryService:
             # or by consent: this is the record-of-notice channel, so a member
             # cannot opt out of being told. Channel preferences still govern
             # SMS and the in-app inbox.
-            to_emails = [u.email for u in recipients if u.email]
-            if not to_emails:
+            email_recipients = [u for u in recipients if u.email]
+            if not email_recipients:
                 return
 
             from app.core.security import is_rate_limited
@@ -208,13 +250,22 @@ class MessageDeliveryService:
                 header_color=header_color,
             )
             email_svc = EmailService(organization=org)
-            await email_svc.send_email(
-                to_emails=to_emails,
-                subject=subject,
-                html_body=html_body,
-                db=self.db,
-                template_type=MESSAGE_CATEGORY,
-            )
+            for user in email_recipients:
+                attempt = await self._claim_delivery(message, user, "email")
+                if attempt is None:
+                    continue
+                try:
+                    await email_svc.send_email(
+                        to_emails=[user.email],
+                        subject=subject,
+                        html_body=html_body,
+                        db=self.db,
+                        template_type=MESSAGE_CATEGORY,
+                    )
+                    await self._finish_delivery(attempt)
+                except Exception as exc:
+                    await self._finish_delivery(attempt, exc)
+                    logger.warning("Department message email send failed: {}", exc)
         except Exception as e:  # pragma: no cover - defensive
             logger.warning("Department message email escalation failed: {}", e)
 
@@ -263,7 +314,22 @@ class MessageDeliveryService:
 
             from app.services.sms_service import SMSService
 
-            await SMSService().send_bulk_sms(numbers, body)
+            sms = SMSService()
+            users_by_number = {
+                (getattr(user, "mobile", None) or getattr(user, "phone", None)): user
+                for user in recipients
+            }
+            for number in numbers:
+                user = users_by_number[number]
+                attempt = await self._claim_delivery(message, user, "sms")
+                if attempt is None:
+                    continue
+                try:
+                    await sms.send_bulk_sms([number], body)
+                    await self._finish_delivery(attempt)
+                except Exception as exc:
+                    await self._finish_delivery(attempt, exc)
+                    logger.warning("Department message SMS send failed: {}", exc)
         except Exception as e:  # pragma: no cover - defensive
             logger.warning("Department message SMS escalation failed: {}", e)
 
