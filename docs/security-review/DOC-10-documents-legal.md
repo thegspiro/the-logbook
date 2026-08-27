@@ -1,12 +1,92 @@
 # Security Review — Documents & Legal
 
-**Prefix:** `DOC` · **Iteration:** 10 · **Reviewed:** 2026-08-26 · **PR:** #1821 (original), fixes landed in #1826 (follow-up, survivor of a two-PR consolidation with #1827 — see revision notes)
+**Prefix:** `DOC` · **Iteration:** 10 · **Reviewed:** 2026-08-26 (pass 1), 2026-08-27 (pass 2) · **PR:** #1821 (original), fixes landed in #1826 (pass 1 follow-up), (this PR) (pass 2)
+
+---
+
+## Pass 2 (2026-08-27)
+
+Scoped to the **full domain** since pass 1's final merge commit (`6ab8b31e`,
+PR #1826): every backend file pass 1 declared, every migration since
+(content-grepped for `document_folders`/`legal_document_revisions`/
+`documents`/`legal_documents`, not filename), and a `git diff --stat`
+against `frontend/src/` broadly — every file that changed since pass 1,
+content-grepped for `legalDocument`/`documentFolder`/`DocumentsPage`/
+`station.?document`/`printDocument`, not just the declared frontend
+files or a directory glob.
+
+**One real finding, in a file pass 1 itself flagged as out of this
+feature's scope.** `documents_service.py` (+30/-1 since pass 1) gained a
+partial fix for the exact Pitfall #27 race pass 1's own Scope section
+predicted ("out of this feature's scope, and out of the rotation until
+those features are reached") for `ensure_apparatus_folder`/
+`ensure_facility_folder`/`ensure_event_folder` — landed via PR #1836
+(feature 12, Facilities, not yet reached in this rotation's own row order)
+rather than by this rotation. It locks the `Organization` row in
+`ensure_facility_folder` before the get-or-create, closing the "two
+concurrent first-accesses both see no folder and both insert one" race —
+**but not completely**. The caller, `GET /facilities/{id}/folders`
+(`facilities.py:3680-3690`), reads the `Facility` row via
+`FacilitiesService.get_facility` — a plain `SELECT` — _before_
+`ensure_facility_folder` ever runs. Under this app's default InnoDB
+REPEATABLE READ, that earlier read establishes the transaction's
+consistent-read snapshot before the organization lock is even acquired.
+The two existence checks after the lock (`facilities_root`,
+`facility_folder`) were plain `SELECT`s, not locking reads, so they could
+still answer from that earlier snapshot — the exact second-half failure
+CLAUDE.md's own Pitfall #27 demonstrates with a two-transaction trace
+("T2 reads (snapshot taken); T1 locks parent, inserts, commits; T2 locks
+parent -> plain read: stale"). Two concurrent first-time visits to the same
+facility's folder tab could each acquire the org lock in turn, each still
+see "no facility folder yet," and each create a duplicate folder tree.
+
+**Fixed** by adding `.with_for_update()` to both existence-check `SELECT`s
+in `ensure_facility_folder` (`documents_service.py`), so all three reads —
+organization, facilities-root, facility-folder — are locking reads and
+each sees latest-committed data. `get_facility_sub_folders` (the read-only
+path, called after the creating transaction has already committed) did not
+need the same treatment — its own `.limit(1)` fallback is legitimately
+about tolerating a pre-existing duplicate row, not about racing this
+method. `ensure_apparatus_folder`/`ensure_event_folder` remain fully
+unlocked, unchanged since pass 1, and still out of scope for this feature
+per pass 1's own reasoning — noted here only because the facility sibling
+now demonstrates the fix those two will eventually need is not just "add a
+lock," but "lock the parent and make the existence checks locking reads
+too."
+
+Extended the existing `TestFolderCreationIsLocked` class in
+`tests/test_facilities_folders.py` (added by PR #1836's own Codex review)
+with `test_ensure_facility_folder_also_locks_both_existence_checks`,
+asserting at least 3 `with_for_update()` calls in the method's source — the
+existing single-assertion test (`"with_for_update()" in source`) passed
+both before and after this fix and gave no signal distinguishing "org
+locked" from "org locked and existence checks locked." Confirmed to fail
+against the pre-fix code via `git stash`.
+
+No changes to any other declared backend file. The one migration
+content-grep hit (`20260826_0345_b3e8d1f45a27_grant_corporate_storefront_access.py`)
+is a false positive — `documents.manage`/`documents.view` permission-string
+matches in an unrelated, already-reviewed storefront-grant-backfill
+migration, not a schema change to any document/legal table. No frontend
+changes: the four files the broad content-grep flagged
+(`SideNavigation.tsx`, `TopNavigation.tsx`, `api.ts`, `eventServices.ts`)
+all matched on the word "document" appearing generically in the full file
+(not in the diff itself) or on an unrelated import line added nearby
+(`FACILITY_ENTRY_PERMISSIONS`) — confirmed by diffing each file directly.
+
+Completion gate: flake8/black/isort clean on both changed files;
+`test_documents_access.py` + `test_legal_documents.py` +
+`test_print_documents.py` + `test_changelog_fixes.py` +
+`test_public_legal.py` + `test_facilities_folders.py` — 182 passed; full
+backend suite run for regressions. Rotation row 10 -> done.
+
+---
+
+## Pass 1 (2026-08-26)
 
 **Backend:** `endpoints/documents.py` (462 L, 11 routes), `services/documents_service.py` (998 L), `endpoints/station_documents.py` (102 L, 2 routes, new to this rotation), `services/print_document_service.py` (515 L, new), `endpoints/legal_documents.py` (340 L, 6 routes, new), `services/legal_service.py` (241 L, new), `schemas/legal.py`, `schemas/documents.py`, `models/document.py`, `models/legal.py`
 **Frontend:** `pages/legal/LegalPage.tsx` (public consumption path, read for XSS — see Verified good), `modules/governance/pages/LegalDocumentsPage.tsx` (not read in full — backend-only pass)
 **Migrations:** `20260820_0135_06adc68a8b84_add_legal_document_revisions.py` — reviewed, sound
-
----
 
 **Revision note (2026-08-25):** This file originally concluded "no new
 findings." An 11-comment Codex review of the draft PR found that conclusion

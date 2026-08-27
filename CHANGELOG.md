@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Two people opening a facility's file tab for the first time at the same moment could get duplicate folders (2026-08-27)
+
+**Fixed**
+
+- The first time anyone opened a facility's Files tab, the app created that
+  facility's folder structure automatically. If two people did this within
+  the same moment (e.g. two officers opening the same new facility right
+  after it was added), both could end up creating a duplicate set of
+  folders instead of sharing one. This is now prevented.
+
 ### Transferring a prospect to full membership could grant more access than the transferring member had, and a double-click could create two accounts for one prospect (2026-08-27)
 
 **Fixed**

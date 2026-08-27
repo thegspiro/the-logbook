@@ -16,10 +16,32 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-None. Feature 09 (medical screening, PHI, pass 2) fully merged as
-[PR #1952](https://github.com/thegspiro/the-logbook/pull/1952) — see log
-entry below. Confirmed on `origin/main` by ancestry check. Next: 10
-documents & legal, pass 2.
+None. Feature 10 (documents & legal, pass 2) reviewed — 1 real finding,
+fixed. Next: 11 inventory, pass 2.
+
+---
+
+### 2026-08-27 — Feature 10 (Documents & legal), pass 2 — 1 real finding, fixed
+
+Scoped to the full domain since pass 1's final merge (`6ab8b31e`, PR
+#1826). Zero changes to any endpoint/schema/model file; one real change in
+`documents_service.py` (+30/-1), landed via a Facilities PR (#1836, feature
+12, not yet reached in this rotation) rather than by this rotation: a
+partial fix for the exact Pitfall #27 race pass 1 had predicted for the
+apparatus/facility/event folder-provisioning helpers. It locked the
+`Organization` row in `ensure_facility_folder` but left the two existence
+checks after it as plain reads — insufficient per Pitfall #27's own second
+half, since the caller (`GET /facilities/{id}/folders`) already reads the
+`Facility` row first, establishing the REPEATABLE READ snapshot before the
+lock is acquired. Two concurrent first-time visits to the same facility's
+folder tab could each still see "no folder yet" and each create a
+duplicate folder tree. Fixed by making both existence checks locking reads
+too; extended the existing (too-weak) guard test to actually distinguish
+"org locked" from "org and existence checks locked," confirmed to fail
+pre-fix via `git stash`. No migrations touch document/legal tables since
+pass 1; no frontend changes (broad content-grep hits were all incidental).
+Full detail in `DOC-10-documents-legal.md`. Rotation row 10 -> done. Next:
+11 inventory.
 
 ---
 
@@ -1285,8 +1307,8 @@ each row's prior PR is recorded in the Log, not repeated here.
 | 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ✅     |
 | 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ✅     |
 | 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ✅     |
-| 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | 🔄     |
-| 11  | Inventory                 | INV    | `endpoints/inventory.py` (6539 L), `inventory_service.py`                                                                                       | ⬜     |
+| 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ✅     |
+| 11  | Inventory                 | INV    | `endpoints/inventory.py` (6539 L), `inventory_service.py`                                                                                       | 🔄     |
 | 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ⬜     |
 | 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | ⬜     |
 | 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | ⬜     |
