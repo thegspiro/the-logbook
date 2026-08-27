@@ -16,13 +16,86 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-None. Feature 34 (frontend shared) merged — see log entry below. Every
-feature 00–34 is now ✅: this is a full-pass completion. Rows reset to ⬜
-below for the next pass; the next iteration starts at 00 (cross-cutting
-baseline), re-running the whole-codebase sweeps against whatever has landed
-since the last pass.
+Feature 01 (auth & session lifecycle, pass 2) — [PR #1929](https://github.com/thegspiro/the-logbook/pull/1929),
+branch `claude/security-review-auth-01-pass2`. No findings, no code changes
+(docs only). See log entry below and `AUTH-01-auth-session.md`'s "Pass 2"
+section.
 
 ---
+
+### 2026-08-27 — Feature 01 (Auth & session lifecycle), pass 2
+
+`auth.py`/`auth_service.py`/`mfa_service.py`/`oauth_service.py` are
+byte-identical to PR #1804's merge commit — zero changes since pass 1.
+AUTH-1's fix and its guard test re-verified intact. The only in-scope growth
+is `consent_service.py` (84 L → 211 L), entirely a new "Photo Use Consent"
+feature (new `roster()` method, `GET /users/consents/photo-use` endpoint, a
+new `users.view_consents` permission, a frontend page) — read in full against
+all seven checklist dimensions since none of it existed at pass 1. Backend
+found already built to this checklist's standard: org-scoped roster query
+with a belt-and-suspenders join filter, a narrow new permission chosen
+specifically to avoid the XC-2 broad-grant pattern (documented in the
+endpoint's own comment), contact fields deliberately excluded from the
+response, and the seeded-grant migration follows Pitfalls #23 and #26 exactly
+(frozen prior-defaults snapshot, `is_system` scoping, `positions`-table
+existence guard, symmetric downgrade).
+
+**Update:** Codex reviewed PR #1929 and found two real gaps in the initial
+"no findings" pass. **AUTH-3 (LOW, fixed):** `PhotoUseConsentPage.tsx` had no
+stale-response guard on its roster fetch — toggling "include inactive" twice
+quickly could let an older response overwrite a newer one. Fixed with the
+codebase's standard `cancelled`-flag `useEffect` idiom; added a regression
+test verified to fail against the pre-fix component. **AUTH-4
+(informational, flagged not fixed):** `ConsentService.roster()` has no
+`LIMIT`/pagination — but grepping `select(User` found 255+ other call sites
+with the identical unbounded shape, so this is the application's existing,
+consistent scale assumption (a department's membership, not an unbounded
+table), not a defect unique to the new code; fixing one of 255 sites would be
+arbitrary. Both replied to on the PR; AUTH-3's thread resolved, AUTH-4's left
+open pending the owner's view on whether an app-wide pagination pass is
+wanted.
+
+Completion gate (after AUTH-3): flake8/black/isort clean,
+`validate_migrations.py --strict` passed, 70/70 scoped backend tests
+(oauth/auth_service/mfa/consent) pass, `tsc --noEmit` 0 errors, `eslint .` 0
+errors (1 file touched, 0 warnings), `PhotoUseConsentPage.test.tsx` 7/7 passed
+(1 new). Full detail in `AUTH-01-auth-session.md`. Next: 02 permissions &
+roles, once this PR merges.
+
+### 2026-08-27 — Feature 00 (Cross-cutting baseline), pass 2 ✅ merged — PR #1924
+
+Merged. Codex's file-list gap (missed `public_portal_admin.py`) was caught
+before merge, fixed, replied to, and resolved — see the "Update" note below.
+Rotation row 00 -> done for pass 2. Next: 01 auth & session lifecycle.
+
+### 2026-08-27 — Feature 00 (Cross-cutting baseline), pass 2 — no findings
+
+Re-ran all five pass-1 sweeps (formula-injection exports, `SET NULL`
+nullability, proxy-IP attribution, Alembic chain integrity, LIKE-wildcard
+escaping) plus the route-auth-coverage AST walk against current `main`
+(381 Alembic revisions, up from 355; one new file in `api/`,
+`prospect_privacy.py`, which is a `Depends()` helper module with no routes of
+its own). All five sweeps clean; the two pass-1 guard tests
+(`test_like_escaping.py`, `test_set_null_fks_are_nullable`) both pass with no
+edits needed. Route auth coverage: 68 unauthenticated routes (pass 1: 69),
+all still confined to the same five already-accounted-for features (auth,
+event_requests public routes, elections token routes, onboarding bootstrap,
+`api/public/*`) — no new ungated route. No findings, no code changes.
+Completion gate: flake8/black/isort clean, `validate_migrations.py --strict`
+passed, guard tests pass, `tsc --noEmit` 0 errors, `eslint .` 0 errors (10
+pre-existing warnings); full backend suite 9036 passed, 22 skipped
+(pre-existing), 0 failed. Full detail in `SEC-00-cross-cutting-baseline.md`.
+
+**Update:** Codex reviewed PR #1924 and found the route-auth-coverage walk's
+file list (`endpoints/*.py` glob) was narrower than pass 1's actual scope and
+missed `app/api/v1/public_portal_admin.py` — a router mounted directly in
+`api.py` outside the `endpoints/` package, 13 routes. Re-scanned with the file
+list derived from `api.py`'s router registrations instead of a directory
+glob: 1526 routes total (up from 1513), same 68 ungated, all 13
+`public_portal_admin.py` routes already `Depends(get_current_user)`-gated —
+conclusion unchanged, denominator corrected. Replied and resolved.
+
+Next: 01 auth & session lifecycle, once this PR merges.
 
 ### 2026-08-27 — Rotation pass complete; reset for pass 2
 
@@ -696,8 +769,8 @@ each row's prior PR is recorded in the Log, not repeated here.
 
 | #   | Feature                   | Prefix | Principal code                                                                                                                                  | Status |
 | --- | ------------------------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
-| 00  | Cross-cutting baseline    | SEC    | whole-codebase sweeps; see `SEC-00-cross-cutting-baseline.md`                                                                                   | ⬜     |
-| 01  | Auth & session lifecycle  | AUTH   | `endpoints/auth.py`, `auth_service.py`, `mfa_service.py`, `oauth_service.py`                                                                    | ⬜     |
+| 00  | Cross-cutting baseline    | SEC    | whole-codebase sweeps; see `SEC-00-cross-cutting-baseline.md`                                                                                   | ✅     |
+| 01  | Auth & session lifecycle  | AUTH   | `endpoints/auth.py`, `auth_service.py`, `mfa_service.py`, `oauth_service.py`                                                                    | ⏳     |
 | 02  | Permissions & roles       | PERM   | `dependencies.py`, `core/permissions.py`, `roles.py`, `operational_ranks.py`, `officers.py`, `org_chart.py`                                     | ⬜     |
 | 03  | Public surface & webhooks | PUB    | `api/public/*` (20 unauth routes), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`                                      | ⬜     |
 | 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                              | ⬜     |
