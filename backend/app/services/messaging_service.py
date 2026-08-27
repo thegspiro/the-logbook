@@ -25,6 +25,28 @@ from app.models.user import Role, User, UserStatus
 from app.utils.sql_search import LIKE_ESCAPE_CHAR, like_pattern
 
 
+def _as_utc(value: Optional[datetime]) -> Optional[datetime]:
+    """Return a timezone-aware UTC datetime, treating naive values as UTC."""
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
+
+
+def _validate_expiry(
+    expires_at: Optional[datetime], scheduled_at: Optional[datetime], now: datetime
+) -> None:
+    """Validate an expiry against the message's effective publication time."""
+    if expires_at is None:
+        return
+    if scheduled_at is not None:
+        if expires_at <= scheduled_at:
+            raise ValueError("expires_at must be later than scheduled_at")
+    elif expires_at <= now:
+        raise ValueError("expires_at must be in the future for a published message")
+
+
 class MessagingService:
     """Service for department internal messaging"""
 
@@ -70,9 +92,12 @@ class MessagingService:
                 target_type, target_roles, target_statuses, target_member_ids
             )
             now = datetime.now(timezone.utc)
+            scheduled_at = _as_utc(scheduled_at)
+            expires_at = _as_utc(expires_at)
             effective_scheduled = (
                 scheduled_at if (scheduled_at and scheduled_at > now) else None
             )
+            _validate_expiry(expires_at, effective_scheduled, now)
             message = DepartmentMessage(
                 id=generate_uuid(),
                 organization_id=organization_id,
@@ -190,14 +215,15 @@ class MessagingService:
             if not message:
                 return None, "Message not found"
 
+            now = datetime.now(timezone.utc)
+            if "scheduled_at" in updates:
+                updates["scheduled_at"] = _as_utc(updates["scheduled_at"])
+            if "expires_at" in updates:
+                updates["expires_at"] = _as_utc(updates["expires_at"])
+
             new_sched = updates.get("scheduled_at")
             if new_sched is not None and message.scheduled_at is None:
-                cmp = (
-                    new_sched
-                    if new_sched.tzinfo is not None
-                    else new_sched.replace(tzinfo=timezone.utc)
-                )
-                if cmp > datetime.now(timezone.utc):
+                if new_sched > now:
                     return (
                         None,
                         "Cannot reschedule a message that has already been "
@@ -210,6 +236,19 @@ class MessagingService:
                 # create_message does, so this is a no-op rather than a
                 # re-trigger.
                 updates["scheduled_at"] = None
+
+            effective_schedule = (
+                updates.get("scheduled_at")
+                if "scheduled_at" in updates
+                else _as_utc(message.scheduled_at)
+            )
+            effective_expiry = (
+                updates.get("expires_at")
+                if "expires_at" in updates
+                else _as_utc(getattr(message, "expires_at", None))
+            )
+            if {"expires_at", "scheduled_at"}.intersection(updates):
+                _validate_expiry(effective_expiry, effective_schedule, now)
 
             audience_fields = {
                 "target_type",
