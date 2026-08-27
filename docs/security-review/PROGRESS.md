@@ -16,11 +16,24 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-Feature 06 (elections & ballots, pass 2) — pushing a fix for 3 real Codex
-findings to the still-open PR #1948. Next after merge: 07 users &
-organizations, pass 2.
+None. Feature 06 (elections & ballots, pass 2) fully merged as
+[PR #1948](https://github.com/thegspiro/the-logbook/pull/1948) — see log
+entry below. Confirmed on `origin/main` by ancestry check. Next: 07 users
+& organizations, pass 2.
 
 ---
+
+### 2026-08-27 — Feature 06 (Elections & ballots), pass 2 ✅ merged — PR #1948
+
+Merged, with the 3-bug fix commit included (pushed directly to the
+still-open PR ahead of auto-merge). Confirmed on `origin/main` by
+ancestry check. Final tally: 3 real findings (quorum staleness via a
+missing `populate_existing`, a module gate blocking public ballot routes
+on a stale session cookie, a mislabeled ballot-builder option), all
+fixed, across two Codex review rounds — plus one scoping-methodology
+repeat: the pass's own frontend check was scoped to `modules/elections/`
+and missed `BallotBuilder.tsx`, which lives outside it. Rotation row 06
+-> done. Next: 07 users & organizations.
 
 ### 2026-08-27 — Feature 06 (Elections & ballots), pass 2 — Codex caught 3 real bugs across 2 rounds, all fixed
 
@@ -1120,8 +1133,8 @@ each row's prior PR is recorded in the Log, not repeated here.
 | 03  | Public surface & webhooks | PUB    | `api/public/*` (20 unauth routes), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`                                      | ✅     |
 | 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                              | ✅     |
 | 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                     | ✅     |
-| 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | ⏳     |
-| 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ⬜     |
+| 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | ✅     |
+| 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | 🔄     |
 | 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ⬜     |
 | 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ⬜     |
 | 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ⬜     |
