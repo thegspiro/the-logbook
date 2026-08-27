@@ -16,8 +16,7 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-None — PR #1908 (feature 26, forms) merged. Feature 27 (integrations)
-starting next.
+PR #1909 (feature 27, integrations) — open, awaiting CI/review.
 
 ---
 
@@ -72,7 +71,7 @@ data-carrying modules, then the supporting infrastructure.
 | 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ✅              |
 | 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ✅              |
 | 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                         | ✅              |
-| 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                         | ⬜              |
+| 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                         | ⏳              |
 | 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`                                                                    | ⬜              |
 | 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                              | ⬜              |
 | 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (24 unauth bootstrap routes)                                                                                             | ⬜              |
@@ -1040,3 +1039,25 @@ re-runs the whole-codebase sweeps against whatever has landed since.
   was over its usage limit for security reviews (no review produced, same
   as a few earlier PRs this rotation); CI ran clean on the first push, no
   review threads to resolve. Next: 27 integrations.
+- **27 Integrations** — the deepest prior coverage of any feature reviewed
+  so far in this rotation (module audit iteration 12, INT-1 through INT-5,
+  plus a 4-pass app-review whose last two passes already concluded "no code
+  change — the module is mature"). Read `integrations.py`, `salesforce_sync.py`,
+  and all three Salesforce backing services directly in full (~2,850 L
+  combined). Re-verified INT-1 through INT-5 all hold. Growth since the
+  last full read was almost entirely new "coming soon" catalog entries
+  (Active911, Google Maps, Zapier, WhatsApp, ImageTrend, ESO Solutions,
+  NREMT, FirstWatch, PulsePoint) plus two genuinely new pieces of logic,
+  both reviewed clean: `_secrets_to_clear_for_base_url_change` (a stored
+  Documenso/Cal.com credential can't silently follow an `api_base_url`
+  change to a new endpoint without being re-entered or explicitly cleared)
+  and `clear_salesforce_refresh_token` (an explicit blank refresh token
+  correctly switches Salesforce from interactive OAuth to client-credentials
+  and clears the cached access token alongside it). Re-traced every dynamic
+  SOQL construction site — all still route through the established
+  `_soql_quote`/`_soql_identifier` helpers, no new site introduced. No new
+  findings; no code change this iteration. Full local completion gate
+  green: existing 112/112 integrations+salesforce-scoped tests pass, no
+  migration needed. Findings doc: `docs/security-review/INT-27-integrations.md`.
+  PR #1909 opened and subscribed. Next: 28 security, audit & IP, once
+  #1909 merges.
