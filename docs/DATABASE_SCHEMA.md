@@ -6237,7 +6237,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 **OnboardingSessionModel** · `app/models/onboarding.py`
 
-> Server-side onboarding session storage SECURITY: Stores sensitive onboarding data encrypted server-side instead of in browser sessionStorage. This prevents passwords, API keys, and secrets from being exposed in the browser. Session data includes: - Department configuration - Email/authentication settings (encrypted) - File storage configuration (encrypted) - Admin user credentials (encrypted) - IT team information Sessions expire after 2 hours of inactivity.
+> Server-side onboarding session storage SECURITY: Stores sensitive onboarding data encrypted server-side instead of in browser sessionStorage. This prevents passwords, API keys, and secrets from being exposed in the browser. Session data includes: - Department configuration - Email/authentication settings (encrypted) - File storage configuration (encrypted) - Admin user credentials (encrypted) - IT team information Sessions expire after 30 minutes of inactivity (see SESSION_EXPIRY_HOURS in api/v1/onboarding.py); each validated call slides the expiry forward.
 
 | Column | Type | Null | Key | Default | References |
 |---|---|---|---|---|---|
