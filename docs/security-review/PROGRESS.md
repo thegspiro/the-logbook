@@ -16,8 +16,7 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-PR #1915 (feature 31, scheduled tasks) — open, responding to a Codex review
-round (5 findings, all fixed; replying to/resolving threads next).
+None — PR #1915 merged. Feature 32 (locations & kiosk) starting next.
 
 ---
 
@@ -354,8 +353,16 @@ on every touched file. Full suite: 8938 passed, 38 failed, 22 skipped — the
 identically with this round's diff stashed out, confirmed pre-existing and
 unrelated.
 
-Next: reply to and resolve the 5 Codex threads on #1915, then merge and move
-to 32 locations & kiosk.
+All 5 Codex threads replied to and resolved. CI green (16/16 checks),
+`mergeable_state: clean`, no Claude Approvals check configured on this repo.
+
+### 2026-08-27 — Feature 31 (Scheduled tasks) merged — PR #1915
+
+Merged (squash, `c19ecc0f`). Registry sync, CRON-1/CRON-2/CRON-5/CRON-6
+invariants, and the Codex-caught MissingGreenlet class of bug are all
+resolved on `main`. Rotation row 31 -> done.
+
+Next: 32 locations & kiosk.
 
 Next: 32 locations & kiosk, once #1915 merges.
 
@@ -416,7 +423,7 @@ data-carrying modules, then the supporting infrastructure.
 | 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`                                                                    | ✅              |
 | 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                              | ✅              |
 | 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (24 unauth bootstrap routes)                                                                                             | ✅              |
-| 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                   | ⏳              |
+| 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                   | ✅              |
 | 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                  | ⬜              |
 | 33  | Core infrastructure       | CORE   | `core/security_middleware.py`, `core/middleware.py`, `core/database.py`, `core/config.py`                                                       | ⬜              |
 | 34  | Frontend shared           | FE     | `utils/apiCache.ts`, module axios instances, `ProtectedRoute`, global stores                                                                    | ⬜              |
