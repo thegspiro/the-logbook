@@ -69,6 +69,40 @@ def test_every_facilities_route_is_permission_gated():
     assert not ungated, f"Routes without a permission check: {ungated}"
 
 
+def test_delete_permission_is_granular_across_every_destructive_route():
+    """DELETE and facility archive accept the dedicated grant; no other
+    mutation may accidentally inherit destructive authority."""
+    destructive = []
+    unexpected = []
+    for route in _api_routes():
+        accepts_delete = any(
+            "facilities.delete" in permissions
+            for permissions in _permission_sets(route)
+        )
+        is_destructive = route.methods == {"DELETE"} or (
+            route.methods == {"POST"} and route.path == "/{facility_id}/archive"
+        )
+        if is_destructive:
+            destructive.append(f"{sorted(route.methods)} {route.path}")
+            assert accepts_delete, (
+                f"Destructive route missing facilities.delete: {route.path}"
+            )
+            assert any(
+                {"facilities.delete", "facilities.manage"} <= permissions
+                for permissions in _permission_sets(route)
+            ), f"Destructive route must retain manager access: {route.path}"
+        elif accepts_delete:
+            unexpected.append(f"{sorted(route.methods)} {route.path}")
+
+    assert len(destructive) == 20, (
+        f"Expected all 19 DELETE routes plus archive, found {destructive}"
+    )
+    assert not unexpected, (
+        "facilities.delete must grant destructive operations only, found on: "
+        f"{unexpected}"
+    )
+
+
 def test_sensitive_families_are_not_readable_with_facilities_view():
     leaky = []
     sensitive_routes = 0
@@ -106,12 +140,12 @@ def test_view_sensitive_grants_sensitive_reads_but_never_writes():
             # Any non-GET route, and any GET outside the sensitive families,
             # has no business accepting the read-only sensitive grant.
             writable.append(f"{sorted(route.methods)} {route.path}")
-    assert (
-        not missing_read
-    ), f"Sensitive GETs missing facilities.view_sensitive: {missing_read}"
-    assert (
-        not writable
-    ), f"facilities.view_sensitive must stay read-only, found on: {writable}"
+    assert not missing_read, (
+        f"Sensitive GETs missing facilities.view_sensitive: {missing_read}"
+    )
+    assert not writable, (
+        f"facilities.view_sensitive must stay read-only, found on: {writable}"
+    )
 
 
 def test_default_positions_grant_sensitive_read_only_to_org_wide_roles():
