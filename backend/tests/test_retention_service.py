@@ -248,3 +248,77 @@ class TestRetentionEnforcement:
 
         assert await _count_messages(db_session, org) == 1
         assert result["deleted"] == {}
+
+
+class TestRetentionEnforcementIsolationAndAudit:
+    """CRON2-31-7: retention deletes are audit-logged, and one org's failure
+    during enforcement cannot lose another org's already-processed
+    deletions — unlike before, orgs were not isolated at all."""
+
+    async def test_deletion_is_audit_logged(self, db_session):
+        from app.models.audit import AuditLog
+
+        org = await _make_org(db_session, retention={"message_history": 30})
+        await _make_message(db_session, org, age_days=60)
+
+        await RetentionService(db_session).enforce()
+
+        log = (
+            await db_session.execute(
+                select(AuditLog)
+                .where(AuditLog.event_type == "retention_enforcement")
+                .where(AuditLog.organization_id == org.id)
+            )
+        ).scalar_one_or_none()
+        assert log is not None
+        assert log.event_data["deleted"] == {"message_history": 1}
+
+    async def test_no_deletions_means_no_audit_event(self, db_session):
+        from app.models.audit import AuditLog
+
+        org = await _make_org(db_session)
+        await _make_message(db_session, org, age_days=5)  # nowhere near expiry
+
+        await RetentionService(db_session).enforce()
+
+        log = (
+            await db_session.execute(
+                select(AuditLog)
+                .where(AuditLog.event_type == "retention_enforcement")
+                .where(AuditLog.organization_id == org.id)
+            )
+        ).scalar_one_or_none()
+        assert log is None
+
+    async def test_one_orgs_failure_does_not_lose_an_earlier_orgs_deletions(
+        self, db_session, monkeypatch
+    ):
+        """Orgs share one session with no per-org isolation before this fix —
+        a later org's failure would silently discard every earlier org's
+        already-deleted rows when the caller's eventual rollback fired."""
+        org_a = await _make_org(db_session, retention={"message_history": 30})
+        org_b = await _make_org(db_session, retention={"message_history": 30})
+        await _make_message(db_session, org_a, age_days=60)
+        await _make_message(db_session, org_b, age_days=60)
+        await db_session.flush()
+
+        service = RetentionService(db_session)
+        real_delete_expired = service._delete_expired
+
+        async def fail_for_org_b(
+            model, timestamp_attr, cutoff, org_id, row_filter=None
+        ):
+            if str(org_id) == str(org_b.id):
+                raise RuntimeError("simulated failure for the second org")
+            return await real_delete_expired(
+                model, timestamp_attr, cutoff, org_id, row_filter
+            )
+
+        monkeypatch.setattr(service, "_delete_expired", fail_for_org_b)
+
+        result = await service.enforce()
+
+        assert result["errors"], "expected the second org's failure to be recorded"
+        # org_a's deletion must have survived — it was committed before
+        # org_b's failure, not discarded by it.
+        assert await _count_messages(db_session, org_a) == 0

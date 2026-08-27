@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Several background tasks could silently skip work, re-send old messages, or stop partway through (2026-08-27)
+
+**Fixed**
+
+- A cancelled shift still generated a "please review the attendance
+  records" email to its officer, because the check that finds
+  ended-shifts-to-review never excluded cancelled ones.
+- Some shift and end-of-shift reminders could be permanently silenced if
+  the shift had no crew, apparatus, or checklist assigned yet at the
+  moment the reminder task ran — even after one was assigned later, the
+  reminder never went out.
+- End-of-shift checklist reminders were still sent to members who had
+  since been deactivated.
+- A single failing item partway through a batch of inventory
+  notifications or scheduled emails could cause every later item in that
+  batch to fail for an unrelated reason, and in the worst case could
+  cause already-sent emails to be re-sent on the next run.
+- Nightly cleanup of expired records (old messages, error logs, form
+  submissions, etc.) had no error isolation between organizations, so one
+  organization's failure could abort the run for every organization
+  after it, and successful deletions were not recorded anywhere.
+- A background sync task could keep contacting whatever address was
+  configured for a connected Salesforce integration without re-validating
+  it, once a connection had already been established.
+- Three background tasks (compliance reports, external training sync,
+  Salesforce sync) and the officer-directory sync task did not correctly
+  skip organizations marked inactive, unlike every comparable task in the
+  same file.
+
 ### First-time setup had a few unbounded requests and inconsistent safeguards (2026-08-27)
 
 **Fixed**

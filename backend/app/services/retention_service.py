@@ -30,6 +30,7 @@ from loguru import logger
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.audit import log_audit_event
 from app.core.config import settings
 from app.models.email_template import MessageHistory
 from app.models.error_log import ErrorLog
@@ -257,30 +258,64 @@ class RetentionService:
         instead of its original hardcoded 90 days.
         """
         now = datetime.now(UTC)
-        results: dict[str, Any] = {"orgs_processed": 0, "deleted": {}}
+        results: dict[str, Any] = {"orgs_processed": 0, "deleted": {}, "errors": []}
 
+        # Deliberately not filtered on Organization.active: retention exists
+        # to keep PII-bearing operational records from piling up
+        # indefinitely, and a decommissioned department's stale records are
+        # the case this most needs to run against, not an exception to it.
         orgs = (await self.db.execute(select(Organization))).scalars().all()
         for org in orgs:
-            config = self._org_config(org)
-            for rc in RECORD_CLASSES:
-                if only_class is not None and rc.key != only_class:
-                    continue
-                days = self._effective_days(config, rc)
-                if days is None:
-                    continue
-                # Defense in depth: a floor also applies at enforcement
-                # time, in case settings were edited outside the API.
-                deleted = await self._delete_expired(
-                    rc.model,
-                    rc.timestamp_attr,
-                    now - timedelta(days=days),
-                    org.id,
-                    rc.row_filter,
-                )
-                if deleted:
-                    key = f"{org.id}:{rc.key}"
-                    results["deleted"][key] = deleted
-            results["orgs_processed"] += 1
+            try:
+                config = self._org_config(org)
+                org_deleted: dict[str, int] = {}
+                for rc in RECORD_CLASSES:
+                    if only_class is not None and rc.key != only_class:
+                        continue
+                    days = self._effective_days(config, rc)
+                    if days is None:
+                        continue
+                    # Defense in depth: a floor also applies at enforcement
+                    # time, in case settings were edited outside the API.
+                    deleted = await self._delete_expired(
+                        rc.model,
+                        rc.timestamp_attr,
+                        now - timedelta(days=days),
+                        org.id,
+                        rc.row_filter,
+                    )
+                    if deleted:
+                        org_deleted[rc.key] = deleted
+                if org_deleted:
+                    results["deleted"].update(
+                        {f"{org.id}:{k}": v for k, v in org_deleted.items()}
+                    )
+                    await log_audit_event(
+                        db=self.db,
+                        event_type="retention_enforcement",
+                        event_category="security",
+                        severity="info",
+                        event_data={"deleted": org_deleted},
+                        organization_id=str(org.id),
+                    )
+                results["orgs_processed"] += 1
+                # Commit this org's deletions (and its audit event, via the
+                # nested savepoint log_audit_event uses) before moving to the
+                # next. Orgs share one session with no per-org isolation
+                # here — unlike every multi-org loop elsewhere in the
+                # scheduled-tasks file — so one org's failed delete/flush
+                # would otherwise poison the session for every org after it
+                # (CRON2-31-7), and a failure anywhere in the run would
+                # discard every earlier org's deletions when the outer
+                # caller's eventual rollback fires.
+                await self.db.commit()
+            except Exception as e:
+                logger.error(f"Retention enforcement failed for org {org.id}: {e}")
+                results["errors"].append({"org_id": str(org.id), "error": str(e)})
+                try:
+                    await self.db.rollback()
+                except Exception:
+                    pass
 
         # Platform-level: blocked access attempts carry IP/user-agent PII
         # and have no org column. Env-configured, 0/None disables.

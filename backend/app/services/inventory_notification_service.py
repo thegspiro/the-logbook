@@ -163,6 +163,7 @@ class InventoryNotificationService:
                         rec.processed = True
                         rec.processed_at = datetime.now(timezone.utc)
                     records_processed += len(member_records)
+                    await self.db.commit()
                     continue
 
                 # Load user + org for email
@@ -177,6 +178,7 @@ class InventoryNotificationService:
                         rec.processed = True
                         rec.processed_at = datetime.now(timezone.utc)
                     records_processed += len(member_records)
+                    await self.db.commit()
                     continue
 
                 # Build email content. Retirements get their own bucket so a
@@ -264,13 +266,22 @@ class InventoryNotificationService:
                             "will retry on next run"
                         )
 
+                # Commit this member's unit of work before moving to the next.
+                # Members share one session (grouped by org/member, not
+                # per-org), so leaving this batched until a single trailing
+                # commit meant a later member's failure could roll back every
+                # earlier member's already-processed records too (CRON2-31-1).
+                await self.db.commit()
+
             except Exception as e:
                 logger.error(
                     f"Failed to process inventory notifications for user {member_id}: {e}"
                 )
-                # Records stay unprocessed and will be retried on next scheduled run
-
-        await self.db.commit()
+                # Roll back this member's failed unit of work. Since every
+                # earlier member's work was already committed above, this
+                # only discards the current, failed unit — it cannot poison
+                # or lose any other member's processed records.
+                await self.db.rollback()
 
         logger.info(
             f"Inventory notifications: {emails_sent} emails sent, {records_processed} records processed"
