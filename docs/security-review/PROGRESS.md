@@ -16,9 +16,9 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-Feature 00 (cross-cutting baseline, pass 2) — branch
-`claude/security-review-cross-cutting-00-pass2`, PR pending open. Re-swept all
-five pass-1 classes plus route auth coverage against everything that landed in
+Feature 00 (cross-cutting baseline, pass 2) — [PR #1924](https://github.com/thegspiro/the-logbook/pull/1924),
+branch `claude/security-review-cross-cutting-00-pass2`. Re-swept all five
+pass-1 classes plus route auth coverage against everything that landed in
 pass 1; no findings, no code changes (docs only). See log entry below and
 `SEC-00-cross-cutting-baseline.md`'s "Pass 2" section.
 
