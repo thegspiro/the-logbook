@@ -69,14 +69,19 @@ renderer uses no `dangerouslySetInnerHTML`, so it renders as escaped text — no
 stored XSS today. **Status:** flagged as defense-in-depth (escape at storage or
 enforce CSP) in case a future renderer changes.
 
-### FORM-5 — LOW — `require_authentication` / `allow_multiple_submissions` not enforced on public submit
+### FORM-5 — LOW — `require_authentication` / `allow_multiple_submissions` not enforced on public submit — ✅ FIXED (re-confirmed in security-review FORM-26)
 
 `get_form_by_slug` gates on `is_public` + `PUBLISHED` only. A form marked
 `is_public=True` **and** `require_authentication=True` still accepts anonymous
 submissions, and `allow_multiple_submissions=False` isn't enforced server-side
 (only the per-IP daily cap applies). Logic/expectation mismatch.
-**Status:** flagged — needs a product decision on the intended semantics of
-"public + require_authentication" before enforcing.
+**Status (corrected 2026-08-27):** resolved since this doc was written —
+`public/forms.py`'s `submit_public_form` now rejects (401) an anonymous
+submission when the form requires authentication or disallows repeat
+submissions, plus a cross-org 404 guard for an authenticated submitter from a
+different org; `forms_service.py`'s `submit_public_form` enforces
+`allow_multiple_submissions=False` with a locked, race-safe duplicate check.
+See `docs/security-review/FORM-26-forms.md` for the full re-verification.
 
 ### FORM-6 — INFO — Required-field check is presence-only — ✅ FIXED (app-review B13)
 

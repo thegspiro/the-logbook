@@ -53,6 +53,7 @@ import { NFC_ID_CARDS_INTEGRATION } from '../../modules/membership/constants/idC
 import { OPEN_MOBILE_NAV_EVENT } from './BottomNavigation';
 import { canOpenAdministrationSection } from './adminNavigation';
 import { LEGAL_DOCUMENTS_PERMISSIONS } from '../../modules/governance';
+import { FACILITY_ENTRY_PERMISSIONS } from '../../modules/facilities/routes';
 import { prefetchRoute } from '../../utils/routePrefetch';
 import { useNotificationCountStore } from '../../hooks/useNotificationCount';
 import { useOnlineStatus } from '../../hooks/useOnlineStatus';
@@ -300,7 +301,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
                 label: 'Facilities',
                 path: '/facilities',
                 icon: Building2,
-                anyPermission: ['facilities.view', 'facilities.manage'],
+                anyPermission: [...FACILITY_ENTRY_PERMISSIONS],
               },
             ]
           : []),

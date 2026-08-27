@@ -29,6 +29,7 @@ import {
 } from 'lucide-react';
 import { useAuthStore } from '../../stores/authStore';
 import { useEnabledModules } from '../../hooks/useEnabledModules';
+import { FACILITY_ENTRY_PERMISSIONS } from '../../modules/facilities/routes';
 
 interface CommandItem {
   id: string;
@@ -135,8 +136,8 @@ const COMMANDS: CommandItem[] = [
     path: '/facilities',
     icon: Building2,
     section: 'Navigation',
+    anyPermission: [...FACILITY_ENTRY_PERMISSIONS],
     keywords: ['buildings', 'stations'],
-    anyPermission: ['facilities.view', 'facilities.manage'],
   },
   {
     id: 'locations',

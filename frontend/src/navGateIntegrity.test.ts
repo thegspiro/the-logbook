@@ -28,6 +28,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { MEDICAL_VIEW_PERMISSIONS } from './modules/medical-supplies/routes';
+import { FACILITY_ENTRY_PERMISSIONS } from './modules/facilities/routes';
 
 const SRC = path.resolve(path.dirname(fileURLToPath(import.meta.url)));
 const read = (rel: string) => fs.readFileSync(path.join(SRC, rel), 'utf8');
@@ -78,6 +79,22 @@ const paletteCommand = (source: string, id: string): string => {
 };
 
 describe('navigation gates match the routes they target', () => {
+  it('shares the Facilities route gate with every discovery surface', () => {
+    const constantName = 'FACILITY_ENTRY_PERMISSIONS';
+    for (const surface of [...NAV_SURFACES, 'components/ux/CommandPalette.tsx']) {
+      const source = read(surface);
+      const entry = surface.includes('CommandPalette')
+        ? paletteCommand(source, 'facilities')
+        : navEntry(source, 'Facilities');
+      expect(entry, `${surface}: Facilities does not use the shared route gate`).toContain(constantName);
+      expect(source, `${surface}: Facilities gate is not imported`).toContain(
+        "import { FACILITY_ENTRY_PERMISSIONS } from '../../modules/facilities/routes'"
+      );
+    }
+
+    expect(FACILITY_ENTRY_PERMISSIONS).toEqual(['facilities.view', 'facilities.manage']);
+  });
+
   it('offers /medical-supplies only on permissions its route accepts', () => {
     for (const surface of NAV_SURFACES) {
       const gates = gatesForPath(read(surface), '/medical-supplies');

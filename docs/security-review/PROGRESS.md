@@ -16,7 +16,145 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-None — PR #1905 (feature 23, medical supplies) merged. Next iteration starts feature 24 (meetings & minutes).
+None — PR #1912 (feature 29, reports & analytics) merged. Feature 30
+(onboarding) starting next.
+
+---
+
+### 2026-08-27 — Feature 28 (Security, audit & IP) merged — PR #1911
+
+Merged (squash, `03916fdd`). Three parallel background agents re-verified
+module-audit SEC-1 through SEC-10 against current code, with extra scrutiny
+on files that had grown significantly since the last full read
+(`core/audit.py` +60%, `error_logs.py` +38%). Six findings surfaced; four
+fixed:
+
+- SEC2-28-1 (MEDIUM, most severe): `create_member` flushed the new `User` row
+  before checking the caller's permissions covered the requested `role_ids`.
+  A denied ceiling check's alert-reporting helper commits the whole
+  transaction by design, which also persisted the should-be-rejected user —
+  a live, ACTIVE, password-set account with no roles, behind a request the
+  admin believed failed outright. Fixed by resolving/ceiling-checking roles
+  before the user row is created.
+- SEC2-28-2 (MEDIUM): the audit hash chain's `calculate_hash` never covered
+  `event_category`/`severity` despite both being read into the hash-input
+  dict — a DB-write-level attacker could rewrite either with no hash
+  mismatch. Fixed with a hash-version bump (v3 → v4); old rows verify
+  unchanged.
+- SEC2-28-3 (LOW/MED): `GET /ip-security/blocked-attempts` was permanently
+  empty — the block-logging path wrote only to `audit_logs`, never to the
+  table the endpoint reads. Fixed by wiring the write.
+- SEC2-28-4 (LOW/MED): `add_blocked_country` always inserted despite
+  `country_code` being unique and unblock being a soft delete, so
+  re-blocking a previously-unblocked country 500'd. Fixed with an
+  update-in-place lookup.
+
+Flagged, not fixed: approved IP-allowlist exceptions have had zero effect on
+geo-blocking enforcement since PR #1544 correctly closed a cross-tenant
+bypass by hard-coding an empty allowlist, without a safe replacement or doc
+update. Needs an owner decision — corrected the stale docstring/doc claims
+instead of guessing at a fix.
+
+Codex review found one real P2 during the round: `request_method` was
+written to a `String(10)` column with no length bound (unlike `request_path`
+immediately above it), so a malformed/overlong HTTP method would overflow
+the column, fail the commit, and silently drop the row from both security
+logs. Fixed by truncating to 10 chars, with a regression test; replied and
+resolved the thread.
+
+Completion gate: 268/268 scoped tests, 8927/8927 full suite (22 pre-existing
+skips), black/isort/flake8 clean, migration validation passed (no
+migrations — hash-version bump is pure application logic).
+
+Next: 29 reports & analytics.
+
+---
+
+### 2026-08-27 — Feature 29 (Reports & analytics) merged — PR #1912
+
+Three parallel background agents covered this feature's split scope: (A)
+re-verification of the two prior review passes on `reports.py`/`analytics.py`/
+`platform_analytics.py`/`reports_service.py` (RPT-1 through RPT-7, no
+regressions found, plus review of the ~13% growth in `reports_service.py`
+since the last audit), (B) a first-ever full read of `dashboard.py` +
+`dashboard_widget_service.py` + `attendance_dashboard_service.py` (never
+previously module-audited or app-reviewed), (C) a first-ever full read of
+`labels.py` + `label_service.py` + `label_printer_service.py` (same — never
+previously reviewed).
+
+No criticals or highs anywhere. Six findings fixed:
+
+- RPT2-29-1 (LOW/MED): `pipeline_overview`'s client-supplied `stage_groups`
+  filter override had no shape validation and crashed the report on
+  malformed input (RPT-2-class unvalidated-filter 500). Fixed with a
+  `_is_valid_stage_groups` guard, falling back to the saved config.
+- RPT2-29-3 (LOW): `avg_time_to_check_in` in `/analytics/metrics` ignored the
+  `event_id` filter every other figure in the same response respects,
+  silently reporting the org-wide average instead. Fixed.
+- DASH-29-1 (LOW): the attendance dashboard's `MeetingAttendee` query was
+  missing a defense-in-depth `organization_id` filter (not currently
+  exploitable — every write path already validates — but inconsistent with
+  every sibling join in the same feature). Fixed.
+- DASH-29-2 (LOW): `grant_waiver` trusted its one caller to have already
+  org-scoped `meeting_id`/`user_id` rather than self-enforcing. Fixed with
+  `assert_in_org` per pitfall 14c.
+- DASH-29-3 (LOW): `total_external_attendees` in the community-engagement
+  dashboard didn't filter to public event types, unlike its sibling
+  `total_member_attendees` — inflating the metric with private events'
+  guests. Fixed to match.
+- LBL-29-1 (LOW): generating/printing labels for `prospective_members`
+  (embeds a public status-check token) and `membership` (membership number)
+  had no audit trail, unlike every other read of that class of PII. Fixed.
+- LBL-29-3 (LOW): `extra_lines` was the one unbounded list field in schemas
+  that bound every other field explicitly. Fixed with `max_length=20`.
+
+Flagged rather than fixed:
+
+- RPT2-29-2 (MEDIUM) — `SavedReport` scheduling (`is_scheduled`,
+  `schedule_frequency`, `email_recipients`) is fully stored and
+  API-writable but nothing reads it — no `TASK_RUNNERS` entry, no
+  scheduler. Textbook Pitfall #19. Partial fix applied:
+  `SavedReportResponse.enforced` now reports `False` so the UI can label it
+  as not-yet-automated; building the actual scheduler/sender is a feature
+  addition, not a drive-by. Mirrored to `KNOWN_LIMITATIONS.md`.
+- LBL-29-2 (LOW) — `GET /label-printers` has no permission gate at all,
+  a deliberate documented design choice, still org-scoped. Permission-
+  granularity policy call, left unchanged.
+- LBL-29-4 (Informational) — the PDF label-generation path has no
+  per-request count cap, unlike the physical-print path's
+  `MAX_LABELS_PER_JOB = 500`. Applying the same cap would be a behavior
+  change with no evidence it's needed; left as a flagged asymmetry.
+- RPT-5c, RPT-6, RPT-7 (all pre-existing, re-confirmed unchanged) — no new
+  action.
+
+Completion gate: 460/460 scoped tests (`-k "reports or analytics or
+dashboard or attendance or label"`), 8937/8937 full suite (22 pre-existing
+skips), black/isort/flake8 clean, migration validation passed (no schema
+change — only a model comment added).
+
+**Update:** Codex reviewed the PR and found three real bugs in this pass's
+own fixes, all confirmed and corrected before merge:
+
+- `_is_valid_stage_groups` only checked `step_ids` was a list, not that
+  every element was a string — a payload like `{"step_ids": [{}]}` passed
+  validation, then crashed downstream anyway at `set.update()` on an
+  unhashable dict, the exact 500 the guard was meant to prevent. Fixed to
+  validate every element is a `str`.
+- The label audit-count fix (LBL-29-1) logged `len(data.ids)` — the
+  requested count, not the labels actually produced — over-counting on a
+  filtered id and under-counting when `copies > 1`. Fixed:
+  `LabelService.generate()` now also returns the specs-rendered count;
+  `print_labels` uses the already-correct `result["labels_sent"]`.
+- The `enforced` flag (RPT2-29-2's partial fix) was added to the backend
+  response but not to the frontend's `SavedReportConfig` type, and
+  `ReportsPage.tsx` doesn't render saved reports at all today — so "the
+  frontend can label it" overstated the fix. Added the frontend type field
+  for whenever that screen is built; corrected the overstated claim in
+  `CHANGELOG.md` and `KNOWN_LIMITATIONS.md`.
+
+All three replied to and resolved on the PR. Merged (squash, `721a60e7`).
+
+Next: 30 onboarding.
 
 ---
 
@@ -68,12 +206,12 @@ data-carrying modules, then the supporting infrastructure.
 | 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ✅ #1903        |
 | 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ✅              |
 | 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ✅              |
-| 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ⬜              |
-| 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ⬜              |
-| 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                         | ⬜              |
-| 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                         | ⬜              |
-| 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`                                                                    | ⬜              |
-| 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                              | ⬜              |
+| 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ✅              |
+| 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ✅              |
+| 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                         | ✅              |
+| 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                         | ✅              |
+| 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`                                                                    | ✅              |
+| 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                              | ✅              |
 | 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (24 unauth bootstrap routes)                                                                                             | ⬜              |
 | 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                   | ⬜              |
 | 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                  | ⬜              |
@@ -876,3 +1014,238 @@ re-runs the whole-codebase sweeps against whatever has landed since.
   over its usage limit for security reviews on this PR (no review
   produced); CI passed clean on the first push, no fix round needed.
   Next: 24 meetings & minutes.
+- **24 Meetings & minutes** — no prior module-audit or app-review pass
+  exists for this feature, the first review of `meetings.py`/`minutes.py`
+  and their two services (3,059 L combined). Read via four parallel agents,
+  one per file; `quorum_service.py` pulled in afterward once three of the
+  four independently flagged it as vote-legitimacy-critical and directly
+  reachable from minutes' own quorum routes. **MM-5 (MED, most notable)**
+  the minutes approval workflow had no separation of duties — the same
+  person could submit minutes and immediately approve their own submission.
+  Fixed with the shared `assert_different_person` guard already used for
+  finance requests, skills tests, and admin hours — its own module docstring
+  invites exactly this. **MM-1** `update_action_item` in both services
+  persisted a reassigned owner with no in-org check, unlike its own
+  create-path sibling. **MM-2** five update methods used blind `setattr`
+  instead of `apply_updates`; two `meetings.py` endpoints used
+  `exclude_none` instead of `exclude_unset`, making field-clearing
+  structurally impossible. **MM-3/MM-4** `create_from_event` and
+  `QuorumService.calculate_quorum` both had a read-then-write race with no
+  lock (Pitfall #27) — event-bridging uniqueness and the quorum status
+  itself; both fixed with a locking read. **MM-6** motion and action-item
+  CRUD, and quorum-config overrides, had no audit trail while every other
+  minutes mutation did — a recorded vote tally could be silently edited
+  with no trace; all seven endpoints now log. **MM-7** a malformed UUID
+  query param crashed with an unhandled 500. Nothing left flagged — every
+  finding had a mechanical fix, all applied. Full local completion gate
+  green: flake8/black/isort clean, migrations validated (no schema
+  change), 203/203 meetings+minutes+quorum scoped and 8908/8908 full
+  backend suite pass. Findings doc:
+  `docs/security-review/MM-24-meetings-minutes.md`. PR #1906 opened and
+  subscribed. Next: 25 messaging & notifications, once #1906 merges.
+- **24 Meetings & minutes ✅ merged** — PR #1906 merged 2026-08-26. Codex
+  review caught two real issues before merge, both fixed: (P1) the MM-3 fix
+  locked only the `Event` fetch in `create_from_event`, reasoning it would
+  always be the transaction's first query so the subsequent plain `Meeting`
+  existence-check SELECT would establish its own accurate snapshot — Codex
+  correctly identified this as unsafe in production, since an earlier query
+  elsewhere in the same session (e.g. `get_current_user` resolving the
+  caller) can already have established the REPEATABLE READ snapshot first;
+  fixed by making the existence check a `.with_for_update()` locking read
+  too, matching every other Pitfall #27 fix in this codebase — lock the
+  parent/uniqueness row and separately make the check itself a locking
+  read, never rely on query ordering. (P2) the MM-6 audit-log fix for
+  `update_action_item` logged `changed_fields` from the raw client payload,
+  but the service silently restricts applied fields to
+  `{status, completion_notes}` on approved minutes, so a client sending
+  `description` there would have it no-opped while the audit log still
+  claimed it changed; fixed by having the service expose a non-mapped
+  `applied_fields` attribute (same convention as
+  `MeetingsService.attach_creator_names`) and having the endpoint log that
+  instead. Both replied to and resolved on their review threads. Full local
+  completion gate re-verified green (203/203 meetings-scoped, 8910/8910
+  full suite) before the final push; CI came back green with no further
+  comments. Next: 25 messaging & notifications.
+- **25 Messaging & notifications** — this feature already carried the
+  deepest prior coverage in the rotation: a module audit plus a 4-5-pass
+  app-review for messaging, notifications, and email templates each. Four
+  parallel background agents split the surface, each briefed to re-verify
+  prior findings rather than re-derive them and focus on what's grown or is
+  new since: messaging (`messages.py`/`message_history.py`/
+  `messaging_service.py`/`message_delivery_service.py`), notifications
+  (`notifications.py`/`notifications_service.py`/`push_service.py`, plus
+  three files with no prior review at all — `notification_rules.py`,
+  `notification_channels.py`, `integration_services/notification_dispatch.py`
+  — all clean), email templates (`email_templates.py`/
+  `email_template_service.py`/`email_templates_storefront.py`, plus two
+  never-reviewed utility modules `email_footers.py`/`email_theme.py`), and
+  the shared send layer `email_service.py` on its own (the widest-blast-radius
+  file in scope — every other email-producing feature calls into it). All
+  prior findings across all five documents re-verified as still holding.
+  **MSG-4 (MEDIUM)** `update_message`'s reschedule guard only blocked moving
+  an already-published message to a _future_ time — a past/current
+  `scheduled_at` slipped through unmodified, leaving a non-null due
+  timestamp the next publish sweep would treat as newly due and re-deliver:
+  a duplicate in-app notification, a duplicate email, and (if urgent) a
+  duplicate SMS blast to the whole targeted audience, repeatably every ~15
+  minutes. Fixed by collapsing it to `None` the same way `create_message`
+  already does. **MSG-5 (LOW)** `notifications_service.update_rule` used
+  `exclude_none` + a blind `setattr` loop, so an explicit null couldn't
+  clear `description`/`config` — switched to `exclude_unset` +
+  `apply_updates`. **MSG-6 (MEDIUM)** `email_service.py`'s header
+  construction sanitized Subject/From only — To, Cc, Reply-To, and
+  List-Unsubscribe were unsanitized in both header-writing sites, and a live
+  unvalidated path already reached one of them
+  (`MemberDropNotificationSettings`/`ScheduleNotificationSettings.cc_emails`
+  were `List[str]`, not `List[EmailStr]`, unlike every sibling cc/to/bcc
+  field). Fixed both. **MSG-7 (MEDIUM)** the SMTP send path had no
+  attachment size budget (unlike the Cloudflare path's 4.5 MiB cap) and its
+  per-recipient loop serializes a full message copy per recipient, so
+  memory scales as attachment-size × recipient-count — concretely reachable
+  via election-package PDFs mailed to a full voter roster; also, two of
+  three send branches weren't exception-safe despite the method's own
+  contract never raising. Fixed with an 18 MiB budget mirroring the
+  Cloudflare pattern and matching try/except on all three branches.
+  **MSG-8 (MEDIUM-LOW, Pitfall #9)** `email_theme._SHELL_COLOURWAYS` — a
+  module-level dict with no cap or eviction — was populated by every
+  `build_shell()` call including the ~20 runtime call sites inside
+  `wrap_email_body()`, none of which are ever read back (only the ~35+9
+  import-time default-template constants are looked up), so every email
+  sent grew it by one entry for the life of the worker process. Fixed with
+  a `cache: bool` parameter defaulting to the existing behavior, with the
+  one runtime caller passing `cache=False`. One item deliberately left
+  unfixed as a policy call, not a bug: `email_service.py`'s org-configured
+  SMTP host has no SSRF-style private-IP guard, unlike this codebase's
+  webhook-URL pattern — but a department may legitimately point it at an
+  internal mail relay, so adding that guard would be a functional
+  regression, not hardening. Full local completion gate green:
+  flake8/black/isort clean, migrations validated (no schema change),
+  855/855 messaging+notifications+email-theme scoped and 8914/8914 full
+  backend suite pass. Findings doc:
+  `docs/security-review/MSG-25-messaging-notifications.md`. PR #1907 opened
+  and subscribed. Next: 26 forms, once #1907 merges.
+- **25 Messaging & notifications ✅ merged** — PR #1907 merged 2026-08-27.
+  Codex review caught one real regression before merge: the MSG-6 fix
+  tightened `scheduling.cc_emails`/`member_drop_notifications.cc_emails`
+  from `List[str]` to `List[EmailStr]`, correct on writes (strictly
+  validated via `OrganizationSettingsUpdate`) but not on reads —
+  `get_organization_settings` reconstructs the entire stored settings
+  blob via Pydantic on every call, including the read at the end of any
+  unrelated settings update, and `scheduling` flowed through unvalidated
+  `extra_settings` into that reconstruction. An org with a legacy
+  malformed `cc_emails` value saved before the tightening would find
+  every future settings read — and any subsequent update to an unrelated
+  field — broken, with no way to fix it through the API. Fixed by
+  reconstructing `scheduling` explicitly and filtering `cc_emails` to
+  syntactically valid addresses on the read path only. Traced the
+  equivalent `member_drop_notifications` field Codex flagged as carrying
+  the same risk and confirmed it doesn't: that field is excluded from the
+  same reconstruction path entirely today (a separate, pre-existing gap
+  unrelated to this change), and its only other reader accesses it as a
+  raw dict, never through Pydantic. 3 regression tests added. Full local
+  completion gate re-verified green (8917/8917 full suite) before the
+  final push; CI came back green with no further comments. Next: 26 forms.
+- **26 Forms** — already has thorough prior coverage (module audit
+  iteration 13, FORM-1 through FORM-7, plus a 4-pass app-review). Read
+  `forms.py`, `public/forms.py`, and `forms_service.py` directly in full
+  (~3,600 L combined, moderate size with deep existing coverage — not
+  fanned out). Re-verified FORM-1/2/3/6/7 all hold. **FORM-5** (flagged in
+  every prior pass as needing a product decision on
+  `require_authentication`/`allow_multiple_submissions` enforcement) turned
+  out to already be resolved — shipped correctly since the last review pass
+  but never reflected in `module-audit/forms.md` or `app-review/forms.md`
+  (only `KNOWN_LIMITATIONS.md` had it right); corrected both docs. Reviewed
+  the ~300-line growth in full: a new `event_request` integration type
+  (creates a coordinator-review record from free-text contact fields, no
+  submitter-supplied FK to another module's row, so no FORM-1/2-shaped
+  cross-org write risk exists structurally) and a new
+  `reprocess_submission_integrations` endpoint (org-scoped submission
+  fetch, reuses the same `_entity_in_org`-guarded processors as the
+  original submit path). **FORM-8 (LOW, fixed)** — `update_form`,
+  `update_field`, and `update_integration` all used blind `setattr` loops;
+  an explicit null against a NOT NULL column (`Form.name`,
+  `FormField.label`/`field_type`, `FormIntegration.target_module`/
+  `integration_type`) reached `commit()` and raised an `IntegrityError`
+  caught by a generic exception handler — not a crash, but a confusing
+  error instead of a specific one. All three now route through
+  `apply_updates`. Full local completion gate green: flake8/black/isort
+  clean, migrations validated (no schema change), 64/64 forms-scoped and
+  8922/8922 full backend suite pass. Findings doc:
+  `docs/security-review/FORM-26-forms.md`. PR #1908 opened and subscribed.
+  Next: 27 integrations, once #1908 merges.
+- **26 Forms ✅ merged** — PR #1908 merged 2026-08-27. Codex reported it
+  was over its usage limit for security reviews (no review produced, same
+  as a few earlier PRs this rotation); CI ran clean on the first push, no
+  review threads to resolve. Next: 27 integrations.
+- **27 Integrations** — the deepest prior coverage of any feature reviewed
+  so far in this rotation (module audit iteration 12, INT-1 through INT-5,
+  plus a 4-pass app-review whose last two passes already concluded "no code
+  change — the module is mature"). Read `integrations.py`, `salesforce_sync.py`,
+  and all three Salesforce backing services directly in full (~2,850 L
+  combined). Re-verified INT-1 through INT-5 all hold. Growth since the
+  last full read was almost entirely new "coming soon" catalog entries
+  (Active911, Google Maps, Zapier, WhatsApp, ImageTrend, ESO Solutions,
+  NREMT, FirstWatch, PulsePoint) plus two genuinely new pieces of logic,
+  both reviewed clean: `_secrets_to_clear_for_base_url_change` (a stored
+  Documenso/Cal.com credential can't silently follow an `api_base_url`
+  change to a new endpoint without being re-entered or explicitly cleared)
+  and `clear_salesforce_refresh_token` (an explicit blank refresh token
+  correctly switches Salesforce from interactive OAuth to client-credentials
+  and clears the cached access token alongside it). Re-traced every dynamic
+  SOQL construction site — all still route through the established
+  `_soql_quote`/`_soql_identifier` helpers, no new site introduced. No new
+  findings; no code change this iteration. Full local completion gate
+  green: existing 112/112 integrations+salesforce-scoped tests pass, no
+  migration needed. Findings doc: `docs/security-review/INT-27-integrations.md`.
+  PR #1910 opened and subscribed. Next: 28 security, audit & IP, once
+  #1910 merges.
+- **27 Integrations ✅ merged** — PR #1910 merged 2026-08-27. Codex reported
+  it was over its usage limit for security reviews (no review produced,
+  informational only); CI ran clean on the first push, no review threads
+  to resolve. Next: 28 security, audit & IP.
+- **28 Security, audit & IP** — an exhaustively-hardened surface (module
+  audit SEC-1 through SEC-10 + a 4-pass app-review), with significant growth
+  in specific files since the last full read (`core/audit.py` +60%,
+  `error_logs.py` +38%). Three parallel background agents split the surface:
+  (A) audit hash chain + error logs, (B) security monitoring + alerts, (C)
+  IP allowlisting + geo-blocking, each re-verifying SEC-1 through SEC-10
+  against current code and giving extra scrutiny to the grown portions.
+  **SEC2-28-1 (MEDIUM, most severe)** `create_member` flushed the new User
+  row before checking whether the caller's own permissions covered the
+  requested role_ids — a denied ceiling check's alert-reporting helper
+  commits the whole transaction (by design, so the alert survives the 403
+  about to be raised), which also persisted the should-be-rejected user: a
+  live, ACTIVE, password-set account with no roles, behind a request the
+  admin believed failed outright. Fixed by resolving/ceiling-checking roles
+  before the user row is created. **SEC2-28-2 (MEDIUM)** the audit hash
+  chain's `calculate_hash` never covered `event_category`/`severity` despite
+  both being read into the hash-input dict at create and verify time — a
+  DB-write-level attacker could rewrite either field (e.g. downgrade a
+  critical incident to info) with no hash mismatch, hiding it from
+  severity/category-filtered admin review. Fixed with a hash-version bump
+  (v3 -> v4, matching the v3-added-organization_id precedent); old rows
+  verify unchanged. **SEC2-28-3 (LOW/MED)** `GET /ip-security/blocked-attempts`
+  was permanently empty — the actual block-logging path wrote only to
+  audit_logs, never to the table the endpoint reads — a false-negative risk
+  for incident response. Fixed by wiring the write. **SEC2-28-4 (LOW/MED)**
+  `add_blocked_country` always inserted a new row despite `country_code`
+  being unique and unblock being a soft delete, so re-blocking a
+  previously-unblocked country 500'd on the constraint. Fixed with an
+  update-in-place lookup. Also removed two orphaned comment banners.
+  **Flagged, not fixed: SEC2-28-5 (HIGH by-name, safe-direction)** — approved
+  IP-allowlist exceptions have had zero effect on geo-blocking enforcement
+  since PR #1544 (2026-08-17) correctly closed a cross-tenant allowlist-union
+  bypass by hard-coding an empty allowlist at the one enforcement call site,
+  without replacing it with a safe per-tenant mechanism or updating the
+  stale docstrings/docs that still described the old behavior — needs an
+  owner decision (restore a safe per-IP-only version, or retire the feature
+  explicitly). Corrected the stale claims in the class docstring and
+  `module-audit/security-audit-ip.md`; mirrored into `KNOWN_LIMITATIONS.md`
+  (also corrected the adjacent SEC-8 row's copy of the same stale claim).
+  **SEC2-28-6 (LOW, flagged)** a TOCTOU race on the IP-exception duplicate
+  check — admin-queue clutter only, not a bypass. Full local completion gate
+  green: flake8/black/isort clean, migrations validated (no schema change —
+  the hash-version bump is pure application logic), 268/268 scoped and
+  8927/8927 full backend suite pass. Findings doc:
+  `docs/security-review/SEC2-28-security-audit-ip.md`. PR #1911 opened and
+  subscribed. Next: 29 reports & analytics, once #1911 merges.

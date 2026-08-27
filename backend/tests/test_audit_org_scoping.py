@@ -79,7 +79,7 @@ class TestOrgStamping:
         )
         assert entry is not None
         assert entry.organization_id == org_id
-        assert entry.hash_version == 3
+        assert entry.hash_version == 4
 
     async def test_explicit_org_wins_without_user(
         self, db_session: AsyncSession, two_orgs_with_users

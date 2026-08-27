@@ -8,13 +8,15 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { screen, fireEvent } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../../test/utils';
 import { CommandPalette } from './CommandPalette';
 
 const enabledModules = { current: null as Set<string> | null };
+const permissions = { current: new Set<string>() };
 
 vi.mock('../../stores/authStore', () => ({
-  useAuthStore: () => ({ checkPermission: () => true }),
+  useAuthStore: () => ({ checkPermission: (permission: string) => permissions.current.has(permission) }),
 }));
 
 vi.mock('../../hooks/useEnabledModules', () => ({
@@ -48,6 +50,45 @@ const ALL = new Set([
 describe('CommandPalette module gating', () => {
   beforeEach(() => {
     enabledModules.current = null;
+    permissions.current = new Set([
+      'facilities.view',
+      'inventory.manage',
+      'storefront.view',
+      'locations.manage',
+      'apparatus.view',
+    ]);
+    window.history.replaceState({}, '', '/');
+  });
+
+  const searchFacilities = async (grants: string[]) => {
+    permissions.current = new Set(grants);
+    enabledModules.current = ALL;
+    const user = userEvent.setup();
+    renderWithRouter(<CommandPalette />);
+    open();
+
+    await user.type(screen.getByRole('textbox', { name: 'Search commands' }), 'facilities');
+    return user;
+  };
+
+  it('does not let an ordinary member discover Facilities', async () => {
+    await searchFacilities([]);
+    expect(screen.queryByText('Facilities')).not.toBeInTheDocument();
+    expect(screen.getByText('No results found for "facilities"')).toBeInTheDocument();
+  });
+
+  it('lets read-only leadership discover and navigate to Facilities', async () => {
+    const user = await searchFacilities(['facilities.view']);
+    const entry = screen.getByText('Facilities');
+    await user.click(entry);
+    expect(window.location.pathname).toBe('/facilities');
+  });
+
+  it('lets a facilities manager discover and navigate to Facilities', async () => {
+    const user = await searchFacilities(['facilities.manage']);
+    const entry = screen.getByText('Facilities');
+    await user.click(entry);
+    expect(window.location.pathname).toBe('/facilities');
   });
 
   it('offers a module command when the module is on', () => {
