@@ -16,10 +16,10 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-Feature 02 (permissions & roles, pass 2) — branch
-`claude/security-review-perm-02-pass2`, PR pending open. Two HIGH
-privilege-escalation findings (PERM-3, PERM-4), both fixed. See log entry
-below and `PERM-02-permissions-roles.md`'s "Pass 2" section.
+Feature 02 (permissions & roles, pass 2) — [PR #1931](https://github.com/thegspiro/the-logbook/pull/1931),
+branch `claude/security-review-perm-02-pass2`. Two HIGH privilege-escalation
+findings (PERM-3, PERM-4), both fixed. See log entry below and
+`PERM-02-permissions-roles.md`'s "Pass 2" section.
 
 ---
 
