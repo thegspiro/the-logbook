@@ -258,6 +258,83 @@ def test_baseline_facilities_view_migration_preserves_custom_positions():
     assert grants["custom-role"] == ["events.view", "facilities.view"]
 
 
+def test_officer_facilities_view_migration_covers_the_registry_change():
+    """The officer revocation must reach stored rows, not just the registry.
+
+    DEFAULT_POSITIONS is materialized into `positions` once, at onboarding, so
+    dropping facilities.view from the shared leadership set reaches fresh
+    installs and nobody else. Every department already running keeps the grant
+    on its Captain and Lieutenant rows — the entire population the change
+    exists to restrict — unless a migration rewrites them.
+    """
+    versions = Path(__file__).resolve().parents[1] / "alembic" / "versions"
+    matches = list(versions.glob("*_revoke_officer_facilities_view.py"))
+    assert len(matches) == 1
+    spec = importlib.util.spec_from_file_location(
+        "revoke_officer_facilities", matches[0]
+    )
+    migration = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(migration)
+
+    # The migration and the registry must name the same slugs, or a rank that
+    # lost the grant in code keeps it in every existing database.
+    registry_lost = {
+        slug
+        for slug in DEFAULT_POSITIONS
+        if slug in OPERATIONAL_RANKS
+        and "facilities.view" not in (DEFAULT_POSITIONS[slug].get("permissions") or [])
+    }
+    assert registry_lost >= set(migration._SLUGS)
+
+    engine = sa.create_engine("sqlite://")
+    metadata = sa.MetaData()
+    positions = sa.Table(
+        "positions",
+        metadata,
+        sa.Column("id", sa.String, primary_key=True),
+        sa.Column("slug", sa.String),
+        sa.Column("is_system", sa.Boolean),
+        sa.Column("permissions", sa.Text),
+    )
+    metadata.create_all(engine)
+    rows = [
+        ("captain", "captain", True),
+        ("lieutenant", "lieutenant", True),
+        ("fire_chief", "fire_chief", True),
+        ("custom-captain", "captain", False),
+        ("untouched", "secretary", True),
+    ]
+    with engine.begin() as connection:
+        connection.execute(
+            positions.insert(),
+            [
+                {
+                    "id": row_id,
+                    "slug": slug,
+                    "is_system": is_system,
+                    "permissions": json.dumps(["events.view", "facilities.view"]),
+                }
+                for row_id, slug, is_system in rows
+            ],
+        )
+        context = MigrationContext.configure(connection)
+        with Operations.context(context):
+            migration.upgrade()
+            migration.upgrade()  # Retried deployments remain idempotent.
+
+    with engine.connect() as connection:
+        grants = {
+            row.id: json.loads(row.permissions)
+            for row in connection.execute(sa.select(positions))
+        }
+    for row_id in ("captain", "lieutenant", "fire_chief"):
+        assert grants[row_id] == ["events.view"], row_id
+    # A department that customized its own Captain chose those grants.
+    assert grants["custom-captain"] == ["events.view", "facilities.view"]
+    # A slug the registry still grants must be left alone.
+    assert grants["untouched"] == ["events.view", "facilities.view"]
+
+
 def test_view_sensitive_is_offered_by_the_role_editor_catalog():
     """The role editor at /settings/roles builds its checkboxes from
     ``GET /roles/permissions/by-category``, which serves this catalog — if
