@@ -16,9 +16,29 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-[PR #1952](https://github.com/thegspiro/the-logbook/pull/1952) — feature 09
-(medical screening, PHI, pass 2), no findings, documentation only. Awaiting
-merge before starting feature 10 (documents & legal), pass 2.
+None. Feature 09 (medical screening, PHI, pass 2) fully merged as
+[PR #1952](https://github.com/thegspiro/the-logbook/pull/1952) — see log
+entry below. Confirmed on `origin/main` by ancestry check. Next: 10
+documents & legal, pass 2.
+
+---
+
+### 2026-08-27 — Feature 09 (Medical screening, PHI), pass 2 ✅ merged — PR #1952
+
+Merged, with the doc-correction commit (`1670bd4d`) included. Confirmed on
+`origin/main` by ancestry check. Codex left 3 P2 review comments; all
+verified against the actual code and were real doc-accuracy issues (not
+security defects — the backend module gate is authoritative and correctly
+enforces in every case): the Open PR wording had already been fixed by a
+later commit on the same PR before the review ran; the onboarding
+description said "offered during setup" when `medical_screening` is
+settings-only and never offered by the wizard; and the frontend's
+module-off skip in `Dashboard.tsx` doesn't cover the genuinely-unconfigured-
+org state, where `useEnabledModules`' deliberate permissive default lets
+the call through and the backend correctly 403s it (a UX-only mismatch,
+not a leak, since the failure is caught and cleared silently). All three
+corrected and threads resolved. Rotation row 09 -> done. Next: 10
+documents & legal.
 
 ---
 
