@@ -117,6 +117,57 @@ acquired for FIN-10. Guarded by
 `test_token_action_rejects_a_later_step_out_of_order`
 (`test_finance_approval_tokens.py`, mock-based, both token actions).
 
+**FIN-16/17/18, found on a third Codex round against the FIN-15 fix PR
+(#1946) — enforcing order surfaced two real deadlocks and one portability
+gap the previous fix's own tests didn't cover.**
+
+- **FIN-16 (deadlock).** `create_approval_records` never called any
+  step-advancement logic at creation time — only `approve_step`/
+  `approve_by_token` did, after a successful approval. A chain that starts
+  with a NOTIFICATION step (or has one following only auto-approved steps)
+  therefore left that notification `PENDING` forever: nothing ever marks it
+  `SENT` except the very advancement call that only runs after an approval
+  succeeds, and nothing can be approved because `get_current_pending_step`
+  returns the stuck notification, which FIN-15's new order check correctly
+  refuses to let the real approval step skip past. Before FIN-15 this
+  "worked" only by accident — the missing order check let approvers step
+  around the stuck notification. Fixed by calling step advancement once,
+  immediately after creating a chain's records, so any step reachable from
+  the start (not just step 1) is activated before the entity is ever
+  returned to the caller.
+- **FIN-17 (deadlock, token expiry).** Every EMAIL-type approval step's
+  token was generated and emailed at chain creation, starting a 7-day
+  expiry clock for all of them at once — including steps several positions
+  down the chain. Combined with FIN-15's order enforcement, a step whose
+  predecessors took a week or more to resolve could expire before it was
+  ever reachable, with no resend path — the external approver could neither
+  act early (blocked by order) nor act once it was their turn (token
+  already expired). Fixed by deferring token generation and the invite
+  email for an EMAIL approval step until it actually becomes reachable,
+  exactly mirroring how a NOTIFICATION step's `SENT` transition already
+  worked — the two are now one function, `_advance_reachable_steps`
+  (renamed from `_advance_notification_steps`), called at chain creation
+  and after every approval.
+- **FIN-18 (portability).** Nothing stops two steps in one chain from
+  sharing a `step_order` (no DB or schema constraint), and every record for
+  one entity is created in the same instant, so a `step_order`+`created_at`
+  tie is real. `get_pending_approvals`' own `has_earlier_pending_step`
+  subquery already breaks such ties with the record `id`;
+  `get_approval_records` (which both `get_current_pending_step` and
+  `_advance_reachable_steps` read) did not, so on a database that doesn't
+  happen to return tied rows in `id` order, FIN-15's check could reject the
+  exact step the pending-approvals list told the user was actionable. Fixed
+  by adding the same `id` tiebreaker to `get_approval_records`'s
+  `order_by`. (Not independently reproducible against this dev database —
+  MariaDB here happens to return the tie in primary-key order without an
+  explicit tiebreaker — so the guard test asserts the correct, portable
+  behavior rather than a locally-red-then-green diff.)
+
+Guarded by `test_a_leading_notification_step_does_not_deadlock_the_chain`,
+`test_email_step_token_is_issued_only_once_reachable`, and
+`test_current_step_tiebreak_matches_the_pending_approvals_list` (all
+`test_finance.py`, DB-backed).
+
 **Read in full and independently re-verified by direct code read** (not
 taken on an agent's word alone, and this pass's own miss above is exactly
 why): `_mutate_budget` (`finance_service.py:2564`) — org-scoped,
@@ -131,21 +182,22 @@ can leak another org's pending approvals into the merged result.
 Two background agents independently reviewed `finance_service.py`'s budget/
 export logic and `finance.py`+`schemas.py`+`models.py` respectively; both
 reported no findings. Codex's review, posted after this PR opened, is what
-actually caught FIN-10 through FIN-14 (and, on a second round against the
-fix PR, FIN-15) — all verified independently against the real code
-(reproduced each schema TypeError directly, confirmed the missing
-`.with_for_update()` and the missing order check by reading the sibling
-methods, confirmed the frontend gap and the backend schema it feeds by
-reading both sides) before fixing, not taken on the bot's word.
+actually caught FIN-10 through FIN-14, then FIN-15 on a second round
+against the fix PR, then FIN-16/17/18 on a third round against _that_ fix —
+each round catching a real defect the previous fix's own review and tests
+had not — all verified independently against the real code (reproduced
+each schema TypeError directly, confirmed each missing lock/check/tiebreak
+by reading the sibling methods that already had it right, confirmed the
+frontend gap and the backend schema it feeds by reading both sides) before
+fixing, not taken on the bot's word.
 
-**6 real findings, all fixed; 1 documentation correction.** No open items.
+**9 real findings, all fixed; 1 documentation correction.** No open items.
 
 **Completion gate (pass 2):** flake8/black/isort clean on `app/ tests/
 alembic/`; `validate_migrations.py --strict` passed (383 revisions, single
 head); scoped backend tests (`-k "finance or dues or approval or budget or
-export"`) 243 passed, 1 skipped (pre-existing), 0 failed; full backend suite
-9060 passed, 22 skipped (pre-existing, Docker/roles-table/API-contract
-opt-ins), 0 failed.
+export"`) 246 passed, 1 skipped (pre-existing), 0 failed; full backend suite
+9065 passed, 22 skipped (pre-existing), 0 failed.
 `tsc --noEmit` 0 errors; `eslint src/modules/finance/` 0 errors; `vitest run
 src/modules/finance/` 2 files, 80 tests, all passed. Each new guard test
 confirmed to fail against the pre-fix code (`git stash` on the fix, re-run,

@@ -549,7 +549,6 @@ class FinanceService:
     ) -> list[ApprovalStepRecord]:
         """Create step records for an entity going through an approval chain"""
         records = []
-        email_targets: list[tuple[ApprovalStepRecord, ApprovalChainStep]] = []
         for step in chain.steps:
             status = ApprovalStepStatus.PENDING
 
@@ -573,26 +572,24 @@ class FinanceService:
                 status=status,
             )
 
-            # Generate token for EMAIL approver type
-            if (
-                step.step_type == ApprovalStepType.APPROVAL
-                and step.approver_type
-                and step.approver_type.value == "email"
-            ):
-                record.approval_token = secrets.token_urlsafe(32)
-                record.token_expires_at = datetime.now(timezone.utc) + timedelta(days=7)
-                if status == ApprovalStepStatus.PENDING:
-                    email_targets.append((record, step))
+            # EMAIL-approver tokens are NOT generated here -- see
+            # _advance_reachable_steps. Issuing every step's token at once
+            # started every step's 7-day expiry at chain creation, so a step
+            # whose predecessors took a week or more to resolve could expire
+            # before it ever became actionable, with no resend path.
 
             self.db.add(record)
             records.append(record)
 
         await self.db.flush()
 
-        # Email each external approver their token link (best-effort — a mail
-        # failure must not roll back the records the entity depends on).
-        for record, step in email_targets:
-            await self.send_approval_request_email(record, step)
+        # Send the invite (and start the expiry clock) for whichever steps
+        # are reachable right now -- a chain can start with a NOTIFICATION
+        # step, or an EMAIL approval step following only auto-approved
+        # steps, so this is not always just "step 1".
+        await self._advance_reachable_steps(
+            entity_type, entity_id, chain.organization_id
+        )
 
         return records
 
@@ -651,10 +648,19 @@ class FinanceService:
                 ApprovalStepRecord.entity_id == entity_id,
                 ApprovalChain.organization_id == org_id,
             )
-            # Chain position, not created_at: records for one entity are
-            # created in the same instant, so DATETIME ties would make the
-            # "current pending step" nondeterministic.
-            .order_by(ApprovalChainStep.step_order, ApprovalStepRecord.created_at)
+            # Chain position, not created_at alone: records for one entity are
+            # created in the same instant, so DATETIME ties are common, and
+            # step_order itself isn't unique (no DB/schema constraint stops
+            # two steps sharing one order). The id tiebreaker matches
+            # get_pending_approvals' has_earlier_pending_step subquery, which
+            # a caller may already be reading to decide what's actionable --
+            # a different tiebreak here would let this method reject exactly
+            # the step that query presented as current.
+            .order_by(
+                ApprovalChainStep.step_order,
+                ApprovalStepRecord.created_at,
+                ApprovalStepRecord.id,
+            )
         )
         return list(result.scalars().all())
 
@@ -738,8 +744,8 @@ class FinanceService:
 
         await self.db.flush()
 
-        # Process next steps (advance notification steps automatically)
-        await self._advance_notification_steps(
+        # Process next steps (advance whatever just became reachable)
+        await self._advance_reachable_steps(
             record.entity_type, record.entity_id, org_id
         )
 
@@ -861,7 +867,7 @@ class FinanceService:
         record.approval_token = None
 
         await self.db.flush()
-        await self._advance_notification_steps(
+        await self._advance_reachable_steps(
             record.entity_type, record.entity_id, org_id
         )
         all_complete = await self._check_all_steps_complete(
@@ -1049,37 +1055,60 @@ class FinanceService:
             raise ValueError(f"Invalid entity type: {entity_type}")
         return await self.resolve_approval_chain(org_id, et, amount, category_id)
 
-    async def _advance_notification_steps(
+    async def _advance_reachable_steps(
         self,
         entity_type: ApprovalEntityType,
         entity_id: str,
         org_id: str,
     ) -> None:
-        """Auto-advance any notification steps that are now reachable"""
+        """Activate every step whose prior steps are all resolved.
+
+        A NOTIFICATION step is marked SENT once reachable. An EMAIL-type
+        APPROVAL step's token/expiry is generated -- and the invite emailed
+        -- only once the step is reachable, not at chain creation: issuing
+        every step's token up front started every step's 7-day expiry
+        immediately, so a step whose predecessors took a week or more to
+        resolve could already be expired by the time _ensure_current_step
+        would finally let it be acted on, with no resend path. Called after
+        creating the chain's records and after any action that could make a
+        new step reachable (an approval, never a denial -- denial finalizes
+        the whole entity, so there is no "next" step to reach).
+        """
         records = await self.get_approval_records(entity_type, entity_id, org_id)
         for record in records:
             if record.status != ApprovalStepStatus.PENDING:
                 continue
             if not record.step:
                 continue
+
+            prior_complete = True
+            for prior in records:
+                if prior.step and prior.step.step_order < record.step.step_order:
+                    if prior.status == ApprovalStepStatus.PENDING:
+                        prior_complete = False
+                        break
+            if not prior_complete:
+                continue
+
             if record.step.step_type == ApprovalStepType.NOTIFICATION:
-                # All prior steps must be complete
-                prior_complete = True
-                for prior in records:
-                    if prior.step and prior.step.step_order < record.step.step_order:
-                        if prior.status in (ApprovalStepStatus.PENDING,):
-                            prior_complete = False
-                            break
-                if prior_complete:
-                    record.status = ApprovalStepStatus.SENT
-                    record.acted_at = datetime.now(timezone.utc)
-                    # In production, trigger email sending here
-                    logger.info(
-                        "Notification step {} auto-sent for {} {}",
-                        record.id,
-                        entity_type.value,
-                        entity_id,
-                    )
+                record.status = ApprovalStepStatus.SENT
+                record.acted_at = datetime.now(timezone.utc)
+                # In production, trigger email sending here
+                logger.info(
+                    "Notification step {} auto-sent for {} {}",
+                    record.id,
+                    entity_type.value,
+                    entity_id,
+                )
+            elif (
+                record.step.step_type == ApprovalStepType.APPROVAL
+                and record.step.approver_type
+                and record.step.approver_type.value == "email"
+                and not record.approval_token
+            ):
+                record.approval_token = secrets.token_urlsafe(32)
+                record.token_expires_at = datetime.now(timezone.utc) + timedelta(days=7)
+                await self.send_approval_request_email(record, record.step)
 
     async def _check_all_steps_complete(
         self,

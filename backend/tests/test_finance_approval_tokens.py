@@ -44,7 +44,7 @@ async def test_token_action_locks_and_consumes_token(action):
     db.flush = AsyncMock()
     service = FinanceService(db)
     service.get_current_pending_step = AsyncMock(return_value=record)
-    service._advance_notification_steps = AsyncMock()
+    service._advance_reachable_steps = AsyncMock()
     service._check_all_steps_complete = AsyncMock(return_value=False)
     service._finalize_denial = AsyncMock()
 
@@ -57,7 +57,7 @@ async def test_token_action_locks_and_consumes_token(action):
     assert record.notes == "reviewed"
     db.flush.assert_awaited_once()
     if action == "approve_by_token":
-        service._advance_notification_steps.assert_awaited_once_with(
+        service._advance_reachable_steps.assert_awaited_once_with(
             record.entity_type, record.entity_id, "token-org-id"
         )
         service._check_all_steps_complete.assert_awaited_once_with(
@@ -103,7 +103,7 @@ class TestApproveByTokenSelfApprovalGuard:
         service = FinanceService(db)
         service.get_current_pending_step = AsyncMock(return_value=record)
         service._entity_creator_email = AsyncMock(return_value=requester_email)
-        service._advance_notification_steps = AsyncMock()
+        service._advance_reachable_steps = AsyncMock()
         service._check_all_steps_complete = AsyncMock(return_value=False)
         return service
 
@@ -115,7 +115,7 @@ class TestApproveByTokenSelfApprovalGuard:
             await service.approve_by_token(record.approval_token, "self-approving")
 
         assert record.status == ApprovalStepStatus.PENDING  # never mutated
-        service._advance_notification_steps.assert_not_awaited()
+        service._advance_reachable_steps.assert_not_awaited()
 
     async def test_rejects_case_insensitively(self):
         record = _pending_record(step=_email_step("Treasurer@Dept.org"))
