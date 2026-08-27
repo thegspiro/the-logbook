@@ -167,7 +167,7 @@ async def generate_labels(
     """
     _authorize_module(current_user, data.module)
     try:
-        pdf, auto_populated = await LabelService(db).generate(
+        pdf, auto_populated, label_count = await LabelService(db).generate(
             organization_id=current_user.organization_id,
             module=data.module,
             ids=data.ids,
@@ -182,12 +182,14 @@ async def generate_labels(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
     if data.module in _AUDITED_LABEL_MODULES:
+        # label_count is the specs actually rendered — filtered/nonexistent
+        # ids in data.ids produce no label and must not inflate this count.
         await log_audit_event(
             db=db,
             event_type="labels_generated",
             event_category="data_access",
             severity="info",
-            event_data={"module": data.module, "count": len(data.ids)},
+            event_data={"module": data.module, "count": label_count},
             user_id=str(current_user.id),
             username=current_user.username,
         )
@@ -513,12 +515,18 @@ async def print_labels(
             "the label printer.",
         )
     if data.module in _AUDITED_LABEL_MODULES:
+        # result["labels_sent"] is the authoritative count (specs actually
+        # rendered * copies) — len(data.ids) over/under-counts whenever a
+        # requested id is filtered/missing, or copies != 1.
         await log_audit_event(
             db=db,
             event_type="labels_printed",
             event_category="data_access",
             severity="info",
-            event_data={"module": data.module, "count": len(data.ids)},
+            event_data={
+                "module": data.module,
+                "count": result.get("labels_sent", len(data.ids)),
+            },
             user_id=str(current_user.id),
             username=current_user.username,
         )

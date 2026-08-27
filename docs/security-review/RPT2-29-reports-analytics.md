@@ -43,6 +43,13 @@ non-empty list of dicts, each with a string `name` and list `step_ids`;
 anything else falls back to `pipeline.report_stage_groups`, matching
 `_safe_int`'s "invalid filter is a no-op, not a 500" contract.
 
+**Codex review caught a gap in this fix:** the first version only checked
+`step_ids` was a _list_, not that every element was a string. A payload like
+`{"step_ids": [{}]}` passed validation, then crashed downstream anyway at
+`grouped_step_ids.update(group_step_ids)` (`set.update` on an unhashable
+dict). Fixed by validating every `step_ids` element is a `str`; regression
+test added (`test_non_string_step_id_is_invalid`).
+
 ### RPT2-29-2 — MEDIUM — `SavedReport` scheduling is stored and API-writable, but nothing reads it — 🚩 FLAGGED (Pitfall #19), partial fix applied
 
 `POST /reports/saved` / `PATCH /reports/saved/{id}` fully accept
@@ -55,12 +62,22 @@ scheduled — and no report is ever generated or emailed. Textbook CLAUDE.md
 Pitfall #19 shape.
 
 **Fix applied:** `SavedReportResponse.enforced` reports `False` (hardcoded —
-there is no reader to derive per-row state from), so the frontend can label
-a saved report as not-yet-automated instead of Active. Building the actual
+there is no reader to derive per-row state from). Building the actual
 `TASK_RUNNERS` reader (including re-deriving/enforcing the RPT-3 PII
 permission gate at send time, since that gate currently lives only in the
 endpoint layer) is a feature addition, not a security-review drive-by —
 mirrored to `docs/KNOWN_LIMITATIONS.md` with both closure options.
+
+**Codex review caught scope in this fix:** the PR added `enforced` to the
+backend response but not to the frontend's `SavedReportConfig` type, and — as
+Codex verified by reading the frontend — `ReportsPage.tsx` doesn't fetch or
+render saved reports at all today, despite `reportsStore.ts`/`services/api.ts`
+having full CRUD support for them. So "the frontend can label it" overstated
+what the fix did: there is no UI surface to label yet. Fixed the type gap
+(`SavedReportConfig.enforced: boolean` added) so a future saved-reports
+screen picks it up automatically; building that screen is out of scope for
+this pass, same as the scheduler itself. Corrected the overstated claim in
+`CHANGELOG.md` and `docs/KNOWN_LIMITATIONS.md`.
 
 ### RPT2-29-3 — LOW — `avg_time_to_check_in` ignores the `event_id` filter every other `/metrics` field respects — ✅ FIXED
 
@@ -155,6 +172,17 @@ app is audit-logged per CLAUDE.md; this was the one gap.
 **Fix:** added `log_audit_event()` calls (`labels_generated`/`labels_printed`,
 `event_category="data_access"`) in `generate_labels` and `print_labels`,
 scoped to `_AUDITED_LABEL_MODULES = {"prospective_members", "membership"}`.
+
+**Codex review caught an accuracy gap in this fix:** the first version
+logged `count: len(data.ids)` — the _requested_ id count, not the labels
+actually produced. That over-counts when a requested id is filtered out
+(e.g. the caller's own prospect application, excluded via
+`hidden_prospect_ids`) and under-counts on `print_labels` when `copies > 1`
+(e.g. `copies=50` on one id logged `count: 1`). Fixed by using the specs
+actually rendered: `LabelService.generate()` now also returns `len(specs)`
+(`Tuple[BytesIO, int, int]`, was `Tuple[BytesIO, int]`), and `print_labels`
+uses `result["labels_sent"]` (`len(specs) * copies`, already computed by
+`LabelPrinterService.print_labels`) instead of `len(data.ids)`.
 
 ### LBL-29-2 — LOW — `GET /label-printers` requires no permission at all — 🚩 FLAGGED (deliberate design, permission-granularity policy)
 

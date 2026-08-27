@@ -2233,15 +2233,21 @@ generated or emailed, with no error at any point.
 
 **Fix applied (2026-08-27):** `SavedReportResponse.enforced` reports `False`
 (hardcoded — there is no per-row state to compute; see the comment on
-`SavedReport.is_scheduled` in `app/models/analytics.py`), so the frontend can
-label a saved report as "not yet automated" rather than badging it Active.
-The underlying scheduling fields are left writable (no data-model change) —
-wiring a `TASK_RUNNERS` entry that scans due `SavedReport` rows, generates,
-emails via the resolved creator's permissions (the RPT-3 PII gate lives only
-in the endpoint layer today, so a future sender must re-derive or enforce it
-itself before emailing `member_roster`/`pipeline_overview` output), and
-advances `next_run_date` is a feature addition, not a security-review
-drive-by fix.
+`SavedReport.is_scheduled` in `app/models/analytics.py`) and the frontend's
+`SavedReportConfig` type now carries the same field, so a future
+saved-reports screen can show a saved report as "not yet automated" rather
+than badging it Active. **No UI currently exposes this at all** —
+`ReportsPage.tsx` doesn't render saved reports despite `reportsStore.ts`/
+`services/api.ts` having full CRUD support for them — so nothing is
+mislabeled in the shipped app today; this closes the type gap Codex flagged
+on PR #1912 ahead of that screen being built. The underlying scheduling
+fields are left writable (no data-model change) — wiring a `TASK_RUNNERS`
+entry that scans due `SavedReport` rows, generates, emails via the resolved
+creator's permissions (the RPT-3 PII gate lives only in the endpoint layer
+today, so a future sender must re-derive or enforce it itself before
+emailing `member_roster`/`pipeline_overview` output), advances
+`next_run_date`, and builds the saved-reports screen itself is a feature
+addition, not a security-review drive-by fix.
 
 **Options for closing it:** (1) implement the `TASK_RUNNERS` reader, or (2)
 reject `is_scheduled=True` at the API layer with a clear "not yet supported"

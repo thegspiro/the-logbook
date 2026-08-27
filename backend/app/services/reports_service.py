@@ -56,9 +56,13 @@ def _safe_int(value: Any, default: int) -> int:
 def _is_valid_stage_groups(value: Any) -> bool:
     """True iff ``value`` is a well-formed client-supplied stage-groups
     override: a non-empty list of dicts, each with a string ``name`` and a
-    list ``step_ids``. Anything else (missing, wrong shape, a stray ``None``
-    entry) falls back to the pipeline's saved config rather than raising —
-    same no-op-on-invalid-filter contract as ``_safe_int``."""
+    list of string ``step_ids``. Anything else (missing, wrong shape, a
+    stray ``None``/non-string entry) falls back to the pipeline's saved
+    config rather than raising — same no-op-on-invalid-filter contract as
+    ``_safe_int``. Every step_id must itself be a string: `grouped_step_ids`
+    is later built with `set.update(group_step_ids)`, so an unhashable
+    element (e.g. a stray dict) would still crash downstream if this only
+    checked the container type."""
     if not isinstance(value, list) or not value:
         return False
     for group in value:
@@ -66,7 +70,10 @@ def _is_valid_stage_groups(value: Any) -> bool:
             return False
         if not isinstance(group.get("name"), str):
             return False
-        if not isinstance(group.get("step_ids"), list):
+        step_ids = group.get("step_ids")
+        if not isinstance(step_ids, list):
+            return False
+        if not all(isinstance(sid, str) for sid in step_ids):
             return False
     return True
 

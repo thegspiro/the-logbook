@@ -70,6 +70,12 @@ class TestIsValidStageGroups:
     def test_entry_with_wrong_types_is_invalid(self):
         assert _is_valid_stage_groups([{"name": 123, "step_ids": "s1"}]) is False
 
+    def test_non_string_step_id_is_invalid(self):
+        """A dict inside step_ids passes a container-type-only check but is
+        unhashable, so set.update(group_step_ids) downstream would still
+        raise TypeError — this must be rejected here, not just the container."""
+        assert _is_valid_stage_groups([{"name": "Early", "step_ids": [{}]}]) is False
+
     def test_well_formed_list_is_valid(self):
         assert (
             _is_valid_stage_groups([{"name": "Early", "step_ids": ["s1", "s2"]}])

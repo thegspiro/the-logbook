@@ -30,9 +30,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 **Flagged for a future decision**
 
 - A saved report can be marked "scheduled" with an email delivery list,
-  but nothing currently generates or sends it on that schedule — the
-  option is now labeled as not yet in effect instead of appearing active.
-  See `docs/KNOWN_LIMITATIONS.md`.
+  but nothing currently generates or sends it on that schedule. The API
+  now reports that a schedule isn't actually in effect, for whenever a
+  saved-reports screen is built (none exists in the app today). See
+  `docs/KNOWN_LIMITATIONS.md`.
 
 ### A denied role assignment during member creation could leave behind a live, unauthorized account (2026-08-27)
 
