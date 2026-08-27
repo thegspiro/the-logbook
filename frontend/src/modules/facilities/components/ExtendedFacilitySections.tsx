@@ -39,7 +39,7 @@ interface ResourceSectionProps<T extends { id: string }> {
   canCreate: boolean;
   /** Create/update affordances — backend accepts facilities.edit or facilities.manage. */
   canEdit: boolean;
-  /** Delete affordance — backend accepts facilities.manage only. */
+  /** Delete affordance — backend accepts facilities.delete or facilities.manage. */
   canDelete: boolean;
   fields: FieldDefinition[];
   /** Must be referentially stable (useCallback) — the fetch effect keys on it. */
@@ -278,8 +278,8 @@ const POLICY_TYPES = options([
 
 interface SectionProps {
   facilityId: string;
-  /** facilities.manage — delete affordances. */
-  canManage: boolean;
+  /** facilities.delete or facilities.manage — delete affordances. */
+  canDelete: boolean;
   /** facilities.create, facilities.edit, or facilities.manage — create affordances. */
   canCreate: boolean;
   /** facilities.edit or facilities.manage — update affordances (mirrors backend gates). */
@@ -403,7 +403,7 @@ function UtilityReadings({ accountId, canEdit }: { accountId: string; canEdit: b
   );
 }
 
-export function UtilitiesSection({ facilityId, canManage, canCreate, canEdit }: SectionProps) {
+export function UtilitiesSection({ facilityId, canDelete, canCreate, canEdit }: SectionProps) {
   // Stable per facilityId — an inline closure would re-trigger the section's
   // fetch effect on every completed request (infinite refetch loop).
   const load = useCallback(() => facilitiesService.getUtilityAccounts({ facility_id: facilityId }), [facilityId]);
@@ -413,7 +413,7 @@ export function UtilitiesSection({ facilityId, canManage, canCreate, canEdit }: 
       emptyMessage="No utility accounts have been added."
       canCreate={canCreate}
       canEdit={canEdit}
-      canDelete={canManage}
+      canDelete={canDelete}
       load={load}
       create={(v) =>
         facilitiesService.createUtilityAccount({
@@ -458,7 +458,7 @@ export function UtilitiesSection({ facilityId, canManage, canCreate, canEdit }: 
   );
 }
 
-export function AccessKeysSection({ facilityId, canManage, canCreate, canEdit }: SectionProps) {
+export function AccessKeysSection({ facilityId, canDelete, canCreate, canEdit }: SectionProps) {
   const load = useCallback(() => facilitiesService.getAccessKeys({ facility_id: facilityId }), [facilityId]);
   return (
     <ResourceSection<AccessKey>
@@ -466,7 +466,7 @@ export function AccessKeysSection({ facilityId, canManage, canCreate, canEdit }:
       emptyMessage="No keys or credentials are tracked."
       canCreate={canCreate}
       canEdit={canEdit}
-      canDelete={canManage}
+      canDelete={canDelete}
       load={load}
       create={(v) =>
         facilitiesService.createAccessKey({
@@ -512,7 +512,7 @@ export function AccessKeysSection({ facilityId, canManage, canCreate, canEdit }:
   );
 }
 
-export function ShutoffsSection({ facilityId, canManage, canCreate, canEdit }: SectionProps) {
+export function ShutoffsSection({ facilityId, canDelete, canCreate, canEdit }: SectionProps) {
   const load = useCallback(() => facilitiesService.getShutoffLocations({ facility_id: facilityId }), [facilityId]);
   return (
     <ResourceSection<ShutoffLocation>
@@ -520,7 +520,7 @@ export function ShutoffsSection({ facilityId, canManage, canCreate, canEdit }: S
       emptyMessage="No utility shutoffs are documented."
       canCreate={canCreate}
       canEdit={canEdit}
-      canDelete={canManage}
+      canDelete={canDelete}
       load={load}
       create={(v) =>
         facilitiesService.createShutoffLocation({
@@ -562,7 +562,7 @@ export function ShutoffsSection({ facilityId, canManage, canCreate, canEdit }: S
   );
 }
 
-export function CapitalProjectsSection({ facilityId, canManage, canCreate, canEdit }: SectionProps) {
+export function CapitalProjectsSection({ facilityId, canDelete, canCreate, canEdit }: SectionProps) {
   const load = useCallback(() => facilitiesService.getCapitalProjects({ facility_id: facilityId }), [facilityId]);
   return (
     <ResourceSection<CapitalProject>
@@ -570,7 +570,7 @@ export function CapitalProjectsSection({ facilityId, canManage, canCreate, canEd
       emptyMessage="No capital projects are tracked."
       canCreate={canCreate}
       canEdit={canEdit}
-      canDelete={canManage}
+      canDelete={canDelete}
       load={load}
       create={(v) =>
         facilitiesService.createCapitalProject({
@@ -622,7 +622,7 @@ export function CapitalProjectsSection({ facilityId, canManage, canCreate, canEd
   );
 }
 
-export function InsuranceSection({ facilityId, canManage, canCreate, canEdit }: SectionProps) {
+export function InsuranceSection({ facilityId, canDelete, canCreate, canEdit }: SectionProps) {
   const load = useCallback(() => facilitiesService.getInsurancePolicies({ facility_id: facilityId }), [facilityId]);
   return (
     <ResourceSection<InsurancePolicy>
@@ -630,7 +630,7 @@ export function InsuranceSection({ facilityId, canManage, canCreate, canEdit }: 
       emptyMessage="No insurance policies are tracked."
       canCreate={canCreate}
       canEdit={canEdit}
-      canDelete={canManage}
+      canDelete={canDelete}
       load={load}
       create={(v) =>
         facilitiesService.createInsurancePolicy({
@@ -683,7 +683,7 @@ export function InsuranceSection({ facilityId, canManage, canCreate, canEdit }: 
   );
 }
 
-export function OccupantsSection({ facilityId, canManage, canCreate, canEdit }: SectionProps) {
+export function OccupantsSection({ facilityId, canDelete, canCreate, canEdit }: SectionProps) {
   const load = useCallback(() => facilitiesService.getOccupants({ facility_id: facilityId }), [facilityId]);
   return (
     <ResourceSection<Occupant>
@@ -691,7 +691,7 @@ export function OccupantsSection({ facilityId, canManage, canCreate, canEdit }: 
       emptyMessage="No occupants or units are assigned."
       canCreate={canCreate}
       canEdit={canEdit}
-      canDelete={canManage}
+      canDelete={canDelete}
       load={load}
       create={(v) =>
         facilitiesService.createOccupant({

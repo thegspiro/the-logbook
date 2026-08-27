@@ -31,8 +31,8 @@ import { useFacilitiesAccess } from '../hooks/useFacilitiesAccess';
 
 export default function MaintenanceListPage() {
   // Create/edit/complete accept facilities.maintenance or facilities.edit on
-  // the backend; delete is manage-only.
-  const { canManage, canMaintenance } = useFacilitiesAccess();
+  // the backend; delete accepts facilities.delete or facilities.manage.
+  const { canDelete, canMaintenance } = useFacilitiesAccess();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const tz = useTimezone();
@@ -221,7 +221,7 @@ export default function MaintenanceListPage() {
                   >
                     <Wrench className="h-4 w-4" />
                   </button>
-                  {canManage && (
+                  {canDelete && (
                     <button
                       onClick={() => {
                         void handleDelete(record);

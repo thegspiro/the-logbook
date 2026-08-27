@@ -10,7 +10,7 @@ from enum import Enum
 from typing import Any, Dict, List, Literal, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 from app.core.constants import ADMIN_NOTIFY_ROLE_SLUGS
 from app.schemas.base import UTCResponseBase
@@ -349,7 +349,7 @@ class SchedulingNotificationSettings(BaseModel):
         default=False,
         description="Send email in addition to in-app notifications",
     )
-    cc_emails: List[str] = Field(
+    cc_emails: List[EmailStr] = Field(
         default_factory=list,
         description="Additional email addresses to CC on decline emails",
     )
@@ -442,7 +442,7 @@ class MemberDropNotificationSettings(BaseModel):
             "name will not match."
         ),
     )
-    cc_emails: List[str] = Field(
+    cc_emails: List[EmailStr] = Field(
         default_factory=list,
         description="Additional static email addresses always CC'd on drop notifications",
     )

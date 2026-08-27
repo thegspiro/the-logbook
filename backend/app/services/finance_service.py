@@ -15,10 +15,20 @@ from decimal import Decimal
 from typing import Optional
 
 from loguru import logger
-from sqlalchemy import Integer, and_, cast, func, or_, select
+from sqlalchemy import (
+    Integer,
+    and_,
+    cast,
+    exists,
+    func,
+    literal,
+    or_,
+    select,
+    union_all,
+)
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import contains_eager, selectinload
+from sqlalchemy.orm import aliased, contains_eager, selectinload
 
 from app.core.config import settings
 from app.models.finance import (
@@ -841,88 +851,131 @@ class FinanceService:
         await self.db.flush()
         return record
 
-    async def get_pending_approvals(self, user_id: str, org_id: str) -> list[dict]:
-        """Get all pending approval steps for the current org.
+    async def get_pending_approvals(
+        self, user_id: str, org_id: str, *, skip: int = 0, limit: int = 100
+    ) -> list[dict]:
+        """Return one currently actionable step per entity in one query.
 
-        FIN-9: the record query used to carry no organization filter at all,
-        scanning every tenant's PENDING approval steps and then running two
-        more queries per record (`_get_entity_info`, `get_current_pending_step`)
-        before `_get_entity_info`'s own org filter discarded anything that
-        wasn't this org's. The result was already org-confined; the query cost
-        wasn't. Resolving each entity type's org-scoped id set first and
-        filtering the record query on it keeps the same output — those ids are
-        exactly what `_get_entity_info` would have kept — while confining the
-        scan and the per-record follow-up queries to this organization.
+        ``user_id`` remains part of the public service signature for callers that
+        will eventually filter permission-based assignments.  Organization scope
+        is applied inside every arm of the entity union and again to requesters.
         """
-        # Correlated existence subqueries, not materialized id lists: the
-        # database does the filtering against its own indexes rather than
-        # Python holding every purchase-request/expense-report/check-request
-        # id an org has ever created (Codex review, PR #1809).
-        pr_ids = select(PurchaseRequest.id).where(
-            PurchaseRequest.organization_id == org_id
-        )
-        er_ids = select(ExpenseReport.id).where(ExpenseReport.organization_id == org_id)
-        cr_ids = select(CheckRequest.id).where(CheckRequest.organization_id == org_id)
+        del user_id
+        entities = union_all(
+            select(
+                PurchaseRequest.id.label("entity_id"),
+                literal(ApprovalEntityType.PURCHASE_REQUEST.value).label("entity_type"),
+                PurchaseRequest.title.label("title"),
+                PurchaseRequest.estimated_amount.label("amount"),
+                PurchaseRequest.requested_by.label("requester_id"),
+                PurchaseRequest.created_at.label("submitted_at"),
+            ).where(PurchaseRequest.organization_id == org_id),
+            select(
+                ExpenseReport.id,
+                literal(ApprovalEntityType.EXPENSE_REPORT.value),
+                ExpenseReport.title,
+                ExpenseReport.total_amount,
+                ExpenseReport.submitted_by,
+                ExpenseReport.created_at,
+            ).where(ExpenseReport.organization_id == org_id),
+            select(
+                CheckRequest.id,
+                literal(ApprovalEntityType.CHECK_REQUEST.value),
+                literal("Check to ") + CheckRequest.payee_name,
+                CheckRequest.amount,
+                CheckRequest.requested_by,
+                CheckRequest.created_at,
+            ).where(CheckRequest.organization_id == org_id),
+        ).subquery("pending_entities")
 
-        result = await self.db.execute(
-            select(ApprovalStepRecord)
-            .options(selectinload(ApprovalStepRecord.step))
+        prior_record = aliased(ApprovalStepRecord)
+        prior_step = aliased(ApprovalChainStep)
+        has_earlier_pending_step = exists(
+            select(1)
+            .select_from(prior_record)
+            .join(prior_step, prior_step.id == prior_record.step_id)
             .where(
-                ApprovalStepRecord.status == ApprovalStepStatus.PENDING,
+                prior_record.entity_type == ApprovalStepRecord.entity_type,
+                prior_record.entity_id == ApprovalStepRecord.entity_id,
+                prior_record.status == ApprovalStepStatus.PENDING,
                 or_(
+                    prior_step.step_order < ApprovalChainStep.step_order,
                     and_(
-                        ApprovalStepRecord.entity_type
-                        == ApprovalEntityType.PURCHASE_REQUEST,
-                        ApprovalStepRecord.entity_id.in_(pr_ids),
-                    ),
-                    and_(
-                        ApprovalStepRecord.entity_type
-                        == ApprovalEntityType.EXPENSE_REPORT,
-                        ApprovalStepRecord.entity_id.in_(er_ids),
-                    ),
-                    and_(
-                        ApprovalStepRecord.entity_type
-                        == ApprovalEntityType.CHECK_REQUEST,
-                        ApprovalStepRecord.entity_id.in_(cr_ids),
+                        prior_step.step_order == ApprovalChainStep.step_order,
+                        or_(
+                            prior_record.created_at < ApprovalStepRecord.created_at,
+                            and_(
+                                prior_record.created_at
+                                == ApprovalStepRecord.created_at,
+                                prior_record.id < ApprovalStepRecord.id,
+                            ),
+                        ),
                     ),
                 ),
             )
         )
-        pending_records = list(result.scalars().all())
+
+        result = await self.db.execute(
+            select(
+                ApprovalStepRecord.id.label("step_record_id"),
+                ApprovalStepRecord.entity_type,
+                entities.c.entity_id,
+                entities.c.title,
+                entities.c.amount,
+                entities.c.submitted_at,
+                ApprovalChainStep.name.label("step_name"),
+                ApprovalChainStep.step_order,
+                User.first_name,
+                User.last_name,
+                User.username,
+            )
+            .join(
+                entities,
+                and_(
+                    entities.c.entity_id == ApprovalStepRecord.entity_id,
+                    entities.c.entity_type == ApprovalStepRecord.entity_type,
+                ),
+            )
+            .join(ApprovalChainStep, ApprovalChainStep.id == ApprovalStepRecord.step_id)
+            .outerjoin(
+                User,
+                and_(
+                    User.id == entities.c.requester_id,
+                    User.organization_id == org_id,
+                    User.deleted_at.is_(None),
+                ),
+            )
+            .where(
+                ApprovalStepRecord.status == ApprovalStepStatus.PENDING,
+                ~has_earlier_pending_step,
+            )
+            .order_by(
+                entities.c.submitted_at.desc(),
+                entities.c.entity_type,
+                entities.c.entity_id,
+                ApprovalStepRecord.id,
+            )
+            .offset(skip)
+            .limit(limit)
+        )
 
         approvals = []
-        for record in pending_records:
-            # Determine entity details
-            entity_info = await self._get_entity_info(
-                record.entity_type, record.entity_id, org_id
-            )
-            if not entity_info:
-                continue
-
-            # Check if this step is the current active step
-            current_step = await self.get_current_pending_step(
-                record.entity_type, record.entity_id, org_id
-            )
-            if not current_step or current_step.id != record.id:
-                continue
-
-            step_name = record.step.name if record.step else "Unknown"
-            step_order = record.step.step_order if record.step else 0
-
+        for row in result:
+            requester_name = " ".join(filter(None, (row.first_name, row.last_name)))
+            requester_name = requester_name.strip() or row.username or "Unknown"
             approvals.append(
                 {
-                    "step_record_id": record.id,
-                    "entity_type": record.entity_type.value,
-                    "entity_id": record.entity_id,
-                    "entity_title": entity_info.get("title", ""),
-                    "entity_amount": entity_info.get("amount", 0),
-                    "requester_name": entity_info.get("requester_name", ""),
-                    "step_name": step_name,
-                    "step_order": step_order,
-                    "submitted_at": entity_info.get("submitted_at", record.created_at),
+                    "step_record_id": row.step_record_id,
+                    "entity_type": row.entity_type.value,
+                    "entity_id": row.entity_id,
+                    "entity_title": row.title,
+                    "entity_amount": float(row.amount),
+                    "requester_name": requester_name,
+                    "step_name": row.step_name,
+                    "step_order": row.step_order,
+                    "submitted_at": row.submitted_at,
                 }
             )
-
         return approvals
 
     async def preview_approval_chain(

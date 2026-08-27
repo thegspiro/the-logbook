@@ -51,7 +51,7 @@ class TestApparatusBuilder:
 
     async def test_renders_pdf(self):
         a = self._apparatus()
-        pdf, _ = await _service_returning(a).generate(
+        pdf, _, _ = await _service_returning(a).generate(
             uuid4(), "apparatus", [a.id], "letter"
         )
         assert pdf.getvalue()[:4] == b"%PDF"
@@ -79,7 +79,7 @@ class TestProspectBuilder:
 
     async def test_renders_pdf(self):
         p = self._prospect()
-        pdf, _ = await _service_returning(p).generate(
+        pdf, _, _ = await _service_returning(p).generate(
             uuid4(), "prospective_members", [p.id], "rollo_2x1"
         )
         assert pdf.getvalue()[:4] == b"%PDF"
@@ -105,7 +105,7 @@ class TestFacilityBuilder:
 
     async def test_renders_pdf(self):
         f = self._facility()
-        pdf, _ = await _service_returning(f).generate(
+        pdf, _, _ = await _service_returning(f).generate(
             uuid4(), "facilities", [f.id], "dymo_30334"
         )
         assert pdf.getvalue()[:4] == b"%PDF"
@@ -139,7 +139,7 @@ class TestMemberBuilder:
 
     async def test_renders_pdf(self):
         u = self._user()
-        pdf, _ = await _service_returning(u).generate(
+        pdf, _, _ = await _service_returning(u).generate(
             uuid4(), "membership", [u.id], "letter"
         )
         assert pdf.getvalue()[:4] == b"%PDF"

@@ -151,9 +151,12 @@ from app.schemas.inventory import (
     NFPAExposureRecordCreate,
     NFPAExposureRecordResponse,
     NFPASummaryResponse,
+    ReorderCorrectionRequest,
+    ReorderReceiptCreate,
     ReorderRequestCreate,
     ReorderRequestResponse,
     ReorderRequestUpdate,
+    ReorderTransitionRequest,
     ResolveClearanceItemRequest,
     ReturnRequestCreate,
     ReturnRequestResponse,
@@ -3758,6 +3761,7 @@ async def fulfill_equipment_request(
         quantity=fulfill_data.quantity,
         expected_return_at=fulfill_data.expected_return_at,
         override_allowance=fulfill_data.override_allowance,
+        fulfillment_type=fulfill_data.fulfillment_type,
     )
 
     if error:
@@ -4648,6 +4652,9 @@ async def review_write_off_request(
         reviewed_by=str(current_user.id),
         decision=review_data.status,
         review_notes=review_data.review_notes,
+        acknowledgement=review_data.acknowledgement,
+        expected_item_status=review_data.expected_item_status,
+        expected_holder_signature=review_data.expected_holder_signature,
     )
 
     if error:
@@ -5778,6 +5785,9 @@ def _reorder_response(req) -> ReorderRequestResponse:
     caller did not eager-load it, so the name is simply left unset.
     """
     resp = ReorderRequestResponse.model_validate(req)
+    resp.quantity_outstanding = max(
+        0, req.quantity_requested - (req.quantity_received or 0)
+    )
     requester = req.__dict__.get("requester")
     if requester is not None:
         resp.requester_name = (
@@ -5879,6 +5889,126 @@ async def create_reorder_request(
     )
 
     return _reorder_response(reorder)
+
+
+@router.post(
+    "/reorder-requests/{request_id}/transition", response_model=ReorderRequestResponse
+)
+async def transition_reorder_request(
+    request_id: UUID,
+    data: ReorderTransitionRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    service = InventoryService(db)
+    payload = data.model_dump(exclude_unset=True)
+    reorder, error = await service.transition_reorder_request(
+        request_id, current_user.organization_id, payload, current_user.id
+    )
+    if error:
+        raise HTTPException(
+            status_code=409 if "another user" in error else 400, detail=error
+        )
+    await log_audit_event(
+        db=db,
+        event_type="reorder_status_transition",
+        event_category="inventory",
+        severity="info",
+        event_data={
+            "resource_type": "reorder_request",
+            "resource_id": str(reorder.id),
+            "action": data.action,
+            "status": reorder.status.value,
+        },
+        user_id=str(current_user.id),
+        organization_id=str(current_user.organization_id),
+    )
+    await db.commit()
+    return _reorder_response(
+        await service.get_reorder_request(
+            request_id, current_user.organization_id, True
+        )
+    )
+
+
+@router.post(
+    "/reorder-requests/{request_id}/correct-status",
+    response_model=ReorderRequestResponse,
+)
+async def correct_reorder_status(
+    request_id: UUID,
+    data: ReorderCorrectionRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    service = InventoryService(db)
+    reorder, error = await service.correct_reorder_status(
+        request_id, current_user.organization_id, data.model_dump()
+    )
+    if error:
+        raise HTTPException(
+            status_code=409 if "another user" in error else 400, detail=error
+        )
+    await log_audit_event(
+        db=db,
+        event_type="reorder_status_corrected",
+        event_category="inventory",
+        severity="warning",
+        event_data={
+            "resource_type": "reorder_request",
+            "resource_id": str(reorder.id),
+            "status": data.status,
+            "reason": data.reason,
+        },
+        user_id=str(current_user.id),
+        organization_id=str(current_user.organization_id),
+    )
+    await db.commit()
+    return _reorder_response(
+        await service.get_reorder_request(
+            request_id, current_user.organization_id, True
+        )
+    )
+
+
+@router.post(
+    "/reorder-requests/{request_id}/receipts", response_model=ReorderRequestResponse
+)
+async def receive_reorder_stock(
+    request_id: UUID,
+    data: ReorderReceiptCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    service = InventoryService(db)
+    reorder, error = await service.receive_reorder(
+        request_id, current_user.organization_id, data.model_dump(), current_user.id
+    )
+    if error:
+        raise HTTPException(
+            status_code=409 if ("already" in error or "another user" in error) else 400,
+            detail=error,
+        )
+    await log_audit_event(
+        db=db,
+        event_type="reorder_stock_received",
+        event_category="inventory",
+        severity="info",
+        event_data={
+            "resource_type": "reorder_request",
+            "resource_id": str(reorder.id),
+            "quantity": data.quantity,
+            "idempotency_key": data.idempotency_key,
+        },
+        user_id=str(current_user.id),
+        organization_id=str(current_user.organization_id),
+    )
+    await db.commit()
+    return _reorder_response(
+        await service.get_reorder_request(
+            request_id, current_user.organization_id, True
+        )
+    )
 
 
 @router.patch("/reorder-requests/{request_id}", response_model=ReorderRequestResponse)

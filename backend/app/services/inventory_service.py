@@ -44,6 +44,7 @@ from app.models.inventory import (
     MemberSizePreferences,
     NFPAInspectionDetail,
     NFPAItemCompliance,
+    ReorderReceipt,
     ReorderRequest,
     ReorderStatus,
     RequestStatus,
@@ -4151,6 +4152,7 @@ class InventoryService:
             requester_name = self._format_user_name(wo.requester) or None
             reviewer_name = self._format_user_name(wo.reviewer) or None
 
+            detail = await self._write_off_item_detail(wo, organization_id)
             requests.append(
                 {
                     "id": wo.id,
@@ -4172,9 +4174,156 @@ class InventoryService:
                     "review_notes": wo.review_notes,
                     "clearance_id": wo.clearance_id,
                     "created_at": wo.created_at.isoformat() if wo.created_at else None,
+                    **detail,
                 }
             )
         return requests
+
+    async def _write_off_item_detail(
+        self, wo: WriteOffRequest, organization_id: str
+    ) -> Dict[str, Any]:
+        """Return the live, safety-critical facts shown by the review dialog."""
+        if not wo.item_id:
+            return {}
+        item = (
+            await self.db.execute(
+                select(InventoryItem).where(
+                    InventoryItem.id == wo.item_id,
+                    InventoryItem.organization_id == organization_id,
+                )
+            )
+        ).scalar_one_or_none()
+        if not item:
+            return {"current_status": "deleted", "holder_signature": "deleted"}
+
+        assignments = (
+            (
+                await self.db.execute(
+                    select(ItemAssignment)
+                    .where(
+                        ItemAssignment.item_id == item.id,
+                        ItemAssignment.is_active.is_(True),
+                    )
+                    .options(selectinload(ItemAssignment.user))
+                )
+            )
+            .scalars()
+            .all()
+        )
+        checkouts = (
+            (
+                await self.db.execute(
+                    select(CheckOutRecord)
+                    .where(
+                        CheckOutRecord.item_id == item.id,
+                        CheckOutRecord.is_returned.is_(False),
+                    )
+                    .options(selectinload(CheckOutRecord.user))
+                )
+            )
+            .scalars()
+            .all()
+        )
+        issuances = (
+            (
+                await self.db.execute(
+                    select(ItemIssuance)
+                    .where(
+                        ItemIssuance.item_id == item.id,
+                        ItemIssuance.is_returned.is_(False),
+                    )
+                    .options(selectinload(ItemIssuance.user))
+                )
+            )
+            .scalars()
+            .all()
+        )
+        holders = [r.user for r in [*assignments, *checkouts, *issuances] if r.user]
+        if item.assigned_to_user_id and not holders:
+            holder = (
+                await self.db.execute(
+                    select(User).where(User.id == item.assigned_to_user_id)
+                )
+            ).scalar_one_or_none()
+            if holder:
+                holders.append(holder)
+        holder_names = sorted(
+            {self._format_user_name(user) or user.username for user in holders}
+        )
+        signature = ":".join(
+            [
+                # assigned_to_user_id is a String column, but an assignment made
+                # earlier in the same session still holds the UUID object the
+                # caller passed, so join() would raise on it.
+                str(item.assigned_to_user_id) if item.assigned_to_user_id else "none",
+                *(sorted(str(r.id) for r in assignments)),
+                *(sorted(str(r.id) for r in checkouts)),
+                *(sorted(str(r.id) for r in issuances)),
+            ]
+        )
+        maintenance = (
+            await self.db.execute(
+                select(MaintenanceRecord)
+                .where(
+                    MaintenanceRecord.item_id == item.id,
+                    MaintenanceRecord.is_completed.is_(False),
+                )
+                .order_by(MaintenanceRecord.created_at.desc())
+                .limit(1)
+            )
+        ).scalar_one_or_none()
+        charged = next(
+            (
+                r
+                for r in issuances
+                if getattr(r.charge_status, "value", r.charge_status) != "none"
+            ),
+            None,
+        )
+        org = (
+            await self.db.execute(
+                select(Organization).where(Organization.id == organization_id)
+            )
+        ).scalar_one()
+        inventory_settings = (org.settings or {}).get("inventory", {})
+        threshold = float(
+            inventory_settings.get(
+                "write_off_acknowledgement_threshold",
+                (org.settings or {}).get("write_off_acknowledgement_threshold", 1000),
+            )
+        )
+        replacement_value = (
+            item.replacement_cost or item.current_value or item.purchase_price
+        )
+        replacement_float = (
+            float(replacement_value) if replacement_value is not None else None
+        )
+        held = bool(assignments or checkouts or issuances or item.assigned_to_user_id)
+        return {
+            "current_holder": ", ".join(holder_names) if holder_names else None,
+            "current_status": item.status.value,
+            "replacement_value": replacement_float,
+            "clearance_record": (
+                f"Clearance {wo.clearance_id}" if wo.clearance_id else None
+            ),
+            "linked_charge_record": (
+                f"Issuance {charged.id} ({charged.charge_status.value})"
+                if charged
+                else None
+            ),
+            "open_maintenance_record": (
+                f"{maintenance.maintenance_type.value} — {maintenance.description or 'No description'}"
+                if maintenance
+                else None
+            ),
+            "active_assignment_count": len(assignments),
+            "active_checkout_count": len(checkouts),
+            "active_issuance_count": len(issuances),
+            "acknowledgement_required": held
+            or (replacement_float is not None and replacement_float > threshold),
+            "acknowledgement_threshold": threshold,
+            "holder_signature": signature,
+        }
 
     async def review_write_off(
         self,
@@ -4183,17 +4332,24 @@ class InventoryService:
         reviewed_by: str,
         decision: str,
         review_notes: Optional[str] = None,
+        acknowledgement: bool = False,
+        expected_item_status: Optional[str] = None,
+        expected_holder_signature: Optional[str] = None,
     ) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
         """Approve or deny a write-off request. On approval, retire the item."""
         try:
             if decision not in ("approved", "denied"):
                 return None, "Decision must be 'approved' or 'denied'"
+            if not review_notes or not review_notes.strip():
+                return None, "A review note is required"
 
             result = await self.db.execute(
-                select(WriteOffRequest).where(
+                select(WriteOffRequest)
+                .where(
                     WriteOffRequest.id == write_off_id,
                     WriteOffRequest.organization_id == organization_id,
                 )
+                .with_for_update()
             )
             wo = result.scalar_one_or_none()
             if not wo:
@@ -4201,6 +4357,32 @@ class InventoryService:
 
             if wo.status != WriteOffStatus.PENDING:
                 return None, f"Request already {wo.status.value}"
+
+            if decision == "approved":
+                # Serialize approval with item mutations; the client snapshot below
+                # then acts as an optimistic precondition rather than stale UI data.
+                if wo.item_id:
+                    await self.db.execute(
+                        select(InventoryItem)
+                        .where(
+                            InventoryItem.id == wo.item_id,
+                            InventoryItem.organization_id == organization_id,
+                        )
+                        .with_for_update()
+                    )
+                live = await self._write_off_item_detail(wo, organization_id)
+                if expected_item_status != live.get(
+                    "current_status"
+                ) or expected_holder_signature != live.get("holder_signature"):
+                    return (
+                        None,
+                        "Item status or holder changed; refresh and review again",
+                    )
+                if live.get("acknowledgement_required") and not acknowledgement:
+                    return (
+                        None,
+                        "Acknowledgement is required for a held or high-value item",
+                    )
 
             now = datetime.now(timezone.utc)
             wo.status = WriteOffStatus(decision)
@@ -4510,9 +4692,9 @@ class InventoryService:
             }
 
         # Count issued this period
+        now = datetime.now(timezone.utc)
         period_start = None
         if allowance.period_type == "annual":
-            now = datetime.now(timezone.utc)
             period_start = datetime(now.year, 1, 1, tzinfo=timezone.utc)
         # "career" and "one_time" count all time
 
@@ -5767,20 +5949,14 @@ class InventoryService:
             if not reorder:
                 return None, "Reorder request not found"
 
+            if "quantity_received" in data:
+                return None, "Received quantity changes require the receiving workflow"
+
             await self._assert_reorder_fks_in_org(data, organization_id)
 
-            now = datetime.now(timezone.utc)
             new_status = data.get("status")
-
-            # Handle status transitions
             if new_status and new_status != reorder.status.value:
-                if new_status == "approved":
-                    data["approved_by"] = current_user_id
-                    data["approved_at"] = now
-                elif new_status == "ordered":
-                    data["ordered_at"] = now
-                elif new_status == "received":
-                    data["received_at"] = now
+                return None, "Status changes require a workflow action"
 
             for key, value in data.items():
                 setattr(reorder, key, value)
@@ -5797,6 +5973,154 @@ class InventoryService:
         except Exception as e:
             logger.error(f"Error updating reorder request: {e}")
             return None, str(e)
+
+    async def transition_reorder_request(
+        self, request_id, organization_id, data, current_user_id
+    ):
+        """Apply only an allowed forward/cancellation edge under a row lock."""
+        row = await self.db.scalar(
+            select(ReorderRequest)
+            .where(
+                ReorderRequest.id == str(request_id),
+                ReorderRequest.organization_id == str(organization_id),
+            )
+            .with_for_update()
+        )
+        if not row:
+            return None, "Reorder request not found"
+        if row.version != data["expected_version"]:
+            return None, "Reorder request was updated by another user; reload and retry"
+        current = row.status.value
+        action = data["action"]
+        edges = {
+            ("pending", "approve"): "approved",
+            ("approved", "mark_ordered"): "ordered",
+        }
+        target = edges.get((current, action))
+        if action == "cancel" and current in {"pending", "approved", "ordered"}:
+            target = "cancelled"
+        if not target:
+            return None, f"Action {action} is not allowed from {current}"
+        now = datetime.now(timezone.utc)
+        if target == "approved":
+            row.approved_by, row.approved_at = current_user_id, now
+        if target == "ordered":
+            if "vendor_id" in data:
+                await self._assert_reorder_fks_in_org(
+                    {"vendor_id": data.get("vendor_id")}, organization_id
+                )
+                row.vendor_id = (
+                    str(data["vendor_id"]) if data.get("vendor_id") else None
+                )
+            if data.get("vendor"):
+                row.vendor = data["vendor"].strip()
+            if data.get("purchase_order_number"):
+                row.purchase_order_number = data["purchase_order_number"].strip()
+            org = await self.db.get(Organization, str(organization_id))
+            if org.reorder_vendor_required and not (
+                row.vendor_id or (row.vendor and row.vendor.strip())
+            ):
+                return None, "Department policy requires a vendor before ordering"
+            if org.reorder_po_required and not (
+                row.purchase_order_number and row.purchase_order_number.strip()
+            ):
+                return (
+                    None,
+                    "Department policy requires a purchase-order reference before ordering",
+                )
+            row.ordered_at = now
+        row.status = ReorderStatus(target)
+        row.version += 1
+        await self.db.flush()
+        return row, None
+
+    async def correct_reorder_status(self, request_id, organization_id, data):
+        row = await self.db.scalar(
+            select(ReorderRequest)
+            .where(
+                ReorderRequest.id == str(request_id),
+                ReorderRequest.organization_id == str(organization_id),
+            )
+            .with_for_update()
+        )
+        if not row:
+            return None, "Reorder request not found"
+        if row.version != data["expected_version"]:
+            return None, "Reorder request was updated by another user; reload and retry"
+        row.status = ReorderStatus(data["status"])
+        row.version += 1
+        await self.db.flush()
+        return row, None
+
+    async def receive_reorder(self, request_id, organization_id, data, current_user_id):
+        """Atomically append receipt history, create stock, and advance status."""
+        row = await self.db.scalar(
+            select(ReorderRequest)
+            .where(
+                ReorderRequest.id == str(request_id),
+                ReorderRequest.organization_id == str(organization_id),
+            )
+            .with_for_update()
+        )
+        if not row:
+            return None, "Reorder request not found"
+        prior = await self.db.scalar(
+            select(ReorderReceipt).where(
+                ReorderReceipt.reorder_request_id == row.id,
+                ReorderReceipt.idempotency_key == data["idempotency_key"],
+            )
+        )
+        if prior:
+            return None, "This receipt has already been recorded"
+        if row.version != data["expected_version"]:
+            return None, "Reorder request was updated by another user; reload and retry"
+        if row.status not in {ReorderStatus.ORDERED, ReorderStatus.PARTIALLY_RECEIVED}:
+            return None, f"Stock cannot be received from {row.status.value}"
+        if not row.item_id:
+            return None, "Link an inventory item before receiving stock"
+        outstanding = row.quantity_requested - row.quantity_received
+        if data["quantity"] > outstanding and not data.get("confirm_over_receipt"):
+            return (
+                None,
+                f"Quantity exceeds the outstanding quantity ({outstanding}); confirm over-receipt",
+            )
+        lot = InventoryLot(
+            organization_id=str(organization_id),
+            inventory_item_id=row.item_id,
+            lot_number=data.get("lot_number"),
+            expiration_date=data.get("expiration_date"),
+            quantity=data["quantity"],
+            received_date=date.today(),
+            storage_location=data["storage_location"],
+            unit_cost=data["unit_cost"],
+            created_by=current_user_id,
+        )
+        self.db.add(lot)
+        await self.db.flush()
+        receipt = ReorderReceipt(
+            organization_id=str(organization_id),
+            reorder_request_id=row.id,
+            inventory_lot_id=lot.id,
+            idempotency_key=data["idempotency_key"],
+            quantity=data["quantity"],
+            unit_cost=data["unit_cost"],
+            storage_location=data["storage_location"],
+            received_by=current_user_id,
+        )
+        self.db.add(receipt)
+        row.quantity_received += data["quantity"]
+        row.actual_unit_cost = data["unit_cost"]
+        row.status = (
+            ReorderStatus.RECEIVED
+            if row.quantity_received >= row.quantity_requested
+            else ReorderStatus.PARTIALLY_RECEIVED
+        )
+        row.received_at = (
+            datetime.now(timezone.utc) if row.status == ReorderStatus.RECEIVED else None
+        )
+        row.version += 1
+        await self.db.flush()
+        return row, None
 
     async def delete_reorder_request(
         self, request_id: UUID, organization_id: UUID
@@ -6179,6 +6503,7 @@ class InventoryService:
         quantity: Optional[int] = None,
         expected_return_at: Optional[datetime] = None,
         override_allowance: bool = False,
+        fulfillment_type: Optional[str] = None,
     ) -> Tuple[Optional[EquipmentRequest], Optional[str]]:
         """Turn an approved equipment request into a real issuance, checkout,
         or assignment, then mark the request fulfilled and link it back to the
@@ -6248,7 +6573,38 @@ class InventoryService:
             requester_id = UUID(req.requester_id)
             request_type = self._enum_value(req.request_type)
 
-            fulfillment_type: str
+            if item.tracking_type == TrackingType.POOL:
+                if request_type != RequestType.ISSUANCE.value:
+                    await self._revert_fulfillment_claim(request_id, organization_id)
+                    return (
+                        None,
+                        "Pool items only support issuance requests because stock is issued by quantity",
+                    )
+                expected_fulfillment_type = "issuance"
+            else:
+                if request_type not in {
+                    RequestType.CHECKOUT.value,
+                    RequestType.ISSUANCE.value,
+                }:
+                    await self._revert_fulfillment_claim(request_id, organization_id)
+                    return (
+                        None,
+                        "Individually tracked items only support checkout or assignment requests",
+                    )
+                expected_fulfillment_type = (
+                    "checkout"
+                    if request_type == RequestType.CHECKOUT.value
+                    else "assignment"
+                )
+
+            if fulfillment_type and fulfillment_type != expected_fulfillment_type:
+                await self._revert_fulfillment_claim(request_id, organization_id)
+                return None, (
+                    f"Unsupported fulfillment: {request_type} intent for a "
+                    f"{self._enum_value(item.tracking_type)} item must use {expected_fulfillment_type}"
+                )
+
+            fulfillment_type = expected_fulfillment_type
             reference_id: str
             try:
                 if item.tracking_type == TrackingType.POOL:
@@ -6261,7 +6617,6 @@ class InventoryService:
                         reason="Equipment request fulfillment",
                         override_allowance=override_allowance,
                     )
-                    fulfillment_type = "issuance"
                     reference_id = str(issuance.id) if issuance else ""
                 elif request_type == RequestType.CHECKOUT.value:
                     checkout, err = await self.checkout_item(
@@ -6272,7 +6627,6 @@ class InventoryService:
                         expected_return_at=expected_return_at,
                         reason="Equipment request fulfillment",
                     )
-                    fulfillment_type = "checkout"
                     reference_id = str(checkout.id) if checkout else ""
                 else:
                     assignment, err = await self.assign_item_to_user(
@@ -6293,7 +6647,6 @@ class InventoryService:
                         expected_return_date=expected_return_at,
                         reason="Equipment request fulfillment",
                     )
-                    fulfillment_type = "assignment"
                     reference_id = str(assignment.id) if assignment else ""
             except Exception:
                 await self._revert_fulfillment_claim(request_id, organization_id)
@@ -6767,6 +7120,7 @@ class InventoryService:
                 if allowance is not None:
                     groups.setdefault(allowance.id, []).append(uid)
             by_id = {a.id: a for a in allowances}
+            now = datetime.now(timezone.utc)
             for aid, uids in groups.items():
                 allowance = by_id[aid]
                 q = (
@@ -6780,7 +7134,6 @@ class InventoryService:
                     .group_by(ItemIssuance.user_id)
                 )
                 if allowance.period_type == "annual":
-                    now = datetime.now(timezone.utc)
                     q = q.where(
                         ItemIssuance.issued_at
                         >= datetime(now.year, 1, 1, tzinfo=timezone.utc)
