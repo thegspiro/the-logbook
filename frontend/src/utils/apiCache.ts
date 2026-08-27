@@ -42,6 +42,7 @@ const UNCACHEABLE_PREFIXES = [
   '/email-templates/scheduled', // scheduled emails: recipient PII
   '/officers', // office holders: member names, emails, phone numbers (PII)
   '/nfc-tags', // member ID card credentials: names, card state, usage (PII + security)
+  '/testing-checklist', // shared testing run: another tester's mark can land at any moment, and a stale one reads as a lost result
   '/training/waivers', // medical/health waivers (PHI)
   '/training/submissions/', // user-specific training submissions
   '/training/shift-reports/', // attendance/location data

@@ -68,6 +68,7 @@ from app.api.v1.endpoints import (
     skills_testing,
     station_documents,
     storefront,
+    testing_checklist,
     training,
     training_enhancements,
     training_module_config,
@@ -330,6 +331,12 @@ api_router.include_router(
 )
 api_router.include_router(error_logs.router, prefix="/errors", tags=["errors"])
 api_router.include_router(audit_logs.router, prefix="/audit-logs", tags=["audit-logs"])
+# The in-app testing home's shared run. Writing is open to any signed-in
+# member by design — proving a gate refuses the right people means testing
+# from those accounts — while reading everyone's marks needs settings.manage.
+api_router.include_router(
+    testing_checklist.router, prefix="/testing-checklist", tags=["testing-checklist"]
+)
 api_router.include_router(
     integrations.router,
     prefix="/integrations",

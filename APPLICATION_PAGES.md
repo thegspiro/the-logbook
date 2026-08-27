@@ -99,13 +99,23 @@ Complete reference of all pages in the application, organized by module.
 | `/testing` | Testing Home | Authenticated |
 
 > An index of every route in this document, as boxes that open the page and
-> record Pass/Fail/Blocked plus a note, kept in the browser's local storage.
+> record Pass/Fail/Blocked plus a note. The run is stored per department, one
+> row per tester per page (`/api/v1/testing-checklist`), so a member testing
+> from their own account and an officer testing from theirs contribute to the
+> same list.
+>
 > Each box also shows the gate its route enforces and whether the signed-in
 > account satisfies it, which is how the permission gates are tested from the
 > outside — so the route is deliberately **authenticated-only**: a page a
 > firefighter could not open would be useless for checking what a firefighter
 > is refused. The navigation entry is gated on `settings.manage`; the URL is
-> not. See TESTING_CHECKLIST.md → "How to work through this".
+> not.
+>
+> `settings.manage` (which the System Owner's `*` covers) additionally opens
+> **every tester's** marks: each box lists what other accounts found and the
+> position they held, and the same grant unlocks clearing the department's
+> whole run — an audited, irreversible action. Without it a tester reads and
+> clears only their own. See TESTING_CHECKLIST.md → "How to work through this".
 
 ---
 

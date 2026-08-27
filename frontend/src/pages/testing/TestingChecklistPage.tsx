@@ -13,7 +13,7 @@
  * administrator could open could not be used for that.
  */
 
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   ClipboardCheck,
   ChevronDown,
@@ -24,6 +24,7 @@ import {
   RotateCcw,
   Search,
   ShieldCheck,
+  Users,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAuthStore } from '../../stores/authStore';
@@ -35,7 +36,7 @@ import { TESTING_GROUPS } from './testingRegistry';
 import type { TestPageEntry } from './testingRegistry';
 import { evaluatePageAccess } from './pageAccess';
 import type { PageAccess } from './pageAccess';
-import { useTestingChecklist } from './useTestingChecklist';
+import { SEE_ALL_TESTERS_PERMISSION, useTestingChecklist } from './useTestingChecklist';
 import type { TestStatus } from './useTestingChecklist';
 import { TestPageCard } from './TestPageCard';
 
@@ -56,7 +57,25 @@ export const TestingChecklistPage: React.FC = () => {
   const { isModuleOn, enabledModules } = useEnabledModules();
   const { confirm } = useConfirm();
   const tz = useTimezone();
-  const { results, summary, setStatus, setNote, setParam, clearAll, toMarkdown } = useTestingChecklist();
+  // The IT manager reads every tester's marks — that is what makes signing in
+  // as each position in turn a usable method rather than three separate runs
+  // nobody can compare. Everybody else reads their own.
+  const canSeeAllTesters = checkPermission(SEE_ALL_TESTERS_PERMISSION);
+  const {
+    results,
+    otherMarks,
+    summary,
+    coveredByAnyone,
+    testerCount,
+    isLoading,
+    loadError,
+    reload,
+    setStatus,
+    setNote,
+    setParam,
+    clearAll,
+    toMarkdown,
+  } = useTestingChecklist(canSeeAllTesters);
 
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
@@ -123,13 +142,24 @@ export const TestingChecklistPage: React.FC = () => {
 
   const handleClear = async () => {
     const confirmed = await confirm({
-      title: 'Clear this testing run?',
-      message: `${summary.pass + summary.fail + summary.blocked} marks and every note will be removed from this browser. Copy the Markdown first if you need the record.`,
-      confirmLabel: 'Clear the run',
-      cancelLabel: 'Keep it',
+      title: 'Clear your testing run?',
+      message: `${summary.pass + summary.fail + summary.blocked} of your marks, and their notes, will be deleted for everyone. Other testers' marks are left alone. Copy the Markdown first if you need the record.`,
+      confirmLabel: 'Delete my marks',
+      cancelLabel: 'Keep them',
       variant: 'danger',
     });
-    if (confirmed) clearAll();
+    if (confirmed) await clearAll('mine');
+  };
+
+  const handleClearEveryone = async () => {
+    const confirmed = await confirm({
+      title: "Clear every tester's run?",
+      message: `All ${testerCount} tester${testerCount === 1 ? "'s" : "s'"} marks and notes will be deleted for the whole department. This cannot be undone, and it is recorded in the audit log.`,
+      confirmLabel: 'Delete every mark',
+      cancelLabel: 'Keep them',
+      variant: 'danger',
+    });
+    if (confirmed) await clearAll('all');
   };
 
   const toggleGroup = (id: string) =>
@@ -139,14 +169,6 @@ export const TestingChecklistPage: React.FC = () => {
   // path and sees only collapsed headings would reasonably conclude the page
   // is not in the list.
   const isFiltering = search.trim() !== '' || statusFilter !== 'all';
-
-  // Stable across renders so the memoized cards only re-render when their own
-  // result changes — see TestPageCard.
-  const username = user?.username;
-  const handleStatus = useCallback(
-    (path: string, status: TestStatus) => setStatus(path, status, username),
-    [setStatus, username]
-  );
 
   const percent = Math.round(summary.progress * 100);
 
@@ -159,8 +181,9 @@ export const TestingChecklistPage: React.FC = () => {
             <h1 className="text-theme-text-primary text-2xl font-bold">Testing home</h1>
             <p className="text-theme-text-secondary mt-1 text-sm">
               Every page in the application, in one place. Open a box to test the page, then mark what you found — the
-              run is saved in this browser. The steps for each area are in{' '}
-              <span className="font-mono">TESTING_CHECKLIST.md</span>; this tracks which screens have been walked.
+              run is saved for the department, so testing from another account, another machine or another day continues
+              the same list. The steps for each area are in <span className="font-mono">TESTING_CHECKLIST.md</span>;
+              this tracks which screens have been walked.
             </p>
           </div>
         </div>
@@ -168,7 +191,12 @@ export const TestingChecklistPage: React.FC = () => {
         <div className="card p-4">
           <div className="flex flex-wrap items-baseline justify-between gap-2">
             <p className="text-theme-text-primary font-semibold">
-              {summary.total - summary.untested} of {summary.total} pages checked
+              {summary.total - summary.untested} of {summary.total} pages checked{canSeeAllTesters ? ' by you' : ''}
+              {isLoading && (
+                <span className="text-theme-text-secondary ml-2 text-sm font-normal" role="status">
+                  loading the saved run…
+                </span>
+              )}
             </p>
             <p className="text-theme-text-secondary text-sm">
               <span className="font-semibold text-green-800 dark:text-green-400">{summary.pass} passed</span> ·{' '}
@@ -190,7 +218,23 @@ export const TestingChecklistPage: React.FC = () => {
               style={{ width: `${percent}%` }}
             />
           </div>
+          {canSeeAllTesters && (
+            <p className="text-theme-text-secondary mt-2 text-sm">
+              <Users className="mr-1 inline h-4 w-4 align-text-bottom" aria-hidden="true" />
+              Across {testerCount === 0 ? 'no testers' : `${testerCount} tester${testerCount === 1 ? '' : 's'}`},{' '}
+              {coveredByAnyone} of {summary.total} pages have been checked by somebody.
+            </p>
+          )}
         </div>
+
+        {loadError && (
+          <div className="alert-danger flex flex-wrap items-center justify-between gap-3 rounded-lg p-4 text-sm">
+            <span>{loadError} — marks made now will not be saved. Check the connection, then reload the run.</span>
+            <button type="button" className="btn-secondary btn-sm" onClick={() => void reload()}>
+              Reload the run
+            </button>
+          </div>
+        )}
 
         <div className="card p-4">
           <div className="flex flex-wrap items-start justify-between gap-3">
@@ -207,7 +251,10 @@ export const TestingChecklistPage: React.FC = () => {
               </p>
               <p className="text-theme-text-secondary mt-1 text-xs">
                 To check the gates, sign in as each position in turn: a box marked in red should refuse with Access
-                Denied, and one marked green should open.
+                Denied, and one marked green should open. Your marks are filed under this account —{' '}
+                {canSeeAllTesters
+                  ? 'and every tester’s appear on the boxes below.'
+                  : 'an administrator sees them alongside every other tester’s.'}
               </p>
             </div>
             <button type="button" className="btn-secondary btn-sm" onClick={() => setShowPermissions((show) => !show)}>
@@ -311,8 +358,19 @@ export const TestingChecklistPage: React.FC = () => {
           onClick={() => void handleClear()}
         >
           <RotateCcw className="h-4 w-4" aria-hidden="true" />
-          Clear run
+          Clear my marks
         </button>
+
+        {canSeeAllTesters && (
+          <button
+            type="button"
+            className="btn-secondary btn-sm inline-flex items-center gap-1.5"
+            onClick={() => void handleClearEveryone()}
+          >
+            <RotateCcw className="h-4 w-4" aria-hidden="true" />
+            Clear everyone
+          </button>
+        )}
       </div>
 
       {visibleGroups.length === 0 && (
@@ -367,8 +425,9 @@ export const TestingChecklistPage: React.FC = () => {
                     key={page.path}
                     page={page}
                     result={results[page.path]}
+                    otherMarks={otherMarks[page.path]}
                     access={accessFor.get(page.path) ?? { kind: 'open' }}
-                    onStatus={handleStatus}
+                    onStatus={setStatus}
                     onNote={setNote}
                     onParam={setParam}
                   />

@@ -13,11 +13,13 @@ import type { TestPageEntry } from './testingRegistry';
 import { buildTestUrl, routeParams } from './testingRegistry';
 import type { PageAccess } from './pageAccess';
 import { describeGate } from './pageAccess';
-import type { TestResult, TestStatus } from './useTestingChecklist';
+import type { OtherTesterMark, TestResult, TestStatus } from './useTestingChecklist';
 
 interface TestPageCardProps {
   page: TestPageEntry;
   result: TestResult | undefined;
+  /** What other testers found here. Only populated on the shared run. */
+  otherMarks?: OtherTesterMark[] | undefined;
   access: PageAccess;
   onStatus: (path: string, status: TestStatus) => void;
   onNote: (path: string, note: string) => void;
@@ -44,7 +46,22 @@ const STATUS_EDGE: Record<TestStatus, string> = {
  * which is slow enough on a laptop to drop characters. The parent keeps the
  * handlers stable and takes the path as an argument for the same reason.
  */
-const TestPageCardComponent: React.FC<TestPageCardProps> = ({ page, result, access, onStatus, onNote, onParam }) => {
+const OTHER_MARK_STYLE: Record<TestStatus, string> = {
+  untested: 'bg-theme-surface-secondary text-theme-text-secondary',
+  pass: 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400',
+  fail: 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-400',
+  blocked: 'bg-amber-100 text-amber-800 dark:bg-amber-500/20 dark:text-amber-300',
+};
+
+const TestPageCardComponent: React.FC<TestPageCardProps> = ({
+  page,
+  result,
+  otherMarks,
+  access,
+  onStatus,
+  onNote,
+  onParam,
+}) => {
   const status = result?.status ?? 'untested';
   const params = routeParams(page.path);
   const url = buildTestUrl(page.path, result?.params ?? {});
@@ -169,6 +186,28 @@ const TestPageCardComponent: React.FC<TestPageCardProps> = ({ page, result, acce
         placeholder="Note — what broke, or what still needs proving"
         aria-label={`Note for ${page.label}`}
       />
+
+      {(otherMarks?.length ?? 0) > 0 && (
+        <div className="border-theme-surface-border border-t pt-2">
+          <p className="text-theme-text-muted mb-1.5 text-xs">Other testers</p>
+          <ul className="flex flex-wrap gap-1.5">
+            {(otherMarks ?? []).map((mark) => (
+              <li key={mark.userId}>
+                {/* The seat is the point: the same page tested by a chief and
+                    by a firefighter are two different observations. */}
+                <span
+                  className={`badge gap-1 ${OTHER_MARK_STYLE[mark.status]}`}
+                  title={mark.note ? `${mark.testerName}: ${mark.note}` : mark.testerName}
+                >
+                  {mark.testerName}
+                  {mark.testedAs.length > 0 && <span className="opacity-75">({mark.testedAs.join(', ')})</span>}
+                  <span className="font-semibold">{mark.status === 'untested' ? 'not tested' : mark.status}</span>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </div>
   );
 };

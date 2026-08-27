@@ -10,9 +10,16 @@ covered.
 
 Use the two together: open a group on `/testing`, click a box to open that page
 in a new tab, run the steps from the matching section here, then mark the box
-Pass, Fail or Blocked and type what you found. The run is kept in that
-browser's local storage — copy or download the Markdown export before clearing
-it or switching machines, since nothing is stored on the server.
+Pass, Fail or Blocked and type what you found.
+
+**The run is saved for the department, one row per tester per page.** Testing
+from another account, another machine or another day continues the same list,
+and a mark is filed under the account that made it. Anyone holding
+`settings.manage` — the IT manager's `*` covers it — sees **every** tester's
+marks: each box shows what other testers found and from which position, and the
+header counts department-wide coverage alongside your own. Everyone else sees
+their own run. "Clear my marks" removes only yours; the IT manager also gets
+"Clear everyone", which is irreversible and written to the audit log.
 
 **It is also how the permission gates get tested.** Each box shows the gate its
 route enforces and whether the signed-in account satisfies it, so signing in as
@@ -20,7 +27,14 @@ a firefighter, then a lieutenant, then a chief and walking the same list proves
 the gating from the outside: a box shown in red must refuse with Access Denied,
 one shown in green must open, and a page whose module is switched off must say
 so rather than render. `/testing` itself is intentionally ungated, so every
-account can reach it to be checked.
+account can reach it to be checked — and because every account's marks land in
+the same shared run, the IT manager compares all three perspectives on one
+screen instead of reconciling three separate runs.
+
+The marks live in `testing_checklist_entries`, behind
+`/api/v1/testing-checklist`. Recording a result is open to any signed-in member
+— a gate is only proved from the account it refuses — while reading other
+testers' results requires `settings.manage`.
 
 The registry behind the page is `frontend/src/pages/testing/testingRegistry.ts`,
 and `testingRegistry.test.ts` fails the build if a route is added, removed or

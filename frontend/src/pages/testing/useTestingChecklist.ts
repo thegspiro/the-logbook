@@ -1,21 +1,38 @@
 /**
  * Testing checklist state
  *
- * Per-page pass/fail marks, notes and sample record ids for the `/testing`
- * screen, held in this browser's localStorage.
+ * The run lives on the server (`/api/v1/testing-checklist`), one row per
+ * tester per page. It began in localStorage and moved for one reason: a
+ * checklist of permission gates is only meaningful across accounts. The method
+ * is to sign in as a firefighter, then a lieutenant, then a chief and confirm
+ * each is refused what they should be — evidence that is worthless if it is
+ * scattered over three browsers. The IT manager (`settings.manage`) reads
+ * every tester's marks; everyone else reads their own.
  *
- * Deliberately not stored on the server. A tester works through a build on one
- * machine and wants the marks to survive a refresh, not to be published to the
- * department — and a shared server-side checklist would need a table, an
- * endpoint and a permission of its own before it recorded anything. Export the
- * Markdown when the run needs to leave the browser.
+ * Marks are applied optimistically and reverted if the save fails, so a lost
+ * write is visible immediately rather than discovered at the end of a run.
  */
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import toast from 'react-hot-toast';
+import {
+  testingChecklistService,
+  type TestingCheckEntry,
+  type TestingCheckStatus,
+} from '../../services/testingChecklistService';
+import { getErrorMessage } from '../../utils/errorHandling';
 import { ALL_TEST_PAGES, TESTING_GROUPS } from './testingRegistry';
 
+/**
+ * The grant that opens every tester's marks.
+ *
+ * Mirrors `SEE_ALL_TESTERS_PERMISSION` on the endpoint — the server is what
+ * enforces it; this only decides whether the screen asks for the shared run.
+ */
+export const SEE_ALL_TESTERS_PERMISSION = 'settings.manage';
+
 export const TEST_STATUSES = ['untested', 'pass', 'fail', 'blocked'] as const;
-export type TestStatus = (typeof TEST_STATUSES)[number];
+export type TestStatus = TestingCheckStatus;
 
 export interface TestResult {
   status: TestStatus;
@@ -31,33 +48,27 @@ export interface TestResult {
 
 export type ChecklistState = Record<string, TestResult>;
 
-export const STORAGE_KEY = 'logbook.testing-checklist.v1';
+/** Another tester's mark on a page, as shown beside your own. */
+export interface OtherTesterMark {
+  userId: string;
+  testerName: string;
+  testedAs: string[];
+  status: TestStatus;
+  note?: string;
+  checkedAt?: string;
+}
 
-/**
- * Reads the saved run.
- *
- * Every access is guarded: localStorage throws outright in a browser set to
- * block site data, and a checklist that cannot be saved must still open.
- */
-const loadState = (): ChecklistState => {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return {};
-    const parsed: unknown = JSON.parse(raw);
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
-    return parsed as ChecklistState;
-  } catch {
-    return {};
-  }
-};
+// Notes and sample ids are typed, not clicked: saving each keystroke would put
+// a request on the wire per character. A status is saved immediately.
+const TEXT_SAVE_DELAY_MS = 600;
 
-const saveState = (state: ChecklistState): void => {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-  } catch {
-    /* Private window or blocked site data — the run just does not persist. */
-  }
-};
+const toResult = (entry: TestingCheckEntry): TestResult => ({
+  status: entry.status,
+  ...(entry.note ? { note: entry.note } : {}),
+  ...(entry.params ? { params: entry.params } : {}),
+  ...(entry.checkedAt ? { checkedAt: entry.checkedAt } : {}),
+  ...(entry.userName ? { checkedBy: entry.userName } : {}),
+});
 
 export interface ChecklistSummary {
   total: number;
@@ -92,72 +103,185 @@ const summarize = (state: ChecklistState, total: number): ChecklistSummary => {
 
 export interface UseTestingChecklist {
   results: ChecklistState;
+  /** Other testers' marks, by route path. Empty unless the run is shared. */
+  otherMarks: Record<string, OtherTesterMark[]>;
   summary: ChecklistSummary;
+  /** Pages carrying a mark from anyone, when the shared run is loaded. */
+  coveredByAnyone: number;
+  testerCount: number;
+  isLoading: boolean;
+  /** Set when the run could not be loaded; marks made now will not save. */
+  loadError: string | null;
+  reload: () => Promise<void>;
   /** Marking the status a second time with the same value clears it. */
-  setStatus: (path: string, status: TestStatus, checkedBy?: string) => void;
+  setStatus: (path: string, status: TestStatus) => void;
   setNote: (path: string, note: string) => void;
   setParam: (path: string, param: string, value: string) => void;
-  clearAll: () => void;
+  clearAll: (scope?: 'mine' | 'all') => Promise<void>;
   /** The whole run as Markdown, for pasting into an issue or a hand-off. */
-  toMarkdown: (context: { department?: string; testedBy?: string; formatTimestamp: (iso: string) => string }) => string;
+  toMarkdown: (context: { testedBy?: string; formatTimestamp: (iso: string) => string }) => string;
 }
 
-export const useTestingChecklist = (): UseTestingChecklist => {
-  const [results, setResults] = useState<ChecklistState>(loadState);
+export const useTestingChecklist = (includeAllTesters = false): UseTestingChecklist => {
+  const [results, setResults] = useState<ChecklistState>({});
+  const [otherMarks, setOtherMarks] = useState<Record<string, OtherTesterMark[]>>({});
+  const [testerCount, setTesterCount] = useState(0);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  // Keyed by route path so a second keystroke on one page replaces its pending
+  // save rather than queueing another, and typing in two notes still saves
+  // both.
+  const textTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  const resultsRef = useRef<ChecklistState>({});
+  resultsRef.current = results;
+
+  const load = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const run = await testingChecklistService.getRun(includeAllTesters);
+      const mine: ChecklistState = {};
+      const others: Record<string, OtherTesterMark[]> = {};
+      for (const entry of run.entries) {
+        if (entry.isMine) {
+          mine[entry.routePath] = toResult(entry);
+          continue;
+        }
+        (others[entry.routePath] ??= []).push({
+          userId: entry.userId,
+          testerName: entry.userName || 'another tester',
+          testedAs: entry.testedAs ?? [],
+          status: entry.status,
+          ...(entry.note ? { note: entry.note } : {}),
+          ...(entry.checkedAt ? { checkedAt: entry.checkedAt } : {}),
+        });
+      }
+      setResults(mine);
+      setOtherMarks(others);
+      setTesterCount(run.testerCount);
+      setLoadError(null);
+    } catch (err: unknown) {
+      setLoadError(getErrorMessage(err, 'Could not load the testing run'));
+    } finally {
+      setIsLoading(false);
+    }
+  }, [includeAllTesters]);
 
   useEffect(() => {
-    saveState(results);
-  }, [results]);
+    void load();
+  }, [load]);
 
-  const update = useCallback((path: string, change: (previous: TestResult) => TestResult) => {
-    setResults((previous) => ({
-      ...previous,
-      [path]: change(previous[path] ?? { status: 'untested' }),
-    }));
+  useEffect(() => {
+    const timers = textTimers.current;
+    return () => {
+      for (const timer of Object.values(timers)) clearTimeout(timer);
+    };
   }, []);
 
-  const setStatus = useCallback(
-    (path: string, status: TestStatus, checkedBy?: string) => {
-      update(path, (previous) => {
-        // Tapping the mark that is already set is how a mis-click is undone;
-        // without it the only way back to "untested" is clearing the run.
-        const next: TestStatus = previous.status === status ? 'untested' : status;
-        return {
-          ...previous,
-          status: next,
-          ...(next === 'untested' ? {} : { checkedAt: new Date().toISOString() }),
-          ...(next === 'untested' || !checkedBy ? {} : { checkedBy }),
-        };
+  /** Persist one page's row, putting the previous state back if it fails. */
+  const save = useCallback(async (path: string, previous: TestResult | undefined) => {
+    const current = resultsRef.current[path];
+    try {
+      await testingChecklistService.saveEntry({
+        routePath: path,
+        status: current?.status ?? 'untested',
+        note: current?.note?.trim() || null,
+        params: current?.params ?? null,
       });
+    } catch (err: unknown) {
+      // Reverted rather than left on screen: a mark that looks recorded and is
+      // not turns into a page nobody tests.
+      setResults((state) => {
+        const next = { ...state };
+        if (previous) next[path] = previous;
+        else delete next[path];
+        return next;
+      });
+      toast.error(getErrorMessage(err, 'Could not save that mark'));
+    }
+  }, []);
+
+  const update = useCallback(
+    (path: string, change: (previous: TestResult) => TestResult, debounce: boolean) => {
+      const previous = resultsRef.current[path];
+      const next = change(previous ?? { status: 'untested' });
+      setResults((state) => ({ ...state, [path]: next }));
+      resultsRef.current = { ...resultsRef.current, [path]: next };
+
+      const pending = textTimers.current[path];
+      if (pending) clearTimeout(pending);
+      if (debounce) {
+        textTimers.current[path] = setTimeout(() => {
+          delete textTimers.current[path];
+          void save(path, previous);
+        }, TEXT_SAVE_DELAY_MS);
+      } else {
+        void save(path, previous);
+      }
+    },
+    [save]
+  );
+
+  const setStatus = useCallback(
+    (path: string, status: TestStatus) => {
+      update(
+        path,
+        (previous) => {
+          // Tapping the mark that is already set is how a mis-click is undone;
+          // without it the only way back to "untested" is clearing the run.
+          const next: TestStatus = previous.status === status ? 'untested' : status;
+          return {
+            ...previous,
+            status: next,
+            ...(next === 'untested' ? {} : { checkedAt: new Date().toISOString() }),
+          };
+        },
+        false
+      );
     },
     [update]
   );
 
   const setNote = useCallback(
     (path: string, note: string) => {
-      update(path, (previous) => ({ ...previous, note }));
+      update(path, (previous) => ({ ...previous, note }), true);
     },
     [update]
   );
 
   const setParam = useCallback(
     (path: string, param: string, value: string) => {
-      update(path, (previous) => ({
-        ...previous,
-        params: { ...(previous.params ?? {}), [param]: value },
-      }));
+      update(path, (previous) => ({ ...previous, params: { ...(previous.params ?? {}), [param]: value } }), true);
     },
     [update]
   );
 
-  const clearAll = useCallback(() => {
-    setResults({});
-  }, []);
+  const clearAll = useCallback(
+    async (scope: 'mine' | 'all' = 'mine') => {
+      try {
+        await testingChecklistService.clearRun(scope);
+        await load();
+      } catch (err: unknown) {
+        toast.error(getErrorMessage(err, 'Could not clear the run'));
+      }
+    },
+    [load]
+  );
 
   const summary = useMemo(() => summarize(results, ALL_TEST_PAGES.length), [results]);
 
+  const coveredByAnyone = useMemo(
+    () =>
+      ALL_TEST_PAGES.filter(
+        (page) =>
+          (results[page.path]?.status ?? 'untested') !== 'untested' ||
+          (otherMarks[page.path] ?? []).some((mark) => mark.status !== 'untested')
+      ).length,
+    [results, otherMarks]
+  );
+
   const toMarkdown = useCallback<UseTestingChecklist['toMarkdown']>(
-    ({ department, testedBy, formatTimestamp }) => {
+    ({ testedBy, formatTimestamp }) => {
       const mark: Record<TestStatus, string> = {
         pass: '[x] PASS',
         fail: '[ ] FAIL',
@@ -165,12 +289,16 @@ export const useTestingChecklist = (): UseTestingChecklist => {
         untested: '[ ] not tested',
       };
       const lines: string[] = ['# The Logbook — page testing run', ''];
-      if (department) lines.push(`- Department: ${department}`);
       if (testedBy) lines.push(`- Tested by: ${testedBy}`);
       lines.push(
-        `- Result: ${summary.pass} passed, ${summary.fail} failed, ${summary.blocked} blocked, ${summary.untested} not tested (${summary.total} pages)`,
-        ''
+        `- Your result: ${summary.pass} passed, ${summary.fail} failed, ${summary.blocked} blocked, ${summary.untested} not tested (${summary.total} pages)`
       );
+      if (includeAllTesters) {
+        lines.push(
+          `- Across ${testerCount} tester${testerCount === 1 ? '' : 's'}: ${coveredByAnyone} of ${summary.total} pages covered`
+        );
+      }
+      lines.push('');
 
       for (const group of TESTING_GROUPS) {
         lines.push(`## ${group.label}`, '');
@@ -178,16 +306,33 @@ export const useTestingChecklist = (): UseTestingChecklist => {
           const result = results[page.path];
           const status = result?.status ?? 'untested';
           const when = result?.checkedAt ? ` — ${formatTimestamp(result.checkedAt)}` : '';
-          const by = result?.checkedBy ? ` by ${result.checkedBy}` : '';
-          lines.push(`- ${mark[status]} \`${page.path}\` ${page.label}${when}${by}`);
+          lines.push(`- ${mark[status]} \`${page.path}\` ${page.label}${when}`);
           if (result?.note?.trim()) lines.push(`  - ${result.note.trim()}`);
+          for (const other of otherMarks[page.path] ?? []) {
+            const seat = other.testedAs.length > 0 ? ` (${other.testedAs.join(', ')})` : '';
+            lines.push(`  - ${other.testerName}${seat}: ${other.status}${other.note ? ` — ${other.note}` : ''}`);
+          }
         }
         lines.push('');
       }
       return lines.join('\n');
     },
-    [results, summary]
+    [results, otherMarks, summary, testerCount, coveredByAnyone, includeAllTesters]
   );
 
-  return { results, summary, setStatus, setNote, setParam, clearAll, toMarkdown };
+  return {
+    results,
+    otherMarks,
+    summary,
+    coveredByAnyone,
+    testerCount,
+    isLoading,
+    loadError,
+    reload: load,
+    setStatus,
+    setNote,
+    setParam,
+    clearAll,
+    toMarkdown,
+  };
 };

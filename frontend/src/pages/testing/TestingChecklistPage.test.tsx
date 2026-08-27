@@ -1,16 +1,21 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen, within } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../../test/utils';
 
+// Mutable so a test can re-run the same screen as a different account, which
+// is the whole method the page exists to support.
+let currentPermissions = ['events.view'];
 const mockAuthState: Record<string, unknown> = {
   user: {
     username: 'ffjones',
     full_name: 'Firefighter Jones',
     positions: ['firefighter'],
-    permissions: ['events.view'],
+    get permissions() {
+      return currentPermissions;
+    },
   },
-  checkPermission: (permission: string) => permission === 'events.view',
+  checkPermission: (permission: string) => currentPermissions.includes(permission),
   hasRole: () => false,
 };
 
@@ -31,6 +36,33 @@ vi.mock('../../hooks/useEnabledModules', () => ({
 
 vi.mock('../../hooks/useTimezone', () => ({ useTimezone: () => 'America/New_York' }));
 
+// The run lives on the server; the screen is tested against the service, not
+// against a browser store.
+const savedEntries: TestingCheckEntry[] = [];
+const mockSaveEntry = vi.fn();
+const mockClearRun = vi.fn();
+vi.mock('../../services/testingChecklistService', () => ({
+  testingChecklistService: {
+    getRun: (includeAll?: boolean) =>
+      Promise.resolve({
+        entries: savedEntries,
+        includesAllTesters: Boolean(includeAll),
+        testerCount: new Set(savedEntries.map((entry) => entry.userId)).size,
+      }),
+    saveEntry: (payload: unknown) => {
+      mockSaveEntry(payload);
+      return Promise.resolve({ ...(payload as object), id: 'saved', userId: 'u1', isMine: true });
+    },
+    clearRun: (scope?: string) => {
+      mockClearRun(scope);
+      savedEntries.length = 0;
+      return Promise.resolve(1);
+    },
+  },
+}));
+
+import type { TestingCheckEntry } from '../../services/testingChecklistService';
+
 // Import AFTER mocks
 import { TestingChecklistPage } from './TestingChecklistPage';
 
@@ -44,8 +76,10 @@ const cardFor = (label: string): HTMLElement => screen.getByRole('group', { name
 
 describe('TestingChecklistPage', () => {
   beforeEach(() => {
-    localStorage.clear();
+    vi.clearAllMocks();
+    savedEntries.length = 0;
     modulesOff.length = 0;
+    currentPermissions = ['events.view'];
   });
 
   it('opens on the group headings rather than two hundred boxes', () => {
@@ -94,6 +128,9 @@ describe('TestingChecklistPage', () => {
 
     expect(within(cardFor('Dashboard')).getByRole('button', { name: 'Pass' })).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByText('1 passed')).toBeInTheDocument();
+    await waitFor(() =>
+      expect(mockSaveEntry).toHaveBeenCalledWith(expect.objectContaining({ routePath: '/dashboard', status: 'pass' }))
+    );
   });
 
   it('withholds the link until a route parameter has a value', async () => {
@@ -131,19 +168,25 @@ describe('TestingChecklistPage', () => {
     expect(screen.getByText('Event detail')).toBeInTheDocument();
   });
 
-  it('asks before clearing the run', async () => {
+  it('asks before clearing the run, and clears only your own marks', async () => {
     const user = userEvent.setup();
     renderWithRouter(<TestingChecklistPage />);
     await user.type(screen.getByLabelText('Search pages'), '/dashboard');
     await user.click(within(cardFor('Dashboard')).getByRole('button', { name: 'Pass' }));
 
-    await user.click(screen.getByRole('button', { name: /Clear run/ }));
-    await user.click(screen.getByRole('button', { name: 'Keep it' }));
-    expect(within(cardFor('Dashboard')).getByRole('button', { name: 'Pass' })).toHaveAttribute('aria-pressed', 'true');
+    await user.click(screen.getByRole('button', { name: /Clear my marks/ }));
+    await user.click(screen.getByRole('button', { name: 'Keep them' }));
+    expect(mockClearRun).not.toHaveBeenCalled();
 
-    await user.click(screen.getByRole('button', { name: /Clear run/ }));
-    await user.click(screen.getByRole('button', { name: 'Clear the run' }));
-    expect(within(cardFor('Dashboard')).getByRole('button', { name: 'Pass' })).toHaveAttribute('aria-pressed', 'false');
+    await user.click(screen.getByRole('button', { name: /Clear my marks/ }));
+    await user.click(screen.getByRole('button', { name: 'Delete my marks' }));
+    await waitFor(() => expect(mockClearRun).toHaveBeenCalledWith('mine'));
+  });
+
+  it('does not offer to clear the department to a member', () => {
+    renderWithRouter(<TestingChecklistPage />);
+
+    expect(screen.queryByRole('button', { name: /Clear everyone/ })).not.toBeInTheDocument();
   });
 
   it('shows the permissions the account actually holds', async () => {
@@ -153,5 +196,54 @@ describe('TestingChecklistPage', () => {
     await user.click(screen.getByRole('button', { name: /Show permissions/ }));
 
     expect(screen.getByText('events.view')).toBeInTheDocument();
+  });
+
+  describe('as the IT manager', () => {
+    beforeEach(() => {
+      // The system owner holds the global wildcard; the screen asks for the
+      // shared run on `settings.manage`, which the wildcard matches.
+      currentPermissions = ['*', 'settings.manage'];
+      savedEntries.push({
+        id: 'theirs',
+        routePath: '/events',
+        status: 'blocked',
+        note: 'refused as expected',
+        params: null,
+        checkedAt: '2026-08-27T12:00:00Z',
+        userId: 'u2',
+        userName: 'Firefighter Jones',
+        testedAs: ['firefighter'],
+        isMine: false,
+      });
+    });
+
+    it('shows what every other tester found, and from which seat', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<TestingChecklistPage />);
+      await user.type(screen.getByLabelText('Search pages'), '/events');
+
+      const card = cardFor('Events');
+      expect(within(card).getByText('Other testers')).toBeInTheDocument();
+      expect(within(card).getByText(/Firefighter Jones/)).toBeInTheDocument();
+      expect(within(card).getByText('(firefighter)')).toBeInTheDocument();
+      expect(within(card).getByText('blocked')).toBeInTheDocument();
+    });
+
+    it('counts department-wide coverage separately from its own', async () => {
+      renderWithRouter(<TestingChecklistPage />);
+
+      expect(await screen.findByText(/Across 1 tester, 1 of \d+ pages have been checked/)).toBeInTheDocument();
+      expect(screen.getByText(/0 of \d+ pages checked by you/)).toBeInTheDocument();
+    });
+
+    it('can clear the whole department, behind its own confirmation', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<TestingChecklistPage />);
+
+      await user.click(screen.getByRole('button', { name: /Clear everyone/ }));
+      await user.click(screen.getByRole('button', { name: 'Delete every mark' }));
+
+      await waitFor(() => expect(mockClearRun).toHaveBeenCalledWith('all'));
+    });
   });
 });
