@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**258 tables · 4409 columns · 834 foreign keys**
+**260 tables · 4432 columns · 839 foreign keys**
 
 ---
 
@@ -522,6 +522,15 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`store_products`](#store_products) | `StoreProduct` | 28 | A sellable item in the department catalog |
 | [`store_settings`](#store_settings) | `StoreSettings` | 43 | Per-organization storefront configuration (one row per org). |
 | [`store_window_products`](#store_window_products) | `StoreWindowProduct` | 9 | Which catalog products a window offers, with per-window overrides |
+
+### Testing_Checklist
+
+<sub>`app/models/testing_checklist.py`</sub>
+
+| Table | Model | Columns | Purpose |
+|---|---|---|---|
+| [`testing_checklist_entries`](#testing_checklist_entries) | `TestingChecklistEntry` | 14 | One tester's finding on one page, in one run. |
+| [`testing_runs`](#testing_runs) | `TestingRun` | 9 | One named pass over the checklist. |
 
 ### Training
 
@@ -7108,6 +7117,59 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 - UNIQUE `uq_store_window_products_window_product` (`window_id`, `product_id`)
 
+## Testing_Checklist
+
+### `testing_checklist_entries`
+
+**TestingChecklistEntry** · `app/models/testing_checklist.py`
+
+> One tester's finding on one page, in one run. Never merged with another tester's: two accounts marking the same page are two observations, and the one made by the account holding fewer grants is usually the interesting one.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `run_id` | VARCHAR(36) | no | FK, UQ-IDX |  | → `testing_runs.id` ON DELETE CASCADE |
+| `user_id` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `route_path` | VARCHAR(200) | no |  |  |  |
+| `status` | ENUM(`untested`, `pass`, `fail`, `blocked`) | no |  | `'untested'` |  |
+| `note` | TEXT | yes |  |  |  |
+| `params` | JSON | yes |  |  |  |
+| `tested_as` | JSON | yes |  |  |  |
+| `build_id` | VARCHAR(64) | yes |  |  |  |
+| `expected_access` | ENUM(`open`, `allowed`, `denied`, `module-off`) | yes |  |  |  |
+| `checked_at` | DATETIME | yes |  |  |  |
+| `created_at` | DATETIME | no |  | `now()` |  |
+| `updated_at` | DATETIME | no |  | `now()` |  |
+
+**Indexes**
+
+- UNIQUE `idx_testing_check_unique` (`run_id`, `user_id`, `route_path`)
+- `ix_testing_checklist_entries_organization_id` (`organization_id`)
+
+### `testing_runs`
+
+**TestingRun** · `app/models/testing_checklist.py`
+
+> One named pass over the checklist. Starting a run archives the previous one by existing: the newest run is the current one. Nothing is closed, so there is no "two active runs" state to repair, and every earlier run stays readable and exportable.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, UQ-IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `sequence` | INTEGER | no |  |  |  |
+| `label` | VARCHAR(120) | no |  |  |  |
+| `build_id` | VARCHAR(64) | yes |  |  |  |
+| `started_by_id` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `started_at` | DATETIME | no |  | `now()` |  |
+| `created_at` | DATETIME | no |  | `now()` |  |
+| `updated_at` | DATETIME | no |  | `now()` |  |
+
+**Indexes**
+
+- UNIQUE `idx_testing_run_org_sequence` (`organization_id`, `sequence`)
+- `ix_testing_runs_organization_id` (`organization_id`)
+
 ## Training
 
 ### `basic_apparatus`
@@ -9141,7 +9203,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 Every foreign key in the schema, grouped by the table it points at — the map of which id lives where.
 
-### → `users` (311 references)
+### → `users` (313 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -9431,6 +9493,8 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `store_product_images` | `uploaded_by` | SET NULL | yes |
 | `store_products` | `created_by` | SET NULL | yes |
 | `template_change_logs` | `user_id` | SET NULL | yes |
+| `testing_checklist_entries` | `user_id` | SET NULL | yes |
+| `testing_runs` | `started_by_id` | SET NULL | yes |
 | `training_approvals` | `approved_by` | SET NULL | yes |
 | `training_categories` | `created_by` | SET NULL | yes |
 | `training_courses` | `created_by` | SET NULL | yes |
@@ -9457,7 +9521,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `votes` | `voter_id` | SET NULL | yes |
 | `xapi_statements` | `user_id` | SET NULL | yes |
 
-### → `organizations` (204 references)
+### → `organizations` (206 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -9650,6 +9714,8 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `store_settings` | `organization_id` | CASCADE | no |
 | `store_window_products` | `organization_id` | CASCADE | no |
 | `template_change_logs` | `organization_id` | CASCADE | no |
+| `testing_checklist_entries` | `organization_id` | CASCADE | no |
+| `testing_runs` | `organization_id` | CASCADE | no |
 | `training_approvals` | `organization_id` | CASCADE | no |
 | `training_categories` | `organization_id` | CASCADE | no |
 | `training_courses` | `organization_id` | CASCADE | no |
@@ -10479,6 +10545,12 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
 | `store_order_items` | `variant_id` | SET NULL | yes |
+
+### → `testing_runs` (1 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `testing_checklist_entries` | `run_id` | CASCADE | no |
 
 ---
 

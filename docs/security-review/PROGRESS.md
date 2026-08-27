@@ -16,19 +16,190 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-Feature 05 (finance & approvals, pass 2) —
-[PR #1946](https://github.com/thegspiro/the-logbook/pull/1946). Chain so
-far: #1942 (docs-only "no findings") merged before Codex's review landed ->
-#1944 (fix for FIN-10 through FIN-14) also merged before a second Codex
-round on it caught FIN-15 (approval-chain step ordering) -> #1946 (fix for
-FIN-15) had CI go fully green but had not yet auto-merged when a third
-Codex round caught FIN-16/17/18 (enforcing order surfaced two real
-deadlocks and a portability gap) -- that fix was pushed directly to #1946
-while it was still open, ahead of the auto-merge for once. Watching for
-either a fourth Codex round or a clean merge. Next after this lands clean:
-06 elections & ballots, pass 2.
+[PR #1950](https://github.com/thegspiro/the-logbook/pull/1950) — feature 08
+(membership pipeline, pass 2), no findings, documentation only. Awaiting
+merge before starting feature 09 (medical screening, PHI), pass 2.
 
 ---
+
+### 2026-08-27 — Feature 08 (Membership pipeline), pass 2 — Codex caught 2 real P1 bugs, both fixed
+
+Scoped to the full domain since pass 1's merge (`aad49be4`, PR #1815). The
+frontend diff (dialog-portal adoption across 5 components, a
+stage-timeout-clearing fix, a stage-config-default fix, module gating, and
+the new `frontend/src/utils/membership.ts`) was reviewed in full and had no
+findings — its own bugs were already fixed and tested within the diff, and
+`membership.ts` matches `backend/app/utils/membership.py` line-by-line, no
+mislabeled UI text of the kind ELEC-06 pass 2 found in `BallotBuilder.tsx`.
+The backend's initial "already-reviewed on PR #1931" read was incomplete:
+Codex's review of the draft PR found two real, separate P1 issues in the
+same transfer-prospect path that PR #1931's narrower review never had
+reason to look for — `transfer_prospect` accepted a caller-supplied
+`role_ids` list and attached every resolved role to the new account with no
+`_enforce_role_grant_ceiling` check (a bare `members.manage`/
+`prospective_members.manage` holder could mint an account with a
+wildcard/more-privileged role, and via the request's own
+`department_email` field, log in as it themselves); and
+`transfer_to_membership` read the prospect without `lock_for_update`, so
+two concurrent transfer requests with distinct usernames could both pass
+the `ProspectStatus.TRANSFERRED` check and each create a separate `User`
+account for one prospect. Both fixed (role ceiling added to the endpoint;
+row lock added ahead of the status check in the service), each covered by
+a guard test confirmed to fail against the pre-fix code via `git stash`.
+Full detail in `MP-08-membership-pipeline.md`. Rotation row 08 -> done.
+Next: 09 medical screening (PHI).
+
+### 2026-08-27 — Feature 07 (Users & organizations), pass 2 ✅ merged — PR #1949
+
+Merged, with the 5-bug fix commit included. Confirmed on `origin/main`
+by ancestry check. This PR sat green and mergeable for over an hour
+without auto-merging (unlike every other PR in this rotation so far) —
+proactively notified the user by push, since the unmerged fix meant
+member creation stayed broken on `main` in the meantime. Final tally: 5
+real findings (a production-breaking schema regression that broke every
+member-creation request, plus three separate gaps in the administrative-
+member-holds-no-rank invariant: an unlocked fourth writer, a missing
+`populate_existing` on two locked ones, and an explicit-null
+misjudgment), all fixed, across two Codex review rounds. Rotation row 07
+-> done. Next: 08 membership pipeline.
+
+### 2026-08-27 — Feature 07 (Users & organizations), pass 2 — Codex caught 5 real bugs across 2 rounds, all fixed
+
+Full-domain diff since pass 1's merge (`5f610f1f`, PR #1814): the
+member-class/status split (already read in full during ELEC-06 for its
+eligibility angle) reaches this module directly via `users.py`/
+`member_status.py`/`schemas/user.py`. First draft called the
+class/rank-contradiction invariant fully closed by three locked writers
+plus two pre-existing structural tests. It wasn't -- Codex caught three
+separate gaps in that same invariant, plus one production-breaking
+regression the diff's own removed lines should have flagged:
+
+- **`schemas/user.py` (P1, production-breaking).** `AdminUserCreate`'s
+  refactor onto `MembershipClassificationFields` silently dropped
+  `password`, `role_ids`, `send_welcome_email`, every address field, and
+  `emergency_contacts`. Every `POST /api/v1/users` hit `user_data.password`
+  with no such attribute and raised `AttributeError` -- member creation
+  was completely broken on `main`. Every existing test for this route was
+  source-inspection style and would never have caught a field silently
+  disappearing. Fixed; guarded by a new test extracting every
+  `user_data.<attr>` access from the route's source and asserting each is
+  a declared field, so the two can't drift silently again.
+- **A fourth, unlocked writer.** `MembershipTierService.advance_all` (the
+  scheduled tier-advancement scan) also clears rank on a move into an
+  administrative tier, but its batch SELECT was never locked -- the cited
+  "every writer" tests only covered three. Fixed with a per-member lock
+  taken right before each mutation (not the whole batch upfront).
+- **The lock alone wasn't enough on a self-update.** Neither locking read
+  had `populate_existing=True`; on a self-update, `get_current_user`
+  already put the same row in the session's identity map, so a re-SELECT
+  under the lock could still return pre-lock values. The exact bug
+  ELEC-06 already found and fixed in `quorum_service.py`; this file
+  hadn't caught up. Fixed on both locking reads.
+- **An explicit `member_class: null` was judged against the wrong
+  value.** `update_data.get("member_class") or user.member_class` can't
+  tell "omitted" from "explicitly cleared" -- both read back None. An
+  explicit null resets to the operational default, not "keep the old
+  class", so clearing an administrative member's class while assigning a
+  rank in the same request was wrongly refused. Fixed by checking key
+  presence before falling back.
+
+All fixes independently verified against the real code before fixing
+(reproduced the AttributeError directly, traced the identity-map
+behavior, traced the exclude_unset semantics) -- not taken on Codex's
+word. Also confirmed real and already-fixed: `_canonical_rank_or_400`
+(unconstrained rank strings) and a real prior frontend bug (rank-list
+cache leaking across orgs, now scoped and guarding the same stale-
+response race AUTH-3 found elsewhere). Completion gate: flake8/black/
+isort clean, migrations valid, scoped tests 430 passed/1 skipped, full
+backend suite 9110 passed/22 skipped/0 failed, `tsc`/`eslint` clean.
+Every new/modified guard test confirmed to fail pre-fix via `git stash`.
+Rotation row 07 -> awaiting
+PR merge.
+
+### 2026-08-27 — Feature 06 (Elections & ballots), pass 2 ✅ merged — PR #1948
+
+Merged, with the 3-bug fix commit included (pushed directly to the
+still-open PR ahead of auto-merge). Confirmed on `origin/main` by
+ancestry check. Final tally: 3 real findings (quorum staleness via a
+missing `populate_existing`, a module gate blocking public ballot routes
+on a stale session cookie, a mislabeled ballot-builder option), all
+fixed, across two Codex review rounds — plus one scoping-methodology
+repeat: the pass's own frontend check was scoped to `modules/elections/`
+and missed `BallotBuilder.tsx`, which lives outside it. Rotation row 06
+-> done. Next: 07 users & organizations.
+
+### 2026-08-27 — Feature 06 (Elections & ballots), pass 2 — Codex caught 3 real bugs across 2 rounds, all fixed
+
+Full-domain diff since pass 1's merge (`56b897ec`, PR #1810). First draft
+scoped its frontend check to `modules/elections/` and missed
+`frontend/src/components/BallotBuilder.tsx` — a shared component outside
+that directory that also changed and carried a real defect. Same class of
+mistake feature 04 already corrected once; re-swept against `frontend/src/`
+broadly this time, not a directory glob.
+
+The significant backend change: a same-day feature split the fused
+`membership_type` column into independent `member_class`/`member_status`
+columns and rewrote `election_service.py`'s `_user_has_role_type` (the
+function every ballot-eligibility check calls) to read them. Read in full
+given the stakes — every legacy voter category reproduces its pre-split
+meaning exactly, the unknown-tier fallback fails closed, the
+`_reconcile_membership` ORM listener keeps the columns populated. **This
+part had no findings** — but three other things in this diff did:
+
+- **Quorum staleness.** `quorum_service.py`'s new `.with_for_update()`
+  lock was declared Pitfall #27-complete on first pass — wrong. On a
+  session that already holds the `MeetingMinutes` row (the
+  quorum-config-update endpoint loads+commits the same instance just
+  before calling this method), a re-`SELECT` with `expire_on_commit=False`
+  returns the cached, pre-lock Python object unless the query opts into
+  `populate_existing` — an established pattern elsewhere in this codebase
+  that this file hadn't caught up to. Fixed.
+- **Module gate blocking public ballot routes.** `module_gate("elections",
+...)` (pre-existing, not part of this diff, but a real bug regardless)
+  gates the whole router including the token-authorized public ballot
+  routes. `get_optional_current_user` correctly raises on an invalid
+  credential rather than downgrading to anonymous — but that means a
+  voter with a stale/expired session cookie from an unrelated main-app
+  visit got a 401 before their ballot token was ever checked. Fixed by
+  having the module-flag resolution catch an invalid-credential exception
+  specifically, without weakening any endpoint that declares its own auth
+  dependency.
+- **Mislabeled ballot-builder option (ELEC-19, the one the scope miss
+  hid).** `BallotBuilder.tsx`'s new `"operational"` label claimed "any
+  status, incl. probationary & life" — backwards. The backend requires
+  status == regular for that category specifically; an admin trusting the
+  new label would silently exclude probationary/life members from a
+  ballot meant to include them. Label and explanatory comment corrected.
+
+All three independently verified against the real code (traced
+`expire_on_commit`/identity-map behavior, traced FastAPI's
+dependency-resolution order, re-read `_user_has_role_type` against the
+new label) before fixing — not taken on Codex's word. Plus one test gap
+closed (a new `"social"` voter category had no coverage). Completion
+gate: flake8/black/isort clean, migrations 383 revisions, scoped tests
+269 passed/1 skipped, full backend suite 9069 passed/22 skipped/0 failed,
+`tsc`/`eslint` clean. Rotation row 06 -> awaiting PR merge.
+
+### 2026-08-27 — Feature 05 (Finance & approvals), pass 2 ✅ merged — PR #1946
+
+Merged, with the FIN-16/17/18 fix commit included (pushed directly to the
+still-open PR ahead of auto-merge, for once). Confirmed on `origin/main`
+by ancestry check, not just the merge notification. Final tally for this
+pass: 9 real findings across FIN-10 through FIN-18, all fixed, plus 1
+documentation correction — three successive Codex rounds, each catching
+something the previous round's own fix and tests had missed (a genuine
+concurrency bug, a ceiling bypass, two schema regressions, a frontend
+precision gap, then an ordering bug the first fix's own review didn't
+question, then two deadlocks and a portability gap _that_ fix introduced).
+**Process note for future iterations**: this rotation's PRs kept
+auto-merging the instant CI went green — three times in a row here, twice
+before a follow-up commit could land (forcing a rebase onto new `main` and
+a fresh PR each time) and once caught in time by pushing directly to the
+still-open PR. When Codex is still actively reviewing a PR, watch for
+review comments landing in the same window CI turns green, and don't
+assume "CI green" means "done" until either Codex has had time to weigh in
+or the PR has actually closed. Rotation row 05 -> done for pass 2. Next:
+06 elections & ballots.
 
 ### 2026-08-27 — Feature 05 (Finance & approvals), pass 2 — Codex round 3 on #1946 caught FIN-16/17/18 (deadlocks + portability), fixed
 
@@ -1054,11 +1225,11 @@ each row's prior PR is recorded in the Log, not repeated here.
 | 02  | Permissions & roles       | PERM   | `dependencies.py`, `core/permissions.py`, `roles.py`, `operational_ranks.py`, `officers.py`, `org_chart.py`                                     | ✅     |
 | 03  | Public surface & webhooks | PUB    | `api/public/*` (20 unauth routes), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`                                      | ✅     |
 | 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                              | ✅     |
-| 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                     | ⏳     |
-| 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | ⬜     |
-| 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ⬜     |
-| 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ⬜     |
-| 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ⬜     |
+| 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                     | ✅     |
+| 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | ✅     |
+| 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ✅     |
+| 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ✅     |
+| 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | 🔄     |
 | 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ⬜     |
 | 11  | Inventory                 | INV    | `endpoints/inventory.py` (6539 L), `inventory_service.py`                                                                                       | ⬜     |
 | 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ⬜     |

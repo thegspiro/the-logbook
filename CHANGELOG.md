@@ -28,6 +28,51 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   role alone. Access to a facility's files now requires a facilities grant,
   which is what the facility screens have always required.
 
+### Transferring a prospect to full membership could grant more access than the transferring member had, and a double-click could create two accounts for one prospect (2026-08-27)
+
+**Fixed**
+
+- Converting a prospective member into a full member could assign that new
+  account a role carrying more permissions than the staff member doing the
+  conversion actually had, including a role that controls the whole
+  organization — the same safeguard already applied when creating a member
+  directly now also applies when converting one from the prospect pipeline.
+- Two transfer requests submitted for the same prospect at nearly the same
+  time (e.g. a double-click, or two coordinators acting at once) could each
+  create a separate member account for that one prospect. The transfer now
+  serializes so only one account is ever created.
+
+### Creating a new member was completely broken, and a member's rank/class safeguard had three gaps (2026-08-27)
+
+**Fixed**
+
+- Creating a new member failed every time with a server error. Restoring
+  the account's password, initial roles, welcome-email option, mailing
+  address, and emergency contacts to the create-member form fixed it.
+- The safeguard that keeps an administrative member from also holding an
+  operational rank (which would carry chain-of-command permissions that
+  role isn't meant to have) had three gaps: the automatic, scheduled
+  tier-advancement process wasn't covered by it at all; a member updating
+  their own record could, in rare timing, still slip past it; and
+  clearing a member's classification back to the default while assigning
+  a rank in the same save was incorrectly rejected. All three are closed.
+
+### A voter with a stale browser session could be blocked from voting, and a recalculated quorum could read a stale attendee count (2026-08-27)
+
+**Fixed**
+
+- A member who received a ballot link by email, but who also had an
+  unrelated, expired or ended session from previously using the app in the
+  same browser, could be blocked from opening or voting on the ballot
+  entirely. The ballot link no longer requires a valid active session.
+- After changing a meeting's quorum settings, the quorum recount that runs
+  immediately afterward could occasionally use an out-of-date attendee
+  count from just before the change, rather than the current one.
+- A ballot-builder option was mislabeled as including probationary and
+  life members when it did not; an admin relying on the label could have
+  unintentionally left those members off a ballot meant to include them.
+  The label now correctly describes who the option reaches.
+
 ### Two approvers acting at the same moment could double-charge a budget, and a budget's cap could be quietly bypassed (2026-08-27)
 
 **Fixed**
@@ -92,6 +137,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   a rank to a name that grants more than the person renaming it holds
   themselves is now blocked the same way; renaming to an ordinary custom
   name is unaffected.
+
+### Testing runs, exports and permission checking (2026-08-27)
+
+**Added**
+
+- The testing checklist now works in **runs** — one named pass over the app,
+  e.g. "Pre-launch, build 1.4". Starting a new run archives the one before it:
+  its marks stay readable and exportable from the run picker instead of being
+  cleared away. The first mark opens a run on its own.
+- **Every mark is checked against what the app expected.** A refusal that
+  happened as predicted is counted as a gate verified; a page that opened for
+  an account that should have been refused is flagged where the mark was made,
+  counted in the header, and listed in the printed report as a permissions
+  defect.
+- Marks record the build they were made against, so after a deployment the ones
+  made on an earlier build are marked and can be filtered with **Needs
+  re-test**.
+- **Exports for reporting:** a CSV of every mark, a page-by-tester permission
+  matrix, a printable report (coverage, failures with notes, gate mismatches,
+  coverage by area) for saving as PDF, and the existing Markdown.
+- **Keyboard marking:** `j`/`k` to move between boxes, `p`/`f`/`b` to mark the
+  focused one, `n` to jump to the next page with no mark.
+
+### The testing checklist is now a module you can switch off (2026-08-27)
+
+**Changed**
+
+- The Testing Home at `/testing` — the page listing every screen in the app so
+  a department can walk them before going live — is now a module of its own,
+  and it is **off by default**. A department that was using it will find it
+  gone after this upgrade until an administrator turns **Testing Checklist**
+  back on under Settings → Modules. Nothing recorded is lost: marks and notes
+  stay in place and reappear when the module is switched on again.
+- While the module is off, the navigation entry, the page and the data behind
+  it all refuse — the same way every other switched-off module behaves.
+- The module is not offered during first-time setup. It is a tool for checking
+  an installation, not a decision a department needs to make while making
+  every other one.
 
 ### A few training-related pages could briefly cache data they shouldn't (2026-08-27)
 
