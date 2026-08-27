@@ -15,12 +15,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
-import {
-  testingChecklistService,
-  type TestingCheckEntry,
-  type TestingCheckStatus,
-} from '../../services/testingChecklistService';
-import { getErrorMessage } from '../../utils/errorHandling';
+import { testingChecklistService, type TestingCheckEntry, type TestingCheckStatus } from './services/api';
+import { getErrorMessage, toAppError } from '../../utils/errorHandling';
 import { ALL_TEST_PAGES, TESTING_GROUPS } from './testingRegistry';
 
 /**
@@ -30,6 +26,18 @@ import { ALL_TEST_PAGES, TESTING_GROUPS } from './testingRegistry';
  * enforces it; this only decides whether the screen asks for the shared run.
  */
 export const SEE_ALL_TESTERS_PERMISSION = 'settings.manage';
+
+/**
+ * The department switched the module off.
+ *
+ * Worth telling apart from any other failed load. The frontend's `isModuleOn`
+ * is permissive for an organization that has never configured its modules,
+ * while the server always resolves the declared defaults — so an unconfigured
+ * department reaches this screen and the API refuses it. "Could not load the
+ * testing run" would send an administrator looking for a broken server; the
+ * answer is a switch under Settings → Modules.
+ */
+const MODULE_DISABLED_CODE = 'LB-ORG-002';
 
 export const TEST_STATUSES = ['untested', 'pass', 'fail', 'blocked'] as const;
 export type TestStatus = TestingCheckStatus;
@@ -112,6 +120,8 @@ export interface UseTestingChecklist {
   isLoading: boolean;
   /** Set when the run could not be loaded; marks made now will not save. */
   loadError: string | null;
+  /** True when that failure was the department having the module switched off. */
+  isModuleDisabled: boolean;
   reload: () => Promise<void>;
   /** Marking the status a second time with the same value clears it. */
   setStatus: (path: string, status: TestStatus) => void;
@@ -128,6 +138,7 @@ export const useTestingChecklist = (includeAllTesters = false): UseTestingCheckl
   const [testerCount, setTesterCount] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [isModuleDisabled, setIsModuleDisabled] = useState(false);
 
   // Keyed by route path so a second keystroke on one page replaces its pending
   // save rather than queueing another, and typing in two notes still saves
@@ -160,7 +171,9 @@ export const useTestingChecklist = (includeAllTesters = false): UseTestingCheckl
       setOtherMarks(others);
       setTesterCount(run.testerCount);
       setLoadError(null);
+      setIsModuleDisabled(false);
     } catch (err: unknown) {
+      setIsModuleDisabled(toAppError(err).code === MODULE_DISABLED_CODE);
       setLoadError(getErrorMessage(err, 'Could not load the testing run'));
     } finally {
       setIsLoading(false);
@@ -328,6 +341,7 @@ export const useTestingChecklist = (includeAllTesters = false): UseTestingCheckl
     testerCount,
     isLoading,
     loadError,
+    isModuleDisabled,
     reload: load,
     setStatus,
     setNote,

@@ -174,6 +174,7 @@ EXPECTED_GATES = {
     "/api/v1/reports": "reports",
     "/api/v1/scheduling": "scheduling",
     "/api/v1/store": "storefront",
+    "/api/v1/testing-checklist": "testing",
     "/api/v1/training": "training",
 }
 
@@ -219,11 +220,6 @@ DELIBERATELY_UNGATED = {
     "/api/v1/scheduled": "platform task scheduling, unrelated to the Scheduling module",
     "/api/v1/dashboard": "spans modules; gates its own blocks one at a time",
     "/api/v1/admin-hub": "spans modules; gates its own metrics one at a time",
-    "/api/v1/testing-checklist": (
-        "the testing home's shared run: it lists every module's pages, "
-        "including the ones a department has switched off — which is a thing "
-        "a tester needs to record a result against"
-    ),
 }
 
 
@@ -436,6 +432,7 @@ MODULE_HOME_DIRECTORIES = {
     "reports": "reports",
     "scheduling": "scheduling",
     "storefront": "storefront",
+    "testing": "testing",
     "training": "training",
 }
 

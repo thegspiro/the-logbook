@@ -334,8 +334,13 @@ api_router.include_router(audit_logs.router, prefix="/audit-logs", tags=["audit-
 # The in-app testing home's shared run. Writing is open to any signed-in
 # member by design — proving a gate refuses the right people means testing
 # from those accounts — while reading everyone's marks needs settings.manage.
+# The module gate is the department's own switch: a department that has
+# finished setting up turns the whole checklist off.
 api_router.include_router(
-    testing_checklist.router, prefix="/testing-checklist", tags=["testing-checklist"]
+    testing_checklist.router,
+    prefix="/testing-checklist",
+    tags=["testing-checklist"],
+    dependencies=module_gate("testing", "The Testing Checklist"),
 )
 api_router.include_router(
     integrations.router,

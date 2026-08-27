@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { renderWithRouter } from '../../test/utils';
+import { renderWithRouter } from '../../../test/utils';
 
 // Mutable so a test can re-run the same screen as a different account, which
 // is the whole method the page exists to support.
@@ -19,14 +19,14 @@ const mockAuthState: Record<string, unknown> = {
   hasRole: () => false,
 };
 
-vi.mock('../../stores/authStore', () => ({
+vi.mock('../../../stores/authStore', () => ({
   useAuthStore: vi.fn((selector?: (state: Record<string, unknown>) => unknown) =>
     selector ? selector(mockAuthState) : mockAuthState
   ),
 }));
 
 const modulesOff: string[] = [];
-vi.mock('../../hooks/useEnabledModules', () => ({
+vi.mock('../../../hooks/useEnabledModules', () => ({
   useEnabledModules: () => ({
     enabledModules: new Set<string>(),
     isModuleOn: (key: string) => !modulesOff.includes(key),
@@ -34,21 +34,27 @@ vi.mock('../../hooks/useEnabledModules', () => ({
   }),
 }));
 
-vi.mock('../../hooks/useTimezone', () => ({ useTimezone: () => 'America/New_York' }));
+vi.mock('../../../hooks/useTimezone', () => ({ useTimezone: () => 'America/New_York' }));
 
 // The run lives on the server; the screen is tested against the service, not
 // against a browser store.
 const savedEntries: TestingCheckEntry[] = [];
+/** Set to make the run load fail the way a switched-off module does. */
+let moduleDisabled = false;
 const mockSaveEntry = vi.fn();
 const mockClearRun = vi.fn();
-vi.mock('../../services/testingChecklistService', () => ({
+vi.mock('../services/api', () => ({
   testingChecklistService: {
     getRun: (includeAll?: boolean) =>
-      Promise.resolve({
-        entries: savedEntries,
-        includesAllTesters: Boolean(includeAll),
-        testerCount: new Set(savedEntries.map((entry) => entry.userId)).size,
-      }),
+      moduleDisabled
+        ? Promise.reject({
+            response: { status: 403, statusText: 'Forbidden', data: { detail: 'not enabled', code: 'LB-ORG-002' } },
+          })
+        : Promise.resolve({
+            entries: savedEntries,
+            includesAllTesters: Boolean(includeAll),
+            testerCount: new Set(savedEntries.map((entry) => entry.userId)).size,
+          }),
     saveEntry: (payload: unknown) => {
       mockSaveEntry(payload);
       return Promise.resolve({ ...(payload as object), id: 'saved', userId: 'u1', isMine: true });
@@ -61,7 +67,7 @@ vi.mock('../../services/testingChecklistService', () => ({
   },
 }));
 
-import type { TestingCheckEntry } from '../../services/testingChecklistService';
+import type { TestingCheckEntry } from '../services/api';
 
 // Import AFTER mocks
 import { TestingChecklistPage } from './TestingChecklistPage';
@@ -79,6 +85,7 @@ describe('TestingChecklistPage', () => {
     vi.clearAllMocks();
     savedEntries.length = 0;
     modulesOff.length = 0;
+    moduleDisabled = false;
     currentPermissions = ['events.view'];
   });
 
@@ -187,6 +194,14 @@ describe('TestingChecklistPage', () => {
     renderWithRouter(<TestingChecklistPage />);
 
     expect(screen.queryByRole('button', { name: /Clear everyone/ })).not.toBeInTheDocument();
+  });
+
+  it('says the module is switched off rather than blaming the server', async () => {
+    moduleDisabled = true;
+    renderWithRouter(<TestingChecklistPage />);
+
+    expect(await screen.findByText(/module is switched off for this department/)).toBeInTheDocument();
+    expect(screen.queryByText(/Check the connection/)).not.toBeInTheDocument();
   });
 
   it('shows the permissions the account actually holds', async () => {

@@ -27,18 +27,19 @@ import {
   Users,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { useAuthStore } from '../../stores/authStore';
-import { useEnabledModules } from '../../hooks/useEnabledModules';
-import { useConfirm } from '../../contexts/ConfirmContext';
-import { useTimezone } from '../../hooks/useTimezone';
-import { formatDateTime } from '../../utils/dateFormatting';
-import { TESTING_GROUPS } from './testingRegistry';
-import type { TestPageEntry } from './testingRegistry';
-import { evaluatePageAccess } from './pageAccess';
-import type { PageAccess } from './pageAccess';
-import { SEE_ALL_TESTERS_PERMISSION, useTestingChecklist } from './useTestingChecklist';
-import type { TestStatus } from './useTestingChecklist';
-import { TestPageCard } from './TestPageCard';
+import { Link } from 'react-router';
+import { useAuthStore } from '../../../stores/authStore';
+import { useEnabledModules } from '../../../hooks/useEnabledModules';
+import { useConfirm } from '../../../contexts/ConfirmContext';
+import { useTimezone } from '../../../hooks/useTimezone';
+import { formatDateTime } from '../../../utils/dateFormatting';
+import { TESTING_GROUPS } from '../testingRegistry';
+import type { TestPageEntry } from '../testingRegistry';
+import { evaluatePageAccess } from '../pageAccess';
+import type { PageAccess } from '../pageAccess';
+import { SEE_ALL_TESTERS_PERMISSION, useTestingChecklist } from '../useTestingChecklist';
+import type { TestStatus } from '../useTestingChecklist';
+import { TestPageCard } from '../components/TestPageCard';
 
 type StatusFilter = 'all' | TestStatus;
 
@@ -69,6 +70,7 @@ export const TestingChecklistPage: React.FC = () => {
     testerCount,
     isLoading,
     loadError,
+    isModuleDisabled,
     reload,
     setStatus,
     setNote,
@@ -227,13 +229,27 @@ export const TestingChecklistPage: React.FC = () => {
           )}
         </div>
 
-        {loadError && (
-          <div className="alert-danger flex flex-wrap items-center justify-between gap-3 rounded-lg p-4 text-sm">
-            <span>{loadError} — marks made now will not be saved. Check the connection, then reload the run.</span>
-            <button type="button" className="btn-secondary btn-sm" onClick={() => void reload()}>
-              Reload the run
-            </button>
+        {isModuleDisabled ? (
+          <div className="alert-warning flex flex-wrap items-center justify-between gap-3 rounded-lg p-4 text-sm">
+            <span>
+              The Testing Checklist module is switched off for this department, so nothing can be recorded. An
+              administrator turns it on under Settings → Modules.
+            </span>
+            {checkPermission('settings.manage') && (
+              <Link to="/settings?tab=modules" className="btn-secondary btn-sm">
+                Open module settings
+              </Link>
+            )}
           </div>
+        ) : (
+          loadError && (
+            <div className="alert-danger flex flex-wrap items-center justify-between gap-3 rounded-lg p-4 text-sm">
+              <span>{loadError} — marks made now will not be saved. Check the connection, then reload the run.</span>
+              <button type="button" className="btn-secondary btn-sm" onClick={() => void reload()}>
+                Reload the run
+              </button>
+            </div>
+          )
         )}
 
         <div className="card p-4">

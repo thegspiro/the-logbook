@@ -1,16 +1,12 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { act, renderHook, waitFor } from '@testing-library/react';
-import type {
-  TestingCheckEntry,
-  TestingCheckUpsert,
-  TestingChecklistRun,
-} from '../../services/testingChecklistService';
+import type { TestingCheckEntry, TestingCheckUpsert, TestingChecklistRun } from './services/api';
 
 const mockGetRun = vi.fn<(includeAll?: boolean) => Promise<TestingChecklistRun>>();
 const mockSaveEntry = vi.fn<(payload: TestingCheckUpsert) => Promise<TestingCheckEntry>>();
 const mockClearRun = vi.fn<(scope?: 'mine' | 'all') => Promise<number>>();
 
-vi.mock('../../services/testingChecklistService', () => ({
+vi.mock('./services/api', () => ({
   testingChecklistService: {
     getRun: (includeAll?: boolean) => mockGetRun(includeAll),
     saveEntry: (payload: TestingCheckUpsert) => mockSaveEntry(payload),
@@ -236,6 +232,19 @@ describe('useTestingChecklist', () => {
     const { result } = await loaded();
 
     expect(result.current.loadError).toMatch(/network down|Could not load/);
+    expect(result.current.isModuleDisabled).toBe(false);
+  });
+
+  it('tells a switched-off module apart from a broken server', async () => {
+    // The department turned the module off; the answer is a switch, not a
+    // reload. Shaped like an axios error so toAppError reads the code.
+    mockGetRun.mockRejectedValue({
+      response: { status: 403, statusText: 'Forbidden', data: { detail: 'not enabled', code: 'LB-ORG-002' } },
+    });
+
+    const { result } = await loaded();
+
+    expect(result.current.isModuleDisabled).toBe(true);
   });
 
   it('clears only the caller’s marks by default', async () => {

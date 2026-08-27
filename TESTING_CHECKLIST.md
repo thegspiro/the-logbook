@@ -8,6 +8,11 @@ Administration in the navigation) which says **which screens exist**, who is
 meant to be able to open each one, and which ones the current run has already
 covered.
 
+**Switch it on first.** Testing Home is its own module and ships off: an
+administrator enables **Testing Checklist** under Settings → Modules. While it
+is off the page and its API both refuse, which is itself worth one line on the
+checklist.
+
 Use the two together: open a group on `/testing`, click a box to open that page
 in a new tab, run the steps from the matching section here, then mark the box
 Pass, Fail or Blocked and type what you found.

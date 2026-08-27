@@ -271,7 +271,9 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
               { label: 'QR Code Analytics', path: '/admin/analytics', permission: 'analytics.view' },
               { label: 'Audit Log', path: '/admin/audit-log', permission: 'audit.view' },
               { label: 'Error Monitor', path: '/admin/errors', permission: 'settings.manage' },
-              { label: 'Testing Home', path: '/testing', permission: 'settings.manage' },
+              ...(isModuleOn('testing')
+                ? [{ label: 'Testing Home', path: '/testing', permission: 'settings.manage' }]
+                : []),
             ],
           } as NavItem,
         ]

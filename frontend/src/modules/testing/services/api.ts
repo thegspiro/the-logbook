@@ -8,7 +8,7 @@
  * browser happens to hold.
  */
 
-import api from './apiClient';
+import api from '../../../services/apiClient';
 
 export type TestingCheckStatus = 'untested' | 'pass' | 'fail' | 'blocked';
 

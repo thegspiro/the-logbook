@@ -94,9 +94,9 @@ Complete reference of all pages in the application, organized by module.
 
 ## Testing Home
 
-| URL        | Page         | Permission    |
-| ---------- | ------------ | ------------- |
-| `/testing` | Testing Home | Authenticated |
+| URL        | Page         | Permission    | Module    |
+| ---------- | ------------ | ------------- | --------- |
+| `/testing` | Testing Home | Authenticated | `testing` |
 
 > An index of every route in this document, as boxes that open the page and
 > record Pass/Fail/Blocked plus a note. The run is stored per department, one
@@ -110,6 +110,11 @@ Complete reference of all pages in the application, organized by module.
 > firefighter could not open would be useless for checking what a firefighter
 > is refused. The navigation entry is gated on `settings.manage`; the URL is
 > not.
+>
+> The module is **off by default** and is not offered during onboarding — a
+> department turns **Testing Checklist** on under Settings → Modules when it
+> wants it. While it is off the nav entry, the route and `/api/v1/testing-checklist`
+> all refuse; recorded marks are kept and return when it is switched back on.
 >
 > `settings.manage` (which the System Owner's `*` covers) additionally opens
 > **every tester's** marks: each box lists what other accounts found and the

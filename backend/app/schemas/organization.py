@@ -805,6 +805,15 @@ class ModuleSettings(BaseModel):
         default=False,
         description="Medical Screening module (physicals, clearances, expirations)",
     )
+    # Off by default, and deliberately so: the testing checklist is a tool for
+    # walking a new installation before it goes live, not a screen a department
+    # runs day to day. A department that wants it turns it on under
+    # Settings > Modules; it is not offered during onboarding, where the
+    # question would be noise.
+    testing: bool = Field(
+        default=False,
+        description="Testing Checklist module (page-by-page QA of the app)",
+    )
 
     def get_enabled_modules(self) -> list[str]:
         """Get list of all enabled module IDs including essential modules"""
@@ -850,6 +859,7 @@ class ModuleSettingsUpdate(BaseModel):
     public_info: Optional[bool] = None
     finance: Optional[bool] = None
     medical_screening: Optional[bool] = None
+    testing: Optional[bool] = None
 
 
 class OrganizationSettings(BaseModel):

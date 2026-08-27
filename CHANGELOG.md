@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### The testing checklist is now a module you can switch off (2026-08-27)
+
+**Changed**
+
+- The Testing Home at `/testing` — the page listing every screen in the app so
+  a department can walk them before going live — is now a module of its own,
+  and it is **off by default**. A department that was using it will find it
+  gone after this upgrade until an administrator turns **Testing Checklist**
+  back on under Settings → Modules. Nothing recorded is lost: marks and notes
+  stay in place and reappear when the module is switched on again.
+- While the module is off, the navigation entry, the page and the data behind
+  it all refuse — the same way every other switched-off module behaves.
+- The module is not offered during first-time setup. It is a tool for checking
+  an installation, not a decision a department needs to make while making
+  every other one.
+
 ### A few training-related pages could briefly cache data they shouldn't (2026-08-27)
 
 **Fixed**

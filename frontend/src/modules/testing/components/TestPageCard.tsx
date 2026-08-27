@@ -9,11 +9,11 @@
 
 import React from 'react';
 import { ExternalLink, CornerDownRight, Lock, PowerOff } from 'lucide-react';
-import type { TestPageEntry } from './testingRegistry';
-import { buildTestUrl, routeParams } from './testingRegistry';
-import type { PageAccess } from './pageAccess';
-import { describeGate } from './pageAccess';
-import type { OtherTesterMark, TestResult, TestStatus } from './useTestingChecklist';
+import type { TestPageEntry } from '../testingRegistry';
+import { buildTestUrl, routeParams } from '../testingRegistry';
+import type { PageAccess } from '../pageAccess';
+import { describeGate } from '../pageAccess';
+import type { OtherTesterMark, TestResult, TestStatus } from '../useTestingChecklist';
 
 interface TestPageCardProps {
   page: TestPageEntry;

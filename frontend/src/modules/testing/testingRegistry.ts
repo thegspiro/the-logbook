@@ -17,9 +17,9 @@
  * Shared gate constants are imported rather than copied for the same reason.
  */
 
-import { FACILITY_ENTRY_PERMISSIONS } from '../../modules/facilities/routes';
-import { MEDICAL_VIEW_PERMISSIONS } from '../../modules/medical-supplies/routes';
-import { LEGAL_DOCUMENTS_PERMISSIONS } from '../../modules/governance/routes';
+import { FACILITY_ENTRY_PERMISSIONS } from '../facilities/routes';
+import { MEDICAL_VIEW_PERMISSIONS } from '../medical-supplies/routes';
+import { LEGAL_DOCUMENTS_PERMISSIONS } from '../governance/routes';
 
 export interface TestPageEntry {
   /** Route pattern exactly as declared in App.tsx or a module's routes.tsx. */
@@ -58,7 +58,12 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
     checklistSection: '15. Dashboard & Reports',
     pages: [
       { path: '/dashboard', label: 'Dashboard', note: 'Landing page after sign-in — widgets, quick actions, alerts' },
-      { path: '/testing', label: 'Testing home', note: 'This page — listed so the list is complete' },
+      {
+        path: '/testing',
+        label: 'Testing home',
+        note: 'This page — listed so the list is complete',
+        module: 'testing',
+      },
       { path: '/learning', label: 'Learning Center' },
       { path: '/learning/:pathId', label: 'Learning Path' },
       { path: '/account', label: 'My Account', note: 'Profile, password change, MFA, notification preferences' },
