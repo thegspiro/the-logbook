@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Administration dashboard settings could show a protected metric's name to the wrong admin, or fail to save under a race (2026-08-27)
+
+**Fixed**
+
+- If a stored dashboard-metric selection had fewer than three usable
+  entries (for example, an admin's chosen metric became permission-gated
+  or its module was turned off), the automatic fallback that fills the
+  remaining slots from the module's defaults could pick a metric the
+  viewing admin does not have permission to see. The metric's number
+  stayed hidden, but its name could still appear on the card.
+- Saving administration dashboard settings for the first time could fail
+  with a server error if two admins (or one admin double-submitting)
+  saved the same module's settings at nearly the same moment, instead of
+  the second save simply applying on top of the first.
+- One dashboard metric (event attendance rate, last 90 days) relied on an
+  assumption that was not independently verified in the query itself; the
+  query has been made independently self-checking as defense in depth.
+
 ### Several background tasks could silently skip work, re-send old messages, or stop partway through (2026-08-27)
 
 **Fixed**

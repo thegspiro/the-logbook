@@ -1265,3 +1265,88 @@ class TestOtherQueuesFindTheirRows:
         await db_session.flush()
 
         assert "below_par" not in await _queue(db_session, org, member, "inventory")
+
+
+class TestEventsAttendanceRateOrgScoping:
+    """LOC2-32-1: _events_attendance_rate joins EventRSVP to Event and, before
+    this fix, filtered organization_id only on the RSVP side — relying on the
+    invariant that an RSVP's org always matches its parent Event's org rather
+    than verifying it. This constructs the invariant-violating row directly
+    (as a future bug elsewhere in the RSVP-creation path could) and asserts
+    the metric no longer counts it once Event.organization_id is filtered
+    independently."""
+
+    async def _event(self, db_session, org, *, days_ago: int):
+        from app.models.event import Event, EventType
+
+        now = datetime.now(timezone.utc)
+        event = Event(
+            id=str(uuid.uuid4()),
+            organization_id=org.id,
+            title="Drill Night",
+            event_type=EventType.TRAINING,
+            start_datetime=now - timedelta(days=days_ago, hours=2),
+            end_datetime=now - timedelta(days=days_ago),
+        )
+        db_session.add(event)
+        await db_session.flush()
+        return event
+
+    async def _rsvp(self, db_session, org, event, user, *, checked_in: bool):
+        from app.models.event import EventRSVP, RSVPStatus
+
+        rsvp = EventRSVP(
+            id=str(uuid.uuid4()),
+            organization_id=org.id,
+            event_id=event.id,
+            user_id=user.id,
+            status=RSVPStatus.GOING,
+            checked_in=checked_in,
+        )
+        db_session.add(rsvp)
+        await db_session.flush()
+        return rsvp
+
+    async def test_attendance_rate_ignores_an_rsvp_pointed_at_another_orgs_event(
+        self, db_session
+    ):
+        from app.services.admin_hub_service import _events_attendance_rate
+
+        org = await _org(db_session)
+        other_org = await _org(db_session)
+        member = await _member(db_session, org)
+
+        own_event = await self._event(db_session, org, days_ago=1)
+        await self._rsvp(db_session, org, own_event, member, checked_in=True)
+
+        # An RSVP correctly stamped with org's own organization_id (so the
+        # RSVP-side filter alone doesn't catch it), but pointing via event_id
+        # at another org's event — a data-integrity violation this metric
+        # must not trust blindly via an unscoped join.
+        other_event = await self._event(db_session, other_org, days_ago=1)
+        await self._rsvp(db_session, org, other_event, member, checked_in=True)
+
+        ctx = await AdminHubService(db_session)._context(member)
+        value, context = await _events_attendance_rate(ctx)
+
+        # Only the RSVP for org's own event counts — 1 of 1, not 2 of 2
+        # (which is what an unscoped join to Event would report).
+        assert value == "100%"
+        assert context == "1 of 1, last 90 days"
+
+    async def test_attendance_rate_still_counts_the_normal_case(self, db_session):
+        from app.services.admin_hub_service import _events_attendance_rate
+
+        org = await _org(db_session)
+        going_only = await _member(db_session, org)
+        attended = await _member(db_session, org)
+
+        event = await self._event(db_session, org, days_ago=2)
+        await self._rsvp(db_session, org, event, going_only, checked_in=False)
+        await self._rsvp(db_session, org, event, attended, checked_in=True)
+
+        ctx = await AdminHubService(db_session)._context(going_only)
+        value, context = await _events_attendance_rate(ctx)
+
+        assert value == "50%"
+        assert context == "1 of 2, last 90 days"
