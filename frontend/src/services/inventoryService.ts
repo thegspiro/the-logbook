@@ -811,6 +811,19 @@ export const inventoryService = {
     return response.data;
   },
 
+  async transitionReorderRequest(
+    id: string,
+    data: import('./eventServices').ReorderTransition
+  ): Promise<ReorderRequest> {
+    const response = await api.post<ReorderRequest>(`/inventory/reorder-requests/${id}/transition`, data);
+    return response.data;
+  },
+
+  async receiveReorderStock(id: string, data: import('./eventServices').ReorderReceiptCreate): Promise<ReorderRequest> {
+    const response = await api.post<ReorderRequest>(`/inventory/reorder-requests/${id}/receipts`, data);
+    return response.data;
+  },
+
   async deleteReorderRequest(id: string): Promise<void> {
     await api.delete(`/inventory/reorder-requests/${id}`);
   },
