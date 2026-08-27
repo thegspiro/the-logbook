@@ -9,7 +9,7 @@ from decimal import Decimal
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from fastapi.responses import PlainTextResponse
+from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import (
@@ -1564,15 +1564,15 @@ async def generate_export(
 ):
     service = FinanceService(db)
     try:
-        csv_content, record_count = await service.generate_export(
+        csv_stream = await service.generate_export(
             str(current_user.organization_id),
             str(current_user.id),
             data.date_range_start,
             data.date_range_end,
             data.file_format,
         )
-        return PlainTextResponse(
-            content=csv_content,
+        return StreamingResponse(
+            content=csv_stream,
             media_type="text/csv",
             headers={"Content-Disposition": "attachment; filename=finance_export.csv"},
         )
