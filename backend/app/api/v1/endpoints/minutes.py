@@ -471,6 +471,15 @@ async def add_motion(
 
     motion = ensure_found(motion, "Meeting minutes")
 
+    await log_audit_event(
+        db=db,
+        event_type="motion_added",
+        event_category="meetings",
+        severity="info",
+        event_data={"minutes_id": minutes_id, "motion_id": str(motion.id)},
+        user_id=str(current_user.id),
+    )
+
     return _build_motion_response(motion)
 
 
@@ -491,6 +500,23 @@ async def update_motion(
         )
 
     motion = ensure_found(motion, "Motion")
+
+    # Motions carry the recorded vote tally and outcome — a governance
+    # record, not incidental data — so an edit is worth a trace of who
+    # changed it and to what, same as every other minutes-lifecycle write
+    # in this file.
+    await log_audit_event(
+        db=db,
+        event_type="motion_updated",
+        event_category="meetings",
+        severity="info",
+        event_data={
+            "minutes_id": minutes_id,
+            "motion_id": motion_id,
+            "changed_fields": sorted(data.model_dump(exclude_unset=True).keys()),
+        },
+        user_id=str(current_user.id),
+    )
 
     return _build_motion_response(motion)
 
@@ -516,6 +542,15 @@ async def delete_motion(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Motion not found"
         )
+
+    await log_audit_event(
+        db=db,
+        event_type="motion_deleted",
+        event_category="meetings",
+        severity="warning",
+        event_data={"minutes_id": minutes_id, "motion_id": motion_id},
+        user_id=str(current_user.id),
+    )
 
 
 # ============================================
@@ -544,6 +579,15 @@ async def add_action_item(
 
     item = ensure_found(item, "Meeting minutes")
 
+    await log_audit_event(
+        db=db,
+        event_type="action_item_added",
+        event_category="meetings",
+        severity="info",
+        event_data={"minutes_id": minutes_id, "action_item_id": str(item.id)},
+        user_id=str(current_user.id),
+    )
+
     return _build_action_item_response(item)
 
 
@@ -564,6 +608,23 @@ async def update_action_item(
         )
 
     item = ensure_found(item, "Action item")
+
+    await log_audit_event(
+        db=db,
+        event_type="action_item_updated",
+        event_category="meetings",
+        severity="info",
+        event_data={
+            "minutes_id": minutes_id,
+            "action_item_id": item_id,
+            # Codex (PR #1906 review): on approved minutes the service
+            # silently drops every field but status/completion_notes — log
+            # what was actually applied, not the raw client payload, or a
+            # dropped `description` reads as a change that never happened.
+            "changed_fields": sorted(getattr(item, "applied_fields", set())),
+        },
+        user_id=str(current_user.id),
+    )
 
     return _build_action_item_response(item)
 
@@ -589,6 +650,15 @@ async def delete_action_item(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Action item not found"
         )
+
+    await log_audit_event(
+        db=db,
+        event_type="action_item_deleted",
+        event_category="meetings",
+        severity="warning",
+        event_data={"minutes_id": minutes_id, "action_item_id": item_id},
+        user_id=str(current_user.id),
+    )
 
 
 # ============================================
@@ -958,9 +1028,25 @@ async def set_meeting_quorum_config(
             status_code=status.HTTP_404_NOT_FOUND, detail="Meeting not found"
         )
 
+    old_type, old_threshold = minutes.quorum_type, minutes.quorum_threshold
     minutes.quorum_type = quorum_type
     minutes.quorum_threshold = quorum_threshold
     await db.commit()
+
+    await log_audit_event(
+        db=db,
+        event_type="minutes_quorum_config_changed",
+        event_category="meetings",
+        severity="info",
+        event_data={
+            "minutes_id": minutes_id,
+            "old_quorum_type": old_type,
+            "old_quorum_threshold": old_threshold,
+            "new_quorum_type": quorum_type,
+            "new_quorum_threshold": quorum_threshold,
+        },
+        user_id=str(current_user.id),
+    )
 
     # Recalculate immediately
     from app.services.quorum_service import QuorumService

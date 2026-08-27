@@ -40,6 +40,8 @@ import { AdminHubFrame, AdminMetricsSettings } from '../../../components/admin';
 import type { AdminHubAction, AdminHubTab } from '../../../components/admin';
 import { useAuthStore } from '../../../stores/authStore';
 import { useEnabledModules } from '../../../hooks/useEnabledModules';
+import { useTimezone } from '../../../hooks/useTimezone';
+import { formatCalendarDate, formatDate } from '../../../utils/dateFormatting';
 import { MemberPickerModal } from '../../../components/MemberPickerModal';
 import { InventoryScanModal } from '../../../components/InventoryScanModal';
 import type {
@@ -66,11 +68,17 @@ interface AttentionRow {
   href: string;
 }
 
-const dateLabel = (value: string | undefined, fallback: string) => {
+// `dateOnly` fields (next_inspection_due, expected_delivery_date) come from
+// the backend as calendar dates ("YYYY-MM-DD"), not instants -- formatDate's
+// tz-aware Intl formatting would parse that as UTC midnight and then render
+// it a day early west of UTC. formatCalendarDate anchors and renders in UTC
+// so the date on screen matches the string, for every viewer.
+const dateLabel = (value: string | undefined, fallback: string, tz: string, dateOnly = false) => {
   if (!value) return fallback;
   const date = new Date(value);
   const days = Math.floor((Date.now() - date.getTime()) / 86_400_000);
-  return days > 0 ? `${days}d overdue · due ${date.toLocaleDateString()}` : `Due ${date.toLocaleDateString()}`;
+  const formatted = dateOnly ? formatCalendarDate(value) : formatDate(date, tz);
+  return days > 0 ? `${days}d overdue · due ${formatted}` : `Due ${formatted}`;
 };
 
 const NeedsAttention: React.FC<{
@@ -87,7 +95,7 @@ const NeedsAttention: React.FC<{
       </h2>
       {!loading && (
         <span
-          className="rounded-full bg-red-600 px-2 py-0.5 text-xs font-bold text-white"
+          className="rounded-full bg-red-800 px-2 py-0.5 text-xs font-bold text-white"
           aria-label={`${rows.length} work items awaiting action`}
         >
           {rows.length}
@@ -237,6 +245,7 @@ export const InventoryAdminHub: React.FC = () => {
   // set up that members could never see, since their side nav reads the same
   // module flag this card was ignoring.
   const canOpenStore = isModuleOn('storefront') && checkPermission('storefront.manage');
+  const tz = useTimezone();
   const [searchParams, setSearchParams] = useSearchParams();
   const tabParam = searchParams.get('tab') as AdminTab | null;
   const activeTab: AdminTab = tabParam === 'settings' ? 'settings' : 'overview';
@@ -308,10 +317,11 @@ export const InventoryAdminHub: React.FC = () => {
         key: `maintenance-${item.id}`,
         subject: 'Maintenance due or overdue',
         party: item.name,
-        when: dateLabel(item.next_inspection_due, 'Due now'),
-        severity: (item.next_inspection_due && new Date(item.next_inspection_due).getTime() < now
-          ? 'Critical'
-          : 'High'),
+        when: dateLabel(item.next_inspection_due, 'Due now', tz, true),
+        severity:
+          item.next_inspection_due && new Date(item.next_inspection_due).getTime() < now
+            ? ('Critical' as const)
+            : ('High' as const),
         rank: item.next_inspection_due && new Date(item.next_inspection_due).getTime() < now ? 0 : 2,
         action: 'Open item',
         href: `/inventory/admin/items/${item.id}`,
@@ -320,7 +330,7 @@ export const InventoryAdminHub: React.FC = () => {
         key: `loan-${checkout.checkout_id}`,
         subject: 'Overdue temporary loan',
         party: `${checkout.user_name ?? 'Member'} · ${checkout.item_name}`,
-        when: dateLabel(checkout.expected_return_at, dateLabel(checkout.checked_out_at, 'Overdue')),
+        when: dateLabel(checkout.expected_return_at, dateLabel(checkout.checked_out_at, 'Overdue', tz), tz),
         severity: 'High' as const,
         rank: 1,
         action: 'Check in',
@@ -334,7 +344,7 @@ export const InventoryAdminHub: React.FC = () => {
           key: `delivery-${delivery.id}`,
           subject: 'Overdue purchase delivery',
           party: delivery.item_name,
-          when: dateLabel(delivery.expected_delivery_date, 'Overdue'),
+          when: dateLabel(delivery.expected_delivery_date, 'Overdue', tz, true),
           severity: 'High' as const,
           rank: 1,
           action: 'Receive',
@@ -344,9 +354,12 @@ export const InventoryAdminHub: React.FC = () => {
         key: `request-${request.id}`,
         subject: 'Pending gear request',
         party: `${request.requester_name ?? 'Member'} · ${request.item_name}`,
-        when: dateLabel(request.created_at, 'Awaiting review'),
-        severity: request.priority === 'urgent' ? ('High' as const) : ('Medium' as const),
-        rank: request.priority === 'urgent' ? 2 : 4,
+        when: dateLabel(request.created_at, 'Awaiting review', tz),
+        // RequestPriority tops out at "high" (low/normal/high); the earlier
+        // "urgent" comparison matched a value the backend cannot emit, so a
+        // top-priority gear request never got escalated in this queue.
+        severity: request.priority === 'high' ? ('High' as const) : ('Medium' as const),
+        rank: request.priority === 'high' ? 2 : 4,
         action: 'Review',
         href: `/inventory/admin/requests?request=${request.id}`,
       })),
@@ -354,7 +367,7 @@ export const InventoryAdminHub: React.FC = () => {
         key: `return-${request.id}`,
         subject: 'Pending return',
         party: `${request.requester_name ?? 'Member'} · ${request.item_name}`,
-        when: dateLabel(request.created_at, 'Awaiting review'),
+        when: dateLabel(request.created_at, 'Awaiting review', tz),
         severity: 'Medium' as const,
         rank: 4,
         action: 'Review',
@@ -364,7 +377,7 @@ export const InventoryAdminHub: React.FC = () => {
         key: `writeoff-${request.id}`,
         subject: 'Pending write-off',
         party: `${request.requester_name ?? 'Member'} · ${request.item_name}`,
-        when: dateLabel(request.created_at, 'Awaiting review'),
+        when: dateLabel(request.created_at, 'Awaiting review', tz),
         severity: 'Medium' as const,
         rank: 4,
         action: 'Review',
@@ -375,7 +388,7 @@ export const InventoryAdminHub: React.FC = () => {
         subject: 'Low-stock item',
         party: alert.category_name,
         when: `${alert.current_stock} on hand · par ${alert.threshold}`,
-        severity: (alert.current_stock === 0 ? 'High' : 'Medium'),
+        severity: alert.current_stock === 0 ? ('High' as const) : ('Medium' as const),
         rank: alert.current_stock === 0 ? 2 : 5,
         action: 'Open item',
         href: `/inventory/admin/reorder?category=${alert.category_id}`,
@@ -384,10 +397,11 @@ export const InventoryAdminHub: React.FC = () => {
         key: `clearance-${clearance.id}`,
         subject: 'Unresolved departure clearance',
         party: `Member ${clearance.user_id} · ${clearance.items_outstanding} outstanding`,
-        when: dateLabel(clearance.return_deadline, dateLabel(clearance.initiated_at, 'In progress')),
-        severity: (clearance.return_deadline && new Date(clearance.return_deadline).getTime() < now
-          ? 'High'
-          : 'Medium'),
+        when: dateLabel(clearance.return_deadline, dateLabel(clearance.initiated_at, 'In progress', tz), tz),
+        severity:
+          clearance.return_deadline && new Date(clearance.return_deadline).getTime() < now
+            ? ('High' as const)
+            : ('Medium' as const),
         rank: clearance.return_deadline && new Date(clearance.return_deadline).getTime() < now ? 1 : 4,
         action: 'Review',
         href: `/inventory/admin/members?user=${clearance.user_id}`,
@@ -395,7 +409,7 @@ export const InventoryAdminHub: React.FC = () => {
     ];
     setAttentionRows(rows.sort((a, b) => a.rank - b.rank || a.when.localeCompare(b.when)));
     setLoading(false);
-  }, []);
+  }, [tz]);
 
   useEffect(() => {
     void loadSummary();
@@ -504,8 +518,8 @@ export const InventoryAdminHub: React.FC = () => {
             <ProminentCard
               to="/inventory/checkouts"
               icon={<ArrowDownToLine className="h-5 w-5 text-amber-600 dark:text-amber-400" />}
-              title="Checkouts"
-              description="Manage active and overdue equipment checkouts"
+              title="Temporary Loans"
+              description="Manage serialized gear due back on a specific date"
               stat={summary?.overdue_checkouts}
               statLabel="overdue"
               iconBg="bg-amber-500/10"

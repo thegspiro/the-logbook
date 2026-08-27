@@ -506,6 +506,25 @@ class TestUpdateMinutes:
 
         assert minutes.event_id is None
 
+    @pytest.mark.unit
+    async def test_rejects_null_title(self, service, mock_db, org_id):
+        """update_minutes now routes through apply_updates instead of a
+        blind setattr loop: an explicit null against title (NOT NULL)
+        must raise a clean ValueError, not reach commit() and crash."""
+        minutes = MeetingMinutes(
+            id=str(uuid4()),
+            organization_id=str(org_id),
+            title="Old Title",
+            meeting_type=MinutesMeetingType.BUSINESS.value,
+            meeting_date=datetime(2026, 3, 1, tzinfo=timezone.utc),
+            status=MinutesStatus.DRAFT.value,
+        )
+        service.get_minutes = AsyncMock(return_value=minutes)
+
+        data = MinutesUpdate(title=None)
+        with pytest.raises(ValueError, match="cannot be cleared"):
+            await service.update_minutes(minutes.id, org_id, data)
+
 
 # ============================================
 # Delete Minutes Tests
@@ -651,6 +670,36 @@ class TestApproveMinutes:
 
         with pytest.raises(ValueError, match="submitted"):
             await service.approve_minutes(minutes.id, org_id, user_id)
+
+    @pytest.mark.unit
+    async def test_self_approval_is_rejected(self, service, mock_db, org_id, user_id):
+        """Separation of duties: the person who submitted the minutes
+        cannot also be the one who approves them (matches the shared
+        assert_different_person guard already used for finance/skills/
+        admin-hours approvals)."""
+        minutes = _make_minutes(
+            status=MinutesStatus.SUBMITTED.value, submitted_by=str(user_id)
+        )
+        service.get_minutes = AsyncMock(return_value=minutes)
+
+        with pytest.raises(ValueError, match="cannot approve your own"):
+            await service.approve_minutes(minutes.id, org_id, user_id)
+
+        assert minutes.status == MinutesStatus.SUBMITTED.value
+
+    @pytest.mark.unit
+    async def test_a_different_approver_succeeds(
+        self, service, mock_db, org_id, user_id
+    ):
+        minutes = _make_minutes(
+            status=MinutesStatus.SUBMITTED.value, submitted_by=str(uuid4())
+        )
+        service.get_minutes = AsyncMock(return_value=minutes)
+
+        result = await service.approve_minutes(minutes.id, org_id, user_id)
+
+        assert result is not None
+        assert minutes.status == MinutesStatus.APPROVED
 
     @pytest.mark.unit
     async def test_approve_already_approved_raises(
@@ -866,6 +915,27 @@ class TestUpdateMotion:
         result = await service.update_motion("motion-id", "bad-id", org_id, data)
 
         assert result is None
+
+    @pytest.mark.unit
+    async def test_rejects_null_motion_text(self, service, mock_db, org_id):
+        """update_motion now routes through apply_updates instead of a
+        blind setattr loop: an explicit null against motion_text (NOT
+        NULL) must raise a clean ValueError."""
+        from app.models.minute import Motion
+
+        minutes = _make_minutes(status=MinutesStatus.DRAFT.value)
+        service.get_minutes = AsyncMock(return_value=minutes)
+
+        motion = Motion(
+            id=str(uuid4()), minutes_id=minutes.id, motion_text="Original text"
+        )
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = motion
+        mock_db.execute.return_value = mock_result
+
+        data = MotionUpdate(motion_text=None)
+        with pytest.raises(ValueError, match="cannot be cleared"):
+            await service.update_motion(motion.id, minutes.id, org_id, data)
 
 
 class TestDeleteMotion:
@@ -1097,6 +1167,47 @@ class TestUpdateActionItem:
         )
 
         assert result is None
+
+    @pytest.mark.unit
+    async def test_reassigning_to_a_foreign_assignee_is_rejected(
+        self, service, mock_db, org_id
+    ):
+        """MM-4 (XC-1): update_action_item now validates a reassigned
+        assignee_id, matching add_action_item's existing check."""
+        minutes = _make_minutes(status=MinutesStatus.DRAFT.value)
+        service.get_minutes = AsyncMock(return_value=minutes)
+
+        item = _make_action_item(minutes_id=minutes.id)
+        item_result = MagicMock()
+        item_result.scalar_one_or_none.return_value = item
+        org_check_result = MagicMock()
+        org_check_result.scalar_one_or_none.return_value = None  # not in org
+        mock_db.execute = AsyncMock(side_effect=[item_result, org_check_result])
+
+        data = ActionItemUpdate(assignee_id=str(uuid4()))
+        with pytest.raises(ValueError, match="Invalid"):
+            await service.update_action_item(item.id, minutes.id, org_id, data)
+
+    @pytest.mark.unit
+    async def test_rejects_null_description(self, service, mock_db, org_id):
+        """update_action_item now routes through apply_updates instead of
+        a blind setattr loop: an explicit null against description (NOT
+        NULL) must raise a clean ValueError."""
+        from app.models.minute import ActionItem
+
+        minutes = _make_minutes(status=MinutesStatus.DRAFT.value)
+        service.get_minutes = AsyncMock(return_value=minutes)
+
+        item = ActionItem(
+            id=str(uuid4()), minutes_id=minutes.id, description="Original description"
+        )
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = item
+        mock_db.execute.return_value = mock_result
+
+        data = ActionItemUpdate(description=None)
+        with pytest.raises(ValueError, match="cannot be cleared"):
+            await service.update_action_item(item.id, minutes.id, org_id, data)
 
     @pytest.mark.unit
     async def test_update_action_item_minutes_not_found(self, service, mock_db, org_id):

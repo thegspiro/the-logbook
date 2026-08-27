@@ -11,7 +11,8 @@ Covers:
 
 import secrets
 import time
-from unittest.mock import MagicMock, patch
+from contextlib import asynccontextmanager
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi import HTTPException
@@ -19,6 +20,7 @@ from fastapi import HTTPException
 from app.core.security_middleware import (
     CSRFProtection,
     InputSanitizer,
+    IPBlockingMiddleware,
     RateLimiter,
     SecurityHeadersMiddleware,
     public_rate_limit,
@@ -329,6 +331,52 @@ class TestRateLimiter:
         limiter.is_rate_limited("trigger", max_requests=100, window_seconds=60)
         assert len(limiter.requests) <= limiter._MAX_KEYS + 1
 
+    @pytest.mark.unit
+    def test_is_rate_limited_records_the_callers_window_for_the_key(self):
+        limiter = RateLimiter()
+        limiter.is_rate_limited(
+            "data-export:1.2.3.4", max_requests=3, window_seconds=3600
+        )
+        assert limiter._key_windows["data-export:1.2.3.4"] == 3600
+
+    @pytest.mark.unit
+    def test_a_long_window_keys_eviction_uses_its_own_window_not_the_triggering_calls(
+        self,
+    ):
+        """CI2-33-2: this limiter is shared across scopes with very different
+        windows (most 60s, but e.g. data_export is 3600s). A sweep triggered
+        by a 60s-window call must not evict a key tracked under a 3600s
+        window just because it's been quiet for longer than 60s — that
+        resets its counter to zero, letting an attacker exceed a 3/hour
+        limit by spacing requests ~65s+ apart."""
+        limiter = RateLimiter()
+        limiter._EVICTION_INTERVAL = 0  # allow eviction on every call
+
+        now = time.time()
+        # Last active 90s ago — stale under a 60s window, well within a 3600s one.
+        limiter.requests["data-export:1.2.3.4"] = [now - 90]
+        limiter._key_windows["data-export:1.2.3.4"] = 3600
+
+        # A different scope's 60s-window call triggers the sweep.
+        limiter.is_rate_limited("login:5.6.7.8", max_requests=100, window_seconds=60)
+
+        assert "data-export:1.2.3.4" in limiter.requests
+
+    @pytest.mark.unit
+    def test_a_long_window_key_is_still_evicted_once_its_own_window_elapses(self):
+        limiter = RateLimiter()
+        limiter._EVICTION_INTERVAL = 0
+
+        now = time.time()
+        # Past its own 3600s window.
+        limiter.requests["data-export:1.2.3.4"] = [now - 4000]
+        limiter._key_windows["data-export:1.2.3.4"] = 3600
+
+        limiter.is_rate_limited("login:5.6.7.8", max_requests=100, window_seconds=60)
+
+        assert "data-export:1.2.3.4" not in limiter.requests
+        assert "data-export:1.2.3.4" not in limiter._key_windows
+
 
 # ---------------------------------------------------------------------------
 # CSRFProtection
@@ -429,6 +477,35 @@ class TestInputSanitizer:
         """Strings exceeding max_length should be truncated."""
         result = InputSanitizer.sanitize_string("a" * 2000, max_length=100)
         assert len(result) <= 100
+
+    @pytest.mark.unit
+    def test_sanitize_string_max_length_bounds_the_escaped_output(self):
+        """CI2-33-9: truncating before escaping let the escaped output exceed
+        max_length (each &<>"' expands 3-5x on escape) — a caller trusting
+        this as a true length bound didn't get one."""
+        result = InputSanitizer.sanitize_string("<" * 100, max_length=50)
+        assert len(result) <= 50
+        # And the escaping is still real, not skipped to make the bound work.
+        assert "<" not in result
+
+    @pytest.mark.unit
+    def test_sanitize_string_does_not_cut_an_entity_in_half(self):
+        """CI2-33-9's escape-then-truncate fix can still land the cut inside
+        an entity (e.g. "&amp;" -> "&am"), which then renders as literal text
+        instead of the character it was escaping (Codex, PR #1917). A
+        boundary that lands exactly on "&" (no entity content follows into
+        the kept slice) must also drop the dangling "&", not just a
+        partial entity body."""
+        # "&" escapes to "&amp;" (5 chars). max_length=7 keeps "&amp;" (5)
+        # plus 2 more chars of the next escaped "&" ("&a"), landing mid-entity.
+        result = InputSanitizer.sanitize_string("&&&&&", max_length=7)
+        assert result == "&amp;"
+        assert not result.endswith("&a")
+
+        # max_length=1 keeps only the opening "&" of the first entity, with
+        # no closing ";" anywhere in the slice.
+        result = InputSanitizer.sanitize_string("&", max_length=1)
+        assert result == ""
 
     @pytest.mark.unit
     def test_sanitize_string_non_string_returns_empty(self):
@@ -564,6 +641,21 @@ class TestInputSanitizer:
         """Non-string input should raise ValueError."""
         with pytest.raises(ValueError, match="must be a string"):
             InputSanitizer.validate_url(12345)
+
+    @pytest.mark.unit
+    def test_validate_url_rejects_a_bare_ip_host(self):
+        """CI2-33-12: a bare IPv4 host (e.g. an internal/link-local address
+        like 169.254.169.254) matched the old host regex — this function has
+        no callers today, but if it's ever wired to a webhook/URL-fetch
+        feature, a raw IP bypassing here would need its own SSRF check."""
+        with pytest.raises(ValueError, match="bare IP"):
+            InputSanitizer.validate_url("https://169.254.169.254/latest/meta-data")
+
+    @pytest.mark.unit
+    def test_validate_url_still_accepts_a_domain_that_looks_ip_adjacent(self):
+        # e.g. a domain with digit labels must not be caught by the IP check.
+        result = InputSanitizer.validate_url("https://192.example.com/path")
+        assert result == "https://192.example.com/path"
 
     @pytest.mark.unit
     def test_validate_url_invalid_format(self):
@@ -808,6 +900,45 @@ class TestVerifyCSRFTokenDependency:
 
     @pytest.mark.unit
     @pytest.mark.asyncio
+    async def test_onboarding_path_skips_the_global_csrf_check(self):
+        """Onboarding implements its own session-based CSRF check — the
+        global double-submit check must not apply there even with no
+        matching token pair at all."""
+        request = MagicMock()
+        request.method = "POST"
+        request.scope = {
+            "type": "http",
+            "path": "/api/v1/onboarding/organization",
+        }
+        request.headers = {}
+        request.cookies = {}
+        # Should not raise, despite no CSRF cookie/header/access_token.
+        await verify_csrf_token(request)
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_a_path_merely_containing_onboarding_is_not_exempt(self):
+        """CI2-33-10: the bypass used to be a substring match
+        ('/onboarding/' in path / path.endswith('/onboarding')), which would
+        silently exempt any future endpoint whose path happened to contain
+        that substring. It's anchored to the real router prefix now."""
+        from fastapi import HTTPException
+
+        request = MagicMock()
+        request.method = "POST"
+        request.scope = {
+            "type": "http",
+            "path": "/api/v1/events/onboarding-checklist",
+        }
+        request.headers = {"X-CSRF-Token": "wrong-token"}
+        request.cookies = {"csrf_token": "correct-token"}
+
+        with pytest.raises(HTTPException) as exc_info:
+            await verify_csrf_token(request)
+        assert exc_info.value.status_code == 403
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
     async def test_missing_header_with_cookie_rejected(self):
         """POST with csrf_token cookie but missing X-CSRF-Token header should raise 403."""
         from fastapi import HTTPException
@@ -869,3 +1000,309 @@ class TestVerifyCSRFTokenDependency:
         with pytest.raises(HTTPException) as exc_info:
             await verify_csrf_token(request)
         assert exc_info.value.status_code == 403
+
+
+class TestIPBlockingMiddlewareBlockedAttemptLogging:
+    """A blocked request must be visible in BOTH the audit log and the
+    blocked_access_attempts table — GET /ip-security/blocked-attempts reads
+    only the latter, so a block that never inserts one is invisible there
+    even though it was correctly denied and audit-logged."""
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_logs_to_both_audit_and_blocked_attempts_table(self):
+        from app.models.ip_security import BlockedAccessAttempt
+
+        request = MagicMock()
+        request.url.path = "/api/v1/events"
+        request.method = "GET"
+        request.headers = {"user-agent": "curl/8.0"}
+
+        db = MagicMock()
+        db.add = MagicMock()
+        db.commit = AsyncMock()
+
+        @asynccontextmanager
+        async def fake_session_factory():
+            yield db
+
+        geoip = MagicMock()
+        geoip.lookup_ip.return_value = {
+            "country_code": "RU",
+            "country_name": "Russia",
+        }
+
+        log_audit_event = AsyncMock()
+
+        middleware = IPBlockingMiddleware(app=None)
+        with (
+            patch("app.core.geoip.get_geoip_service", return_value=geoip),
+            patch(
+                "app.core.database.async_session_factory",
+                fake_session_factory,
+            ),
+            patch("app.core.audit.log_audit_event", log_audit_event),
+        ):
+            await middleware._log_blocked_attempt(
+                request, "203.0.113.9", "country_blocked"
+            )
+
+        log_audit_event.assert_awaited_once()
+        db.add.assert_called_once()
+        row = db.add.call_args.args[0]
+        assert isinstance(row, BlockedAccessAttempt)
+        assert row.ip_address == "203.0.113.9"
+        assert row.block_reason == "country_blocked"
+        assert row.country_code == "RU"
+        assert row.country_name == "Russia"
+        assert row.request_path == "/api/v1/events"
+        assert row.request_method == "GET"
+        db.commit.assert_awaited_once()
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_request_method_is_truncated_to_column_width(self):
+        """request_method is String(10). A malformed/overlong method must be
+        truncated before insert, or the commit fails and the exception
+        handler drops the row from both security logs (Codex P2, PR #1911)."""
+        request = MagicMock()
+        request.url.path = "/api/v1/events"
+        request.method = "X" * 50
+        request.headers = {"user-agent": "curl/8.0"}
+
+        db = MagicMock()
+        db.add = MagicMock()
+        db.commit = AsyncMock()
+
+        @asynccontextmanager
+        async def fake_session_factory():
+            yield db
+
+        geoip = MagicMock()
+        geoip.lookup_ip.return_value = {
+            "country_code": "RU",
+            "country_name": "Russia",
+        }
+
+        middleware = IPBlockingMiddleware(app=None)
+        with (
+            patch("app.core.geoip.get_geoip_service", return_value=geoip),
+            patch(
+                "app.core.database.async_session_factory",
+                fake_session_factory,
+            ),
+            patch("app.core.audit.log_audit_event", AsyncMock()),
+        ):
+            await middleware._log_blocked_attempt(
+                request, "203.0.113.9", "country_blocked"
+            )
+
+        row = db.add.call_args.args[0]
+        assert len(row.request_method) <= 10
+        assert row.request_method == "X" * 10
+
+
+# ---------------------------------------------------------------------------
+# SecurityMonitoringMiddleware
+# ---------------------------------------------------------------------------
+
+
+class TestSecurityMonitoringMiddlewareReadsTheRealAuthenticatedUser:
+    """CI2-33-1 (HIGH): this middleware read request.state.user before
+    self.app() ran. No auth path ever sets ".user" (get_current_user sets
+    ".authenticated_user"), and that attribute isn't populated until a route
+    dependency runs *inside* self.app() anyway — so user_id was always None,
+    silently disabling both session-hijack and data-exfiltration monitoring
+    for every request, with no error and nothing to distinguish it from
+    working."""
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_session_hijack_check_uses_the_user_the_route_authenticated(
+        self, monkeypatch
+    ):
+        from types import SimpleNamespace
+
+        from starlette.requests import Request
+
+        from app.core.security_middleware import SecurityMonitoringMiddleware
+
+        calls = {}
+
+        async def fake_detect_session_hijack(**kwargs):
+            calls.update(kwargs)
+            return None
+
+        monkeypatch.setattr(
+            "app.services.security_monitoring.security_monitor",
+            SimpleNamespace(detect_session_hijack=fake_detect_session_hijack),
+        )
+
+        fake_db = AsyncMock()
+
+        @asynccontextmanager
+        async def fake_session_factory():
+            yield fake_db
+
+        monkeypatch.setattr(
+            "app.core.database.async_session_factory", fake_session_factory
+        )
+
+        async def inner_app(scope, receive, send):
+            # Mirrors what get_current_user actually does: sets this
+            # attribute on the same Request the outer middleware holds,
+            # from *inside* the self.app() call.
+            req = Request(scope)
+            req.state.authenticated_user = SimpleNamespace(id="user-123")
+            await send({"type": "http.response.start", "status": 200, "headers": []})
+            await send({"type": "http.response.body", "body": b""})
+
+        middleware = SecurityMonitoringMiddleware(inner_app)
+
+        # No client ever sends X-Session-ID outside onboarding (Codex, PR
+        # #1917) — a real authenticated request carries only the access_token
+        # cookie, which is what session_id is now derived from.
+        scope = {
+            "type": "http",
+            "method": "GET",
+            "path": "/api/v1/some-route",
+            "headers": [(b"cookie", b"access_token=real-jwt-value")],
+            "client": ("203.0.113.9", 12345),
+            "query_string": b"",
+        }
+
+        async def receive():
+            return {"type": "http.request", "body": b"", "more_body": False}
+
+        sent = []
+
+        async def send(message):
+            sent.append(message)
+
+        await middleware(scope, receive, send)
+
+        import hashlib
+
+        assert calls.get("user_id") == "user-123"
+        assert calls.get("session_id") == hashlib.sha256(b"real-jwt-value").hexdigest()
+        # CI2-33-13-2 (Codex, PR #1917): a bare AsyncSession context manager
+        # doesn't auto-commit like the get_session() request dependency does
+        # — without an explicit commit, the alert/audit row this check writes
+        # is silently rolled back on scope exit.
+        fake_db.commit.assert_awaited_once()
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_no_hijack_check_when_the_route_never_authenticates(
+        self, monkeypatch
+    ):
+        """An unauthenticated route (no request.state.authenticated_user set)
+        must not call the hijack check at all — confirms the fix reads the
+        real attribute rather than always finding *something*."""
+        from unittest.mock import AsyncMock as _AsyncMock
+
+        fake_detect = _AsyncMock()
+        monkeypatch.setattr(
+            "app.services.security_monitoring.security_monitor",
+            MagicMock(detect_session_hijack=fake_detect),
+        )
+
+        async def inner_app(scope, receive, send):
+            await send({"type": "http.response.start", "status": 200, "headers": []})
+            await send({"type": "http.response.body", "body": b""})
+
+        from app.core.security_middleware import SecurityMonitoringMiddleware
+
+        middleware = SecurityMonitoringMiddleware(inner_app)
+
+        scope = {
+            "type": "http",
+            "method": "GET",
+            "path": "/api/v1/public-route",
+            "headers": [(b"x-session-id", b"sess-abc")],
+            "client": ("203.0.113.9", 12345),
+            "query_string": b"",
+        }
+
+        async def receive():
+            return {"type": "http.request", "body": b"", "more_body": False}
+
+        async def send(message):
+            pass
+
+        await middleware(scope, receive, send)
+
+        fake_detect.assert_not_awaited()
+
+
+# ---------------------------------------------------------------------------
+# IPLoggingMiddleware — X-Request-ID validation
+# ---------------------------------------------------------------------------
+
+
+class TestIPLoggingMiddlewareRequestIdValidation:
+    """CI2-33-7: an unvalidated client-supplied X-Request-ID was interpolated
+    verbatim into log lines and the response header — a client could forge
+    what looks like a genuine, distinct log entry (e.g. embedded newlines) in
+    the security audit trail."""
+
+    @staticmethod
+    async def _run(monkeypatch, incoming_request_id: str | None):
+        from app.core.security_middleware import IPLoggingMiddleware
+
+        monkeypatch.setattr("app.core.geoip.get_geoip_service", lambda: None)
+
+        async def inner_app(scope, receive, send):
+            await send({"type": "http.response.start", "status": 200, "headers": []})
+            await send({"type": "http.response.body", "body": b""})
+
+        middleware = IPLoggingMiddleware(inner_app)
+
+        headers = []
+        if incoming_request_id is not None:
+            headers.append((b"x-request-id", incoming_request_id.encode()))
+        scope = {
+            "type": "http",
+            "method": "GET",
+            "path": "/api/v1/some-route",
+            "headers": headers,
+            "client": ("203.0.113.9", 12345),
+            "query_string": b"",
+        }
+
+        async def receive():
+            return {"type": "http.request", "body": b"", "more_body": False}
+
+        sent = []
+
+        async def send(message):
+            sent.append(message)
+
+        await middleware(scope, receive, send)
+
+        start = next(m for m in sent if m["type"] == "http.response.start")
+        response_request_id = next(
+            v.decode() for k, v in start["headers"] if k == b"x-request-id"
+        )
+        return response_request_id
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_a_valid_format_incoming_id_is_reused(self, monkeypatch):
+        valid_id = "0123456789abcdef"  # 16 lowercase hex chars
+        response_request_id = await self._run(monkeypatch, valid_id)
+        assert response_request_id == valid_id
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_an_invalid_format_incoming_id_is_replaced(self, monkeypatch):
+        forged = "1\n2026-08-27 ERROR admin session revoked"
+        response_request_id = await self._run(monkeypatch, forged)
+        assert response_request_id != forged
+        assert "\n" not in response_request_id
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_no_incoming_id_generates_one(self, monkeypatch):
+        response_request_id = await self._run(monkeypatch, None)
+        assert len(response_request_id) == 16

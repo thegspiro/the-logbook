@@ -7,6 +7,348 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### A few training-related pages could briefly cache data they shouldn't (2026-08-27)
+
+**Fixed**
+
+- A training cohort's roster (names and emails), a program's per-member
+  enrollment-eligibility list, and an external training provider's internal
+  member mappings could each be held in the browser's short-lived response
+  cache for up to 90 seconds, instead of being excluded like other
+  member-identifying data.
+- A form-management page and a raw analytics-export download had the same
+  gap; a grants/fundraising list had a related gap that wasn't currently
+  reachable but is now closed as a precaution.
+- A shift-attendance lookup that failed for any reason (not just "no record
+  yet") was silently treated as "not checked in," which could hide a real
+  network or server problem from the person viewing it.
+
+### A logo-upload failure during setup could echo internal error details (2026-08-27)
+
+**Fixed**
+
+- If a logo image uploaded during first-time setup failed to process for an
+  unexpected reason, the error message shown could include raw internal
+  detail instead of a generic message — a follow-up finding from the
+  monitoring pass on the fixes below.
+
+### Security monitoring for session hijacking and data exfiltration was never actually running (2026-08-27)
+
+**Fixed**
+
+- A background security-monitoring check meant to detect session hijacking
+  and unusual bulk data downloads never ran, for any request, due to a
+  timing and naming bug — it looked for the signed-in user before the
+  request had been authenticated, under an attribute name nothing ever set.
+  Both checks now run correctly.
+- Rate limiting on the once-an-hour data-export endpoint could be reset
+  early by unrelated traffic in the fallback used during a Redis outage,
+  letting the hourly limit be worked around by spacing requests out.
+- A total database-connection failure at startup could include the
+  database password in the error message reaching logs/monitoring, on a
+  different code path than a similar issue fixed previously.
+- Three configuration checks that previously failed silently now warn at
+  startup instead: an unsupported JWT signing algorithm (previously only
+  caught an exact "none" value), a bot-challenge feature turned on without
+  its required secret key, and a dedicated audit-log signing key being
+  left unset.
+- An overly broad trusted-proxy network range (letting a client spoof
+  their IP address) is now flagged at startup instead of accepted silently.
+- A request-tracing ID supplied by the client was previously trusted and
+  echoed back verbatim into logs and a response header without validation;
+  it's now validated against the expected format first.
+
+### Administration dashboard settings could show a protected metric's name to the wrong admin, or fail to save under a race (2026-08-27)
+
+**Fixed**
+
+- If a stored dashboard-metric selection had fewer than three usable
+  entries (for example, an admin's chosen metric became permission-gated
+  or its module was turned off), the automatic fallback that fills the
+  remaining slots from the module's defaults could pick a metric the
+  viewing admin does not have permission to see. The metric's number
+  stayed hidden, but its name could still appear on the card.
+- Saving administration dashboard settings for the first time could fail
+  with a server error if two admins (or one admin double-submitting)
+  saved the same module's settings at nearly the same moment, instead of
+  the second save simply applying on top of the first.
+- One dashboard metric (event attendance rate, last 90 days) relied on an
+  assumption that was not independently verified in the query itself; the
+  query has been made independently self-checking as defense in depth.
+
+### Several background tasks could silently skip work, re-send old messages, or stop partway through (2026-08-27)
+
+**Fixed**
+
+- A cancelled shift still generated a "please review the attendance
+  records" email to its officer, because the check that finds
+  ended-shifts-to-review never excluded cancelled ones.
+- Some shift and end-of-shift reminders could be permanently silenced if
+  the shift had no crew, apparatus, or checklist assigned yet at the
+  moment the reminder task ran — even after one was assigned later, the
+  reminder never went out.
+- End-of-shift checklist reminders were still sent to members who had
+  since been deactivated.
+- A single failing item partway through a batch of inventory
+  notifications or scheduled emails could cause every later item in that
+  batch to fail for an unrelated reason, and in the worst case could
+  cause already-sent emails to be re-sent on the next run.
+- Nightly cleanup of expired records (old messages, error logs, form
+  submissions, etc.) had no error isolation between organizations, so one
+  organization's failure could abort the run for every organization
+  after it, and successful deletions were not recorded anywhere.
+- A background sync task could keep contacting whatever address was
+  configured for a connected Salesforce integration without re-validating
+  it, once a connection had already been established.
+- Three background tasks (compliance reports, external training sync,
+  Salesforce sync) and the officer-directory sync task did not correctly
+  skip organizations marked inactive, unlike every comparable task in the
+  same file.
+
+### First-time setup had a few unbounded requests and inconsistent safeguards (2026-08-27)
+
+**Fixed**
+
+- The initial setup wizard's IT-team, roles, and positions steps had no
+  limit on how many entries a single request could submit, unlike every
+  other list in setup — a very large submission could tie up the server
+  hashing passwords or creating roles for far more entries than any real
+  department would ever have.
+- Six of setup's save steps (department info, email, file storage, auth,
+  IT team, module selection) could still be replayed after setup finished,
+  unlike the rest of the wizard's steps, letting an old browser tab keep
+  rewriting the saved (but no longer used) setup data indefinitely.
+- Retrying a failed test-email or reset attempt during setup a few times
+  could lock the whole setup process (including creating the first admin
+  account) for 30 minutes, because unrelated setup requests shared one
+  rate limit.
+- Editing a saved meeting-minutes template relied entirely on the request
+  never containing fields it shouldn't (organization or ownership) rather
+  than actively rejecting them — no live issue, but fragile against a
+  future change.
+
+### Several reporting and dashboard figures were counted inconsistently, and a malformed report filter could return a server error (2026-08-27)
+
+**Fixed**
+
+- A custom report filter with an unexpected shape (an advanced pipeline
+  report grouping option) could return a generic server error instead of
+  falling back to the report's saved configuration.
+- Requesting attendance metrics for a single event still included every
+  other event's data in one of the reported averages.
+- The secretary's attendance dashboard now double-checks that a meeting
+  attendance record belongs to the requesting department, matching every
+  other aggregate in the dashboard.
+- The community-engagement dashboard counted every outside visitor ever
+  logged, instead of only those from public events who actually checked
+  in — inflating the figure next to it, which was already scoped
+  correctly.
+- Generating or printing barcode labels for prospective members or
+  current members is now recorded in the audit trail, matching every
+  other read of that kind of information.
+
+**Flagged for a future decision**
+
+- A saved report can be marked "scheduled" with an email delivery list,
+  but nothing currently generates or sends it on that schedule. The API
+  now reports that a schedule isn't actually in effect, for whenever a
+  saved-reports screen is built (none exists in the app today). See
+  `docs/KNOWN_LIMITATIONS.md`.
+
+### A denied role assignment during member creation could leave behind a live, unauthorized account (2026-08-27)
+
+**Fixed**
+
+- Creating a new member with roles the creator wasn't allowed to grant
+  correctly showed an error and blocked the request — but could silently
+  leave behind a real, active account with a working password and no
+  roles at all, because the account had already been saved to the
+  database before the permission check ran. Member creation now checks
+  role permissions before the account is created, so a denied request
+  leaves nothing behind.
+- The audit trail's tamper-detection didn't cover a log entry's category
+  or severity level, so someone with direct database access could have
+  quietly downgraded a critical security incident to a routine one
+  without leaving any trace of the change.
+- The blocked-access-attempts report was always empty — blocked requests
+  were being recorded to the audit log but never to the report itself,
+  so an admin checking for attack patterns would see nothing regardless
+  of how much traffic had actually been blocked.
+- Blocking a country that had previously been blocked and then unblocked
+  failed with a generic server error instead of succeeding.
+
+### Editing a form, form field, or form integration could turn a cleared field into a confusing server error (2026-08-27)
+
+**Fixed**
+
+- Clearing certain required fields while editing a form, one of its fields,
+  or a cross-module integration (e.g. equipment assignment, event
+  registration) returned a generic error instead of a clear message
+  explaining which field couldn't be empty.
+
+### An already-sent department message could go out a second time; email headers weren't fully sanitized (2026-08-27)
+
+**Fixed**
+
+- Rescheduling an already-sent department message to a time in the past
+  (rather than the future, which was already blocked) could make the
+  background delivery task treat it as newly due and send it out again —
+  a duplicate in-app notification, a duplicate email, and, for an urgent
+  message, a duplicate text to everyone it was targeted at.
+- A notification rule's description or configuration couldn't actually be
+  cleared through the update endpoint — the request appeared to succeed
+  but the old value silently remained.
+- The shared email-sending layer sanitized the Subject line and sender
+  name against header-injection characters but not the To, Cc, Reply-To,
+  or unsubscribe-link fields, and one settings field that feeds a Cc
+  address wasn't validated as an email address at all before reaching it.
+- Large email attachments sent to many recipients at once (e.g. a
+  generated election package sent to the full voter roster) had no size
+  limit and could consume a large amount of memory; a connection failure
+  partway through such a send could also crash the whole batch instead of
+  reporting which messages went out.
+- An internal cache used to remember an email's color scheme grew by one
+  entry for every email ever sent, with nothing ever clearing it out —
+  a slow, unbounded memory leak in any long-running server process.
+
+### A secretary could submit and approve their own meeting minutes; a foreign member could be assigned an action item (2026-08-27)
+
+**Fixed**
+
+- The same person could submit meeting minutes for approval and then
+  approve their own submission, with no second person involved — the
+  same self-certification gap already closed for finance requests,
+  skills tests, and admin hours. Approving minutes now requires someone
+  other than whoever submitted them.
+- Reassigning an action item on a meeting or a set of minutes to a
+  different owner didn't check that owner belonged to the same
+  department, unlike creating a new action item, which already did.
+- Editing a meeting, meeting minutes, a motion, or an action item and
+  clearing certain required fields could produce a generic server error
+  instead of a clear message. Clearing a meeting's notes or location
+  (which are optional) previously did nothing at all — the old value
+  silently stuck around.
+- Two coordinators bridging the same calendar event into meeting minutes
+  at the same time could both succeed, leaving two duplicate draft
+  minutes for one meeting. Two check-ins recalculating a meeting's
+  quorum at the same time could similarly overwrite each other's count.
+- Adding, editing, or deleting a motion or an action item on a set of
+  minutes, and changing a meeting's quorum override, left no record of
+  who made the change — every other edit to minutes already did.
+
+### Editing a medical supply, item, or category could turn a cleared field into a server error instead of a clear message (2026-08-27)
+
+**Fixed**
+
+- Clearing certain required fields while editing an inventory category, an
+  inventory item, or a stock lot (from either the medical supplies page or
+  the general inventory pages) could produce a generic server error instead
+  of telling the person what went wrong. Stock lot edits in particular could
+  fail with no error message at all. All three now report a clear,
+  specific message.
+
+### Deleting a grant opportunity could silently wipe out every application ever linked to it (2026-08-27)
+
+**Fixed**
+
+- Deleting a grant opportunity that still had applications attached either
+  crashed or, worse, silently deleted every one of those applications —
+  including their budget items, expenditures, compliance tasks, and notes.
+  An application is supposed to survive its opportunity being removed (it
+  may have started as a manual entry); it now does, with its opportunity
+  link simply cleared.
+- Moving a grant application from Awarded back to Active and then back to
+  Awarded duplicated the whole set of auto-generated compliance tasks
+  (progress reports, closeout report, equipment inventory) a second time.
+  Re-awarding a grant no longer regenerates tasks that already exist.
+- Two donations to the same campaign, or two expenditures against the same
+  budget line, recorded or edited at nearly the same moment, could each
+  read a stale running total and one could silently overwrite the other's
+  contribution. Both totals now serialize correctly under concurrent
+  writes.
+- A handful of grant/fundraising update actions (editing an opportunity,
+  application, budget item, expenditure, compliance task, campaign, donor,
+  donation, pledge, or fundraising event) could turn an attempt to clear an
+  optional field into an unhandled server error instead of a clean
+  validation message.
+- A couple of internal lookups (resolving a note's author name, and the
+  budget-item total recompute) were missing the department filter every
+  other query in this module already carries — closed for consistency,
+  though neither was reachable from outside the department in practice.
+
+### An officer with compliance access could look up any member's admin-hours progress, in any department (2026-08-27)
+
+**Fixed**
+
+- `GET /admin-hours/compliance/{user_id}` restricted ordinary members to
+  their own id, but an officer holding compliance access could pass any
+  member's id — including one from a different department on the same
+  server — and get back that member's role/position data used to pick a
+  compliance profile. Now scoped to the officer's own department.
+- Two admin-hours entries clocked in at the same moment (a double-tap, or
+  two open tabs) could both succeed, leaving a member with two simultaneous
+  active sessions and no clean way to clock out of either. Clock-in now
+  serializes per member so only one can win.
+- An officer editing a still-pending admin-hours entry could set times that
+  span more than 24 hours, land in the future, or overlap another entry for
+  the same member — all guards the original entry already enforced, just
+  not re-checked on edit.
+- Two officers creating or updating event-to-admin-hours mappings for the
+  same event type at the same time could push the combined percentage over
+  100%, double-crediting part of an event's duration.
+- A malformed date on four admin-hours report/export endpoints crashed with
+  a server error instead of a clean "invalid date" message.
+- A few remaining internal admin-hours queries added since the last review
+  were missing the department filter every other query in the module
+  already carries — closed for consistency, though none were reachable
+  from outside the department in practice.
+
+### A compliance officer's "what's missing" report silently stopped at the newest 500 records (2026-08-26)
+
+**Fixed**
+
+- `GET /incomplete-records` fetched only the 500 most-recently-completed
+  training records, then filtered for missing fields in Python and stopped
+  once it found enough. For any department with more than 500 completed
+  records, an incomplete one older than that window was permanently
+  invisible with no signal the scan wasn't complete. The missing-field check
+  now runs in SQL, so the result covers the whole organization.
+- `update_compliance_config` and `update_compliance_profile` discarded an
+  explicit `null` before it ever reached the database, so a profile's
+  threshold override (documented as "null = use org default") could never
+  actually be reset — only overwritten with another number. Both now
+  distinguish an omitted field (leave alone) from an explicit null (clear
+  it), and reject a null against a field that can't be empty with a clean
+  error instead of a database crash.
+- Two concurrent first-time saves of an organization's compliance
+  configuration could crash one of them with a raw database error instead of
+  a clean "already exists" message.
+- A department's total-hours report could silently drop a member's hours if
+  their id were ever loaded as a different data type than usual — hardened
+  to match the fix already in place for the ISO-readiness report.
+
+### A skills-testing officer could void or return their own result, and the attempt cap could race (2026-08-26)
+
+**Fixed**
+
+- `void_test` and `return_test_for_correction` had no separation-of-duties
+  check, unlike their siblings `create_test` and `validate_test`. An
+  officer-candidate could void their own unfavorable official result out of
+  the pass-rate and average-score totals, or repeatedly return their own
+  pending submission for unlimited free redo cycles with no attempt spent.
+  Both now enforce the same `assert_different_person` check as
+  `validate_test`.
+- `assert_attempts_remaining`'s `max_attempts` cap counted validated tests
+  with a plain `SELECT` and no row lock, so two officers validating
+  different pending tests for the same candidate and requirement at the same
+  moment could both read the count as under the cap before either commits.
+  Fixed with a `FOR UPDATE` lock on the candidate's `RequirementProgress`
+  row plus a locking read on the count itself — a lock elsewhere does not
+  refresh an already-open transaction's snapshot.
+- `update_template` applied its payload with a blind `setattr` loop; an
+  explicit `null` against `name`, `sections`, or `score_pass_fail_criteria`
+  (all NOT NULL) raised an unhandled `IntegrityError` instead of a clean 400. Now routes through `apply_updates`.
+
 ### The chief was missing from every notification meant to include them (2026-08-26)
 
 **Fixed**
@@ -664,6 +1006,23 @@ count must fall through to no badge rather than warning about every rank.
   file outside the caller's own organization's upload directory; the
   download endpoint now confines every resolved path to that directory.
 - Downloading a document is now recorded in the audit log.
+
+### Admin hours: reading another member's requirement progress returned a 500 (2026-08-25)
+
+**Fixed**
+
+- `GET /admin-hours/compliance/{user_id}` raised for every user except the
+  caller. The service loads the target member to decide which compliance
+  profiles apply to them, then reads `user.positions` — a lazy load, which
+  under asyncio raises `MissingGreenlet` rather than emitting the query. The
+  endpoint's own permission check exists precisely so an officer can read
+  somebody else's progress, and that was the only path that failed.
+
+  SQLAlchemy's identity map is what hid it: asking for your own compliance
+  resolves to the already-loaded `current_user`, whose positions the auth
+  dependency populated, so the endpoint answered correctly for anyone who
+  tried it on themselves. No screen calls it for another member yet, so this
+  is an API fix rather than a visible one.
 
 ### Every member could read every other member's notifications (2026-08-25)
 

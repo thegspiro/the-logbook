@@ -593,16 +593,13 @@ async def reschedule_cohort_class(
             data=data,
             organization_id=current_user.organization_id,
             actor_id=current_user.id,
+            cohort_id=cohort_id,
         )
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail=safe_error_detail(e)
         )
 
-    if str(cohort_class.cohort_id) != str(cohort_id):
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Class not found"
-        )
     return _class_response(cohort_class)
 
 
@@ -630,15 +627,11 @@ async def cancel_cohort_class(
             reason=data.reason,
             organization_id=current_user.organization_id,
             actor_id=current_user.id,
+            cohort_id=cohort_id,
         )
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail=safe_error_detail(e)
-        )
-
-    if str(cohort_class.cohort_id) != str(cohort_id):
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Class not found"
         )
 
     await log_audit_event(

@@ -9,16 +9,28 @@ and QuickBooks export.
 import html
 import io
 import secrets
+from collections.abc import AsyncIterator
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Optional
 
 from loguru import logger
-from sqlalchemy import Integer, and_, cast, func, or_, select
+from sqlalchemy import (
+    Integer,
+    and_,
+    cast,
+    exists,
+    func,
+    literal,
+    or_,
+    select,
+    union_all,
+)
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import contains_eager, selectinload
+from sqlalchemy.orm import aliased, contains_eager, selectinload
 
+from app.api.dependencies import PaginationParams
 from app.core.config import settings
 from app.models.finance import (
     ApprovalChain,
@@ -54,6 +66,21 @@ from app.services.separation_of_duties import (
 from app.utils.csv_export import SafeCsvWriter
 from app.utils.model_updates import apply_updates
 from app.utils.sql_search import LIKE_ESCAPE_CHAR
+
+
+class BudgetLimitExceededError(Exception):
+    """A proposed finance transaction would exceed its organization's budget.
+
+    This is a stable domain error (rather than a persistence error) so API
+    adapters can consistently report a conflict.  Overspending is deliberately
+    fail-closed: purchase requests, check requests, and individual expense
+    report lines have no override path, including for finance administrators.
+    """
+
+    code = "budget_limit_exceeded"
+
+    def __init__(self) -> None:
+        super().__init__("Insufficient available budget")
 
 
 def _apply_payment_totals(dues: MemberDues) -> None:
@@ -103,11 +130,15 @@ class FinanceService:
     # Fiscal Years
     # ========================================
 
-    async def list_fiscal_years(self, org_id: str) -> list[FiscalYear]:
+    async def list_fiscal_years(
+        self, org_id: str, pagination: PaginationParams
+    ) -> list[FiscalYear]:
         result = await self.db.execute(
             select(FiscalYear)
             .where(FiscalYear.organization_id == org_id)
-            .order_by(FiscalYear.start_date.desc())
+            .order_by(FiscalYear.start_date.desc(), FiscalYear.id)
+            .offset(pagination.skip)
+            .limit(pagination.limit)
         )
         return list(result.scalars().all())
 
@@ -187,11 +218,15 @@ class FinanceService:
     # Budget Categories
     # ========================================
 
-    async def list_budget_categories(self, org_id: str) -> list[BudgetCategory]:
+    async def list_budget_categories(
+        self, org_id: str, pagination: PaginationParams
+    ) -> list[BudgetCategory]:
         result = await self.db.execute(
             select(BudgetCategory)
             .where(BudgetCategory.organization_id == org_id)
-            .order_by(BudgetCategory.sort_order)
+            .order_by(BudgetCategory.sort_order, BudgetCategory.id)
+            .offset(pagination.skip)
+            .limit(pagination.limit)
         )
         return list(result.scalars().all())
 
@@ -238,6 +273,7 @@ class FinanceService:
     async def list_budgets(
         self,
         org_id: str,
+        pagination: PaginationParams,
         fiscal_year_id: Optional[str] = None,
         category_id: Optional[str] = None,
     ) -> list[Budget]:
@@ -246,6 +282,9 @@ class FinanceService:
             query = query.where(Budget.fiscal_year_id == fiscal_year_id)
         if category_id:
             query = query.where(Budget.category_id == category_id)
+        query = (
+            query.order_by(Budget.id).offset(pagination.skip).limit(pagination.limit)
+        )
         result = await self.db.execute(query)
         return list(result.scalars().all())
 
@@ -310,12 +349,16 @@ class FinanceService:
     # Approval Chains
     # ========================================
 
-    async def list_approval_chains(self, org_id: str) -> list[ApprovalChain]:
+    async def list_approval_chains(
+        self, org_id: str, pagination: PaginationParams
+    ) -> list[ApprovalChain]:
         result = await self.db.execute(
             select(ApprovalChain)
             .options(selectinload(ApprovalChain.steps))
             .where(ApprovalChain.organization_id == org_id)
-            .order_by(ApprovalChain.name)
+            .order_by(ApprovalChain.name, ApprovalChain.id)
+            .offset(pagination.skip)
+            .limit(pagination.limit)
         )
         return list(result.scalars().unique().all())
 
@@ -825,88 +868,131 @@ class FinanceService:
         await self.db.flush()
         return record
 
-    async def get_pending_approvals(self, user_id: str, org_id: str) -> list[dict]:
-        """Get all pending approval steps for the current org.
+    async def get_pending_approvals(
+        self, user_id: str, org_id: str, *, skip: int = 0, limit: int = 100
+    ) -> list[dict]:
+        """Return one currently actionable step per entity in one query.
 
-        FIN-9: the record query used to carry no organization filter at all,
-        scanning every tenant's PENDING approval steps and then running two
-        more queries per record (`_get_entity_info`, `get_current_pending_step`)
-        before `_get_entity_info`'s own org filter discarded anything that
-        wasn't this org's. The result was already org-confined; the query cost
-        wasn't. Resolving each entity type's org-scoped id set first and
-        filtering the record query on it keeps the same output — those ids are
-        exactly what `_get_entity_info` would have kept — while confining the
-        scan and the per-record follow-up queries to this organization.
+        ``user_id`` remains part of the public service signature for callers that
+        will eventually filter permission-based assignments.  Organization scope
+        is applied inside every arm of the entity union and again to requesters.
         """
-        # Correlated existence subqueries, not materialized id lists: the
-        # database does the filtering against its own indexes rather than
-        # Python holding every purchase-request/expense-report/check-request
-        # id an org has ever created (Codex review, PR #1809).
-        pr_ids = select(PurchaseRequest.id).where(
-            PurchaseRequest.organization_id == org_id
-        )
-        er_ids = select(ExpenseReport.id).where(ExpenseReport.organization_id == org_id)
-        cr_ids = select(CheckRequest.id).where(CheckRequest.organization_id == org_id)
+        del user_id
+        entities = union_all(
+            select(
+                PurchaseRequest.id.label("entity_id"),
+                literal(ApprovalEntityType.PURCHASE_REQUEST.value).label("entity_type"),
+                PurchaseRequest.title.label("title"),
+                PurchaseRequest.estimated_amount.label("amount"),
+                PurchaseRequest.requested_by.label("requester_id"),
+                PurchaseRequest.created_at.label("submitted_at"),
+            ).where(PurchaseRequest.organization_id == org_id),
+            select(
+                ExpenseReport.id,
+                literal(ApprovalEntityType.EXPENSE_REPORT.value),
+                ExpenseReport.title,
+                ExpenseReport.total_amount,
+                ExpenseReport.submitted_by,
+                ExpenseReport.created_at,
+            ).where(ExpenseReport.organization_id == org_id),
+            select(
+                CheckRequest.id,
+                literal(ApprovalEntityType.CHECK_REQUEST.value),
+                literal("Check to ") + CheckRequest.payee_name,
+                CheckRequest.amount,
+                CheckRequest.requested_by,
+                CheckRequest.created_at,
+            ).where(CheckRequest.organization_id == org_id),
+        ).subquery("pending_entities")
 
-        result = await self.db.execute(
-            select(ApprovalStepRecord)
-            .options(selectinload(ApprovalStepRecord.step))
+        prior_record = aliased(ApprovalStepRecord)
+        prior_step = aliased(ApprovalChainStep)
+        has_earlier_pending_step = exists(
+            select(1)
+            .select_from(prior_record)
+            .join(prior_step, prior_step.id == prior_record.step_id)
             .where(
-                ApprovalStepRecord.status == ApprovalStepStatus.PENDING,
+                prior_record.entity_type == ApprovalStepRecord.entity_type,
+                prior_record.entity_id == ApprovalStepRecord.entity_id,
+                prior_record.status == ApprovalStepStatus.PENDING,
                 or_(
+                    prior_step.step_order < ApprovalChainStep.step_order,
                     and_(
-                        ApprovalStepRecord.entity_type
-                        == ApprovalEntityType.PURCHASE_REQUEST,
-                        ApprovalStepRecord.entity_id.in_(pr_ids),
-                    ),
-                    and_(
-                        ApprovalStepRecord.entity_type
-                        == ApprovalEntityType.EXPENSE_REPORT,
-                        ApprovalStepRecord.entity_id.in_(er_ids),
-                    ),
-                    and_(
-                        ApprovalStepRecord.entity_type
-                        == ApprovalEntityType.CHECK_REQUEST,
-                        ApprovalStepRecord.entity_id.in_(cr_ids),
+                        prior_step.step_order == ApprovalChainStep.step_order,
+                        or_(
+                            prior_record.created_at < ApprovalStepRecord.created_at,
+                            and_(
+                                prior_record.created_at
+                                == ApprovalStepRecord.created_at,
+                                prior_record.id < ApprovalStepRecord.id,
+                            ),
+                        ),
                     ),
                 ),
             )
         )
-        pending_records = list(result.scalars().all())
+
+        result = await self.db.execute(
+            select(
+                ApprovalStepRecord.id.label("step_record_id"),
+                ApprovalStepRecord.entity_type,
+                entities.c.entity_id,
+                entities.c.title,
+                entities.c.amount,
+                entities.c.submitted_at,
+                ApprovalChainStep.name.label("step_name"),
+                ApprovalChainStep.step_order,
+                User.first_name,
+                User.last_name,
+                User.username,
+            )
+            .join(
+                entities,
+                and_(
+                    entities.c.entity_id == ApprovalStepRecord.entity_id,
+                    entities.c.entity_type == ApprovalStepRecord.entity_type,
+                ),
+            )
+            .join(ApprovalChainStep, ApprovalChainStep.id == ApprovalStepRecord.step_id)
+            .outerjoin(
+                User,
+                and_(
+                    User.id == entities.c.requester_id,
+                    User.organization_id == org_id,
+                    User.deleted_at.is_(None),
+                ),
+            )
+            .where(
+                ApprovalStepRecord.status == ApprovalStepStatus.PENDING,
+                ~has_earlier_pending_step,
+            )
+            .order_by(
+                entities.c.submitted_at.desc(),
+                entities.c.entity_type,
+                entities.c.entity_id,
+                ApprovalStepRecord.id,
+            )
+            .offset(skip)
+            .limit(limit)
+        )
 
         approvals = []
-        for record in pending_records:
-            # Determine entity details
-            entity_info = await self._get_entity_info(
-                record.entity_type, record.entity_id, org_id
-            )
-            if not entity_info:
-                continue
-
-            # Check if this step is the current active step
-            current_step = await self.get_current_pending_step(
-                record.entity_type, record.entity_id, org_id
-            )
-            if not current_step or current_step.id != record.id:
-                continue
-
-            step_name = record.step.name if record.step else "Unknown"
-            step_order = record.step.step_order if record.step else 0
-
+        for row in result:
+            requester_name = " ".join(filter(None, (row.first_name, row.last_name)))
+            requester_name = requester_name.strip() or row.username or "Unknown"
             approvals.append(
                 {
-                    "step_record_id": record.id,
-                    "entity_type": record.entity_type.value,
-                    "entity_id": record.entity_id,
-                    "entity_title": entity_info.get("title", ""),
-                    "entity_amount": entity_info.get("amount", 0),
-                    "requester_name": entity_info.get("requester_name", ""),
-                    "step_name": step_name,
-                    "step_order": step_order,
-                    "submitted_at": entity_info.get("submitted_at", record.created_at),
+                    "step_record_id": row.step_record_id,
+                    "entity_type": row.entity_type.value,
+                    "entity_id": row.entity_id,
+                    "entity_title": row.title,
+                    "entity_amount": float(row.amount),
+                    "requester_name": requester_name,
+                    "step_name": row.step_name,
+                    "step_order": row.step_order,
+                    "submitted_at": row.submitted_at,
                 }
             )
-
         return approvals
 
     async def preview_approval_chain(
@@ -1277,6 +1363,7 @@ class FinanceService:
     async def list_purchase_requests(
         self,
         org_id: str,
+        pagination: PaginationParams,
         status: Optional[str] = None,
         fiscal_year_id: Optional[str] = None,
     ) -> list[PurchaseRequest]:
@@ -1285,7 +1372,11 @@ class FinanceService:
             query = query.where(PurchaseRequest.status == status)
         if fiscal_year_id:
             query = query.where(PurchaseRequest.fiscal_year_id == fiscal_year_id)
-        query = query.order_by(PurchaseRequest.created_at.desc())
+        query = (
+            query.order_by(PurchaseRequest.created_at.desc(), PurchaseRequest.id)
+            .offset(pagination.skip)
+            .limit(pagination.limit)
+        )
         result = await self.db.execute(query)
         return list(result.scalars().all())
 
@@ -1436,8 +1527,15 @@ class FinanceService:
         # Move from encumbered to spent
         if pr.budget_id:
             amount = pr.actual_amount or pr.estimated_amount
-            await self._release_encumbrance(pr.budget_id, pr.estimated_amount, org_id)
-            await self._add_to_spent(pr.budget_id, amount, org_id)
+            # One locked mutation avoids briefly counting both the existing
+            # encumbrance and the resulting spend.  It also permits an actual
+            # amount up to the remaining budget after releasing the estimate.
+            await self._mutate_budget(
+                pr.budget_id,
+                org_id,
+                encumbered_delta=-pr.estimated_amount,
+                spent_delta=amount,
+            )
 
         await self.db.flush()
         await self.db.refresh(pr, ["updated_at"])
@@ -1470,6 +1568,7 @@ class FinanceService:
     async def list_expense_reports(
         self,
         org_id: str,
+        pagination: PaginationParams,
         status: Optional[str] = None,
         restrict_to_user: Optional[str] = None,
     ) -> list[ExpenseReport]:
@@ -1486,7 +1585,11 @@ class FinanceService:
             query = query.where(ExpenseReport.submitted_by == restrict_to_user)
         if status:
             query = query.where(ExpenseReport.status == status)
-        query = query.order_by(ExpenseReport.created_at.desc())
+        query = (
+            query.order_by(ExpenseReport.created_at.desc(), ExpenseReport.id)
+            .offset(pagination.skip)
+            .limit(pagination.limit)
+        )
         result = await self.db.execute(query)
         return list(result.scalars().unique().all())
 
@@ -1665,12 +1768,17 @@ class FinanceService:
     async def list_check_requests(
         self,
         org_id: str,
+        pagination: PaginationParams,
         status: Optional[str] = None,
     ) -> list[CheckRequest]:
         query = select(CheckRequest).where(CheckRequest.organization_id == org_id)
         if status:
             query = query.where(CheckRequest.status == status)
-        query = query.order_by(CheckRequest.created_at.desc())
+        query = (
+            query.order_by(CheckRequest.created_at.desc(), CheckRequest.id)
+            .offset(pagination.skip)
+            .limit(pagination.limit)
+        )
         result = await self.db.execute(query)
         return list(result.scalars().all())
 
@@ -1818,11 +1926,15 @@ class FinanceService:
     # Dues & Assessments
     # ========================================
 
-    async def list_dues_schedules(self, org_id: str) -> list[DuesSchedule]:
+    async def list_dues_schedules(
+        self, org_id: str, pagination: PaginationParams
+    ) -> list[DuesSchedule]:
         result = await self.db.execute(
             select(DuesSchedule)
             .where(DuesSchedule.organization_id == org_id)
-            .order_by(DuesSchedule.due_date.desc())
+            .order_by(DuesSchedule.due_date.desc(), DuesSchedule.id)
+            .offset(pagination.skip)
+            .limit(pagination.limit)
         )
         return list(result.scalars().all())
 
@@ -1904,6 +2016,7 @@ class FinanceService:
     async def list_member_dues(
         self,
         org_id: str,
+        pagination: PaginationParams,
         schedule_id: Optional[str] = None,
         user_id: Optional[str] = None,
         status: Optional[str] = None,
@@ -1915,6 +2028,11 @@ class FinanceService:
             query = query.where(MemberDues.user_id == user_id)
         if status:
             query = query.where(MemberDues.status == status)
+        query = (
+            query.order_by(MemberDues.due_date.desc(), MemberDues.id)
+            .offset(pagination.skip)
+            .limit(pagination.limit)
+        )
         result = await self.db.execute(query)
         return list(result.scalars().all())
 
@@ -2122,9 +2240,15 @@ class FinanceService:
     # Export
     # ========================================
 
-    async def list_export_mappings(self, org_id: str) -> list[ExportMapping]:
+    async def list_export_mappings(
+        self, org_id: str, pagination: PaginationParams
+    ) -> list[ExportMapping]:
         result = await self.db.execute(
-            select(ExportMapping).where(ExportMapping.organization_id == org_id)
+            select(ExportMapping)
+            .where(ExportMapping.organization_id == org_id)
+            .order_by(ExportMapping.id)
+            .offset(pagination.skip)
+            .limit(pagination.limit)
         )
         return list(result.scalars().all())
 
@@ -2159,117 +2283,186 @@ class FinanceService:
         date_start: datetime,
         date_end: datetime,
         file_format: str = "csv",
-    ) -> tuple[str, int]:
-        """Generate a QuickBooks-compatible export file"""
-        # Gather all paid transactions in date range
-        pr_result = await self.db.execute(
-            select(PurchaseRequest).where(
-                PurchaseRequest.organization_id == org_id,
-                PurchaseRequest.status == PurchaseRequestStatus.PAID,
-                PurchaseRequest.paid_at >= date_start,
-                PurchaseRequest.paid_at <= date_end,
-            )
+        batch_size: int = 500,
+        max_records: int = 10_000,
+    ) -> AsyncIterator[str]:
+        """Prepare a bounded export and return its incremental CSV stream."""
+        filters = (
+            PurchaseRequest.organization_id == org_id,
+            PurchaseRequest.status == PurchaseRequestStatus.PAID,
+            PurchaseRequest.paid_at >= date_start,
+            PurchaseRequest.paid_at <= date_end,
         )
-        prs = list(pr_result.scalars().all())
-
-        cr_result = await self.db.execute(
-            select(CheckRequest).where(
-                CheckRequest.organization_id == org_id,
-                CheckRequest.status == CheckRequestStatus.ISSUED,
-                CheckRequest.check_date >= date_start,
-                CheckRequest.check_date <= date_end,
-            )
+        pr_count = await self.db.scalar(
+            select(func.count()).select_from(PurchaseRequest).where(*filters)
         )
-        crs = list(cr_result.scalars().all())
-
-        er_result = await self.db.execute(
-            select(ExpenseReport)
-            .options(selectinload(ExpenseReport.line_items))
-            .where(
-                ExpenseReport.organization_id == org_id,
-                ExpenseReport.status == ExpenseReportStatus.PAID,
-                ExpenseReport.paid_at >= date_start,
-                ExpenseReport.paid_at <= date_end,
-            )
+        cr_filters = (
+            CheckRequest.organization_id == org_id,
+            CheckRequest.status == CheckRequestStatus.ISSUED,
+            CheckRequest.check_date >= date_start,
+            CheckRequest.check_date <= date_end,
         )
-        ers = list(er_result.scalars().unique().all())
-
-        # Build CSV. SafeCsvWriter neutralizes spreadsheet formula injection in
-        # free-text cells (names, memos).
-        output = io.StringIO()
-        writer = SafeCsvWriter(output)
-        writer.writerow(
-            ["Date", "Type", "Num", "Name", "Memo", "Account", "Debit", "Credit"]
+        cr_count = await self.db.scalar(
+            select(func.count()).select_from(CheckRequest).where(*cr_filters)
         )
-
-        record_count = 0
-
-        for pr in prs:
-            writer.writerow(
-                [
-                    pr.paid_at.strftime("%m/%d/%Y") if pr.paid_at else "",
-                    "Bill Pmt",
-                    pr.request_number,
-                    pr.vendor or "",
-                    pr.title,
-                    "",
-                    str(pr.actual_amount or pr.estimated_amount),
-                    "",
-                ]
+        er_filters = (
+            ExpenseReport.organization_id == org_id,
+            ExpenseReport.status == ExpenseReportStatus.PAID,
+            ExpenseReport.paid_at >= date_start,
+            ExpenseReport.paid_at <= date_end,
+        )
+        line_count = await self.db.scalar(
+            select(func.count())
+            .select_from(ExpenseLineItem)
+            .join(ExpenseReport)
+            .where(*er_filters)
+        )
+        total = int(pr_count or 0) + int(cr_count or 0) + int(line_count or 0)
+        if total > max_records:
+            raise ValueError(
+                f"Synchronous exports support at most {max_records} rows; "
+                f"this request contains {total}. Narrow the date range"
             )
-            record_count += 1
 
-        for cr in crs:
-            writer.writerow(
-                [
-                    cr.check_date.strftime("%m/%d/%Y") if cr.check_date else "",
-                    "Check",
-                    cr.check_number or cr.request_number,
-                    cr.payee_name,
-                    cr.memo or cr.purpose or "",
-                    "",
-                    str(cr.amount),
-                    "",
-                ]
-            )
-            record_count += 1
-
-        for er in ers:
-            for item in er.line_items:
-                writer.writerow(
-                    [
-                        er.paid_at.strftime("%m/%d/%Y") if er.paid_at else "",
-                        "Expense",
-                        er.report_number,
-                        item.merchant or "",
-                        item.description,
-                        "",
-                        str(item.amount),
-                        "",
-                    ]
-                )
-                record_count += 1
-
-        # Log the export
         log = ExportLog(
             organization_id=org_id,
             export_type="transactions",
             date_range_start=date_start,
             date_range_end=date_end,
-            record_count=record_count,
+            record_count=0,
             file_format=file_format,
             exported_by=exported_by,
         )
         self.db.add(log)
-        await self.db.flush()
+        await self.db.commit()  # Persist pending before any bytes reach the client.
 
-        return output.getvalue(), record_count
+        async def stream() -> AsyncIterator[str]:
+            output = io.StringIO()
+            writer = SafeCsvWriter(output)
+            delivered = 0
 
-    async def list_export_logs(self, org_id: str) -> list[ExportLog]:
+            def csv_chunk(rows: list[list[str]]) -> str:
+                output.seek(0)
+                output.truncate(0)
+                writer.writerows(rows)
+                return output.getvalue()
+
+            try:
+                yield csv_chunk(
+                    [
+                        [
+                            "Date",
+                            "Type",
+                            "Num",
+                            "Name",
+                            "Memo",
+                            "Account",
+                            "Debit",
+                            "Credit",
+                        ]
+                    ]
+                )
+                for model, where, ordering, render in (
+                    (
+                        PurchaseRequest,
+                        filters,
+                        (PurchaseRequest.paid_at, PurchaseRequest.id),
+                        lambda pr: [
+                            pr.paid_at.strftime("%m/%d/%Y"),
+                            "Bill Pmt",
+                            pr.request_number,
+                            pr.vendor or "",
+                            pr.title,
+                            "",
+                            str(pr.actual_amount or pr.estimated_amount),
+                            "",
+                        ],
+                    ),
+                    (
+                        CheckRequest,
+                        cr_filters,
+                        (CheckRequest.check_date, CheckRequest.id),
+                        lambda cr: [
+                            cr.check_date.strftime("%m/%d/%Y"),
+                            "Check",
+                            cr.check_number or cr.request_number,
+                            cr.payee_name,
+                            cr.memo or cr.purpose or "",
+                            "",
+                            str(cr.amount),
+                            "",
+                        ],
+                    ),
+                ):
+                    for offset in range(0, total, batch_size):
+                        result = await self.db.execute(
+                            select(model)
+                            .where(*where)
+                            .order_by(*ordering)
+                            .offset(offset)
+                            .limit(batch_size)
+                        )
+                        records = list(result.scalars())
+                        if not records:
+                            break
+                        delivered += len(records)
+                        yield csv_chunk([render(record) for record in records])
+
+                for offset in range(0, int(line_count or 0), batch_size):
+                    result = await self.db.execute(
+                        select(ExpenseLineItem, ExpenseReport)
+                        .join(ExpenseReport)
+                        .where(*er_filters)
+                        .order_by(
+                            ExpenseReport.paid_at, ExpenseReport.id, ExpenseLineItem.id
+                        )
+                        .offset(offset)
+                        .limit(batch_size)
+                    )
+                    records = list(result.all())
+                    if not records:
+                        break
+                    delivered += len(records)
+                    yield csv_chunk(
+                        [
+                            [
+                                er.paid_at.strftime("%m/%d/%Y"),
+                                "Expense",
+                                er.report_number,
+                                item.merchant or "",
+                                item.description,
+                                "",
+                                str(item.amount),
+                                "",
+                            ]
+                            for item, er in records
+                        ]
+                    )
+
+                log.status = "successful"
+                log.record_count = delivered
+                log.completed_at = datetime.now(timezone.utc)
+                await self.db.commit()
+            except BaseException:
+                await self.db.rollback()
+                log.status = "partial" if delivered else "failed"
+                log.record_count = delivered
+                log.error_message = "Export stream interrupted before completion"
+                log.completed_at = datetime.now(timezone.utc)
+                await self.db.commit()
+                raise
+
+        return stream()
+
+    async def list_export_logs(
+        self, org_id: str, pagination: PaginationParams
+    ) -> list[ExportLog]:
         result = await self.db.execute(
             select(ExportLog)
             .where(ExportLog.organization_id == org_id)
-            .order_by(ExportLog.exported_at.desc())
+            .order_by(ExportLog.exported_at.desc(), ExportLog.id)
+            .offset(pagination.skip)
+            .limit(pagination.limit)
         )
         return list(result.scalars().all())
 
@@ -2338,6 +2531,12 @@ class FinanceService:
     # Budget Helpers
     # ========================================
 
+    # Overspend policy: every purchase-request encumbrance, issued check, and
+    # expense-report line must fit within amount_budgeted. Equality is allowed;
+    # exceeding the limit is not. There is intentionally no administrative or
+    # approval-based override: adding one requires an explicit permission,
+    # audit trail, and API contract rather than an implicit bypass here.
+    #
     # These helpers mutate a Budget's running totals. The budget_id ultimately
     # originates from a client-supplied FK on the referencing PR/CR/expense, so
     # every fetch is org-scoped to the referencing record's organization — a
@@ -2348,44 +2547,49 @@ class FinanceService:
     async def _encumber_budget(
         self, budget_id: str, amount: Decimal, org_id: str
     ) -> None:
-        result = await self.db.execute(
-            select(Budget).where(
-                Budget.id == budget_id,
-                Budget.organization_id == org_id,
-            )
+        await self._mutate_budget(
+            budget_id, org_id, encumbered_delta=Decimal(str(amount))
         )
-        budget = result.scalar_one_or_none()
-        if budget:
-            budget.amount_encumbered = budget.amount_encumbered + amount
-            await self.db.flush()
 
     async def _release_encumbrance(
         self, budget_id: str, amount: Decimal, org_id: str
     ) -> None:
-        result = await self.db.execute(
-            select(Budget).where(
-                Budget.id == budget_id,
-                Budget.organization_id == org_id,
-            )
+        await self._mutate_budget(
+            budget_id, org_id, encumbered_delta=-Decimal(str(amount))
         )
-        budget = result.scalar_one_or_none()
-        if budget:
-            budget.amount_encumbered = max(
-                Decimal("0"),
-                budget.amount_encumbered - amount,
-            )
-            await self.db.flush()
 
     async def _add_to_spent(self, budget_id: str, amount: Decimal, org_id: str) -> None:
+        await self._mutate_budget(budget_id, org_id, spent_delta=Decimal(str(amount)))
+
+    async def _mutate_budget(
+        self,
+        budget_id: str,
+        org_id: str,
+        *,
+        spent_delta: Decimal = Decimal("0"),
+        encumbered_delta: Decimal = Decimal("0"),
+    ) -> None:
+        """Apply budget deltas under a row lock and enforce the hard ceiling."""
         result = await self.db.execute(
-            select(Budget).where(
+            select(Budget)
+            .where(
                 Budget.id == budget_id,
                 Budget.organization_id == org_id,
             )
+            .with_for_update()
         )
         budget = result.scalar_one_or_none()
         if budget:
-            budget.amount_spent = budget.amount_spent + amount
+            new_spent = budget.amount_spent + Decimal(spent_delta)
+            new_encumbered = budget.amount_encumbered + Decimal(encumbered_delta)
+            # Releases are idempotently bounded at zero, preserving the former
+            # behavior while ensuring the ceiling check uses the final totals.
+            new_spent = max(Decimal("0"), new_spent)
+            new_encumbered = max(Decimal("0"), new_encumbered)
+            if new_spent + new_encumbered > budget.amount_budgeted:
+                raise BudgetLimitExceededError()
+            budget.amount_spent = new_spent
+            budget.amount_encumbered = new_encumbered
             await self.db.flush()
 
     async def _validate_finance_fks(self, org_id: str, data: dict) -> None:

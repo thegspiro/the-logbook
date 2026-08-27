@@ -349,3 +349,24 @@ class TestLotDomainPinning:
 
         assert err.value.status_code == 404
         svc.delete_lot.assert_not_awaited()
+
+    async def test_clearing_lot_quantity_is_a_clean_400(self, svc):
+        """update_lot now raises ValueError against a null NOT NULL field
+        (see test_inventory_service.py::TestUpdateLot); this router must
+        convert that to a 400, not let it fall through to an unhandled
+        500."""
+        from app.schemas.inventory import InventoryLotUpdate
+
+        svc.update_lot = AsyncMock(
+            side_effect=ValueError("Field 'quantity' cannot be cleared")
+        )
+
+        with pytest.raises(HTTPException) as err:
+            await ms.update_medical_lot(
+                "lot-1",
+                InventoryLotUpdate(quantity=None),
+                db=AsyncMock(),
+                current_user=_user(),
+            )
+
+        assert err.value.status_code == 400

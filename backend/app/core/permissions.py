@@ -940,7 +940,6 @@ _LINE_MEMBER_PERMISSIONS = [
     MINUTES_VIEW.name,
     DOCUMENTS_VIEW.name,
     APPARATUS_VIEW.name,
-    FACILITIES_VIEW.name,
     LOCATIONS_VIEW.name,
     # No notifications.view — see the `member` position in
     # DEFAULT_POSITIONS. The Send Log it opens is org-wide.
@@ -1208,7 +1207,6 @@ OPERATIONAL_RANKS: dict[str, dict] = {
             DOCUMENTS_VIEW.name,
             APPARATUS_VIEW.name,
             APPARATUS_MAINTENANCE.name,
-            FACILITIES_VIEW.name,
             LOCATIONS_VIEW.name,
             # No notifications.view — see the `member` position in
             # DEFAULT_POSITIONS. The Send Log it opens is org-wide.
@@ -2091,7 +2089,6 @@ DEFAULT_POSITIONS: dict[str, dict] = {
             MINUTES_VIEW.name,
             DOCUMENTS_VIEW.name,
             APPARATUS_VIEW.name,
-            FACILITIES_VIEW.name,
             LOCATIONS_VIEW.name,
             # notifications.view is deliberately absent. A member's own
             # inbox (`GET /notifications/my`) is gated on authentication

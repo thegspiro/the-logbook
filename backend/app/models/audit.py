@@ -53,6 +53,9 @@ class AuditLog(Base):
 
     # Event Information
     event_type = Column(String(100), nullable=False)
+    # event_category and severity are included in the hash chain from
+    # hash_version 4 onward — earlier rows verify without them (they were
+    # read into the hash-input dict but silently never hashed).
     event_category = Column(String(50), nullable=False, index=True)
     severity = Column(
         Enum(SeverityLevel, values_callable=lambda x: [e.value for e in x]),

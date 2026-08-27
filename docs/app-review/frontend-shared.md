@@ -101,10 +101,15 @@ cacheable with no exclusion at all — added, matching the `/minutes-records` an
 `/rsvps` precedent. Regression test pins all eight bare-list exclusions plus the
 non-collision (`apiCache.test.ts`, 71 pass).
 
-**Flagged (LOW, unchanged):** the module-factory (`createApiClient.ts`) 401 handler
-redirects to `/login` without the global handler's `/onboarding` guard or
-`clearCache()` — not a live bug (module instances aren't used pre-session today),
-recorded for a future consistency pass. Lenses 1/2/4/5/6 clean.
+**Correction (2026-08-27, FE2-34):** the LOW item previously flagged here — "the
+module-factory (`createApiClient.ts`) 401 handler redirects to `/login` without
+the global handler's `/onboarding` guard or `clearCache()`" — does not describe
+the current code and appears to have been stale even when written.
+`createApiClient.ts` imports and calls `handleExpiredSession` directly from
+`services/apiClient.ts` (`import { handleExpiredSession, performSharedRefresh }
+from '../services/apiClient'`); it is the same function the global client uses,
+onboarding guard and `clearCache()` included, not a divergent implementation.
+No fix needed. Lenses 1/2/4/5/6 clean.
 
 ---
 
