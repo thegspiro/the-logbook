@@ -148,7 +148,8 @@ Completion gate: flake8/black/isort clean on every changed file;
 `test_membership_pipeline_flow.py` + `test_privilege_ceiling_wiring.py` +
 `test_prospect_create_privacy.py` + `test_rejected_prospect_dropped.py` +
 `test_administrative_rank_restriction.py` (95 tests) all pass; full backend
-suite run for regressions. Rotation row 08 -> done.
+suite 9112 passed / 22 skipped (pre-existing, environment-related) / 0
+failed. Rotation row 08 -> done.
 
 ---
 
