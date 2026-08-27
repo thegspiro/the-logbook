@@ -3620,6 +3620,9 @@ async def run_publish_scheduled_messages(db: AsyncSession) -> Dict[str, Any]:
     scheduled_at is cleared *before* delivery so a delivery failure leaves the
     message live-but-unescalated (members still see it in their inbox) rather
     than risking a duplicate escalation on the next run.
+
+    A message whose expires_at has already passed when it comes due is
+    deactivated and counted as expired instead of being delivered.
     """
     from datetime import timezone
 
@@ -3627,20 +3630,35 @@ async def run_publish_scheduled_messages(db: AsyncSession) -> Dict[str, Any]:
     from app.services.message_delivery_service import MessageDeliveryService
 
     now = datetime.now(timezone.utc)
+    # Lock and claim in one transaction. PostgreSQL and MySQL 8 skip rows
+    # already held by another publisher; SQLAlchemy harmlessly degrades this
+    # on engines (notably SQLite in tests) that do not implement row locks.
     result = await db.execute(
-        select(DepartmentMessage).where(
+        select(DepartmentMessage)
+        .where(
             DepartmentMessage.scheduled_at.isnot(None),
             DepartmentMessage.scheduled_at <= now,
             DepartmentMessage.is_active.is_(True),
             DepartmentMessage.deleted_at.is_(None),
         )
+        .with_for_update(skip_locked=True)
     )
     due = list(result.scalars().all())
+    for message in due:
+        # Clearing the due marker is the durable claim. Commit all claims while
+        # locks are held and only then perform potentially slow network I/O.
+        message.scheduled_at = None
+    await db.commit()
 
     delivery = MessageDeliveryService(db)
     published = 0
     expired = 0
     for message in due:
+        # A message that expired before its send time came due goes live for
+        # nobody and must not be escalated. The claim above already cleared
+        # scheduled_at for the whole batch, so deactivation is all that is left
+        # to persist here — main set it per message because it claimed per
+        # message; that assignment would be a no-op now.
         expires_at = getattr(message, "expires_at", None)
         if expires_at is not None:
             if expires_at.tzinfo is None:
@@ -3649,12 +3667,9 @@ async def run_publish_scheduled_messages(db: AsyncSession) -> Dict[str, Any]:
                 expires_at = expires_at.astimezone(timezone.utc)
         if expires_at is not None and expires_at <= now:
             message.is_active = False
-            message.scheduled_at = None
             await db.commit()
             expired += 1
             continue
-        message.scheduled_at = None
-        await db.commit()
         await delivery.deliver(message)
         published += 1
 
