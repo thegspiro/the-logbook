@@ -1,6 +1,93 @@
 # Security Review — Membership Pipeline
 
-**Prefix:** `MP` · **Iteration:** 8 · **Reviewed:** 2026-08-25 · **PR:** (this PR)
+**Prefix:** `MP` · **Iteration:** 8 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2) · **PR:** [#1815](https://github.com/thegspiro/the-logbook/pull/1815) (pass 1), (this PR) (pass 2)
+
+---
+
+## Pass 2 (2026-08-27)
+
+Scoped to the **full domain** since pass 1's merge commit (`aad49be4`,
+PR #1815): `endpoints/membership_pipeline.py`, `services/membership_pipeline_service.py`,
+`models/membership_pipeline.py`, `schemas/membership_pipeline.py`,
+`api/prospect_privacy.py`, every migration since (checked by content, not
+filename, for anything touching prospect/pipeline/stage tables), and —
+learning from ELEC-06/USR-07 pass 2's own correction — a `git diff --stat`
+against `frontend/src/` broadly rather than only `modules/prospective-members/`,
+which also caught `frontend/src/modules/membership/routes.tsx` and the new
+`frontend/src/utils/membership.ts`, both outside that directory.
+
+**Backend (2 files changed, both already reviewed):** `endpoints/membership_pipeline.py`
+(+42/-1) and `services/membership_pipeline_service.py` (+37) both changed
+only for the privilege-ceiling fix already made and Codex-reviewed earlier
+in this same rotation, on PR #1931 (feature 02, permissions & roles pass 2)
+— `transfer_prospect` resolves and validates the prospect before checking
+the administrative-rank ceiling (avoiding a false CRITICAL on an invalid
+prospect id), and `_do_transfer` refuses an administrative class paired with
+a rank via `is_administrative(...)`, matching
+`TestEveryWriterIsCovered.test_the_prospect_transfer_path_refuses_the_pair`
+(verified during USR-07 pass 2). This is an INSERT path (a new `User` row
+via prospect conversion) rather than an update-in-place, and the
+`ProspectStatus.TRANSFERRED` guard already prevents a double-transfer race,
+so it does not need the `populate_existing`/row-lock treatment the update
+writers required — no finding.
+
+**Migrations:** content-grepped (`prospect|membership_pipeline|pipeline_stage`,
+case-insensitive) across every migration added since pass 1; the 3 hits are
+all false positives — permission-string substring matches in unrelated,
+already-reviewed storefront-grant-backfill migrations, not schema changes to
+any membership-pipeline table.
+
+**Frontend:** reviewed via a dedicated pass over the diff for `PipelineSettingsPage.tsx`
+(527 L changed), `ProspectiveMembersPage.tsx` (237 L changed),
+`ApplicantDetailDrawer.tsx`, `ConversionModal.tsx`, `StageConfigModal.tsx`,
+`prospective-members/routes.tsx`, `services/api.ts`, `types/index.ts`, the
+new `PipelineBuilder.test.tsx`, and the new `frontend/src/utils/membership.ts`
+(the frontend counterpart to `backend/app/utils/membership.py`'s class/status
+split, diffed line-by-line against it). Findings:
+
+- Most of the diff is `DialogPortal` adoption on every fixed-position dialog
+  shell — the established fix for the fixed-dialog-in-a-`backdrop-blur`
+  defect (Pitfall #21 family) — structural only, no behavior change.
+- `mapStageUpdateToBackend` used `?? undefined` on `inactivity_timeout_days`,
+  collapsing an explicit `null` (clear a per-stage override) into an omitted
+  key, which the backend's `exclude_unset=True` update path reads as "leave
+  alone" — unticking a custom timeout silently failed to persist. Already
+  fixed in this diff (forwards `null` verbatim) and covered by new tests in
+  `stageMapping.test.ts`/`PipelineBuilder.test.tsx`; the create path
+  correctly keeps `null → undefined` since no "leave alone" meaning exists
+  on create. No further action.
+- `DEFAULT_STAGE_CONFIGS` previously covered only 7 of 12 stage types,
+  crashing the editor on a stored `checklist`/`reference_check`/
+  `multi_approval`/`medical_screening`/`interview_requirement` stage.
+  Already fixed in this diff (one canonical table shared by the editor and
+  the read boundary) and covered by new tests. No further action.
+- `frontend/src/utils/membership.ts` matches `app/utils/membership.py`'s
+  `_SPLIT`/`is_administrative` exactly, including the no-guessing behavior
+  for unknown/custom tiers; no label or comment misrepresents backend
+  enforcement (the exact bug class `BallotBuilder.tsx` had in ELEC-06 pass 2
+  — not repeated here).
+- `ConversionModal` disables/clears the Rank input when "Administrative" is
+  picked — client-side only, but confirmed backed by the same server-side
+  refusal reviewed above (`_do_transfer`'s `is_administrative(...)` check),
+  so this is defense-in-depth, not the actual gate.
+- Module gating (`requiredModule`/`moduleLabel`) added to
+  `prospective-members/routes.tsx` and a training-history route in
+  `membership/routes.tsx`. Confirmed in `ProtectedRoute.tsx` that the module
+  check runs strictly after the existing `requiredPermission`/`requiredRole`
+  checks and is documented as a usability gate, not access control —
+  additive, not a weakening.
+- No stale-response race: neither page's diff added new fetch/`useEffect`
+  logic (both are pure reindentation from the `DialogPortal` change).
+
+No confirmed security findings. Completion gate: no code changes required
+(the 2 backend files matched already-merged, already-reviewed work; the
+frontend diff's actual bugs were already fixed and tested within the diff
+itself), so no fresh test run was needed beyond what pass 1 and the earlier
+PR #1931 review already covered. Rotation row 08 -> done.
+
+---
+
+## Pass 1 (2026-08-25)
 
 **Backend:** `endpoints/membership_pipeline.py` (2,255 L, 51 routes), `services/membership_pipeline_service.py` (5,690 L), `models/membership_pipeline.py`, `schemas/membership_pipeline.py`, `api/prospect_privacy.py`
 **Frontend:** `modules/prospective-members/` (not re-read in full this pass — see Scope)

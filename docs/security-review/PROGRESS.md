@@ -16,12 +16,28 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-None. Feature 07 (users & organizations, pass 2) fully merged as
-[PR #1949](https://github.com/thegspiro/the-logbook/pull/1949) — see log
-entry below. Confirmed on `origin/main` by ancestry check. Next: 08
-membership pipeline, pass 2.
+None. Feature 08 (membership pipeline, pass 2) reviewed — no findings, no
+code changes. Next: 09 medical screening (PHI), pass 2.
 
 ---
+
+### 2026-08-27 — Feature 08 (Membership pipeline), pass 2 — no findings
+
+Scoped to the full domain since pass 1's merge (`aad49be4`, PR #1815). Only
+2 backend files changed since pass 1, both already reviewed and fixed
+earlier in this rotation on PR #1931 (feature 02) — the prospect-transfer
+privilege-ceiling checks. No new/relevant migrations. The frontend diff
+(dialog-portal adoption across 5 components, a stage-timeout-clearing fix,
+a stage-config-default fix, module gating, and the new
+`frontend/src/utils/membership.ts`) was reviewed in full, including a
+line-by-line diff of `membership.ts` against
+`backend/app/utils/membership.py` — matches exactly, no mislabeled UI text
+of the kind ELEC-06 pass 2 found in `BallotBuilder.tsx`. The diff's own bugs
+(stage-timeout `??`/`undefined` swallowing an explicit clear; an incomplete
+`DEFAULT_STAGE_CONFIGS` table) were already fixed and tested within the
+diff itself — nothing left to fix. No code changes, no new PR needed beyond
+the doc update. Full detail in `MP-08-membership-pipeline.md`. Rotation row
+08 -> done. Next: 09 medical screening (PHI).
 
 ### 2026-08-27 — Feature 07 (Users & organizations), pass 2 ✅ merged — PR #1949
 
@@ -1202,8 +1218,8 @@ each row's prior PR is recorded in the Log, not repeated here.
 | 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                     | ✅     |
 | 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | ✅     |
 | 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ✅     |
-| 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | 🔄     |
-| 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ⬜     |
+| 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ✅     |
+| 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | 🔄     |
 | 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ⬜     |
 | 11  | Inventory                 | INV    | `endpoints/inventory.py` (6539 L), `inventory_service.py`                                                                                       | ⬜     |
 | 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ⬜     |
