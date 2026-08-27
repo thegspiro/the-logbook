@@ -6179,6 +6179,7 @@ class InventoryService:
         quantity: Optional[int] = None,
         expected_return_at: Optional[datetime] = None,
         override_allowance: bool = False,
+        fulfillment_type: Optional[str] = None,
     ) -> Tuple[Optional[EquipmentRequest], Optional[str]]:
         """Turn an approved equipment request into a real issuance, checkout,
         or assignment, then mark the request fulfilled and link it back to the
@@ -6248,7 +6249,38 @@ class InventoryService:
             requester_id = UUID(req.requester_id)
             request_type = self._enum_value(req.request_type)
 
-            fulfillment_type: str
+            if item.tracking_type == TrackingType.POOL:
+                if request_type != RequestType.ISSUANCE.value:
+                    await self._revert_fulfillment_claim(request_id, organization_id)
+                    return (
+                        None,
+                        "Pool items only support issuance requests because stock is issued by quantity",
+                    )
+                expected_fulfillment_type = "issuance"
+            else:
+                if request_type not in {
+                    RequestType.CHECKOUT.value,
+                    RequestType.ISSUANCE.value,
+                }:
+                    await self._revert_fulfillment_claim(request_id, organization_id)
+                    return (
+                        None,
+                        "Individually tracked items only support checkout or assignment requests",
+                    )
+                expected_fulfillment_type = (
+                    "checkout"
+                    if request_type == RequestType.CHECKOUT.value
+                    else "assignment"
+                )
+
+            if fulfillment_type and fulfillment_type != expected_fulfillment_type:
+                await self._revert_fulfillment_claim(request_id, organization_id)
+                return None, (
+                    f"Unsupported fulfillment: {request_type} intent for a "
+                    f"{self._enum_value(item.tracking_type)} item must use {expected_fulfillment_type}"
+                )
+
+            fulfillment_type = expected_fulfillment_type
             reference_id: str
             try:
                 if item.tracking_type == TrackingType.POOL:
@@ -6261,7 +6293,6 @@ class InventoryService:
                         reason="Equipment request fulfillment",
                         override_allowance=override_allowance,
                     )
-                    fulfillment_type = "issuance"
                     reference_id = str(issuance.id) if issuance else ""
                 elif request_type == RequestType.CHECKOUT.value:
                     checkout, err = await self.checkout_item(
@@ -6272,7 +6303,6 @@ class InventoryService:
                         expected_return_at=expected_return_at,
                         reason="Equipment request fulfillment",
                     )
-                    fulfillment_type = "checkout"
                     reference_id = str(checkout.id) if checkout else ""
                 else:
                     assignment, err = await self.assign_item_to_user(
@@ -6293,7 +6323,6 @@ class InventoryService:
                         expected_return_date=expected_return_at,
                         reason="Equipment request fulfillment",
                     )
-                    fulfillment_type = "assignment"
                     reference_id = str(assignment.id) if assignment else ""
             except Exception:
                 await self._revert_fulfillment_claim(request_id, organization_id)

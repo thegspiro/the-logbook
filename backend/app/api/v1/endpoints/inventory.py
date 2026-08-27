@@ -3758,6 +3758,7 @@ async def fulfill_equipment_request(
         quantity=fulfill_data.quantity,
         expected_return_at=fulfill_data.expected_return_at,
         override_allowance=fulfill_data.override_allowance,
+        fulfillment_type=fulfill_data.fulfillment_type,
     )
 
     if error:

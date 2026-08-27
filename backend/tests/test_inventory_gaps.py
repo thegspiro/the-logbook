@@ -401,6 +401,61 @@ class TestEquipmentRequestFulfillment:
         assert assignment.expected_return_date is None
 
     @pytest.mark.asyncio
+    async def test_rejects_checkout_intent_for_pool_item(
+        self, db_session, setup_org_and_user
+    ):
+        org_id, user_id, member_id = setup_org_and_user
+        svc = InventoryService(db_session)
+        _, item = await _make_pool_item(svc, org_id, user_id)
+        req = EquipmentRequest(
+            organization_id=org_id,
+            requester_id=member_id,
+            item_name="Polo Shirt",
+            item_id=item.id,
+            quantity=1,
+            request_type=RequestType.CHECKOUT,
+            status=RequestStatus.APPROVED,
+        )
+        db_session.add(req)
+        await db_session.flush()
+
+        fulfilled, err = await svc.fulfill_equipment_request(
+            request_id=uuid.UUID(req.id),
+            organization_id=uuid.UUID(org_id),
+            fulfilled_by=uuid.UUID(user_id),
+        )
+        assert fulfilled is None
+        assert "Pool items only support issuance" in err
+
+    @pytest.mark.asyncio
+    async def test_rejects_wrong_explicit_operation_for_individual_item(
+        self, db_session, setup_org_and_user
+    ):
+        org_id, user_id, member_id = setup_org_and_user
+        svc = InventoryService(db_session)
+        item = await _make_individual_item(svc, org_id, user_id)
+        req = EquipmentRequest(
+            organization_id=org_id,
+            requester_id=member_id,
+            item_name="Spare Radio",
+            item_id=item.id,
+            quantity=1,
+            request_type=RequestType.CHECKOUT,
+            status=RequestStatus.APPROVED,
+        )
+        db_session.add(req)
+        await db_session.flush()
+
+        fulfilled, err = await svc.fulfill_equipment_request(
+            request_id=uuid.UUID(req.id),
+            organization_id=uuid.UUID(org_id),
+            fulfilled_by=uuid.UUID(user_id),
+            fulfillment_type="assignment",
+        )
+        assert fulfilled is None
+        assert "must use checkout" in err
+
+    @pytest.mark.asyncio
     async def test_fulfill_requires_approved_status(
         self, db_session, setup_org_and_user
     ):
