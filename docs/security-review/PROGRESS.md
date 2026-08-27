@@ -16,7 +16,7 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-PR TBD (feature 32, locations & kiosk) — open, awaiting CI/review.
+PR #1916 (feature 32, locations & kiosk) — open, awaiting CI/review.
 
 ---
 
@@ -362,7 +362,7 @@ Merged (squash, `c19ecc0f`). Registry sync, CRON-1/CRON-2/CRON-5/CRON-6
 invariants, and the Codex-caught MissingGreenlet class of bug are all
 resolved on `main`. Rotation row 31 -> done.
 
-### 2026-08-27 — Feature 32 (Locations & kiosk) — PR opened
+### 2026-08-27 — Feature 32 (Locations & kiosk) — PR #1916 opened
 
 Five parallel background agents: four read `admin_hub_service.py`
 (1,798 lines, never previously reviewed — headline metrics and "needs

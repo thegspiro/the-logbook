@@ -1,6 +1,6 @@
 # Security Review — Feature 32: Locations & Kiosk
 
-**Prefix:** `LOC` · **Iteration:** 32 · **Reviewed:** 2026-08-27 · **PR:** (pending)
+**Prefix:** `LOC` · **Iteration:** 32 · **Reviewed:** 2026-08-27 · **PR:** [#1916](https://github.com/thegspiro/the-logbook/pull/1916)
 
 **Backend:** `app/api/v1/endpoints/locations.py` (364 L, 7 endpoints),
 `app/services/location_service.py` (364 L), `app/api/public/display.py`
