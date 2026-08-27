@@ -67,6 +67,29 @@ class TestConnectScrubsThePasswordOnTotalFailure:
         assert exc_info.value.__cause__ is None
         assert "s3cr3t-password" not in str(exc_info.value.__context__ or "")
 
+    async def test_the_percent_encoded_password_is_also_scrubbed(self, monkeypatch):
+        """DATABASE_URL percent-encodes the password (see
+        Settings._db_credentials), so a password with a reserved URL
+        character (@ : / ? # %) appears in its encoded form inside a
+        DSN-embedding exception — a raw-string replace misses it entirely
+        (Codex, PR #1917)."""
+        manager = DatabaseManager()
+        monkeypatch.setattr(settings, "DB_CONNECT_RETRIES", 1)
+        monkeypatch.setattr(settings, "DB_PASSWORD", "s3cr3t@pass/word")
+
+        def fail(*args, **kwargs):
+            raise RuntimeError(
+                "Can't connect: mysql+aiomysql://user:s3cr3t%40pass%2Fword@host/db"
+            )
+
+        with patch("app.core.database.create_async_engine", side_effect=fail):
+            with pytest.raises(ConnectionError) as exc_info:
+                await manager.connect()
+
+        assert "s3cr3t@pass/word" not in str(exc_info.value)
+        assert "s3cr3t%40pass%2Fword" not in str(exc_info.value)
+        assert "***" in str(exc_info.value)
+
 
 class TestDisconnectResetsConnectionState:
     async def test_is_connected_is_false_after_disconnect(self):

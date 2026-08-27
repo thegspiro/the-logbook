@@ -8,6 +8,7 @@ Includes retry logic and connection timeouts for robust startup.
 import asyncio
 from collections.abc import AsyncGenerator
 from datetime import datetime, timezone
+from urllib.parse import quote
 
 from loguru import logger
 from sqlalchemy import DateTime, MetaData, event
@@ -129,7 +130,13 @@ class DatabaseManager:
                 detail = str(e)
                 db_password = getattr(settings, "DB_PASSWORD", "") or ""
                 if db_password:
+                    # DATABASE_URL percent-encodes the password (see
+                    # Settings._db_credentials) so a reserved character in it
+                    # (@ : / ? # %) survives a raw-string replace unscrubbed
+                    # inside a DSN-embedding exception (Codex, PR #1917).
+                    # Scrub both forms.
                     detail = detail.replace(db_password, "***")
+                    detail = detail.replace(quote(db_password, safe=""), "***")
                 last_exception_type = type(e).__name__
                 last_scrubbed_detail = detail
                 logger.warning(

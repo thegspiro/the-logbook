@@ -518,3 +518,115 @@ No new columns or tables this pass; no schema-touching changes.
 | Scoped backend tests (`test_security_middleware.py`, `test_core_infra_boot_checks.py`, `test_database_manager.py`, `test_database_url_encoding.py`, `test_onboarding_rate_limit_scopes.py`, `test_startup_diagnostics.py`, `test_tls_required_config.py`) | ✅ 149 passed                                                                                                                                                                                                                                                                                                          |
 | Full backend suite (`pytest tests/`)                                                                                                                                                                                                                      | ✅ 8972 passed, 38 failed, 22 skipped. The 38 failures (`test_public_legal.py`, `test_agency_position_seeding.py`, `test_onboarding_integration.py`, `test_facilities_onboarding.py`) are pre-existing and unrelated — the identical set confirmed unrelated to this diff in the immediately preceding feature's pass. |
 | `tsc --noEmit` / `eslint`                                                                                                                                                                                                                                 | n/a — no frontend file changed this iteration                                                                                                                                                                                                                                                                          |
+
+## Revised after Codex review (PR #1917)
+
+Codex reviewed the fix commit above and found 6 more real bugs — in every
+case my original fix addressed the surface-level symptom described in its
+finding but missed a deeper reason the control still didn't actually work.
+Each was verified against the real code before fixing, per this review's
+standing rule (Codex findings on this rotation have consistently been real).
+
+1. **`EXPORT_ENDPOINTS` still didn't match any real route.** The original
+   CI2-33-1 fix corrected _when_ `request.state.authenticated_user` is read,
+   but none of the four placeholder paths in `EXPORT_ENDPOINTS`
+   (`/api/v1/users/export`, `/api/v1/events/export`, `/api/v1/audit/export`,
+   `/api/v1/reports`) matched an actual endpoint, so exfiltration detection
+   still could never fire. Rebuilt the set from a full grep of every
+   `@router.get`/`@router.post` path containing "export" across
+   `app/api/v1/endpoints/*.py`, each resolved against its router's real
+   registered prefix in `app/api/v1/api.py` — 15 real paths. One genuine
+   export route (`training_programs.py`'s parameterized
+   `/programs/{program_id}/export`) is excluded on purpose: this is an
+   exact-match set, and a path parameter means the request path never equals
+   a fixed string — closing that gap needs a prefix/pattern check, which is
+   a larger change than this fix's scope.
+
+2. **`session_id` came from a header real clients never send (P1).**
+   `X-Session-ID` is sent only by the onboarding module, never by regular
+   authenticated app traffic (confirmed via a repo-wide grep) — so even
+   after CI2-33-1's timing fix, the `user_id and session_id and client_ip`
+   guard was always false in practice and session-hijack detection still
+   never ran for a real user. `detect_session_hijack`'s `session_id` param is
+   only ever used as an in-memory dict key (never a DB lookup), so it just
+   needs to be stable within one login session and differ across logins —
+   derived it from the same credential `get_current_user` authenticates
+   with, using the same cookie-then-Authorization-header resolution order,
+   hashed with sha256 so the raw token itself never lands in memory or logs.
+
+3. **Password scrubbing missed the percent-encoded form (P1).**
+   `Settings._db_credentials` percent-encodes `DB_PASSWORD` via
+   `quote(..., safe='')` when building `DATABASE_URL`/`SYNC_DATABASE_URL`, so
+   a password containing a reserved URL character (`@ : / ? # %`) appears in
+   its **encoded** form inside a DSN-embedding exception — the CI2-33-3 fix's
+   raw-string `.replace()` never matched that form. Now scrubs both the raw
+   and `quote(db_password, safe="")`-encoded forms.
+
+4. **CAPTCHA boot check only covered one of three silent-failure pairings
+   (P1).** CI2-33-6 warned when `CAPTCHA_SECRET_KEY` was empty, but
+   `is_captcha_configured()` in `app/core/captcha.py` has two more ways to
+   silently disable the challenge while looking configured: an empty
+   `CAPTCHA_SITE_KEY` (secret is valid, but the browser has nothing to render
+   a widget with, so it can never obtain a token — every gated public form
+   fails closed) and an unsupported `CAPTCHA_PROVIDER` (not one of
+   `turnstile`/`hcaptcha`/`recaptcha` — `is_captcha_configured()` logs and
+   returns `False`, skipping the challenge on every request). Added both
+   checks alongside the existing secret-key one. The provider set is
+   duplicated rather than imported from `captcha.py`, which imports
+   `settings` from this module — importing it back would be circular.
+
+5. **Truncation could still cut an entity in half (P2).** CI2-33-9 fixed
+   escape-then-truncate ordering so the byte bound holds, but a cut landing
+   inside an escaped entity (e.g. `&amp;` → `&am`) renders as literal text
+   instead of the character it was escaping. Every `&` `html.escape` emits
+   opens a `&...;` entity, so after truncating, if the last `&` in the kept
+   slice has no closing `;` after it, the cut landed inside that entity —
+   trim back to before it rather than emit the corrupted partial form.
+
+6. **The `/8` trusted-proxy threshold was IPv6-blind (P2).** CI2-33-8's
+   single `_MIN_TRUSTED_PROXY_PREFIX = 8` check is reasonable for IPv4 (a
+   `/8` there still leaves 24 free host bits) but far too permissive for
+   IPv6, where `/8` leaves 120 free bits. IPv6 allocations already assign a
+   whole `/64` to a single host's subnet via SLAAC, so anything narrower than
+   `/64` already spans far more than one proxy. Split into
+   `_MIN_TRUSTED_PROXY_PREFIX_V4 = 8` / `_MIN_TRUSTED_PROXY_PREFIX_V6 = 64`,
+   selected via `ip_network.version`.
+
+7. **Neither monitoring detector's DB session was ever committed (P2).**
+   `SecurityMonitoringMiddleware` opens its own
+   `async_session_factory()` session for `detect_session_hijack` and
+   `detect_data_exfiltration` — a bare `AsyncSession` context manager, not
+   the app's `get_session()` request dependency, which is what actually
+   commits on success elsewhere. Neither `detect_session_hijack`'s
+   `log_audit_event`/`_add_alert` calls nor `detect_data_exfiltration`
+   commit internally, so every alert/audit row either check wrote was
+   silently rolled back on scope exit. Added an explicit `await db.commit()`
+   after each detector call.
+
+### Guard tests added (Codex round)
+
+- `test_security_middleware.py::TestSecurityMonitoringMiddlewareReadsTheRealAuthenticatedUser::test_session_hijack_check_uses_the_user_the_route_authenticated`
+  — updated to derive `session_id` from an `access_token` cookie (not
+  `X-Session-ID`) and assert the sha256 hash, plus assert `db.commit()` was
+  awaited (findings 2, 7).
+- `test_security_middleware.py::TestInputSanitizer::test_sanitize_string_does_not_cut_an_entity_in_half`
+  (finding 5).
+- `test_database_manager.py::TestConnectScrubsThePasswordOnTotalFailure::test_the_percent_encoded_password_is_also_scrubbed`
+  (finding 3).
+- `test_core_infra_boot_checks.py::TestCaptchaSecretKeyPairing` — split the
+  old single "secret set" test into
+  `test_enabled_with_a_secret_but_no_site_key_reports_a_warning`,
+  `test_enabled_with_secret_and_site_key_reports_no_warning`, and
+  `test_enabled_with_unsupported_provider_reports_a_warning` (finding 4).
+- `test_core_infra_boot_checks.py::TestTrustedProxyRangeSanity` — 4 new IPv6
+  cases (`/8`, `/48`, `/64` boundary, exact address) (finding 6).
+
+### Completion gate (Codex round)
+
+| Check                                                                                                                                                                                  | Result                                                                                                                                                         |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `flake8 app/core/security_middleware.py app/core/database.py app/core/config.py tests/test_security_middleware.py tests/test_database_manager.py tests/test_core_infra_boot_checks.py` | ✅ 0 violations                                                                                                                                                |
+| `black --check` (same files)                                                                                                                                                           | ✅ clean                                                                                                                                                       |
+| `isort --check-only` (same files)                                                                                                                                                      | ✅ clean                                                                                                                                                       |
+| Scoped tests (`test_security_middleware.py`, `test_database_manager.py`, `test_core_infra_boot_checks.py`)                                                                             | ✅ 103 passed                                                                                                                                                  |
+| Full backend suite (`pytest tests/`)                                                                                                                                                   | ✅ 8980 passed, 38 failed, 22 skipped — same pre-existing, unrelated failure set as before this round (confirmed identical with this round's diff stashed out) |

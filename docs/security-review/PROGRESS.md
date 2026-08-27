@@ -525,6 +525,28 @@ passed / 38 failed (the identical pre-existing onboarding/facilities/
 legal-doc set confirmed unrelated in the immediately preceding feature's
 pass) / 22 skipped, no frontend changes this iteration.
 
+Codex reviewed the fix commit and found 6 more real bugs — each time, my
+original fix addressed the surface symptom but missed a deeper reason the
+control still didn't work: (1) the rebuilt `EXPORT_ENDPOINTS` set still
+didn't match any real route (fixed with a full grep-and-resolve of every
+export route in the app, 15 real paths, one parameterized route
+structurally excluded); (2) `session_id` came from `X-Session-ID`, a
+header real clients never send (fixed by deriving it from the same
+credential `get_current_user` authenticates with, hashed); (3) password
+scrubbing missed the percent-encoded form `DATABASE_URL` actually embeds
+(fixed to scrub both forms); (4) the CAPTCHA boot check only covered the
+secret key, missing two more silent-failure pairings, site key and
+provider (fixed, both added); (5) truncation could still cut an HTML
+entity in half (fixed to trim back to the last complete entity); (6) the
+`/8` trusted-proxy threshold was IPv6-blind (split into a v4/v6-aware
+pair, `/8` and `/64`). All 6 verified against actual code before fixing,
+per this rotation's standing rule. Full findings and guard tests in
+`CI2-33-core-infra.md`'s "Revised after Codex review" section. Completion
+gate re-run clean: flake8/black/isort clean, 103/103 scoped tests passed
+(9 new/updated), full backend suite 8980 passed / 38 failed (same
+pre-existing set, reconfirmed unrelated with this round's diff stashed
+out) / 22 skipped.
+
 Next: 34 frontend shared, once this PR merges.
 
 ---

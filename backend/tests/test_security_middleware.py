@@ -489,6 +489,25 @@ class TestInputSanitizer:
         assert "<" not in result
 
     @pytest.mark.unit
+    def test_sanitize_string_does_not_cut_an_entity_in_half(self):
+        """CI2-33-9's escape-then-truncate fix can still land the cut inside
+        an entity (e.g. "&amp;" -> "&am"), which then renders as literal text
+        instead of the character it was escaping (Codex, PR #1917). A
+        boundary that lands exactly on "&" (no entity content follows into
+        the kept slice) must also drop the dangling "&", not just a
+        partial entity body."""
+        # "&" escapes to "&amp;" (5 chars). max_length=7 keeps "&amp;" (5)
+        # plus 2 more chars of the next escaped "&" ("&a"), landing mid-entity.
+        result = InputSanitizer.sanitize_string("&&&&&", max_length=7)
+        assert result == "&amp;"
+        assert not result.endswith("&a")
+
+        # max_length=1 keeps only the opening "&" of the first entity, with
+        # no closing ";" anywhere in the slice.
+        result = InputSanitizer.sanitize_string("&", max_length=1)
+        assert result == ""
+
+    @pytest.mark.unit
     def test_sanitize_string_non_string_returns_empty(self):
         """Non-string input should return an empty string."""
         result = InputSanitizer.sanitize_string(12345)
@@ -1119,9 +1138,11 @@ class TestSecurityMonitoringMiddlewareReadsTheRealAuthenticatedUser:
             SimpleNamespace(detect_session_hijack=fake_detect_session_hijack),
         )
 
+        fake_db = AsyncMock()
+
         @asynccontextmanager
         async def fake_session_factory():
-            yield MagicMock()
+            yield fake_db
 
         monkeypatch.setattr(
             "app.core.database.async_session_factory", fake_session_factory
@@ -1138,11 +1159,14 @@ class TestSecurityMonitoringMiddlewareReadsTheRealAuthenticatedUser:
 
         middleware = SecurityMonitoringMiddleware(inner_app)
 
+        # No client ever sends X-Session-ID outside onboarding (Codex, PR
+        # #1917) — a real authenticated request carries only the access_token
+        # cookie, which is what session_id is now derived from.
         scope = {
             "type": "http",
             "method": "GET",
             "path": "/api/v1/some-route",
-            "headers": [(b"x-session-id", b"sess-abc")],
+            "headers": [(b"cookie", b"access_token=real-jwt-value")],
             "client": ("203.0.113.9", 12345),
             "query_string": b"",
         }
@@ -1157,8 +1181,15 @@ class TestSecurityMonitoringMiddlewareReadsTheRealAuthenticatedUser:
 
         await middleware(scope, receive, send)
 
+        import hashlib
+
         assert calls.get("user_id") == "user-123"
-        assert calls.get("session_id") == "sess-abc"
+        assert calls.get("session_id") == hashlib.sha256(b"real-jwt-value").hexdigest()
+        # CI2-33-13-2 (Codex, PR #1917): a bare AsyncSession context manager
+        # doesn't auto-commit like the get_session() request dependency does
+        # — without an explicit commit, the alert/audit row this check writes
+        # is silently rolled back on scope exit.
+        fake_db.commit.assert_awaited_once()
 
     @pytest.mark.unit
     @pytest.mark.asyncio

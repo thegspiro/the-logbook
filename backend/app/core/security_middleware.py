@@ -5,6 +5,7 @@ Implements rate limiting, CSRF protection, security headers,
 input sanitization, and other security features.
 """
 
+import hashlib
 import html
 import re
 import secrets
@@ -307,6 +308,16 @@ class InputSanitizer:
 
         # Truncate to max length
         value = value[:max_length]
+
+        # The cut above can land inside an escaped entity (e.g. "&amp;" ->
+        # "&am"), which then renders as literal text instead of the escaped
+        # character it stood for (Codex, PR #1917). Every "&" html.escape
+        # produced is the start of a "&...;" entity, so if the last one in
+        # the truncated tail has no closing ";", the cut landed inside it —
+        # drop the partial entity rather than emit corrupted output.
+        last_amp = value.rfind("&")
+        if last_amp != -1 and ";" not in value[last_amp:]:
+            value = value[:last_amp]
 
         # Remove null bytes
         value = value.replace("\x00", "")
@@ -1254,12 +1265,32 @@ class SecurityMonitoringMiddleware:
     POST.
     """
 
-    # Export endpoints for data exfiltration monitoring
+    # Export endpoints for data exfiltration monitoring. None of the
+    # original four entries matched a real route (Codex, PR #1917) — this
+    # set is now every non-parameterized GET/POST route in app/api/v1
+    # whose path contains "export" (grep '@router\.(get|post)([^)]*export'
+    # across app/api/v1/endpoints/*.py, each resolved against its router's
+    # registered prefix). One real export route is excluded on purpose:
+    # training_programs.py's "/programs/{program_id}/export" takes a path
+    # parameter, so the request's actual path never equals a fixed string
+    # here — this exact-match set structurally cannot cover it without a
+    # prefix/pattern check, which is a larger change than this fix's scope.
     EXPORT_ENDPOINTS = {
-        "/api/v1/users/export",
-        "/api/v1/events/export",
-        "/api/v1/audit/export",
-        "/api/v1/reports",
+        "/api/v1/admin-hours/entries/export",
+        "/api/v1/analytics/export",
+        "/api/v1/compliance/annual-report/export",
+        "/api/v1/equipment-checks/reports/export/csv",
+        "/api/v1/equipment-checks/reports/export/pdf",
+        "/api/v1/errors/export",
+        "/api/v1/finance/export/transactions",
+        "/api/v1/inventory/items/export",
+        "/api/v1/organization/template/export",
+        "/api/v1/security/audit-log/export",
+        "/api/v1/store/orders/export",
+        "/api/v1/training/module-config/my-training/export",
+        "/api/v1/training/reports/export",
+        "/api/v1/training/skills-testing/tests/export/csv",
+        "/api/v1/users/me/data-export",
     }
 
     def __init__(self, app: ASGIApp) -> None:
@@ -1287,7 +1318,26 @@ class SecurityMonitoringMiddleware:
         # disabling both the session-hijack and data-exfiltration monitoring
         # below.
         user_id = None
-        session_id = request.headers.get("X-Session-ID")
+
+        # session_id is only ever used as an in-memory dict key inside
+        # SecurityMonitoringService.detect_session_hijack (never a DB lookup)
+        # — it just needs to stay stable across requests in one login session
+        # and differ across logins/devices. X-Session-ID is never sent by
+        # regular authenticated clients (it's onboarding-only), so hijack
+        # detection still never ran for real users even after the timing fix
+        # above (Codex, PR #1917). Derive it from the same credential
+        # get_current_user authenticates with instead, using the same
+        # cookie-then-header resolution order — hashed so the raw token
+        # itself never lands in memory or logs.
+        raw_token = request.cookies.get("access_token")
+        if not raw_token:
+            auth_header = request.headers.get("authorization", "")
+            scheme, _, bearer_token = auth_header.partition(" ")
+            if scheme.lower() == "bearer" and bearer_token:
+                raw_token = bearer_token
+        session_id = (
+            hashlib.sha256(raw_token.encode()).hexdigest() if raw_token else None
+        )
 
         # Track response status and content-length for exfiltration monitoring
         response_status = 0
@@ -1332,6 +1382,12 @@ class SecurityMonitoringMiddleware:
                         user_agent=user_agent or "",
                         user_id=user_id,
                     )
+                    # This is a bare AsyncSession context manager, not the
+                    # get_session() request dependency — nothing else commits
+                    # it, so the audit-log row and persisted alert
+                    # detect_session_hijack writes were rolled back on scope
+                    # exit until this call was added (Codex, PR #1917).
+                    await db.commit()
                     if alert:
                         logger.critical(f"Session hijack detected: {alert.description}")
             except Exception as e:
@@ -1354,6 +1410,9 @@ class SecurityMonitoringMiddleware:
                             endpoint=path,
                             ip_address=client_ip,
                         )
+                        # Same bare-session gap as the hijack check above:
+                        # nothing else commits this session (Codex, PR #1917).
+                        await db.commit()
             except Exception as e:
                 logger.debug(f"Data exfiltration monitoring error: {e}")
 

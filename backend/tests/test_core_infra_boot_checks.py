@@ -67,11 +67,35 @@ class TestCaptchaSecretKeyPairing:
         ).validate_security_config()
         assert any("CAPTCHA" in w for w in warnings)
 
-    def test_enabled_with_a_secret_reports_no_warning(self):
+    def test_enabled_with_a_secret_but_no_site_key_reports_a_warning(self):
+        # A secret with no site key still leaves is_captcha_configured()
+        # True, but the browser can never obtain a token to submit — every
+        # gated public form fails closed (Codex, PR #1917).
         warnings = _prod(
-            CAPTCHA_ENABLED=True, CAPTCHA_SECRET_KEY="s" * 20
+            CAPTCHA_ENABLED=True, CAPTCHA_SECRET_KEY="s" * 20, CAPTCHA_SITE_KEY=""
+        ).validate_security_config()
+        assert any("CAPTCHA_SITE_KEY" in w for w in warnings)
+
+    def test_enabled_with_secret_and_site_key_reports_no_warning(self):
+        warnings = _prod(
+            CAPTCHA_ENABLED=True,
+            CAPTCHA_SECRET_KEY="s" * 20,
+            CAPTCHA_SITE_KEY="k" * 20,
+            CAPTCHA_PROVIDER="turnstile",
         ).validate_security_config()
         assert not any("CAPTCHA" in w for w in warnings)
+
+    def test_enabled_with_unsupported_provider_reports_a_warning(self):
+        # app/core/captcha.py's is_captcha_configured() silently treats an
+        # unrecognized provider as "not configured" and skips the challenge
+        # on every request (Codex, PR #1917).
+        warnings = _prod(
+            CAPTCHA_ENABLED=True,
+            CAPTCHA_SECRET_KEY="s" * 20,
+            CAPTCHA_SITE_KEY="k" * 20,
+            CAPTCHA_PROVIDER="not-a-real-provider",
+        ).validate_security_config()
+        assert any("CAPTCHA_PROVIDER" in w for w in warnings)
 
     def test_disabled_with_no_secret_reports_no_warning(self):
         # The pairing only matters once CAPTCHA is actually turned on.
@@ -98,4 +122,24 @@ class TestTrustedProxyRangeSanity:
 
     def test_no_configured_range_reports_no_warning(self):
         warnings = _prod(TRUSTED_PROXY_IPS="").validate_security_config()
+        assert not any("TRUSTED_PROXY_IPS" in w for w in warnings)
+
+    def test_an_ipv6_slash_8_reports_a_warning(self):
+        # A single IPv4-scaled /8 threshold is far too permissive for IPv6:
+        # /8 there still leaves 120 free host bits (Codex, PR #1917).
+        warnings = _prod(TRUSTED_PROXY_IPS="2001:db8::/8").validate_security_config()
+        assert any("TRUSTED_PROXY_IPS" in w for w in warnings)
+
+    def test_an_ipv6_slash_48_reports_a_warning(self):
+        warnings = _prod(TRUSTED_PROXY_IPS="2001:db8::/48").validate_security_config()
+        assert any("TRUSTED_PROXY_IPS" in w for w in warnings)
+
+    def test_a_typical_ipv6_subnet_range_reports_no_warning(self):
+        # /64 is exactly the boundary — a single site subnet, and typical for
+        # a reverse proxy's own /64 allocation.
+        warnings = _prod(TRUSTED_PROXY_IPS="2001:db8::/64").validate_security_config()
+        assert not any("TRUSTED_PROXY_IPS" in w for w in warnings)
+
+    def test_an_exact_ipv6_address_reports_no_warning(self):
+        warnings = _prod(TRUSTED_PROXY_IPS="2001:db8::1").validate_security_config()
         assert not any("TRUSTED_PROXY_IPS" in w for w in warnings)

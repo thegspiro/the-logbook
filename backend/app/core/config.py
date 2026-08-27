@@ -398,12 +398,23 @@ class Settings(BaseSettings):
         # every IP-keyed control downstream (suspicious-IP throttle,
         # geo-blocking, rate-limit exemptions). Only unparseable entries were
         # previously flagged; a valid-but-permissive one gave no signal.
-        _MIN_TRUSTED_PROXY_PREFIX = 8
+        # A single /8 threshold is far too permissive for IPv6 (Codex, PR
+        # #1917): /8 there still leaves 120 free host bits, versus 24 for
+        # IPv4's /8. IPv6 allocations already assign whole /64s to a single
+        # host's subnet via SLAAC, so a "trusted proxy" range narrower than a
+        # /64 already spans far more addresses than one proxy needs.
+        _MIN_TRUSTED_PROXY_PREFIX_V4 = 8
+        _MIN_TRUSTED_PROXY_PREFIX_V6 = 64
         for _network in self.get_trusted_proxy_networks():
-            if _network.prefixlen < _MIN_TRUSTED_PROXY_PREFIX:
+            _min_prefix = (
+                _MIN_TRUSTED_PROXY_PREFIX_V6
+                if _network.version == 6
+                else _MIN_TRUSTED_PROXY_PREFIX_V4
+            )
+            if _network.prefixlen < _min_prefix:
                 warnings.append(
                     f"WARNING: TRUSTED_PROXY_IPS includes {_network}, a range "
-                    f"wider than /{_MIN_TRUSTED_PROXY_PREFIX} — X-Forwarded-For "
+                    f"wider than /{_min_prefix} — X-Forwarded-For "
                     "is trusted from anyone connecting within it, letting a "
                     "direct-connecting attacker in that range spoof their IP."
                 )
@@ -556,6 +567,31 @@ class Settings(BaseSettings):
                     "request rather than rejecting them, so the abuse control "
                     "is believed live and is not."
                 )
+
+            if self.CAPTCHA_ENABLED and self.CAPTCHA_SECRET_KEY:
+                if not self.CAPTCHA_SITE_KEY:
+                    warnings.append(
+                        "WARNING: CAPTCHA_ENABLED is True with a secret key set "
+                        "but CAPTCHA_SITE_KEY is empty. The site key is public "
+                        "and served to the frontend to render the widget — "
+                        "without it the browser can never obtain a token, so "
+                        "every gated public form (signup, password reset) "
+                        "fails closed for every visitor."
+                    )
+                # Mirrors app/core/captcha.py's _VERIFY_URLS keys. Duplicated
+                # rather than imported: captcha.py imports `settings` from
+                # this module, so importing it back here would be circular.
+                _CAPTCHA_PROVIDERS = {"turnstile", "hcaptcha", "recaptcha"}
+                if self.CAPTCHA_PROVIDER not in _CAPTCHA_PROVIDERS:
+                    warnings.append(
+                        f"WARNING: CAPTCHA_ENABLED is True but "
+                        f"CAPTCHA_PROVIDER={self.CAPTCHA_PROVIDER!r} is not one "
+                        f"of {sorted(_CAPTCHA_PROVIDERS)} — "
+                        "is_captcha_configured() treats this as not configured "
+                        "and silently skips the challenge on every request "
+                        "rather than rejecting them, so the abuse control is "
+                        "believed live and is not."
+                    )
 
             if not self.AUDIT_LOG_SIGNING_KEY:
                 warnings.append(
