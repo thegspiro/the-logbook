@@ -37,7 +37,8 @@ and unmodified; SF-5's guard tests still pass. No findings, no code
 changes. Completion gate: flake8/black/isort clean,
 `validate_migrations.py --strict` passed, 644/644 scoped tests pass (up
 from 533 at pass 1, reflecting the new feature's own coverage), full
-backend suite run separately. No frontend files touched. Full detail in
+backend suite 9040 passed / 22 skipped (pre-existing) / 0 failed. No
+frontend files touched. Full detail in
 `SF-04-storefront-payments.md`. Next: 05 finance & approvals, once this PR
 merges.
 

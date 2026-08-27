@@ -44,7 +44,8 @@ well-built feature addition with proper enum-level validation throughout.
 alembic/`; `validate_migrations.py --strict` passed (381 revisions, single
 head); scoped tests (`-k "storefront"`) 644 passed, 1 skipped
 (pre-existing) — SF-6/SF-5's four guard tests individually re-confirmed
-passing. No frontend files touched.
+passing; full backend suite 9040 passed, 22 skipped (pre-existing), 0
+failed. No frontend files touched.
 
 ---
 
