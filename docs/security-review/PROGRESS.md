@@ -16,10 +16,10 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-Feature 04 (storefront & payments, pass 2) — branch
-`claude/security-review-sf-04-pass2`, PR pending open. No findings, no code
-changes (docs only). See log entry below and
-`SF-04-storefront-payments.md`'s "Pass 2" section.
+Feature 04 (storefront & payments, pass 2) — [PR #1935](https://github.com/thegspiro/the-logbook/pull/1935),
+branch `claude/security-review-sf-04-pass2`. No findings, no code changes
+(docs only). See log entry below and `SF-04-storefront-payments.md`'s
+"Pass 2" section.
 
 ---
 
