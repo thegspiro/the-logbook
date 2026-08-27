@@ -165,6 +165,60 @@ describe('EventForm', () => {
       });
     });
 
+    it('shows only room names when all facility rooms belong to one facility', async () => {
+      vi.mocked(apiModule.locationsService.getLocations).mockResolvedValue([
+        {
+          id: 'room-1',
+          name: 'Quartermaster Storage — Volunteer Office — Station 1',
+          facility_id: 'facility-1',
+          facility_room_id: 'room-1',
+          building: 'Station 1',
+          address: '1 Main Street',
+          is_active: true,
+        },
+        {
+          id: 'room-2',
+          name: 'Conference Room — Station 1',
+          facility_id: 'facility-1',
+          facility_room_id: 'room-2',
+          is_active: true,
+        },
+      ] as unknown as Location[]);
+
+      renderWithRouter(<EventForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} />);
+
+      const locationSelect = await screen.findByLabelText(/location/i);
+      const labels = Array.from((locationSelect as HTMLSelectElement).options).map((option) => option.text);
+      expect(labels).toContain('Quartermaster Storage');
+      expect(labels).toContain('Conference Room');
+      expect(labels).not.toContain('Quartermaster Storage (Station 1) — 1 Main Street');
+    });
+
+    it('keeps room hierarchy when rooms span multiple facilities', async () => {
+      vi.mocked(apiModule.locationsService.getLocations).mockResolvedValue([
+        {
+          id: 'room-1',
+          name: 'Storage — Office — Station 1',
+          facility_id: 'facility-1',
+          facility_room_id: 'room-1',
+          is_active: true,
+        },
+        {
+          id: 'room-2',
+          name: 'Storage — Office — Station 2',
+          facility_id: 'facility-2',
+          facility_room_id: 'room-2',
+          is_active: true,
+        },
+      ] as unknown as Location[]);
+
+      renderWithRouter(<EventForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} />);
+
+      const locationSelect = await screen.findByLabelText(/location/i);
+      expect(locationSelect).toHaveTextContent('Storage — Office — Station 1');
+      expect(locationSelect).toHaveTextContent('Storage — Office — Station 2');
+    });
+
     it('should toggle between select and manual location modes', async () => {
       renderWithRouter(<EventForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} />);
 
