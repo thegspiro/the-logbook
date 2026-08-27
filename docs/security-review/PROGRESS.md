@@ -16,7 +16,7 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-PR (feature 34, frontend shared) — opening.
+PR #1918 (feature 34, frontend shared) — open, awaiting CI/review.
 
 ---
 
