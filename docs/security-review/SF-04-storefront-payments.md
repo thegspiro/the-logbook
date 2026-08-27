@@ -1,6 +1,54 @@
 # Security Review — Storefront & Payments
 
-**Prefix:** `SF` · **Iteration:** 04 · **Reviewed:** 2026-08-25 · **PR:** #1807
+**Prefix:** `SF` · **Iteration:** 04 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2) · **PR:** #1807 (pass 1)
+
+---
+
+## Pass 2 (2026-08-27)
+
+`git diff` between PR #1807's merge commit (`311aa196`) and current `main`
+touches only 2 of the 7 in-scope files — `storefront.py` (+2, two new
+display fields added to the product-serialization allowlist) and
+`storefront_service.py` (+131/-6, an embroidery thread-color/personalization-
+method feature plus a size-aware variant-ordering fix). The other 5
+(`storefront_notification_service.py`, `email_templates_storefront.py`,
+`storefront_preview_service.py`, `storefront_payments.py`,
+`paypal_webhook.py`) are byte-identical.
+
+- **Embroidery thread color / personalization method** is a closed-enum
+  feature end to end: `EmbroideryThreadColor`/`PersonalizationMethod` are
+  `(str, Enum)` types, the create/update Pydantic schemas type the fields as
+  those enums directly (so an invalid value 422s before reaching the
+  service), and every read path normalizes defensively via
+  `normalize_thread_color`/`normalize_personalization_method` (falls back to
+  a default rather than raising on an unrecognized stored value — same
+  resilience pattern used elsewhere in this codebase). The CSV export's two
+  new columns (`personalization_verb`/`thread_color_label`) resolve only to
+  fixed strings from the enum's own label table, never client input — no
+  formula-injection surface, and the existing `SafeCsvWriter` is unchanged.
+- **`_ordered_variants`** makes `sort_order` fully server-computed (size
+  order), where it previously honored a client-supplied `sort_order` on
+  create. Not itself a security boundary (display ordering only), but a
+  reduction in client influence over stored data, not an increase.
+- **SF-6's separation-of-duties guard is confirmed still present and
+  unmodified** — `record_payment`'s `assert_different_person(...)` call
+  (`storefront_service.py:1826`) sits outside this diff's changed line
+  ranges, re-verified by direct read. SF-5's guard tests
+  (`test_refund_amount_must_be_positive`/`_may_be_omitted`) still pass
+  unmodified.
+
+**No findings.** No code changes this pass — the changes since pass 1 are a
+well-built feature addition with proper enum-level validation throughout.
+
+**Completion gate (pass 2):** flake8/black/isort clean on `app/ tests/
+alembic/`; `validate_migrations.py --strict` passed (381 revisions, single
+head); scoped tests (`-k "storefront"`) 644 passed, 1 skipped
+(pre-existing) — SF-6/SF-5's four guard tests individually re-confirmed
+passing. No frontend files touched.
+
+---
+
+## Pass 1 (2026-08-25)
 
 **Backend:** `app/api/v1/endpoints/storefront.py` (1650 L, 48 endpoints),
 `app/services/storefront_service.py` (3184 L),
