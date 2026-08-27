@@ -16,12 +16,39 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-Feature 04 (storefront & payments, pass 2) — [PR #1935](https://github.com/thegspiro/the-logbook/pull/1935),
-branch `claude/security-review-sf-04-pass2`. No findings, no code changes
-(docs only). See log entry below and `SF-04-storefront-payments.md`'s
-"Pass 2" section.
+Feature 05 (finance & approvals, pass 2) — PR pending push. No findings;
+docs-only change. Next after merge: 06 elections & ballots, pass 2.
 
 ---
+
+### 2026-08-27 — Feature 05 (Finance & approvals), pass 2 — no findings
+
+Full-domain diff since pass 1's merge (`51ce8547`, PR #1809): `finance.py`,
+`finance_service.py`, `finance_approvals.py` (already covered by PUB-03,
+re-confirmed unchanged), `models/finance.py`, `schemas/finance.py`, the new
+`add_export_stream_status` migration, and 8 finance frontend files. Two
+background agents reviewed the budget/export and endpoint/schema/model
+halves independently — both reported clean; the two highest-stakes claims
+(`_mutate_budget`'s locking read, `get_pending_approvals`'s org-scoped
+`union_all`) were re-verified by direct read rather than trusted from the
+agent summaries alone. No code changes — completion gate: flake8/black/
+isort clean, migrations valid (382 revisions), scoped tests 233 passed,
+full backend suite 9042 passed/22 skipped/0 failed, frontend `tsc`/`eslint`/
+`vitest` (80 tests) all clean. Rotation row 05 -> awaiting PR merge. Next:
+06 elections & ballots.
+
+### 2026-08-27 — Feature 04 (Storefront & payments), pass 2 ✅ merged — PR #1935
+
+Merged. Codex caught a real scoping gap (the diff had covered only the 7
+files pass 1's header literally listed, missing models/schemas/a new
+util/6 migrations/11 frontend files) before merge — corrected, still no
+findings after the full re-sweep, thread resolved. **Methodology note for
+future iterations**: scope each pass-2 diff to everything under the
+feature's domain (models, schemas, services, endpoints, utils, migrations,
+frontend module), not just the exact files a prior pass's header happened
+to enumerate — a real feature can land touching more of a domain than the
+original file list named. Rotation row 04 -> done for pass 2. Next: 05
+finance & approvals.
 
 ### 2026-08-27 — Feature 04 (Storefront & payments), pass 2 — no findings
 
@@ -906,8 +933,8 @@ each row's prior PR is recorded in the Log, not repeated here.
 | 01  | Auth & session lifecycle  | AUTH   | `endpoints/auth.py`, `auth_service.py`, `mfa_service.py`, `oauth_service.py`                                                                    | ✅     |
 | 02  | Permissions & roles       | PERM   | `dependencies.py`, `core/permissions.py`, `roles.py`, `operational_ranks.py`, `officers.py`, `org_chart.py`                                     | ✅     |
 | 03  | Public surface & webhooks | PUB    | `api/public/*` (20 unauth routes), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`                                      | ✅     |
-| 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                              | ⏳     |
-| 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                     | ⬜     |
+| 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                              | ✅     |
+| 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                     | ⏳     |
 | 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | ⬜     |
 | 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ⬜     |
 | 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ⬜     |

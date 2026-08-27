@@ -1,6 +1,71 @@
 # Security Review 05 — Finance & Approvals
 
-**Prefix:** `FIN` · **Iteration:** 05 · **Reviewed:** 2026-08-25 · **PR:** [#1809](https://github.com/thegspiro/the-logbook/pull/1809)
+**Prefix:** `FIN` · **Iteration:** 05 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2) · **PR:** [#1809](https://github.com/thegspiro/the-logbook/pull/1809) (pass 1)
+
+---
+
+## Pass 2 (2026-08-27)
+
+Scoped to the **full finance domain** since pass 1's merge commit (`51ce8547`,
+PR #1809), not just the files pass 1's header enumerated — the corrected
+methodology adopted after Codex flagged the same gap on SF-04 (PR #1935).
+`git diff 51ce8547..<pass-2 base>` on the finance/approvals area touches:
+
+- **Backend:** `api/v1/endpoints/finance.py` (+176), `services/finance_service.py`
+  (+781), `api/public/finance_approvals.py` (+6 — the PUB-03 self-approval
+  guard, already reviewed under that iteration and re-confirmed unchanged
+  since), `models/finance.py` (+7), `schemas/finance.py` (+122).
+- **Migrations:** `20260826_1700_add_export_stream_status.py` — adds
+  `status`/`error_message`/`completed_at` to `finance_export_logs`.
+- **Frontend:** 8 files under `modules/finance` — primarily a
+  `MonetaryAmount`/`DecimalString` type-hardening pass (money stays a string
+  end-to-end, matching the backend's `Decimal` usage, never a float) plus a
+  `requiredModule="finance"` addition to the module's `ProtectedRoute`,
+  matching the pre-existing backend `module_gate("finance", "Finance")` — a
+  frontend gate mirroring a server-side one already in place, not a new
+  access-control boundary.
+
+**Read in full and independently re-verified by direct code read** (not
+taken on an agent's word alone): `_mutate_budget`
+(`finance_service.py:2564`) — org-scoped, `.with_for_update()` locking read
+on the budget row, with the over-budget ceiling check computed from the
+locked row's fresh value (Pitfall #27 compliant: the lock alone is not
+enough without a locking re-read, and this has both). `get_pending_approvals`
+(`finance_service.py:871`) — rewritten to a `union_all` "entities" CTE
+covering `PurchaseRequest`/`ExpenseReport`/`CheckRequest`, each arm filtered
+on `organization_id == organization_id` before the `UNION ALL`, then INNER
+JOINed to `ApprovalStepRecord` — no arm can leak another org's pending
+approvals into the merged result.
+
+Two background agents independently reviewed `finance_service.py`'s budget/
+export logic and `finance.py`+`schemas.py`+`models.py` respectively; both
+reported no findings, and their highest-stakes claims (the two methods
+above) were the ones re-verified by hand rather than trusted outright.
+
+The new migration adds three nullable columns to `finance_export_logs`
+(itself `create_all`-only — no `SET NULL` FK, no seed data, no table-
+existence guard needed since it neither creates nor alters a pre-existing
+table across a fresh-DB boundary in a way Pitfall #26 would flag). No new
+by-id or FK-accepting endpoint was added in this diff, so dimension 3/14
+(tenant isolation) reduces to re-confirming the two methods above, which
+were already org-scoped before this pass and remain so.
+
+**No findings.** The diff since pass 1 is a locking-read budget fix (already
+correct), a tenant-scoped rewrite of the pending-approvals query (already
+correct), a closed type-hardening pass on the frontend, and one additive,
+nullable, non-FK migration column set.
+
+**Completion gate (pass 2):** flake8/black/isort clean on `app/ tests/
+alembic/`; `validate_migrations.py --strict` passed (382 revisions, single
+head); scoped backend tests (`-k "finance or dues or approval or budget or
+export"`) 233 passed, 1 skipped (pre-existing), 0 failed; full backend suite
+9042 passed, 22 skipped (pre-existing, Docker-unavailable), 0 failed.
+`tsc --noEmit` 0 errors; `eslint src/modules/finance/` 0 errors; `vitest run
+src/modules/finance/` 2 files, 80 tests, all passed.
+
+---
+
+## Pass 1 (2026-08-25)
 
 **Backend:** `api/v1/endpoints/finance.py` (66 routes), `services/finance_service.py`
 (~2,000 L), `api/public/finance_approvals.py` (token-scoped approve/deny)
