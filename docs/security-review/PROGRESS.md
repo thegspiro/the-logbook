@@ -16,17 +16,12 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**#1914** (branch `claude/security-review-onboarding-followup`) — a small
-follow-up from the 30-minute monitoring pass, opened _after_ PR #1913
-(feature 30) had already merged: fixes a raw-exception leak in the onboarding
-logo-upload error path and flags an onboarding session-TTL absolute-cap
-decision. Feature 30 stays ✅ (its own review, #1913, is done); this PR does
-not block feature 31 from being picked up — it's a tend-while-open item, not
-a new feature in the rotation.
-
 **#1918** (branch `claude/security-review-frontend-shared`) — feature 34
-(frontend shared) review, opened after PR #1917 merged. CI green, mergeable
-cleanly against `main`. Next feature once both #1914 and #1918 merge: 35.
+(frontend shared) review, opened after PR #1917 merged. CI was green;
+picked up a merge conflict against `main` when #1914 (onboarding follow-up,
+a separate tend-while-open item) merged first, since both touched
+CHANGELOG.md and this file. Conflict resolved, re-validating. Next feature
+once #1918 merges: 35.
 
 ---
 
@@ -559,6 +554,63 @@ out) / 22 skipped.
 
 Next: 34 frontend shared, once this PR merges.
 
+### 2026-08-27 — Feature 34 (Frontend shared) — PR opened
+
+This layer carries four prior app-review passes and one module-audit pass, all
+of which explicitly noted the module axios instances and most of the shared
+core were checked "for invariants, not line-by-line." Three parallel
+background agents did that line-by-line read for the first time: (A) the
+shared API/cache/error core (`apiClient.ts`, `apiCache.ts`, `errorHandling.ts`,
+`errorTracking.ts`), (B) `createApiClient.ts` + all 12 module axios instances,
+(C) `ProtectedRoute.tsx` + `authStore.ts`/`learningProgressStore.ts`/
+`pendingSyncStore.ts`/`skillsTestingStore.ts` — including independently
+re-verifying two items the module audit left open (FE-6, FE-7) against current
+code rather than trusting the doc.
+
+9 findings, all fixed (3 HIGH, 2 MEDIUM, 4 LOW):
+
+- FE2-34-1/2/3 (HIGH/HIGH/MED-HIGH): three training endpoints
+  (`/training/cohorts/{id}`, `/training/programs/programs/{id}/eligibility`,
+  `/training/external/providers/{id}/user-mappings`) each return a
+  member roster with resolved names/emails and had no entry in
+  `UNCACHEABLE_PREFIXES` at all — held in the in-memory 90s cache on every
+  page load. Fixed by adding all three (each as a trailing-slash prefix so
+  the roster-free bare list stays cacheable).
+- FE2-34-4 (MED): `/forms` bare list escaped its own exclusion — a live
+  recurrence of the FE-2 trailing-slash bug class (`'/forms/'` doesn't match
+  `'/forms'.startsWith(...)`), missed when the other six were fixed
+  2026-08-08. Fixed.
+- FE2-34-5/6 (LOW, defense-in-depth): `/grants` had the same trailing-slash
+  shape (currently inert — that module doesn't use the cached global
+  instance) and `/analytics/export` (raw per-user events) had no exclusion
+  at all. Both fixed.
+- FE2-34-7 (LOW): `authStore.getCsrfCookie` didn't `decodeURIComponent` the
+  cookie value, unlike `apiClient.getCookie` — flagged as FE-7 in the
+  original module audit and left unfixed across four app-review passes.
+  Re-verified still present (currently inert — the backend's token alphabet
+  has nothing to decode) and fixed to match.
+- FE2-34-8 (LOW): `scheduling/services/api.ts`'s `getMyAttendance` swallowed
+  _any_ error (network failure, 500, 403) as "not checked in," masking
+  operational failures. Fixed to only swallow a confirmed 404, mirroring
+  the correct pattern already used elsewhere in the codebase. Also removed
+  a dead duplicate `_retry` type-augmentation block in the same file.
+- FE2-34-9: re-verified FE-6 (module-audit MEDIUM — PII drafts/offline
+  queue surviving logout) and found it already resolved by an intervening
+  change (`purgeLocalMemberData()` wired into `authStore.logout()`, the
+  idle-timeout path, and the session-expiry catch branch) — no code change
+  needed, documented so it isn't re-flagged as open.
+- Corrected a stale LOW finding in `docs/app-review/frontend-shared.md`:
+  the `createApiClient.ts` 401-handler note didn't match current code (it
+  imports and calls the same `handleExpiredSession` the global client
+  uses, onboarding guard and `clearCache()` included).
+
+Completion gate: flake8/black/isort n/a (no backend changes); `tsc --noEmit`
+0 errors; `eslint` 0 errors (10 pre-existing warnings, unrelated files,
+within budget); `npm run build` succeeds; full frontend suite 5242/5242
+passed (397 files).
+
+Next: 00 cross-cutting baseline (second full pass), once this PR merges.
+
 ### 2026-08-27 — Feature 33 (Core infrastructure) merged — PR #1917
 
 Merged (squash, `5a1f859c`). Codex round confirmed and fixed (see the
@@ -625,7 +677,7 @@ data-carrying modules, then the supporting infrastructure.
 | 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                   | ✅              |
 | 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                  | ✅              |
 | 33  | Core infrastructure       | CORE   | `core/security_middleware.py`, `core/database.py`, `core/config.py`                                                                             | ✅              |
-| 34  | Frontend shared           | FE     | `utils/apiCache.ts`, module axios instances, `ProtectedRoute`, global stores                                                                    | 🔄              |
+| 34  | Frontend shared           | FE     | `utils/apiCache.ts`, module axios instances, `ProtectedRoute`, global stores                                                                    | ⏳              |
 
 **35 iterations per full pass.** After 34 the rotation wraps to 00, which
 re-runs the whole-codebase sweeps against whatever has landed since.
