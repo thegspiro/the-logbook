@@ -16,19 +16,32 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-Feature 05 (finance & approvals, pass 2) —
-[PR #1946](https://github.com/thegspiro/the-logbook/pull/1946). Chain so
-far: #1942 (docs-only "no findings") merged before Codex's review landed ->
-#1944 (fix for FIN-10 through FIN-14) also merged before a second Codex
-round on it caught FIN-15 (approval-chain step ordering) -> #1946 (fix for
-FIN-15) had CI go fully green but had not yet auto-merged when a third
-Codex round caught FIN-16/17/18 (enforcing order surfaced two real
-deadlocks and a portability gap) -- that fix was pushed directly to #1946
-while it was still open, ahead of the auto-merge for once. Watching for
-either a fourth Codex round or a clean merge. Next after this lands clean:
-06 elections & ballots, pass 2.
+None. Feature 05 (finance & approvals, pass 2) fully merged as
+[PR #1946](https://github.com/thegspiro/the-logbook/pull/1946) — see log
+entry below. Next: 06 elections & ballots, pass 2.
 
 ---
+
+### 2026-08-27 — Feature 05 (Finance & approvals), pass 2 ✅ merged — PR #1946
+
+Merged, with the FIN-16/17/18 fix commit included (pushed directly to the
+still-open PR ahead of auto-merge, for once). Confirmed on `origin/main`
+by ancestry check, not just the merge notification. Final tally for this
+pass: 9 real findings across FIN-10 through FIN-18, all fixed, plus 1
+documentation correction — three successive Codex rounds, each catching
+something the previous round's own fix and tests had missed (a genuine
+concurrency bug, a ceiling bypass, two schema regressions, a frontend
+precision gap, then an ordering bug the first fix's own review didn't
+question, then two deadlocks and a portability gap _that_ fix introduced).
+**Process note for future iterations**: this rotation's PRs kept
+auto-merging the instant CI went green — three times in a row here, twice
+before a follow-up commit could land (forcing a rebase onto new `main` and
+a fresh PR each time) and once caught in time by pushing directly to the
+still-open PR. When Codex is still actively reviewing a PR, watch for
+review comments landing in the same window CI turns green, and don't
+assume "CI green" means "done" until either Codex has had time to weigh in
+or the PR has actually closed. Rotation row 05 -> done for pass 2. Next:
+06 elections & ballots.
 
 ### 2026-08-27 — Feature 05 (Finance & approvals), pass 2 — Codex round 3 on #1946 caught FIN-16/17/18 (deadlocks + portability), fixed
 
@@ -1054,8 +1067,8 @@ each row's prior PR is recorded in the Log, not repeated here.
 | 02  | Permissions & roles       | PERM   | `dependencies.py`, `core/permissions.py`, `roles.py`, `operational_ranks.py`, `officers.py`, `org_chart.py`                                     | ✅     |
 | 03  | Public surface & webhooks | PUB    | `api/public/*` (20 unauth routes), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`                                      | ✅     |
 | 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                              | ✅     |
-| 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                     | ⏳     |
-| 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | ⬜     |
+| 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                     | ✅     |
+| 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | 🔄     |
 | 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ⬜     |
 | 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ⬜     |
 | 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ⬜     |
