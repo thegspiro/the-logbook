@@ -128,18 +128,22 @@ and empty progress. The in-progress branch is unchanged — the onboarding wizar
 legitimately reads those back to resume before completion. **2 tests added**
 (completed hides it; in-progress keeps it).
 
-### ONB-8 (residual) — 🚩 FLAGGED (owner decision / robustness, unchanged)
+### ONB-8 (residual) — audit durability still open; reset re-auth and template mass-assignment now fixed
 
-- **Reset re-auth.** `/reset` is gated by the onboarding session + CSRF but not the
-  existing owner's re-authentication, so a leaked in-progress session could wipe the
-  owner+org before `/complete`. Blocking reset once an owner exists conflicts with
-  legitimately restarting a botched setup — owner decision.
-- **Audit durability.** The `reset_initiated` audit event is written in the same
-  transaction as the deletes, so a failed reset rolls it back; it should commit to a
-  durable sink first. A transaction-boundary change deferred for care.
-- **Template mass-assignment fragility.** `template_service` create/update rely on
-  the pydantic schema never exposing `organization_id`/`is_system`; an explicit
-  strip/reject guard would be defense-in-depth against a future schema change.
+- **✅ Reset re-auth FIXED (2026-08-27 correction — landed 2026-08-21, commit
+  `3d445eb2`, undocumented at the time).** `/reset` now requires that once a
+  System Owner exists, the caller must be authenticated as that exact owner
+  (via `find_system_owner`) or the request 403s. Verified against current
+  code 2026-08-27 (security-review feature 30).
+- **Audit durability — still 🚩 FLAGGED.** The `reset_initiated` audit event is
+  written in the same transaction as the deletes, so a failed reset rolls it
+  back; it should commit to a durable sink first. A transaction-boundary
+  change deferred for care.
+- **✅ Template mass-assignment fragility FIXED (2026-08-27, security-review
+  feature 30).** `template_service.create_template`/`update_template` now
+  strip `organization_id`/`created_by` defensively and route updates through
+  `apply_updates(..., skip={"organization_id", "id", "created_by"})` instead
+  of a blind `setattr` loop.
 
 ### ONB-7 — MED/LOW — Onboarding role editor accepts client permissions/priority/system-flag — 🚩 FLAGGED (product decision)
 
@@ -164,13 +168,14 @@ can express — a product decision. Recorded in `KNOWN_LIMITATIONS.md`.
 
 ## Documentation
 
-`docs/module-audit/onboarding.md` updated: ONB-8 `/status` fixed; ONB-7 + ONB-8
-residual stand.
+`docs/module-audit/onboarding.md` updated (2026-08-27): ONB-8 `/status`, reset
+re-auth, and template mass-assignment all now fixed; ONB-7 and ONB-8's audit
+durability sub-point stand.
 
 ## Future development
 
-1. **ONB-8** — reset re-auth policy; commit the reset-initiated audit to a durable
-   sink before the deletes; explicit mass-assignment guard on template create/update.
+1. **ONB-8** — commit the reset-initiated audit to a durable sink before the
+   deletes (transaction-boundary change, still open).
 2. **ONB-7** — clamp/allowlist the onboarding role editor's permission/priority/
    system-flag inputs.
 
