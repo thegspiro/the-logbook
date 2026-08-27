@@ -16,6 +16,8 @@ both were *removed or never-added* call sites, not broken helper logic.
 
 import inspect
 
+from app.api.v1.endpoints.membership_pipeline import transfer_prospect
+from app.api.v1.endpoints.operational_ranks import update_rank
 from app.api.v1.endpoints.users import create_member, update_user_profile
 
 
@@ -55,4 +57,47 @@ def test_create_member_ceiling_check_runs_before_the_user_is_flushed():
         "create_member now flushes the new user before the role-grant "
         "ceiling check -- a denied check's alert-commit would persist the "
         "orphaned, should-be-rejected user account"
+    )
+
+
+def test_transfer_prospect_calls_rank_ceiling():
+    """AUTH-adjacent PERM-3 (2026-08-27 pass 2): transfer_prospect creates a
+    new User row with a client-supplied rank via
+    MembershipPipelineService._do_transfer, gated only on members.manage /
+    prospective_members.manage -- neither implies settings.manage or
+    security.manage. Without this call, a bare members.manage holder could
+    transfer a prospect in at rank="fire_chief" and mint a tenant admin,
+    exactly the escalation _enforce_rank_grant_ceiling's own docstring
+    describes for create_member."""
+    source = inspect.getsource(transfer_prospect)
+    assert "_enforce_rank_grant_ceiling(" in source, (
+        "transfer_prospect no longer enforces the rank-grant ceiling before "
+        "transferring a prospect to a full User account -- PERM-3 regression"
+    )
+    ceiling_at = source.index("_enforce_rank_grant_ceiling(")
+    transfer_at = source.index("service.transfer_to_membership(")
+    assert ceiling_at < transfer_at, (
+        "transfer_prospect now creates the User account before the "
+        "rank-grant ceiling check runs"
+    )
+
+
+def test_update_rank_calls_rank_ceiling_before_renaming():
+    """PERM-4 (2026-08-27 pass 2): OperationalRankService.update_rank
+    bulk-rewrites User.rank for every member holding the old code when a
+    rank's rank_code is renamed. get_rank_default_permissions() resolves
+    purely by code string, so renaming a rank to a reserved code (e.g.
+    "fire_chief") instantly grants every member currently holding it that
+    rank's permissions -- and the endpoint requires only settings.manage,
+    not the security.manage/users.delete the ceiling is meant to gate."""
+    source = inspect.getsource(update_rank)
+    assert "_enforce_rank_grant_ceiling(" in source, (
+        "update_rank no longer enforces the rank-grant ceiling on a "
+        "rank_code rename -- PERM-4 regression"
+    )
+    ceiling_at = source.index("_enforce_rank_grant_ceiling(")
+    rename_at = source.index("service.update_rank(")
+    assert ceiling_at < rename_at, (
+        "update_rank now renames the rank code (cascading to every current "
+        "holder) before the rank-grant ceiling check runs"
     )

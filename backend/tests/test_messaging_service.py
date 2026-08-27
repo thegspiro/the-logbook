@@ -322,6 +322,7 @@ class TestReadAckVisibilityGate:
                 MagicMock(scalar_one_or_none=MagicMock(return_value=message)),
                 MagicMock(scalar_one_or_none=MagicMock(return_value=self._user())),
                 MagicMock(scalar_one_or_none=MagicMock(return_value=None)),
+                SimpleNamespace(rowcount=1),
             ]
         )
         db.add = MagicMock()
@@ -330,6 +331,14 @@ class TestReadAckVisibilityGate:
         assert ok is True
         assert err is None
         db.add.assert_called_once()
+        notification_update = db.execute.await_args_list[3].args[0]
+        sql = str(notification_update)
+        assert "UPDATE notification_logs" in sql
+        assert "notification_logs.organization_id" in sql
+        assert "notification_logs.recipient_id" in sql
+        assert "notification_logs.metadata" in sql
+        assert notification_update.compile().params["organization_id_1"] == "org-1"
+        assert notification_update.compile().params["recipient_id_1"] == "u1"
 
     async def test_acknowledge_rejects_untargeted_message(self):
         message = _msg("m1", "members", members=["someone-else"])
@@ -375,6 +384,7 @@ class TestReadAckVisibilityGate:
                 MagicMock(scalar_one_or_none=MagicMock(return_value=message)),
                 MagicMock(scalar_one_or_none=MagicMock(return_value=self._user())),
                 MagicMock(scalar_one_or_none=MagicMock(return_value=read_record)),
+                SimpleNamespace(rowcount=1),
             ]
         )
         db.commit = AsyncMock()
@@ -387,7 +397,9 @@ class TestReadAckVisibilityGate:
         assert error is None
         assert changed is False
         assert read_record.acknowledged_at == acknowledged_at
-        db.commit.assert_not_awaited()
+        db.commit.assert_awaited_once()
+        notification_update = db.execute.await_args_list[3].args[0]
+        assert "UPDATE notification_logs" in str(notification_update)
 
 
 @pytest.mark.parametrize(("changed", "expected_audits"), [(True, 1), (False, 0)])
@@ -523,6 +535,7 @@ class TestCreateScheduling:
         db = MagicMock()
         db.add = MagicMock()
         db.commit = AsyncMock()
+        db.rollback = AsyncMock()
         db.refresh = AsyncMock()
         return db
 
@@ -547,6 +560,30 @@ class TestCreateScheduling:
         )
         assert message.scheduled_at is None
 
+    async def test_rejects_expired_immediate_message(self):
+        message, error = await MessagingService(self._db()).create_message(
+            "org-1",
+            "author",
+            "Drill",
+            "Body",
+            expires_at=datetime.now(timezone.utc) - timedelta(minutes=1),
+        )
+        assert message is None
+        assert error == "expires_at must be in the future for a published message"
+
+    async def test_rejects_expiry_before_naive_schedule(self):
+        schedule = datetime.now() + timedelta(hours=2)
+        message, error = await MessagingService(self._db()).create_message(
+            "org-1",
+            "author",
+            "Drill",
+            "Body",
+            scheduled_at=schedule,
+            expires_at=schedule - timedelta(minutes=1),
+        )
+        assert message is None
+        assert error == "expires_at must be later than scheduled_at"
+
 
 class TestRescheduleGuard:
     """A published message (scheduled_at NULL) can't be moved to a future time,
@@ -558,6 +595,7 @@ class TestRescheduleGuard:
             return_value=MagicMock(scalar_one_or_none=MagicMock(return_value=message))
         )
         db.commit = AsyncMock()
+        db.rollback = AsyncMock()
         db.refresh = AsyncMock()
         return db
 
@@ -620,6 +658,20 @@ class TestRescheduleGuard:
         assert err is None
         assert message.title == "New title"
         service._validate_targeting.assert_not_awaited()
+
+    async def test_rejects_update_with_expiry_before_schedule(self):
+        pending = SimpleNamespace(
+            scheduled_at=datetime.now(timezone.utc) + timedelta(hours=1),
+            expires_at=datetime.now(timezone.utc) + timedelta(hours=2),
+        )
+        db = self._db_with(pending)
+        message, error = await MessagingService(db).update_message(
+            "m1",
+            "org-1",
+            {"expires_at": datetime.now() + timedelta(minutes=30)},
+        )
+        assert message is None
+        assert error == "expires_at must be later than scheduled_at"
 
 
 class TestValidateTargeting:

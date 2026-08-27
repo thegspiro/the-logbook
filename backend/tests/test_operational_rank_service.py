@@ -298,8 +298,8 @@ class TestCrud:
             created_at=now,
             updated_at=now,
         )
-        db = _db([_one(rank), _one(None), MagicMock()])
-        user = SimpleNamespace(organization_id=str(org_id))
+        db = _db([_one(rank), _one(rank), _one(None), MagicMock()])
+        user = SimpleNamespace(organization_id=str(org_id), rank=None, positions=[])
 
         response = await ranks_ep.update_rank(
             rank_id,
