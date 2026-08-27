@@ -43,6 +43,13 @@ from app.utils.printer_transport import PrinterUnreachableError
 
 router = APIRouter()
 
+# Modules whose labels carry PII/credential-adjacent data worth an audit
+# trail: a prospect label embeds the applicant's public status-check token
+# (label_service.py) and a membership label embeds membership_number.
+# Printer *configuration* changes are already audited below; this covers
+# actually generating/printing the labels themselves.
+_AUDITED_LABEL_MODULES = frozenset({"prospective_members", "membership"})
+
 
 def _authorize_module(current_user: User, module: str) -> None:
     """404 for unknown modules, 403 when the caller holds none of the module's
@@ -71,7 +78,7 @@ class LabelGenerateBody(BaseModel):
     custom_width: Optional[float] = Field(None, ge=0.5, le=8)
     custom_height: Optional[float] = Field(None, ge=0.5, le=11)
     auto_rotate: Optional[bool] = None
-    extra_lines: Optional[List[str]] = None
+    extra_lines: Optional[List[str]] = Field(None, max_length=20)
     symbology: str = Field(SYMBOLOGY_CODE128, max_length=20)
 
 
@@ -160,7 +167,7 @@ async def generate_labels(
     """
     _authorize_module(current_user, data.module)
     try:
-        pdf, auto_populated = await LabelService(db).generate(
+        pdf, auto_populated, label_count = await LabelService(db).generate(
             organization_id=current_user.organization_id,
             module=data.module,
             ids=data.ids,
@@ -174,6 +181,18 @@ async def generate_labels(
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
+    if data.module in _AUDITED_LABEL_MODULES:
+        # label_count is the specs actually rendered — filtered/nonexistent
+        # ids in data.ids produce no label and must not inflate this count.
+        await log_audit_event(
+            db=db,
+            event_type="labels_generated",
+            event_category="data_access",
+            severity="info",
+            event_data={"module": data.module, "count": label_count},
+            user_id=str(current_user.id),
+            username=current_user.username,
+        )
     await db.commit()
     return Response(
         content=pdf.getvalue(),
@@ -238,7 +257,7 @@ class LabelPrintBody(BaseModel):
     custom_width: Optional[float] = Field(None, ge=0.5, le=8)
     custom_height: Optional[float] = Field(None, ge=0.5, le=11)
     copies: int = Field(1, ge=1, le=50)
-    extra_lines: Optional[List[str]] = None
+    extra_lines: Optional[List[str]] = Field(None, max_length=20)
     symbology: str = Field(SYMBOLOGY_CODE128, max_length=20)
 
 
@@ -494,6 +513,22 @@ async def print_labels(
             status_code=502,
             detail="The printer could not be reached. Contact whoever manages "
             "the label printer.",
+        )
+    if data.module in _AUDITED_LABEL_MODULES:
+        # result["labels_sent"] is the authoritative count (specs actually
+        # rendered * copies) — len(data.ids) over/under-counts whenever a
+        # requested id is filtered/missing, or copies != 1.
+        await log_audit_event(
+            db=db,
+            event_type="labels_printed",
+            event_category="data_access",
+            severity="info",
+            event_data={
+                "module": data.module,
+                "count": result.get("labels_sent", len(data.ids)),
+            },
+            user_id=str(current_user.id),
+            username=current_user.username,
         )
     await db.commit()
     return result

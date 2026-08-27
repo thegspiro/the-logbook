@@ -583,6 +583,22 @@ class TestRescheduleGuard:
         assert err is None
         assert pending.scheduled_at == new_time
 
+    async def test_past_scheduled_at_on_published_message_is_normalized_not_stored(
+        self,
+    ):
+        """MSG-4: a past/current scheduled_at must collapse to None on an
+        already-published message, or the next publish sweep re-delivers it —
+        duplicate in-app notifications, a duplicate email, and (if urgent) a
+        duplicate SMS blast to the whole targeted audience."""
+        published = SimpleNamespace(scheduled_at=None)
+        db = self._db_with(published)
+        past = datetime.now(timezone.utc) - timedelta(hours=1)
+        message, err = await MessagingService(db).update_message(
+            "m1", "org-1", {"scheduled_at": past}
+        )
+        assert err is None
+        assert published.scheduled_at is None
+
     async def test_clearing_schedule_on_published_message_is_allowed(self):
         published = SimpleNamespace(scheduled_at=None, is_active=True)
         db = self._db_with(published)

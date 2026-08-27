@@ -30,7 +30,6 @@ import type {
   InventoryItem,
   EquipmentRequestItem,
   ReturnRequestItem,
-  RequestTypeLiteral,
 } from '../types';
 import { getConditionColor, REQUEST_STATUS_BADGES } from '../types';
 import { useAuthStore } from '../../../stores/authStore';
@@ -125,7 +124,7 @@ const MyEquipmentPage: React.FC = () => {
   const [reqSearch, setReqSearch] = useState('');
   const [reqResults, setReqResults] = useState<InventoryItem[]>([]);
   const [reqSelected, setReqSelected] = useState<InventoryItem | null>(null);
-  const [reqType, setReqType] = useState<RequestTypeLiteral>('checkout');
+  const [reqType, setReqType] = useState<'checkout' | 'issuance'>('checkout');
   const [reqQty, setReqQty] = useState(1);
   const [reqReason, setReqReason] = useState('');
   const [reqSearching, setReqSearching] = useState(false);
@@ -668,6 +667,7 @@ const MyEquipmentPage: React.FC = () => {
                           setReqSelected(item);
                           setReqSearch(item.name);
                           setReqResults([]);
+                          setReqType(item.tracking_type === 'pool' ? 'issuance' : 'checkout');
                         }}
                         className="hover:bg-theme-surface-secondary/50 text-theme-text-primary w-full px-3 py-2 text-left text-sm"
                       >
@@ -690,20 +690,25 @@ const MyEquipmentPage: React.FC = () => {
 
             <div>
               <div>
-                <label className={labelClass}>Request Type</label>
-                <select
-                  value={reqType}
-                  onChange={(e) => setReqType(e.target.value as RequestTypeLiteral)}
-                  className={selectClass}
-                >
-                  {/* Values are the backend RequestType members; "assignment"
-                      is not one, which is why #1876 replaced it. The checkout
-                      label follows the vocabulary the scan modal already uses
-                      for the same concept. */}
-                  <option value="checkout">Temporary loan</option>
-                  <option value="issuance">Issuance</option>
-                  <option value="purchase">Purchase</option>
-                </select>
+                <label className={labelClass}>Request Intent</label>
+                {reqSelected?.tracking_type === 'pool' ? (
+                  <div className="text-theme-text-secondary text-sm">
+                    <p className="font-medium">Quantity issue</p>
+                    <p className="text-theme-text-muted mt-1 text-xs">
+                      Pool stock is issued by quantity and handled under your department&apos;s return policy.
+                    </p>
+                  </div>
+                ) : (
+                  <select
+                    value={reqType}
+                    onChange={(e) => setReqType(e.target.value as 'checkout' | 'issuance')}
+                    className={selectClass}
+                    disabled={!reqSelected}
+                  >
+                    <option value="checkout">Temporary checkout</option>
+                    <option value="issuance">Permanent assignment</option>
+                  </select>
+                )}
               </div>
             </div>
 

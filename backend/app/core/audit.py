@@ -28,7 +28,13 @@ from app.models.audit import AuditLog, AuditLogCheckpoint
 # Version 3 additionally includes organization_id in the hash input, making
 # tenant attribution tamper-proof for new rows (v1/v2 rows predate the column
 # and verify without it — the backfilled column is scoping metadata there).
-_CURRENT_HASH_VERSION = 3
+# Version 4 additionally includes event_category and severity: neither was
+# covered by any prior version despite both being read back into the hash
+# input dict (_build_hash_data), so a DB-write-level attacker could rewrite
+# either field on a row (e.g. severity "critical" -> "info") with no hash
+# mismatch — hiding a security incident from severity/category-filtered
+# admin review, the exact tamper the chain exists to make detectable.
+_CURRENT_HASH_VERSION = 4
 _KEYED_MIN_VERSION = 2
 _LEGACY_HASH_VERSION = 1
 
@@ -85,8 +91,10 @@ class AuditLogger:
         Creates a deterministic hash from log entry data and the previous hash,
         forming a blockchain-inspired chain. ``version`` selects the algorithm:
 
-        - ``3`` (default): keyed HMAC-SHA256 with organization_id in the
-          hash input — tenant attribution is tamper-proof.
+        - ``4`` (default): keyed HMAC-SHA256 with organization_id,
+          event_category, and severity in the hash input.
+        - ``3``: keyed HMAC-SHA256 with organization_id but not
+          event_category/severity (rows written before those were covered).
         - ``2``: keyed HMAC-SHA256 without organization_id (rows written
           before the column existed).
         - ``1``: legacy unkeyed SHA-256, retained ONLY to verify entries written
@@ -110,6 +118,15 @@ class AuditLogger:
         # stored hashes must keep verifying byte-identically without it.
         if version >= 3:
             fields.insert(4, str(log_data.get("organization_id", "")))
+        # v4 adds event_category and severity, inserted at a fixed distance
+        # from the end (before event_data_str/previous_hash) so the position
+        # is correct whether or not the v3 insert above ran. Older rows keep
+        # verifying byte-identically without these two fields.
+        if version >= 4:
+            fields[-2:-2] = [
+                str(log_data.get("event_category", "")),
+                str(log_data.get("severity", "")),
+            ]
         data_string = "|".join(fields)
 
         if version >= _KEYED_MIN_VERSION:

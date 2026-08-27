@@ -11,7 +11,14 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from app.models.forms import IntegrationType
+from app.models.forms import (
+    FieldType,
+    Form,
+    FormField,
+    FormIntegration,
+    IntegrationTarget,
+    IntegrationType,
+)
 from app.services.forms_service import FormsService
 
 
@@ -158,3 +165,111 @@ async def test_invalid_public_form_does_not_consume_daily_cap(monkeypatch):
     assert error == "Required field 'Required' is missing"
     cap.assert_not_awaited()
     db.add.assert_not_called()
+
+
+def _db_returning(row):
+    db = MagicMock()
+    db.execute = AsyncMock(
+        return_value=MagicMock(scalar_one_or_none=MagicMock(return_value=row))
+    )
+    db.commit = AsyncMock()
+    db.flush = AsyncMock()
+    db.refresh = AsyncMock()
+    db.rollback = AsyncMock()
+    return db
+
+
+class TestUpdateForm:
+    """update_form must route through apply_updates so an explicit null
+    actually clears a nullable field, and rejects one against a NOT NULL
+    column with a clean error instead of a blind setattr."""
+
+    async def test_clears_a_nullable_field(self):
+        form = Form(
+            id="f1",
+            organization_id="org-1",
+            name="Outreach",
+            description="old description",
+        )
+        db = _db_returning(form)
+        service = FormsService(db)
+        service.get_form_by_id = AsyncMock(return_value=form)
+
+        result, error = await service.update_form("f1", "org-1", {"description": None})
+
+        assert error is None
+        assert result.description is None
+
+    async def test_rejects_null_against_not_null_name(self):
+        form = Form(id="f1", organization_id="org-1", name="Outreach")
+        db = _db_returning(form)
+        service = FormsService(db)
+        service.get_form_by_id = AsyncMock(return_value=form)
+
+        result, error = await service.update_form("f1", "org-1", {"name": None})
+
+        assert result is None
+        assert error is not None
+        db.rollback.assert_awaited_once()
+
+
+class TestUpdateField:
+    async def test_clears_a_nullable_field(self):
+        field = FormField(
+            id="fld1",
+            form_id="f1",
+            label="Notes",
+            field_type=FieldType.TEXT,
+            help_text="old help text",
+        )
+        db = _db_returning(field)
+        service = FormsService(db)
+        service.get_form_by_id = AsyncMock(
+            return_value=Form(id="f1", organization_id="org-1", name="Outreach")
+        )
+
+        result, error = await service.update_field(
+            "fld1", "f1", "org-1", {"help_text": None}
+        )
+
+        assert error is None
+        assert result.help_text is None
+
+    async def test_rejects_null_against_not_null_label(self):
+        field = FormField(
+            id="fld1", form_id="f1", label="Notes", field_type=FieldType.TEXT
+        )
+        db = _db_returning(field)
+        service = FormsService(db)
+        service.get_form_by_id = AsyncMock(
+            return_value=Form(id="f1", organization_id="org-1", name="Outreach")
+        )
+
+        result, error = await service.update_field(
+            "fld1", "f1", "org-1", {"label": None}
+        )
+
+        assert result is None
+        assert error is not None
+        db.rollback.assert_awaited_once()
+
+
+class TestUpdateIntegration:
+    async def test_rejects_null_against_not_null_target_module(self):
+        integration = FormIntegration(
+            id="int1",
+            form_id="f1",
+            organization_id="org-1",
+            target_module=IntegrationTarget.INVENTORY,
+            integration_type=IntegrationType.EQUIPMENT_ASSIGNMENT,
+        )
+        db = _db_returning(integration)
+        service = FormsService(db)
+
+        result, error = await service.update_integration(
+            "int1", "f1", "org-1", {"target_module": None}
+        )
+
+        assert result is None
+        assert error is not None
+        db.rollback.assert_awaited_once()
