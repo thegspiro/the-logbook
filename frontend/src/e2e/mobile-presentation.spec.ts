@@ -85,6 +85,7 @@ const ALL_ROUTES: RouteCheck[] = [
   { path: '/analytics', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/messages', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/settings', maxSmallTargets: 0, maxTinyText: 0 },
+  { path: '/testing', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/profile', maxSmallTargets: 0, maxTinyText: 0 },
 ];
 

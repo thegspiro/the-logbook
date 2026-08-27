@@ -214,6 +214,7 @@ EXPECTED_GATES = {
     "/api/v1/reports": "reports",
     "/api/v1/scheduling": "scheduling",
     "/api/v1/store": "storefront",
+    "/api/v1/testing-checklist": "testing",
     "/api/v1/training": "training",
 }
 
@@ -471,6 +472,7 @@ MODULE_HOME_DIRECTORIES = {
     "reports": "reports",
     "scheduling": "scheduling",
     "storefront": "storefront",
+    "testing": "testing",
     "training": "training",
 }
 

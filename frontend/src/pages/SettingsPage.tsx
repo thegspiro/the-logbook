@@ -38,6 +38,7 @@ import {
   Key,
   Store,
   Stethoscope,
+  ClipboardCheck,
   HeartPulse,
   Wallet,
   Printer,
@@ -321,6 +322,13 @@ const ADDITIONAL_MODULES: ConfigurableModule[] = [
     description:
       'EMS stock with lot numbers and expiration dates, tracked separately from gear so it can have its own supply officer',
     icon: <Stethoscope className="h-5 w-5" />,
+  },
+  {
+    key: 'testing',
+    name: 'Testing Checklist',
+    description:
+      "A tester's index of every page in the app, with each page's permission gate — for walking a new installation before it goes live",
+    icon: <ClipboardCheck className="h-5 w-5" />,
   },
 ];
 

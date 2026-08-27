@@ -117,6 +117,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   themselves is now blocked the same way; renaming to an ordinary custom
   name is unaffected.
 
+### Testing runs, exports and permission checking (2026-08-27)
+
+**Added**
+
+- The testing checklist now works in **runs** — one named pass over the app,
+  e.g. "Pre-launch, build 1.4". Starting a new run archives the one before it:
+  its marks stay readable and exportable from the run picker instead of being
+  cleared away. The first mark opens a run on its own.
+- **Every mark is checked against what the app expected.** A refusal that
+  happened as predicted is counted as a gate verified; a page that opened for
+  an account that should have been refused is flagged where the mark was made,
+  counted in the header, and listed in the printed report as a permissions
+  defect.
+- Marks record the build they were made against, so after a deployment the ones
+  made on an earlier build are marked and can be filtered with **Needs
+  re-test**.
+- **Exports for reporting:** a CSV of every mark, a page-by-tester permission
+  matrix, a printable report (coverage, failures with notes, gate mismatches,
+  coverage by area) for saving as PDF, and the existing Markdown.
+- **Keyboard marking:** `j`/`k` to move between boxes, `p`/`f`/`b` to mark the
+  focused one, `n` to jump to the next page with no mark.
+
+### The testing checklist is now a module you can switch off (2026-08-27)
+
+**Changed**
+
+- The Testing Home at `/testing` — the page listing every screen in the app so
+  a department can walk them before going live — is now a module of its own,
+  and it is **off by default**. A department that was using it will find it
+  gone after this upgrade until an administrator turns **Testing Checklist**
+  back on under Settings → Modules. Nothing recorded is lost: marks and notes
+  stay in place and reappear when the module is switched on again.
+- While the module is off, the navigation entry, the page and the data behind
+  it all refuse — the same way every other switched-off module behaves.
+- The module is not offered during first-time setup. It is a tool for checking
+  an installation, not a decision a department needs to make while making
+  every other one.
+
 ### A few training-related pages could briefly cache data they shouldn't (2026-08-27)
 
 **Fixed**

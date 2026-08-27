@@ -54,6 +54,7 @@ import { getGrantsFundraisingRoutes } from './modules/grants-fundraising';
 import { getIPSecurityRoutes } from './modules/ip-security';
 import { getFinanceRoutes } from './modules/finance';
 import { getMedicalScreeningRoutes } from './modules/medical-screening';
+import { getTestingRoutes } from './modules/testing';
 
 // Loading fallback component
 const PageLoadingFallback = () => (
@@ -154,6 +155,7 @@ function App() {
                     {getFormsRoutes()}
                     {getIntegrationsRoutes()}
                     {getMedicalScreeningRoutes()}
+                    {getTestingRoutes()}
 
                     {/* Finance */}
                     {getFinanceRoutes()}

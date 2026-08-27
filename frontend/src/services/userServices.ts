@@ -353,6 +353,7 @@ export interface ModuleSettingsData {
   public_info: boolean;
   finance: boolean;
   medical_screening: boolean;
+  testing: boolean;
 }
 
 export interface OrganizationProfile {
