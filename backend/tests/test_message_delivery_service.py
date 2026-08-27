@@ -85,7 +85,10 @@ class TestInAppFanOut:
         assert db.add.call_count == 2
         db.commit.assert_awaited()
         notifications = [call.args[0] for call in db.add.call_args_list]
-        assert all(item.action_url == "/messages/m1" for item in notifications)
+        assert [item.action_url for item in notifications] == [
+            "/messages/m1",
+            "/messages/m1",
+        ]
 
     async def test_no_recipients_is_a_noop(self):
         db = _db()
