@@ -2930,9 +2930,7 @@ async def run_trainee_report_escalation(db: AsyncSession) -> Dict[str, Any]:
                 select(ShiftCompletionReport)
                 .where(ShiftCompletionReport.organization_id == str(org.id))
                 .where(ShiftCompletionReport.review_status == "approved")
-                .where(
-                    ShiftCompletionReport.trainee_acknowledged == False
-                )  # noqa: E712
+                .where(ShiftCompletionReport.trainee_acknowledged.is_(False))
                 .where(ShiftCompletionReport.created_at <= cutoff)
             )
             reports = list(rep_result.scalars().all())
@@ -3577,7 +3575,20 @@ async def run_publish_scheduled_messages(db: AsyncSession) -> Dict[str, Any]:
 
     delivery = MessageDeliveryService(db)
     published = 0
+    expired = 0
     for message in due:
+        expires_at = getattr(message, "expires_at", None)
+        if expires_at is not None:
+            if expires_at.tzinfo is None:
+                expires_at = expires_at.replace(tzinfo=timezone.utc)
+            else:
+                expires_at = expires_at.astimezone(timezone.utc)
+        if expires_at is not None and expires_at <= now:
+            message.is_active = False
+            message.scheduled_at = None
+            await db.commit()
+            expired += 1
+            continue
         message.scheduled_at = None
         await db.commit()
         await delivery.deliver(message)
@@ -3585,7 +3596,11 @@ async def run_publish_scheduled_messages(db: AsyncSession) -> Dict[str, Any]:
 
     if published:
         logger.info(f"Published {published} scheduled department message(s)")
-    return {"task": "publish_scheduled_messages", "published": published}
+    return {
+        "task": "publish_scheduled_messages",
+        "published": published,
+        "expired": expired,
+    }
 
 
 async def run_storefront_window_lifecycle(db: AsyncSession) -> Dict[str, Any]:

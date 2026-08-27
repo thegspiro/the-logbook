@@ -75,6 +75,15 @@ def _patch_sms_consent(*consented_ids):
 
 
 class TestInAppFanOut:
+    async def test_expired_message_is_not_delivered(self):
+        db = _db()
+        message = _msg()
+        message.expires_at = datetime.now() - timedelta(minutes=1)
+        with _patch_recipients([_user("u1")]) as recipients:
+            await MessageDeliveryService(db).deliver(message)
+        recipients.assert_not_awaited()
+        db.add.assert_not_called()
+
     async def test_creates_one_notification_per_recipient_excluding_author(self):
         db = _db()
         recipients = [_user("u1"), _user("author"), _user("u2")]
@@ -343,6 +352,34 @@ class TestPublishScheduledMessages:
         assert due.scheduled_at is None
         deliver.assert_awaited_once()
         db.commit.assert_awaited()
+
+    async def test_deactivates_expired_due_message_without_delivery(self):
+        from app.services.scheduled_tasks import run_publish_scheduled_messages
+
+        due = SimpleNamespace(
+            scheduled_at=datetime.now(timezone.utc) - timedelta(minutes=2),
+            expires_at=datetime.now() - timedelta(minutes=1),
+            is_active=True,
+            deleted_at=None,
+        )
+        db = MagicMock(commit=AsyncMock())
+        result_set = MagicMock()
+        result_set.scalars.return_value.all.return_value = [due]
+        db.execute = AsyncMock(return_value=result_set)
+
+        with patch.object(
+            MessageDeliveryService, "deliver", new=AsyncMock()
+        ) as deliver:
+            result = await run_publish_scheduled_messages(db)
+
+        assert result == {
+            "task": "publish_scheduled_messages",
+            "published": 0,
+            "expired": 1,
+        }
+        assert due.is_active is False
+        assert due.scheduled_at is None
+        deliver.assert_not_awaited()
 
 
 if __name__ == "__main__":  # pragma: no cover
