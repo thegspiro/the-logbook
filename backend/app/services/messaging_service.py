@@ -8,7 +8,7 @@ Handles creation, targeting, delivery, and read tracking.
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
-from sqlalchemy import desc, func, or_, select
+from sqlalchemy import desc, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -18,9 +18,33 @@ from app.models.notification import (
     DepartmentMessageRead,
     MessagePriority,
     MessageTargetType,
+    NotificationChannel,
+    NotificationLog,
 )
 from app.models.user import Role, User, UserStatus
 from app.utils.sql_search import LIKE_ESCAPE_CHAR, like_pattern
+
+
+def _as_utc(value: Optional[datetime]) -> Optional[datetime]:
+    """Return a timezone-aware UTC datetime, treating naive values as UTC."""
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
+
+
+def _validate_expiry(
+    expires_at: Optional[datetime], scheduled_at: Optional[datetime], now: datetime
+) -> None:
+    """Validate an expiry against the message's effective publication time."""
+    if expires_at is None:
+        return
+    if scheduled_at is not None:
+        if expires_at <= scheduled_at:
+            raise ValueError("expires_at must be later than scheduled_at")
+    elif expires_at <= now:
+        raise ValueError("expires_at must be in the future for a published message")
 
 
 class MessagingService:
@@ -68,9 +92,12 @@ class MessagingService:
                 target_type, target_roles, target_statuses, target_member_ids
             )
             now = datetime.now(timezone.utc)
+            scheduled_at = _as_utc(scheduled_at)
+            expires_at = _as_utc(expires_at)
             effective_scheduled = (
                 scheduled_at if (scheduled_at and scheduled_at > now) else None
             )
+            _validate_expiry(expires_at, effective_scheduled, now)
             message = DepartmentMessage(
                 id=generate_uuid(),
                 organization_id=organization_id,
@@ -188,14 +215,15 @@ class MessagingService:
             if not message:
                 return None, "Message not found"
 
+            now = datetime.now(timezone.utc)
+            if "scheduled_at" in updates:
+                updates["scheduled_at"] = _as_utc(updates["scheduled_at"])
+            if "expires_at" in updates:
+                updates["expires_at"] = _as_utc(updates["expires_at"])
+
             new_sched = updates.get("scheduled_at")
             if new_sched is not None and message.scheduled_at is None:
-                cmp = (
-                    new_sched
-                    if new_sched.tzinfo is not None
-                    else new_sched.replace(tzinfo=timezone.utc)
-                )
-                if cmp > datetime.now(timezone.utc):
+                if new_sched > now:
                     return (
                         None,
                         "Cannot reschedule a message that has already been "
@@ -208,6 +236,19 @@ class MessagingService:
                 # create_message does, so this is a no-op rather than a
                 # re-trigger.
                 updates["scheduled_at"] = None
+
+            effective_schedule = (
+                updates.get("scheduled_at")
+                if "scheduled_at" in updates
+                else _as_utc(message.scheduled_at)
+            )
+            effective_expiry = (
+                updates.get("expires_at")
+                if "expires_at" in updates
+                else _as_utc(getattr(message, "expires_at", None))
+            )
+            if {"expires_at", "scheduled_at"}.intersection(updates):
+                _validate_expiry(effective_expiry, effective_schedule, now)
 
             audience_fields = {
                 "target_type",
@@ -640,6 +681,31 @@ class MessagingService:
     # Read / Acknowledge Tracking
     # ============================================
 
+    async def _mark_message_notification_read(
+        self, message_id: str, user_id: str, organization_id: str
+    ) -> bool:
+        """Apply the department-message receipt to its in-app notification.
+
+        ``metadata.message_id`` is the delivery service's existing link between
+        the two records.  Keep all recipient and tenant predicates here so a
+        receipt can never affect another member's notification.
+        """
+        now = datetime.now(timezone.utc)
+        result = await self.db.execute(
+            update(NotificationLog)
+            .where(
+                NotificationLog.organization_id == organization_id,
+                NotificationLog.recipient_id == user_id,
+                NotificationLog.channel == NotificationChannel.IN_APP,
+                NotificationLog.category == "department_message",
+                NotificationLog.read.is_(False),
+                NotificationLog.notification_metadata["message_id"].as_string()
+                == message_id,
+            )
+            .values(read=True, read_at=now)
+        )
+        return bool(result.rowcount)
+
     async def _visible_message_or_none(
         self, message_id: str, user_id: str, organization_id: str
     ) -> Optional[DepartmentMessage]:
@@ -694,6 +760,10 @@ class MessagingService:
             )
             record = existing.scalar_one_or_none()
             if record:
+                if await self._mark_message_notification_read(
+                    message_id, user_id, organization_id
+                ):
+                    await self.db.commit()
                 return True, None  # Already read
 
             read_record = DepartmentMessageRead(
@@ -702,6 +772,9 @@ class MessagingService:
                 user_id=user_id,
             )
             self.db.add(read_record)
+            await self._mark_message_notification_read(
+                message_id, user_id, organization_id
+            )
             await self.db.commit()
             return True, None
         except Exception as e:
@@ -731,8 +804,15 @@ class MessagingService:
 
             if record:
                 if record.acknowledged_at:
+                    if await self._mark_message_notification_read(
+                        message_id, user_id, organization_id
+                    ):
+                        await self.db.commit()
                     return True, None, False
                 record.acknowledged_at = datetime.now(timezone.utc)
+                await self._mark_message_notification_read(
+                    message_id, user_id, organization_id
+                )
                 await self.db.commit()
             else:
                 read_record = DepartmentMessageRead(
@@ -742,6 +822,9 @@ class MessagingService:
                     acknowledged_at=datetime.now(timezone.utc),
                 )
                 self.db.add(read_record)
+                await self._mark_message_notification_read(
+                    message_id, user_id, organization_id
+                )
                 await self.db.commit()
 
             return True, None, True

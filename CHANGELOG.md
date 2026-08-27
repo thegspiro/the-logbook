@@ -7,6 +7,71 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Two approvers acting at the same moment could double-charge a budget, and a budget's cap could be quietly bypassed (2026-08-27)
+
+**Fixed**
+
+- Approving or denying a purchase/expense/check-request approval step didn't
+  lock the step record while checking it was still pending. Two authorized
+  approvers acting on the same step within the same moment could both pass
+  that check and both finalize it — encumbering the associated budget twice
+  for what was really a single approval.
+- A multi-step approval chain (e.g. Supervisor, then Treasurer, then Chief)
+  didn't enforce that steps be acted on in order. A later reviewer — an
+  internal user, or an external emailed approver, who could each act at any
+  time — could approve or deny their step before earlier reviewers acted.
+  A denial finalizes the whole request immediately, so an out-of-order
+  denial could kill a request before earlier reviewers ever weighed in.
+  Approving or denying a step now requires that every earlier step in the
+  chain has already been resolved.
+- A chain that starts with an informational notice step (or has one
+  following only auto-approved steps) could get permanently stuck: the
+  notice was never marked sent until the first real approval, but nothing
+  could be approved until the notice was marked sent. Chains like this now
+  activate correctly from the start.
+- Every external approver's email invite/link was sent — and its one-week
+  expiry started — the moment a request was submitted, even for approvers
+  several steps down the chain. If earlier steps took a while to resolve,
+  a later approver's link could expire before it was ever their turn, with
+  no way to get a new one. Invites (and their expiry) now go out only once
+  it's actually that approver's turn.
+- A misconfigured approval chain with two steps at the same position could,
+  on some database configurations, cause the wrong one to be treated as
+  "current," blocking the step actually shown as actionable. Fixed to
+  consistently agree with what's shown as actionable.
+- Editing a budget's total amount didn't check it against what was already
+  spent or committed against that budget. A budget could be reduced below
+  its already-committed total and the reduction would be accepted, silently
+  breaking the guarantee that a budget's spending never exceeds its cap.
+- Updating a dues schedule's grace period would fail every time due to a
+  copy-paste error in field validation.
+- Requesting a finance export with a date range that mixed a plain date and
+  a fully-specified (timezone-included) date could crash instead of showing
+  a normal validation error.
+- One expense-report form still converted dollar amounts through
+  floating-point math when submitting, unlike the rest of the finance
+  module's forms, which could very rarely round a line-item amount
+  incorrectly.
+
+### Two paths could hand out permissions beyond what the requester held (2026-08-27)
+
+**Fixed**
+
+- Transferring a prospective member to full membership set their rank from
+  the request without checking whether the person doing the transfer held
+  that rank's permissions themselves — someone with only member-management
+  access could have transferred a prospect in at a chief-level rank and
+  granted them (or an account they controlled) admin-level permissions.
+  Transferring a prospect now goes through the same permission check as
+  creating a member directly.
+- Renaming an operational rank's code (e.g. correcting a typo or relabeling
+  it) moved every member who held that rank to the new code with no similar
+  check — renaming a rank to match a built-in senior rank's code would have
+  granted that rank's permissions to everyone who held the old one. Renaming
+  a rank to a name that grants more than the person renaming it holds
+  themselves is now blocked the same way; renaming to an ordinary custom
+  name is unaffected.
+
 ### Testing runs, exports and permission checking (2026-08-27)
 
 **Added**

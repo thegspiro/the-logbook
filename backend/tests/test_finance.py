@@ -375,6 +375,40 @@ class TestBudgetMutationPolicy:
         await db_session.refresh(budget)
         assert budget.amount_spent == Decimal("0.00")
 
+    async def test_update_budget_enforces_ceiling_when_reducing(
+        self, db_session, sample_org_data
+    ):
+        """PUT /budgets/{id} must not be a side door around the ceiling
+        _mutate_budget enforces: reducing amount_budgeted below what is
+        already spent+encumbered has to be rejected, not silently persisted.
+        """
+        service, budget = await self._budget(db_session, sample_org_data)
+        await service._encumber_budget(
+            budget.id, Decimal("60.00"), sample_org_data["id"]
+        )
+        with pytest.raises(BudgetLimitExceededError):
+            await service.update_budget(
+                budget.id,
+                sample_org_data["id"],
+                amount_budgeted=Decimal("10.00"),
+            )
+        await db_session.refresh(budget)
+        assert budget.amount_budgeted == Decimal("100.00")
+
+    async def test_update_budget_allows_reduction_above_committed_amount(
+        self, db_session, sample_org_data
+    ):
+        service, budget = await self._budget(db_session, sample_org_data)
+        await service._encumber_budget(
+            budget.id, Decimal("60.00"), sample_org_data["id"]
+        )
+        updated = await service.update_budget(
+            budget.id,
+            sample_org_data["id"],
+            amount_budgeted=Decimal("75.00"),
+        )
+        assert updated.amount_budgeted == Decimal("75.00")
+
 
 # ============================================
 # Approval Chain Tests
@@ -627,6 +661,131 @@ class TestApprovalChainService:
         assert notification_record is not None
         assert notification_record.status == ApprovalStepStatus.SENT
 
+    async def test_a_leading_notification_step_does_not_deadlock_the_chain(
+        self, db_session: AsyncSession, sample_org_data
+    ):
+        """A chain can start with a NOTIFICATION step (or one can follow only
+        auto-approved steps). Before create_approval_records advanced
+        initially-reachable steps, that notification stayed PENDING forever
+        -- _advance_reachable_steps only ran after an approval succeeded --
+        so get_current_pending_step returned the notification and the
+        chain-order check (FIN-15) would reject the first real approval
+        step indefinitely, with nothing able to ever unstick it.
+        """
+        service = FinanceService(db_session)
+        org_id = sample_org_data["id"]
+        user_id = sample_org_data.get("admin_id", "test-user-id")
+
+        chain = await service.create_approval_chain(
+            org_id=org_id,
+            created_by=user_id,
+            name="Notify then Approve",
+            applies_to=ApprovalEntityType.PURCHASE_REQUEST,
+            is_default=True,
+            steps=[
+                {
+                    "step_order": 1,
+                    "name": "Notify Officer",
+                    "step_type": ApprovalStepType.NOTIFICATION,
+                    "approver_type": ApproverType.EMAIL,
+                    "approver_value": "officer@dept.org",
+                },
+                {
+                    "step_order": 2,
+                    "name": "Approve",
+                    "step_type": ApprovalStepType.APPROVAL,
+                    "approver_type": ApproverType.PERMISSION,
+                    "approver_value": "finance.approve",
+                },
+            ],
+        )
+        records = await service.create_approval_records(
+            chain,
+            ApprovalEntityType.PURCHASE_REQUEST,
+            "leading-notify-entity",
+            500.00,
+            user_id,
+        )
+        notify_step, approve_step_record = records[0], records[1]
+
+        # The notification is auto-sent immediately, not left pending, so
+        # the approval step behind it is the current step from the start.
+        assert notify_step.status == ApprovalStepStatus.SENT
+        current = await service.get_current_pending_step(
+            ApprovalEntityType.PURCHASE_REQUEST, "leading-notify-entity", org_id
+        )
+        assert current is not None
+        assert current.id == approve_step_record.id
+
+        approved = await service.approve_step(
+            approve_step_record.id, user_id, org_id=org_id
+        )
+        assert approved.status == ApprovalStepStatus.APPROVED
+
+    async def test_email_step_token_is_issued_only_once_reachable(
+        self, db_session: AsyncSession, sample_org_data
+    ):
+        """Generating and emailing every EMAIL step's token at chain
+        creation started every step's 7-day expiry immediately. A step
+        whose predecessors took a week or more to resolve could already be
+        expired by the time FIN-15's order check would finally let it be
+        acted on -- with no resend path. Tokens are now issued (and the
+        clock started) only once a step is actually reachable.
+        """
+        service = FinanceService(db_session)
+        org_id = sample_org_data["id"]
+        user_id = sample_org_data.get("admin_id", "test-user-id")
+
+        chain = await service.create_approval_chain(
+            org_id=org_id,
+            created_by=user_id,
+            name="Two External Approvers",
+            applies_to=ApprovalEntityType.PURCHASE_REQUEST,
+            is_default=True,
+            steps=[
+                {
+                    "step_order": 1,
+                    "name": "First Approver",
+                    "step_type": ApprovalStepType.APPROVAL,
+                    "approver_type": ApproverType.EMAIL,
+                    "approver_value": "first@dept.org",
+                },
+                {
+                    "step_order": 2,
+                    "name": "Second Approver",
+                    "step_type": ApprovalStepType.APPROVAL,
+                    "approver_type": ApproverType.EMAIL,
+                    "approver_value": "second@dept.org",
+                },
+            ],
+        )
+        records = await service.create_approval_records(
+            chain,
+            ApprovalEntityType.PURCHASE_REQUEST,
+            "deferred-token-entity",
+            1000.00,
+            user_id,
+        )
+        first_step, second_step = records[0], records[1]
+
+        # The reachable (first) step's token is issued right away; the
+        # unreachable (second) step's token does not exist yet.
+        assert first_step.approval_token is not None
+        assert first_step.token_expires_at is not None
+        assert second_step.approval_token is None
+        assert second_step.token_expires_at is None
+
+        await service.approve_by_token(first_step.approval_token, "looks good")
+
+        updated = await service.get_approval_records(
+            ApprovalEntityType.PURCHASE_REQUEST, "deferred-token-entity", org_id
+        )
+        second_updated = next(r for r in updated if r.id == second_step.id)
+        # Now reachable: its token is issued (and its clock starts) at the
+        # moment it actually becomes actionable, not before.
+        assert second_updated.approval_token is not None
+        assert second_updated.token_expires_at is not None
+
     async def test_auto_approve_under_threshold(
         self, db_session: AsyncSession, sample_org_data
     ):
@@ -747,6 +906,125 @@ class TestApprovalChainService:
 
         # The owning org still works.
         approved = await service.approve_step(records[0].id, user_id, org_id=org_id)
+        assert approved.status == ApprovalStepStatus.APPROVED
+
+    async def test_a_later_step_cannot_be_acted_on_before_an_earlier_one(
+        self, db_session: AsyncSession, sample_org_data
+    ):
+        """create_approval_records marks every step PENDING up front, so
+        without an explicit order check a later-step approver (or anyone who
+        knows/is emailed that record's id/token) could approve or deny out
+        of turn -- and a deny finalizes the whole entity immediately,
+        killing the request before earlier reviewers ever weighed in.
+        """
+        service = FinanceService(db_session)
+        org_id = sample_org_data["id"]
+        user_id = sample_org_data.get("admin_id", "test-user-id")
+
+        chain = await service.create_approval_chain(
+            org_id=org_id,
+            created_by=user_id,
+            name="Sequential",
+            applies_to=ApprovalEntityType.PURCHASE_REQUEST,
+            is_default=True,
+            steps=[
+                {
+                    "step_order": 1,
+                    "name": "Supervisor",
+                    "step_type": ApprovalStepType.APPROVAL,
+                    "approver_type": ApproverType.PERMISSION,
+                    "approver_value": "finance.approve",
+                },
+                {
+                    "step_order": 2,
+                    "name": "Treasurer",
+                    "step_type": ApprovalStepType.APPROVAL,
+                    "approver_type": ApproverType.PERMISSION,
+                    "approver_value": "finance.approve",
+                },
+            ],
+        )
+        records = await service.create_approval_records(
+            chain,
+            ApprovalEntityType.PURCHASE_REQUEST,
+            "order-entity",
+            1000.00,
+            user_id,
+        )
+        step1, step2 = records[0], records[1]
+
+        with pytest.raises(ValueError, match="earlier approval step"):
+            await service.approve_step(step2.id, user_id, org_id=org_id)
+        with pytest.raises(ValueError, match="earlier approval step"):
+            await service.deny_step(step2.id, user_id, "no", org_id=org_id)
+
+        # Once step 1 is resolved, step 2 becomes the current step.
+        await service.approve_step(step1.id, user_id, org_id=org_id)
+        approved = await service.approve_step(step2.id, user_id, org_id=org_id)
+        assert approved.status == ApprovalStepStatus.APPROVED
+
+    async def test_current_step_tiebreak_matches_the_pending_approvals_list(
+        self, db_session: AsyncSession, sample_org_data
+    ):
+        """Nothing stops two steps in one chain from sharing a step_order,
+        and records for one entity are created in the same instant, so a
+        step_order+created_at tie is possible. get_pending_approvals'
+        has_earlier_pending_step subquery breaks such a tie with the
+        record id; get_current_pending_step must break it the same way, or
+        it can reject the exact step that list presented to the user as
+        the one to act on.
+        """
+        service = FinanceService(db_session)
+        org_id = sample_org_data["id"]
+        user_id = sample_org_data.get("admin_id", "test-user-id")
+
+        chain = await service.create_approval_chain(
+            org_id=org_id,
+            created_by=user_id,
+            name="Duplicate Order",
+            applies_to=ApprovalEntityType.PURCHASE_REQUEST,
+            is_default=True,
+            steps=[
+                {
+                    "step_order": 1,
+                    "name": "Reviewer A",
+                    "step_type": ApprovalStepType.APPROVAL,
+                    "approver_type": ApproverType.PERMISSION,
+                    "approver_value": "finance.approve",
+                },
+                {
+                    "step_order": 1,
+                    "name": "Reviewer B",
+                    "step_type": ApprovalStepType.APPROVAL,
+                    "approver_type": ApproverType.PERMISSION,
+                    "approver_value": "finance.approve",
+                },
+            ],
+        )
+        records = await service.create_approval_records(
+            chain,
+            ApprovalEntityType.PURCHASE_REQUEST,
+            "tie-entity",
+            1000.00,
+            user_id,
+        )
+        # Force the tie the DB might otherwise avoid by microseconds.
+        tied_at = datetime.now(timezone.utc)
+        for record in records:
+            record.created_at = tied_at
+        await db_session.flush()
+
+        lower_id_record = min(records, key=lambda r: r.id)
+        current = await service.get_current_pending_step(
+            ApprovalEntityType.PURCHASE_REQUEST, "tie-entity", org_id
+        )
+        assert current is not None
+        assert current.id == lower_id_record.id
+
+        # And it's exactly the step the actionable-list query would present.
+        approved = await service.approve_step(
+            lower_id_record.id, user_id, org_id=org_id
+        )
         assert approved.status == ApprovalStepStatus.APPROVED
 
     async def test_get_pending_approvals_is_confined_to_the_caller_org(
@@ -1288,6 +1566,17 @@ class TestDuesService:
         summary = await service.get_dues_summary(sample_org_data["id"])
         assert summary["total_expected"] == 0
         assert summary["collection_rate"] == 0
+
+    def test_dues_schedule_update_accepts_integer_grace_period(self):
+        """grace_period_days is an int column (app/models/finance.py); a
+        decimal_places constraint copy-pasted from the neighboring Decimal
+        fields made pydantic-core raise TypeError on every valid integer
+        instead of validating it, breaking every dues-schedule update that
+        touched this field."""
+        from app.schemas.finance import DuesScheduleUpdate
+
+        update = DuesScheduleUpdate(grace_period_days=5)
+        assert update.grace_period_days == 5
 
 
 # ============================================

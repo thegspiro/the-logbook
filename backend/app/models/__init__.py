@@ -276,6 +276,7 @@ from app.models.minute import (
 from app.models.nfc_tag import NfcCredentialType, NfcTag, NfcTagStatus
 from app.models.notification import (
     DepartmentMessage,
+    DepartmentMessageDelivery,
     DepartmentMessageRead,
     MessagePriority,
     MessageTargetType,
@@ -435,6 +436,7 @@ __all__ = [
     "NotificationChannel",
     # Department message models
     "DepartmentMessage",
+    "DepartmentMessageDelivery",
     "DepartmentMessageRead",
     "MessagePriority",
     "MessageTargetType",

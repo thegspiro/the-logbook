@@ -60,6 +60,16 @@ const mockFacility2 = {
   updatedAt: '2025-02-01T00:00:00Z',
 };
 
+const deferred = <T>() => {
+  let resolve!: (value: T) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise;
+    reject = rejectPromise;
+  });
+  return { promise, resolve, reject };
+};
+
 describe('facilitiesStore', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -121,6 +131,22 @@ describe('facilitiesStore', () => {
       resolvePromise([mockFacility]);
       await loadPromise;
 
+      expect(useFacilitiesStore.getState().isLoading).toBe(false);
+    });
+
+    it('ignores a stale response that completes after a newer load', async () => {
+      const first = deferred<(typeof mockFacility)[]>();
+      const second = deferred<(typeof mockFacility)[]>();
+      mockGetFacilities.mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
+
+      const firstLoad = useFacilitiesStore.getState().loadFacilities();
+      const secondLoad = useFacilitiesStore.getState().loadFacilities();
+      second.resolve([mockFacility2]);
+      await secondLoad;
+      first.resolve([mockFacility]);
+      await firstLoad;
+
+      expect(useFacilitiesStore.getState().facilities).toEqual([mockFacility2]);
       expect(useFacilitiesStore.getState().isLoading).toBe(false);
     });
   });
@@ -266,6 +292,25 @@ describe('facilitiesStore', () => {
       expect(mockGetFacilities).toHaveBeenCalledWith({ is_archived: false });
     });
 
+    it('waits for a failed refresh and exposes its error before resolving', async () => {
+      const refresh = deferred<(typeof mockFacility)[]>();
+      mockCreateFacility.mockResolvedValue(mockFacility);
+      mockGetFacilities.mockReturnValue(refresh.promise);
+
+      const creation = useFacilitiesStore.getState().createFacility({ name: mockFacility.name });
+      let resolved = false;
+      const resolution = creation.then(() => {
+        resolved = true;
+      });
+      await Promise.resolve();
+      expect(resolved).toBe(false);
+
+      refresh.reject(new Error('Refresh failed'));
+      await resolution;
+      expect(resolved).toBe(true);
+      expect(useFacilitiesStore.getState().error).toBe('Refresh failed');
+    });
+
     it('should propagate errors on creation failure', async () => {
       mockCreateFacility.mockRejectedValue(new Error('Validation error'));
 
@@ -274,16 +319,36 @@ describe('facilitiesStore', () => {
   });
 
   describe('updateFacility', () => {
-    it('should update facility and refresh detail', async () => {
-      mockUpdateFacility.mockResolvedValue(undefined);
-      mockGetFacility.mockResolvedValue({ ...mockFacility, name: 'Updated Station' });
-      mockGetFacilities.mockResolvedValue([{ ...mockFacility, name: 'Updated Station' }]);
+    it('updates list and selected detail atomically from the mutation response', async () => {
+      const updatedFacility = { ...mockFacility, name: 'Updated Station' };
+      mockUpdateFacility.mockResolvedValue(updatedFacility);
+      useFacilitiesStore.setState({ facilities: [mockFacility, mockFacility2], selectedFacility: mockFacility });
 
       await useFacilitiesStore.getState().updateFacility('f1', { name: 'Updated Station' });
 
       expect(mockUpdateFacility).toHaveBeenCalledWith('f1', { name: 'Updated Station' });
-      expect(mockGetFacility).toHaveBeenCalledWith('f1');
-      expect(mockGetFacilities).toHaveBeenCalledWith({ is_archived: false });
+      expect(useFacilitiesStore.getState().facilities).toEqual([updatedFacility, mockFacility2]);
+      expect(useFacilitiesStore.getState().selectedFacility).toEqual(updatedFacility);
+      expect(mockGetFacility).not.toHaveBeenCalled();
+      expect(mockGetFacilities).not.toHaveBeenCalled();
+    });
+
+    it('keeps the newest rapid update when responses complete out of order', async () => {
+      const first = deferred<typeof mockFacility>();
+      const second = deferred<typeof mockFacility>();
+      mockUpdateFacility.mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
+      useFacilitiesStore.setState({ facilities: [mockFacility], selectedFacility: mockFacility });
+
+      const firstUpdate = useFacilitiesStore.getState().updateFacility('f1', { name: 'First' });
+      const secondUpdate = useFacilitiesStore.getState().updateFacility('f1', { name: 'Second' });
+      const newest = { ...mockFacility, name: 'Second' };
+      second.resolve(newest);
+      await secondUpdate;
+      first.resolve({ ...mockFacility, name: 'First' });
+      await firstUpdate;
+
+      expect(useFacilitiesStore.getState().facilities[0]).toEqual(newest);
+      expect(useFacilitiesStore.getState().selectedFacility).toEqual(newest);
     });
 
     it('should propagate errors on update failure', async () => {
@@ -294,24 +359,57 @@ describe('facilitiesStore', () => {
   });
 
   describe('archiveFacility / restoreFacility', () => {
-    it('should archive facility and refresh list', async () => {
-      mockArchiveFacility.mockResolvedValue(undefined);
-      mockGetFacilities.mockResolvedValue([]);
+    it('removes an archived facility locally and updates selected detail', async () => {
+      const archived = { ...mockFacility, isArchived: true };
+      mockArchiveFacility.mockResolvedValue(archived);
+      useFacilitiesStore.setState({
+        facilities: [mockFacility, mockFacility2],
+        facilitiesTotal: 2,
+        selectedFacility: mockFacility,
+      });
 
       await useFacilitiesStore.getState().archiveFacility('f1');
 
       expect(mockArchiveFacility).toHaveBeenCalledWith('f1');
-      expect(mockGetFacilities).toHaveBeenCalledWith({ is_archived: false });
+      expect(useFacilitiesStore.getState().facilities).toEqual([mockFacility2]);
+      expect(useFacilitiesStore.getState().facilitiesTotal).toBe(1);
+      expect(useFacilitiesStore.getState().selectedFacility).toEqual(archived);
+      expect(mockGetFacilities).not.toHaveBeenCalled();
     });
 
-    it('should restore facility and refresh list', async () => {
-      mockRestoreFacility.mockResolvedValue(undefined);
-      mockGetFacilities.mockResolvedValue([mockFacility]);
+    it('inserts a restored facility locally without duplicating it', async () => {
+      mockRestoreFacility.mockResolvedValue(mockFacility);
+      useFacilitiesStore.setState({
+        facilities: [mockFacility2],
+        facilitiesTotal: 1,
+        selectedFacility: { ...mockFacility, isArchived: true },
+      });
 
       await useFacilitiesStore.getState().restoreFacility('f1');
 
       expect(mockRestoreFacility).toHaveBeenCalledWith('f1');
-      expect(mockGetFacilities).toHaveBeenCalledWith({ is_archived: false });
+      expect(useFacilitiesStore.getState().facilities).toEqual([mockFacility, mockFacility2]);
+      expect(useFacilitiesStore.getState().facilitiesTotal).toBe(2);
+      expect(useFacilitiesStore.getState().selectedFacility).toEqual(mockFacility);
+      expect(mockGetFacilities).not.toHaveBeenCalled();
+    });
+
+    it('does not let a stale archive overwrite a newer restore', async () => {
+      const archive = deferred<typeof mockFacility>();
+      const restore = deferred<typeof mockFacility>();
+      mockArchiveFacility.mockReturnValue(archive.promise);
+      mockRestoreFacility.mockReturnValue(restore.promise);
+      useFacilitiesStore.setState({ facilities: [mockFacility], facilitiesTotal: 1, selectedFacility: mockFacility });
+
+      const archiveMutation = useFacilitiesStore.getState().archiveFacility('f1');
+      const restoreMutation = useFacilitiesStore.getState().restoreFacility('f1');
+      restore.resolve(mockFacility);
+      await restoreMutation;
+      archive.resolve({ ...mockFacility, isArchived: true });
+      await archiveMutation;
+
+      expect(useFacilitiesStore.getState().facilities).toEqual([mockFacility]);
+      expect(useFacilitiesStore.getState().selectedFacility).toEqual(mockFacility);
     });
 
     it('should propagate errors on archive failure', async () => {

@@ -5,6 +5,7 @@ Covers channel routing by priority/ack and the in-app fan-out. DB and the
 email/SMS services are mocked; no MySQL, no network.
 """
 
+import asyncio
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -42,6 +43,11 @@ def _db():
     db.add = MagicMock()
     db.commit = AsyncMock()
     db.rollback = AsyncMock()
+    db.flush = AsyncMock()
+    nested = MagicMock()
+    nested.__aenter__ = AsyncMock()
+    nested.__aexit__ = AsyncMock(return_value=False)
+    db.begin_nested = MagicMock(return_value=nested)
     # org lookup during escalation
     db.execute = AsyncMock(
         return_value=MagicMock(
@@ -75,6 +81,15 @@ def _patch_sms_consent(*consented_ids):
 
 
 class TestInAppFanOut:
+    async def test_expired_message_is_not_delivered(self):
+        db = _db()
+        message = _msg()
+        message.expires_at = datetime.now() - timedelta(minutes=1)
+        with _patch_recipients([_user("u1")]) as recipients:
+            await MessageDeliveryService(db).deliver(message)
+        recipients.assert_not_awaited()
+        db.add.assert_not_called()
+
     async def test_creates_one_notification_per_recipient_excluding_author(self):
         db = _db()
         recipients = [_user("u1"), _user("author"), _user("u2")]
@@ -85,7 +100,10 @@ class TestInAppFanOut:
         assert db.add.call_count == 2
         db.commit.assert_awaited()
         notifications = [call.args[0] for call in db.add.call_args_list]
-        assert all(item.action_url == "/messages/m1" for item in notifications)
+        assert [item.action_url for item in notifications] == [
+            "/messages/m1",
+            "/messages/m1",
+        ]
 
     async def test_no_recipients_is_a_noop(self):
         db = _db()
@@ -178,7 +196,7 @@ class TestEmailRecipientFiltering:
                 pass
 
             async def send_email(self, to_emails, **kwargs):
-                sent["to"] = to_emails
+                sent.setdefault("to", []).extend(to_emails)
                 return (len(to_emails), 0)
 
         svc = MessageDeliveryService(db)
@@ -190,6 +208,82 @@ class TestEmailRecipientFiltering:
 
         # Both addressable members are emailed, including the opted-out one.
         assert sent["to"] == ["in@fd.co", "out@fd.co"]
+
+
+class TestReportedFailuresAreNotRecordedAsDelivered:
+    """A provider that reports failure instead of raising must not read as sent.
+
+    ``EmailService.send_email`` returns ``(sent, failed)`` and
+    ``SMSService.send_bulk_sms`` returns a count; neither raises when the
+    channel is disabled or the provider rejects a recipient. Marking those
+    attempts "delivered" is not just a wrong audit row — the idempotency key
+    then suppresses every later retry, so the member never gets the message and
+    the record says they did. Email is the channel of record, which is exactly
+    what this would silently drop.
+    """
+
+    async def test_email_reporting_zero_sent_is_recorded_as_failed(self):
+        db = _db()
+        recipients = [_user("u1", email="nobody@fd.co")]
+
+        class _FailingEmail:
+            def __init__(self, organization=None):
+                pass
+
+            async def send_email(self, to_emails, **kwargs):
+                return (0, len(to_emails))  # disabled provider / rejected recipient
+
+        svc = MessageDeliveryService(db)
+        claimed = []
+
+        async def _claim(message, user, channel):
+            attempt = SimpleNamespace(
+                status="pending", error=None, delivered_at=None, channel=channel
+            )
+            claimed.append(attempt)
+            return attempt
+
+        svc._claim_delivery = _claim
+        with patch("app.services.email_service.EmailService", _FailingEmail), patch(
+            "app.services.email_service.wrap_email_body",
+            return_value="<html></html>",
+        ):
+            await svc._send_email(_msg(priority="urgent"), recipients, org=None)
+
+        assert len(claimed) == 1
+        assert claimed[0].status == "failed"
+        assert claimed[0].delivered_at is None
+
+    async def test_sms_reporting_zero_sent_is_recorded_as_failed(self):
+        db = _db()
+        recipients = [_user("u1", mobile="+15551234567")]
+        svc = MessageDeliveryService(db)
+        claimed = []
+
+        async def _claim(message, user, channel):
+            attempt = SimpleNamespace(
+                status="pending", error=None, delivered_at=None, channel=channel
+            )
+            claimed.append(attempt)
+            return attempt
+
+        svc._claim_delivery = _claim
+        fake_sms = MagicMock()
+        fake_sms.enabled = True
+        fake_sms.send_bulk_sms = AsyncMock(return_value=0)  # Twilio rejected it
+        with patch(
+            "app.services.sms_service.SMSService", return_value=fake_sms
+        ), _patch_sms_consent("u1"):
+            await svc._send_sms(
+                _msg(priority="urgent"),
+                recipients,
+                org=SimpleNamespace(name="FD"),
+            )
+
+        fake_sms.send_bulk_sms.assert_awaited_once()
+        assert len(claimed) == 1
+        assert claimed[0].status == "failed"
+        assert claimed[0].delivered_at is None
 
 
 class TestSmsGating:
@@ -224,8 +318,8 @@ class TestSmsGating:
                 recipients,
                 org=SimpleNamespace(name="FD"),
             )
-        fake_sms.send_bulk_sms.assert_awaited_once()
-        numbers = fake_sms.send_bulk_sms.await_args.args[0]
+        assert fake_sms.send_bulk_sms.await_count == 2
+        numbers = [call.args[0][0] for call in fake_sms.send_bulk_sms.await_args_list]
         assert numbers == ["+1555mobile", "+1555phone"]
 
     async def test_sms_requires_consent_even_when_the_channel_is_on(self):
@@ -343,6 +437,79 @@ class TestPublishScheduledMessages:
         assert due.scheduled_at is None
         deliver.assert_awaited_once()
         db.commit.assert_awaited()
+        claim_statement = db.execute.await_args.args[0]
+        assert claim_statement._for_update_arg.skip_locked is True
+
+    async def test_two_publishers_and_retry_deliver_each_channel_once(self):
+        """A second publisher/retry loses the same durable delivery keys."""
+        recipient = _user("u1", email="member@fd.co", mobile="+15551234567")
+        claimed = set()
+        in_app = set()
+        channel_sends = {"email": 0, "sms": 0}
+
+        class RacingDelivery(MessageDeliveryService):
+            async def _create_in_app(self, message, recipients):
+                # Models the notification_logs unique constraint.
+                for user in recipients:
+                    in_app.add((message.id, user.id, "in_app"))
+
+            async def _send_email(self, message, recipients, org):
+                key = (message.id, recipients[0].id, "email")
+                if key not in claimed:
+                    claimed.add(key)
+                    channel_sends["email"] += 1
+
+            async def _send_sms(self, message, recipients, org):
+                key = (message.id, recipients[0].id, "sms")
+                if key not in claimed:
+                    claimed.add(key)
+                    channel_sends["sms"] += 1
+
+        first, second = RacingDelivery(_db()), RacingDelivery(_db())
+        target = MessagingService(first.db)
+        target._targeted_users = AsyncMock(return_value=[recipient])
+        # One shared patch encloses both workers, avoiding concurrent patch
+        # contexts while the deliveries themselves genuinely overlap.
+        with patch(
+            "app.services.messaging_service.MessagingService", return_value=target
+        ):
+            await asyncio.gather(
+                first.deliver(_msg(priority="urgent")),
+                second.deliver(_msg(priority="urgent")),
+            )
+            # A later task retry must also observe the durable keys.
+            await first.deliver(_msg(priority="urgent"))
+
+        assert in_app == {("m1", "u1", "in_app")}
+        assert channel_sends == {"email": 1, "sms": 1}
+
+    async def test_deactivates_expired_due_message_without_delivery(self):
+        from app.services.scheduled_tasks import run_publish_scheduled_messages
+
+        due = SimpleNamespace(
+            scheduled_at=datetime.now(timezone.utc) - timedelta(minutes=2),
+            expires_at=datetime.now() - timedelta(minutes=1),
+            is_active=True,
+            deleted_at=None,
+        )
+        db = MagicMock(commit=AsyncMock())
+        result_set = MagicMock()
+        result_set.scalars.return_value.all.return_value = [due]
+        db.execute = AsyncMock(return_value=result_set)
+
+        with patch.object(
+            MessageDeliveryService, "deliver", new=AsyncMock()
+        ) as deliver:
+            result = await run_publish_scheduled_messages(db)
+
+        assert result == {
+            "task": "publish_scheduled_messages",
+            "published": 0,
+            "expired": 1,
+        }
+        assert due.is_active is False
+        assert due.scheduled_at is None
+        deliver.assert_not_awaited()
 
 
 if __name__ == "__main__":  # pragma: no cover

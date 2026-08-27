@@ -17,6 +17,7 @@ describe('Facility detail section contract', () => {
       'insurance',
       'occupants',
       'compliance',
+      'files',
     ]);
   });
 
@@ -35,6 +36,7 @@ describe('Facility detail section contract', () => {
       'contacts',
       'shutoffs',
       'compliance',
+      'files',
     ]);
   });
 

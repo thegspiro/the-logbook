@@ -8,6 +8,7 @@ import {
   Settings,
   Shield,
   ShieldCheck,
+  Files,
   UserRound,
   Users,
   Wrench,
@@ -27,7 +28,8 @@ export type FacilitySectionId =
   | 'capital-projects'
   | 'insurance'
   | 'occupants'
-  | 'compliance';
+  | 'compliance'
+  | 'files';
 
 export interface FacilityDetailSection {
   id: FacilitySectionId;
@@ -57,6 +59,7 @@ export const FACILITY_DETAIL_SECTIONS: FacilityDetailSection[] = [
   { id: 'insurance', label: 'Insurance', icon: Shield, sensitive: true },
   { id: 'occupants', label: 'Occupants', icon: UserRound, sensitive: true },
   { id: 'compliance', label: 'Compliance', icon: ShieldCheck },
+  { id: 'files', label: 'Files', icon: Files },
 ];
 
 export const getVisibleFacilitySections = (canViewSensitive: boolean): FacilityDetailSection[] =>

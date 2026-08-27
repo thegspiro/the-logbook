@@ -1,7 +1,7 @@
 """Create testing_checklist_entries.
 
 Revision ID: b7c3e91d84af
-Revises: 8fb3757b80ec
+Revises: d4e5f6a7b8c9
 
 Backs the in-app testing home (`/testing`), whose run used to live in one
 browser's localStorage. A checklist of permission gates is only meaningful
@@ -23,7 +23,12 @@ import sqlalchemy as sa
 from alembic import op
 
 revision = "b7c3e91d84af"
-down_revision = "8fb3757b80ec"
+# Re-pointed onto main's head when this branch was brought up to date: main
+# gained c7e2b9a41f83 -> d4e5f6a7b8c9 from the same parent, and two heads make
+# `alembic upgrade head` abort outright — which takes out every CI job that
+# builds the schema, not merely the newest revision. Safe to re-point rather
+# than add a merge node: these two revisions have never left this branch.
+down_revision = "d4e5f6a7b8c9"
 branch_labels = None
 depends_on = None
 

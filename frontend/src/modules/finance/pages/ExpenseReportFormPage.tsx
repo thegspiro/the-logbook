@@ -196,11 +196,13 @@ const ExpenseReportFormPage: React.FC = () => {
       const payload: Record<string, unknown> = {
         title: data.title,
         fiscalYearId: data.fiscalYearId,
-        totalAmount,
         lineItems: lineItems.map((item) => {
           const li: Record<string, unknown> = {
             description: item.description,
-            amount: Number(item.amount),
+            // A DecimalString, matching PurchaseRequestFormPage/
+            // CheckRequestFormPage -- never Number()/parseFloat() at the
+            // wire boundary, which round-trips through a JS float.
+            amount: item.amount.toFixed(2),
             dateIncurred: item.dateIncurred,
             expenseType: item.expenseType,
           };

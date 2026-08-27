@@ -16,12 +16,292 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-Feature 01 (auth & session lifecycle, pass 2) — [PR #1929](https://github.com/thegspiro/the-logbook/pull/1929),
-branch `claude/security-review-auth-01-pass2`. No findings, no code changes
-(docs only). See log entry below and `AUTH-01-auth-session.md`'s "Pass 2"
-section.
+Feature 05 (finance & approvals, pass 2) —
+[PR #1946](https://github.com/thegspiro/the-logbook/pull/1946). Chain so
+far: #1942 (docs-only "no findings") merged before Codex's review landed ->
+#1944 (fix for FIN-10 through FIN-14) also merged before a second Codex
+round on it caught FIN-15 (approval-chain step ordering) -> #1946 (fix for
+FIN-15) had CI go fully green but had not yet auto-merged when a third
+Codex round caught FIN-16/17/18 (enforcing order surfaced two real
+deadlocks and a portability gap) -- that fix was pushed directly to #1946
+while it was still open, ahead of the auto-merge for once. Watching for
+either a fourth Codex round or a clean merge. Next after this lands clean:
+06 elections & ballots, pass 2.
 
 ---
+
+### 2026-08-27 — Feature 05 (Finance & approvals), pass 2 — Codex round 3 on #1946 caught FIN-16/17/18 (deadlocks + portability), fixed
+
+Enforcing chain order (FIN-15) surfaced two real deadlocks and one
+portability gap that FIN-15's own tests didn't cover:
+
+- **FIN-16** — `create_approval_records` never advanced any step at
+  creation time (only `approve_step`/`approve_by_token` did, after a
+  success). A chain starting with a NOTIFICATION step (or one following
+  only auto-approved steps) left that notification `PENDING` forever, and
+  FIN-15's order check then refused to let the real approval step skip
+  past it -- a hard deadlock. Fixed by calling step advancement once,
+  immediately after creating a chain's records.
+- **FIN-17** — every EMAIL step's token was generated and its 7-day expiry
+  clock started at chain creation, regardless of position. Combined with
+  FIN-15, a step whose predecessors took a week or more could expire
+  before ever being reachable, with no resend path -- neither "act early"
+  nor "act on time" was possible. Fixed by deferring token generation and
+  the invite email until a step actually becomes reachable, generalizing
+  `_advance_notification_steps` (renamed `_advance_reachable_steps`) to
+  handle both notification-send and token-issue in one pass.
+- **FIN-18** — `get_approval_records` (which `get_current_pending_step`
+  reads) ordered by `step_order`+`created_at` with no `id` tiebreaker, but
+  `get_pending_approvals`' own subquery already breaks such ties with
+  `id` -- nothing stops two steps sharing a `step_order`, and records for
+  one entity are created in the same instant. On a database that doesn't
+  happen to return ties in `id` order, FIN-15's check could reject the
+  exact step the pending-approvals list told the user was actionable.
+  Fixed by adding the same `id` tiebreaker.
+
+Three new regression tests (DB-backed), two of the three confirmed to fail
+pre-fix via `git stash`; the third (FIN-18) asserts correct, portable
+behavior rather than a locally-reproducible failure -- this dev database
+happens to return the tie in primary-key order without the tiebreaker.
+Completion gate re-run clean: flake8/black/isort, migrations 383
+revisions, scoped tests 246 passed/1 skipped, full backend suite 9065
+passed/22 skipped/0 failed. Pushed directly to #1946 (still open when
+this landed, CI green but not yet auto-merged).
+
+### 2026-08-27 — Feature 05 (Finance & approvals), pass 2 — Codex round 2 on #1944 caught FIN-15 (approval-chain ordering), fixed
+
+`create_approval_records` marks every step in a chain `PENDING` up front —
+including emailing an EMAIL-type step's token immediately, regardless of
+its position — but none of `approve_step`/`deny_step`/`approve_by_token`/
+`deny_by_token` checked that the acted-on record was the chain's _current_
+step (earliest `step_order` still `PENDING`), only that its own status was
+`PENDING`. A `get_current_pending_step` helper already existed to answer
+that and was never called anywhere — dead code next to the gap it should
+have closed. A later-step approver (by record id, or by the token emailed
+to them at the same moment as everyone else's) could act out of order;
+denial is the sharp edge, since a single deny finalizes the whole entity
+immediately, killing the request before earlier reviewers ever weighed in.
+Fixed with a shared `_ensure_current_step` check wired into all four action
+paths, inside the same lock each already holds for FIN-10. Two new
+regression tests (one DB-backed multi-step-chain test, one mock-based
+token-path test), both confirmed to fail pre-fix via `git stash`. Full
+completion gate re-run clean (flake8/black/isort, migrations 383 revisions,
+scoped tests 243 passed/1 skipped, full backend suite 9060 passed/22
+skipped/0 failed, frontend gates clean). Pushed to PR #1944, which itself
+merged before this commit landed — re-pushed as a fresh PR, #1946, rebased
+onto current `main` (see Open PR above).
+
+### 2026-08-27 — Feature 05 (Finance & approvals), pass 2 — Codex caught 5 real bugs, all fixed
+
+Codex reviewed PR #1942 (the "no findings" doc-only push below) and flagged
+6 issues; 5 verified as real defects (not just documentation gaps) and
+fixed, 1 was a documentation correction. #1942 merged (docs-only, as
+originally pushed) before this fix commit could be pushed to it, so the fix
+went out as a fresh PR, #1944, rebased onto current `main`:
+
+- **FIN-10** — `approve_step`/`deny_step` read `ApprovalStepRecord` without
+  `.with_for_update()`, unlike the token-based `approve_by_token`/
+  `deny_by_token` siblings. Two approvers acting on the same step at once
+  could both pass the pending check and both finalize -> double-encumbered
+  budget. Fixed by locking both reads.
+- **FIN-11** — `update_budget` (`PUT /budgets/{id}`) set `amount_budgeted`
+  with no lock and no check against `amount_spent + amount_encumbered` —
+  a silent side door around the hard ceiling `_mutate_budget` enforces.
+  Fixed: same locking read, raises `BudgetLimitExceededError` on a
+  reduction below the committed total (the endpoint's exception handler
+  for this was previously dead code).
+- **FIN-12** — `DuesScheduleUpdate.grace_period_days` had a copy-pasted
+  `decimal_places=2` constraint on an `int` field; pydantic-core raised a
+  bare `TypeError` on every valid integer, breaking the update path
+  entirely. Fixed by dropping the stray constraint.
+- **FIN-13** — `ExportRequest`'s date-range validator compared naive and
+  aware datetimes directly, raising an uncaught `TypeError` (a 500) for a
+  mixed-format request instead of a 422. Fixed with a `field_validator`
+  normalizing naive input to UTC, mirroring `schemas/election.py`'s
+  `_as_utc`.
+- **FIN-14** — `ExpenseReportFormPage.tsx` was the one finance form the
+  `MonetaryAmount`/`DecimalString` hardening pass missed (also: the frontend
+  file count was 10, not 8 as first documented) — it still sent
+  `Number(item.amount)`, a live float-precision gap since the backend
+  already required a 2-decimal `Decimal`. Fixed to `.toFixed(2)`, matching
+  the sibling forms.
+- **Doc-only correction** — the migration review wrongly said `status` was
+  nullable and its table-existence guard unnecessary; `status` is
+  `nullable=False` and the guard is required (Pitfall #26,
+  `finance_export_logs` is `create_all`-only). The migration code itself
+  was already correct.
+
+Every fix independently re-verified against the real code (reproduced each
+schema TypeError directly; confirmed the missing lock by reading the token
+path; confirmed the frontend gap against the backend schema it feeds) before
+fixing — not taken on Codex's word. Six new regression tests added, each
+confirmed to fail on the pre-fix code via `git stash`. Completion gate:
+flake8/black/isort clean, migrations valid, scoped tests 240 passed/1
+skipped, full backend suite green (re-confirmed after the rebase onto
+`main`), frontend `tsc`/`eslint`/`vitest` (80 tests) clean. Pushed as
+PR #1944.
+
+### 2026-08-27 — Feature 05 (Finance & approvals), pass 2 — no findings
+
+Full-domain diff since pass 1's merge (`51ce8547`, PR #1809): `finance.py`,
+`finance_service.py`, `finance_approvals.py` (already covered by PUB-03,
+re-confirmed unchanged), `models/finance.py`, `schemas/finance.py`, the new
+`add_export_stream_status` migration, and 8 finance frontend files. Two
+background agents reviewed the budget/export and endpoint/schema/model
+halves independently — both reported clean; the two highest-stakes claims
+(`_mutate_budget`'s locking read, `get_pending_approvals`'s org-scoped
+`union_all`) were re-verified by direct read rather than trusted from the
+agent summaries alone. No code changes — completion gate: flake8/black/
+isort clean, migrations valid (382 revisions), scoped tests 233 passed,
+full backend suite 9042 passed/22 skipped/0 failed, frontend `tsc`/`eslint`/
+`vitest` (80 tests) all clean. Rotation row 05 -> awaiting PR merge. Next:
+06 elections & ballots.
+
+### 2026-08-27 — Feature 04 (Storefront & payments), pass 2 ✅ merged — PR #1935
+
+Merged. Codex caught a real scoping gap (the diff had covered only the 7
+files pass 1's header literally listed, missing models/schemas/a new
+util/6 migrations/11 frontend files) before merge — corrected, still no
+findings after the full re-sweep, thread resolved. **Methodology note for
+future iterations**: scope each pass-2 diff to everything under the
+feature's domain (models, schemas, services, endpoints, utils, migrations,
+frontend module), not just the exact files a prior pass's header happened
+to enumerate — a real feature can land touching more of a domain than the
+original file list named. Rotation row 04 -> done for pass 2. Next: 05
+finance & approvals.
+
+### 2026-08-27 — Feature 04 (Storefront & payments), pass 2 — no findings
+
+Only 2 of the 7 pass-1-declared files changed on their own: `storefront.py`
+(two new display fields) and `storefront_service.py` (an embroidery
+thread-color/personalization-method feature plus a variant `sort_order`
+fix making it fully server-computed). SF-6's separation-of-duties guard in
+`record_payment` re-verified present and unmodified; SF-5's guard tests
+still pass.
+
+**Update:** Codex reviewed PR #1935 and found the initial pass scoped its
+diff only to the 7 files pass 1's header literally listed, missing that
+the same embroidery feature also touched `models/storefront.py`,
+`schemas/storefront.py`, a new `utils/size_order.py`, 6 migrations
+(including 3 seeded-grant backfills needing Pitfall #23 scrutiny), and 11
+frontend files — and the doc had wrongly claimed "no frontend files
+touched." Re-swept properly: all of it is clean — closed-enum validation
+end to end on both backend and frontend, the grant migrations correctly
+`is_system`/frozen-snapshot scoped, no raw client value ever reaches a
+frontend `style` attribute (always resolved server-side or from a fixed
+catalog), no `dangerouslySetInnerHTML`. No findings, no code changes;
+`tsc`/`eslint`/frontend tests now actually run and pass. Replied and
+resolved.
+
+Completion gate: flake8/black/isort clean, `validate_migrations.py
+--strict` passed, 644/644 scoped backend tests pass (up from 533 at pass
+1), full backend suite 9040 passed / 22 skipped (pre-existing) / 0 failed,
+`tsc --noEmit` 0 errors, `eslint src/modules/storefront/` 0 errors,
+`vitest run src/modules/storefront/` 170/170 passed. Full detail in
+`SF-04-storefront-payments.md`. Next: 05 finance & approvals, once this PR
+merges.
+
+### 2026-08-27 — Feature 03 (Public surface & webhooks), pass 2 ✅ merged — PR #1934
+
+Merged. No findings — the three changed files (finance_approvals.py,
+legal.py, portal.py) were already-complete fixes for other rotation
+findings plus one new defense-in-depth improvement. Rotation row 03 -> done
+for pass 2. Next: 04 storefront & payments.
+
+### 2026-08-27 — Feature 03 (Public surface & webhooks), pass 2 — no findings
+
+Only 3 of the 12 in-scope files changed since pass 1: `finance_approvals.py`
+(a new fail-closed budget-limit error mapped to 409 — verified PUB-4's
+self-approval guard and the Pitfall-#27 locking read are both still present
+and correctly ordered ahead of it), `legal.py` (a correctness fix for
+independently-dated privacy/terms text, DOC-10 — no security-relevant
+change), and `portal.py` (a genuine new defense-in-depth fix: the portal's
+API-key-authenticated router now also checks the `public_info` module is
+enabled, closing a gap where feature 02's new `require_module` mechanism
+didn't reach this separately-mounted router — confirmed applied to all
+three relevant routes, correctly not applied to the two that don't need
+it). File count unchanged at 12, no new public endpoint. No findings, no
+code changes. Completion gate: flake8/black/isort clean,
+`validate_migrations.py --strict` passed, pass-1 guard tests 10/10 pass,
+366/366 broader scoped tests pass, full backend suite 9040 passed / 22
+skipped (pre-existing) / 0 failed. No frontend files touched. Full detail in
+`PUB-03-public-surface-webhooks.md`. Next: 04 storefront & payments, once
+this PR merges.
+
+### 2026-08-27 — Feature 02 (Permissions & roles), pass 2 ✅ merged — PR #1931
+
+Merged. Two HIGH privilege-escalation findings (PERM-3, PERM-4), both fixed;
+Codex's follow-up (PERM-3's fix could still generate spurious CRITICAL
+security alerts for an unresolvable prospect) also fixed and its thread
+resolved before merge. Rotation row 02 -> done for pass 2. Next: 03 public
+surface & webhooks.
+
+### 2026-08-27 — Feature 02 (Permissions & roles), pass 2 — 2 HIGH findings, both fixed
+
+Unlike feature 01, this feature's files grew substantially since pass 1 (up
+to +450 net lines in `org_chart_service.py`). Three parallel background
+agents reviewed org_chart, roles/role_service, and operational_ranks against
+the full diff; I reviewed `dependencies.py`'s new per-request auth/module
+caching and the `core/permissions.py` registry churn (new `EMT` rank, new
+`training.configure` permission with its Pitfall-#23-compliant migration)
+directly. org_chart and roles/role_service came back clean (one LOW
+informational note on dead code in role_service). operational_ranks
+surfaced two real HIGH findings, both independently verified by reading the
+actual code before fixing (per this rotation's standing rule) rather than
+trusting the agent report as-is:
+
+**PERM-3 (HIGH, fixed):** `POST /prospects/{id}/transfer` creates a full,
+live `User` account with a client-supplied `rank`, validated only for
+"is this rank configured" — never for whether the caller's permissions cover
+what that rank grants. Gated on `members.manage`/`prospective_members.manage`
+only, neither of which implies `security.manage`. A caller holding either
+could transfer a prospect in at `rank="fire_chief"` and mint a tenant-admin-
+equivalent account — the exact scenario `_enforce_rank_grant_ceiling`'s own
+docstring names for `create_member`, reachable through a second, unguarded
+door. Fixed by wiring the same (unmodified) ceiling helper into
+`transfer_prospect` before the service call.
+
+**PERM-4 (HIGH, fixed):** `OperationalRankService.update_rank` bulk-rewrites
+`User.rank` for every member currently holding a rank whose `rank_code` is
+renamed, with no ceiling check — renaming any currently-held rank to a
+reserved code like `fire_chief` retroactively escalates every one of its
+holders at once. Endpoint required only `settings.manage`. Fixed by
+enforcing the ceiling against the new code before the rename, only when the
+code actually changes (a rename to a non-reserved custom code, the common
+case, resolves to zero default permissions and passes trivially).
+
+Both fixes reuse `_enforce_rank_grant_ceiling` unmodified — no duplicated
+ceiling logic. Guard tests added to `test_privilege_ceiling_wiring.py`
+(source-inspection, matching this file's established pattern for exactly
+this failure class — the ORU-1/ORU-7d regressions it already guards were
+also "call site silently dropped", not broken helper logic), both verified
+to fail against the pre-fix endpoints. Two pre-existing tests needed
+updates for the new `request` parameter / extra `get_rank` lookup, not for
+any behavior change. Completion gate: flake8/black/isort clean,
+`validate_migrations.py --strict` passed, 945/945 scoped tests pass, full
+backend suite 9039 passed / 22 skipped (pre-existing) / 0 failed. No
+frontend files touched.
+
+**Update:** Codex reviewed PR #1931 and found the PERM-3 fix still let a
+caller generate a committed CRITICAL security alert for a prospect id that
+could never have been transferred (nonexistent, wrong-org, or already
+transferred) alongside `rank="fire_chief"` — not an escalation gap (still
+correctly blocked), but alert-noise that could degrade the monitoring
+channel's signal. Fixed by resolving and validating the prospect _before_
+the ceiling check, returning the same 404/400 the service would eventually
+have produced. New guard test verified to fail against the pre-correction
+ordering. Replied and resolved. Scoped tests re-run: 946/946 pass.
+
+Full detail in `PERM-02-permissions-roles.md`. Next: 03 public surface &
+webhooks, once this PR merges.
+
+### 2026-08-27 — Feature 01 (Auth & session lifecycle), pass 2 ✅ merged — PR #1929
+
+Merged. AUTH-3 (stale-response race, fixed) and AUTH-4 (unbounded roster
+query, flagged) both came from Codex's review, not the initial pass — see the
+"Update" note below. AUTH-4's thread was left open on the PR for the owner;
+it did not block the merge. Rotation row 01 -> done for pass 2. Next: 02
+permissions & roles.
 
 ### 2026-08-27 — Feature 01 (Auth & session lifecycle), pass 2
 
@@ -770,11 +1050,11 @@ each row's prior PR is recorded in the Log, not repeated here.
 | #   | Feature                   | Prefix | Principal code                                                                                                                                  | Status |
 | --- | ------------------------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
 | 00  | Cross-cutting baseline    | SEC    | whole-codebase sweeps; see `SEC-00-cross-cutting-baseline.md`                                                                                   | ✅     |
-| 01  | Auth & session lifecycle  | AUTH   | `endpoints/auth.py`, `auth_service.py`, `mfa_service.py`, `oauth_service.py`                                                                    | ⏳     |
-| 02  | Permissions & roles       | PERM   | `dependencies.py`, `core/permissions.py`, `roles.py`, `operational_ranks.py`, `officers.py`, `org_chart.py`                                     | ⬜     |
-| 03  | Public surface & webhooks | PUB    | `api/public/*` (20 unauth routes), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`                                      | ⬜     |
-| 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                              | ⬜     |
-| 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                     | ⬜     |
+| 01  | Auth & session lifecycle  | AUTH   | `endpoints/auth.py`, `auth_service.py`, `mfa_service.py`, `oauth_service.py`                                                                    | ✅     |
+| 02  | Permissions & roles       | PERM   | `dependencies.py`, `core/permissions.py`, `roles.py`, `operational_ranks.py`, `officers.py`, `org_chart.py`                                     | ✅     |
+| 03  | Public surface & webhooks | PUB    | `api/public/*` (20 unauth routes), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`                                      | ✅     |
+| 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                              | ✅     |
+| 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                     | ⏳     |
 | 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | ⬜     |
 | 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ⬜     |
 | 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ⬜     |
