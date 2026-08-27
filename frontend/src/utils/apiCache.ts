@@ -61,6 +61,9 @@ const UNCACHEABLE_PREFIXES = [
   '/training/reports/compliance-forecast', // per-member compliance projection
   '/training/records', // individual training records (scores, certs) — member PHI-adjacent
   '/training/skills-testing/tests', // per-member skills-test scores + evaluator notes (PHI)
+  '/training/cohorts/', // cohort detail carries a resolved-name+email member roster (bare list is roster-free)
+  '/training/programs/programs/', // per-program enrollment eligibility carries a full member roster + reason
+  '/training/external/providers/', // provider user-mappings carry internal member name + email
   '/facilities/emergency-contacts', // emergency contact PII
   '/messages', // department messages: targeted announcements + per-member inbox/read state (no trailing slash covers GET /messages)
   '/admin-hours/', // individual work hours and clock-in records
@@ -73,7 +76,7 @@ const UNCACHEABLE_PREFIXES = [
   '/meetings', // meeting list + detail: attendee PII, notes/motions/agenda (no trailing slash covers both)
   '/event-requests', // external event-request intake: contact name/email/phone, venue address (PII)
   '/events/missed-mandatory', // caller's own missed mandatory attendance (per-member compliance)
-  '/forms/', // form submissions may contain PII
+  '/forms', // form defs carry admin notification emails + creator id; no trailing slash so GET /forms list is covered too
   '/inventory/users/', // member-specific inventory, issuances & history (PII)
   '/inventory/checkout/', // GET active/overdue: who currently holds equipment (PII)
   '/inventory/members-summary', // per-member inventory roster (names, membership numbers)
@@ -85,13 +88,14 @@ const UNCACHEABLE_PREFIXES = [
   '/compliance/', // compliance attestations, member compliance data (PII)
   '/integrations', // integration config (list + detail): API keys, webhook URLs, secrets
   '/finance/', // budgets, purchase/expense/check requests & reimbursements tied to members (PII)
-  '/grants/', // grant applications and donor/fundraising records (PII)
+  '/grants', // grant applications and donor/fundraising records (PII); no trailing slash so GET /grants list is covered too
   '/roles/user/', // an arbitrary user's full permission set (authz data)
   '/roles/admin-access', // admin-status probe (authz decision — must not go stale)
   '/facilities/occupants', // facility occupant PII
   '/facilities/access-keys', // physical building access-key inventory
   '/admin-hub/', // module attention queues: medical-screening lapses, applicant backlogs (PHI/PII-adjacent)
   '/equipment-checks', // reporter/member names, free-text restock notes, deployed-lot detail (PII)
+  '/analytics/export', // raw analytics events: per-event user_id + free-form metadata
 ] as const;
 
 /**

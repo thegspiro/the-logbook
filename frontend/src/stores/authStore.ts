@@ -46,7 +46,10 @@ const COOKIE_SETTLE_POLL_MS = 25;
  */
 function getCsrfCookie(): string | null {
   const match = document.cookie.match(/(?:^|; )csrf_token=([^;]*)/);
-  return match?.[1] ?? null;
+  // Match apiClient.ts's cookie reader exactly (FE-7) — decodeURIComponent
+  // is idempotent on already-plain values, so this changes nothing for the
+  // current token alphabet and only closes the gap for a future one.
+  return match?.[1] ? decodeURIComponent(match[1]) : null;
 }
 
 /**
