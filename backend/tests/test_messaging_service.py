@@ -322,6 +322,7 @@ class TestReadAckVisibilityGate:
                 MagicMock(scalar_one_or_none=MagicMock(return_value=message)),
                 MagicMock(scalar_one_or_none=MagicMock(return_value=self._user())),
                 MagicMock(scalar_one_or_none=MagicMock(return_value=None)),
+                SimpleNamespace(rowcount=1),
             ]
         )
         db.add = MagicMock()
@@ -330,6 +331,14 @@ class TestReadAckVisibilityGate:
         assert ok is True
         assert err is None
         db.add.assert_called_once()
+        notification_update = db.execute.await_args_list[3].args[0]
+        sql = str(notification_update)
+        assert "UPDATE notification_logs" in sql
+        assert "notification_logs.organization_id" in sql
+        assert "notification_logs.recipient_id" in sql
+        assert "notification_logs.metadata" in sql
+        assert notification_update.compile().params["organization_id_1"] == "org-1"
+        assert notification_update.compile().params["recipient_id_1"] == "u1"
 
     async def test_acknowledge_rejects_untargeted_message(self):
         message = _msg("m1", "members", members=["someone-else"])
@@ -375,6 +384,7 @@ class TestReadAckVisibilityGate:
                 MagicMock(scalar_one_or_none=MagicMock(return_value=message)),
                 MagicMock(scalar_one_or_none=MagicMock(return_value=self._user())),
                 MagicMock(scalar_one_or_none=MagicMock(return_value=read_record)),
+                SimpleNamespace(rowcount=1),
             ]
         )
         db.commit = AsyncMock()
@@ -387,7 +397,9 @@ class TestReadAckVisibilityGate:
         assert error is None
         assert changed is False
         assert read_record.acknowledged_at == acknowledged_at
-        db.commit.assert_not_awaited()
+        db.commit.assert_awaited_once()
+        notification_update = db.execute.await_args_list[3].args[0]
+        assert "UPDATE notification_logs" in str(notification_update)
 
 
 @pytest.mark.parametrize(("changed", "expected_audits"), [(True, 1), (False, 0)])
