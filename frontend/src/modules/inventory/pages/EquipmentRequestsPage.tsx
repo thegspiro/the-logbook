@@ -578,7 +578,7 @@ const EquipmentRequestsPage: React.FC = () => {
                 Override issuance allowance limit
               </label>
 
-              <div className="border-theme-border rounded-md border p-3">
+              <div className="border-theme-surface-border rounded-md border p-3">
                 <label className="text-theme-text-primary inline-flex items-center gap-2 text-sm font-medium">
                   <input
                     type="checkbox"
