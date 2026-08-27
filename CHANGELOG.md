@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Two paths could hand out permissions beyond what the requester held (2026-08-27)
+
+**Fixed**
+
+- Transferring a prospective member to full membership set their rank from
+  the request without checking whether the person doing the transfer held
+  that rank's permissions themselves — someone with only member-management
+  access could have transferred a prospect in at a chief-level rank and
+  granted them (or an account they controlled) admin-level permissions.
+  Transferring a prospect now goes through the same permission check as
+  creating a member directly.
+- Renaming an operational rank's code (e.g. correcting a typo or relabeling
+  it) moved every member who held that rank to the new code with no similar
+  check — renaming a rank to match a built-in senior rank's code would have
+  granted that rank's permissions to everyone who held the old one. Renaming
+  a rank to a name that grants more than the person renaming it holds
+  themselves is now blocked the same way; renaming to an ordinary custom
+  name is unaffected.
+
 ### A few training-related pages could briefly cache data they shouldn't (2026-08-27)
 
 **Fixed**
