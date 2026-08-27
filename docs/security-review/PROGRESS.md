@@ -16,12 +16,42 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-None. Feature 06 (elections & ballots, pass 2) fully merged as
-[PR #1948](https://github.com/thegspiro/the-logbook/pull/1948) — see log
-entry below. Confirmed on `origin/main` by ancestry check. Next: 07 users
-& organizations, pass 2.
+Feature 07 (users & organizations, pass 2) — about to open. Full-domain
+diff since pass 1 (PR #1814) reviewed, including a broad frontend sweep
+(this module has no dedicated module directory — the exact condition
+that hid a real bug from ELEC-06's first pass, applying that lesson here
+from the start). No findings — everything found was an already-shipped
+fix to a real prior bug (unconstrained rank strings, cross-org rank-cache
+leakage, a settings read-path crash), not a new defect. Next after merge:
+08 membership pipeline, pass 2.
 
 ---
+
+### 2026-08-27 — Feature 07 (Users & organizations), pass 2 — no findings
+
+Full-domain diff since pass 1's merge (`5f610f1f`, PR #1814): the
+member-class/status split (already read in full during ELEC-06 for its
+eligibility angle) reaches this module directly via `users.py`/
+`member_status.py`/`schemas/user.py`. Re-read from the authorization
+angle: `member_class`/`member_status` correctly gated into
+`update_user_profile`'s restricted-fields set (same leadership/secretary
+check as `rank`), and — the significant find — a genuine cross-endpoint
+race between setting a rank and setting class to administrative
+(two requests could each read an operational, rankless member and each
+pass independently, landing an administrative member holding rank
+permissions) was already closed: all three writers lock via
+`.with_for_update()` and judge the _resulting_ pair, verified by two
+pre-existing structural tests (`TestEveryWriterIsCovered`,
+`TestTheTwoWritersSerialize`). Also closed: `_canonical_rank_or_400`
+(a typo'd rank previously resolved to silently zero permissions/seats,
+now rejected at write time on every writer) and a real prior frontend
+bug — the rank-list cache was a single unscoped module variable, so
+switching orgs without a reload could leak the previous org's ranks into
+a dropdown; now keyed by `(organizationId, activeOnly)` and guards the
+same stale-response race AUTH-3 found elsewhere. No findings. Completion
+gate: flake8/black/isort clean, migrations valid, scoped tests 388
+passed/1 skipped, full backend suite 9107 passed/22 skipped/0 failed,
+`tsc`/`eslint` clean. Rotation row 07 -> awaiting PR merge.
 
 ### 2026-08-27 — Feature 06 (Elections & ballots), pass 2 ✅ merged — PR #1948
 
@@ -1134,7 +1164,7 @@ each row's prior PR is recorded in the Log, not repeated here.
 | 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                              | ✅     |
 | 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                     | ✅     |
 | 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | ✅     |
-| 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | 🔄     |
+| 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ⏳     |
 | 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ⬜     |
 | 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ⬜     |
 | 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ⬜     |
