@@ -133,6 +133,12 @@ async def get_metrics(
 
         scan = aliased(AnalyticsEvent)
         checkin = aliased(AnalyticsEvent)
+        avg_where = [scan.organization_id == str(current_user.organization_id)]
+        if event_id:
+            # Every other figure in this response is event-scoped via
+            # base_filter when event_id is supplied — this one must match,
+            # or it silently reports the org-wide average instead.
+            avg_where.append(scan.event_id == event_id)
         avg_result = await db.execute(
             select(
                 func.avg(
@@ -153,7 +159,7 @@ async def get_metrics(
                     checkin.created_at > scan.created_at,
                 ),
             )
-            .where(scan.organization_id == str(current_user.organization_id))
+            .where(*avg_where)
         )
         avg_seconds = avg_result.scalar()
         if avg_seconds is not None:

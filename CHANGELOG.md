@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Several reporting and dashboard figures were counted inconsistently, and a malformed report filter could return a server error (2026-08-27)
+
+**Fixed**
+
+- A custom report filter with an unexpected shape (an advanced pipeline
+  report grouping option) could return a generic server error instead of
+  falling back to the report's saved configuration.
+- Requesting attendance metrics for a single event still included every
+  other event's data in one of the reported averages.
+- The secretary's attendance dashboard now double-checks that a meeting
+  attendance record belongs to the requesting department, matching every
+  other aggregate in the dashboard.
+- The community-engagement dashboard counted every outside visitor ever
+  logged, instead of only those from public events who actually checked
+  in — inflating the figure next to it, which was already scoped
+  correctly.
+- Generating or printing barcode labels for prospective members or
+  current members is now recorded in the audit trail, matching every
+  other read of that kind of information.
+
+**Flagged for a future decision**
+
+- A saved report can be marked "scheduled" with an email delivery list,
+  but nothing currently generates or sends it on that schedule. The API
+  now reports that a schedule isn't actually in effect, for whenever a
+  saved-reports screen is built (none exists in the app today). See
+  `docs/KNOWN_LIMITATIONS.md`.
+
 ### A denied role assignment during member creation could leave behind a live, unauthorized account (2026-08-27)
 
 **Fixed**
