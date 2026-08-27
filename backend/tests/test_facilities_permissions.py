@@ -294,8 +294,14 @@ def test_file_crud_uses_four_distinct_facility_grants():
         },
         ("PATCH", "/photos/{photo_id}"): {"facilities.edit", "facilities.manage"},
         ("PATCH", "/documents/{document_id}"): {"facilities.edit", "facilities.manage"},
-        ("DELETE", "/photos/{photo_id}"): {"facilities.manage"},
-        ("DELETE", "/documents/{document_id}"): {"facilities.manage"},
+        ("DELETE", "/photos/{photo_id}"): {
+            "facilities.delete",
+            "facilities.manage",
+        },
+        ("DELETE", "/documents/{document_id}"): {
+            "facilities.delete",
+            "facilities.manage",
+        },
     }
     actual = {}
     for route in _api_routes():
