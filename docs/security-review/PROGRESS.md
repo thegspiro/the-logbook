@@ -16,7 +16,7 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-PR TBD (feature 33, core infrastructure) — open, awaiting CI/review.
+PR #1917 (feature 33, core infrastructure) — open, awaiting CI/review.
 
 ---
 
@@ -427,7 +427,7 @@ Merged (squash, `1a0a35c8`). LOC-1/2/4 re-confirmed, LOC-3 still flagged
 (now 3 gaps, mirrored to `KNOWN_LIMITATIONS.md`), `admin_hub_service.py`
 fully reviewed for the first time. Rotation row 32 -> done.
 
-### 2026-08-27 — Feature 33 (Core infrastructure) — PR opened
+### 2026-08-27 — Feature 33 (Core infrastructure) — PR #1917 opened
 
 Corrected a stale rotation-table entry first: `core/middleware.py` does not
 exist (only `security_middleware.py` does) — the file list above is fixed.

@@ -1,6 +1,6 @@
 # Security Review — Feature 33: Core Infrastructure
 
-**Prefix:** `CI2` · **Iteration:** 33 · **Reviewed:** 2026-08-27 · **PR:** (pending)
+**Prefix:** `CI2` · **Iteration:** 33 · **Reviewed:** 2026-08-27 · **PR:** [#1917](https://github.com/thegspiro/the-logbook/pull/1917)
 
 **Backend:** `app/core/security_middleware.py` (1,380 L), `app/core/database.py`
 (219 L), `app/core/config.py` (964 L).
