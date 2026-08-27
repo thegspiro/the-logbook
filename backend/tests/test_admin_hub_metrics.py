@@ -242,6 +242,7 @@ def _mock_db_with_no_existing_preferences() -> MagicMock:
     db.execute = AsyncMock(return_value=result)
     db.add = MagicMock()
     db.rollback = AsyncMock()
+    db.refresh = AsyncMock()
     return db
 
 
@@ -289,6 +290,13 @@ class TestSaveSettingsFirstInsertRace:
 
         assert commit_calls["n"] == 2
         db.rollback.assert_awaited_once()
+        # rollback() expires every persistent object in the session,
+        # including ctx.user — refreshed so the retry's own permission
+        # check (and the caller's later attribute reads, e.g. an audit-log
+        # call) don't hit an expired attribute (Codex, PR #1916).
+        assert db.refresh.await_count == 2
+        db.refresh.assert_any_await(self.ctx.user)
+        db.refresh.assert_any_await(self.ctx.user, attribute_names=["positions"])
         assert result == "final-settings"
 
     async def test_a_second_conflict_on_the_retry_still_raises(self, monkeypatch):
@@ -307,6 +315,7 @@ class TestSaveSettingsFirstInsertRace:
 
         assert db.commit.await_count == 2
         assert db.rollback.await_count == 2
+        assert db.refresh.await_count == 4  # user + positions, each attempt
 
 
 class TestAttentionCardCopy:

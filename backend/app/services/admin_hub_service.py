@@ -1803,6 +1803,17 @@ class AdminHubService:
                 break
             except IntegrityError:
                 await self.db.rollback()
+                # rollback() expires every persistent object in the session,
+                # including ctx.user — the same object this method's caller
+                # (and the endpoint, for its audit-log call) keeps using
+                # afterward — not just the row(s) this attempt tried to
+                # insert. Refresh it explicitly so the retry's permission
+                # check (user_has_permission reads user.positions) or a
+                # later attribute read doesn't attempt an implicit async
+                # reload outside the greenlet bridge and raise
+                # MissingGreenlet (Codex, PR #1916).
+                await self.db.refresh(ctx.user)
+                await self.db.refresh(ctx.user, attribute_names=["positions"])
                 if attempt == 1:
                     raise
 

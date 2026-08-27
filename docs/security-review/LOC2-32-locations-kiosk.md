@@ -245,6 +245,26 @@ covered with a mocked-session test that exercises the retry loop directly:
 asserting a single conflict retries and succeeds, one asserting a second
 consecutive conflict still raises rather than looping).
 
+**Revised after Codex review (PR #1916):** the fix above committed/rolled
+back correctly but missed the same second-order effect this session's
+CRON2-31 pass already named: `AsyncSession.rollback()` expires _every_
+persistent object in the session, not just the row(s) the failed attempt
+tried to insert — including `ctx.user`, the same `User` object the method's
+caller (and the endpoint, for its post-save audit-log call) keeps using
+afterward. On the retry, `user_has_permission()` reading `user.positions`
+(a `selectinload`-populated relationship) would attempt an implicit async
+reload outside the greenlet bridge and raise `MissingGreenlet` — negating
+the whole point of the fix by turning the race into a _different_ 500 on
+retry. The mocked test missed this because it supplies a bare
+`SimpleNamespace`, which has no expiration semantics to violate. Fixed by
+explicitly refreshing `ctx.user` (columns, then the `positions` relationship
+by name) immediately after the rollback, before the retry continues.
+Regression test extended to assert both `db.refresh` calls happen with the
+expected arguments, on every rollback (including the final one before
+re-raising, since the exception can propagate to code — the endpoint's
+audit-log call — that also reads the now-expired user):
+`tests/test_admin_hub_metrics.py::TestSaveSettingsFirstInsertRace`.
+
 ## LOC-3 status — still flagged, third gap since the last pass
 
 `GET /locations/{id}/display` (the endpoint LOC-1 corrected) still has
@@ -293,3 +313,7 @@ unchanged.
 | `tsc --noEmit` (via `npm run typecheck`)                                   | ✅ 0 errors                  |
 | `eslint` (`RoomQRCodesPage.tsx`)                                           | ✅ clean                     |
 | Frontend tests (`RoomQRCodesPage.test.tsx`)                                | ✅ 13 passed                 |
+
+**Codex round (this PR's own review):** `black`/`isort`/`flake8` re-run on
+`admin_hub_service.py` and `test_admin_hub_metrics.py` — clean.
+`test_admin_hub_metrics.py`/`test_admin_hub_db.py` re-run — 174/174 passed.
