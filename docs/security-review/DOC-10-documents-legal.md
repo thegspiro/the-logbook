@@ -78,7 +78,8 @@ Completion gate: flake8/black/isort clean on both changed files;
 `test_documents_access.py` + `test_legal_documents.py` +
 `test_print_documents.py` + `test_changelog_fixes.py` +
 `test_public_legal.py` + `test_facilities_folders.py` — 182 passed; full
-backend suite run for regressions. Rotation row 10 -> done.
+backend suite 9161 passed / 22 skipped (pre-existing, environment-related) /
+0 failed. Rotation row 10 -> done.
 
 ---
 
