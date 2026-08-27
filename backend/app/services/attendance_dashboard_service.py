@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.meeting import Meeting, MeetingAttendee
 from app.models.user import MemberLeaveOfAbsence, Organization, User, UserStatus
+from app.utils.org_scoping import assert_in_org
 
 
 class AttendanceDashboardService:
@@ -76,7 +77,8 @@ class AttendanceDashboardService:
         att_result = (
             await self.db.execute(
                 select(MeetingAttendee).where(
-                    MeetingAttendee.meeting_id.in_(meeting_ids)
+                    MeetingAttendee.meeting_id.in_(meeting_ids),
+                    MeetingAttendee.organization_id == org_id,
                 )
             )
             if meeting_ids
@@ -238,6 +240,16 @@ class AttendanceDashboardService:
         The member won't be able to vote in this meeting, but their
         attendance percentage won't be penalized.
         """
+        # The current endpoint caller already re-fetches both Meeting and
+        # User scoped to the org before calling this, but that validation
+        # must not be an unenforced contract the service merely trusts —
+        # a future caller that skips it would create a cross-org
+        # MeetingAttendee row (pitfall 14c).
+        await assert_in_org(
+            self.db, Meeting, meeting_id, organization_id, label="Meeting"
+        )
+        await assert_in_org(self.db, User, user_id, organization_id, label="User")
+
         # Find or create the attendance record (org-scoped)
         result = await self.db.execute(
             select(MeetingAttendee).where(

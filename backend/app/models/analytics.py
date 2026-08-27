@@ -67,7 +67,14 @@ class SavedReport(Base):
     report_type = Column(String(50), nullable=False)
     filters = Column(JSON, default=dict)
 
-    # Scheduling
+    # Scheduling. NOTE (2026-08-27): stored and API-writable, but nothing
+    # reads it — no TASK_RUNNERS entry (scheduled_tasks.py) or other job
+    # advances next_run_date or sends email_recipients. A caller can set
+    # is_scheduled=True and see it listed as scheduled with no report ever
+    # generated (CLAUDE.md Pitfall #19 shape). SavedReportResponse.enforced
+    # reports this so the UI can label it instead of badging it Active; a
+    # scheduler is needed before this can report True. See
+    # docs/KNOWN_LIMITATIONS.md.
     is_scheduled = Column(Boolean, default=False, nullable=False)
     schedule_frequency = Column(
         String(20), nullable=True

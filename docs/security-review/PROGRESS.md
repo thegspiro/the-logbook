@@ -16,8 +16,7 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-None — PR #1911 (feature 28, security, audit & IP) merged. Feature 29
-(reports & analytics) starting next.
+PR #1912 (feature 29, reports & analytics) — open, awaiting CI/review.
 
 ---
 
@@ -67,6 +66,72 @@ skips), black/isort/flake8 clean, migration validation passed (no
 migrations — hash-version bump is pure application logic).
 
 Next: 29 reports & analytics.
+
+---
+
+### 2026-08-27 — Feature 29 (Reports & analytics) — PR #1912 opened
+
+Three parallel background agents covered this feature's split scope: (A)
+re-verification of the two prior review passes on `reports.py`/`analytics.py`/
+`platform_analytics.py`/`reports_service.py` (RPT-1 through RPT-7, no
+regressions found, plus review of the ~13% growth in `reports_service.py`
+since the last audit), (B) a first-ever full read of `dashboard.py` +
+`dashboard_widget_service.py` + `attendance_dashboard_service.py` (never
+previously module-audited or app-reviewed), (C) a first-ever full read of
+`labels.py` + `label_service.py` + `label_printer_service.py` (same — never
+previously reviewed).
+
+No criticals or highs anywhere. Six findings fixed:
+
+- RPT2-29-1 (LOW/MED): `pipeline_overview`'s client-supplied `stage_groups`
+  filter override had no shape validation and crashed the report on
+  malformed input (RPT-2-class unvalidated-filter 500). Fixed with a
+  `_is_valid_stage_groups` guard, falling back to the saved config.
+- RPT2-29-3 (LOW): `avg_time_to_check_in` in `/analytics/metrics` ignored the
+  `event_id` filter every other figure in the same response respects,
+  silently reporting the org-wide average instead. Fixed.
+- DASH-29-1 (LOW): the attendance dashboard's `MeetingAttendee` query was
+  missing a defense-in-depth `organization_id` filter (not currently
+  exploitable — every write path already validates — but inconsistent with
+  every sibling join in the same feature). Fixed.
+- DASH-29-2 (LOW): `grant_waiver` trusted its one caller to have already
+  org-scoped `meeting_id`/`user_id` rather than self-enforcing. Fixed with
+  `assert_in_org` per pitfall 14c.
+- DASH-29-3 (LOW): `total_external_attendees` in the community-engagement
+  dashboard didn't filter to public event types, unlike its sibling
+  `total_member_attendees` — inflating the metric with private events'
+  guests. Fixed to match.
+- LBL-29-1 (LOW): generating/printing labels for `prospective_members`
+  (embeds a public status-check token) and `membership` (membership number)
+  had no audit trail, unlike every other read of that class of PII. Fixed.
+- LBL-29-3 (LOW): `extra_lines` was the one unbounded list field in schemas
+  that bound every other field explicitly. Fixed with `max_length=20`.
+
+Flagged rather than fixed:
+
+- RPT2-29-2 (MEDIUM) — `SavedReport` scheduling (`is_scheduled`,
+  `schedule_frequency`, `email_recipients`) is fully stored and
+  API-writable but nothing reads it — no `TASK_RUNNERS` entry, no
+  scheduler. Textbook Pitfall #19. Partial fix applied:
+  `SavedReportResponse.enforced` now reports `False` so the UI can label it
+  as not-yet-automated; building the actual scheduler/sender is a feature
+  addition, not a drive-by. Mirrored to `KNOWN_LIMITATIONS.md`.
+- LBL-29-2 (LOW) — `GET /label-printers` has no permission gate at all,
+  a deliberate documented design choice, still org-scoped. Permission-
+  granularity policy call, left unchanged.
+- LBL-29-4 (Informational) — the PDF label-generation path has no
+  per-request count cap, unlike the physical-print path's
+  `MAX_LABELS_PER_JOB = 500`. Applying the same cap would be a behavior
+  change with no evidence it's needed; left as a flagged asymmetry.
+- RPT-5c, RPT-6, RPT-7 (all pre-existing, re-confirmed unchanged) — no new
+  action.
+
+Completion gate: 460/460 scoped tests (`-k "reports or analytics or
+dashboard or attendance or label"`), 8937/8937 full suite (22 pre-existing
+skips), black/isort/flake8 clean, migration validation passed (no schema
+change — only a model comment added).
+
+Next: 30 onboarding, once #1912 merges.
 
 ---
 
@@ -123,7 +188,7 @@ data-carrying modules, then the supporting infrastructure.
 | 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                         | ✅              |
 | 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                         | ✅              |
 | 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`                                                                    | ✅              |
-| 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                              | ⬜              |
+| 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                              | ⏳              |
 | 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (24 unauth bootstrap routes)                                                                                             | ⬜              |
 | 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                   | ⬜              |
 | 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                  | ⬜              |

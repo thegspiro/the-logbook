@@ -2210,6 +2210,43 @@ rotation's process reserves for a flagged item rather than a drive-by
 fix inside an unrelated finding. (Security review TR-17 residual,
 `docs/security-review/TR-17-training-core.md`.)
 
+## RPT2-29-2 — Saved Report Scheduling Is Stored and API-Writable, but Nothing Reads It (2026-08-27)
+
+`POST /reports/saved` and `PATCH /reports/saved/{id}` fully accept and
+persist `is_scheduled`, `schedule_frequency` (daily/weekly/monthly/quarterly),
+`schedule_day`, and `email_recipients`. `GET /reports/saved` reports
+`next_run_at` back to the caller as though it's live. But no code anywhere
+reads these fields to actually generate and email a report:
+
+- `create_saved_report` never computes `next_run_date` — it stays `None`
+  forever.
+- `scheduled_tasks.py`'s `TASK_RUNNERS` registry has no entry for saved/
+  scheduled reports (`run_compliance_auto_reports` is a distinct,
+  `ComplianceConfig`-driven feature, not `SavedReport`-driven).
+- No Celery beat / APScheduler config exists for this anywhere in the
+  backend.
+
+This is CLAUDE.md **Pitfall #19** — a config switch with no reader. A chief
+can set `is_scheduled=True`, `schedule_frequency="weekly"`, add
+`email_recipients`, see it listed as scheduled, and no report is ever
+generated or emailed, with no error at any point.
+
+**Fix applied (2026-08-27):** `SavedReportResponse.enforced` reports `False`
+(hardcoded — there is no per-row state to compute; see the comment on
+`SavedReport.is_scheduled` in `app/models/analytics.py`), so the frontend can
+label a saved report as "not yet automated" rather than badging it Active.
+The underlying scheduling fields are left writable (no data-model change) —
+wiring a `TASK_RUNNERS` entry that scans due `SavedReport` rows, generates,
+emails via the resolved creator's permissions (the RPT-3 PII gate lives only
+in the endpoint layer today, so a future sender must re-derive or enforce it
+itself before emailing `member_roster`/`pipeline_overview` output), and
+advances `next_run_date` is a feature addition, not a security-review
+drive-by fix.
+
+**Options for closing it:** (1) implement the `TASK_RUNNERS` reader, or (2)
+reject `is_scheduled=True` at the API layer with a clear "not yet supported"
+error until a sender exists, rather than the current silent-accept.
+
 ## Process
 
 The review loop (see [review-log.md](./review-log.md)) advances through one area

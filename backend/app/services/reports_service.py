@@ -53,6 +53,24 @@ def _safe_int(value: Any, default: int) -> int:
         return default
 
 
+def _is_valid_stage_groups(value: Any) -> bool:
+    """True iff ``value`` is a well-formed client-supplied stage-groups
+    override: a non-empty list of dicts, each with a string ``name`` and a
+    list ``step_ids``. Anything else (missing, wrong shape, a stray ``None``
+    entry) falls back to the pipeline's saved config rather than raising —
+    same no-op-on-invalid-filter contract as ``_safe_int``."""
+    if not isinstance(value, list) or not value:
+        return False
+    for group in value:
+        if not isinstance(group, dict):
+            return False
+        if not isinstance(group.get("name"), str):
+            return False
+        if not isinstance(group.get("step_ids"), list):
+            return False
+    return True
+
+
 def _include_empty_calendar_years(yearly: Dict[int, Dict[str, Any]]) -> None:
     """Fill gaps so year-over-year comparisons never skip a calendar year."""
     if not yearly:
@@ -1841,9 +1859,13 @@ class ReportsService:
         steps = list(steps_result.scalars().all())
         step_map = {step.id: step for step in steps}
 
-        # Determine stage groups: ad-hoc override > saved config > ungrouped
+        # Determine stage groups: ad-hoc override > saved config > ungrouped.
+        # `filters` is client-supplied, unvalidated JSON (ReportRequest.filters
+        # is Dict[str, Any]) — unlike report_stage_groups (server-controlled),
+        # a malformed override here must not crash the report (same class as
+        # the _safe_int guard above for scalar filters).
         stage_groups = filters.get("stage_groups")
-        if not stage_groups:
+        if not _is_valid_stage_groups(stage_groups):
             stage_groups = pipeline.report_stage_groups or []
 
         # Build prospect query with date filters
