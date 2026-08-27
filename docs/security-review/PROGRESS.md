@@ -16,8 +16,8 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-None — PR #1913 (feature 30, onboarding) merged. Feature 31 (scheduled
-tasks) starting next.
+PR #1915 (feature 31, scheduled tasks) — open, responding to a Codex review
+round (5 findings, all fixed; replying to/resolving threads next).
 
 ---
 
@@ -224,6 +224,143 @@ Next: 31 scheduled tasks.
 
 ---
 
+### 2026-08-27 — Feature 31 (Scheduled tasks) — PR #1915 opened
+
+`services/scheduled_tasks.py` is 5,446 lines (~44 task runners), and the
+prior app-review pass explicitly did NOT read it line-by-line ("at 4570 L
+that would not be an honest single-iteration claim") — it reviewed
+structural patterns and sampled a few runners. Four parallel background
+agents split the file by line range and did the line-by-line read that
+pass skipped, with extra scrutiny on the +19% growth since the last audit.
+
+No regressions in any prior CRON finding (CRON-1 through CRON-6, the
+registry-sync test). Registry sync re-confirmed 43/43 (grown from 38/39),
+no drift.
+
+12 findings, 10 fixed (4 MED, 6 LOW), 2 flagged:
+
+- CRON2-31-1 (MED): `InventoryNotificationService.process_pending_notifications`
+  had no per-group commit/rollback — a failed (org, member) group poisoned
+  the session for every later group in the batch, invisible to the
+  existing structural test since the loop lives outside
+  `scheduled_tasks.py`. Fixed.
+- CRON2-31-2 (MED): `run_post_shift_validation` never excluded cancelled
+  shifts, generating bogus "validate attendance" emails for the common
+  case of a same-day cancellation. Fixed.
+- CRON2-31-3 (MED): reminder dedup flags (`start_reminder_sent`,
+  `eos_checklist_reminder_sent`) were stamped permanently `True` even when
+  nothing was sent because a precondition (crew/apparatus/templates) wasn't
+  ready yet — silently suppressing the reminder forever, even once the
+  precondition was met later in the same window. Fixed.
+- CRON2-31-4 (LOW): `run_end_of_shift_checklist_reminders` notified
+  deactivated members, unlike its sibling which explicitly filters
+  `User.is_active`. Fixed.
+- CRON2-31-5 (MED): `run_scheduled_emails` had no per-item commit/rollback
+  across up to 100 pending emails spanning many orgs — one bad item could
+  cascade failures to every later item and, in the worst case, cause
+  already-sent emails to re-send on the next run. Fixed.
+- CRON2-31-6 (MED): `RetentionService.enforce()` had zero per-org isolation
+  (unlike every other multi-org runner in the file) and never audit-logged
+  its PII-bearing deletes. Fixed with per-org commit/rollback plus a
+  `log_audit_event()` call when an org had deletions.
+- CRON2-31-7 (LOW): `run_audit_log_archival`'s except block didn't roll
+  back, so a DB-level failure turned its intended graceful 200-with-errors
+  response into an unhandled 500 anyway. Fixed.
+- CRON2-31-8 (LOW, latent): `run_officer_directory_sync` used a bare
+  `where(Organization.active)` instead of `.isnot(False)`, excluding NULL
+  rows. Fixed.
+- CRON2-31-9 (MED, SSRF-adjacent): Salesforce's cached-access-token path
+  never validated `instance_url` — only the token-refresh path did — so an
+  org-admin-editable `instance_url` with a cached token became an
+  unvalidated outbound-request target hit every 30 minutes unattended, with
+  the org's bearer token attached. Fixed by validating in `_api_url()`
+  itself, the one call site every request goes through.
+- CRON2-31-10 (informational, now fixed): the naive-datetime issue in
+  `run_rolling_recurrence_extend`, flagged-not-fixed by the prior review
+  pending verification of aiomysql's actual return type for
+  `DateTime(timezone=True)` columns on this stack — now verified
+  naive-but-UTC (via two other sites in the same file), unblocking the fix
+  the prior review explicitly deferred.
+- CRON2-31-11 (LOW, latent): three more org-scoped loops
+  (`run_compliance_auto_reports`, `run_external_training_auto_sync`,
+  `run_salesforce_auto_sync`) skipped the active-org filter entirely since
+  they iterate a child table keyed by `organization_id` rather than
+  `Organization` directly — the same shape as CRON-2, invisible to its
+  regression test's `select(Organization)` detection heuristic. Fixed with
+  joins.
+
+Flagged, not fixed: CRON2-31-12 (`run_action_item_reminders` has no org
+loop at all, so it was never in scope for CRON-2 either — closing it means
+joining two different action-item tables through two different parents,
+a structural change beyond a drive-by) and CRON2-31-13
+(`run_admin_hours_auto_close` has no audit trail — a design choice for the
+admin-hours feature to make deliberately). Both mirrored to
+`KNOWN_LIMITATIONS.md`.
+
+Completion gate: 299/299 scoped tests across every touched runner/service,
+8971/8971 full suite (22 pre-existing skips), black/isort/flake8 clean,
+migration validation passed (no schema change — this feature's fixes are
+pure application logic; separately repaired unrelated schema drift from a
+prior merge's inventory-reorder migration via `repair_schema.py` +
+`alembic stamp head` to unblock the sandbox's DB-backed tests).
+
+### 2026-08-27 — Feature 31 (Scheduled tasks) — PR #1915, Codex review round
+
+Codex reviewed #1915's own fix commit and found 5 real bugs, all one root
+cause: the CRON2-31-1/CRON2-31-5/CRON2-31-6 fixes (commit-per-unit,
+rollback-on-failure over a _pre-fetched_ list of ORM objects sharing one
+`AsyncSession`) missed that `AsyncSession.rollback()` expires every
+persistent object in the session, not just the failed unit's. Once one
+unit's rollback fires, the next pre-fetched-but-not-yet-processed unit's ORM
+attributes are expired, and reading one outside the async greenlet bridge
+raises `MissingGreenlet` — a class of bug the `db_session` test fixture
+cannot catch, since its savepoint-based rollback doesn't expire objects the
+same way a production session does. Verified by reproducing the crash
+directly against a real `async_session_factory()` session before trusting
+the finding.
+
+All 5 fixed:
+
+- `inventory_notification_service.py` (CRON2-31-1) and `scheduled_tasks.py`'s
+  `run_scheduled_emails` (CRON2-31-5): **refresh-after-rollback pattern** — a
+  `needs_refresh` flag flips `True` after any unit's rollback; every
+  subsequent unit's records are explicitly refreshed (`db.refresh()`, plus
+  `db.get(..., populate_existing=True)` for the email loop's `organization`
+  relationship) before their attributes are read again. Used here rather
+  than a snapshot because both loops keep mutating the _same_ ORM rows across
+  iterations for the eventual UPDATE to persist.
+- `retention_service.py` (CRON2-31-6): **snapshot pattern** instead — `(id,
+config)` tuples are extracted for every org in one pass before the loop,
+  since nothing here needs to keep mutating the pre-fetched `Organization`
+  rows themselves.
+- `scheduled_tasks.py`'s `run_end_of_shift_checklist_reminders`: a smaller,
+  related bug in the CRON2-31-3/CRON2-31-4 fix — the `User.is_active` filter
+  added for CRON2-31-4 can leave a shift with assignments but zero _active_
+  recipients, and the dedup flag was still being stamped `True` in that case.
+  Added a fourth continue-without-stamping guard.
+
+Regression tests: `test_inventory_notification_group_isolation.py` (new),
+`test_scheduled_email_group_isolation.py` (new), `test_retention_service.py`
+(the isolation test rewritten to 3 orgs — a 2-org version can't distinguish
+this bug class from a plain try/except, since it only manifests on the unit
+_after_ a failure), `test_shift_scheduled_tasks.py` (2 new tests for the
+empty-active-member-list case). Full detail:
+`docs/security-review/CRON2-31-scheduled-tasks.md`.
+
+Completion gate (this round): 96/96 scoped tests, black/isort/flake8 clean
+on every touched file. Full suite: 8938 passed, 38 failed, 22 skipped — the
+38 failures (`test_public_legal.py`, `test_agency_position_seeding.py`,
+`test_onboarding_integration.py`, `test_facilities_onboarding.py`) reproduced
+identically with this round's diff stashed out, confirmed pre-existing and
+unrelated.
+
+Next: reply to and resolve the 5 Codex threads on #1915, then merge and move
+to 32 locations & kiosk.
+
+Next: 32 locations & kiosk, once #1915 merges.
+
+---
+
 ## Relationship to the existing review passes
 
 This rotation is **not** a replacement for the two that came before it, and it
@@ -279,7 +416,7 @@ data-carrying modules, then the supporting infrastructure.
 | 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`                                                                    | ✅              |
 | 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                              | ✅              |
 | 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (24 unauth bootstrap routes)                                                                                             | ✅              |
-| 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                   | ⬜              |
+| 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                   | ⏳              |
 | 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                  | ⬜              |
 | 33  | Core infrastructure       | CORE   | `core/security_middleware.py`, `core/middleware.py`, `core/database.py`, `core/config.py`                                                       | ⬜              |
 | 34  | Frontend shared           | FE     | `utils/apiCache.ts`, module axios instances, `ProtectedRoute`, global stores                                                                    | ⬜              |
