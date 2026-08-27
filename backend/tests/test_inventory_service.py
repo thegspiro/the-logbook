@@ -456,6 +456,28 @@ class TestUpdateCategory:
         assert error is None
         assert mock_category.name == "New Name"
 
+    @pytest.mark.asyncio
+    async def test_update_category_rejects_null_name(self, service, org_id):
+        """update_category now routes through apply_updates instead of a
+        blind setattr loop: an explicit null against name (NOT NULL) is
+        caught and returned as a clean error string, not an unhandled
+        IntegrityError at commit."""
+        from app.models.inventory import InventoryCategory
+
+        category = InventoryCategory(
+            id=str(uuid4()), organization_id=org_id, name="Airway", item_type="medical"
+        )
+        service.get_category_by_id = AsyncMock(return_value=category)
+
+        result, error = await service.update_category(
+            category_id=category.id,
+            organization_id=org_id,
+            update_data={"name": None},
+        )
+        assert result is None
+        assert error is not None
+        assert "cannot be cleared" in error.lower()
+
 
 # ============================================
 # Serial Number Uniqueness Tests
@@ -611,6 +633,92 @@ class TestUpdateItem:
         )
         assert result is None
         assert "already in use" in err.lower()
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_update_item_rejects_null_name(self, service, org_id):
+        """update_item now routes through apply_updates instead of a blind
+        setattr loop: an explicit null against name (NOT NULL) is caught and
+        returned as a clean error string, not an unhandled IntegrityError at
+        commit."""
+        from app.models.inventory import InventoryItem
+
+        item = InventoryItem(id=str(uuid4()), organization_id=org_id, name="Gauze 4x4")
+        service.get_item_by_id = AsyncMock(return_value=item)
+
+        result, err = await service.update_item(
+            item_id=UUID(item.id),
+            organization_id=UUID(item.organization_id),
+            update_data={"name": None},
+        )
+        assert result is None
+        assert "cannot be cleared" in err.lower()
+
+
+# ============================================
+# Update Lot Tests
+# ============================================
+
+
+class TestUpdateLot:
+    """update_lot now routes through apply_updates instead of a blind
+    setattr loop guarded only by hasattr — an explicit null against
+    quantity (NOT NULL) previously reached commit() unguarded (no
+    try/except anywhere in this method) and raised an unhandled
+    IntegrityError; it must now raise a clean ValueError instead."""
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_update_lot_rejects_null_quantity(self, service, org_id):
+        from app.models.inventory import InventoryLot
+
+        lot = InventoryLot(
+            id=str(uuid4()),
+            organization_id=org_id,
+            inventory_item_id=str(uuid4()),
+            quantity=10,
+        )
+        service._get_lot = AsyncMock(return_value=lot)
+
+        with pytest.raises(ValueError, match="cannot be cleared"):
+            await service.update_lot(
+                lot_id=lot.id,
+                organization_id=org_id,
+                data={"quantity": None},
+            )
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_update_lot_success(self, service, mock_db, org_id):
+        from app.models.inventory import InventoryLot
+
+        lot = InventoryLot(
+            id=str(uuid4()),
+            organization_id=org_id,
+            inventory_item_id=str(uuid4()),
+            quantity=10,
+        )
+        service._get_lot = AsyncMock(return_value=lot)
+
+        updated = await service.update_lot(
+            lot_id=lot.id,
+            organization_id=org_id,
+            data={"quantity": 25, "lot_number": "LOT-2"},
+        )
+        assert updated is lot
+        assert lot.quantity == 25
+        assert lot.lot_number == "LOT-2"
+        mock_db.commit.assert_awaited_once()
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_update_lot_missing_returns_none(self, service, org_id):
+        service._get_lot = AsyncMock(return_value=None)
+
+        result = await service.update_lot(
+            lot_id="nope", organization_id=org_id, data={"quantity": 5}
+        )
+        assert result is None
 
 
 # ============================================

@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**256 tables · 4373 columns · 827 foreign keys**
+**256 tables · 4374 columns · 827 foreign keys**
 
 ---
 
@@ -274,7 +274,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`donors`](#donors) | `Donor` | 26 | Donor model mapping to the existing donors table. |
 | [`fundraising_campaigns`](#fundraising_campaigns) | `FundraisingCampaign` | 22 | Fundraising campaign model mapping to the existing fundraising_campaigns table. |
 | [`fundraising_events`](#fundraising_events) | `FundraisingEvent` | 22 | Fundraising event model mapping to the existing fundraising_events table. |
-| [`grant_applications`](#grant_applications) | `GrantApplication` | 32 | Individual grant application tracked through the pipeline. |
+| [`grant_applications`](#grant_applications) | `GrantApplication` | 33 | Individual grant application tracked through the pipeline. |
 | [`grant_budget_items`](#grant_budget_items) | `GrantBudgetItem` | 13 | Budget line item for a grant application. |
 | [`grant_compliance_tasks`](#grant_compliance_tasks) | `GrantComplianceTask` | 19 | Follow-up task, report, or compliance obligation for a grant. |
 | [`grant_expenditures`](#grant_expenditures) | `GrantExpenditure` | 16 | Individual spending record against a grant budget. |
@@ -4101,6 +4101,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `reporting_frequency` | ENUM(`monthly`, `quarterly`, `semi_annual`, `annual`) | yes |  |  |  |
 | `next_report_due` | DATE | yes |  |  |  |
 | `final_report_due` | DATE | yes |  |  |  |
+| `compliance_tasks_generated` | BOOL | no |  | `0` |  |
 | `assigned_to` | VARCHAR(36) | yes | FK, IDX |  | → `users.id` ON DELETE SET NULL |
 | `priority` | ENUM(`low`, `medium`, `high`, `critical`) | no | IDX | `medium` |  |
 | `linked_campaign_id` | VARCHAR(36) | yes | FK, IDX |  | → `fundraising_campaigns.id` ON DELETE SET NULL |

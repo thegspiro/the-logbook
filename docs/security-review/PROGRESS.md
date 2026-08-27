@@ -16,13 +16,7 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-PR #1903 (feature 21, admin hours) — open, subscribed. 8 fixes: cross-org
-`get_user_hours_compliance` leak, `clock_out` org scoping,
-`update_category` null-clear bug, a `clock_in` race, event-hour-mapping
-percentage race, `edit_pending_entry` guard parity, 4 `fromisoformat`
-500s, and 3 `source_rsvp_id` org filters. Per-org SoD toggle and a resync
-approval-integrity gap remain flagged (product decisions). See
-`docs/security-review/AH-21-admin-hours.md`.
+None — PR #1905 (feature 23, medical supplies) merged. Next iteration starts feature 24 (meetings & minutes).
 
 ---
 
@@ -71,9 +65,9 @@ data-carrying modules, then the supporting infrastructure.
 | 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ✅ #1873        |
 | 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3723 L)                                                                                                          | ✅ #1901        |
 | 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ✅ #1902        |
-| 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ⏳ #1903        |
-| 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ⬜              |
-| 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ⬜              |
+| 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ✅ #1903        |
+| 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ✅              |
+| 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ✅              |
 | 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ⬜              |
 | 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ⬜              |
 | 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                         | ⬜              |
@@ -784,3 +778,101 @@ re-runs the whole-codebase sweeps against whatever has landed since.
   scoped and 8845/8845 full backend suite pass. Findings doc:
   `docs/security-review/AH-21-admin-hours.md`. PR #1903 opened and
   subscribed. Next: 22 grants & fundraising, once #1903 merges.
+- **21 Admin hours ✅ merged** — PR #1903 merged 2026-08-26. Codex review
+  caught one real deadlock risk in the AH-11 fix before merge: the first
+  version of `update_event_hour_mapping`'s percentage-check locked only
+  the _other_ mappings for a source, excluding the target row being
+  updated. Two concurrent updates to two different mappings under the same
+  source could each lock the row the other was about to write to, then
+  each block writing their own row at flush — a lock-order inversion
+  InnoDB resolves by killing one side as a deadlock (surfaced as a 500).
+  Fixed by locking the complete set of mappings for the source — including
+  the target — in one query ordered consistently by id, so a second
+  transaction reaching the same source queues behind the first instead of
+  each holding what the other needs. `create_event_hour_mapping` doesn't
+  share this failure mode (a fresh INSERT never needs to acquire a write
+  lock on an existing row). Replied and resolved the review thread. Full
+  local completion gate re-verified green (8846/8846 full suite) before
+  the final push; CI came back 16/16 green with no further comments.
+  Next: 22 grants & fundraising.
+- **22 Grants & fundraising** — read `docs/module-audit/grants-fundraising.md`
+  (iteration 14, GF-1 through GF-9) and `docs/app-review/grants-fundraising.md`
+  (4 passes through 2026-08-09, GF-10 through GF-12) first; three parallel
+  agents then read `grants.py`, `grant_service.py`, `fundraising_service.py`
+  in full, re-confirming GF-1 through GF-12 and surfacing six new findings.
+  **GF-13 (HIGH, most severe of the whole rotation so far)**
+  `GrantOpportunity.applications` carried `cascade="all, delete-orphan"`
+  while `GrantApplication.opportunity_id` is `ondelete="SET NULL"` — deleting
+  an opportunity with linked applications either crashed or silently deleted
+  every one of those applications and their full financial history. Fixed by
+  removing the cascade and adding `passive_deletes=True`; guarded by a new
+  real-DB integration test (`test_grant_opportunity_delete_db.py`), invisible
+  to a mocked session. **GF-14** an awarded->active->awarded round-trip
+  duplicated the auto-generated compliance task set — idempotency guard
+  added, scoped narrowly so it doesn't presume an answer to GF-7's broader
+  state-machine question. **GF-15** three read-then-write aggregate
+  recomputes (campaign total, donor stats, budget item spent) had no lock —
+  Pitfall #27 fix applied to all three (lock the parent row, make the SUM
+  itself a locking read). **GF-16** ten update methods across both services
+  used blind `setattr` loops -> converted to `apply_updates`. **GF-17/GF-18**
+  two by-id queries (`_notes_with_authors`, the budget-item fetch inside the
+  GF-15 fix) gained `organization_id` filters for defense-in-depth
+  consistency; neither was independently exploitable. GF-7 (broader
+  state-machine/overspend question), GF-8 (`is_anonymous` enforcement), GF-9
+  (float money math) re-confirmed unchanged and stay flagged as product
+  decisions, per every prior pass. Full local completion gate green:
+  flake8/black/isort clean, migrations validated (no migration needed —
+  GF-13's fix is ORM-relationship-only), 45/45 grant+fundraising scoped and
+  8849/8849 full backend suite pass. Findings doc:
+  `docs/security-review/GF-22-grants-fundraising.md`. PR #1904 opened and
+  subscribed. Next: 23 medical supplies, once #1904 merges.
+- **22 Grants & fundraising ✅ merged** — PR #1904 merged 2026-08-26.
+  Codex review caught two real issues before merge, both fixed in the same
+  PR: (P1) the parent-lock fixes for GF-15 left `create_donation`/
+  `create_expenditure` (and the reassignment branches of
+  `update_donation`/`update_expenditure`) inserting/updating the
+  FK-carrying child row _before_ locking the parent — InnoDB's own FK
+  check on that insert takes a shared lock on the parent, so two
+  concurrent writes to the same parent could each hold a shared lock and
+  then both try to upgrade to the exclusive FOR UPDATE lock the recompute
+  takes, deadlocking; fixed by acquiring the parent lock(s) first, via new
+  `_lock_campaign`/`_lock_donor`/`_lock_budget_item` helpers. (P2) the
+  GF-14 idempotency guard matched on `task_type`, which is fully
+  client-settable on manual task creation with no status restriction — an
+  officer's own pre-award task of the same type could make the guard
+  believe generation had already run and silently skip the real thing;
+  replaced with a dedicated `compliance_tasks_generated` boolean on
+  `GrantApplication` (migration `472a1e34aa84`). Both fixes replied to and
+  resolved on their review threads. CI also caught the generated
+  `docs/DATABASE_SCHEMA.md` going stale after the new column — regenerated
+  and pushed. Full local completion gate re-verified green (8855/8855 full
+  suite) before the final push; CI came back green with no further
+  comments. Next: 23 medical supplies.
+- **23 Medical supplies** — no prior module-audit or app-review pass exists
+  for this feature, the first review of `medical_supplies.py` (667 L, 15
+  endpoints). Read directly rather than via parallel agents — small file,
+  and its only dependency (`InventoryService`) was already read in full by
+  the INV-11 pass three weeks prior. The endpoint layer itself is soundly
+  domain-pinned: every by-id write re-checks the target is in the medical
+  domain, the domain is never client-supplied, and a `category_id: null`
+  escape hatch out of the domain is already closed with its own guard test.
+  **MSUP-1 (MED)** the one real gap: three shared `InventoryService`
+  methods this router calls (`update_category`, `update_item`,
+  `update_lot`) used blind `setattr` loops instead of `apply_updates` — out
+  of INV-11's tenant-isolation lens, so not previously flagged.
+  `update_lot` was the worst case, with no exception handling at all, so an
+  explicit null against its NOT NULL `quantity` column was a genuine
+  unhandled 500; `update_category`/`update_item` softened the same bug into
+  a generic sanitized error via a catch-all `try/except`. All three now
+  route through `apply_updates`; `update_lot`'s two callers
+  (`inventory.py` and this router) gained a `ValueError` -> 400 catch to
+  match the sibling `add_lots_bulk` convention already on both files. Full
+  local completion gate green: flake8/black/isort clean, migrations
+  validated (no schema change), 553/553 inventory+medical_supplies scoped
+  and 8897/8897 full backend suite pass. Findings doc:
+  `docs/security-review/MSUP-23-medical-supplies.md`. PR #1905 opened and
+  subscribed. Next: 24 meetings & minutes, once #1905 merges.
+- **23 Medical supplies ✅ merged** — PR #1905 merged 2026-08-26. Codex was
+  over its usage limit for security reviews on this PR (no review
+  produced); CI passed clean on the first push, no fix round needed.
+  Next: 24 meetings & minutes.

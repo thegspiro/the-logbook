@@ -7,6 +7,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Editing a medical supply, item, or category could turn a cleared field into a server error instead of a clear message (2026-08-27)
+
+**Fixed**
+
+- Clearing certain required fields while editing an inventory category, an
+  inventory item, or a stock lot (from either the medical supplies page or
+  the general inventory pages) could produce a generic server error instead
+  of telling the person what went wrong. Stock lot edits in particular could
+  fail with no error message at all. All three now report a clear,
+  specific message.
+
+### Deleting a grant opportunity could silently wipe out every application ever linked to it (2026-08-27)
+
+**Fixed**
+
+- Deleting a grant opportunity that still had applications attached either
+  crashed or, worse, silently deleted every one of those applications —
+  including their budget items, expenditures, compliance tasks, and notes.
+  An application is supposed to survive its opportunity being removed (it
+  may have started as a manual entry); it now does, with its opportunity
+  link simply cleared.
+- Moving a grant application from Awarded back to Active and then back to
+  Awarded duplicated the whole set of auto-generated compliance tasks
+  (progress reports, closeout report, equipment inventory) a second time.
+  Re-awarding a grant no longer regenerates tasks that already exist.
+- Two donations to the same campaign, or two expenditures against the same
+  budget line, recorded or edited at nearly the same moment, could each
+  read a stale running total and one could silently overwrite the other's
+  contribution. Both totals now serialize correctly under concurrent
+  writes.
+- A handful of grant/fundraising update actions (editing an opportunity,
+  application, budget item, expenditure, compliance task, campaign, donor,
+  donation, pledge, or fundraising event) could turn an attempt to clear an
+  optional field into an unhandled server error instead of a clean
+  validation message.
+- A couple of internal lookups (resolving a note's author name, and the
+  budget-item total recompute) were missing the department filter every
+  other query in this module already carries — closed for consistency,
+  though neither was reachable from outside the department in practice.
+
 ### An officer with compliance access could look up any member's admin-hours progress, in any department (2026-08-27)
 
 **Fixed**
