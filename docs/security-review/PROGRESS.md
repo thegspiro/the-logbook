@@ -16,8 +16,7 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-None — PR #1906 (feature 24, meetings & minutes) merged. Feature 25
-(messaging & notifications) starting next.
+PR #1907 (feature 25, messaging & notifications) — open, awaiting CI/review.
 
 ---
 
@@ -70,7 +69,7 @@ data-carrying modules, then the supporting infrastructure.
 | 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ✅              |
 | 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ✅              |
 | 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ✅              |
-| 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ⬜              |
+| 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ⏳              |
 | 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                         | ⬜              |
 | 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                         | ⬜              |
 | 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`                                                                    | ⬜              |
@@ -929,3 +928,61 @@ re-runs the whole-codebase sweeps against whatever has landed since.
   completion gate re-verified green (203/203 meetings-scoped, 8910/8910
   full suite) before the final push; CI came back green with no further
   comments. Next: 25 messaging & notifications.
+- **25 Messaging & notifications** — this feature already carried the
+  deepest prior coverage in the rotation: a module audit plus a 4-5-pass
+  app-review for messaging, notifications, and email templates each. Four
+  parallel background agents split the surface, each briefed to re-verify
+  prior findings rather than re-derive them and focus on what's grown or is
+  new since: messaging (`messages.py`/`message_history.py`/
+  `messaging_service.py`/`message_delivery_service.py`), notifications
+  (`notifications.py`/`notifications_service.py`/`push_service.py`, plus
+  three files with no prior review at all — `notification_rules.py`,
+  `notification_channels.py`, `integration_services/notification_dispatch.py`
+  — all clean), email templates (`email_templates.py`/
+  `email_template_service.py`/`email_templates_storefront.py`, plus two
+  never-reviewed utility modules `email_footers.py`/`email_theme.py`), and
+  the shared send layer `email_service.py` on its own (the widest-blast-radius
+  file in scope — every other email-producing feature calls into it). All
+  prior findings across all five documents re-verified as still holding.
+  **MSG-4 (MEDIUM)** `update_message`'s reschedule guard only blocked moving
+  an already-published message to a _future_ time — a past/current
+  `scheduled_at` slipped through unmodified, leaving a non-null due
+  timestamp the next publish sweep would treat as newly due and re-deliver:
+  a duplicate in-app notification, a duplicate email, and (if urgent) a
+  duplicate SMS blast to the whole targeted audience, repeatably every ~15
+  minutes. Fixed by collapsing it to `None` the same way `create_message`
+  already does. **MSG-5 (LOW)** `notifications_service.update_rule` used
+  `exclude_none` + a blind `setattr` loop, so an explicit null couldn't
+  clear `description`/`config` — switched to `exclude_unset` +
+  `apply_updates`. **MSG-6 (MEDIUM)** `email_service.py`'s header
+  construction sanitized Subject/From only — To, Cc, Reply-To, and
+  List-Unsubscribe were unsanitized in both header-writing sites, and a live
+  unvalidated path already reached one of them
+  (`MemberDropNotificationSettings`/`ScheduleNotificationSettings.cc_emails`
+  were `List[str]`, not `List[EmailStr]`, unlike every sibling cc/to/bcc
+  field). Fixed both. **MSG-7 (MEDIUM)** the SMTP send path had no
+  attachment size budget (unlike the Cloudflare path's 4.5 MiB cap) and its
+  per-recipient loop serializes a full message copy per recipient, so
+  memory scales as attachment-size × recipient-count — concretely reachable
+  via election-package PDFs mailed to a full voter roster; also, two of
+  three send branches weren't exception-safe despite the method's own
+  contract never raising. Fixed with an 18 MiB budget mirroring the
+  Cloudflare pattern and matching try/except on all three branches.
+  **MSG-8 (MEDIUM-LOW, Pitfall #9)** `email_theme._SHELL_COLOURWAYS` — a
+  module-level dict with no cap or eviction — was populated by every
+  `build_shell()` call including the ~20 runtime call sites inside
+  `wrap_email_body()`, none of which are ever read back (only the ~35+9
+  import-time default-template constants are looked up), so every email
+  sent grew it by one entry for the life of the worker process. Fixed with
+  a `cache: bool` parameter defaulting to the existing behavior, with the
+  one runtime caller passing `cache=False`. One item deliberately left
+  unfixed as a policy call, not a bug: `email_service.py`'s org-configured
+  SMTP host has no SSRF-style private-IP guard, unlike this codebase's
+  webhook-URL pattern — but a department may legitimately point it at an
+  internal mail relay, so adding that guard would be a functional
+  regression, not hardening. Full local completion gate green:
+  flake8/black/isort clean, migrations validated (no schema change),
+  855/855 messaging+notifications+email-theme scoped and 8914/8914 full
+  backend suite pass. Findings doc:
+  `docs/security-review/MSG-25-messaging-notifications.md`. PR #1907 opened
+  and subscribed. Next: 26 forms, once #1907 merges.
