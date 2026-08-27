@@ -6,6 +6,20 @@
 
 ## Pass 2 (2026-08-27)
 
+> **Revision note:** the backend section below, as first drafted, concluded
+> the 2 changed backend files needed no further review since they matched
+> already-Codex-reviewed work from PR #1931. That comparison was correct as
+> far as it went, but incomplete — Codex's review of this PR's draft found
+> two real, separate P1 issues in the same `transfer_prospect`/
+> `transfer_to_membership`/`_do_transfer` path that PR #1931's review never
+> had reason to look for (it was scoped to the administrative-rank pairing,
+> not to `role_ids` or to concurrency): a missing role-grant ceiling on the
+> transfer's `role_ids`, and a missing row lock making the transfer's
+> already-once-fixed `ProspectStatus.TRANSFERRED` guard a check-before-write
+> race. Both are recorded under Findings with what was actually done. The
+> original draft's backend paragraph is left below for the record, followed
+> by the corrected conclusion.
+
 Scoped to the **full domain** since pass 1's merge commit (`aad49be4`,
 PR #1815): `endpoints/membership_pipeline.py`, `services/membership_pipeline_service.py`,
 `models/membership_pipeline.py`, `schemas/membership_pipeline.py`,
@@ -30,6 +44,53 @@ via prospect conversion) rather than an update-in-place, and the
 `ProspectStatus.TRANSFERRED` guard already prevents a double-transfer race,
 so it does not need the `populate_existing`/row-lock treatment the update
 writers required — no finding.
+
+**Corrected backend conclusion (Codex review on this PR):** the two findings
+below are both real and both fixed.
+
+- **Missing role-grant ceiling on `transfer_prospect`'s `role_ids`.**
+  `TransferProspectRequest` carries a caller-supplied `role_ids` list, and
+  `_do_transfer` resolved those ids with only an `organization_id` filter and
+  attached every match to the new `User` — `create_member`'s identical
+  `role_ids` handling calls `_enforce_role_grant_ceiling` right after the
+  same org-scoped resolution; `transfer_prospect` never did. A caller
+  holding only `members.manage`/`prospective_members.manage` (neither of
+  which implies `roles.manage`) could submit a wildcard or otherwise
+  more-privileged role's id and mint an account with permissions beyond
+  their own — and since the same request also controls
+  `department_email`, they could point the new account's welcome email at
+  an address they control and log in as it themselves, a full-tenant
+  escalation through the transfer path rather than the (already-guarded)
+  direct-create or assign paths. Fixed in `transfer_prospect`
+  (`endpoints/membership_pipeline.py`): after the existing rank-ceiling
+  check and before calling `service.transfer_to_membership`, resolve
+  `data.role_ids` the same way `create_member` does (org-scoped, 400 on any
+  id that doesn't resolve) and run `_enforce_role_grant_ceiling` on the
+  result. Covered by
+  `test_transfer_prospect_calls_role_ceiling` in
+  `test_privilege_ceiling_wiring.py`.
+- **`transfer_to_membership` is a check-before-write with no row lock.**
+  `get_prospect` supports `lock_for_update=True` and the pattern is already
+  established elsewhere in this service (`complete_step_for_prospect` locks
+  before its own status check, with the exact comment explaining why) — but
+  `transfer_to_membership` called `get_prospect` with no lock, checked
+  `ProspectStatus.TRANSFERRED`, and only set that status _after_ creating
+  the new `User` row in `_do_transfer`. Two concurrent transfer requests
+  supplying distinct `username`/`membership_id`/`department_email` values
+  (so the `User` table's uniqueness indexes don't conflict) can both observe
+  `ACTIVE` before either commits, and both create a separate `User` account
+  for the same prospect — the second write to `prospect.transferred_user_id`
+  simply overwrites the first, silently orphaning one of the two accounts
+  from the prospect record while leaving both live. This is the same
+  read-then-write shape CLAUDE.md Pitfall #27 documents for capacity checks,
+  applied to a one-time status transition instead of a count. Fixed by
+  adding `lock_for_update=True` to `transfer_to_membership`'s `get_prospect`
+  call, ahead of the `TRANSFERRED` check (the row lock serializes the
+  decision; `get_prospect`'s query already carries
+  `.execution_options(populate_existing=True)` unconditionally, so no
+  separate staleness fix was needed here). Covered by
+  `test_transfer_locks_the_prospect_before_checking_status` in
+  `test_membership_pipeline_flow.py`.
 
 **Migrations:** content-grepped (`prospect|membership_pipeline|pipeline_stage`,
 case-insensitive) across every migration added since pass 1; the 3 hits are
@@ -79,11 +140,15 @@ split, diffed line-by-line against it). Findings:
 - No stale-response race: neither page's diff added new fetch/`useEffect`
   logic (both are pure reindentation from the `DialogPortal` change).
 
-No confirmed security findings. Completion gate: no code changes required
-(the 2 backend files matched already-merged, already-reviewed work; the
-frontend diff's actual bugs were already fixed and tested within the diff
-itself), so no fresh test run was needed beyond what pass 1 and the earlier
-PR #1931 review already covered. Rotation row 08 -> done.
+Frontend: no confirmed security findings, no code changes needed (the diff's
+own bugs were already fixed and tested within it). Backend: 2 real P1
+findings, both fixed above and each covered by a guard test confirmed to
+fail against the pre-fix code via `git stash` before being counted.
+Completion gate: flake8/black/isort clean on every changed file;
+`test_membership_pipeline_flow.py` + `test_privilege_ceiling_wiring.py` +
+`test_prospect_create_privacy.py` + `test_rejected_prospect_dropped.py` +
+`test_administrative_rank_restriction.py` (95 tests) all pass; full backend
+suite run for regressions. Rotation row 08 -> done.
 
 ---
 

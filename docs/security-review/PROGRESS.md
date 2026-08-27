@@ -22,23 +22,32 @@ merge before starting feature 09 (medical screening, PHI), pass 2.
 
 ---
 
-### 2026-08-27 — Feature 08 (Membership pipeline), pass 2 — no findings
+### 2026-08-27 — Feature 08 (Membership pipeline), pass 2 — Codex caught 2 real P1 bugs, both fixed
 
-Scoped to the full domain since pass 1's merge (`aad49be4`, PR #1815). Only
-2 backend files changed since pass 1, both already reviewed and fixed
-earlier in this rotation on PR #1931 (feature 02) — the prospect-transfer
-privilege-ceiling checks. No new/relevant migrations. The frontend diff
-(dialog-portal adoption across 5 components, a stage-timeout-clearing fix,
-a stage-config-default fix, module gating, and the new
-`frontend/src/utils/membership.ts`) was reviewed in full, including a
-line-by-line diff of `membership.ts` against
-`backend/app/utils/membership.py` — matches exactly, no mislabeled UI text
-of the kind ELEC-06 pass 2 found in `BallotBuilder.tsx`. The diff's own bugs
-(stage-timeout `??`/`undefined` swallowing an explicit clear; an incomplete
-`DEFAULT_STAGE_CONFIGS` table) were already fixed and tested within the
-diff itself — nothing left to fix. No code changes, no new PR needed beyond
-the doc update. Full detail in `MP-08-membership-pipeline.md`. Rotation row
-08 -> done. Next: 09 medical screening (PHI).
+Scoped to the full domain since pass 1's merge (`aad49be4`, PR #1815). The
+frontend diff (dialog-portal adoption across 5 components, a
+stage-timeout-clearing fix, a stage-config-default fix, module gating, and
+the new `frontend/src/utils/membership.ts`) was reviewed in full and had no
+findings — its own bugs were already fixed and tested within the diff, and
+`membership.ts` matches `backend/app/utils/membership.py` line-by-line, no
+mislabeled UI text of the kind ELEC-06 pass 2 found in `BallotBuilder.tsx`.
+The backend's initial "already-reviewed on PR #1931" read was incomplete:
+Codex's review of the draft PR found two real, separate P1 issues in the
+same transfer-prospect path that PR #1931's narrower review never had
+reason to look for — `transfer_prospect` accepted a caller-supplied
+`role_ids` list and attached every resolved role to the new account with no
+`_enforce_role_grant_ceiling` check (a bare `members.manage`/
+`prospective_members.manage` holder could mint an account with a
+wildcard/more-privileged role, and via the request's own
+`department_email` field, log in as it themselves); and
+`transfer_to_membership` read the prospect without `lock_for_update`, so
+two concurrent transfer requests with distinct usernames could both pass
+the `ProspectStatus.TRANSFERRED` check and each create a separate `User`
+account for one prospect. Both fixed (role ceiling added to the endpoint;
+row lock added ahead of the status check in the service), each covered by
+a guard test confirmed to fail against the pre-fix code via `git stash`.
+Full detail in `MP-08-membership-pipeline.md`. Rotation row 08 -> done.
+Next: 09 medical screening (PHI).
 
 ### 2026-08-27 — Feature 07 (Users & organizations), pass 2 ✅ merged — PR #1949
 
