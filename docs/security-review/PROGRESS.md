@@ -16,12 +16,19 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-Feature 01 (auth & session lifecycle, pass 2) — [PR #1929](https://github.com/thegspiro/the-logbook/pull/1929),
-branch `claude/security-review-auth-01-pass2`. No findings, no code changes
-(docs only). See log entry below and `AUTH-01-auth-session.md`'s "Pass 2"
-section.
+None. Feature 01 (auth & session lifecycle, pass 2) merged as
+[PR #1929](https://github.com/thegspiro/the-logbook/pull/1929) — see log entry
+below. Next: 02 permissions & roles, pass 2.
 
 ---
+
+### 2026-08-27 — Feature 01 (Auth & session lifecycle), pass 2 ✅ merged — PR #1929
+
+Merged. AUTH-3 (stale-response race, fixed) and AUTH-4 (unbounded roster
+query, flagged) both came from Codex's review, not the initial pass — see the
+"Update" note below. AUTH-4's thread was left open on the PR for the owner;
+it did not block the merge. Rotation row 01 -> done for pass 2. Next: 02
+permissions & roles.
 
 ### 2026-08-27 — Feature 01 (Auth & session lifecycle), pass 2
 
@@ -770,8 +777,8 @@ each row's prior PR is recorded in the Log, not repeated here.
 | #   | Feature                   | Prefix | Principal code                                                                                                                                  | Status |
 | --- | ------------------------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
 | 00  | Cross-cutting baseline    | SEC    | whole-codebase sweeps; see `SEC-00-cross-cutting-baseline.md`                                                                                   | ✅     |
-| 01  | Auth & session lifecycle  | AUTH   | `endpoints/auth.py`, `auth_service.py`, `mfa_service.py`, `oauth_service.py`                                                                    | ⏳     |
-| 02  | Permissions & roles       | PERM   | `dependencies.py`, `core/permissions.py`, `roles.py`, `operational_ranks.py`, `officers.py`, `org_chart.py`                                     | ⬜     |
+| 01  | Auth & session lifecycle  | AUTH   | `endpoints/auth.py`, `auth_service.py`, `mfa_service.py`, `oauth_service.py`                                                                    | ✅     |
+| 02  | Permissions & roles       | PERM   | `dependencies.py`, `core/permissions.py`, `roles.py`, `operational_ranks.py`, `officers.py`, `org_chart.py`                                     | 🔄     |
 | 03  | Public surface & webhooks | PUB    | `api/public/*` (20 unauth routes), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`                                      | ⬜     |
 | 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                              | ⬜     |
 | 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                     | ⬜     |
