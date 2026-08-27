@@ -8,7 +8,7 @@
  */
 
 import React from 'react';
-import { ExternalLink, CornerDownRight, Lock, PowerOff } from 'lucide-react';
+import { ExternalLink, CornerDownRight, History, Lock, PowerOff } from 'lucide-react';
 import type { TestPageEntry } from '../testingRegistry';
 import { buildTestUrl, routeParams } from '../testingRegistry';
 import type { PageAccess } from '../pageAccess';
@@ -21,6 +21,10 @@ interface TestPageCardProps {
   /** What other testers found here. Only populated on the shared run. */
   otherMarks?: OtherTesterMark[] | undefined;
   access: PageAccess;
+  /** The build this browser runs, so a mark from an older one can say so. */
+  currentBuildId?: string | undefined;
+  /** An archived run is a record: it renders, but it does not take marks. */
+  readOnly?: boolean | undefined;
   onStatus: (path: string, status: TestStatus) => void;
   onNote: (path: string, note: string) => void;
   onParam: (path: string, param: string, value: string) => void;
@@ -58,11 +62,17 @@ const TestPageCardComponent: React.FC<TestPageCardProps> = ({
   result,
   otherMarks,
   access,
+  currentBuildId,
+  readOnly = false,
   onStatus,
   onNote,
   onParam,
 }) => {
   const status = result?.status ?? 'untested';
+  // Only a mark that carries a build can be stale: development bundles carry
+  // none, and an absent stamp is not evidence of age.
+  const isStale =
+    status !== 'untested' && Boolean(currentBuildId) && Boolean(result?.buildId) && result?.buildId !== currentBuildId;
   const params = routeParams(page.path);
   const url = buildTestUrl(page.path, result?.params ?? {});
   const gate = describeGate(page);
@@ -96,6 +106,13 @@ const TestPageCardComponent: React.FC<TestPageCardProps> = ({
       )}
 
       {page.note && <p className="text-theme-text-secondary text-xs">{page.note}</p>}
+
+      {isStale && (
+        <p className="text-theme-text-secondary inline-flex items-center gap-1 text-xs">
+          <History className="h-3 w-3" aria-hidden="true" />
+          Marked against an earlier build — worth checking again.
+        </p>
+      )}
 
       <div className="flex flex-wrap items-center gap-1.5">
         {page.isPublic && <span className="badge bg-theme-surface-secondary text-theme-text-secondary">public</span>}
@@ -168,6 +185,7 @@ const TestPageCardComponent: React.FC<TestPageCardProps> = ({
               key={button.status}
               type="button"
               aria-pressed={status === button.status}
+              disabled={readOnly}
               onClick={() => onStatus(page.path, button.status)}
               className={`mobile-touch-target rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
                 status === button.status ? button.active : 'text-theme-text-secondary hover:bg-theme-surface-hover'
@@ -183,6 +201,7 @@ const TestPageCardComponent: React.FC<TestPageCardProps> = ({
         className="form-input-sm"
         value={result?.note ?? ''}
         onChange={(event) => onNote(page.path, event.target.value)}
+        disabled={readOnly}
         placeholder="Note — what broke, or what still needs proving"
         aria-label={`Note for ${page.label}`}
       />

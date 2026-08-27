@@ -260,7 +260,10 @@ class TestTestingChecklistEndpoints:
         )
 
         response = await list_checklist(
-            include_all_testers=True, current_user=it_manager, db=db_session
+            include_all_testers=True,
+            run_id=None,
+            current_user=it_manager,
+            db=db_session,
         )
 
         assert response.includes_all_testers is True
@@ -283,11 +286,14 @@ class TestTestingChecklistEndpoints:
             lambda user, permission: False,
         )
 
-        # include_all_testers is passed explicitly: called directly rather
-        # than through FastAPI, the parameter default is a Query object, and
-        # a Query object is truthy.
+        # Every query parameter is passed explicitly: called directly rather
+        # than through FastAPI, a parameter's default is the Query object
+        # itself — which is truthy, and is not None.
         response = await list_checklist(
-            include_all_testers=False, current_user=firefighter, db=db_session
+            include_all_testers=False,
+            run_id=None,
+            current_user=firefighter,
+            db=db_session,
         )
 
         assert [entry.route_path for entry in response.entries] == ["/training"]

@@ -41,6 +41,17 @@ vi.mock('../../../hooks/useTimezone', () => ({ useTimezone: () => 'America/New_Y
 const savedEntries: TestingCheckEntry[] = [];
 /** Set to make the run load fail the way a switched-off module does. */
 let moduleDisabled = false;
+const currentRun = {
+  id: 'run-1',
+  sequence: 1,
+  label: 'Run of 2026-08-27',
+  buildId: null,
+  startedAt: '2026-08-27T09:00:00Z',
+  startedById: 'u1',
+  startedByName: 'Firefighter Jones',
+  isCurrent: true,
+};
+const mockStartRun = vi.fn();
 const mockSaveEntry = vi.fn();
 const mockClearRun = vi.fn();
 vi.mock('../services/api', () => ({
@@ -52,12 +63,18 @@ vi.mock('../services/api', () => ({
           })
         : Promise.resolve({
             entries: savedEntries,
+            run: currentRun,
+            runs: [currentRun],
             includesAllTesters: Boolean(includeAll),
             testerCount: new Set(savedEntries.map((entry) => entry.userId)).size,
           }),
     saveEntry: (payload: unknown) => {
       mockSaveEntry(payload);
       return Promise.resolve({ ...(payload as object), id: 'saved', userId: 'u1', isMine: true });
+    },
+    startRun: (label: string) => {
+      mockStartRun(label);
+      return Promise.resolve({ ...currentRun, id: 'run-2', sequence: 2, label });
     },
     clearRun: (scope?: string) => {
       mockClearRun(scope);
@@ -196,6 +213,19 @@ describe('TestingChecklistPage', () => {
     expect(screen.queryByRole('button', { name: /Clear everyone/ })).not.toBeInTheDocument();
   });
 
+  it('names the run the marks belong to', async () => {
+    renderWithRouter(<TestingChecklistPage />);
+
+    expect(await screen.findByText('Run of 2026-08-27')).toBeInTheDocument();
+    expect(screen.getByText(/Run 1, started/)).toBeInTheDocument();
+  });
+
+  it('does not offer a member the run controls', () => {
+    renderWithRouter(<TestingChecklistPage />);
+
+    expect(screen.queryByRole('button', { name: /Start a new run/ })).not.toBeInTheDocument();
+  });
+
   it('says the module is switched off rather than blaming the server', async () => {
     moduleDisabled = true;
     renderWithRouter(<TestingChecklistPage />);
@@ -249,6 +279,21 @@ describe('TestingChecklistPage', () => {
 
       expect(await screen.findByText(/Across 1 tester, 1 of \d+ pages have been checked/)).toBeInTheDocument();
       expect(screen.getByText(/0 of \d+ pages checked by you/)).toBeInTheDocument();
+    });
+
+    it('starts a new run, saying what it costs first', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<TestingChecklistPage />);
+
+      await user.click(await screen.findByRole('button', { name: /Start a new run/ }));
+      expect(screen.getByText(/Everyone's board goes back to nothing/)).toBeInTheDocument();
+
+      await user.click(screen.getByRole('button', { name: 'Start the run' }));
+
+      await waitFor(() => expect(mockStartRun).toHaveBeenCalled());
+      // The suggested label carries the next run number, so an administrator
+      // can simply accept it.
+      expect(String(mockStartRun.mock.calls[0]?.[0])).toMatch(/^Run 2 · /);
     });
 
     it('can clear the whole department, behind its own confirmation', async () => {

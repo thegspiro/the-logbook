@@ -11,7 +11,10 @@ from typing import Optional
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from pydantic.alias_generators import to_camel
 
-from app.models.testing_checklist import TestingCheckStatus
+from app.models.testing_checklist import (
+    TestingAccessExpectation,
+    TestingCheckStatus,
+)
 from app.schemas.base import UTCResponseBase
 
 _RESPONSE_CONFIG = ConfigDict(
@@ -26,6 +29,10 @@ _REQUEST_CONFIG = ConfigDict(alias_generator=to_camel, populate_by_name=True)
 ROUTE_PATH_PATTERN = re.compile(r"^/[A-Za-z0-9\-_/:.]*$")
 
 MAX_NOTE_CHARS = 2000
+MAX_RUN_LABEL_CHARS = 120
+# Long enough for the build ids vite stamps; a cap so the column cannot be used
+# as free storage.
+MAX_BUILD_ID_CHARS = 64
 # A parameterized route has one or two segments; the cap is a bound on junk,
 # not a design constraint.
 MAX_PARAMS = 8
@@ -41,6 +48,12 @@ class TestingCheckUpsert(BaseModel):
     status: TestingCheckStatus = TestingCheckStatus.UNTESTED
     note: Optional[str] = Field(default=None, max_length=MAX_NOTE_CHARS)
     params: Optional[dict[str, str]] = None
+    # The bundle the tester was looking at, so a mark can be told from one made
+    # three deployments ago. Absent in development, where nothing is stamped.
+    build_id: Optional[str] = Field(default=None, max_length=MAX_BUILD_ID_CHARS)
+    # What the screen predicted this account would meet. Stored as reported —
+    # see TestingAccessExpectation for why that is enough.
+    expected_access: Optional[TestingAccessExpectation] = None
 
     @field_validator("route_path")
     @classmethod
@@ -72,6 +85,42 @@ class TestingCheckUpsert(BaseModel):
         return cleaned or None
 
 
+class TestingRunCreate(BaseModel):
+    """Open a new run, retiring the current one."""
+
+    model_config = _REQUEST_CONFIG
+
+    label: str = Field(..., min_length=1, max_length=MAX_RUN_LABEL_CHARS)
+    build_id: Optional[str] = Field(default=None, max_length=MAX_BUILD_ID_CHARS)
+
+    @field_validator("label")
+    @classmethod
+    def _require_label(cls, value: str) -> str:
+        label = value.strip()
+        if not label:
+            raise ValueError("A run needs a label")
+        return label
+
+
+class TestingRunResponse(UTCResponseBase):
+    """One pass over the checklist."""
+
+    model_config = _RESPONSE_CONFIG
+
+    id: str
+    # 1, 2, 3 … per department; what orders the history picker.
+    sequence: int
+    label: str
+    build_id: Optional[str] = None
+    started_at: datetime
+    started_by_id: Optional[str] = None
+    started_by_name: Optional[str] = None
+    # False for every run but the newest: an archived run is read-only, and the
+    # screen has to say so rather than accept marks it will file in the wrong
+    # place.
+    is_current: bool = False
+
+
 class TestingCheckResponse(UTCResponseBase):
     """One tester's mark on one page."""
 
@@ -89,6 +138,8 @@ class TestingCheckResponse(UTCResponseBase):
     # because a mark made before a promotion no longer describes the account.
     user_name: Optional[str] = None
     tested_as: Optional[list[str]] = None
+    build_id: Optional[str] = None
+    expected_access: Optional[TestingAccessExpectation] = None
     is_mine: bool = False
 
 
@@ -98,6 +149,10 @@ class TestingChecklistResponse(UTCResponseBase):
     model_config = _RESPONSE_CONFIG
 
     entries: list[TestingCheckResponse]
+    # The run these entries belong to, and every run the department has kept.
+    # Absent only before the first mark, when no run has been opened yet.
+    run: Optional[TestingRunResponse] = None
+    runs: list[TestingRunResponse] = []
     # False when the caller asked for everyone's marks and holds the grant for
     # it; the screen labels its totals differently in each case, and guessing
     # from the row set would call a single-tester department "everyone".

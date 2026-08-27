@@ -1,14 +1,16 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { act, renderHook, waitFor } from '@testing-library/react';
-import type { TestingCheckEntry, TestingCheckUpsert, TestingChecklistRun } from './services/api';
+import type { TestingCheckEntry, TestingCheckUpsert, TestingChecklistRun, TestingRun } from './services/api';
 
-const mockGetRun = vi.fn<(includeAll?: boolean) => Promise<TestingChecklistRun>>();
+const mockGetRun = vi.fn<(includeAll?: boolean, runId?: string) => Promise<TestingChecklistRun>>();
+const mockStartRun = vi.fn<(label: string, buildId?: string) => Promise<TestingRun>>();
 const mockSaveEntry = vi.fn<(payload: TestingCheckUpsert) => Promise<TestingCheckEntry>>();
 const mockClearRun = vi.fn<(scope?: 'mine' | 'all') => Promise<number>>();
 
 vi.mock('./services/api', () => ({
   testingChecklistService: {
-    getRun: (includeAll?: boolean) => mockGetRun(includeAll),
+    getRun: (includeAll?: boolean, runId?: string) => mockGetRun(includeAll, runId),
+    startRun: (label: string, buildId?: string) => mockStartRun(label, buildId),
     saveEntry: (payload: TestingCheckUpsert) => mockSaveEntry(payload),
     clearRun: (scope?: 'mine' | 'all') => mockClearRun(scope),
   },
@@ -41,15 +43,29 @@ const entry = (overrides: Partial<TestingCheckEntry> = {}): TestingCheckEntry =>
   ...overrides,
 });
 
+const makeRun = (overrides: Partial<TestingRun> = {}): TestingRun => ({
+  id: 'run-1',
+  sequence: 1,
+  label: 'Run of 2026-08-27',
+  buildId: null,
+  startedAt: '2026-08-27T09:00:00Z',
+  startedById: 'u1',
+  startedByName: 'Firefighter Jones',
+  isCurrent: true,
+  ...overrides,
+});
+
 const run = (entries: TestingCheckEntry[], overrides: Partial<TestingChecklistRun> = {}): TestingChecklistRun => ({
   entries,
+  run: makeRun(),
+  runs: [makeRun()],
   includesAllTesters: false,
   testerCount: new Set(entries.map((e) => e.userId)).size,
   ...overrides,
 });
 
 const loaded = async () => {
-  const hook = renderHook(() => useTestingChecklist());
+  const hook = renderHook(() => useTestingChecklist({}));
   await waitFor(() => expect(hook.result.current.isLoading).toBe(false));
   return hook;
 };
@@ -60,6 +76,7 @@ describe('useTestingChecklist', () => {
     mockGetRun.mockResolvedValue(run([]));
     mockSaveEntry.mockResolvedValue(entry());
     mockClearRun.mockResolvedValue(1);
+    mockStartRun.mockResolvedValue(makeRun({ id: 'run-2', sequence: 2, label: 'Second pass' }));
   });
 
   it('loads the saved run', async () => {
@@ -73,11 +90,11 @@ describe('useTestingChecklist', () => {
 
   it('asks for its own run unless the caller can read every tester', async () => {
     await loaded();
-    expect(mockGetRun).toHaveBeenCalledWith(false);
+    expect(mockGetRun).toHaveBeenCalledWith(false, undefined);
 
-    const shared = renderHook(() => useTestingChecklist(true));
+    const shared = renderHook(() => useTestingChecklist({ includeAllTesters: true }));
     await waitFor(() => expect(shared.result.current.isLoading).toBe(false));
-    expect(mockGetRun).toHaveBeenCalledWith(true);
+    expect(mockGetRun).toHaveBeenCalledWith(true, undefined);
   });
 
   it('files another tester’s mark separately from your own', async () => {
@@ -142,6 +159,10 @@ describe('useTestingChecklist', () => {
         status: 'pass',
         note: null,
         params: null,
+        // No build is stamped into a development bundle, and an absent stamp
+        // must not read as "made against an old build".
+        buildId: null,
+        expectedAccess: null,
       })
     );
   });
@@ -172,7 +193,7 @@ describe('useTestingChecklist', () => {
   it('waits for a pause before saving a note', async () => {
     vi.useFakeTimers();
     try {
-      const hook = renderHook(() => useTestingChecklist());
+      const hook = renderHook(() => useTestingChecklist({}));
       await vi.waitFor(() => expect(hook.result.current.isLoading).toBe(false));
 
       act(() => hook.result.current.setNote('/dashboard', 'r'));
@@ -194,7 +215,7 @@ describe('useTestingChecklist', () => {
     vi.useFakeTimers();
     try {
       mockGetRun.mockResolvedValue(run([entry({ routePath: '/dashboard', note: 'was broken' })]));
-      const hook = renderHook(() => useTestingChecklist());
+      const hook = renderHook(() => useTestingChecklist({}));
       await vi.waitFor(() => expect(hook.result.current.isLoading).toBe(false));
 
       act(() => hook.result.current.setNote('/dashboard', ''));
@@ -211,7 +232,7 @@ describe('useTestingChecklist', () => {
   it('keeps sample ids with the page', async () => {
     vi.useFakeTimers();
     try {
-      const hook = renderHook(() => useTestingChecklist());
+      const hook = renderHook(() => useTestingChecklist({}));
       await vi.waitFor(() => expect(hook.result.current.isLoading).toBe(false));
 
       act(() => hook.result.current.setParam('/events/:id', 'id', 'evt-7'));
@@ -224,6 +245,81 @@ describe('useTestingChecklist', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it('reads the run it was given, and the history beside it', async () => {
+    const archived = makeRun({ id: 'run-0', sequence: 0, label: 'First pass', isCurrent: false });
+    mockGetRun.mockResolvedValue(run([], { runs: [makeRun(), archived] }));
+
+    const { result } = await loaded();
+
+    expect(result.current.run?.label).toBe('Run of 2026-08-27');
+    expect(result.current.runs.map((entry) => entry.label)).toEqual(['Run of 2026-08-27', 'First pass']);
+    expect(result.current.isViewingArchivedRun).toBe(false);
+  });
+
+  it('knows an archived run is a record rather than a board', async () => {
+    const archived = makeRun({ id: 'run-0', label: 'First pass', isCurrent: false });
+    mockGetRun.mockResolvedValue(run([], { run: archived, runs: [makeRun(), archived] }));
+
+    const { result } = await loaded();
+
+    expect(result.current.isViewingArchivedRun).toBe(true);
+  });
+
+  it('re-reads when an earlier run is picked', async () => {
+    const { result } = await loaded();
+
+    act(() => result.current.viewRun('run-0'));
+
+    await waitFor(() => expect(mockGetRun).toHaveBeenLastCalledWith(false, 'run-0'));
+  });
+
+  it('starts a run and comes back to it', async () => {
+    const { result } = await loaded();
+
+    await act(async () => {
+      await result.current.startRun('Pre-launch');
+    });
+
+    expect(mockStartRun).toHaveBeenCalledWith('Pre-launch', undefined);
+    // Reloaded, and looking at the current run rather than whatever was picked.
+    await waitFor(() => expect(mockGetRun).toHaveBeenLastCalledWith(false, undefined));
+  });
+
+  it('flags marks made against an earlier build', async () => {
+    vi.stubGlobal('__BUILD_ID__', 'build-now');
+    try {
+      mockGetRun.mockResolvedValue(
+        run([
+          entry({ routePath: '/dashboard', status: 'pass', buildId: 'build-old' }),
+          entry({ id: 'e2', routePath: '/events', status: 'pass', buildId: 'build-now' }),
+          entry({ id: 'e3', routePath: '/training', status: 'pass', buildId: null }),
+        ])
+      );
+
+      const { result } = await loaded();
+
+      // Only the one that actually names an older build: an absent stamp is
+      // not evidence of age.
+      expect(result.current.staleCount).toBe(1);
+      expect(result.current.currentBuildId).toBe('build-now');
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('records what the screen predicted alongside the result', async () => {
+    const { result } = renderHook(() =>
+      useTestingChecklist({ expectationFor: (path) => (path === '/events/admin' ? 'denied' : 'open') })
+    );
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    act(() => result.current.setStatus('/events/admin', 'blocked'));
+
+    await waitFor(() =>
+      expect(mockSaveEntry).toHaveBeenCalledWith(expect.objectContaining({ expectedAccess: 'denied' }))
+    );
   });
 
   it('reports a run it could not load, and does not pretend it is empty', async () => {
@@ -286,7 +382,7 @@ describe('useTestingChecklist', () => {
         { includesAllTesters: true, testerCount: 2 }
       )
     );
-    const hook = renderHook(() => useTestingChecklist(true));
+    const hook = renderHook(() => useTestingChecklist({ includeAllTesters: true }));
     await waitFor(() => expect(hook.result.current.isLoading).toBe(false));
 
     const markdown = hook.result.current.toMarkdown({

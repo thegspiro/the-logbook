@@ -13,7 +13,7 @@
  * administrator could open could not be used for that.
  */
 
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
   ClipboardCheck,
   ChevronDown,
@@ -21,6 +21,7 @@ import {
   Copy,
   Download,
   Eye,
+  History,
   RotateCcw,
   Search,
   ShieldCheck,
@@ -40,6 +41,8 @@ import type { PageAccess } from '../pageAccess';
 import { SEE_ALL_TESTERS_PERMISSION, useTestingChecklist } from '../useTestingChecklist';
 import type { TestStatus } from '../useTestingChecklist';
 import { TestPageCard } from '../components/TestPageCard';
+import { PromptDialog } from '../../../components/ux';
+import { formatDate } from '../../../utils/dateFormatting';
 
 type StatusFilter = 'all' | TestStatus;
 
@@ -62,28 +65,6 @@ export const TestingChecklistPage: React.FC = () => {
   // as each position in turn a usable method rather than three separate runs
   // nobody can compare. Everybody else reads their own.
   const canSeeAllTesters = checkPermission(SEE_ALL_TESTERS_PERMISSION);
-  const {
-    results,
-    otherMarks,
-    summary,
-    coveredByAnyone,
-    testerCount,
-    isLoading,
-    loadError,
-    isModuleDisabled,
-    reload,
-    setStatus,
-    setNote,
-    setParam,
-    clearAll,
-    toMarkdown,
-  } = useTestingChecklist(canSeeAllTesters);
-
-  const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
-  const [onlyOpenable, setOnlyOpenable] = useState(false);
-  const [expanded, setExpanded] = useState<string[]>([]);
-  const [showPermissions, setShowPermissions] = useState(false);
 
   const accessFor = useMemo(() => {
     const context = { checkPermission, hasRole, isModuleOn };
@@ -97,6 +78,41 @@ export const TestingChecklistPage: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, enabledModules]);
 
+  // What the screen predicts this account will meet, recorded with each mark so
+  // a page that opens for somebody it should refuse can be told from a pass.
+  const expectationFor = useCallback((path: string) => accessFor.get(path)?.kind, [accessFor]);
+  const {
+    results,
+    run,
+    runs,
+    isViewingArchivedRun,
+    currentBuildId,
+    staleCount,
+    viewRun,
+    startRun,
+    otherMarks,
+    summary,
+    coveredByAnyone,
+    testerCount,
+    isLoading,
+    loadError,
+    isModuleDisabled,
+    reload,
+    setStatus,
+    setNote,
+    setParam,
+    clearAll,
+    toMarkdown,
+  } = useTestingChecklist({ includeAllTesters: canSeeAllTesters, expectationFor });
+
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const [onlyOpenable, setOnlyOpenable] = useState(false);
+  const [expanded, setExpanded] = useState<string[]>([]);
+  const [showPermissions, setShowPermissions] = useState(false);
+  const [startingRun, setStartingRun] = useState(false);
+  const [staleOnly, setStaleOnly] = useState(false);
+
   const matches = (page: TestPageEntry): boolean => {
     const term = search.trim().toLowerCase();
     if (term && !page.label.toLowerCase().includes(term) && !page.path.toLowerCase().includes(term)) return false;
@@ -104,6 +120,11 @@ export const TestingChecklistPage: React.FC = () => {
     if (onlyOpenable) {
       const access = accessFor.get(page.path);
       if (access && (access.kind === 'denied' || access.kind === 'module-off')) return false;
+    }
+    if (staleOnly) {
+      const result = results[page.path];
+      if (!result || result.status === 'untested') return false;
+      if (!currentBuildId || !result.buildId || result.buildId === currentBuildId) return false;
     }
     return true;
   };
@@ -174,6 +195,8 @@ export const TestingChecklistPage: React.FC = () => {
 
   const percent = Math.round(summary.progress * 100);
 
+  const suggestedRunLabel = `Run ${(runs[0]?.sequence ?? 0) + 1} · ${formatDate(new Date().toISOString(), tz)}`;
+
   return (
     <div className="page-container page-stack px-4 py-6 sm:px-6 lg:px-8">
       <header className="page-stack">
@@ -187,6 +210,59 @@ export const TestingChecklistPage: React.FC = () => {
               the same list. The steps for each area are in <span className="font-mono">TESTING_CHECKLIST.md</span>;
               this tracks which screens have been walked.
             </p>
+          </div>
+        </div>
+
+        <div className="card flex flex-wrap items-center justify-between gap-3 p-4">
+          <div className="min-w-0">
+            <p className="text-theme-text-primary font-semibold">
+              {run ? run.label : 'No run started yet'}
+              {isViewingArchivedRun && (
+                <span className="badge bg-theme-surface-secondary text-theme-text-secondary ml-2">archived</span>
+              )}
+            </p>
+            <p className="text-theme-text-secondary text-sm">
+              {run
+                ? `Run ${run.sequence}, started ${formatDate(run.startedAt, tz)}${
+                    run.startedByName ? ` by ${run.startedByName}` : ''
+                  }${run.buildId ? ` · build ${run.buildId.slice(0, 8)}` : ''}`
+                : 'The first mark you make opens one.'}
+            </p>
+            {isViewingArchivedRun && (
+              <p className="text-theme-text-secondary mt-1 text-xs">
+                This is the record of an earlier pass — marking is disabled. Switch back to the current run to test.
+              </p>
+            )}
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            {runs.length > 1 && (
+              <label className="text-sm">
+                <span className="sr-only">Testing run</span>
+                <select
+                  className="form-input-sm w-auto"
+                  value={run?.id ?? ''}
+                  onChange={(event) => viewRun(event.target.value === runs[0]?.id ? null : event.target.value)}
+                >
+                  {runs.map((entry) => (
+                    <option key={entry.id} value={entry.id}>
+                      {entry.label}
+                      {entry.isCurrent ? ' (current)' : ''}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+            {isViewingArchivedRun && (
+              <button type="button" className="btn-secondary btn-sm" onClick={() => viewRun(null)}>
+                Back to the current run
+              </button>
+            )}
+            {canSeeAllTesters && (
+              <button type="button" className="btn-secondary btn-sm" onClick={() => setStartingRun(true)}>
+                Start a new run
+              </button>
+            )}
           </div>
         </div>
 
@@ -220,6 +296,11 @@ export const TestingChecklistPage: React.FC = () => {
               style={{ width: `${percent}%` }}
             />
           </div>
+          {staleCount > 0 && (
+            <p className="text-theme-text-secondary mt-2 text-sm">
+              {staleCount} {staleCount === 1 ? 'mark was' : 'marks were'} made against an earlier build of the app.
+            </p>
+          )}
           {canSeeAllTesters && (
             <p className="text-theme-text-secondary mt-2 text-sm">
               <Users className="mr-1 inline h-4 w-4 align-text-bottom" aria-hidden="true" />
@@ -352,6 +433,22 @@ export const TestingChecklistPage: React.FC = () => {
           {expanded.length > 0 ? 'Collapse all' : 'Expand all'}
         </button>
 
+        {staleCount > 0 && (
+          <button
+            type="button"
+            aria-pressed={staleOnly}
+            onClick={() => setStaleOnly((only) => !only)}
+            className={`btn-sm inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm transition-colors ${
+              staleOnly
+                ? 'border-red-800 bg-red-800 text-white'
+                : 'border-theme-surface-border bg-theme-surface text-theme-text-secondary hover:bg-theme-surface-hover'
+            }`}
+          >
+            <History className="h-4 w-4" aria-hidden="true" />
+            Needs re-test ({staleCount})
+          </button>
+        )}
+
         <button
           type="button"
           className="btn-secondary btn-sm inline-flex items-center gap-1.5"
@@ -388,6 +485,22 @@ export const TestingChecklistPage: React.FC = () => {
           </button>
         )}
       </div>
+
+      <PromptDialog
+        isOpen={startingRun}
+        onClose={() => setStartingRun(false)}
+        onSubmit={(label) => {
+          setStartingRun(false);
+          void startRun(label);
+        }}
+        title="Start a new testing run"
+        message="Everyone's board goes back to nothing. The run on screen now keeps every mark and stays readable from the picker."
+        label="What is this run for?"
+        placeholder="Pre-launch, build 1.4"
+        defaultValue={suggestedRunLabel}
+        confirmLabel="Start the run"
+        minLength={1}
+      />
 
       {visibleGroups.length === 0 && (
         <p className="text-theme-text-secondary card p-6 text-center text-sm">
@@ -443,6 +556,8 @@ export const TestingChecklistPage: React.FC = () => {
                     result={results[page.path]}
                     otherMarks={otherMarks[page.path]}
                     access={accessFor.get(page.path) ?? { kind: 'open' }}
+                    currentBuildId={currentBuildId}
+                    readOnly={isViewingArchivedRun}
                     onStatus={setStatus}
                     onNote={setNote}
                     onParam={setParam}
