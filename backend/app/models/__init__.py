@@ -321,6 +321,12 @@ from app.models.storefront import (
     StoreWindowProduct,
     StoreWindowStatus,
 )
+from app.models.testing_checklist import (
+    TestingAccessExpectation,
+    TestingChecklistEntry,
+    TestingCheckStatus,
+    TestingRun,
+)
 from app.models.training import (
     ExternalCategoryMapping,
     ExternalTrainingImport,
@@ -723,4 +729,9 @@ __all__ = [
     "LegalDocumentRevision",
     "LegalDocumentType",
     "LegalRevisionStatus",
+    # Testing checklist models
+    "TestingAccessExpectation",
+    "TestingCheckStatus",
+    "TestingChecklistEntry",
+    "TestingRun",
 ]
