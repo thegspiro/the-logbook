@@ -1,6 +1,97 @@
 # Security Review 06 — Elections & Ballots
 
-**Prefix:** `ELEC` · **Iteration:** 06 · **Reviewed:** 2026-08-25 · **PR:** TBD
+**Prefix:** `ELEC` · **Iteration:** 06 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2) · **PR:** [#1810](https://github.com/thegspiro/the-logbook/pull/1810) (pass 1)
+
+---
+
+## Pass 2 (2026-08-27)
+
+Scoped to the **full elections domain** since pass 1's merge commit
+(`56b897ec`, PR #1810) — `endpoints/elections.py`, `election_service.py`,
+`quorum_service.py`, `models/election.py`, `schemas/election.py`, the
+elections frontend module, and every migration since, checked by content
+(not just filename) for anything touching election tables or eligibility
+logic. Three real changes since pass 1, all reviewed in full:
+
+- **`election_service.py` (+58/-25) — voter eligibility rewritten for the
+  member-class/status split.** A same-day feature
+  (`20260826_1400_f1a2b3c4d5e6_split_member_class_and_status.py`) replaced
+  the fused `membership_type` column with independent `member_class`
+  (operational/administrative/social) and `member_status`
+  (prospective/probationary/regular/life/retired/honorary/junior) columns.
+  `_user_has_role_type` — the function every ballot-eligibility and
+  results-visibility check in the module calls — was rewritten to read the
+  new columns, with a fallback to `split_membership_type()` for a
+  pre-migration row. This is exactly the kind of change that could
+  silently widen a restricted ballot's electorate, so it was read in full
+  rather than skimmed:
+  - Every legacy category (`operational`, `administrative`, `regular`,
+    `life`, `probationary`) reproduces its pre-split meaning exactly —
+    `operational` now requires `member_class == operational AND
+member_status == regular`, matching the old `membership_type == "active"`
+    check precisely, not just "any operational member" (which would have
+    wrongly included probationary and retired members). `regular` and
+    `life` are likewise class-**and**-status, not class-only.
+  - `split_membership_type()`'s fallback deliberately returns `(None,
+None)` for an org-configured custom tier (e.g. `"senior"`) rather than
+    defaulting to a permissive value — confirmed by reading its docstring's
+    own stated reasoning and cross-checked against the `_reconcile_membership`
+    event listener (`models/user.py:542`, wired to both `before_insert` and
+    `before_update`), which fills both columns on every ORM write, making
+    the fallback a rare defense-in-depth path rather than the common case.
+  - A new `"social"` category was added (`member_class == social`). Not
+    dead code: `eligible_voter_types` (`schemas/election.py:86`) accepts
+    any string with no fixed enum, falling back to a role-slug match, so
+    an admin can set `"social"` today. Verified it satisfies only its own
+    category, not `operational`/`administrative`/`regular` (no prior test
+    covered this — added one).
+  - The migration itself: guarded on `users` table existence (Pitfall
+    #26), deliberately no `server_default` (would silently misclassify
+    non-operational-regular rows on a raw-SQL insert — documented
+    reasoning in the migration matches the fallback's), reversible with a
+    documented, bounded information loss.
+- **`election_service.py`, `notify_leadership_of_rollback` (~L4908) — an
+  unrelated correctness fix in the same file.** Removed a
+  `.join(User.roles)` that produced one row per position held, double-
+  counting and double-emailing a leadership member who held two roles.
+  Not a security issue (no access-control implication, an org-scoped
+  notification path); confirmed no other instance of the same join pattern
+  remains in the file (`get_package_recipients`'s sibling query was already
+  correct).
+- **`quorum_service.py` (+8) — `calculate_quorum` now takes a
+  `.with_for_update()` locking read on the `MeetingMinutes` row before
+  computing `present_count` from its own `attendees` JSON column.**
+  Pitfall #27 compliant by construction here: since the count is read
+  directly off the same row the lock was taken on (not a separate COUNT
+  query against a different table), the lock alone makes the read fresh —
+  there is no second, unlocked read to miss. Confirmed the write
+  (`quorum_met`/`quorum_count`) and `commit()` happen inside the same
+  method, so the lock is held across the whole read-decide-write.
+- **`frontend/src/modules/elections/routes.tsx` (+18/-14)** — added
+  `requiredModule="elections"` to all three election routes. Mirrors a
+  pre-existing backend `module_gate("elections", "Elections")`
+  (`api/v1/api.py:206`, unchanged) — a frontend gate catching up to a
+  server-side one already in place, not a new access-control boundary.
+
+**No findings.** One test gap closed (the new `"social"` category had no
+coverage; the existing `TestVoterTypeMembershipBoundaries` class already
+covered every other category's boundary precisely because a prior pass
+built it with this exact concern in mind — added
+`test_social_is_eligible_only_for_social_category` and
+`test_administrative_is_eligible_for_administrative_category` alongside
+it).
+
+**Completion gate (pass 2):** flake8/black/isort clean on `app/ tests/
+alembic/`; `validate_migrations.py --strict` passed (383 revisions, single
+head); scoped backend tests (`-k "elections or quorum or ballot"`) 250
+passed, 1 skipped (pre-existing), 0 failed; full backend suite 9067
+passed, 22 skipped (pre-existing), 0 failed. No frontend logic changed
+this pass beyond the already-shipped route-gating diff reviewed above, so
+no frontend gate re-run was needed.
+
+---
+
+## Pass 1 (2026-08-25)
 
 **Backend:** `api/v1/endpoints/elections.py` (3,809 L, 65 routes — 56
 `require_permission`-gated, 5 authenticated-only self-scoped, 4 intentionally

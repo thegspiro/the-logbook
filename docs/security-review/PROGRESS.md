@@ -16,11 +16,41 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-None. Feature 05 (finance & approvals, pass 2) fully merged as
-[PR #1946](https://github.com/thegspiro/the-logbook/pull/1946) — see log
-entry below. Next: 06 elections & ballots, pass 2.
+Feature 06 (elections & ballots, pass 2) — about to open. Full-domain diff
+since pass 1 (PR #1810) reviewed: a same-day member-class/status split
+feature rewrote voter-eligibility logic in `election_service.py` (read in
+full given the stakes), a `quorum_service.py` locking fix, and a frontend
+route-gating catch-up. No findings; one test-coverage gap closed (a new
+"social" voter category had no test). Next after merge: 07 users &
+organizations, pass 2.
 
 ---
+
+### 2026-08-27 — Feature 06 (Elections & ballots), pass 2 — no findings
+
+Full-domain diff since pass 1's merge (`56b897ec`, PR #1810): only three
+real changes touched the elections surface, all reviewed in full rather
+than skimmed given the module's history as the most heavily audited one
+in the codebase. The significant one: a same-day feature split the fused
+`membership_type` column into independent `member_class`/`member_status`
+columns and rewrote `election_service.py`'s `_user_has_role_type` (the
+function every ballot-eligibility check calls) to read them — exactly the
+shape of change that could silently widen a restricted ballot's
+electorate. Read in full: every legacy voter category reproduces its
+pre-split meaning exactly (class **and** status, not class alone), the
+unknown-tier fallback fails closed (no defaulting to a permissive value),
+and the `_reconcile_membership` ORM listener keeps the columns populated
+on every write. A new `"social"` category was added and confirmed real
+(not dead code — `eligible_voter_types` accepts any string) and correctly
+scoped to only its own category. Also: a `quorum_service.py` locking fix
+(Pitfall #27, already correct — the count reads off the same locked row,
+so there's no second unlocked read to miss) and a frontend route-gating
+catch-up to a pre-existing backend `module_gate`. No findings; closed one
+test-coverage gap (the new "social" category had no test, added two).
+Completion gate: flake8/black/isort clean, migrations 383 revisions,
+scoped tests 250 passed/1 skipped, full backend suite 9067 passed/22
+skipped/0 failed. Rotation row
+06 -> awaiting PR merge.
 
 ### 2026-08-27 — Feature 05 (Finance & approvals), pass 2 ✅ merged — PR #1946
 
@@ -1068,7 +1098,7 @@ each row's prior PR is recorded in the Log, not repeated here.
 | 03  | Public surface & webhooks | PUB    | `api/public/*` (20 unauth routes), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`                                      | ✅     |
 | 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                              | ✅     |
 | 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                     | ✅     |
-| 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | 🔄     |
+| 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | ⏳     |
 | 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ⬜     |
 | 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ⬜     |
 | 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ⬜     |
