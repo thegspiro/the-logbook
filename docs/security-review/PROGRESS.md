@@ -16,7 +16,7 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-PR #1914 (feature 31, scheduled tasks) — open, awaiting CI/review.
+PR #1915 (feature 31, scheduled tasks) — open, awaiting CI/review.
 
 ---
 
@@ -223,7 +223,7 @@ Next: 31 scheduled tasks.
 
 ---
 
-### 2026-08-27 — Feature 31 (Scheduled tasks) — PR #1914 opened
+### 2026-08-27 — Feature 31 (Scheduled tasks) — PR #1915 opened
 
 `services/scheduled_tasks.py` is 5,446 lines (~44 task runners), and the
 prior app-review pass explicitly did NOT read it line-by-line ("at 4570 L
@@ -303,7 +303,7 @@ pure application logic; separately repaired unrelated schema drift from a
 prior merge's inventory-reorder migration via `repair_schema.py` +
 `alembic stamp head` to unblock the sandbox's DB-backed tests).
 
-Next: 32 locations & kiosk, once #1914 merges.
+Next: 32 locations & kiosk, once #1915 merges.
 
 ---
 
