@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### A few training-related pages could briefly cache data they shouldn't (2026-08-27)
+
+**Fixed**
+
+- A training cohort's roster (names and emails), a program's per-member
+  enrollment-eligibility list, and an external training provider's internal
+  member mappings could each be held in the browser's short-lived response
+  cache for up to 90 seconds, instead of being excluded like other
+  member-identifying data.
+- A form-management page and a raw analytics-export download had the same
+  gap; a grants/fundraising list had a related gap that wasn't currently
+  reachable but is now closed as a precaution.
+- A shift-attendance lookup that failed for any reason (not just "no record
+  yet") was silently treated as "not checked in," which could hide a real
+  network or server problem from the person viewing it.
+
 ### Security monitoring for session hijacking and data exfiltration was never actually running (2026-08-27)
 
 **Fixed**
