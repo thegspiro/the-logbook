@@ -2137,6 +2137,10 @@ class ReorderReceipt(Base):
             "reorder_request_id", "idempotency_key", name="uq_reorder_receipt_key"
         ),
         Index("ix_reorder_receipts_request", "reorder_request_id"),
+        # Every read of this table is org-scoped first (Pitfall #14a), so
+        # organization_id has to lead an index of its own -- the request index
+        # above cannot serve a tenancy filter.
+        Index("ix_reorder_receipts_org", "organization_id", "received_at"),
     )
 
 

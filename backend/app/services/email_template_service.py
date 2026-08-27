@@ -96,6 +96,8 @@ ORGANIZATION_FIELDS_WITHOUT_VARIABLES: Dict[str, str] = {
     "physical_state": "composed into organization_physical_address",
     "physical_zip": "composed into organization_physical_address",
     "physical_country": "composed into organization_physical_address",
+    "reorder_vendor_required": "purchasing policy switch, not letterhead content",
+    "reorder_po_required": "purchasing policy switch, not letterhead content",
 }
 
 _ORGANIZATION_TYPE_LABELS: Dict[str, str] = {

@@ -101,6 +101,11 @@ def upgrade():
     op.create_index(
         "ix_reorder_receipts_request", "reorder_receipts", ["reorder_request_id"]
     )
+    op.create_index(
+        "ix_reorder_receipts_org",
+        "reorder_receipts",
+        ["organization_id", "received_at"],
+    )
 
 
 def downgrade():

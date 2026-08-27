@@ -5274,7 +5274,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | Column | Type | Null | Key | Default | References |
 |---|---|---|---|---|---|
 | `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
-| `organization_id` | VARCHAR(36) | no | FK |  | → `organizations.id` ON DELETE CASCADE |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
 | `reorder_request_id` | VARCHAR(36) | no | FK, IDX |  | → `reorder_requests.id` ON DELETE CASCADE |
 | `inventory_lot_id` | VARCHAR(36) | no | FK |  | → `inventory_lots.id` ON DELETE RESTRICT |
 | `idempotency_key` | VARCHAR(100) | no |  |  |  |
@@ -5286,6 +5286,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 **Indexes**
 
+- `ix_reorder_receipts_org` (`organization_id`, `received_at`)
 - `ix_reorder_receipts_request` (`reorder_request_id`)
 
 **Constraints**
