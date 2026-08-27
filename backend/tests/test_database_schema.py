@@ -526,6 +526,9 @@ class TestColumnConstraints:
             "sent_at",
             "exported_at",
             "generated_at",
+            # department_message_deliveries records when the send was claimed;
+            # the row is the attempt, so "attempted_at" is its creation stamp.
+            "attempted_at",
         }
         missing_timestamp = []
         for table_name, table in _tables.items():
