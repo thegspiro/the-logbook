@@ -10,6 +10,7 @@ import { useTimezone } from '../hooks/useTimezone';
 import { getTodayLocalDate } from '../utils/dateFormatting';
 import { useRanks } from '../hooks/useRanks';
 import { useConfirm } from '../contexts/ConfirmContext';
+import { ADMINISTRATIVE_RANK_HINT, isAdministrativeMember, memberClassAndStatusFor } from '../utils/membership';
 
 const AddMember: React.FC = () => {
   const navigate = useNavigate();
@@ -95,8 +96,18 @@ const AddMember: React.FC = () => {
       });
   }, []);
 
+  // An administrative member holds no operational rank — the server refuses the
+  // pair outright, since a rank carries its own default permissions.
+  const isAdministrative = isAdministrativeMember(undefined, formData.membershipType);
+
   const handleInputChange = (field: keyof MemberFormData, value: string) => {
-    setFormData((prev) => ({ ...prev, [field]: value }));
+    setFormData((prev) => {
+      const next = { ...prev, [field]: value };
+      if (field === 'membershipType' && isAdministrativeMember(undefined, value)) {
+        next.rank = '';
+      }
+      return next;
+    });
     // Clear error when user starts typing
     if (errors[field]) {
       setErrors((prev) => {
@@ -212,6 +223,12 @@ const AddMember: React.FC = () => {
         ...(formData.secondaryPhone ? { mobile: formData.secondaryPhone } : {}),
         ...(formData.dateOfBirth ? { date_of_birth: formData.dateOfBirth } : {}),
         ...(formData.joinDate ? { hire_date: formData.joinDate } : {}),
+        // The pair, not the fused legacy string: `membershipType` spells the
+        // regular case 'regular', which is a member *status* and not a legal
+        // `membership_type` — and until this was sent at all, every member
+        // added here landed as a plain operational regular whatever the
+        // required-marked dropdown said.
+        ...memberClassAndStatusFor(formData.membershipType),
         ...(formData.rank ? { rank: formData.rank } : {}),
         ...(formData.station ? { station: formData.station } : {}),
         ...(formData.platoon ? { platoon: formData.platoon } : {}),
@@ -663,10 +680,11 @@ const AddMember: React.FC = () => {
               </div>
 
               <div>
-                <label className="text-theme-text-primary mb-2 block text-sm font-medium">
+                <label htmlFor="add-membership-type" className="text-theme-text-primary mb-2 block text-sm font-medium">
                   Membership Type <span className="text-red-700 dark:text-red-400">*</span>
                 </label>
                 <select
+                  id="add-membership-type"
                   value={formData.membershipType}
                   onChange={(e) => handleInputChange('membershipType', e.target.value)}
                   className="form-input"
@@ -679,11 +697,15 @@ const AddMember: React.FC = () => {
               </div>
 
               <div>
-                <label className="text-theme-text-primary mb-2 block text-sm font-medium">Rank</label>
+                <label htmlFor="add-rank" className="text-theme-text-primary mb-2 block text-sm font-medium">
+                  Rank
+                </label>
                 <select
+                  id="add-rank"
                   value={formData.rank}
                   onChange={(e) => handleInputChange('rank', e.target.value)}
                   className="form-input"
+                  disabled={isAdministrative}
                 >
                   <option value="">Select Rank</option>
                   {rankOptions.map((r) => (
@@ -692,6 +714,7 @@ const AddMember: React.FC = () => {
                     </option>
                   ))}
                 </select>
+                {isAdministrative && <p className="text-theme-text-muted mt-1 text-xs">{ADMINISTRATIVE_RANK_HINT}</p>}
               </div>
 
               <div>

@@ -27,6 +27,7 @@ from app.services.admin_continuity_service import (
     LastAdministratorError,
     assert_not_last_administrator,
 )
+from app.utils.membership import is_administrative
 
 router = APIRouter()
 
@@ -826,6 +827,21 @@ async def change_membership_type(
     now = datetime.now(timezone.utc)
     member.membership_type = request.membership_type
     member.membership_type_changed_at = now
+
+    # An administrative member holds no operational rank. A rank is not
+    # decoration — its default permissions are unioned into the member's
+    # effective set — so leaving one behind would keep chain-of-command
+    # authority live on somebody this call just moved out of the chain.
+    #
+    # The class has to be derived from the new value rather than read off
+    # `member.member_class`: `_reconcile_membership` runs at flush, so the
+    # column still holds the pre-change class at this point.
+    previous_rank = member.rank
+    cleared_rank = None
+    if previous_rank and is_administrative(None, request.membership_type):
+        member.rank = None
+        cleared_rank = previous_rank
+
     await db.commit()
 
     await log_audit_event(
@@ -839,6 +855,7 @@ async def change_membership_type(
             "previous_type": previous_type,
             "new_type": request.membership_type,
             "reason": request.reason,
+            "cleared_rank": cleared_rank,
         },
         user_id=str(current_user.id),
         username=current_user.username,

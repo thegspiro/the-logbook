@@ -20,6 +20,7 @@ import type { Location } from '../services/api';
 import type { UserWithRoles } from '../types/role';
 import type { UserProfileUpdate, EmergencyContact } from '../types/user';
 import { useRanks } from '../hooks/useRanks';
+import { ADMINISTRATIVE_RANK_HINT, isAdministrativeMember } from '../utils/membership';
 
 const MEMBERSHIP_TYPE_OPTIONS = [
   { value: 'prospective', label: 'Prospective' },
@@ -149,10 +150,27 @@ export const MemberAdminEditPage: React.FC = () => {
       });
   }, []);
 
+  // An administrative member holds no operational rank — the server refuses the
+  // pair, and a rank carries its own default permissions besides. Disabling the
+  // control is only the visible half; the clear below is what makes the save
+  // actually drop a rank the member is losing.
+  const isAdministrative = isAdministrativeMember(undefined, form?.membership_type);
+
   const handleFieldChange = (field: keyof Omit<FormData, 'emergency_contacts'>, value: string) => {
     if (!form) return;
     setSuccessMessage(null);
-    setForm((prev) => (prev ? { ...prev, [field]: value } : prev));
+    setForm((prev) => {
+      if (!prev) return prev;
+      const next = { ...prev, [field]: value };
+      if (field === 'membership_type' && isAdministrativeMember(undefined, value)) {
+        // Clearing it here rather than only on the server keeps the two saves
+        // this page makes in agreement: the profile PATCH goes out first and
+        // would otherwise re-assert the rank the membership-type PATCH is about
+        // to remove.
+        next.rank = '';
+      }
+      return next;
+    });
   };
 
   const handleEmergencyContactChange = (index: number, field: keyof EmergencyContact, value: string | boolean) => {
@@ -488,12 +506,15 @@ export const MemberAdminEditPage: React.FC = () => {
                 />
               </div>
               <div>
-                <label className="text-theme-text-muted mb-1 block text-xs font-medium uppercase">Rank</label>
+                <label htmlFor="member-rank" className="text-theme-text-muted mb-1 block text-xs font-medium uppercase">
+                  Rank
+                </label>
                 <select
+                  id="member-rank"
                   value={form.rank}
                   onChange={(e) => handleFieldChange('rank', e.target.value)}
                   className="form-input bg-theme-surface-secondary px-3 text-sm"
-                  disabled={saving}
+                  disabled={saving || isAdministrative}
                 >
                   <option value="">Select Rank</option>
                   {rankOptions.map((r) => (
@@ -502,6 +523,9 @@ export const MemberAdminEditPage: React.FC = () => {
                     </option>
                   ))}
                 </select>
+                {isAdministrative && (
+                  <p className="text-theme-text-muted mt-1 text-[11px]">{ADMINISTRATIVE_RANK_HINT}</p>
+                )}
               </div>
               <div>
                 <label className="text-theme-text-muted mb-1 block text-xs font-medium uppercase">Station</label>
@@ -549,10 +573,14 @@ export const MemberAdminEditPage: React.FC = () => {
                 </p>
               </div>
               <div>
-                <label className="text-theme-text-muted mb-1 block text-xs font-medium uppercase">
+                <label
+                  htmlFor="member-membership-type"
+                  className="text-theme-text-muted mb-1 block text-xs font-medium uppercase"
+                >
                   Membership Type
                 </label>
                 <select
+                  id="member-membership-type"
                   value={form.membership_type}
                   onChange={(e) => handleFieldChange('membership_type', e.target.value)}
                   className="form-input bg-theme-surface-secondary px-3 text-sm"
