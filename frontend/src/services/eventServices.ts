@@ -992,6 +992,18 @@ export interface WriteOffRequestItem {
   reviewed_at?: string;
   review_notes?: string;
   clearance_id?: string;
+  clearance_record?: string;
+  current_holder?: string;
+  current_status?: string;
+  replacement_value?: number;
+  linked_charge_record?: string;
+  open_maintenance_record?: string;
+  active_assignment_count: number;
+  active_checkout_count: number;
+  active_issuance_count: number;
+  acknowledgement_required: boolean;
+  acknowledgement_threshold?: number;
+  holder_signature?: string;
   created_at?: string;
 }
 

@@ -4151,6 +4151,7 @@ class InventoryService:
             requester_name = self._format_user_name(wo.requester) or None
             reviewer_name = self._format_user_name(wo.reviewer) or None
 
+            detail = await self._write_off_item_detail(wo, organization_id)
             requests.append(
                 {
                     "id": wo.id,
@@ -4172,9 +4173,156 @@ class InventoryService:
                     "review_notes": wo.review_notes,
                     "clearance_id": wo.clearance_id,
                     "created_at": wo.created_at.isoformat() if wo.created_at else None,
+                    **detail,
                 }
             )
         return requests
+
+    async def _write_off_item_detail(
+        self, wo: WriteOffRequest, organization_id: str
+    ) -> Dict[str, Any]:
+        """Return the live, safety-critical facts shown by the review dialog."""
+        if not wo.item_id:
+            return {}
+        item = (
+            await self.db.execute(
+                select(InventoryItem).where(
+                    InventoryItem.id == wo.item_id,
+                    InventoryItem.organization_id == organization_id,
+                )
+            )
+        ).scalar_one_or_none()
+        if not item:
+            return {"current_status": "deleted", "holder_signature": "deleted"}
+
+        assignments = (
+            (
+                await self.db.execute(
+                    select(ItemAssignment)
+                    .where(
+                        ItemAssignment.item_id == item.id,
+                        ItemAssignment.is_active.is_(True),
+                    )
+                    .options(selectinload(ItemAssignment.user))
+                )
+            )
+            .scalars()
+            .all()
+        )
+        checkouts = (
+            (
+                await self.db.execute(
+                    select(CheckOutRecord)
+                    .where(
+                        CheckOutRecord.item_id == item.id,
+                        CheckOutRecord.is_returned.is_(False),
+                    )
+                    .options(selectinload(CheckOutRecord.user))
+                )
+            )
+            .scalars()
+            .all()
+        )
+        issuances = (
+            (
+                await self.db.execute(
+                    select(ItemIssuance)
+                    .where(
+                        ItemIssuance.item_id == item.id,
+                        ItemIssuance.is_returned.is_(False),
+                    )
+                    .options(selectinload(ItemIssuance.user))
+                )
+            )
+            .scalars()
+            .all()
+        )
+        holders = [r.user for r in [*assignments, *checkouts, *issuances] if r.user]
+        if item.assigned_to_user_id and not holders:
+            holder = (
+                await self.db.execute(
+                    select(User).where(User.id == item.assigned_to_user_id)
+                )
+            ).scalar_one_or_none()
+            if holder:
+                holders.append(holder)
+        holder_names = sorted(
+            {self._format_user_name(user) or user.username for user in holders}
+        )
+        signature = ":".join(
+            [
+                # assigned_to_user_id is a String column, but an assignment made
+                # earlier in the same session still holds the UUID object the
+                # caller passed, so join() would raise on it.
+                str(item.assigned_to_user_id) if item.assigned_to_user_id else "none",
+                *(sorted(str(r.id) for r in assignments)),
+                *(sorted(str(r.id) for r in checkouts)),
+                *(sorted(str(r.id) for r in issuances)),
+            ]
+        )
+        maintenance = (
+            await self.db.execute(
+                select(MaintenanceRecord)
+                .where(
+                    MaintenanceRecord.item_id == item.id,
+                    MaintenanceRecord.is_completed.is_(False),
+                )
+                .order_by(MaintenanceRecord.created_at.desc())
+                .limit(1)
+            )
+        ).scalar_one_or_none()
+        charged = next(
+            (
+                r
+                for r in issuances
+                if getattr(r.charge_status, "value", r.charge_status) != "none"
+            ),
+            None,
+        )
+        org = (
+            await self.db.execute(
+                select(Organization).where(Organization.id == organization_id)
+            )
+        ).scalar_one()
+        inventory_settings = (org.settings or {}).get("inventory", {})
+        threshold = float(
+            inventory_settings.get(
+                "write_off_acknowledgement_threshold",
+                (org.settings or {}).get("write_off_acknowledgement_threshold", 1000),
+            )
+        )
+        replacement_value = (
+            item.replacement_cost or item.current_value or item.purchase_price
+        )
+        replacement_float = (
+            float(replacement_value) if replacement_value is not None else None
+        )
+        held = bool(assignments or checkouts or issuances or item.assigned_to_user_id)
+        return {
+            "current_holder": ", ".join(holder_names) if holder_names else None,
+            "current_status": item.status.value,
+            "replacement_value": replacement_float,
+            "clearance_record": (
+                f"Clearance {wo.clearance_id}" if wo.clearance_id else None
+            ),
+            "linked_charge_record": (
+                f"Issuance {charged.id} ({charged.charge_status.value})"
+                if charged
+                else None
+            ),
+            "open_maintenance_record": (
+                f"{maintenance.maintenance_type.value} — {maintenance.description or 'No description'}"
+                if maintenance
+                else None
+            ),
+            "active_assignment_count": len(assignments),
+            "active_checkout_count": len(checkouts),
+            "active_issuance_count": len(issuances),
+            "acknowledgement_required": held
+            or (replacement_float is not None and replacement_float > threshold),
+            "acknowledgement_threshold": threshold,
+            "holder_signature": signature,
+        }
 
     async def review_write_off(
         self,
@@ -4183,17 +4331,24 @@ class InventoryService:
         reviewed_by: str,
         decision: str,
         review_notes: Optional[str] = None,
+        acknowledgement: bool = False,
+        expected_item_status: Optional[str] = None,
+        expected_holder_signature: Optional[str] = None,
     ) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
         """Approve or deny a write-off request. On approval, retire the item."""
         try:
             if decision not in ("approved", "denied"):
                 return None, "Decision must be 'approved' or 'denied'"
+            if not review_notes or not review_notes.strip():
+                return None, "A review note is required"
 
             result = await self.db.execute(
-                select(WriteOffRequest).where(
+                select(WriteOffRequest)
+                .where(
                     WriteOffRequest.id == write_off_id,
                     WriteOffRequest.organization_id == organization_id,
                 )
+                .with_for_update()
             )
             wo = result.scalar_one_or_none()
             if not wo:
@@ -4201,6 +4356,32 @@ class InventoryService:
 
             if wo.status != WriteOffStatus.PENDING:
                 return None, f"Request already {wo.status.value}"
+
+            if decision == "approved":
+                # Serialize approval with item mutations; the client snapshot below
+                # then acts as an optimistic precondition rather than stale UI data.
+                if wo.item_id:
+                    await self.db.execute(
+                        select(InventoryItem)
+                        .where(
+                            InventoryItem.id == wo.item_id,
+                            InventoryItem.organization_id == organization_id,
+                        )
+                        .with_for_update()
+                    )
+                live = await self._write_off_item_detail(wo, organization_id)
+                if expected_item_status != live.get(
+                    "current_status"
+                ) or expected_holder_signature != live.get("holder_signature"):
+                    return (
+                        None,
+                        "Item status or holder changed; refresh and review again",
+                    )
+                if live.get("acknowledgement_required") and not acknowledgement:
+                    return (
+                        None,
+                        "Acknowledgement is required for a held or high-value item",
+                    )
 
             now = datetime.now(timezone.utc)
             wo.status = WriteOffStatus(decision)
