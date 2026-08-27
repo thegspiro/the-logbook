@@ -16,6 +16,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from fastapi import HTTPException
 
+from app.api.dependencies import PaginationParams
 from app.api.v1.endpoints import reports as reports_ep
 from app.api.v1.endpoints import users as users_ep
 from app.services.finance_service import FinanceService
@@ -84,12 +85,23 @@ class TestExpenseReportScoping:
 
     async def test_list_scopes_to_user_when_restricted(self):
         svc, captured = self._capture_service()
-        await svc.list_expense_reports("org1", None, restrict_to_user="u1")
-        assert "submitted_by" in str(captured["stmt"].whereclause)
+        await svc.list_expense_reports(
+            "org1", PaginationParams(skip=7, limit=13), None, restrict_to_user="u1"
+        )
+        statement = captured["stmt"]
+        where_sql = str(statement.whereclause)
+        assert "organization_id" in where_sql
+        assert "submitted_by" in where_sql
+        assert statement._offset_clause.value == 7
+        assert statement._limit_clause.value == 13
+        assert "created_at DESC" in str(statement)
+        assert "expense_reports.id" in str(statement)
 
     async def test_list_unscoped_for_managers(self):
         svc, captured = self._capture_service()
-        await svc.list_expense_reports("org1", None, restrict_to_user=None)
+        await svc.list_expense_reports(
+            "org1", PaginationParams(skip=0, limit=10), None, restrict_to_user=None
+        )
         assert "submitted_by" not in str(captured["stmt"].whereclause)
 
     async def test_get_scopes_to_user_when_restricted(self):

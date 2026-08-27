@@ -30,6 +30,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased, contains_eager, selectinload
 
+from app.api.dependencies import PaginationParams
 from app.core.config import settings
 from app.models.finance import (
     ApprovalChain,
@@ -129,11 +130,15 @@ class FinanceService:
     # Fiscal Years
     # ========================================
 
-    async def list_fiscal_years(self, org_id: str) -> list[FiscalYear]:
+    async def list_fiscal_years(
+        self, org_id: str, pagination: PaginationParams
+    ) -> list[FiscalYear]:
         result = await self.db.execute(
             select(FiscalYear)
             .where(FiscalYear.organization_id == org_id)
-            .order_by(FiscalYear.start_date.desc())
+            .order_by(FiscalYear.start_date.desc(), FiscalYear.id)
+            .offset(pagination.skip)
+            .limit(pagination.limit)
         )
         return list(result.scalars().all())
 
@@ -213,11 +218,15 @@ class FinanceService:
     # Budget Categories
     # ========================================
 
-    async def list_budget_categories(self, org_id: str) -> list[BudgetCategory]:
+    async def list_budget_categories(
+        self, org_id: str, pagination: PaginationParams
+    ) -> list[BudgetCategory]:
         result = await self.db.execute(
             select(BudgetCategory)
             .where(BudgetCategory.organization_id == org_id)
-            .order_by(BudgetCategory.sort_order)
+            .order_by(BudgetCategory.sort_order, BudgetCategory.id)
+            .offset(pagination.skip)
+            .limit(pagination.limit)
         )
         return list(result.scalars().all())
 
@@ -264,6 +273,7 @@ class FinanceService:
     async def list_budgets(
         self,
         org_id: str,
+        pagination: PaginationParams,
         fiscal_year_id: Optional[str] = None,
         category_id: Optional[str] = None,
     ) -> list[Budget]:
@@ -272,6 +282,9 @@ class FinanceService:
             query = query.where(Budget.fiscal_year_id == fiscal_year_id)
         if category_id:
             query = query.where(Budget.category_id == category_id)
+        query = (
+            query.order_by(Budget.id).offset(pagination.skip).limit(pagination.limit)
+        )
         result = await self.db.execute(query)
         return list(result.scalars().all())
 
@@ -336,12 +349,16 @@ class FinanceService:
     # Approval Chains
     # ========================================
 
-    async def list_approval_chains(self, org_id: str) -> list[ApprovalChain]:
+    async def list_approval_chains(
+        self, org_id: str, pagination: PaginationParams
+    ) -> list[ApprovalChain]:
         result = await self.db.execute(
             select(ApprovalChain)
             .options(selectinload(ApprovalChain.steps))
             .where(ApprovalChain.organization_id == org_id)
-            .order_by(ApprovalChain.name)
+            .order_by(ApprovalChain.name, ApprovalChain.id)
+            .offset(pagination.skip)
+            .limit(pagination.limit)
         )
         return list(result.scalars().unique().all())
 
@@ -1346,6 +1363,7 @@ class FinanceService:
     async def list_purchase_requests(
         self,
         org_id: str,
+        pagination: PaginationParams,
         status: Optional[str] = None,
         fiscal_year_id: Optional[str] = None,
     ) -> list[PurchaseRequest]:
@@ -1354,7 +1372,11 @@ class FinanceService:
             query = query.where(PurchaseRequest.status == status)
         if fiscal_year_id:
             query = query.where(PurchaseRequest.fiscal_year_id == fiscal_year_id)
-        query = query.order_by(PurchaseRequest.created_at.desc())
+        query = (
+            query.order_by(PurchaseRequest.created_at.desc(), PurchaseRequest.id)
+            .offset(pagination.skip)
+            .limit(pagination.limit)
+        )
         result = await self.db.execute(query)
         return list(result.scalars().all())
 
@@ -1546,6 +1568,7 @@ class FinanceService:
     async def list_expense_reports(
         self,
         org_id: str,
+        pagination: PaginationParams,
         status: Optional[str] = None,
         restrict_to_user: Optional[str] = None,
     ) -> list[ExpenseReport]:
@@ -1562,7 +1585,11 @@ class FinanceService:
             query = query.where(ExpenseReport.submitted_by == restrict_to_user)
         if status:
             query = query.where(ExpenseReport.status == status)
-        query = query.order_by(ExpenseReport.created_at.desc())
+        query = (
+            query.order_by(ExpenseReport.created_at.desc(), ExpenseReport.id)
+            .offset(pagination.skip)
+            .limit(pagination.limit)
+        )
         result = await self.db.execute(query)
         return list(result.scalars().unique().all())
 
@@ -1741,12 +1768,17 @@ class FinanceService:
     async def list_check_requests(
         self,
         org_id: str,
+        pagination: PaginationParams,
         status: Optional[str] = None,
     ) -> list[CheckRequest]:
         query = select(CheckRequest).where(CheckRequest.organization_id == org_id)
         if status:
             query = query.where(CheckRequest.status == status)
-        query = query.order_by(CheckRequest.created_at.desc())
+        query = (
+            query.order_by(CheckRequest.created_at.desc(), CheckRequest.id)
+            .offset(pagination.skip)
+            .limit(pagination.limit)
+        )
         result = await self.db.execute(query)
         return list(result.scalars().all())
 
@@ -1894,11 +1926,15 @@ class FinanceService:
     # Dues & Assessments
     # ========================================
 
-    async def list_dues_schedules(self, org_id: str) -> list[DuesSchedule]:
+    async def list_dues_schedules(
+        self, org_id: str, pagination: PaginationParams
+    ) -> list[DuesSchedule]:
         result = await self.db.execute(
             select(DuesSchedule)
             .where(DuesSchedule.organization_id == org_id)
-            .order_by(DuesSchedule.due_date.desc())
+            .order_by(DuesSchedule.due_date.desc(), DuesSchedule.id)
+            .offset(pagination.skip)
+            .limit(pagination.limit)
         )
         return list(result.scalars().all())
 
@@ -1980,6 +2016,7 @@ class FinanceService:
     async def list_member_dues(
         self,
         org_id: str,
+        pagination: PaginationParams,
         schedule_id: Optional[str] = None,
         user_id: Optional[str] = None,
         status: Optional[str] = None,
@@ -1991,6 +2028,11 @@ class FinanceService:
             query = query.where(MemberDues.user_id == user_id)
         if status:
             query = query.where(MemberDues.status == status)
+        query = (
+            query.order_by(MemberDues.due_date.desc(), MemberDues.id)
+            .offset(pagination.skip)
+            .limit(pagination.limit)
+        )
         result = await self.db.execute(query)
         return list(result.scalars().all())
 
@@ -2198,9 +2240,15 @@ class FinanceService:
     # Export
     # ========================================
 
-    async def list_export_mappings(self, org_id: str) -> list[ExportMapping]:
+    async def list_export_mappings(
+        self, org_id: str, pagination: PaginationParams
+    ) -> list[ExportMapping]:
         result = await self.db.execute(
-            select(ExportMapping).where(ExportMapping.organization_id == org_id)
+            select(ExportMapping)
+            .where(ExportMapping.organization_id == org_id)
+            .order_by(ExportMapping.id)
+            .offset(pagination.skip)
+            .limit(pagination.limit)
         )
         return list(result.scalars().all())
 
@@ -2406,11 +2454,15 @@ class FinanceService:
 
         return stream()
 
-    async def list_export_logs(self, org_id: str) -> list[ExportLog]:
+    async def list_export_logs(
+        self, org_id: str, pagination: PaginationParams
+    ) -> list[ExportLog]:
         result = await self.db.execute(
             select(ExportLog)
             .where(ExportLog.organization_id == org_id)
-            .order_by(ExportLog.exported_at.desc())
+            .order_by(ExportLog.exported_at.desc(), ExportLog.id)
+            .offset(pagination.skip)
+            .limit(pagination.limit)
         )
         return list(result.scalars().all())
 

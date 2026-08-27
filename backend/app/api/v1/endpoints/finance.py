@@ -86,8 +86,9 @@ async def list_fiscal_years(
     current_user: User = Depends(require_permission("finance.view")),
 ):
     service = FinanceService(db)
-    results = await service.list_fiscal_years(str(current_user.organization_id))
-    return results[pagination.skip : pagination.skip + pagination.limit]
+    return await service.list_fiscal_years(
+        str(current_user.organization_id), pagination
+    )
 
 
 @router.post("/fiscal-years", response_model=FiscalYearResponse, status_code=201)
@@ -214,8 +215,9 @@ async def list_budget_categories(
     current_user: User = Depends(require_permission("finance.view")),
 ):
     service = FinanceService(db)
-    results = await service.list_budget_categories(str(current_user.organization_id))
-    return results[pagination.skip : pagination.skip + pagination.limit]
+    return await service.list_budget_categories(
+        str(current_user.organization_id), pagination
+    )
 
 
 @router.post(
@@ -295,10 +297,9 @@ async def list_budgets(
     current_user: User = Depends(require_permission("finance.view")),
 ):
     service = FinanceService(db)
-    results = await service.list_budgets(
-        str(current_user.organization_id), fiscal_year_id, category_id
+    return await service.list_budgets(
+        str(current_user.organization_id), pagination, fiscal_year_id, category_id
     )
-    return results[pagination.skip : pagination.skip + pagination.limit]
 
 
 @router.post("/budgets", response_model=BudgetResponse, status_code=201)
@@ -388,8 +389,9 @@ async def list_approval_chains(
     current_user: User = Depends(require_permission("finance.view")),
 ):
     service = FinanceService(db)
-    results = await service.list_approval_chains(str(current_user.organization_id))
-    return results[pagination.skip : pagination.skip + pagination.limit]
+    return await service.list_approval_chains(
+        str(current_user.organization_id), pagination
+    )
 
 
 @router.post(
@@ -695,10 +697,9 @@ async def list_purchase_requests(
     current_user: User = Depends(require_permission("finance.view")),
 ):
     service = FinanceService(db)
-    results = await service.list_purchase_requests(
-        str(current_user.organization_id), status, fiscal_year_id
+    return await service.list_purchase_requests(
+        str(current_user.organization_id), pagination, status, fiscal_year_id
     )
-    return results[pagination.skip : pagination.skip + pagination.limit]
 
 
 @router.post(
@@ -943,10 +944,12 @@ async def list_expense_reports(
         if user_has_permission(current_user, "finance.manage")
         else str(current_user.id)
     )
-    results = await service.list_expense_reports(
-        str(current_user.organization_id), status, restrict_to_user=restrict
+    return await service.list_expense_reports(
+        str(current_user.organization_id),
+        pagination,
+        status,
+        restrict_to_user=restrict,
     )
-    return results[pagination.skip : pagination.skip + pagination.limit]
 
 
 @router.post(
@@ -1115,10 +1118,9 @@ async def list_check_requests(
     current_user: User = Depends(require_permission("finance.view")),
 ):
     service = FinanceService(db)
-    results = await service.list_check_requests(
-        str(current_user.organization_id), status
+    return await service.list_check_requests(
+        str(current_user.organization_id), pagination, status
     )
-    return results[pagination.skip : pagination.skip + pagination.limit]
 
 
 @router.post(
@@ -1267,8 +1269,9 @@ async def list_dues_schedules(
     current_user: User = Depends(require_permission("finance.view")),
 ):
     service = FinanceService(db)
-    results = await service.list_dues_schedules(str(current_user.organization_id))
-    return results[pagination.skip : pagination.skip + pagination.limit]
+    return await service.list_dues_schedules(
+        str(current_user.organization_id), pagination
+    )
 
 
 @router.post(
@@ -1358,10 +1361,9 @@ async def list_member_dues(
     if not user_has_permission(current_user, "finance.manage"):
         user_id = str(current_user.id)
     service = FinanceService(db)
-    results = await service.list_member_dues(
-        str(current_user.organization_id), schedule_id, user_id, status
+    return await service.list_member_dues(
+        str(current_user.organization_id), pagination, schedule_id, user_id, status
     )
-    return results[pagination.skip : pagination.skip + pagination.limit]
 
 
 @router.put("/dues/{dues_id}", response_model=MemberDuesResponse)
@@ -1506,8 +1508,9 @@ async def list_export_mappings(
     current_user: User = Depends(require_permission("finance.manage")),
 ):
     service = FinanceService(db)
-    results = await service.list_export_mappings(str(current_user.organization_id))
-    return results[pagination.skip : pagination.skip + pagination.limit]
+    return await service.list_export_mappings(
+        str(current_user.organization_id), pagination
+    )
 
 
 @router.post(
@@ -1591,8 +1594,7 @@ async def list_export_logs(
     current_user: User = Depends(require_permission("finance.manage")),
 ):
     service = FinanceService(db)
-    results = await service.list_export_logs(str(current_user.organization_id))
-    return results[pagination.skip : pagination.skip + pagination.limit]
+    return await service.list_export_logs(str(current_user.organization_id), pagination)
 
 
 # ============================================

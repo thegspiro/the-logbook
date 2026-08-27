@@ -13,6 +13,7 @@ import pytest
 from sqlalchemy import event, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.dependencies import PaginationParams
 from app.models.finance import (
     ApprovalEntityType,
     ApprovalStepStatus,
@@ -23,6 +24,8 @@ from app.models.finance import (
 )
 from app.models.user import User
 from app.services.finance_service import BudgetLimitExceededError, FinanceService
+
+pytestmark = [pytest.mark.integration]
 
 pytestmark = [pytest.mark.integration]
 
@@ -95,6 +98,46 @@ class TestFiscalYearService:
         assert fy.name == "FY2026"
         assert fy.status == FiscalYearStatus.DRAFT
         assert fy.is_locked is False
+
+    async def test_list_paginates_after_org_filter_with_stable_tie_breaker(
+        self, db_session: AsyncSession, sample_org_data
+    ):
+        service = FinanceService(db_session)
+        org_id = sample_org_data["id"]
+        common = {
+            "created_by": sample_org_data["admin_id"],
+            "start_date": datetime(2026, 1, 1, tzinfo=timezone.utc),
+            "end_date": datetime(2026, 12, 31, tzinfo=timezone.utc),
+        }
+        own = [
+            await service.create_fiscal_year(org_id=org_id, name=f"FY {i}", **common)
+            for i in range(3)
+        ]
+
+        other_org = str(uuid.uuid4())
+        await db_session.execute(
+            text(
+                "INSERT INTO organizations "
+                "(id, name, organization_type, slug, timezone) "
+                "VALUES (:id, 'Other', 'fire_department', :slug, 'UTC')"
+            ),
+            {"id": other_org, "slug": f"other-{other_org[:8]}"},
+        )
+        await db_session.flush()
+        # This row sorts among the tied dates, but its organization predicate
+        # must exclude it before OFFSET is evaluated.
+        await service.create_fiscal_year(
+            org_id=other_org,
+            created_by=sample_org_data["admin_id"],
+            name="Other org FY",
+            start_date=common["start_date"],
+            end_date=common["end_date"],
+        )
+
+        page = await service.list_fiscal_years(
+            org_id, PaginationParams(skip=1, limit=1)
+        )
+        assert [row.id for row in page] == sorted(row.id for row in own)[1:2]
 
     async def test_activate_fiscal_year(
         self, db_session: AsyncSession, sample_org_data
@@ -1425,7 +1468,9 @@ class TestRequestNumberAllocation:
         assert pr2.request_number != pr1.request_number
         # The outer transaction survived the rolled-back savepoint: both
         # rows are still queryable.
-        both = await service.list_purchase_requests(org_id)
+        both = await service.list_purchase_requests(
+            org_id, PaginationParams(skip=0, limit=100)
+        )
         assert {p.id for p in both} == {pr1.id, pr2.id}
 
     async def test_expense_and_check_numbers_are_per_org_too(
