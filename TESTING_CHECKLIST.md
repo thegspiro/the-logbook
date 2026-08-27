@@ -1,5 +1,32 @@
 # The Logbook — Production Readiness Testing Checklist
 
+## How to work through this
+
+This document says **what to try** on each screen. The application ships a
+companion to it at **`/testing`** ("Testing Home", also under Settings →
+Administration in the navigation) which says **which screens exist**, who is
+meant to be able to open each one, and which ones the current run has already
+covered.
+
+Use the two together: open a group on `/testing`, click a box to open that page
+in a new tab, run the steps from the matching section here, then mark the box
+Pass, Fail or Blocked and type what you found. The run is kept in that
+browser's local storage — copy or download the Markdown export before clearing
+it or switching machines, since nothing is stored on the server.
+
+**It is also how the permission gates get tested.** Each box shows the gate its
+route enforces and whether the signed-in account satisfies it, so signing in as
+a firefighter, then a lieutenant, then a chief and walking the same list proves
+the gating from the outside: a box shown in red must refuse with Access Denied,
+one shown in green must open, and a page whose module is switched off must say
+so rather than render. `/testing` itself is intentionally ungated, so every
+account can reach it to be checked.
+
+The registry behind the page is `frontend/src/pages/testing/testingRegistry.ts`,
+and `testingRegistry.test.ts` fails the build if a route is added, removed or
+re-gated without it following — so the page cannot quietly fall behind the
+router.
+
 ## 1. Authentication & Session Management
 
 | ID      | Test                                                         | Expected Outcome                                                          |

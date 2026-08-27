@@ -82,6 +82,11 @@ const LegalPage = lazyWithRetry(() => import('./pages/legal/LegalPage'));
 const LearningCenterPage = lazyWithRetry(() => import('./pages/learning/LearningCenterPage'));
 const LearningPathPage = lazyWithRetry(() => import('./pages/learning/LearningPathPage'));
 
+// Testing home — the in-app companion to TESTING_CHECKLIST.md. Ungated on
+// purpose: proving another page's permission gate means signing in as the
+// position that should be refused, and this screen has to open for them too.
+const TestingChecklistPage = lazyWithRetry(() => import('./pages/testing/TestingChecklistPage'));
+
 /**
  * Main Application Component
  *
@@ -131,6 +136,7 @@ function App() {
                     <Route path="/dashboard" element={<Dashboard />} />
                     <Route path="/learning" element={<LearningCenterPage />} />
                     <Route path="/learning/:pathId" element={<LearningPathPage />} />
+                    <Route path="/testing" element={<TestingChecklistPage />} />
 
                     {/* Feature Modules */}
                     {getApparatusRoutes()}

@@ -92,6 +92,23 @@ Complete reference of all pages in the application, organized by module.
 
 ---
 
+## Testing Home
+
+| URL        | Page         | Permission    |
+| ---------- | ------------ | ------------- |
+| `/testing` | Testing Home | Authenticated |
+
+> An index of every route in this document, as boxes that open the page and
+> record Pass/Fail/Blocked plus a note, kept in the browser's local storage.
+> Each box also shows the gate its route enforces and whether the signed-in
+> account satisfies it, which is how the permission gates are tested from the
+> outside — so the route is deliberately **authenticated-only**: a page a
+> firefighter could not open would be useless for checking what a firefighter
+> is refused. The navigation entry is gated on `settings.manage`; the URL is
+> not. See TESTING_CHECKLIST.md → "How to work through this".
+
+---
+
 ## Members
 
 ### Member-Facing Pages
