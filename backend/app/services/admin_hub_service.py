@@ -23,6 +23,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from loguru import logger
 from sqlalchemy import and_, func, or_, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 
@@ -1057,6 +1058,10 @@ async def _events_check_ins(ctx: MetricContext) -> tuple[str, str]:
 
 async def _events_attendance_rate(ctx: MetricContext) -> tuple[str, str]:
     since = ctx.local_midnight - timedelta(days=90)
+    now = datetime.now(timezone.utc)
+    # Event is filtered on organization_id independently of the RSVP filter
+    # above it, rather than relying on the invariant that a joined RSVP's org
+    # always matches its parent Event's org (defense in depth, LOC2-32-1).
     going = await _scalar(
         ctx.db,
         select(func.count(EventRSVP.id))
@@ -1064,8 +1069,9 @@ async def _events_attendance_rate(ctx: MetricContext) -> tuple[str, str]:
         .where(
             EventRSVP.organization_id == ctx.organization_id,
             EventRSVP.status == RSVPStatus.GOING,
+            Event.organization_id == ctx.organization_id,
             Event.start_datetime >= since,
-            Event.end_datetime < datetime.now(timezone.utc),
+            Event.end_datetime < now,
         ),
     )
     if going == 0:
@@ -1078,8 +1084,9 @@ async def _events_attendance_rate(ctx: MetricContext) -> tuple[str, str]:
             EventRSVP.organization_id == ctx.organization_id,
             EventRSVP.status == RSVPStatus.GOING,
             EventRSVP.checked_in.is_(True),
+            Event.organization_id == ctx.organization_id,
             Event.start_datetime >= since,
-            Event.end_datetime < datetime.now(timezone.utc),
+            Event.end_datetime < now,
         ),
     )
     return f"{round(attended * 100 / going)}%", f"{attended} of {going}, last 90 days"
@@ -1589,29 +1596,42 @@ class AdminHubService:
         never render. The slot falls back to the module default rather than
         going blank.
         """
-        by_key = {m.key: m for m in spec.metrics}
-        resolved: list[str] = []
-        for key in keys:
-            metric = by_key.get(key)
-            if metric is None or key in resolved:
-                continue
+
+        def _permitted(metric: MetricSpec) -> bool:
             if metric.permission and not user_has_permission(
                 ctx.user, metric.permission
             ):
-                continue
+                return False
             if (
                 metric.requires_module
                 and metric.requires_module not in ctx.enabled_modules
             ):
+                return False
+            return True
+
+        by_key = {m.key: m for m in spec.metrics}
+        resolved: list[str] = []
+        for key in keys:
+            metric = by_key.get(key)
+            if metric is None or key in resolved or not _permitted(metric):
                 continue
             resolved.append(key)
             if len(resolved) == OPEN_SLOTS:
                 break
+        # The padding loop must apply the same permission/module gate as the
+        # primary loop above — otherwise a permission-gated metric's label
+        # (still shown by _render_metric's redacted-value branch) can be
+        # padded straight into a stored selection for an admin who lacks that
+        # specific permission (LOC2-32-2).
         for key in spec.default_metrics:
             if len(resolved) >= OPEN_SLOTS:
                 break
-            if key and key not in resolved and key in by_key:
-                resolved.append(key)
+            if not key or key in resolved:
+                continue
+            metric = by_key.get(key)
+            if metric is None or not _permitted(metric):
+                continue
+            resolved.append(key)
         return resolved[:OPEN_SLOTS]
 
     async def _resolve_selection(
@@ -1740,39 +1760,52 @@ class AdminHubService:
         if len(set(payload.metric_keys)) != len(payload.metric_keys):
             raise ValueError("A metric can only occupy one slot")
 
-        department, personal = await self._load_preferences(module_key, ctx)
+        # Two concurrent first-time saves for the same (org, module, scope)
+        # can both observe department/personal as None and both insert; the
+        # unique constraint then rejects the second commit. Retry once as an
+        # update against the row the other request just created, instead of
+        # surfacing a 500 that silently drops this save (LOC2-32-3).
+        for attempt in range(2):
+            department, personal = await self._load_preferences(module_key, ctx)
 
-        # The department row always carries the toggle, so turning personal
-        # choice back off has somewhere to be recorded even when the admin
-        # never edited the department's own four.
-        if department is None:
-            department = AdminHubMetricPreference(
-                organization_id=ctx.organization_id,
-                module_key=module_key,
-                user_id=None,
-                scope_key=DEPARTMENT_SCOPE,
-                metric_keys=list(spec.default_metrics),
-                applies_to_everyone=payload.applies_to_everyone,
-            )
-            self.db.add(department)
-        department.applies_to_everyone = payload.applies_to_everyone
-
-        if payload.applies_to_everyone:
-            department.metric_keys = list(payload.metric_keys)
-        else:
-            if personal is None:
-                personal = AdminHubMetricPreference(
+            # The department row always carries the toggle, so turning
+            # personal choice back off has somewhere to be recorded even when
+            # the admin never edited the department's own four.
+            if department is None:
+                department = AdminHubMetricPreference(
                     organization_id=ctx.organization_id,
                     module_key=module_key,
-                    user_id=ctx.user.id,
-                    scope_key=ctx.user.id,
-                    metric_keys=list(payload.metric_keys),
+                    user_id=None,
+                    scope_key=DEPARTMENT_SCOPE,
+                    metric_keys=list(spec.default_metrics),
+                    applies_to_everyone=payload.applies_to_everyone,
                 )
-                self.db.add(personal)
-            else:
-                personal.metric_keys = list(payload.metric_keys)
+                self.db.add(department)
+            department.applies_to_everyone = payload.applies_to_everyone
 
-        await self.db.commit()
+            if payload.applies_to_everyone:
+                department.metric_keys = list(payload.metric_keys)
+            else:
+                if personal is None:
+                    personal = AdminHubMetricPreference(
+                        organization_id=ctx.organization_id,
+                        module_key=module_key,
+                        user_id=ctx.user.id,
+                        scope_key=ctx.user.id,
+                        metric_keys=list(payload.metric_keys),
+                    )
+                    self.db.add(personal)
+                else:
+                    personal.metric_keys = list(payload.metric_keys)
+
+            try:
+                await self.db.commit()
+                break
+            except IntegrityError:
+                await self.db.rollback()
+                if attempt == 1:
+                    raise
+
         return await self.get_settings(module_key, user)
 
     # -- access -------------------------------------------------------------

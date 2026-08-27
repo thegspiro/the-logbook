@@ -2273,6 +2273,28 @@ error until a sender exists, rather than the current silent-accept.
 See `docs/security-review/CRON2-31-scheduled-tasks.md` for the full pass
 (12 findings fixed, these 2 flagged).
 
+## LOC-3 — The Authenticated Location Display Endpoint Is Dead Code With a Growing Gap List (2026-08-27)
+
+`GET /locations/{id}/display` (`locations.py`) has had **zero frontend
+callers** since it was first reviewed on 2026-08-08 — the kiosk fetches
+`/api/public/v1/display/{code}` instead, which is a strictly better
+implementation (rate-limited, uses the canonical check-in-window helper,
+computes `is_valid` correctly, withholds event descriptions).
+
+The 2026-08-08 pass flagged two gaps that would need closing if this
+endpoint were ever wired up rather than deleted: it hardcodes
+`is_valid=True`/`can_check_in=True`, and never populates the `timezone`
+field its public sibling does. The 2026-08-27 security-review pass
+(`docs/security-review/LOC2-32-locations-kiosk.md`) found the drift grew a
+**third** gap in the meantime: it still emits
+`event_description=event.description` while the public path explicitly
+nulls that field with a comment ("Don't expose description publicly").
+
+Not fixed either pass, deliberately: deleting or wiring up an endpoint is an
+API-surface decision, not a correction. The department decision is the same
+as it was — delete this endpoint, or give it a caller and bring it in line
+with its public sibling on all three points before that caller ships.
+
 ## Process
 
 The review loop (see [review-log.md](./review-log.md)) advances through one area

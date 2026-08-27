@@ -16,7 +16,7 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-None — PR #1915 merged. Feature 32 (locations & kiosk) starting next.
+PR TBD (feature 32, locations & kiosk) — open, awaiting CI/review.
 
 ---
 
@@ -362,9 +362,58 @@ Merged (squash, `c19ecc0f`). Registry sync, CRON-1/CRON-2/CRON-5/CRON-6
 invariants, and the Codex-caught MissingGreenlet class of bug are all
 resolved on `main`. Rotation row 31 -> done.
 
-Next: 32 locations & kiosk.
+### 2026-08-27 — Feature 32 (Locations & kiosk) — PR opened
 
-Next: 32 locations & kiosk, once #1915 merges.
+Five parallel background agents: four read `admin_hub_service.py`
+(1,798 lines, never previously reviewed — headline metrics and "needs
+attention" queues for the administration dashboard, one per module in
+`MODULE_REGISTRY`) by line range; one re-verified `locations.py`/
+`location_service.py`/`public/display.py`/the kiosk frontend against the
+prior app-review pass's LOC-1 through LOC-4.
+
+3 findings, all fixed (1 LOW, 2 MED):
+
+- LOC2-32-1 (LOW): `_events_attendance_rate` joined `Event` without
+  independently filtering its `organization_id`, relying on (rather than
+  verifying) the invariant that a joined RSVP's org always matches its
+  parent Event's org. Defense-in-depth fix; not independently exploitable
+  today. Fixed.
+- LOC2-32-2 (MED): `AdminHubService._sanitize()`'s slot-padding loop (fills
+  empty slots from a module's defaults) skipped the permission/module gate
+  its own primary loop applies — a permission-gated default metric could
+  reach a resolved selection for an admin who lacks that permission, and
+  `_render_metric`'s redacted-value branch would still show the metric's
+  _label_. Latent under the current registry (no module has a gated
+  default today) but live the moment one is added. Fixed by sharing one
+  gate check between both loops.
+- LOC2-32-3 (LOW/MED): concurrent first-time settings saves for the same
+  (org, module, scope) could both observe no existing row, both insert,
+  and the second commit's `IntegrityError` was uncaught — surfacing as a
+  500 that silently dropped the second admin's save. Fixed with a
+  bounded (2-attempt) retry: catch, roll back, re-read/re-apply once, then
+  re-raise if it conflicts again.
+
+Also re-confirmed LOC-1/LOC-2/LOC-4 still hold, and investigated a LOW an
+agent flagged in `RoomQRCodesPage.tsx` (a kiosk-URL card with no
+`display_code` null-guard) — found **not reproducible**: `groupByStation()`
+already filters out codeless locations before any card is built, with
+existing test coverage asserting it. No code change made there.
+
+LOC-3 (the dead-code authenticated display endpoint, flagged not fixed in
+the 2026-08-08 app-review pass) is still open and has grown a third gap
+since then (event descriptions, unlike its public sibling, are not
+redacted) — mirrored to `KNOWN_LIMITATIONS.md`.
+
+Completion gate: flake8/black/isort clean on all touched files, migration
+validation passed (no schema change), 174/174 scoped backend tests passed
+(5 new: 2 for LOC2-32-1, 1 for LOC2-32-2, 2 for LOC2-32-3), full backend
+suite 8943 passed / 38 failed (same pre-existing onboarding/facilities/
+legal-doc failures confirmed unrelated in the prior feature's pass,
+reproduced identically with this diff stashed out) / 22 skipped, `tsc
+--noEmit` and `eslint` clean.
+
+Next: reply to/resolve any review threads, then merge and move to 33 core
+infrastructure.
 
 ---
 
@@ -424,7 +473,7 @@ data-carrying modules, then the supporting infrastructure.
 | 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                              | ✅              |
 | 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (24 unauth bootstrap routes)                                                                                             | ✅              |
 | 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                   | ✅              |
-| 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                  | 🔄              |
+| 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                  | ⏳              |
 | 33  | Core infrastructure       | CORE   | `core/security_middleware.py`, `core/middleware.py`, `core/database.py`, `core/config.py`                                                       | ⬜              |
 | 34  | Frontend shared           | FE     | `utils/apiCache.ts`, module axios instances, `ProtectedRoute`, global stores                                                                    | ⬜              |
 
