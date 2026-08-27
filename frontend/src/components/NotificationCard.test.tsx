@@ -28,6 +28,7 @@ async function expand(user: ReturnType<typeof userEvent.setup>) {
 describe('NotificationCard', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    window.history.pushState({}, '', '/notifications');
   });
 
   describe('category label', () => {
@@ -106,7 +107,7 @@ describe('NotificationCard', () => {
       expect(screen.getByRole('button', { name: /Pin/ })).toBeInTheDocument();
     });
 
-    it('labels a department communication action clearly', async () => {
+    it('navigates a department communication to its message detail route', async () => {
       const user = userEvent.setup();
       renderWithRouter(
         <NotificationCard
@@ -118,7 +119,9 @@ describe('NotificationCard', () => {
 
       await expand(user);
 
-      expect(screen.getByRole('button', { name: /Read Message/ })).toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: /Read Message/ }));
+
+      expect(window.location.pathname).toBe('/messages/msg-1');
     });
   });
 
