@@ -151,10 +151,9 @@ describe('EquipmentRequestsPage', () => {
       expect(screen.getByText('Radio XTS 5000')).toBeInTheDocument();
     });
     await user.click(screen.getByText('Review'));
-    await waitFor(() => {
-      expect(screen.getByText('Approve')).toBeInTheDocument();
-    });
-    await user.click(screen.getByText('Approve'));
+    // #1884 split approval into "approve now, fulfil later" and "approve &
+    // fulfil now"; this test covers the former, which is the review call.
+    await user.click(await screen.findByText('Approve for later fulfillment'));
     await waitFor(() => {
       expect(mockReviewEquipmentRequest).toHaveBeenCalledWith('req-1', {
         status: 'approved',
@@ -192,7 +191,7 @@ describe('EquipmentRequestsPage', () => {
       expect(screen.getByText('Radio XTS 5000')).toBeInTheDocument();
     });
     await user.click(screen.getByText('Review'));
-    await user.click(await screen.findByText('Approve'));
+    await user.click(await screen.findByText('Approve for later fulfillment'));
     await waitFor(() => {
       expect(mockToastError).toHaveBeenCalledWith(expect.any(String));
     });

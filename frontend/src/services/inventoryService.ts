@@ -680,6 +680,7 @@ export const inventoryService = {
       expected_return_at?: string | undefined;
       override_allowance?: boolean;
       fulfillment_type?: 'issuance' | 'checkout' | 'assignment';
+      substitution_override_reason?: string | undefined;
     }
   ): Promise<{
     id: string;
