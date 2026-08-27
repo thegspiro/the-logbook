@@ -7,15 +7,23 @@ introspection, so it runs in the sandbox):
 1. Every route is permission-gated (no bare-auth or open endpoints).
 2. Sensitive resource families — access keys/codes, utility accounts and
    readings, capital projects, insurance policies, occupants — are NOT
-   readable with the lower-privilege ``facilities.view`` grant.
+   readable with the lower-privilege ``facilities.view`` grant. That grant can
+   be delegated without also handing out door/alarm codes, account numbers,
+   budgets, and lease terms.
 3. ``facilities.view_sensitive`` is a READ-ONLY grant: sensitive GETs accept
    it (so explicitly authorized roles can read this data), but no mutation on
    the router does.
 """
 
+import importlib.util
+import json
 from datetime import date, datetime, timezone
+from pathlib import Path
 from types import SimpleNamespace
 
+import sqlalchemy as sa
+from alembic.operations import Operations
+from alembic.runtime.migration import MigrationContext
 from fastapi.routing import APIRoute
 
 from app.api.dependencies import PermissionChecker
@@ -170,14 +178,84 @@ def test_default_positions_grant_sensitive_read_only_to_org_wide_roles():
     ):
         assert "facilities.manage" in perms(slug), slug
 
-    # The baseline member cannot enter the facilities workspace at all.
-    member = perms("member")
-    assert "facilities.view" not in member
-    assert not member & {
-        "facilities.view_sensitive",
-        "facilities.edit",
-        "facilities.manage",
-    }
+    # Baseline roles have no organization-wide facilities access.
+    for slug, grants in (
+        ("member", perms("member")),
+        ("firefighter", set(OPERATIONAL_RANKS["firefighter"]["default_permissions"])),
+        ("emt", set(OPERATIONAL_RANKS["emt"]["default_permissions"])),
+    ):
+        assert not {grant for grant in grants if grant.startswith("facilities.")}, slug
+
+    # The chief ranks and organization president manage facilities, while the
+    # explicitly appointed facilities manager retains its operational grants.
+    for slug in ("fire_chief", "deputy_chief", "assistant_chief"):
+        assert "facilities.manage" in OPERATIONAL_RANKS[slug]["default_permissions"]
+    for slug in ("president", "facilities_manager"):
+        assert "facilities.manage" in perms(slug), slug
+
+    # Only organization-wide offices with a defined facilities duty retain a
+    # read-only grant; it is no longer inherited by every operational officer.
+    for slug in ("vice_president", "treasurer", "secretary"):
+        assert "facilities.view" in perms(slug), slug
+    for slug in ("captain", "lieutenant"):
+        assert "facilities.view" not in OPERATIONAL_RANKS[slug]["default_permissions"]
+
+
+def test_baseline_facilities_view_migration_preserves_custom_positions():
+    versions = Path(__file__).resolve().parents[1] / "alembic" / "versions"
+    matches = list(versions.glob("*_revoke_regular_member_facilities_view.py"))
+    assert len(matches) == 1
+    spec = importlib.util.spec_from_file_location(
+        "revoke_baseline_facilities", matches[0]
+    )
+    migration = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(migration)
+
+    engine = sa.create_engine("sqlite://")
+    metadata = sa.MetaData()
+    positions = sa.Table(
+        "positions",
+        metadata,
+        sa.Column("id", sa.String, primary_key=True),
+        sa.Column("slug", sa.String),
+        sa.Column("is_system", sa.Boolean),
+        sa.Column("permissions", sa.Text),
+    )
+    metadata.create_all(engine)
+    rows = [
+        ("member", "member", True),
+        ("firefighter", "firefighter", True),
+        ("emt", "emt", True),
+        ("custom-member", "member", False),
+        ("custom-role", "station_reader", False),
+    ]
+    with engine.begin() as connection:
+        connection.execute(
+            positions.insert(),
+            [
+                {
+                    "id": row_id,
+                    "slug": slug,
+                    "is_system": is_system,
+                    "permissions": json.dumps(["events.view", "facilities.view"]),
+                }
+                for row_id, slug, is_system in rows
+            ],
+        )
+        context = MigrationContext.configure(connection)
+        with Operations.context(context):
+            migration.upgrade()
+            migration.upgrade()  # Retried deployments remain idempotent.
+
+    with engine.connect() as connection:
+        grants = {
+            row.id: json.loads(row.permissions)
+            for row in connection.execute(sa.select(positions))
+        }
+    for row_id in ("member", "firefighter", "emt"):
+        assert grants[row_id] == ["events.view"]
+    assert grants["custom-member"] == ["events.view", "facilities.view"]
+    assert grants["custom-role"] == ["events.view", "facilities.view"]
 
 
 def test_view_sensitive_is_offered_by_the_role_editor_catalog():
@@ -257,7 +335,7 @@ def test_facility_response_keeps_lease_fields_for_privileged_readers():
 
 
 def test_operational_reads_stay_available_to_facilities_view():
-    """The baseline member grant must keep the operational surface readable."""
+    """An explicitly delegated view grant keeps operational reads available."""
     operational_get_paths = {"", "/rooms", "/shutoff-locations", "/emergency-contacts"}
     for route in _api_routes():
         if route.path not in operational_get_paths or "GET" not in route.methods:

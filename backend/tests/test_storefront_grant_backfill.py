@@ -35,6 +35,8 @@ _VERSIONS = Path(__file__).resolve().parents[1] / "alembic" / "versions"
 _LATER_REVOCATIONS = (
     _VERSIONS / "20260825_2015_a1f7c34e9b02_revoke_baseline_notifications_view.py",
     _VERSIONS / "20260826_1700_e4f5a6b7c8d9_revoke_regular_member_facilities_view.py",
+    _VERSIONS
+    / "20260827_1700_a6c9e2f41b73_revoke_operational_leadership_facilities_view.py",
 )
 
 
@@ -54,9 +56,9 @@ def _pristine_registry_set(slug: str) -> set[str]:
 
     ``_PRIOR_DEFAULTS`` freezes what a pristine pre-storefront row looks like
     at the point ``a4f8c1b92d17`` runs, and it is matched against real stored
-    rows — so it must keep describing them exactly. ``a1f7c34e9b02`` and
-    ``e4f5a6b7c8d9`` run later in the chain and revoke ``notifications.view``
-    and ``facilities.view`` from some of the same slugs, which leaves today's
+    rows — so it must keep describing them exactly. The migrations in
+    ``_LATER_REVOCATIONS`` subsequently revoke ``notifications.view`` or
+    ``facilities.view`` from some of the same slugs, which leaves today's
     registry short of the row the backfill actually encounters. Add them back
     rather than editing the frozen snapshot: the snapshot is right, and
     trimming it to match a registry that moved on afterwards is what would stop
