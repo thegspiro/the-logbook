@@ -22,6 +22,7 @@ from app.models.minute import (
     MinutesTemplate,
 )
 from app.schemas.minute import TemplateCreate, TemplateUpdate
+from app.utils.model_updates import apply_updates
 
 
 class TemplateService:
@@ -224,6 +225,14 @@ class TemplateService:
         if tpl_dict.get("is_default"):
             await self._clear_defaults(organization_id, tpl_dict["meeting_type"])
 
+        # TemplateCreate does not expose organization_id/created_by today, so
+        # **tpl_dict below can never collide with the explicit kwargs — but
+        # nothing enforces that stays true. Strip them defensively so a
+        # future schema change can't let a client override tenancy/ownership
+        # via this constructor call (ONB-8 residual: template mass-assignment).
+        tpl_dict.pop("organization_id", None)
+        tpl_dict.pop("created_by", None)
+
         tpl = MinutesTemplate(
             organization_id=str(organization_id),
             created_by=str(created_by),
@@ -271,8 +280,12 @@ class TemplateService:
             )
             await self._clear_defaults(organization_id, mt)
 
-        for field, value in update_data.items():
-            setattr(tpl, field, value)
+        # apply_updates (not a blind setattr loop) so tenancy/identity stay
+        # protected even if TemplateUpdate's schema ever grows those fields
+        # (ONB-8 residual: template mass-assignment), and an explicit null
+        # against name (NOT NULL) raises a clean 400 instead of a flush-time
+        # IntegrityError.
+        apply_updates(tpl, update_data, skip={"organization_id", "id", "created_by"})
 
         await self.db.commit()
         await self.db.refresh(tpl)
@@ -296,7 +309,7 @@ class TemplateService:
             select(MinutesTemplate)
             .where(MinutesTemplate.organization_id == str(organization_id))
             .where(MinutesTemplate.meeting_type == meeting_type)
-            .where(MinutesTemplate.is_default == True)  # noqa: E712
+            .where(MinutesTemplate.is_default.is_(True))
         )
         return result.scalar_one_or_none()
 
@@ -306,7 +319,7 @@ class TemplateService:
             select(MinutesTemplate)
             .where(MinutesTemplate.organization_id == str(organization_id))
             .where(MinutesTemplate.meeting_type == meeting_type)
-            .where(MinutesTemplate.is_default == True)  # noqa: E712
+            .where(MinutesTemplate.is_default.is_(True))
         )
         for tpl in result.scalars().all():
             tpl.is_default = False
