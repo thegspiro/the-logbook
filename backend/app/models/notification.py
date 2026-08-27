@@ -369,6 +369,11 @@ class DepartmentMessage(Base):
     reads = relationship(
         "DepartmentMessageRead", back_populates="message", cascade="all, delete-orphan"
     )
+    recipients = relationship(
+        "DepartmentMessageRecipient",
+        back_populates="message",
+        cascade="all, delete-orphan",
+    )
 
     __table_args__ = (
         Index("idx_dept_msg_org_pinned", "organization_id", "is_pinned"),
@@ -407,7 +412,6 @@ class DepartmentMessageRead(Base):
     read_at = Column(DateTime(timezone=True), server_default=func.now())
     acknowledged_at = Column(DateTime(timezone=True), nullable=True)
 
-    # Relationships
     message = relationship("DepartmentMessage", back_populates="reads")
     user = relationship("User", foreign_keys=[user_id])
 
@@ -446,6 +450,54 @@ class DepartmentMessageDelivery(Base):
             name="uq_dept_msg_delivery_recipient_channel",
         ),
         Index("idx_dept_msg_delivery_message", "message_id"),
+    )
+
+
+class DepartmentMessageRecipient(Base):
+    """Durable, queryable delivery and resolution state for one recipient."""
+
+    __tablename__ = "department_message_recipients"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    message_id = Column(
+        String(36),
+        ForeignKey("department_messages.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    user_id = Column(
+        String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    organization_id = Column(
+        String(36),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    read_at = Column(DateTime(timezone=True), nullable=True)
+    acknowledged_at = Column(DateTime(timezone=True), nullable=True)
+
+    message = relationship("DepartmentMessage", back_populates="recipients")
+    user = relationship("User", foreign_keys=[user_id])
+
+    __table_args__ = (
+        UniqueConstraint("message_id", "user_id", name="uq_dept_msg_recipient_user"),
+        Index(
+            "idx_dept_msg_recipient_org_user_message",
+            "organization_id",
+            "user_id",
+            "message_id",
+        ),
+        Index(
+            "idx_dept_msg_recipient_unread",
+            "organization_id",
+            "user_id",
+            "read_at",
+        ),
+        Index(
+            "idx_dept_msg_recipient_unacknowledged",
+            "organization_id",
+            "user_id",
+            "acknowledged_at",
+        ),
     )
 
 

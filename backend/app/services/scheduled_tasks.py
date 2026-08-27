@@ -3628,6 +3628,7 @@ async def run_publish_scheduled_messages(db: AsyncSession) -> Dict[str, Any]:
 
     from app.models.notification import DepartmentMessage
     from app.services.message_delivery_service import MessageDeliveryService
+    from app.services.messaging_service import MessagingService
 
     now = datetime.now(timezone.utc)
     # Lock and claim in one transaction. PostgreSQL and MySQL 8 skip rows
@@ -3651,6 +3652,7 @@ async def run_publish_scheduled_messages(db: AsyncSession) -> Dict[str, Any]:
     await db.commit()
 
     delivery = MessageDeliveryService(db)
+    messaging = MessagingService(db)
     published = 0
     expired = 0
     for message in due:
@@ -3670,6 +3672,8 @@ async def run_publish_scheduled_messages(db: AsyncSession) -> Dict[str, Any]:
             await db.commit()
             expired += 1
             continue
+        await messaging.materialize_recipients(message)
+        await db.commit()
         await delivery.deliver(message)
         published += 1
 
