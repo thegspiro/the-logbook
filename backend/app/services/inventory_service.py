@@ -6650,6 +6650,7 @@ class InventoryService:
         quantity: Optional[int] = None,
         expected_return_at: Optional[datetime] = None,
         override_allowance: bool = False,
+        substitution_override_reason: Optional[str] = None,
     ) -> Tuple[Optional[EquipmentRequest], Optional[str]]:
         """Turn an approved equipment request into a real issuance, checkout,
         or assignment, then mark the request fulfilled and link it back to the
@@ -6714,6 +6715,21 @@ class InventoryService:
             if not item:
                 await self._revert_fulfillment_claim(request_id, organization_id)
                 return None, "Selected item not found"
+
+            is_substitute = bool(req.item_id and str(target_item_id) != req.item_id)
+            wrong_category = bool(
+                not req.item_id
+                and req.category_id
+                and item.category_id != req.category_id
+            )
+            if (is_substitute or wrong_category) and not (
+                substitution_override_reason and substitution_override_reason.strip()
+            ):
+                await self._revert_fulfillment_claim(request_id, organization_id)
+                return None, (
+                    "Selected substitute is incompatible with the requested item/category; "
+                    "a documented substitution override is required"
+                )
 
             qty = quantity or req.quantity or 1
             requester_id = UUID(req.requester_id)

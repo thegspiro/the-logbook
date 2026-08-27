@@ -563,6 +563,106 @@ class TestEquipmentRequestFulfillment:
         assert err is not None
         assert "approved" in err.lower()
 
+    @pytest.mark.asyncio
+    async def test_incompatible_substitution_requires_documented_override(
+        self, db_session, setup_org_and_user
+    ):
+        org_id, user_id, member_id = setup_org_and_user
+        svc = InventoryService(db_session)
+        _, requested = await _make_pool_item(svc, org_id, user_id)
+        substitute = await _make_individual_item(svc, org_id, user_id)
+        req = EquipmentRequest(
+            organization_id=org_id,
+            requester_id=member_id,
+            item_name=requested.name,
+            item_id=requested.id,
+            quantity=1,
+            request_type=RequestType.ISSUANCE,
+            status=RequestStatus.APPROVED,
+        )
+        db_session.add(req)
+        await db_session.flush()
+
+        fulfilled, err = await svc.fulfill_equipment_request(
+            request_id=uuid.UUID(req.id),
+            organization_id=uuid.UUID(org_id),
+            fulfilled_by=uuid.UUID(user_id),
+            item_id=uuid.UUID(substitute.id),
+            fulfillment_type="assignment",
+        )
+        assert fulfilled is None
+        assert "documented substitution override" in err
+        await db_session.refresh(req)
+        assert req.status == RequestStatus.APPROVED
+
+    @pytest.mark.asyncio
+    async def test_unavailable_inventory_leaves_request_approved(
+        self, db_session, setup_org_and_user
+    ):
+        org_id, user_id, member_id = setup_org_and_user
+        svc = InventoryService(db_session)
+        # A pool item cannot be *created* empty (create_item requires
+        # quantity >= 1), so the shortage under test is depletion after the
+        # fact -- which is the only way stock actually reaches zero.
+        _, item = await _make_pool_item(svc, org_id, user_id, quantity=1)
+        item.quantity = 0
+        await db_session.flush()
+        req = EquipmentRequest(
+            organization_id=org_id,
+            requester_id=member_id,
+            item_name=item.name,
+            item_id=item.id,
+            quantity=1,
+            request_type=RequestType.ISSUANCE,
+            status=RequestStatus.APPROVED,
+        )
+        db_session.add(req)
+        await db_session.flush()
+
+        fulfilled, err = await svc.fulfill_equipment_request(
+            request_id=uuid.UUID(req.id),
+            organization_id=uuid.UUID(org_id),
+            fulfilled_by=uuid.UUID(user_id),
+            fulfillment_type="issuance",
+        )
+        assert fulfilled is None
+        assert err is not None
+        await db_session.refresh(req)
+        assert req.status == RequestStatus.APPROVED
+
+    @pytest.mark.asyncio
+    async def test_approved_request_can_be_fulfilled_after_stock_arrives(
+        self, db_session, setup_org_and_user
+    ):
+        org_id, user_id, member_id = setup_org_and_user
+        svc = InventoryService(db_session)
+        _, item = await _make_pool_item(svc, org_id, user_id, quantity=1)
+        item.quantity = 0
+        await db_session.flush()
+        req = EquipmentRequest(
+            organization_id=org_id,
+            requester_id=member_id,
+            item_name=item.name,
+            item_id=item.id,
+            quantity=2,
+            request_type=RequestType.ISSUANCE,
+            status=RequestStatus.APPROVED,
+        )
+        db_session.add(req)
+        await db_session.flush()
+        # Approval is intentionally durable while procurement/receiving occurs.
+        item.quantity = 2
+        await db_session.commit()
+
+        fulfilled, err = await svc.fulfill_equipment_request(
+            request_id=uuid.UUID(req.id),
+            organization_id=uuid.UUID(org_id),
+            fulfilled_by=uuid.UUID(user_id),
+            fulfillment_type="issuance",
+        )
+        assert err is None
+        assert fulfilled.status == RequestStatus.FULFILLED
+
 
 # ── Write-Off Releases Holder Records ──────────────────────────────
 

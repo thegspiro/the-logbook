@@ -958,6 +958,14 @@ export interface EquipmentRequestItem {
   item_name: string;
   item_id?: string;
   category_id?: string;
+  category_name?: string;
+  requested_item?: {
+    tracking_type: string;
+    status: string;
+    available_quantity: number;
+    min_rank_order?: number | null;
+    restricted_to_positions?: string[] | null;
+  };
   quantity: number;
   request_type: RequestTypeLiteral;
   requested_duration: 'temporary' | 'ongoing';
