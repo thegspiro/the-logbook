@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**256 tables · 4374 columns · 827 foreign keys**
+**256 tables · 4377 columns · 827 foreign keys**
 
 ---
 
@@ -247,7 +247,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`dues_schedules`](#dues_schedules) | `DuesSchedule` | 15 | Schedule for dues collection |
 | [`expense_line_items`](#expense_line_items) | `ExpenseLineItem` | 10 | Individual line item within an expense report |
 | [`expense_reports`](#expense_reports) | `ExpenseReport` | 17 | Expense report submitted by a member for reimbursement |
-| [`finance_export_logs`](#finance_export_logs) | `ExportLog` | 9 | Log of QuickBooks export operations |
+| [`finance_export_logs`](#finance_export_logs) | `ExportLog` | 12 | Log of an export attempt, including interrupted streams. |
 | [`finance_export_mappings`](#finance_export_mappings) | `ExportMapping` | 8 | Mapping between internal budget categories and QuickBooks accounts |
 | [`fiscal_years`](#fiscal_years) | `FiscalYear` | 10 | Fiscal year definition for the organization |
 | [`member_dues`](#member_dues) | `MemberDues` | 18 | Individual member dues payment record |
@@ -3642,7 +3642,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 **ExportLog** · `app/models/finance.py`
 
-> Log of QuickBooks export operations
+> Log of an export attempt, including interrupted streams.
 
 | Column | Type | Null | Key | Default | References |
 |---|---|---|---|---|---|
@@ -3655,6 +3655,9 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `file_format` | ENUM(`csv`, `iif`) | no |  |  |  |
 | `exported_by` | VARCHAR(36) | no | FK |  | → `users.id` |
 | `exported_at` | DATETIME | no |  | `now()` |  |
+| `status` | VARCHAR(20) | no |  | `'pending'` |  |
+| `error_message` | VARCHAR(500) | yes |  |  |  |
+| `completed_at` | DATETIME | yes |  |  |  |
 
 **Indexes**
 
