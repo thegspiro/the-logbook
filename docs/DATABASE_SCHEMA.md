@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**256 tables · 4375 columns · 827 foreign keys**
+**257 tables · 4390 columns · 831 foreign keys**
 
 ---
 
@@ -316,7 +316,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`inventory_categories`](#inventory_categories) | `InventoryCategory` | 16 | Inventory Category model |
 | [`inventory_impact_plans`](#inventory_impact_plans) | `InventoryImpactPlan` | 8 | A saved, named impact-planner scenario. |
 | [`inventory_items`](#inventory_items) | `InventoryItem` | 51 | Inventory Item model |
-| [`inventory_lots`](#inventory_lots) | `InventoryLot` | 11 | A batch/lot of a consumable inventory item held as ready stock. |
+| [`inventory_lots`](#inventory_lots) | `InventoryLot` | 13 | A batch/lot of a consumable inventory item held as ready stock. |
 | [`inventory_notification_queue`](#inventory_notification_queue) | `InventoryNotificationQueue` | 15 | Queues inventory change events for delayed, consolidated email |
 | [`inventory_vendor_contacts`](#inventory_vendor_contacts) | `InventoryVendorContact` | 12 | A named person at a vendor — sales rep, service desk, accounts receivable. |
 | [`inventory_vendors`](#inventory_vendors) | `InventoryVendor` | 21 | Vendor model |
@@ -331,7 +331,8 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`nfpa_inspection_details`](#nfpa_inspection_details) | `NFPAInspectionDetail` | 18 | NFPA-specific inspection fields extending a MaintenanceRecord. |
 | [`nfpa_item_compliance`](#nfpa_item_compliance) | `NFPAItemCompliance` | 20 | NFPA 1851/1852 compliance record for PPE and SCBA items. |
 | [`property_return_reminders`](#property_return_reminders) | `PropertyReturnReminder` | 10 | Tracks which property-return reminder notices have been sent to |
-| [`reorder_requests`](#reorder_requests) | `ReorderRequest` | 24 | Tracks reorder requests for inventory items that have dropped below |
+| [`reorder_receipts`](#reorder_receipts) | `ReorderReceipt` | 10 | Immutable receipt history; one client receipt key may affect stock once. |
+| [`reorder_requests`](#reorder_requests) | `ReorderRequest` | 25 | Tracks reorder requests for inventory items that have dropped below |
 | [`return_requests`](#return_requests) | `ReturnRequest` | 18 | Member-initiated return request. |
 | [`storage_areas`](#storage_areas) | `StorageArea` | 14 | Storage Area model |
 
@@ -585,7 +586,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | Table | Model | Columns | Purpose |
 |---|---|---|---|
 | [`member_leaves_of_absence`](#member_leaves_of_absence) | `MemberLeaveOfAbsence` | 14 | Records periods where a member is on leave from the department. |
-| [`organizations`](#organizations) | `Organization` | 36 | Organization/Department model |
+| [`organizations`](#organizations) | `Organization` | 38 | Organization/Department model |
 | [`password_history`](#password_history) | `PasswordHistory` | 4 | Password history for HIPAA compliance (§164.312(d)) |
 | [`positions`](#positions) | `Position` | 11 | Corporate Position model for permission-based access control. |
 | [`prospects`](#prospects) | `Prospect` | 17 | Prospective member – someone who has expressed interest in joining |
@@ -4807,6 +4808,8 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `expiration_date` | DATE | yes |  |  |  |
 | `quantity` | INTEGER | no |  | `0` |  |
 | `received_date` | DATE | yes |  |  |  |
+| `storage_location` | VARCHAR(255) | yes |  |  |  |
+| `unit_cost` | NUMERIC(10, 2) | yes |  |  |  |
 | `notes` | TEXT | yes |  |  |  |
 | `created_at` | DATETIME | yes |  | `now()` |  |
 | `updated_at` | DATETIME | yes |  | `now()` |  |
@@ -5263,6 +5266,34 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 - `idx_prop_reminder_org_user` (`organization_id`, `user_id`)
 - `idx_prop_reminder_type` (`user_id`, `reminder_type`)
 
+### `reorder_receipts`
+
+**ReorderReceipt** · `app/models/inventory.py`
+
+> Immutable receipt history; one client receipt key may affect stock once.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `reorder_request_id` | VARCHAR(36) | no | FK, IDX |  | → `reorder_requests.id` ON DELETE CASCADE |
+| `inventory_lot_id` | VARCHAR(36) | no | FK |  | → `inventory_lots.id` ON DELETE RESTRICT |
+| `idempotency_key` | VARCHAR(100) | no |  |  |  |
+| `quantity` | INTEGER | no |  |  |  |
+| `unit_cost` | NUMERIC(10, 2) | yes |  |  |  |
+| `storage_location` | VARCHAR(255) | yes |  |  |  |
+| `received_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `received_at` | DATETIME | no |  | `now()` |  |
+
+**Indexes**
+
+- `ix_reorder_receipts_org` (`organization_id`, `received_at`)
+- `ix_reorder_receipts_request` (`reorder_request_id`)
+
+**Constraints**
+
+- UNIQUE `uq_reorder_receipt_key` (`reorder_request_id`, `idempotency_key`)
+
 ### `reorder_requests`
 
 **ReorderRequest** · `app/models/inventory.py`
@@ -5277,7 +5308,8 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `category_id` | VARCHAR(36) | yes | FK |  | → `inventory_categories.id` ON DELETE SET NULL |
 | `item_name` | VARCHAR(255) | no |  |  |  |
 | `quantity_requested` | INTEGER | no |  | `1` |  |
-| `quantity_received` | INTEGER | yes |  |  |  |
+| `quantity_received` | INTEGER | no |  | `0` |  |
+| `version` | INTEGER | no |  | `1` |  |
 | `vendor` | VARCHAR(255) | yes |  |  |  |
 | `vendor_contact` | VARCHAR(255) | yes |  |  |  |
 | `vendor_id` | VARCHAR(36) | yes | FK, IDX |  | → `inventory_vendors.id` ON DELETE SET NULL |
@@ -5285,7 +5317,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `actual_unit_cost` | NUMERIC(10, 2) | yes |  |  |  |
 | `purchase_order_number` | VARCHAR(255) | yes |  |  |  |
 | `expected_delivery_date` | DATE | yes |  |  |  |
-| `status` | ENUM(`pending`, `approved`, `ordered`, `received`, `cancelled`) | no | IDX | `pending` |  |
+| `status` | ENUM(`pending`, `approved`, `ordered`, `partially_received`, `received`, `cancelled`) | no | IDX | `pending` |  |
 | `urgency` | ENUM(`low`, `normal`, `high`, `critical`) | no |  | `normal` |  |
 | `notes` | TEXT | yes |  |  |  |
 | `requested_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
@@ -8820,6 +8852,8 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `name` | VARCHAR(255) | no |  |  |  |
 | `slug` | VARCHAR(100) | no | UQ |  |  |
 | `description` | TEXT | yes |  |  |  |
+| `reorder_vendor_required` | BOOL | no |  | `0` |  |
+| `reorder_po_required` | BOOL | no |  | `0` |  |
 | `organization_type` | ENUM(`fire_department`, `ems_only`, `fire_ems_combined`) | no |  | `fire_department` |  |
 | `timezone` | VARCHAR(50) | yes |  | `'America/New_York'` |  |
 | `phone` | VARCHAR(20) | yes |  |  |  |
@@ -9065,7 +9099,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 Every foreign key in the schema, grouped by the table it points at — the map of which id lives where.
 
-### → `users` (309 references)
+### → `users` (310 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -9293,6 +9327,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `push_subscriptions` | `user_id` | CASCADE | no |
 | `recertification_pathways` | `created_by` | SET NULL | yes |
 | `renewal_tasks` | `user_id` | CASCADE | no |
+| `reorder_receipts` | `received_by` | SET NULL | yes |
 | `reorder_requests` | `approved_by` | SET NULL | yes |
 | `reorder_requests` | `requested_by` | SET NULL | yes |
 | `requirement_progress` | `verified_by` | SET NULL | yes |
@@ -9379,7 +9414,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `votes` | `voter_id` | SET NULL | yes |
 | `xapi_statements` | `user_id` | SET NULL | yes |
 
-### → `organizations` (203 references)
+### → `organizations` (204 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -9536,6 +9571,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `push_subscriptions` | `organization_id` | CASCADE | no |
 | `recertification_pathways` | `organization_id` | CASCADE | no |
 | `renewal_tasks` | `organization_id` | CASCADE | no |
+| `reorder_receipts` | `organization_id` | CASCADE | no |
 | `reorder_requests` | `organization_id` | CASCADE | no |
 | `return_requests` | `organization_id` | CASCADE | no |
 | `saved_ballot_templates` | `organization_id` | CASCADE | no |
@@ -10099,6 +10135,13 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `event_requests` | `form_submission_id` | SET NULL | yes |
 | `prospective_members` | `form_submission_id` | SET NULL | yes |
 
+### → `inventory_lots` (2 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `check_item_deployed_lots` | `inventory_lot_id` | SET NULL | yes |
+| `reorder_receipts` | `inventory_lot_id` | RESTRICT | no |
+
 ### → `meeting_minutes` (2 references)
 
 | From table | Column | On delete | Nullable |
@@ -10272,12 +10315,6 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 |---|---|---|---|
 | `grant_applications` | `opportunity_id` | SET NULL | yes |
 
-### → `inventory_lots` (1 references)
-
-| From table | Column | On delete | Nullable |
-|---|---|---|---|
-| `check_item_deployed_lots` | `inventory_lot_id` | SET NULL | yes |
-
 ### → `ip_exceptions` (1 references)
 
 | From table | Column | On delete | Nullable |
@@ -10349,6 +10386,12 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
 | `renewal_tasks` | `pathway_id` | CASCADE | no |
+
+### → `reorder_requests` (1 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `reorder_receipts` | `reorder_request_id` | CASCADE | no |
 
 ### → `requirement_progress` (1 references)
 

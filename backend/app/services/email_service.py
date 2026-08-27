@@ -319,6 +319,7 @@ def wrap_email_body(
         accent=accent,
         chip=chip,
         subtitle=subtitle,
+        cache=False,
     )
     # build_shell writes the shell as a template and this path never goes
     # through variable substitution, so every token it emits is filled in
@@ -710,6 +711,15 @@ class EmailService:
     # base64 attachments) at 5 MiB; leave headroom for the HTML body.
     _CLOUDFLARE_ATTACHMENT_BUDGET = int(4.5 * 1024 * 1024)
 
+    # The SMTP path has no per-provider cap enforcing this, but without one
+    # a large attachment (e.g. a generated election package PDF) times the
+    # recipient count in send_email's per-recipient batch is held fully in
+    # memory at once (attachment bytes are read once but re-serialized via
+    # msg.as_string() into every recipient's own batch entry) — unbounded
+    # memory growth with ordinary usage, not just abuse. 18 MiB raw keeps
+    # the base64-inflated message under most relays' ~25 MiB accept limit.
+    _SMTP_ATTACHMENT_BUDGET = int(18 * 1024 * 1024)
+
     @classmethod
     def _build_cloudflare_attachments(
         cls,
@@ -900,23 +910,24 @@ class EmailService:
 
         safe_from_name = _sanitize_header(self._smtp_config["from_name"])
         safe_subject = _sanitize_header(subject)
+        safe_to = _sanitize_header(to_email)
 
         msg["From"] = f"{safe_from_name} <{self._smtp_config['from_email']}>"
-        msg["To"] = to_email
+        msg["To"] = safe_to
         msg["Subject"] = safe_subject
         msg["Date"] = datetime.now(timezone.utc).strftime("%a, %d %b %Y %H:%M:%S +0000")
         msg["Message-ID"] = self._make_message_id()
         msg["MIME-Version"] = "1.0"
         msg["X-Auto-Response-Suppress"] = "OOF, DR, RN, NRN, AutoReply"
         if reply_to:
-            msg["Reply-To"] = reply_to
+            msg["Reply-To"] = _sanitize_header(reply_to)
         if list_unsubscribe:
-            msg["List-Unsubscribe"] = f"<{list_unsubscribe}>"
+            msg["List-Unsubscribe"] = f"<{_sanitize_header(list_unsubscribe)}>"
             msg["List-Unsubscribe-Post"] = "List-Unsubscribe=One-Click"
 
         all_recipients = [to_email]
         if cc_emails:
-            msg["Cc"] = ", ".join(cc_emails)
+            msg["Cc"] = ", ".join(_sanitize_header(addr) for addr in cc_emails)
             all_recipients.extend(cc_emails)
         if bcc_emails:
             all_recipients.extend(bcc_emails)
@@ -1012,17 +1023,21 @@ class EmailService:
 
         # --- Cloudflare Email Service path (REST API, no SMTP) ---
         if self._use_cloudflare:
-            cf_attachments = self._build_cloudflare_attachments(attachment_paths)
-            results = await self._cloudflare_send(
-                to_emails=to_emails,
-                subject=subject,
-                html_body=html_body,
-                text_body=text_body,
-                cc_emails=cc_emails,
-                bcc_emails=bcc_emails,
-                reply_to=reply_to,
-                attachments=cf_attachments,
-            )
+            try:
+                cf_attachments = self._build_cloudflare_attachments(attachment_paths)
+                results = await self._cloudflare_send(
+                    to_emails=to_emails,
+                    subject=subject,
+                    html_body=html_body,
+                    text_body=text_body,
+                    cc_emails=cc_emails,
+                    bcc_emails=bcc_emails,
+                    reply_to=reply_to,
+                    attachments=cf_attachments,
+                )
+            except Exception as e:
+                logger.error("Cloudflare email send failed: {}", e)
+                results = [False] * len(to_emails)
         else:
             # --- SMTP path ---
             safe_from_name = _sanitize_header(self._smtp_config["from_name"])
@@ -1030,11 +1045,20 @@ class EmailService:
 
             # Pre-read attachment payloads once (avoids re-reading per recipient)
             attachment_parts: List[MIMEBase] = []
+            attachment_bytes_used = 0
             for filepath in attachment_paths or []:
                 resolved = os.path.realpath(filepath)
                 if not os.path.isfile(resolved):
                     logger.warning("Attachment not found, skipping")
                     continue
+                file_size = os.path.getsize(resolved)
+                if attachment_bytes_used + file_size > self._SMTP_ATTACHMENT_BUDGET:
+                    logger.warning(
+                        "Attachment exceeds per-message size budget, skipping: {}",
+                        os.path.basename(resolved),
+                    )
+                    continue
+                attachment_bytes_used += file_size
                 with open(resolved, "rb") as f:
                     part = MIMEBase("application", "octet-stream")
                     part.set_payload(f.read())
@@ -1065,7 +1089,7 @@ class EmailService:
                     msg["From"] = (
                         f"{safe_from_name} <{self._smtp_config['from_email']}>"
                     )
-                    msg["To"] = to_email
+                    msg["To"] = _sanitize_header(to_email)
                     msg["Subject"] = safe_subject
                     msg["Date"] = datetime.now(timezone.utc).strftime(
                         "%a, %d %b %Y %H:%M:%S +0000"
@@ -1074,14 +1098,18 @@ class EmailService:
                     msg["MIME-Version"] = "1.0"
                     msg["X-Auto-Response-Suppress"] = "OOF, DR, RN, NRN, AutoReply"
                     if reply_to:
-                        msg["Reply-To"] = reply_to
+                        msg["Reply-To"] = _sanitize_header(reply_to)
                     if list_unsubscribe:
-                        msg["List-Unsubscribe"] = f"<{list_unsubscribe}>"
+                        msg["List-Unsubscribe"] = (
+                            f"<{_sanitize_header(list_unsubscribe)}>"
+                        )
                         msg["List-Unsubscribe-Post"] = "List-Unsubscribe=One-Click"
 
                     all_recipients = [to_email]
                     if cc_emails:
-                        msg["Cc"] = ", ".join(cc_emails)
+                        msg["Cc"] = ", ".join(
+                            _sanitize_header(addr) for addr in cc_emails
+                        )
                         all_recipients.extend(cc_emails)
                     if bcc_emails:
                         all_recipients.extend(bcc_emails)
@@ -1105,7 +1133,11 @@ class EmailService:
                     )
                     results = [False]
             elif batch:
-                results = await asyncio.to_thread(self._smtp_send_batch, batch)
+                try:
+                    results = await asyncio.to_thread(self._smtp_send_batch, batch)
+                except Exception as e:
+                    logger.error("Batch SMTP send failed: {}", e)
+                    results = [False] * len(batch)
             else:
                 results = []
 

@@ -993,6 +993,18 @@ export interface WriteOffRequestItem {
   reviewed_at?: string;
   review_notes?: string;
   clearance_id?: string;
+  clearance_record?: string;
+  current_holder?: string;
+  current_status?: string;
+  replacement_value?: number;
+  linked_charge_record?: string;
+  open_maintenance_record?: string;
+  active_assignment_count: number;
+  active_checkout_count: number;
+  active_issuance_count: number;
+  acknowledgement_required: boolean;
+  acknowledgement_threshold?: number;
+  holder_signature?: string;
   created_at?: string;
 }
 
@@ -1456,6 +1468,8 @@ export interface ReorderRequest {
   item_name: string;
   quantity_requested: number;
   quantity_received?: number;
+  quantity_outstanding: number;
+  version: number;
   vendor?: string;
   vendor_contact?: string;
   vendor_id?: string;
@@ -1507,6 +1521,24 @@ export interface ReorderRequestUpdate {
   status?: string | undefined;
   urgency?: string | undefined;
   notes?: string | null | undefined;
+}
+
+export interface ReorderTransition {
+  action: 'approve' | 'mark_ordered' | 'cancel';
+  expected_version: number;
+  vendor_id?: string;
+  vendor?: string;
+  purchase_order_number?: string;
+}
+
+export interface ReorderReceiptCreate {
+  quantity: number;
+  expected_version: number;
+  idempotency_key: string;
+  storage_location: string;
+  unit_cost: number;
+  lot_number?: string;
+  confirm_over_receipt?: boolean;
 }
 
 // Scan / Quick-Action Types

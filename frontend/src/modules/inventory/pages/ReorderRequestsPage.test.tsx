@@ -9,6 +9,7 @@ const mockGetCategories = vi.fn();
 const mockGetLowStockItems = vi.fn();
 const mockCreateReorderRequest = vi.fn();
 const mockUpdateReorderRequest = vi.fn();
+const mockTransitionReorderRequest = vi.fn();
 const mockGetVendors = vi.fn();
 
 vi.mock('../../../services/api', () => ({
@@ -18,6 +19,7 @@ vi.mock('../../../services/api', () => ({
     getLowStockItems: (...a: unknown[]) => mockGetLowStockItems(...a) as unknown,
     createReorderRequest: (...a: unknown[]) => mockCreateReorderRequest(...a) as unknown,
     updateReorderRequest: (...a: unknown[]) => mockUpdateReorderRequest(...a) as unknown,
+    transitionReorderRequest: (...a: unknown[]) => mockTransitionReorderRequest(...a) as unknown,
     getVendors: (...a: unknown[]) => mockGetVendors(...a) as unknown,
   },
 }));
@@ -44,6 +46,9 @@ const makeReq = (overrides: Partial<ReorderRequest> = {}): ReorderRequest => ({
   organization_id: 'org-1',
   item_name: 'SCBA Cylinders',
   quantity_requested: 4,
+  quantity_received: 0,
+  quantity_outstanding: 4,
+  version: 1,
   status: 'pending',
   urgency: 'high',
   created_at: '2026-02-01T00:00:00Z',
@@ -157,19 +162,22 @@ describe('ReorderRequestsPage', () => {
     expect(mockUpdateReorderRequest.mock.calls[0]?.[0]).toBe('r-1');
   });
 
-  it('updates a request status', async () => {
+  it('shows and invokes only the contextual next-state action', async () => {
     mockGetReorderRequests.mockResolvedValue([makeReq({ status: 'approved' })]);
     const user = userEvent.setup();
     renderWithRouter(<ReorderRequestsPage />);
     await screen.findAllByText('SCBA Cylinders');
 
-    await user.click(firstButton('Update Status'));
-    expect(await screen.findByText('Update Reorder Status')).toBeInTheDocument();
-    await user.click(lastButton('Update Status'));
+    expect(screen.queryByRole('button', { name: 'Approve' })).not.toBeInTheDocument();
+    await user.click(firstButton('Mark ordered'));
+    expect(await screen.findByRole('heading', { name: 'Mark ordered' })).toBeInTheDocument();
+    await user.click(lastButton('Mark ordered'));
 
-    await waitFor(() => expect(mockUpdateReorderRequest).toHaveBeenCalledTimes(1));
-    expect(mockUpdateReorderRequest.mock.calls[0]?.[0]).toBe('r-1');
-    expect(mockToastSuccess).toHaveBeenCalledWith('Status updated');
+    await waitFor(() => expect(mockTransitionReorderRequest).toHaveBeenCalledTimes(1));
+    expect(mockTransitionReorderRequest).toHaveBeenCalledWith(
+      'r-1',
+      expect.objectContaining({ action: 'mark_ordered', expected_version: 1 })
+    );
   });
 
   it('shows the linked vendor name in preference to the free-text one', async () => {
