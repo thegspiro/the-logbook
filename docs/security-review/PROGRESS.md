@@ -16,7 +16,8 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-PR #1907 (feature 25, messaging & notifications) — open, awaiting CI/review.
+None — PR #1907 (feature 25, messaging & notifications) merged. Feature 26
+(forms) starting next.
 
 ---
 
@@ -69,7 +70,7 @@ data-carrying modules, then the supporting infrastructure.
 | 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ✅              |
 | 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ✅              |
 | 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ✅              |
-| 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ⏳              |
+| 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ✅              |
 | 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                         | ⬜              |
 | 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                         | ⬜              |
 | 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`                                                                    | ⬜              |
@@ -986,3 +987,24 @@ re-runs the whole-codebase sweeps against whatever has landed since.
   backend suite pass. Findings doc:
   `docs/security-review/MSG-25-messaging-notifications.md`. PR #1907 opened
   and subscribed. Next: 26 forms, once #1907 merges.
+- **25 Messaging & notifications ✅ merged** — PR #1907 merged 2026-08-27.
+  Codex review caught one real regression before merge: the MSG-6 fix
+  tightened `scheduling.cc_emails`/`member_drop_notifications.cc_emails`
+  from `List[str]` to `List[EmailStr]`, correct on writes (strictly
+  validated via `OrganizationSettingsUpdate`) but not on reads —
+  `get_organization_settings` reconstructs the entire stored settings
+  blob via Pydantic on every call, including the read at the end of any
+  unrelated settings update, and `scheduling` flowed through unvalidated
+  `extra_settings` into that reconstruction. An org with a legacy
+  malformed `cc_emails` value saved before the tightening would find
+  every future settings read — and any subsequent update to an unrelated
+  field — broken, with no way to fix it through the API. Fixed by
+  reconstructing `scheduling` explicitly and filtering `cc_emails` to
+  syntactically valid addresses on the read path only. Traced the
+  equivalent `member_drop_notifications` field Codex flagged as carrying
+  the same risk and confirmed it doesn't: that field is excluded from the
+  same reconstruction path entirely today (a separate, pre-existing gap
+  unrelated to this change), and its only other reader accesses it as a
+  raw dict, never through Pydantic. 3 regression tests added. Full local
+  completion gate re-verified green (8917/8917 full suite) before the
+  final push; CI came back green with no further comments. Next: 26 forms.
