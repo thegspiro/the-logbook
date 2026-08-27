@@ -1,12 +1,99 @@
 # Security Review — Medical Screening
 
-**Prefix:** `MS` · **Iteration:** 9 · **Reviewed:** 2026-08-25 · **PR:** (this PR)
+**Prefix:** `MS` · **Iteration:** 9 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2) · **PR:** [#1816](https://github.com/thegspiro/the-logbook/pull/1816) (pass 1), (this PR) (pass 2)
+
+---
+
+## Pass 2 (2026-08-27)
+
+Scoped to the **full domain** since pass 1's merge commit (`daf5eaca`,
+PR #1816): `endpoints/medical_screening.py`,
+`services/medical_screening_service.py`, `models/medical_screening.py`,
+`schemas/medical_screening.py`, every migration since (checked by content,
+not filename, for anything touching `screening_records`/
+`screening_requirements`), and a `git diff --stat`/content-grep against
+`frontend/src/` and `backend/app/` broadly for anything referencing
+`medical_screening`/`screening_record`/`screening_requirement`, rather than
+a directory glob — the scoping discipline this rotation had to re-learn on
+ELEC-06 and MP-08.
+
+**Backend declared files: zero changes.** `git diff daf5eaca..origin/main`
+against all four files pass 1 named returns nothing.
+
+**A real, non-trivial change did land, outside those four files: a
+server-side module gate on the whole router.**
+`backend/app/api/v1/api.py` now registers `medical_screening.router` with
+`dependencies=module_gate("medical_screening", "Medical Screening")`, where
+`module_gate` resolves to `Depends(require_module(...))`
+(`api/dependencies.py:465`). This is new _enforcement_, not a new
+permission model — it adds an AND condition ("does this org run the
+module") on top of every route's existing permission check, never a
+substitute for one. Traced in full:
+
+- `require_module`'s underlying resolver, `get_request_enabled_modules`
+  (`api/dependencies.py:404`), is the exact function this rotation already
+  hardened — I rewrote it in ELEC-06 pass 2 to call
+  `get_optional_current_user` directly (not via `Depends`) wrapped in
+  try/except, so an invalid/expired session cookie is treated as anonymous
+  for module-gating purposes rather than raising before the module check
+  runs. That fix is unmodified here and still covered by
+  `test_module_api_gating.py::test_an_invalid_session_cookie_does_not_block_a_public_route_either`.
+- `require_module` deliberately passes an anonymous caller through (`enabled
+is None` → return), reserved for routers that also carry
+  token-authenticated public routes. `medical_screening.router` has no such
+  route — every one of its 14 endpoints requires
+  `Depends(get_current_user)` or a `require_permission(...)` dependency of
+  its own — so this clause is a no-op here rather than a gap: an anonymous
+  caller is rejected by the endpoint's own auth dependency regardless of
+  what the module gate decides. Verified directly against
+  `get_my_compliance` (`endpoints/medical_screening.py:358`), the one route
+  with no permission string, which still declares
+  `current_user: User = Depends(get_current_user)`.
+- 403 (not 404) on a disabled module, with a dedicated error code
+  distinguishing "your department switched this off" from "you lack the
+  permission" — consistent with every other gated router, and confirmed
+  covered for `/api/v1/medical-screening` specifically in
+  `test_module_api_gating.py:207,466`.
+- `ModuleSettings.medical_screening` (`schemas/organization.py`) defaults to
+  `False`, and `onboarding.py`'s module list only _offers_ it during setup
+  rather than defaulting it on for existing installations — matches this
+  rotation's own CLAUDE.md Pitfall #19 concern (a switch must have a reader,
+  and must not silently change existing behavior on upgrade). Not this
+  pass's to re-litigate; already reasoned through in the change's own
+  comments and consistent with the pattern.
+- `admin_hub_service.py`'s metric resolver now skips the
+  medical-screening lapse/overdue tiles when the module is off
+  (`requires_module="medical_screening"`) — display-only, and the
+  underlying data read stays permission-gated the same as before.
+
+**Frontend, matching the backend change:**
+`modules/medical-screening/routes.tsx` adds `requiredModule="medical_screening"`
+to the existing `<ProtectedRoute requiredPermission="medical_screening.view">`.
+Confirmed in `ProtectedRoute.tsx:178-224` that the permission/role checks
+run strictly before the module gate (`if (requiredModule)` at line 219) —
+additive, not a weakening, the same ordering already verified for MP-08's
+equivalent change. `Dashboard.tsx`'s `loadMyScreenings` now skips calling
+`medicalScreeningService.getMyCompliance()` when the module is off
+client-side — a UX/API-call-avoidance convenience with no security
+implication, since `/compliance/me` was already safe by construction (no id
+parameter, subject is always the caller) and still requires authentication
+regardless of the module flag.
+
+No migrations touch `screening_records`/`screening_requirements` since pass
+
+1. Completion gate: `test_module_api_gating.py` (parity test covering this
+   router) + `test_medical_screening_service.py` +
+   `test_medical_screening_update_guards.py` +
+   `test_my_medical_compliance_route.py` — 67 passed, 0 failed. No code
+   changes needed. Rotation row 09 -> done.
+
+---
+
+## Pass 1 (2026-08-25)
 
 **Backend:** `endpoints/medical_screening.py` (417 L → 434 L this iteration, 14 routes), `services/medical_screening_service.py` (355 L → 605 L), `models/medical_screening.py`, `schemas/medical_screening.py`
 **Frontend:** `modules/medical-screening/` (routes only — see Findings, MS-4)
 **Migrations:** `20260810_0001_encrypt_medical_screening_phi.py` — re-verified sound, no new migration this iteration
-
----
 
 ## Scope
 
