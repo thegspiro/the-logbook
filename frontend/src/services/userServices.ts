@@ -120,6 +120,12 @@ export const userService = {
     mobile?: string | undefined;
     date_of_birth?: string | undefined;
     hire_date?: string | undefined;
+    // The two independent facts the legacy `membership_type` fuses. Send the
+    // pair rather than that string: it is the only way to state a standing the
+    // fused vocabulary cannot hold (an administrative probationer), and the
+    // backend derives `membership_type` back from it.
+    member_class?: string | undefined;
+    member_status?: string | undefined;
     rank?: string | undefined;
     station?: string | undefined;
     platoon?: string | undefined;

@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.audit import log_audit_event
 from app.models.meeting import Meeting, MeetingAttendee
 from app.models.user import MemberLeaveOfAbsence, Organization, User, UserStatus
+from app.utils.membership import is_administrative
 
 
 class MembershipTierService:
@@ -232,6 +233,19 @@ class MembershipTierService:
             member.membership_type = target_tier["id"]
             member.membership_type_changed_at = now
 
+            # An administrative member holds no operational rank, and this is a
+            # writer of the membership class like any other — an unattended one,
+            # which is what makes it the dangerous one. Tier ids are
+            # organization-configurable, so a department that names a tier
+            # `administrative` moves ranked operational members into that class
+            # on a schedule, and without this they would keep every permission
+            # their rank confers while nobody is watching the change happen.
+            cleared_rank = member.rank
+            if cleared_rank and is_administrative(None, target_tier["id"]):
+                member.rank = None
+            else:
+                cleared_rank = None
+
             advanced.append(
                 {
                     "user_id": str(member.id),
@@ -239,6 +253,7 @@ class MembershipTierService:
                     "previous_tier": previous_type,
                     "new_tier": target_tier["id"],
                     "years_of_service": yos,
+                    "cleared_rank": cleared_rank,
                 }
             )
 

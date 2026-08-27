@@ -74,6 +74,10 @@ from app.services.user_deletion_service import (
     release_user_references,
 )
 from app.services.user_service import UserService
+from app.utils.membership import (
+    ADMINISTRATIVE_RANK_MESSAGE,
+    is_administrative,
+)
 from app.utils.security_notifications import notify_security_event
 
 router = APIRouter()
@@ -261,6 +265,7 @@ async def create_member(
     await _enforce_rank_grant_ceiling(
         current_user, canonical_rank, db, get_client_ip(request)
     )
+    _refuse_administrative_rank(user_data.member_class, None, canonical_rank)
 
     # Auto-generate membership number if not provided and auto-generation is on
     membership_number = user_data.membership_number
@@ -338,6 +343,16 @@ async def create_member(
         must_change_password=True,
         password_changed_at=datetime.now(timezone.utc),
     )
+
+    # Set only when the caller asked for one. `_reconcile_membership` treats any
+    # assignment to either column as "the caller wrote the new pair" and then
+    # derives `membership_type` from it, so writing a bare None here would claim
+    # authorship of a standing nobody stated and pin every new member to the
+    # default pair — the opposite of the omit-and-derive path the listener
+    # documents. The listener fills whichever half is missing.
+    if user_data.member_class or user_data.member_status:
+        new_user.member_class = user_data.member_class
+        new_user.member_status = user_data.member_status
 
     db.add(new_user)
     await db.flush()  # Flush to get the user ID
@@ -799,6 +814,31 @@ async def _enforce_rank_grant_ceiling(
                     "beyond your own."
                 ),
             )
+
+
+def _refuse_administrative_rank(
+    member_class: str | None,
+    membership_type: str | None,
+    rank: str | None,
+) -> None:
+    """Refuse a write that makes somebody an administrative member *with* a rank.
+
+    A rank is not decoration: ``_collect_user_permissions`` unions
+    ``get_rank_default_permissions(user.rank)`` into a member's effective
+    permissions, so an administrative member carrying ``fire_chief`` holds
+    ``settings.manage``/``security.manage`` through the operational chain of
+    command they are by definition outside of.
+
+    Only the contradictory *pair* is refused. A class change that merely strands
+    an existing rank clears it instead (see the callers) — the operator is not
+    asserting the rank there, so refusing would make them do two saves for one
+    decision.
+    """
+    if rank and is_administrative(member_class, membership_type):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=ADMINISTRATIVE_RANK_MESSAGE,
+        )
 
 
 async def _enforce_account_reset_ceiling(
@@ -1418,11 +1458,21 @@ async def update_user_profile(
                 detail="You do not have permission to update this user's profile",
             )
 
+    # Locked, because "an administrative member holds no operational rank" is a
+    # read-then-write and the two halves live in different endpoints. Without
+    # this, a request setting a rank and a request setting the class to
+    # administrative can both read an operational, rankless member, both pass
+    # their own check, and each write only its own column — leaving a row that
+    # is administrative *and* ranked, which neither request would have allowed.
+    # A locking read for the same reason the capacity checks use one: under
+    # REPEATABLE READ a plain SELECT answers from the transaction's first
+    # snapshot, so acquiring the lock without re-reading buys nothing.
     result = await db.execute(
         select(User)
         .where(User.id == str(user_id))
         .where(User.organization_id == str(current_user.organization_id))
         .where(User.deleted_at.is_(None))
+        .with_for_update()
         .options(selectinload(User.roles))
     )
     user = result.scalar_one_or_none()
@@ -1500,6 +1550,29 @@ async def update_user_profile(
                     perm_user, update_data["rank"], db, None
                 )
 
+        # An administrative member holds no operational rank. Judge against the
+        # class this save *lands on* — the payload's when it sets one, the
+        # stored one otherwise — because the two can move in the same request.
+        resulting_class = update_data.get("member_class") or user.member_class
+        resulting_type = user.membership_type
+        if "rank" in update_data:
+            _refuse_administrative_rank(
+                resulting_class, resulting_type, update_data["rank"]
+            )
+        elif user.rank and is_administrative(resulting_class, resulting_type):
+            # The save moves them to administrative and says nothing about the
+            # rank they already carry. Clear it rather than refuse: the operator
+            # is not asserting the rank, and leaving it would leave its default
+            # permissions live on a member now outside the chain of command.
+            update_data["rank"] = None
+
+    # Snapshot for the audit trail before `emergency_contacts` is popped below.
+    # Taken from `update_data` rather than the raw payload because a move to the
+    # administrative class clears the member's rank without the client having
+    # named the field, and a permission-bearing change nobody requested is
+    # exactly the kind the trail has to show.
+    audited_fields = list(update_data.keys())
+
     # Handle emergency_contacts separately (needs serialization)
     if "emergency_contacts" in update_data:
         ec_list = update_data.pop("emergency_contacts")
@@ -1523,6 +1596,14 @@ async def update_user_profile(
         "rank",
         "station",
         "platoon",
+        # Gated above by `restricted_fields`, which exists precisely so these
+        # two can be written under `members.manage`. Omitting them here made
+        # that gate guard a write the endpoint then discarded: the request was
+        # permission-checked, audited and answered 200, and the member's class
+        # never changed. `_reconcile_membership` re-derives `membership_type`
+        # from whichever of the pair lands.
+        "member_class",
+        "member_status",
         "address_street",
         "address_city",
         "address_state",
@@ -1557,9 +1638,7 @@ async def update_user_profile(
             "updated_user_id": str(user_id),
             "updated_by": str(current_user.id),
             "is_self_update": is_self,
-            "fields_updated": list(
-                profile_update.model_dump(exclude_unset=True).keys()
-            ),
+            "fields_updated": audited_fields,
         },
         user_id=str(current_user.id),
         username=current_user.username,
