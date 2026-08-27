@@ -17,13 +17,79 @@ feature. The rotation cannot outrun its own review queue.
 ## Open PR
 
 Feature 05 (finance & approvals, pass 2) —
-[PR #1944](https://github.com/thegspiro/the-logbook/pull/1944). #1942 (the
-docs-only "no findings" push) merged before Codex's review comments landed
-and before this fix could be pushed to it — #1944 is a fresh branch/PR
-carrying the fix, rebased onto current `main` per the "PR already merged"
-branch-reuse rule. Next after merge: 06 elections & ballots, pass 2.
+[PR #1946](https://github.com/thegspiro/the-logbook/pull/1946). Chain so
+far: #1942 (docs-only "no findings") merged before Codex's review landed ->
+#1944 (fix for FIN-10 through FIN-14) also merged before a second Codex
+round on it caught FIN-15 (approval-chain step ordering) -> #1946 (fix for
+FIN-15) had CI go fully green but had not yet auto-merged when a third
+Codex round caught FIN-16/17/18 (enforcing order surfaced two real
+deadlocks and a portability gap) -- that fix was pushed directly to #1946
+while it was still open, ahead of the auto-merge for once. Watching for
+either a fourth Codex round or a clean merge. Next after this lands clean:
+06 elections & ballots, pass 2.
 
 ---
+
+### 2026-08-27 — Feature 05 (Finance & approvals), pass 2 — Codex round 3 on #1946 caught FIN-16/17/18 (deadlocks + portability), fixed
+
+Enforcing chain order (FIN-15) surfaced two real deadlocks and one
+portability gap that FIN-15's own tests didn't cover:
+
+- **FIN-16** — `create_approval_records` never advanced any step at
+  creation time (only `approve_step`/`approve_by_token` did, after a
+  success). A chain starting with a NOTIFICATION step (or one following
+  only auto-approved steps) left that notification `PENDING` forever, and
+  FIN-15's order check then refused to let the real approval step skip
+  past it -- a hard deadlock. Fixed by calling step advancement once,
+  immediately after creating a chain's records.
+- **FIN-17** — every EMAIL step's token was generated and its 7-day expiry
+  clock started at chain creation, regardless of position. Combined with
+  FIN-15, a step whose predecessors took a week or more could expire
+  before ever being reachable, with no resend path -- neither "act early"
+  nor "act on time" was possible. Fixed by deferring token generation and
+  the invite email until a step actually becomes reachable, generalizing
+  `_advance_notification_steps` (renamed `_advance_reachable_steps`) to
+  handle both notification-send and token-issue in one pass.
+- **FIN-18** — `get_approval_records` (which `get_current_pending_step`
+  reads) ordered by `step_order`+`created_at` with no `id` tiebreaker, but
+  `get_pending_approvals`' own subquery already breaks such ties with
+  `id` -- nothing stops two steps sharing a `step_order`, and records for
+  one entity are created in the same instant. On a database that doesn't
+  happen to return ties in `id` order, FIN-15's check could reject the
+  exact step the pending-approvals list told the user was actionable.
+  Fixed by adding the same `id` tiebreaker.
+
+Three new regression tests (DB-backed), two of the three confirmed to fail
+pre-fix via `git stash`; the third (FIN-18) asserts correct, portable
+behavior rather than a locally-reproducible failure -- this dev database
+happens to return the tie in primary-key order without the tiebreaker.
+Completion gate re-run clean: flake8/black/isort, migrations 383
+revisions, scoped tests 246 passed/1 skipped, full backend suite 9065
+passed/22 skipped/0 failed. Pushed directly to #1946 (still open when
+this landed, CI green but not yet auto-merged).
+
+### 2026-08-27 — Feature 05 (Finance & approvals), pass 2 — Codex round 2 on #1944 caught FIN-15 (approval-chain ordering), fixed
+
+`create_approval_records` marks every step in a chain `PENDING` up front —
+including emailing an EMAIL-type step's token immediately, regardless of
+its position — but none of `approve_step`/`deny_step`/`approve_by_token`/
+`deny_by_token` checked that the acted-on record was the chain's _current_
+step (earliest `step_order` still `PENDING`), only that its own status was
+`PENDING`. A `get_current_pending_step` helper already existed to answer
+that and was never called anywhere — dead code next to the gap it should
+have closed. A later-step approver (by record id, or by the token emailed
+to them at the same moment as everyone else's) could act out of order;
+denial is the sharp edge, since a single deny finalizes the whole entity
+immediately, killing the request before earlier reviewers ever weighed in.
+Fixed with a shared `_ensure_current_step` check wired into all four action
+paths, inside the same lock each already holds for FIN-10. Two new
+regression tests (one DB-backed multi-step-chain test, one mock-based
+token-path test), both confirmed to fail pre-fix via `git stash`. Full
+completion gate re-run clean (flake8/black/isort, migrations 383 revisions,
+scoped tests 243 passed/1 skipped, full backend suite 9060 passed/22
+skipped/0 failed, frontend gates clean). Pushed to PR #1944, which itself
+merged before this commit landed — re-pushed as a fresh PR, #1946, rebased
+onto current `main` (see Open PR above).
 
 ### 2026-08-27 — Feature 05 (Finance & approvals), pass 2 — Codex caught 5 real bugs, all fixed
 

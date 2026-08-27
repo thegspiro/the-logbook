@@ -16,6 +16,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   approvers acting on the same step within the same moment could both pass
   that check and both finalize it — encumbering the associated budget twice
   for what was really a single approval.
+- A multi-step approval chain (e.g. Supervisor, then Treasurer, then Chief)
+  didn't enforce that steps be acted on in order. A later reviewer — an
+  internal user, or an external emailed approver, who could each act at any
+  time — could approve or deny their step before earlier reviewers acted.
+  A denial finalizes the whole request immediately, so an out-of-order
+  denial could kill a request before earlier reviewers ever weighed in.
+  Approving or denying a step now requires that every earlier step in the
+  chain has already been resolved.
+- A chain that starts with an informational notice step (or has one
+  following only auto-approved steps) could get permanently stuck: the
+  notice was never marked sent until the first real approval, but nothing
+  could be approved until the notice was marked sent. Chains like this now
+  activate correctly from the start.
+- Every external approver's email invite/link was sent — and its one-week
+  expiry started — the moment a request was submitted, even for approvers
+  several steps down the chain. If earlier steps took a while to resolve,
+  a later approver's link could expire before it was ever their turn, with
+  no way to get a new one. Invites (and their expiry) now go out only once
+  it's actually that approver's turn.
+- A misconfigured approval chain with two steps at the same position could,
+  on some database configurations, cause the wrong one to be treated as
+  "current," blocking the step actually shown as actionable. Fixed to
+  consistently agree with what's shown as actionable.
 - Editing a budget's total amount didn't check it against what was already
   spent or committed against that budget. A budget could be reduced below
   its already-committed total and the reduction would be accepted, silently
