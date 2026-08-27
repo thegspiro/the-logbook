@@ -16,11 +16,77 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-Feature 06 (elections & ballots, pass 2) — pushing a fix for 3 real Codex
-findings to the still-open PR #1948. Next after merge: 07 users &
-organizations, pass 2.
+Feature 07 (users & organizations, pass 2) — pushing a fix for 5 real
+Codex findings (across 2 rounds) to the still-open PR #1949, including a
+production-breaking `AttributeError` on every member-creation request.
+Next after merge: 08 membership pipeline, pass 2.
 
 ---
+
+### 2026-08-27 — Feature 07 (Users & organizations), pass 2 — Codex caught 5 real bugs across 2 rounds, all fixed
+
+Full-domain diff since pass 1's merge (`5f610f1f`, PR #1814): the
+member-class/status split (already read in full during ELEC-06 for its
+eligibility angle) reaches this module directly via `users.py`/
+`member_status.py`/`schemas/user.py`. First draft called the
+class/rank-contradiction invariant fully closed by three locked writers
+plus two pre-existing structural tests. It wasn't -- Codex caught three
+separate gaps in that same invariant, plus one production-breaking
+regression the diff's own removed lines should have flagged:
+
+- **`schemas/user.py` (P1, production-breaking).** `AdminUserCreate`'s
+  refactor onto `MembershipClassificationFields` silently dropped
+  `password`, `role_ids`, `send_welcome_email`, every address field, and
+  `emergency_contacts`. Every `POST /api/v1/users` hit `user_data.password`
+  with no such attribute and raised `AttributeError` -- member creation
+  was completely broken on `main`. Every existing test for this route was
+  source-inspection style and would never have caught a field silently
+  disappearing. Fixed; guarded by a new test extracting every
+  `user_data.<attr>` access from the route's source and asserting each is
+  a declared field, so the two can't drift silently again.
+- **A fourth, unlocked writer.** `MembershipTierService.advance_all` (the
+  scheduled tier-advancement scan) also clears rank on a move into an
+  administrative tier, but its batch SELECT was never locked -- the cited
+  "every writer" tests only covered three. Fixed with a per-member lock
+  taken right before each mutation (not the whole batch upfront).
+- **The lock alone wasn't enough on a self-update.** Neither locking read
+  had `populate_existing=True`; on a self-update, `get_current_user`
+  already put the same row in the session's identity map, so a re-SELECT
+  under the lock could still return pre-lock values. The exact bug
+  ELEC-06 already found and fixed in `quorum_service.py`; this file
+  hadn't caught up. Fixed on both locking reads.
+- **An explicit `member_class: null` was judged against the wrong
+  value.** `update_data.get("member_class") or user.member_class` can't
+  tell "omitted" from "explicitly cleared" -- both read back None. An
+  explicit null resets to the operational default, not "keep the old
+  class", so clearing an administrative member's class while assigning a
+  rank in the same request was wrongly refused. Fixed by checking key
+  presence before falling back.
+
+All fixes independently verified against the real code before fixing
+(reproduced the AttributeError directly, traced the identity-map
+behavior, traced the exclude_unset semantics) -- not taken on Codex's
+word. Also confirmed real and already-fixed: `_canonical_rank_or_400`
+(unconstrained rank strings) and a real prior frontend bug (rank-list
+cache leaking across orgs, now scoped and guarding the same stale-
+response race AUTH-3 found elsewhere). Completion gate: flake8/black/
+isort clean, migrations valid, scoped tests 430 passed/1 skipped, full
+backend suite 9110 passed/22 skipped/0 failed, `tsc`/`eslint` clean.
+Every new/modified guard test confirmed to fail pre-fix via `git stash`.
+Rotation row 07 -> awaiting
+PR merge.
+
+### 2026-08-27 — Feature 06 (Elections & ballots), pass 2 ✅ merged — PR #1948
+
+Merged, with the 3-bug fix commit included (pushed directly to the
+still-open PR ahead of auto-merge). Confirmed on `origin/main` by
+ancestry check. Final tally: 3 real findings (quorum staleness via a
+missing `populate_existing`, a module gate blocking public ballot routes
+on a stale session cookie, a mislabeled ballot-builder option), all
+fixed, across two Codex review rounds — plus one scoping-methodology
+repeat: the pass's own frontend check was scoped to `modules/elections/`
+and missed `BallotBuilder.tsx`, which lives outside it. Rotation row 06
+-> done. Next: 07 users & organizations.
 
 ### 2026-08-27 — Feature 06 (Elections & ballots), pass 2 — Codex caught 3 real bugs across 2 rounds, all fixed
 
@@ -1120,8 +1186,8 @@ each row's prior PR is recorded in the Log, not repeated here.
 | 03  | Public surface & webhooks | PUB    | `api/public/*` (20 unauth routes), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`                                      | ✅     |
 | 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                              | ✅     |
 | 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                     | ✅     |
-| 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | ⏳     |
-| 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ⬜     |
+| 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | ✅     |
+| 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ⏳     |
 | 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ⬜     |
 | 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ⬜     |
 | 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ⬜     |

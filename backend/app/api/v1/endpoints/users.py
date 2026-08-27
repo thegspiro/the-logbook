@@ -76,6 +76,7 @@ from app.services.user_deletion_service import (
 from app.services.user_service import UserService
 from app.utils.membership import (
     ADMINISTRATIVE_RANK_MESSAGE,
+    DEFAULT_CLASS,
     is_administrative,
 )
 from app.utils.security_notifications import notify_security_event
@@ -1467,12 +1468,24 @@ async def update_user_profile(
     # A locking read for the same reason the capacity checks use one: under
     # REPEATABLE READ a plain SELECT answers from the transaction's first
     # snapshot, so acquiring the lock without re-reading buys nothing.
+    #
+    # populate_existing is required alongside the lock, not optional, on a
+    # self-update specifically: get_current_user already loaded this same
+    # User row into this request's session (same Depends(get_db) session),
+    # so with expire_on_commit=False the instance sits in the identity map
+    # before this SELECT ever runs. Without populate_existing, re-selecting a
+    # row already in the identity map returns the cached pre-lock object
+    # without copying the new row's columns onto it -- the lock is acquired
+    # at the SQL level, but `user.member_class`/`user.rank` would still read
+    # whatever they were before a concurrent request's commit. Same
+    # requirement as quorum_service.py's calculate_quorum.
     result = await db.execute(
         select(User)
         .where(User.id == str(user_id))
         .where(User.organization_id == str(current_user.organization_id))
         .where(User.deleted_at.is_(None))
         .with_for_update()
+        .execution_options(populate_existing=True)
         .options(selectinload(User.roles))
     )
     user = result.scalar_one_or_none()
@@ -1553,7 +1566,22 @@ async def update_user_profile(
         # An administrative member holds no operational rank. Judge against the
         # class this save *lands on* — the payload's when it sets one, the
         # stored one otherwise — because the two can move in the same request.
-        resulting_class = update_data.get("member_class") or user.member_class
+        #
+        # "in update_data" (present, however set) has to be checked before
+        # falling back to the stored value: model_dump(exclude_unset=True)
+        # keeps a key the client explicitly sent even when its value is null,
+        # and an explicit `member_class: null` is a request to clear it, which
+        # _reconcile_membership resolves to DEFAULT_CLASS -- not "leave the
+        # old class in place". `update_data.get("member_class") or
+        # user.member_class` could not tell the two apart: both an omitted key
+        # and an explicit null read back as None from `.get`, so an explicit
+        # clear was judged against the stale administrative class it was
+        # clearing, wrongly rejecting a rank the resulting (operational) class
+        # would have allowed.
+        if "member_class" in update_data:
+            resulting_class = update_data["member_class"] or DEFAULT_CLASS
+        else:
+            resulting_class = user.member_class
         resulting_type = user.membership_type
         if "rank" in update_data:
             _refuse_administrative_rank(

@@ -101,3 +101,33 @@ def test_update_rank_calls_rank_ceiling_before_renaming():
         "update_rank now renames the rank code (cascading to every current "
         "holder) before the rank-grant ceiling check runs"
     )
+
+
+def test_create_member_reads_only_declared_admin_user_create_fields():
+    """USR-07 pass 2 (2026-08-27, Codex): refactoring AdminUserCreate to
+    inherit MembershipClassificationFields also silently dropped `password`,
+    `role_ids`, `send_welcome_email`, every address field, and
+    `emergency_contacts` from the schema. Pydantic then discards those keys
+    from the request body, and create_member's first `user_data.password`
+    read raised AttributeError on every single call -- member creation was
+    completely broken. A hardcoded field list would rot the moment a field
+    is renamed on either side without the test being touched; this instead
+    extracts every `user_data.<attr>` access from the route's own source and
+    asserts each one is a field AdminUserCreate actually declares, so the
+    two can never drift silently again.
+    """
+    import re
+
+    from app.schemas.user import AdminUserCreate
+
+    source = inspect.getsource(create_member)
+    accessed = set(re.findall(r"user_data\.(\w+)", source))
+    assert accessed, "expected create_member to read attributes off user_data"
+
+    declared = set(AdminUserCreate.model_fields.keys())
+    missing = accessed - declared
+    assert not missing, (
+        f"create_member reads user_data.{sorted(missing)}, but "
+        f"AdminUserCreate no longer declares {sorted(missing)} -- every "
+        "request would 500 with AttributeError on the first such access"
+    )

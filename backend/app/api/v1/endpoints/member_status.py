@@ -801,12 +801,19 @@ async def change_membership_type(
     # operational, rankless member, both pass, and each write only its own
     # column — leaving the row administrative *and* ranked. Both writers have to
     # take the lock or neither is serialized.
+    #
+    # populate_existing alongside the lock for the same reason as the profile
+    # endpoint: a self-change shares this request's session with whatever
+    # already loaded the caller's User row, and expire_on_commit=False leaves
+    # that instance in the identity map -- without this a re-SELECT under the
+    # lock can still return pre-lock column values.
     result = await db.execute(
         select(User)
         .where(User.id == str(user_id))
         .where(User.organization_id == current_user.organization_id)
         .where(User.deleted_at.is_(None))
         .with_for_update()
+        .execution_options(populate_existing=True)
     )
     member = ensure_found(result.scalar_one_or_none(), "Member")
 

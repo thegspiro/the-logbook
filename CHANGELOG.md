@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Creating a new member was completely broken, and a member's rank/class safeguard had three gaps (2026-08-27)
+
+**Fixed**
+
+- Creating a new member failed every time with a server error. Restoring
+  the account's password, initial roles, welcome-email option, mailing
+  address, and emergency contacts to the create-member form fixed it.
+- The safeguard that keeps an administrative member from also holding an
+  operational rank (which would carry chain-of-command permissions that
+  role isn't meant to have) had three gaps: the automatic, scheduled
+  tier-advancement process wasn't covered by it at all; a member updating
+  their own record could, in rare timing, still slip past it; and
+  clearing a member's classification back to the default while assigning
+  a rank in the same save was incorrectly rejected. All three are closed.
+
 ### A voter with a stale browser session could be blocked from voting, and a recalculated quorum could read a stale attendee count (2026-08-27)
 
 **Fixed**
