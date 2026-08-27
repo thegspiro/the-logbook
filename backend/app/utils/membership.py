@@ -163,3 +163,28 @@ def is_operational(member_class: Optional[str]) -> bool:
     if not member_class:
         return False
     return member_class.strip().lower() == MemberClass.OPERATIONAL
+
+
+def may_hold_rank(member_class: Optional[str]) -> bool:
+    """Whether a member of this class may hold an operational rank.
+
+    An operational rank is a position in the emergency-response chain of
+    command, and it is not decoration: ``_collect_user_permissions`` unions
+    each rank's default permissions into the member's effective ones, and
+    ``ShiftEligibilityService`` reads the rank to decide which seats the
+    member may sign up for. An administrative member does not respond, so a
+    rank on one is either a stale value from before they moved off the line or
+    a data-entry mistake — and in both cases it grants real permissions and
+    real shift eligibility to somebody the department has said does not ride.
+
+    ``None`` may hold a rank, which is the opposite of what ``is_operational``
+    does with it, and the asymmetry is deliberate. An unset class means the
+    member's ``membership_type`` is a custom tier this module does not
+    recognise — not that they are administrative. ``is_operational`` answers
+    "may I widen a body to include this member", where guessing adds people;
+    this answers "may I take something away", where guessing removes it. Both
+    decline to guess; declining points opposite ways.
+    """
+    if not member_class:
+        return True
+    return member_class.strip().lower() != MemberClass.ADMINISTRATIVE

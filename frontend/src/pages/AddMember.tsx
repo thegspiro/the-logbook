@@ -9,6 +9,7 @@ import { getErrorMessage } from '@/utils/errorHandling';
 import { useTimezone } from '../hooks/useTimezone';
 import { getTodayLocalDate } from '../utils/dateFormatting';
 import { useRanks } from '../hooks/useRanks';
+import { mayHoldOperationalRank, membershipClassification, RANK_DISABLED_REASON } from '../utils/membership';
 import { useConfirm } from '../contexts/ConfirmContext';
 
 const AddMember: React.FC = () => {
@@ -96,7 +97,16 @@ const AddMember: React.FC = () => {
   }, []);
 
   const handleInputChange = (field: keyof MemberFormData, value: string) => {
-    setFormData((prev) => ({ ...prev, [field]: value }));
+    setFormData((prev) => {
+      const next = { ...prev, [field]: value };
+      // An administrative member holds no operational rank, so choosing that
+      // type drops a rank already picked rather than sending one the API will
+      // refuse.
+      if (field === 'membershipType' && !mayHoldOperationalRank(value)) {
+        next.rank = '';
+      }
+      return next;
+    });
     // Clear error when user starts typing
     if (errors[field]) {
       setErrors((prev) => {
@@ -212,6 +222,7 @@ const AddMember: React.FC = () => {
         ...(formData.secondaryPhone ? { mobile: formData.secondaryPhone } : {}),
         ...(formData.dateOfBirth ? { date_of_birth: formData.dateOfBirth } : {}),
         ...(formData.joinDate ? { hire_date: formData.joinDate } : {}),
+        ...membershipClassification(formData.membershipType),
         ...(formData.rank ? { rank: formData.rank } : {}),
         ...(formData.station ? { station: formData.station } : {}),
         ...(formData.platoon ? { platoon: formData.platoon } : {}),
@@ -256,6 +267,8 @@ const AddMember: React.FC = () => {
       void navigate('/members');
     }
   };
+
+  const canHoldRank = mayHoldOperationalRank(formData.membershipType);
 
   return (
     <div className="min-h-screen">
@@ -679,19 +692,29 @@ const AddMember: React.FC = () => {
               </div>
 
               <div>
-                <label className="text-theme-text-primary mb-2 block text-sm font-medium">Rank</label>
+                <label htmlFor="new-member-rank" className="text-theme-text-primary mb-2 block text-sm font-medium">
+                  Rank
+                </label>
                 <select
+                  id="new-member-rank"
                   value={formData.rank}
                   onChange={(e) => handleInputChange('rank', e.target.value)}
-                  className="form-input"
+                  className="form-input disabled:cursor-not-allowed disabled:opacity-60"
+                  disabled={!canHoldRank}
+                  aria-describedby={canHoldRank ? undefined : 'new-member-rank-help'}
                 >
-                  <option value="">Select Rank</option>
+                  <option value="">{canHoldRank ? 'Select Rank' : 'No Rank'}</option>
                   {rankOptions.map((r) => (
                     <option key={r.value} value={r.value}>
                       {r.label}
                     </option>
                   ))}
                 </select>
+                {!canHoldRank && (
+                  <p id="new-member-rank-help" className="text-theme-text-muted mt-1 text-xs">
+                    {RANK_DISABLED_REASON}
+                  </p>
+                )}
               </div>
 
               <div>

@@ -74,6 +74,7 @@ from app.services.user_deletion_service import (
     release_user_references,
 )
 from app.services.user_service import UserService
+from app.utils.membership import may_hold_rank
 from app.utils.security_notifications import notify_security_event
 
 router = APIRouter()
@@ -305,6 +306,21 @@ async def create_member(
             current_user, list(roles), db, get_client_ip(request)
         )
 
+    # The classification the caller asked for, passed only when they named it.
+    # Assigning None here instead would register as a write in the flush-time
+    # reconciliation listener on `User`, which reads "somebody set the class"
+    # and defaults the pair — overwriting nothing today, but taking the
+    # decision away from `membership_type` the moment this endpoint learns to
+    # accept it. Absent means absent.
+    classification = {
+        field: value
+        for field, value in (
+            ("member_class", user_data.member_class),
+            ("member_status", user_data.member_status),
+        )
+        if value is not None
+    }
+
     # Create new user
     new_user = User(
         id=str(uuid4()),
@@ -337,6 +353,13 @@ async def create_member(
         status=UserStatus.ACTIVE,
         must_change_password=True,
         password_changed_at=datetime.now(timezone.utc),
+        # Accepted by AdminUserCreate since the class/status split, and until
+        # now dropped on the floor here: a member created as `administrative`
+        # or `life` came out a regular operational one, because the column
+        # default is "active" and nothing overrode it. Found while adding the
+        # rank rule below, which is unenforceable at creation time if the class
+        # the rule keys on never reaches the row.
+        **classification,
     )
 
     db.add(new_user)
@@ -764,6 +787,34 @@ async def _canonical_rank_or_400(
             detail=rank_not_configured_message(str(rank)),
         )
     return canonical
+
+
+def _reject_rank_for_administrative_member(user: User, rank: str | None) -> None:
+    """Refuse to put an operational rank on a member who does not ride.
+
+    The schema catches this when one payload carries both halves; this catches
+    the commoner shape, where the request names only a rank and the class it
+    conflicts with is already on the row. Without it the write is accepted, the
+    listener on ``User`` clears the rank at flush, and the response comes back
+    200 with the field blank — which reads as the form having dropped it.
+
+    Checked against the *stored* class because this endpoint does not write
+    class or status; ``ALLOWED_PROFILE_FIELDS`` omits both, so a payload that
+    names one changes nothing. Promoting an administrative member back onto the
+    line is a membership-type change first (``POST /member-status/{id}/tier``),
+    and only then a rank — which is the order the member edit screen sends them
+    in.
+    """
+    if not rank or may_hold_rank(user.member_class):
+        return
+    raise HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        detail=(
+            "An administrative member cannot hold an operational rank. "
+            "Change their membership type to an operational one first, "
+            "or leave the rank blank."
+        ),
+    )
 
 
 async def _enforce_rank_grant_ceiling(
@@ -1495,6 +1546,7 @@ async def update_user_profile(
             update_data["rank"] = await _canonical_rank_or_400(
                 update_data["rank"], str(current_user.organization_id), db
             )
+            _reject_rank_for_administrative_member(user, update_data["rank"])
             if update_data["rank"] != user.rank:
                 await _enforce_rank_grant_ceiling(
                     perm_user, update_data["rank"], db, None

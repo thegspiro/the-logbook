@@ -120,6 +120,11 @@ export const userService = {
     mobile?: string | undefined;
     date_of_birth?: string | undefined;
     hire_date?: string | undefined;
+    // The two independent facts the legacy `membership_type` fused: what kind
+    // of member this is, and where they sit on the membership ladder. Omit
+    // both and the server derives them from `membership_type` as before.
+    member_class?: string | undefined;
+    member_status?: string | undefined;
     rank?: string | undefined;
     station?: string | undefined;
     platoon?: string | undefined;

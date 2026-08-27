@@ -9,7 +9,11 @@ Taxonomy
 - **Operational Rank** (one per member, stored in ``User.rank``):
   Configurable per organization via the ``operational_ranks`` table.
   Ranks carry *default* permissions that are combined with the
-  member's position permissions at runtime.
+  member's position permissions at runtime.  A rank is a place in the
+  response chain of command, so only a member whose *class* rides may
+  hold one — see ``may_hold_rank`` and the listener at the foot of this
+  module, which clears the rank of anyone moved to the administrative
+  class.
 
 - **Corporate Position** (many per member, via ``user_positions``):
   President, Vice President, Treasurer, Secretary, IT Manager, etc.
@@ -101,6 +105,7 @@ from app.utils.membership import (
     DEFAULT_CLASS,
     DEFAULT_STATUS,
     derive_membership_type,
+    may_hold_rank,
     split_membership_type,
 )
 
@@ -572,12 +577,39 @@ def _reconcile_membership(_mapper, _connection, target: "User") -> None:
         target.membership_type = derive_membership_type(
             target.member_class, target.member_status
         )
-        return
-
-    if legacy_written or target.member_class is None or target.member_status is None:
+    elif legacy_written or target.member_class is None or target.member_status is None:
         member_class, member_status = split_membership_type(target.membership_type)
         target.member_class = member_class
         target.member_status = member_status
+
+    _clear_rank_of_administrative_member(target)
+
+
+def _clear_rank_of_administrative_member(target: "User") -> None:
+    """An administrative member holds no operational rank. See ``may_hold_rank``.
+
+    Enforced at flush, beside the reconciliation above, because that is the one
+    place every write reaches. The rank and the class are set from six
+    directions — the member create and profile-update endpoints, the tier
+    change in ``member_status``, the prospect conversion in
+    ``membership_pipeline_service``, the seeders, and the shell — and a check
+    on any subset of them leaves the rest able to write the pair this rule
+    forbids. The class is what the department decided; the rank is the value
+    that has to give way.
+
+    The endpoints refuse the combination up front with a 400 rather than
+    relying on this, so an operator who submits a rank is told it was rejected
+    instead of watching it vanish on save. This is the backstop under them, and
+    it is what converts a member on the way *into* the administrative class:
+    naming a new class is not an attempt to set a rank, so there is nothing to
+    refuse — the rank they used to hold simply stops applying.
+
+    Deliberately not conditioned on the rank having been written this flush. A
+    row that predates this rule is corrected by the next write that touches it,
+    whatever that write was for.
+    """
+    if target.rank and not may_hold_rank(target.member_class):
+        target.rank = None
 
 
 event.listen(User, "before_insert", _reconcile_membership)

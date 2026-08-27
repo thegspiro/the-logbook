@@ -824,9 +824,18 @@ async def change_membership_type(
         )
 
     now = datetime.now(timezone.utc)
+    # Read before the flush: moving a member into the administrative class
+    # clears their operational rank (see `_clear_rank_of_administrative_member`
+    # on the User model), and the audit entry is the only record that the rank
+    # was ever held. Without it the rank disappears from the row with nothing
+    # anywhere saying which one it was or when it went.
+    previous_rank = member.rank
+
     member.membership_type = request.membership_type
     member.membership_type_changed_at = now
     await db.commit()
+
+    rank_cleared = bool(previous_rank) and not member.rank
 
     await log_audit_event(
         db=db,
@@ -839,6 +848,7 @@ async def change_membership_type(
             "previous_type": previous_type,
             "new_type": request.membership_type,
             "reason": request.reason,
+            **({"cleared_rank": previous_rank} if rank_cleared else {}),
         },
         user_id=str(current_user.id),
         username=current_user.username,
@@ -850,6 +860,7 @@ async def change_membership_type(
         "previous_membership_type": previous_type,
         "new_membership_type": request.membership_type,
         "changed_at": now.isoformat(),
+        "cleared_rank": previous_rank if rank_cleared else None,
     }
 
 

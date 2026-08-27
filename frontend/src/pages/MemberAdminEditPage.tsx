@@ -20,6 +20,7 @@ import type { Location } from '../services/api';
 import type { UserWithRoles } from '../types/role';
 import type { UserProfileUpdate, EmergencyContact } from '../types/user';
 import { useRanks } from '../hooks/useRanks';
+import { mayHoldOperationalRank, RANK_DISABLED_REASON } from '../utils/membership';
 
 const MEMBERSHIP_TYPE_OPTIONS = [
   { value: 'prospective', label: 'Prospective' },
@@ -152,7 +153,18 @@ export const MemberAdminEditPage: React.FC = () => {
   const handleFieldChange = (field: keyof Omit<FormData, 'emergency_contacts'>, value: string) => {
     if (!form) return;
     setSuccessMessage(null);
-    setForm((prev) => (prev ? { ...prev, [field]: value } : prev));
+    setForm((prev) => {
+      if (!prev) return prev;
+      const next = { ...prev, [field]: value };
+      // Moving a member to a class that does not ride drops the rank with the
+      // same edit, so the form shows what will be saved. The API clears it
+      // regardless; leaving it displayed would have the operator save a rank
+      // and watch it come back blank without being told why.
+      if (field === 'membership_type' && !mayHoldOperationalRank(value)) {
+        next.rank = '';
+      }
+      return next;
+    });
   };
 
   const handleEmergencyContactChange = (index: number, field: keyof EmergencyContact, value: string | boolean) => {
@@ -285,14 +297,22 @@ export const MemberAdminEditPage: React.FC = () => {
         return;
       }
 
+      // Membership type first, then the profile — the order matters, because
+      // these are two requests and the rank rule is evaluated against whatever
+      // class is on the row at the time. Sending the profile first means
+      // promoting an administrative member back onto the line and giving them a
+      // rank in one save arrives as a rank on a member who is still
+      // administrative, and is refused. Reversed, the class lands first and the
+      // rank is accepted; going the other way, the class change clears the rank
+      // and the profile update that follows carries the blank the form already
+      // shows.
+      if (membershipTypeChanged && form.membership_type) {
+        await userService.changeMembershipType(userId, form.membership_type);
+      }
+
       // Save profile fields
       if (hasProfileChanges) {
         await userService.updateUserProfile(userId, profileUpdate);
-      }
-
-      // Save membership type separately if changed
-      if (membershipTypeChanged && form.membership_type) {
-        await userService.changeMembershipType(userId, form.membership_type);
       }
 
       // Save compliance exemption separately if changed
@@ -329,6 +349,8 @@ export const MemberAdminEditPage: React.FC = () => {
   const handleCancel = () => {
     void navigate('/members/admin');
   };
+
+  const canHoldRank = mayHoldOperationalRank(form?.membership_type);
 
   if (loading) {
     return (
@@ -488,20 +510,29 @@ export const MemberAdminEditPage: React.FC = () => {
                 />
               </div>
               <div>
-                <label className="text-theme-text-muted mb-1 block text-xs font-medium uppercase">Rank</label>
+                <label htmlFor="member-rank" className="text-theme-text-muted mb-1 block text-xs font-medium uppercase">
+                  Rank
+                </label>
                 <select
+                  id="member-rank"
                   value={form.rank}
                   onChange={(e) => handleFieldChange('rank', e.target.value)}
-                  className="form-input bg-theme-surface-secondary px-3 text-sm"
-                  disabled={saving}
+                  className="form-input bg-theme-surface-secondary px-3 text-sm disabled:cursor-not-allowed disabled:opacity-60"
+                  disabled={saving || !canHoldRank}
+                  aria-describedby={canHoldRank ? undefined : 'member-rank-help'}
                 >
-                  <option value="">Select Rank</option>
+                  <option value="">{canHoldRank ? 'Select Rank' : 'No Rank'}</option>
                   {rankOptions.map((r) => (
                     <option key={r.value} value={r.value}>
                       {r.label}
                     </option>
                   ))}
                 </select>
+                {!canHoldRank && (
+                  <p id="member-rank-help" className="text-theme-text-muted mt-1 text-[11px]">
+                    {RANK_DISABLED_REASON} Change the membership type to assign one.
+                  </p>
+                )}
               </div>
               <div>
                 <label className="text-theme-text-muted mb-1 block text-xs font-medium uppercase">Station</label>

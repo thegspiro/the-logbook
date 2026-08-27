@@ -8,10 +8,17 @@ from datetime import date, datetime
 from typing import List, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    EmailStr,
+    Field,
+    field_validator,
+    model_validator,
+)
 
 from app.schemas.base import UTCResponseBase
-from app.utils.membership import MemberClass, MemberStatus
+from app.utils.membership import MemberClass, MemberStatus, may_hold_rank
 
 _response_config = ConfigDict(from_attributes=True)
 
@@ -104,6 +111,29 @@ class MembershipClassificationFields(BaseModel):
                 f"Expected one of: {', '.join(MemberStatus.ALL)}."
             )
         return normalised
+
+    @model_validator(mode="after")
+    def _no_rank_for_an_administrative_member(self) -> "MembershipClassificationFields":
+        """Refuse a rank and the administrative class in the same payload.
+
+        The listener on ``User`` would clear the rank anyway — see
+        ``may_hold_rank`` — but silently discarding a value the operator just
+        typed reads as the form having lost it. Rejecting here names the
+        conflict while both halves are still in front of them.
+
+        Only catches the pair when one request carries both, which is why the
+        endpoints check a submitted rank against the member's *stored* class as
+        well: a request that sets only ``rank`` has nothing here to compare it
+        to. Clearing a rank stays allowed in every combination — an empty value
+        is what this rule wants.
+        """
+        rank = getattr(self, "rank", None)
+        if rank and str(rank).strip() and not may_hold_rank(self.member_class):
+            raise ValueError(
+                "An administrative member cannot hold an operational rank. "
+                "Clear the rank, or set a member_class that rides."
+            )
+        return self
 
 
 class AdminUserCreate(MembershipClassificationFields):
