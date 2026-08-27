@@ -16,9 +16,9 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-Feature 03 (public surface & webhooks, pass 2) — branch
-`claude/security-review-pub-03-pass2`, PR pending open. No findings, no code
-changes (docs only). See log entry below and
+Feature 03 (public surface & webhooks, pass 2) — [PR #1934](https://github.com/thegspiro/the-logbook/pull/1934),
+branch `claude/security-review-pub-03-pass2`. No findings, no code changes
+(docs only). See log entry below and
 `PUB-03-public-surface-webhooks.md`'s "Pass 2" section.
 
 ---
@@ -38,8 +38,8 @@ three relevant routes, correctly not applied to the two that don't need
 it). File count unchanged at 12, no new public endpoint. No findings, no
 code changes. Completion gate: flake8/black/isort clean,
 `validate_migrations.py --strict` passed, pass-1 guard tests 10/10 pass,
-366/366 broader scoped tests pass, full backend suite run separately. No
-frontend files touched. Full detail in
+366/366 broader scoped tests pass, full backend suite 9040 passed / 22
+skipped (pre-existing) / 0 failed. No frontend files touched. Full detail in
 `PUB-03-public-surface-webhooks.md`. Next: 04 storefront & payments, once
 this PR merges.
 

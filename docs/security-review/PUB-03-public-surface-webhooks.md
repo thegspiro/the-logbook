@@ -57,7 +57,8 @@ head); pass-1 guard tests (`test_salesforce_webhook.py`,
 `test_finance_approval_tokens.py`) 10/10 pass; broader scoped tests (`-k
 "finance or legal or public_portal or portal or webhook or salesforce or
 display or calendar or security_txt or forms"`) 366 passed, 1 skipped
-(pre-existing). No frontend files touched.
+(pre-existing); full backend suite 9040 passed, 22 skipped (pre-existing),
+0 failed. No frontend files touched.
 
 ---
 
