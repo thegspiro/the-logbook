@@ -16,7 +16,8 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-PR #1908 (feature 26, forms) — open, awaiting CI/review.
+None — PR #1908 (feature 26, forms) merged. Feature 27 (integrations)
+starting next.
 
 ---
 
@@ -70,7 +71,7 @@ data-carrying modules, then the supporting infrastructure.
 | 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ✅              |
 | 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ✅              |
 | 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ✅              |
-| 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                         | ⏳              |
+| 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                         | ✅              |
 | 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                         | ⬜              |
 | 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`                                                                    | ⬜              |
 | 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                              | ⬜              |
@@ -1035,3 +1036,7 @@ re-runs the whole-codebase sweeps against whatever has landed since.
   8922/8922 full backend suite pass. Findings doc:
   `docs/security-review/FORM-26-forms.md`. PR #1908 opened and subscribed.
   Next: 27 integrations, once #1908 merges.
+- **26 Forms ✅ merged** — PR #1908 merged 2026-08-27. Codex reported it
+  was over its usage limit for security reviews (no review produced, same
+  as a few earlier PRs this rotation); CI ran clean on the first push, no
+  review threads to resolve. Next: 27 integrations.
