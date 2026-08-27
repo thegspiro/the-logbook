@@ -16,12 +16,50 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-Feature 03 (public surface & webhooks, pass 2) — [PR #1934](https://github.com/thegspiro/the-logbook/pull/1934),
-branch `claude/security-review-pub-03-pass2`. No findings, no code changes
-(docs only). See log entry below and
-`PUB-03-public-surface-webhooks.md`'s "Pass 2" section.
+Feature 04 (storefront & payments, pass 2) — [PR #1935](https://github.com/thegspiro/the-logbook/pull/1935),
+branch `claude/security-review-sf-04-pass2`. No findings, no code changes
+(docs only). See log entry below and `SF-04-storefront-payments.md`'s
+"Pass 2" section.
 
 ---
+
+### 2026-08-27 — Feature 04 (Storefront & payments), pass 2 — no findings
+
+Only 2 of the 7 pass-1-declared files changed on their own: `storefront.py`
+(two new display fields) and `storefront_service.py` (an embroidery
+thread-color/personalization-method feature plus a variant `sort_order`
+fix making it fully server-computed). SF-6's separation-of-duties guard in
+`record_payment` re-verified present and unmodified; SF-5's guard tests
+still pass.
+
+**Update:** Codex reviewed PR #1935 and found the initial pass scoped its
+diff only to the 7 files pass 1's header literally listed, missing that
+the same embroidery feature also touched `models/storefront.py`,
+`schemas/storefront.py`, a new `utils/size_order.py`, 6 migrations
+(including 3 seeded-grant backfills needing Pitfall #23 scrutiny), and 11
+frontend files — and the doc had wrongly claimed "no frontend files
+touched." Re-swept properly: all of it is clean — closed-enum validation
+end to end on both backend and frontend, the grant migrations correctly
+`is_system`/frozen-snapshot scoped, no raw client value ever reaches a
+frontend `style` attribute (always resolved server-side or from a fixed
+catalog), no `dangerouslySetInnerHTML`. No findings, no code changes;
+`tsc`/`eslint`/frontend tests now actually run and pass. Replied and
+resolved.
+
+Completion gate: flake8/black/isort clean, `validate_migrations.py
+--strict` passed, 644/644 scoped backend tests pass (up from 533 at pass
+1), full backend suite 9040 passed / 22 skipped (pre-existing) / 0 failed,
+`tsc --noEmit` 0 errors, `eslint src/modules/storefront/` 0 errors,
+`vitest run src/modules/storefront/` 170/170 passed. Full detail in
+`SF-04-storefront-payments.md`. Next: 05 finance & approvals, once this PR
+merges.
+
+### 2026-08-27 — Feature 03 (Public surface & webhooks), pass 2 ✅ merged — PR #1934
+
+Merged. No findings — the three changed files (finance_approvals.py,
+legal.py, portal.py) were already-complete fixes for other rotation
+findings plus one new defense-in-depth improvement. Rotation row 03 -> done
+for pass 2. Next: 04 storefront & payments.
 
 ### 2026-08-27 — Feature 03 (Public surface & webhooks), pass 2 — no findings
 
@@ -867,8 +905,8 @@ each row's prior PR is recorded in the Log, not repeated here.
 | 00  | Cross-cutting baseline    | SEC    | whole-codebase sweeps; see `SEC-00-cross-cutting-baseline.md`                                                                                   | ✅     |
 | 01  | Auth & session lifecycle  | AUTH   | `endpoints/auth.py`, `auth_service.py`, `mfa_service.py`, `oauth_service.py`                                                                    | ✅     |
 | 02  | Permissions & roles       | PERM   | `dependencies.py`, `core/permissions.py`, `roles.py`, `operational_ranks.py`, `officers.py`, `org_chart.py`                                     | ✅     |
-| 03  | Public surface & webhooks | PUB    | `api/public/*` (20 unauth routes), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`                                      | ⏳     |
-| 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                              | ⬜     |
+| 03  | Public surface & webhooks | PUB    | `api/public/*` (20 unauth routes), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`                                      | ✅     |
+| 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                              | ⏳     |
 | 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                     | ⬜     |
 | 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | ⬜     |
 | 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ⬜     |
