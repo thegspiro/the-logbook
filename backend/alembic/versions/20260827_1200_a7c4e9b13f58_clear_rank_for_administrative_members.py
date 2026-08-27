@@ -34,6 +34,17 @@ recorded anywhere else, so it cannot be put back. Reverting the application code
 without reverting this migration is safe — the rows are simply already
 compliant — but the cleared ranks must be re-entered by hand.
 
+``rank`` is a reserved word, and only on one of the two engines
+--------------------------------------------------------------
+MySQL reserved ``RANK`` in 8.0.2 for the window function; MariaDB 10.11 did
+not. So an unquoted ``SET rank = NULL`` parses on MariaDB and is a 1064 syntax
+error on MySQL — a hand-written statement passes local testing against one
+engine and takes out the other half of the CI matrix.
+
+Hence SQLAlchemy Core rather than ``sa.text``: the dialect quotes the
+identifier, so this cannot depend on which engine happened to run it. Any
+future migration naming this column must do the same, or backtick it.
+
 Revision ID: a7c4e9b13f58
 Revises: d4e5f6a7b8c9
 Create Date: 2026-08-27 12:00:00.000000
@@ -49,17 +60,32 @@ depends_on = None
 
 _ADMINISTRATIVE = "administrative"
 
+# A minimal stand-in for the real table: a migration must keep transforming rows
+# the way it did the day it ran, so it cannot import the model, which is free to
+# change underneath it.
+_users = sa.table(
+    "users",
+    sa.column("rank", sa.String),
+    sa.column("member_class", sa.String),
+    sa.column("membership_type", sa.String),
+)
+
 
 def upgrade() -> None:
-    op.execute(sa.text("""
-            UPDATE users
-               SET rank = NULL
-             WHERE rank IS NOT NULL
-               AND (
-                     member_class = :administrative
-                  OR (member_class IS NULL AND membership_type = :administrative)
-                   )
-            """).bindparams(administrative=_ADMINISTRATIVE))
+    op.execute(
+        _users.update()
+        .where(
+            _users.c.rank.isnot(None),
+            sa.or_(
+                _users.c.member_class == _ADMINISTRATIVE,
+                sa.and_(
+                    _users.c.member_class.is_(None),
+                    _users.c.membership_type == _ADMINISTRATIVE,
+                ),
+            ),
+        )
+        .values(rank=None)
+    )
 
 
 def downgrade() -> None:

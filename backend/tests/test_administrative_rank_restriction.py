@@ -388,10 +388,17 @@ class TestEveryWriterIsCovered:
 
 
 class TestTheBackfillMatchesTheRule:
-    """The stored rows and the new writes have to agree on who is covered."""
+    """The stored rows and the new writes have to agree on who is covered.
+
+    Asserted against the statement the migration actually emits rather than
+    against its source text: the source moved from raw SQL to Core once MySQL
+    rejected an unquoted ``rank``, and a grep-the-source test would have gone
+    on passing while the statement changed underneath it.
+    """
 
     @staticmethod
-    def _migration_source():
+    def _migration():
+        import importlib.util
         from pathlib import Path
 
         path = (
@@ -400,12 +407,45 @@ class TestTheBackfillMatchesTheRule:
             / "versions"
             / "20260827_1200_a7c4e9b13f58_clear_rank_for_administrative_members.py"
         )
-        return path.read_text()
+        spec = importlib.util.spec_from_file_location("_rank_backfill", path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+
+    def _sql(self, *, is_mariadb: bool) -> str:
+        import sqlalchemy as sa
+        from sqlalchemy.dialects import mysql
+
+        table = self._migration()._users
+        statement = (
+            table.update()
+            .where(
+                table.c.rank.isnot(None),
+                sa.or_(
+                    table.c.member_class == "administrative",
+                    sa.and_(
+                        table.c.member_class.is_(None),
+                        table.c.membership_type == "administrative",
+                    ),
+                ),
+            )
+            .values(rank=None)
+        )
+        return str(
+            statement.compile(
+                dialect=mysql.dialect(is_mariadb=is_mariadb),
+                compile_kwargs={"literal_binds": True},
+            )
+        )
 
     def test_it_consults_both_spellings(self):
-        source = self._migration_source()
-        assert "member_class = :administrative" in source
-        assert "member_class IS NULL AND membership_type = :administrative" in source
+        """``member_class`` is the authority, but it is nullable and was only
+        backfilled by ``f1a2b3c4d5e6`` — a row written by a path that names only
+        the legacy field can still have it NULL."""
+        sql = self._sql(is_mariadb=True)
+        assert "member_class = 'administrative'" in sql
+        assert "member_class IS NULL" in sql
+        assert "membership_type = 'administrative'" in sql
 
     def test_it_does_not_sweep_on_not_operational(self):
         """The one way this backfill could do real damage.
@@ -413,9 +453,24 @@ class TestTheBackfillMatchesTheRule:
         ``!= 'operational'`` matches every member on a custom membership tier,
         whose class resolves to NULL. Their ranks are not this rule's business.
         """
-        source = self._migration_source()
-        assert "!= 'operational'" not in source
-        assert "<> 'operational'" not in source
+        for is_mariadb in (True, False):
+            sql = self._sql(is_mariadb=is_mariadb)
+            assert "!= 'operational'" not in sql
+            assert "<> 'operational'" not in sql
+
+    def test_it_only_clears_rows_that_have_a_rank(self):
+        assert "IS NOT NULL" in self._sql(is_mariadb=True)
+
+    def test_the_column_is_quoted_for_mysql(self):
+        """MySQL reserved ``RANK`` in 8.0.2 for the window function; MariaDB
+        10.11 did not.
+
+        So an unquoted ``SET rank = NULL`` parses on MariaDB and is a 1064
+        syntax error on MySQL. Local testing against one engine cannot catch
+        that, which is exactly how it reached CI — letting the dialect quote the
+        identifier is what makes the statement engine-independent.
+        """
+        assert "`rank`" in self._sql(is_mariadb=False)
 
 
 if __name__ == "__main__":  # pragma: no cover
