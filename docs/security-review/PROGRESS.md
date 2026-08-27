@@ -66,7 +66,8 @@ to fail against the pre-fix endpoints. Two pre-existing tests needed
 updates for the new `request` parameter / extra `get_rank` lookup, not for
 any behavior change. Completion gate: flake8/black/isort clean,
 `validate_migrations.py --strict` passed, 945/945 scoped tests pass, full
-backend suite run separately. No frontend files touched. Full detail in
+backend suite 9039 passed / 22 skipped (pre-existing) / 0 failed. No
+frontend files touched. Full detail in
 `PERM-02-permissions-roles.md`. Next: 03 public surface & webhooks, once
 this PR merges.
 

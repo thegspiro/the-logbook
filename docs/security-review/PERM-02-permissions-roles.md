@@ -154,8 +154,8 @@ update for the endpoint's one added `get_rank` lookup.
 alembic/`; `validate_migrations.py --strict` passed (381 revisions, single
 head); scoped tests (`-k "rank or permission or role or membership_pipeline or
 transfer or org_chart or officer or prospect"`) 945 passed, 2 skipped
-(pre-existing); full backend suite run separately (see PROGRESS.md log entry
-for the count). No frontend files touched.
+(pre-existing); full backend suite 9039 passed, 22 skipped (pre-existing),
+0 failed. No frontend files touched.
 
 ---
 
