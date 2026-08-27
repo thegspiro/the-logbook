@@ -6,12 +6,26 @@
 
 ## Pass 2 (2026-08-27)
 
+**Scope correction (Codex review on PR #1948):** the first draft of this
+section scoped its frontend check to `modules/elections/` and missed
+`frontend/src/components/BallotBuilder.tsx` — a shared component, outside
+that directory, that also changed since pass 1's merge and carried a real
+defect (ELEC-19 below). The exact class of mistake feature 04 already
+corrected: a component a feature touches is not guaranteed to live under
+the feature's own module directory. Re-swept with `git diff --stat` against
+`frontend/src/` broadly, not a directory glob, before writing "no findings"
+again.
+
 Scoped to the **full elections domain** since pass 1's merge commit
 (`56b897ec`, PR #1810) — `endpoints/elections.py`, `election_service.py`,
-`quorum_service.py`, `models/election.py`, `schemas/election.py`, the
-elections frontend module, and every migration since, checked by content
-(not just filename) for anything touching election tables or eligibility
-logic. Three real changes since pass 1, all reviewed in full:
+`quorum_service.py`, `models/election.py`, `schemas/election.py`, every
+frontend file under `frontend/src/` referencing election/ballot/quorum
+concerns (not just `modules/elections/`), and every migration since,
+checked by content (not just filename) for anything touching election
+tables or eligibility logic. Four real changes since pass 1, all reviewed
+in full — three carried real defects, caught by Codex across two review
+rounds on this PR and independently verified against the actual code
+before fixing, not taken on the bot's word:
 
 - **`election_service.py` (+58/-25) — voter eligibility rewritten for the
   member-class/status split.** A same-day feature
@@ -58,36 +72,92 @@ None)` for an org-configured custom tier (e.g. `"senior"`) rather than
   notification path); confirmed no other instance of the same join pattern
   remains in the file (`get_package_recipients`'s sibling query was already
   correct).
-- **`quorum_service.py` (+8) — `calculate_quorum` now takes a
+- **`quorum_service.py` (+8) — `calculate_quorum` takes a
   `.with_for_update()` locking read on the `MeetingMinutes` row before
-  computing `present_count` from its own `attendees` JSON column.**
-  Pitfall #27 compliant by construction here: since the count is read
-  directly off the same row the lock was taken on (not a separate COUNT
-  query against a different table), the lock alone makes the read fresh —
-  there is no second, unlocked read to miss. Confirmed the write
-  (`quorum_met`/`quorum_count`) and `commit()` happen inside the same
-  method, so the lock is held across the whole read-decide-write.
-- **`frontend/src/modules/elections/routes.tsx` (+18/-14)** — added
-  `requiredModule="elections"` to all three election routes. Mirrors a
-  pre-existing backend `module_gate("elections", "Elections")`
-  (`api/v1/api.py:206`, unchanged) — a frontend gate catching up to a
-  server-side one already in place, not a new access-control boundary.
+  computing `present_count` from its own `attendees` JSON column.** First
+  draft called this Pitfall #27-compliant by construction (count read off
+  the same locked row, no separate query to miss) — **wrong**, caught on
+  Codex's first round. The lock is necessary but not sufficient on a
+  session that already holds this row: `PATCH /minutes/{id}/quorum-config`
+  (`set_meeting_quorum_config`) loads and commits the same
+  `MeetingMinutes` instance, then calls `calculate_quorum` on the _same_
+  session, before this method ever runs. With `expire_on_commit=False`
+  (`core/database.py`) that instance stays in the session's identity map,
+  and SQLAlchemy's default behavior on a re-`SELECT` for a row already in
+  the identity map is to return the cached Python object **without**
+  copying the new row's columns onto it — the lock is acquired at the SQL
+  level, but `minutes.attendees` still reads the pre-lock value unless the
+  query opts into `populate_existing`. This exact pattern (lock +
+  `populate_existing`) was already established elsewhere in the codebase
+  (`membership_pipeline_service.py`, `inventory_service.py`) for the
+  identical reason — this file just hadn't caught up. Fixed by adding
+  `.execution_options(populate_existing=True)`. Guarded by
+  `test_minutes_fetch_repopulates_an_already_loaded_instance`
+  (`test_quorum_service.py`), confirmed to fail pre-fix via `git stash`.
+- **`frontend/src/modules/elections/routes.tsx` (+18/-14) —
+  `requiredModule="elections"` added to all three election routes,
+  mirroring a pre-existing backend `module_gate("elections", "Elections")`
+  (`api/v1/api.py:206`, unchanged).** First draft called this "not a new
+  access-control boundary" and stopped there — **incomplete**, caught on
+  Codex's first round, and a real bug independent of this diff (the gate
+  itself predates pass 1; this diff only made the frontend consistent with
+  it). `module_gate` mounts `require_module` on the _whole_ `elections`
+  router, including the explicitly public, token-authorized ballot routes
+  (`POST /ballot/lookup`, `/ballot/vote`, `/ballot/vote/bulk`,
+  `GET /{id}/verify-receipt`) — none of which declare a `current_user`
+  dependency themselves. `require_module` resolves the caller's org via
+  `get_optional_current_user`, which (correctly, for routes that read who
+  is asking) raises rather than downgrading an invalid credential to
+  anonymous. A voter clicking an emailed ballot link while their browser
+  still carries an unrelated, expired/revoked `access_token` cookie from a
+  since-ended main-app session therefore got a 401 before their ballot
+  token was ever evaluated — the module gate, not the ballot logic,
+  rejected them. Fixed by having `get_request_enabled_modules` call
+  `get_optional_current_user` directly (not via `Depends`) and catch an
+  invalid-credential `HTTPException`, treating it the same as no session
+  at all for the _module flag_ specifically — an unusable session carries
+  no more organization information than none. Does not weaken
+  authentication anywhere else: an endpoint that declares its own
+  `Depends(get_current_user)` still resolves and rejects independently.
+  Guarded by
+  `test_an_invalid_session_cookie_does_not_block_a_public_route_either`
+  (`test_module_api_gating.py`), alongside the existing
+  `test_a_request_with_no_session_is_not_turned_into_a_401` it mirrors.
+- **`frontend/src/components/BallotBuilder.tsx` (+26/-9, outside
+  `modules/elections/` — the file the first draft's scope missed) —
+  ELEC-19, caught on Codex's second round.** Relabeled the
+  `eligible_voter_types` picker for the member-class/status split, but got
+  `operational` backwards: the new label read "Operational Members — any
+  status, incl. probationary & life". `ElectionService._user_has_role_type`
+  requires `member_class == operational AND member_status == regular` for
+  the `operational` _category_ specifically (preserving its legacy
+  `membership_type == "active"` meaning) — it does **not** include
+  probationary, life, or retired members, even though those are all
+  operational-class. An administrator relying on the new label would build
+  a ballot believing probationary/life members were included when they
+  were not — silent under-inclusion, not a privilege escalation, but a
+  real defect in an election tool where turnout matters. The label (and
+  the file's explanatory comment, which encoded the same wrong "class
+  alone" mental model) corrected to state the narrower, accurate
+  requirement.
 
-**No findings.** One test gap closed (the new `"social"` category had no
-coverage; the existing `TestVoterTypeMembershipBoundaries` class already
-covered every other category's boundary precisely because a prior pass
-built it with this exact concern in mind — added
+**3 real findings, all fixed.** Plus one test gap closed (the new
+`"social"` category had no coverage — added
 `test_social_is_eligible_only_for_social_category` and
-`test_administrative_is_eligible_for_administrative_category` alongside
-it).
+`test_administrative_is_eligible_for_administrative_category`).
 
 **Completion gate (pass 2):** flake8/black/isort clean on `app/ tests/
 alembic/`; `validate_migrations.py --strict` passed (383 revisions, single
-head); scoped backend tests (`-k "elections or quorum or ballot"`) 250
-passed, 1 skipped (pre-existing), 0 failed; full backend suite 9067
-passed, 22 skipped (pre-existing), 0 failed. No frontend logic changed
-this pass beyond the already-shipped route-gating diff reviewed above, so
-no frontend gate re-run was needed.
+head); scoped backend tests (`-k "elections or quorum or ballot or
+module_gat"`) 269 passed, 1 skipped (pre-existing), 0 failed; full backend
+suite 9069 passed, 22 skipped (pre-existing), 0 failed; `tsc --noEmit` 0
+errors; `eslint src/components/BallotBuilder.tsx src/modules/elections/`
+0 errors. Two of the three new guard tests confirmed to fail against the
+pre-fix code via `git stash`; the module-gating fix changes _how_ the
+dependency is resolved (a plain call instead of `Depends`), so its test
+harness had to change with it and a clean stash-diff wasn't meaningful —
+correctness there rests on tracing FastAPI's dependency-resolution order
+directly, not a before/after run.
 
 ---
 

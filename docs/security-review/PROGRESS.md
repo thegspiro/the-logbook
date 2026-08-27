@@ -16,41 +16,63 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-Feature 06 (elections & ballots, pass 2) — about to open. Full-domain diff
-since pass 1 (PR #1810) reviewed: a same-day member-class/status split
-feature rewrote voter-eligibility logic in `election_service.py` (read in
-full given the stakes), a `quorum_service.py` locking fix, and a frontend
-route-gating catch-up. No findings; one test-coverage gap closed (a new
-"social" voter category had no test). Next after merge: 07 users &
+Feature 06 (elections & ballots, pass 2) — pushing a fix for 3 real Codex
+findings to the still-open PR #1948. Next after merge: 07 users &
 organizations, pass 2.
 
 ---
 
-### 2026-08-27 — Feature 06 (Elections & ballots), pass 2 — no findings
+### 2026-08-27 — Feature 06 (Elections & ballots), pass 2 — Codex caught 3 real bugs across 2 rounds, all fixed
 
-Full-domain diff since pass 1's merge (`56b897ec`, PR #1810): only three
-real changes touched the elections surface, all reviewed in full rather
-than skimmed given the module's history as the most heavily audited one
-in the codebase. The significant one: a same-day feature split the fused
+Full-domain diff since pass 1's merge (`56b897ec`, PR #1810). First draft
+scoped its frontend check to `modules/elections/` and missed
+`frontend/src/components/BallotBuilder.tsx` — a shared component outside
+that directory that also changed and carried a real defect. Same class of
+mistake feature 04 already corrected once; re-swept against `frontend/src/`
+broadly this time, not a directory glob.
+
+The significant backend change: a same-day feature split the fused
 `membership_type` column into independent `member_class`/`member_status`
 columns and rewrote `election_service.py`'s `_user_has_role_type` (the
-function every ballot-eligibility check calls) to read them — exactly the
-shape of change that could silently widen a restricted ballot's
-electorate. Read in full: every legacy voter category reproduces its
-pre-split meaning exactly (class **and** status, not class alone), the
-unknown-tier fallback fails closed (no defaulting to a permissive value),
-and the `_reconcile_membership` ORM listener keeps the columns populated
-on every write. A new `"social"` category was added and confirmed real
-(not dead code — `eligible_voter_types` accepts any string) and correctly
-scoped to only its own category. Also: a `quorum_service.py` locking fix
-(Pitfall #27, already correct — the count reads off the same locked row,
-so there's no second unlocked read to miss) and a frontend route-gating
-catch-up to a pre-existing backend `module_gate`. No findings; closed one
-test-coverage gap (the new "social" category had no test, added two).
-Completion gate: flake8/black/isort clean, migrations 383 revisions,
-scoped tests 250 passed/1 skipped, full backend suite 9067 passed/22
-skipped/0 failed. Rotation row
-06 -> awaiting PR merge.
+function every ballot-eligibility check calls) to read them. Read in full
+given the stakes — every legacy voter category reproduces its pre-split
+meaning exactly, the unknown-tier fallback fails closed, the
+`_reconcile_membership` ORM listener keeps the columns populated. **This
+part had no findings** — but three other things in this diff did:
+
+- **Quorum staleness.** `quorum_service.py`'s new `.with_for_update()`
+  lock was declared Pitfall #27-complete on first pass — wrong. On a
+  session that already holds the `MeetingMinutes` row (the
+  quorum-config-update endpoint loads+commits the same instance just
+  before calling this method), a re-`SELECT` with `expire_on_commit=False`
+  returns the cached, pre-lock Python object unless the query opts into
+  `populate_existing` — an established pattern elsewhere in this codebase
+  that this file hadn't caught up to. Fixed.
+- **Module gate blocking public ballot routes.** `module_gate("elections",
+...)` (pre-existing, not part of this diff, but a real bug regardless)
+  gates the whole router including the token-authorized public ballot
+  routes. `get_optional_current_user` correctly raises on an invalid
+  credential rather than downgrading to anonymous — but that means a
+  voter with a stale/expired session cookie from an unrelated main-app
+  visit got a 401 before their ballot token was ever checked. Fixed by
+  having the module-flag resolution catch an invalid-credential exception
+  specifically, without weakening any endpoint that declares its own auth
+  dependency.
+- **Mislabeled ballot-builder option (ELEC-19, the one the scope miss
+  hid).** `BallotBuilder.tsx`'s new `"operational"` label claimed "any
+  status, incl. probationary & life" — backwards. The backend requires
+  status == regular for that category specifically; an admin trusting the
+  new label would silently exclude probationary/life members from a
+  ballot meant to include them. Label and explanatory comment corrected.
+
+All three independently verified against the real code (traced
+`expire_on_commit`/identity-map behavior, traced FastAPI's
+dependency-resolution order, re-read `_user_has_role_type` against the
+new label) before fixing — not taken on Codex's word. Plus one test gap
+closed (a new `"social"` voter category had no coverage). Completion
+gate: flake8/black/isort clean, migrations 383 revisions, scoped tests
+269 passed/1 skipped, full backend suite 9069 passed/22 skipped/0 failed,
+`tsc`/`eslint` clean. Rotation row 06 -> awaiting PR merge.
 
 ### 2026-08-27 — Feature 05 (Finance & approvals), pass 2 ✅ merged — PR #1946
 
