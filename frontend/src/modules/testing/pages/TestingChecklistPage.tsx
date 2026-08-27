@@ -21,9 +21,13 @@ import {
   Copy,
   Download,
   Eye,
+  FileText,
   History,
+  Printer,
   RotateCcw,
   Search,
+  ShieldAlert,
+  Table,
   ShieldCheck,
   Users,
 } from 'lucide-react';
@@ -33,8 +37,9 @@ import { useAuthStore } from '../../../stores/authStore';
 import { useEnabledModules } from '../../../hooks/useEnabledModules';
 import { useConfirm } from '../../../contexts/ConfirmContext';
 import { useTimezone } from '../../../hooks/useTimezone';
+import { useKeyboardShortcuts } from '../../../hooks/useKeyboardShortcuts';
 import { formatDateTime } from '../../../utils/dateFormatting';
-import { TESTING_GROUPS } from '../testingRegistry';
+import { ALL_TEST_PAGES, TESTING_GROUPS } from '../testingRegistry';
 import type { TestPageEntry } from '../testingRegistry';
 import { evaluatePageAccess } from '../pageAccess';
 import type { PageAccess } from '../pageAccess';
@@ -42,6 +47,8 @@ import { SEE_ALL_TESTERS_PERMISSION, useTestingChecklist } from '../useTestingCh
 import type { TestStatus } from '../useTestingChecklist';
 import { TestPageCard } from '../components/TestPageCard';
 import { PromptDialog } from '../../../components/ux';
+import { buildPermissionMatrixCsv, buildRunCsv, runFileName } from '../exportRun';
+import { downloadCsv } from '../../../utils/csv';
 import { formatDate } from '../../../utils/dateFormatting';
 
 type StatusFilter = 'all' | TestStatus;
@@ -88,6 +95,8 @@ export const TestingChecklistPage: React.FC = () => {
     isViewingArchivedRun,
     currentBuildId,
     staleCount,
+    gateTally,
+    mismatchedPaths,
     viewRun,
     startRun,
     otherMarks,
@@ -112,6 +121,12 @@ export const TestingChecklistPage: React.FC = () => {
   const [showPermissions, setShowPermissions] = useState(false);
   const [startingRun, setStartingRun] = useState(false);
   const [staleOnly, setStaleOnly] = useState(false);
+  const [mismatchesOnly, setMismatchesOnly] = useState(false);
+
+  // Keyboard marking. The focused page is held by path rather than by index
+  // so filtering or expanding a group cannot silently move the focus ring
+  // onto a different page than the one the tester is looking at.
+  const [focusedPath, setFocusedPath] = useState<string | null>(null);
 
   const matches = (page: TestPageEntry): boolean => {
     const term = search.trim().toLowerCase();
@@ -121,6 +136,7 @@ export const TestingChecklistPage: React.FC = () => {
       const access = accessFor.get(page.path);
       if (access && (access.kind === 'denied' || access.kind === 'module-off')) return false;
     }
+    if (mismatchesOnly && !mismatchedPaths.has(page.path)) return false;
     if (staleOnly) {
       const result = results[page.path];
       if (!result || result.status === 'untested') return false;
@@ -132,6 +148,51 @@ export const TestingChecklistPage: React.FC = () => {
   const visibleGroups = TESTING_GROUPS.map((group) => ({ ...group, visible: group.pages.filter(matches) })).filter(
     (group) => group.visible.length > 0
   );
+
+  // Searching or filtering opens whatever still matches: a tester who types a
+  // path and sees only collapsed headings would reasonably conclude the page
+  // is not in the list.
+  const isFiltering = search.trim() !== '' || statusFilter !== 'all';
+  const isGroupOpen = (id: string) => isFiltering || expanded.includes(id);
+
+  // Only what is actually on screen: j/k must not walk into a collapsed group.
+  const visiblePaths = visibleGroups.flatMap((group) =>
+    isGroupOpen(group.id) ? group.visible.map((page) => page.path) : []
+  );
+
+  const moveFocus = (step: number) => {
+    if (visiblePaths.length === 0) return;
+    const at = focusedPath ? visiblePaths.indexOf(focusedPath) : -1;
+    const next = at === -1 ? 0 : (at + step + visiblePaths.length) % visiblePaths.length;
+    setFocusedPath(visiblePaths[next] ?? null);
+  };
+
+  /** The next page in registry order that carries no mark, opening its group. */
+  const jumpToNextUntested = () => {
+    const start = focusedPath ? ALL_TEST_PAGES.findIndex((page) => page.path === focusedPath) + 1 : 0;
+    const ordered = [...ALL_TEST_PAGES.slice(start), ...ALL_TEST_PAGES.slice(0, start)];
+    const next = ordered.find((page) => (results[page.path]?.status ?? 'untested') === 'untested');
+    if (!next) {
+      toast.success('Every page carries a mark');
+      return;
+    }
+    setExpanded((previous) => (previous.includes(next.groupId) ? previous : [...previous, next.groupId]));
+    setFocusedPath(next.path);
+  };
+
+  const markFocused = (status: TestStatus) => {
+    if (!focusedPath || isViewingArchivedRun) return;
+    setStatus(focusedPath, status);
+  };
+
+  useKeyboardShortcuts([
+    { key: 'j', handler: () => moveFocus(1), description: 'Next page' },
+    { key: 'k', handler: () => moveFocus(-1), description: 'Previous page' },
+    { key: 'n', handler: jumpToNextUntested, description: 'Jump to the next untested page' },
+    { key: 'p', handler: () => markFocused('pass'), description: 'Mark the focused page as passing' },
+    { key: 'f', handler: () => markFocused('fail'), description: 'Mark the focused page as failing' },
+    { key: 'b', handler: () => markFocused('blocked'), description: 'Mark the focused page as blocked' },
+  ]);
 
   const openableCount = useMemo(
     () => [...accessFor.values()].filter((access) => access.kind === 'open' || access.kind === 'allowed').length,
@@ -163,6 +224,25 @@ export const TestingChecklistPage: React.FC = () => {
     URL.revokeObjectURL(url);
   };
 
+  const exportContext = () => ({
+    run,
+    results,
+    otherMarks,
+    viewerName: user?.full_name || user?.username || 'you',
+    viewerPositions: user?.positions ?? [],
+    formatTimestamp: (iso: string) => formatDateTime(iso, tz),
+  });
+
+  const handleExportCsv = () => {
+    downloadCsv(buildRunCsv(exportContext()), runFileName(run, 'run', 'csv'));
+    toast.success('Run exported as CSV');
+  };
+
+  const handleExportMatrix = () => {
+    downloadCsv(buildPermissionMatrixCsv(exportContext()), runFileName(run, 'permissions', 'csv'));
+    toast.success('Permission matrix exported');
+  };
+
   const handleClear = async () => {
     const confirmed = await confirm({
       title: 'Clear your testing run?',
@@ -187,11 +267,6 @@ export const TestingChecklistPage: React.FC = () => {
 
   const toggleGroup = (id: string) =>
     setExpanded((previous) => (previous.includes(id) ? previous.filter((entry) => entry !== id) : [...previous, id]));
-
-  // Searching or filtering opens whatever still matches: a tester who types a
-  // path and sees only collapsed headings would reasonably conclude the page
-  // is not in the list.
-  const isFiltering = search.trim() !== '' || statusFilter !== 'all';
 
   const percent = Math.round(summary.progress * 100);
 
@@ -296,6 +371,23 @@ export const TestingChecklistPage: React.FC = () => {
               style={{ width: `${percent}%` }}
             />
           </div>
+          {(gateTally.verified > 0 || gateTally.mismatches > 0) && (
+            <p className="mt-2 text-sm">
+              <ShieldCheck className="mr-1 inline h-4 w-4 align-text-bottom" aria-hidden="true" />
+              <span className="text-theme-text-secondary">
+                {gateTally.verified} gate {gateTally.verified === 1 ? 'refusal' : 'refusals'} verified
+              </span>
+              {gateTally.mismatches > 0 && (
+                <>
+                  {' · '}
+                  <span className="font-semibold text-red-800 dark:text-red-400">
+                    {gateTally.mismatches} gate {gateTally.mismatches === 1 ? 'mismatch' : 'mismatches'}
+                  </span>
+                </>
+              )}
+            </p>
+          )}
+
           {staleCount > 0 && (
             <p className="text-theme-text-secondary mt-2 text-sm">
               {staleCount} {staleCount === 1 ? 'mark was' : 'marks were'} made against an earlier build of the app.
@@ -433,6 +525,22 @@ export const TestingChecklistPage: React.FC = () => {
           {expanded.length > 0 ? 'Collapse all' : 'Expand all'}
         </button>
 
+        {gateTally.mismatches > 0 && (
+          <button
+            type="button"
+            aria-pressed={mismatchesOnly}
+            onClick={() => setMismatchesOnly((only) => !only)}
+            className={`btn-sm inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm transition-colors ${
+              mismatchesOnly
+                ? 'border-red-800 bg-red-800 text-white'
+                : 'border-theme-surface-border bg-theme-surface text-theme-text-secondary hover:bg-theme-surface-hover'
+            }`}
+          >
+            <ShieldAlert className="h-4 w-4" aria-hidden="true" />
+            Gate mismatches ({gateTally.mismatches})
+          </button>
+        )}
+
         {staleCount > 0 && (
           <button
             type="button"
@@ -449,6 +557,35 @@ export const TestingChecklistPage: React.FC = () => {
           </button>
         )}
 
+        <a
+          href={`/testing/report/print${run && !run.isCurrent ? `?run=${run.id}` : ''}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="btn-secondary btn-sm inline-flex items-center gap-1.5"
+        >
+          <Printer className="h-4 w-4" aria-hidden="true" />
+          Report
+        </a>
+
+        <button
+          type="button"
+          className="btn-secondary btn-sm inline-flex items-center gap-1.5"
+          onClick={handleExportCsv}
+        >
+          <Download className="h-4 w-4" aria-hidden="true" />
+          CSV
+        </button>
+        {canSeeAllTesters && testerCount > 1 && (
+          <button
+            type="button"
+            className="btn-secondary btn-sm inline-flex items-center gap-1.5"
+            onClick={handleExportMatrix}
+          >
+            <Table className="h-4 w-4" aria-hidden="true" />
+            Permission matrix
+          </button>
+        )}
+
         <button
           type="button"
           className="btn-secondary btn-sm inline-flex items-center gap-1.5"
@@ -462,8 +599,8 @@ export const TestingChecklistPage: React.FC = () => {
           className="btn-secondary btn-sm inline-flex items-center gap-1.5"
           onClick={handleDownload}
         >
-          <Download className="h-4 w-4" aria-hidden="true" />
-          Download
+          <FileText className="h-4 w-4" aria-hidden="true" />
+          Markdown
         </button>
         <button
           type="button"
@@ -502,6 +639,11 @@ export const TestingChecklistPage: React.FC = () => {
         minLength={1}
       />
 
+      <p className="text-theme-text-muted -mt-2 text-xs">
+        Keyboard: <kbd>j</kbd>/<kbd>k</kbd> move between boxes · <kbd>p</kbd>/<kbd>f</kbd>/<kbd>b</kbd> mark the focused
+        one pass, fail or blocked · <kbd>n</kbd> jump to the next page with no mark.
+      </p>
+
       {visibleGroups.length === 0 && (
         <p className="text-theme-text-secondary card p-6 text-center text-sm">
           No page matches this filter. Clear the search or choose All.
@@ -509,7 +651,7 @@ export const TestingChecklistPage: React.FC = () => {
       )}
 
       {visibleGroups.map((group) => {
-        const isOpen = isFiltering || expanded.includes(group.id);
+        const isOpen = isGroupOpen(group.id);
         const statuses = group.pages.map((page) => results[page.path]?.status ?? 'untested');
         const checked = statuses.filter((status) => status !== 'untested').length;
         const failed = statuses.filter((status) => status === 'fail').length;
@@ -557,6 +699,8 @@ export const TestingChecklistPage: React.FC = () => {
                     otherMarks={otherMarks[page.path]}
                     access={accessFor.get(page.path) ?? { kind: 'open' }}
                     currentBuildId={currentBuildId}
+                    isFocused={focusedPath === page.path}
+                    onFocus={setFocusedPath}
                     readOnly={isViewingArchivedRun}
                     onStatus={setStatus}
                     onNote={setNote}

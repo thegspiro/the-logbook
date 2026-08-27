@@ -3,6 +3,7 @@
  *
  * Protected routes (require auth + AppLayout):
  *   /testing               — the testing home
+ *   /testing/report/print  — the run as a printable report
  *
  * **No permission gate, on purpose.** The screen's second job is proving the
  * gates on every other page, and that is done by signing in as a firefighter,
@@ -21,6 +22,7 @@ import { ProtectedRoute } from '../../components/ProtectedRoute';
 import { lazyWithRetry } from '../../utils/lazyWithRetry';
 
 const TestingChecklistPage = lazyWithRetry(() => import('./pages/TestingChecklistPage'));
+const TestingReportPrintPage = lazyWithRetry(() => import('./pages/TestingReportPrintPage'));
 
 export const getTestingRoutes = () => (
   <React.Fragment>
@@ -30,6 +32,16 @@ export const getTestingRoutes = () => (
         <ProtectedRoute requiredModule="testing" moduleLabel="The Testing Checklist">
           <Suspense fallback={null}>
             <TestingChecklistPage />
+          </Suspense>
+        </ProtectedRoute>
+      }
+    />
+    <Route
+      path="/testing/report/print"
+      element={
+        <ProtectedRoute requiredModule="testing" moduleLabel="The Testing Checklist">
+          <Suspense fallback={null}>
+            <TestingReportPrintPage />
           </Suspense>
         </ProtectedRoute>
       }

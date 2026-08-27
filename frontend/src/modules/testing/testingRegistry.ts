@@ -64,6 +64,12 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
         note: 'This page — listed so the list is complete',
         module: 'testing',
       },
+      {
+        path: '/testing/report/print',
+        label: 'Testing report (print)',
+        note: 'The run as a printable report — opens the print dialog',
+        module: 'testing',
+      },
       { path: '/learning', label: 'Learning Center' },
       { path: '/learning/:pathId', label: 'Learning Path' },
       { path: '/account', label: 'My Account', note: 'Profile, password change, MFA, notification preferences' },

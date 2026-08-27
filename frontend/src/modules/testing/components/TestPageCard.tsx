@@ -8,12 +8,13 @@
  */
 
 import React from 'react';
-import { ExternalLink, CornerDownRight, History, Lock, PowerOff } from 'lucide-react';
+import { ExternalLink, CornerDownRight, History, Lock, PowerOff, ShieldAlert, ShieldCheck } from 'lucide-react';
 import type { TestPageEntry } from '../testingRegistry';
 import { buildTestUrl, routeParams } from '../testingRegistry';
 import type { PageAccess } from '../pageAccess';
 import { describeGate } from '../pageAccess';
 import type { OtherTesterMark, TestResult, TestStatus } from '../useTestingChecklist';
+import { GATE_VERDICT_LABELS, gateVerdict, isGateMismatch } from '../gateVerdict';
 
 interface TestPageCardProps {
   page: TestPageEntry;
@@ -25,6 +26,9 @@ interface TestPageCardProps {
   currentBuildId?: string | undefined;
   /** An archived run is a record: it renders, but it does not take marks. */
   readOnly?: boolean | undefined;
+  /** Carries the keyboard focus ring; p/f/b mark whichever card has it. */
+  isFocused?: boolean | undefined;
+  onFocus?: ((path: string) => void) | undefined;
   onStatus: (path: string, status: TestStatus) => void;
   onNote: (path: string, note: string) => void;
   onParam: (path: string, param: string, value: string) => void;
@@ -36,6 +40,9 @@ const STATUS_BUTTONS: { status: Exclude<TestStatus, 'untested'>; label: string; 
   { status: 'fail', label: 'Fail', active: 'bg-red-800 text-white' },
   { status: 'blocked', label: 'Blocked', active: 'bg-amber-800 text-white' },
 ];
+
+/** A gate defect outranks the result colour: it is the louder finding. */
+const MISMATCH_EDGE = 'border-red-800';
 
 const STATUS_EDGE: Record<TestStatus, string> = {
   untested: 'border-theme-surface-border',
@@ -64,15 +71,25 @@ const TestPageCardComponent: React.FC<TestPageCardProps> = ({
   access,
   currentBuildId,
   readOnly = false,
+  isFocused = false,
+  onFocus,
   onStatus,
   onNote,
   onParam,
 }) => {
   const status = result?.status ?? 'untested';
+  const verdict = gateVerdict({
+    status,
+    ...(result?.expectedAccess ? { expectedAccess: result.expectedAccess } : {}),
+  });
   // Only a mark that carries a build can be stale: development bundles carry
   // none, and an absent stamp is not evidence of age.
   const isStale =
     status !== 'untested' && Boolean(currentBuildId) && Boolean(result?.buildId) && result?.buildId !== currentBuildId;
+  const cardRef = React.useRef<HTMLDivElement>(null);
+  React.useEffect(() => {
+    if (isFocused) cardRef.current?.scrollIntoView({ block: 'nearest' });
+  }, [isFocused]);
   const params = routeParams(page.path);
   const url = buildTestUrl(page.path, result?.params ?? {});
   const gate = describeGate(page);
@@ -81,9 +98,13 @@ const TestPageCardComponent: React.FC<TestPageCardProps> = ({
     // A named group rather than a bare div: the screen is two hundred boxes of
     // identical shape, so each one has to carry the name of the page it is for.
     <div
+      ref={cardRef}
       role="group"
       aria-label={page.label}
-      className={`card flex flex-col gap-3 border-l-4 p-4 ${STATUS_EDGE[status]}`}
+      onClickCapture={() => onFocus?.(page.path)}
+      className={`card flex flex-col gap-3 border-l-4 p-4 ${
+        isGateMismatch(verdict) ? MISMATCH_EDGE : STATUS_EDGE[status]
+      } ${isFocused ? 'ring-theme-focus-ring ring-2' : ''}`}
     >
       {url ? (
         <a
@@ -196,6 +217,19 @@ const TestPageCardComponent: React.FC<TestPageCardProps> = ({
           ))}
         </div>
       </div>
+
+      {isGateMismatch(verdict) && (
+        <p className="inline-flex items-start gap-1.5 text-xs font-semibold text-red-800 dark:text-red-400">
+          <ShieldAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+          {GATE_VERDICT_LABELS[verdict]} — worth reporting as a permissions defect.
+        </p>
+      )}
+      {verdict === 'refusal-verified' && (
+        <p className="inline-flex items-center gap-1.5 text-xs text-green-800 dark:text-green-400">
+          <ShieldCheck className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+          {GATE_VERDICT_LABELS[verdict]}.
+        </p>
+      )}
 
       <input
         className="form-input-sm"

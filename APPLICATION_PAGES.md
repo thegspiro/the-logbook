@@ -94,9 +94,10 @@ Complete reference of all pages in the application, organized by module.
 
 ## Testing Home
 
-| URL        | Page         | Permission    | Module    |
-| ---------- | ------------ | ------------- | --------- |
-| `/testing` | Testing Home | Authenticated | `testing` |
+| URL                     | Page                   | Permission    | Module    |
+| ----------------------- | ---------------------- | ------------- | --------- |
+| `/testing`              | Testing Home           | Authenticated | `testing` |
+| `/testing/report/print` | Testing Report (print) | Authenticated | `testing` |
 
 > An index of every route in this document, as boxes that open the page and
 > record Pass/Fail/Blocked plus a note. The run is stored per department, one
@@ -115,6 +116,14 @@ Complete reference of all pages in the application, organized by module.
 > department turns **Testing Checklist** on under Settings → Modules when it
 > wants it. While it is off the nav entry, the route and `/api/v1/testing-checklist`
 > all refuse; recorded marks are kept and return when it is switched back on.
+>
+> Marks belong to a **run** — one named pass over the checklist. The newest run
+> is the current one, so starting a run archives the previous one; earlier runs
+> stay readable and exportable from the picker. Each mark also records the build
+> it was made against and what the app predicted that account would meet, which
+> is what turns "this page opened for a firefighter" into a reported finding
+> rather than a pass. Exports: CSV, a page-by-tester permission matrix, the
+> printable report at `/testing/report/print`, and Markdown.
 >
 > `settings.manage` (which the System Owner's `*` covers) additionally opens
 > **every tester's** marks: each box lists what other accounts found and the

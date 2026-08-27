@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Testing runs, exports and permission checking (2026-08-27)
+
+**Added**
+
+- The testing checklist now works in **runs** — one named pass over the app,
+  e.g. "Pre-launch, build 1.4". Starting a new run archives the one before it:
+  its marks stay readable and exportable from the run picker instead of being
+  cleared away. The first mark opens a run on its own.
+- **Every mark is checked against what the app expected.** A refusal that
+  happened as predicted is counted as a gate verified; a page that opened for
+  an account that should have been refused is flagged where the mark was made,
+  counted in the header, and listed in the printed report as a permissions
+  defect.
+- Marks record the build they were made against, so after a deployment the ones
+  made on an earlier build are marked and can be filtered with **Needs
+  re-test**.
+- **Exports for reporting:** a CSV of every mark, a page-by-tester permission
+  matrix, a printable report (coverage, failures with notes, gate mismatches,
+  coverage by area) for saving as PDF, and the existing Markdown.
+- **Keyboard marking:** `j`/`k` to move between boxes, `p`/`f`/`b` to mark the
+  focused one, `n` to jump to the next page with no mark.
+
 ### The testing checklist is now a module you can switch off (2026-08-27)
 
 **Changed**

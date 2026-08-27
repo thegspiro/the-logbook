@@ -17,6 +17,12 @@ Use the two together: open a group on `/testing`, click a box to open that page
 in a new tab, run the steps from the matching section here, then mark the box
 Pass, Fail or Blocked and type what you found.
 
+**Work in runs.** A run is one named pass over the checklist — "Pre-launch,
+build 1.4". Starting a new run (Settings-level grant required) archives the one
+before it: every mark it holds stays readable and exportable from the run
+picker, and the fresh run starts empty. The first mark opens a run by itself,
+so nothing has to be set up before testing begins.
+
 **The run is saved for the department, one row per tester per page.** Testing
 from another account, another machine or another day continues the same list,
 and a mark is filed under the account that made it. Anyone holding
@@ -36,10 +42,35 @@ account can reach it to be checked — and because every account's marks land in
 the same shared run, the IT manager compares all three perspectives on one
 screen instead of reconciling three separate runs.
 
+**Every mark is compared against what the app expected.** The screen records
+what it predicted that account would meet — open, or refused, or a switched-off
+module — beside what the tester actually found. A refusal that happened as
+predicted is counted as a gate verified; a page that _opened_ for an account
+that should have been turned away is flagged on the box, counted in the header
+and listed in the report as a permissions defect. That comparison is the reason
+to walk the list from several accounts.
+
+**Marks carry the build they were made against.** After a deployment, marks
+made on an earlier build show an "earlier build" chip and can be filtered with
+**Needs re-test**, so a green board cannot quietly describe a build nobody
+tested.
+
+**Getting the results out.** **CSV** exports one row per mark — area, page,
+route, gate, expectation, result, gate verdict, note, tester, positions, build
+and timestamp. **Permission matrix** (with the grant, once more than one tester
+has marked anything) is a page-by-tester grid, which is the artifact the
+multi-account method produces. **Report** opens a printable summary — coverage,
+failures with their notes, gate mismatches, coverage by area — for printing or
+saving as PDF. **Markdown** stays for pasting into an issue.
+
+**Keyboard.** `j`/`k` move between boxes, `p`/`f`/`b` mark the focused one, `n`
+jumps to the next page carrying no mark. Typing in a note is unaffected.
+
 The marks live in `testing_checklist_entries`, behind
 `/api/v1/testing-checklist`. Recording a result is open to any signed-in member
 — a gate is only proved from the account it refuses — while reading other
-testers' results requires `settings.manage`.
+testers' results, starting a run, and clearing the department's run all require
+`settings.manage`.
 
 The registry behind the page is `frontend/src/pages/testing/testingRegistry.ts`,
 and `testingRegistry.test.ts` fails the build if a route is added, removed or

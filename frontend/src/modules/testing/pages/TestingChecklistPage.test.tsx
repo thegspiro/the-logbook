@@ -213,6 +213,102 @@ describe('TestingChecklistPage', () => {
     expect(screen.queryByRole('button', { name: /Clear everyone/ })).not.toBeInTheDocument();
   });
 
+  it('calls out a page that opened for an account it should have refused', async () => {
+    const user = userEvent.setup();
+    savedEntries.push({
+      id: 'mine',
+      routePath: '/events/admin',
+      status: 'pass',
+      note: null,
+      params: null,
+      checkedAt: '2026-08-27T12:00:00Z',
+      userId: 'u1',
+      userName: 'Firefighter Jones',
+      testedAs: ['firefighter'],
+      buildId: null,
+      expectedAccess: 'denied',
+      isMine: true,
+    });
+    renderWithRouter(<TestingChecklistPage />);
+    await user.type(screen.getByLabelText('Search pages'), '/events/admin');
+
+    expect(
+      within(cardFor('Events administration hub')).getByText(/Opened when it should have refused/)
+    ).toBeInTheDocument();
+    expect(screen.getByText(/1 gate mismatch/)).toBeInTheDocument();
+  });
+
+  it('counts a refusal that behaved as predicted', async () => {
+    savedEntries.push({
+      id: 'mine',
+      routePath: '/events/admin',
+      status: 'blocked',
+      note: null,
+      params: null,
+      checkedAt: '2026-08-27T12:00:00Z',
+      userId: 'u1',
+      userName: 'Firefighter Jones',
+      testedAs: ['firefighter'],
+      buildId: null,
+      expectedAccess: 'denied',
+      isMine: true,
+    });
+    renderWithRouter(<TestingChecklistPage />);
+
+    expect(await screen.findByText(/1 gate refusal verified/)).toBeInTheDocument();
+  });
+
+  it('calls out a gate mismatch the moment the mark is made', async () => {
+    // The tester is looking at the page right then; a finding that only
+    // appears after a reload is a finding they cannot act on.
+    const user = userEvent.setup();
+    renderWithRouter(<TestingChecklistPage />);
+    await user.type(screen.getByLabelText('Search pages'), '/events/admin');
+
+    await user.click(within(cardFor('Events administration hub')).getByRole('button', { name: 'Pass' }));
+
+    expect(
+      within(cardFor('Events administration hub')).getByText(/Opened when it should have refused/)
+    ).toBeInTheDocument();
+  });
+
+  it('marks the focused page from the keyboard', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<TestingChecklistPage />);
+    await openGroup(user, /^Core/);
+
+    // Clicking a card gives it the focus ring; p then marks that page.
+    await user.click(within(cardFor('Dashboard')).getByRole('button', { name: 'Blocked' }));
+    await user.keyboard('p');
+
+    await waitFor(() =>
+      expect(mockSaveEntry).toHaveBeenLastCalledWith(
+        expect.objectContaining({ routePath: '/dashboard', status: 'pass' })
+      )
+    );
+  });
+
+  it('leaves typing alone', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<TestingChecklistPage />);
+    await openGroup(user, /^Core/);
+
+    // 'p', 'f' and 'b' are letters somebody types into a note.
+    await user.type(within(cardFor('Dashboard')).getByLabelText('Note for Dashboard'), 'pfb');
+
+    expect(within(cardFor('Dashboard')).getByRole('button', { name: 'Pass' })).toHaveAttribute('aria-pressed', 'false');
+  });
+
+  it('jumps to the next page carrying no mark', async () => {
+    const user = userEvent.setup();
+    renderWithRouter(<TestingChecklistPage />);
+
+    await user.keyboard('n');
+
+    // The group holding the first untested page opens so the card is reachable.
+    expect(await screen.findByText('Dashboard')).toBeInTheDocument();
+  });
+
   it('names the run the marks belong to', async () => {
     renderWithRouter(<TestingChecklistPage />);
 

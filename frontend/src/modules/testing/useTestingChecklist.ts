@@ -25,6 +25,7 @@ import {
 import { getCurrentBuildId } from '../../utils/appVersion';
 import { getErrorMessage, toAppError } from '../../utils/errorHandling';
 import { ALL_TEST_PAGES, TESTING_GROUPS } from './testingRegistry';
+import { gateVerdict, isGateMismatch, tallyGateVerdicts, type GateVerdictTally } from './gateVerdict';
 
 /**
  * The grant that opens every tester's marks.
@@ -147,6 +148,14 @@ export interface UseTestingChecklist {
   currentBuildId: string | undefined;
   /** Marks made against an earlier build, and so worth checking again. */
   staleCount: number;
+  /**
+   * Gates proved and gates broken, across every mark on screen —
+   * including other testers', because a page that opened for a
+   * firefighter is the finding whatever the reader's own account saw.
+   */
+  gateTally: GateVerdictTally;
+  /** Route paths where a mark contradicts what the app predicted. */
+  mismatchedPaths: Set<string>;
   /** Read an earlier run; pass null to come back to the current one. */
   viewRun: (runId: string | null) => void;
   /** Open a new run, retiring the current one. Needs settings.manage. */
@@ -274,7 +283,17 @@ export const useTestingChecklist = ({
   const update = useCallback(
     (path: string, change: (previous: TestResult) => TestResult, debounce: boolean) => {
       const previous = resultsRef.current[path];
-      const next = change(previous ?? { status: 'untested' });
+      // Stamped locally as well as sent: the finding a mismatch represents has
+      // to appear the moment the mark is made, not after the next reload —
+      // the tester is looking at the page right then, which is when they can
+      // still say what they saw.
+      const expectedAccess = expectationRef.current?.(path);
+      const buildId = getCurrentBuildId();
+      const next = {
+        ...change(previous ?? { status: 'untested' }),
+        ...(expectedAccess ? { expectedAccess } : {}),
+        ...(buildId ? { buildId } : {}),
+      };
       setResults((state) => ({ ...state, [path]: next }));
       resultsRef.current = { ...resultsRef.current, [path]: next };
 
@@ -358,6 +377,45 @@ export const useTestingChecklist = ({
 
   const summary = useMemo(() => summarize(results, ALL_TEST_PAGES.length), [results]);
 
+  const gateMarks = useMemo(() => {
+    const marks = Object.values(results).map((result) => ({
+      status: result.status,
+      ...(result.expectedAccess ? { expectedAccess: result.expectedAccess } : {}),
+    }));
+    for (const list of Object.values(otherMarks)) {
+      for (const mark of list) {
+        marks.push({
+          status: mark.status,
+          ...(mark.expectedAccess ? { expectedAccess: mark.expectedAccess } : {}),
+        });
+      }
+    }
+    return marks;
+  }, [results, otherMarks]);
+
+  const gateTally = useMemo(() => tallyGateVerdicts(gateMarks), [gateMarks]);
+
+  const mismatchedPaths = useMemo(() => {
+    const paths = new Set<string>();
+    for (const [path, result] of Object.entries(results)) {
+      const verdict = gateVerdict({
+        status: result.status,
+        ...(result.expectedAccess ? { expectedAccess: result.expectedAccess } : {}),
+      });
+      if (isGateMismatch(verdict)) paths.add(path);
+    }
+    for (const [path, list] of Object.entries(otherMarks)) {
+      for (const mark of list) {
+        const verdict = gateVerdict({
+          status: mark.status,
+          ...(mark.expectedAccess ? { expectedAccess: mark.expectedAccess } : {}),
+        });
+        if (isGateMismatch(verdict)) paths.add(path);
+      }
+    }
+    return paths;
+  }, [results, otherMarks]);
+
   const currentBuildId = getCurrentBuildId();
   const staleCount = useMemo(() => {
     if (!currentBuildId) return 0;
@@ -385,6 +443,10 @@ export const useTestingChecklist = ({
         untested: '[ ] not tested',
       };
       const lines: string[] = ['# The Logbook — page testing run', ''];
+      if (run) {
+        lines.push(`- Run: ${run.label} (run ${run.sequence}, started ${formatTimestamp(run.startedAt)})`);
+      }
+      if (currentBuildId) lines.push(`- Build under test: ${currentBuildId}`);
       if (testedBy) lines.push(`- Tested by: ${testedBy}`);
       lines.push(
         `- Your result: ${summary.pass} passed, ${summary.fail} failed, ${summary.blocked} blocked, ${summary.untested} not tested (${summary.total} pages)`
@@ -394,7 +456,21 @@ export const useTestingChecklist = ({
           `- Across ${testerCount} tester${testerCount === 1 ? '' : 's'}: ${coveredByAnyone} of ${summary.total} pages covered`
         );
       }
+      if (gateTally.verified > 0 || gateTally.mismatches > 0) {
+        lines.push(`- Gates: ${gateTally.verified} refusal(s) verified, ${gateTally.mismatches} mismatch(es)`);
+      }
+      if (staleCount > 0) lines.push(`- ${staleCount} mark(s) made against an earlier build`);
       lines.push('');
+
+      if (mismatchedPaths.size > 0) {
+        // First, because it is the finding somebody has to act on.
+        lines.push('## Gate mismatches', '');
+        for (const page of ALL_TEST_PAGES) {
+          if (!mismatchedPaths.has(page.path)) continue;
+          lines.push(`- \`${page.path}\` ${page.label}`);
+        }
+        lines.push('');
+      }
 
       for (const group of TESTING_GROUPS) {
         lines.push(`## ${group.label}`, '');
@@ -413,7 +489,19 @@ export const useTestingChecklist = ({
       }
       return lines.join('\n');
     },
-    [results, otherMarks, summary, testerCount, coveredByAnyone, includeAllTesters]
+    [
+      results,
+      otherMarks,
+      summary,
+      testerCount,
+      coveredByAnyone,
+      includeAllTesters,
+      run,
+      currentBuildId,
+      gateTally,
+      staleCount,
+      mismatchedPaths,
+    ]
   );
 
   return {
@@ -423,6 +511,8 @@ export const useTestingChecklist = ({
     isViewingArchivedRun: run !== null && !run.isCurrent,
     currentBuildId,
     staleCount,
+    gateTally,
+    mismatchedPaths,
     viewRun,
     startRun,
     otherMarks,
