@@ -295,11 +295,23 @@ class TestRetentionEnforcementIsolationAndAudit:
     ):
         """Orgs share one session with no per-org isolation before this fix —
         a later org's failure would silently discard every earlier org's
-        already-deleted rows when the caller's eventual rollback fired."""
+        already-deleted rows when the caller's eventual rollback fired.
+
+        Three orgs, not two: org_c is fetched into the `orgs` list up front
+        (like every org) but only touched *after* org_b's rollback. A plain
+        `await self.db.rollback()` expires every persistent object in the
+        session, not just org_b's — so if the loop still reads an attribute
+        of the pre-fetched org_c ORM object (e.g. org_c.settings via
+        _org_config) without re-fetching it first, AsyncSession's implicit
+        refresh-on-expired-attribute-access raises MissingGreenlet outside
+        the greenlet bridge. A two-org version of this test cannot catch
+        that: the bug only manifests on the *next* org after a failure."""
         org_a = await _make_org(db_session, retention={"message_history": 30})
         org_b = await _make_org(db_session, retention={"message_history": 30})
+        org_c = await _make_org(db_session, retention={"message_history": 30})
         await _make_message(db_session, org_a, age_days=60)
         await _make_message(db_session, org_b, age_days=60)
+        await _make_message(db_session, org_c, age_days=60)
         await db_session.flush()
 
         service = RetentionService(db_session)
@@ -319,6 +331,10 @@ class TestRetentionEnforcementIsolationAndAudit:
         result = await service.enforce()
 
         assert result["errors"], "expected the second org's failure to be recorded"
+        # org_c, processed after org_b's rollback, must still have been
+        # deleted correctly — not skipped/crashed by a MissingGreenlet on
+        # its pre-fetched (now-expired) ORM attributes.
+        assert await _count_messages(db_session, org_c) == 0
         # org_a's deletion must have survived — it was committed before
         # org_b's failure, not discarded by it.
         assert await _count_messages(db_session, org_a) == 0

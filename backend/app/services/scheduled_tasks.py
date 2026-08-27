@@ -2354,6 +2354,13 @@ async def run_end_of_shift_checklist_reminders(
             )
 
             member_ids = assigned_map.get(str(shift.id), [])
+            if not member_ids:
+                # Every assigned user was filtered out by the is_active
+                # check above (or the shift has no assignments yet) — no
+                # reminder was actually sent, so don't stamp the dedup flag.
+                # Otherwise a member added/reactivated later in the window
+                # would never receive the reminder (Codex, PR #1915).
+                continue
 
             shift_action_url = f"/scheduling?shift={shift.id}&tab=equipment-checks"
             shift_metadata = {
@@ -3404,9 +3411,24 @@ async def _run_scheduled_emails_inner(db: AsyncSession) -> Dict[str, Any]:
 
     sent = 0
     failed = 0
+    needs_refresh = False
     for item in pending:
         try:
-            org = item.organization
+            if needs_refresh:
+                # A prior item's rollback (below) expired every persistent
+                # object in the session, including this pre-fetched item
+                # and its selectin-loaded `organization` relationship.
+                # Refresh the item's own columns and re-fetch its org
+                # explicitly rather than touching the expired relationship
+                # attribute directly, which would trigger an implicit lazy
+                # load outside the async greenlet bridge and raise
+                # MissingGreenlet (Codex, PR #1915).
+                await db.refresh(item)
+                org = await db.get(
+                    Organization, item.organization_id, populate_existing=True
+                )
+            else:
+                org = item.organization
             if not org:
                 logger.warning(
                     "Scheduled email {} skipped: org {} not found",
@@ -3538,6 +3560,7 @@ async def _run_scheduled_emails_inner(db: AsyncSession) -> Dict[str, Any]:
                 # stays PENDING and is retried on the next scheduled run.
                 try:
                     await db.rollback()
+                    needs_refresh = True
                 except Exception:
                     pass
 

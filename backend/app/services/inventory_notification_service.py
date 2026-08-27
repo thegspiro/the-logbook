@@ -152,9 +152,21 @@ class InventoryNotificationService:
 
         emails_sent = 0
         records_processed = 0
+        # Set once any group's rollback fires. await self.db.rollback()
+        # expires every persistent object in the session, not just the
+        # failed group's — so every later group's pre-fetched
+        # InventoryNotificationQueue rows (grouped from `records` above) are
+        # expired, and reading one of their attributes (rec.action_type,
+        # rec.quantity, ...) triggers an implicit reload AsyncSession cannot
+        # do outside the greenlet bridge, raising MissingGreenlet and
+        # aborting every remaining group (Codex review, PR #1915).
+        needs_refresh = False
 
         for (org_id, member_id), member_records in grouped.items():
             try:
+                if needs_refresh:
+                    for rec in member_records:
+                        await self.db.refresh(rec)
                 net_items = self._net_actions(member_records)
 
                 # If everything netted out, mark processed and skip email
@@ -282,6 +294,7 @@ class InventoryNotificationService:
                 # only discards the current, failed unit — it cannot poison
                 # or lose any other member's processed records.
                 await self.db.rollback()
+                needs_refresh = True
 
         logger.info(
             f"Inventory notifications: {emails_sent} emails sent, {records_processed} records processed"

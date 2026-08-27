@@ -16,7 +16,8 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-PR #1915 (feature 31, scheduled tasks) — open, awaiting CI/review.
+PR #1915 (feature 31, scheduled tasks) — open, responding to a Codex review
+round (5 findings, all fixed; replying to/resolving threads next).
 
 ---
 
@@ -302,6 +303,59 @@ migration validation passed (no schema change — this feature's fixes are
 pure application logic; separately repaired unrelated schema drift from a
 prior merge's inventory-reorder migration via `repair_schema.py` +
 `alembic stamp head` to unblock the sandbox's DB-backed tests).
+
+### 2026-08-27 — Feature 31 (Scheduled tasks) — PR #1915, Codex review round
+
+Codex reviewed #1915's own fix commit and found 5 real bugs, all one root
+cause: the CRON2-31-1/CRON2-31-5/CRON2-31-6 fixes (commit-per-unit,
+rollback-on-failure over a _pre-fetched_ list of ORM objects sharing one
+`AsyncSession`) missed that `AsyncSession.rollback()` expires every
+persistent object in the session, not just the failed unit's. Once one
+unit's rollback fires, the next pre-fetched-but-not-yet-processed unit's ORM
+attributes are expired, and reading one outside the async greenlet bridge
+raises `MissingGreenlet` — a class of bug the `db_session` test fixture
+cannot catch, since its savepoint-based rollback doesn't expire objects the
+same way a production session does. Verified by reproducing the crash
+directly against a real `async_session_factory()` session before trusting
+the finding.
+
+All 5 fixed:
+
+- `inventory_notification_service.py` (CRON2-31-1) and `scheduled_tasks.py`'s
+  `run_scheduled_emails` (CRON2-31-5): **refresh-after-rollback pattern** — a
+  `needs_refresh` flag flips `True` after any unit's rollback; every
+  subsequent unit's records are explicitly refreshed (`db.refresh()`, plus
+  `db.get(..., populate_existing=True)` for the email loop's `organization`
+  relationship) before their attributes are read again. Used here rather
+  than a snapshot because both loops keep mutating the _same_ ORM rows across
+  iterations for the eventual UPDATE to persist.
+- `retention_service.py` (CRON2-31-6): **snapshot pattern** instead — `(id,
+config)` tuples are extracted for every org in one pass before the loop,
+  since nothing here needs to keep mutating the pre-fetched `Organization`
+  rows themselves.
+- `scheduled_tasks.py`'s `run_end_of_shift_checklist_reminders`: a smaller,
+  related bug in the CRON2-31-3/CRON2-31-4 fix — the `User.is_active` filter
+  added for CRON2-31-4 can leave a shift with assignments but zero _active_
+  recipients, and the dedup flag was still being stamped `True` in that case.
+  Added a fourth continue-without-stamping guard.
+
+Regression tests: `test_inventory_notification_group_isolation.py` (new),
+`test_scheduled_email_group_isolation.py` (new), `test_retention_service.py`
+(the isolation test rewritten to 3 orgs — a 2-org version can't distinguish
+this bug class from a plain try/except, since it only manifests on the unit
+_after_ a failure), `test_shift_scheduled_tasks.py` (2 new tests for the
+empty-active-member-list case). Full detail:
+`docs/security-review/CRON2-31-scheduled-tasks.md`.
+
+Completion gate (this round): 96/96 scoped tests, black/isort/flake8 clean
+on every touched file. Full suite: 8938 passed, 38 failed, 22 skipped — the
+38 failures (`test_public_legal.py`, `test_agency_position_seeding.py`,
+`test_onboarding_integration.py`, `test_facilities_onboarding.py`) reproduced
+identically with this round's diff stashed out, confirmed pre-existing and
+unrelated.
+
+Next: reply to and resolve the 5 Codex threads on #1915, then merge and move
+to 32 locations & kiosk.
 
 Next: 32 locations & kiosk, once #1915 merges.
 

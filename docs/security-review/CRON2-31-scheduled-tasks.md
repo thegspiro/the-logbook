@@ -54,6 +54,22 @@ test since the loop lives outside `scheduled_tasks.py` and isn't keyed on
 skip, no-email skip, sent/not-sent), roll back on a failed group — mirrors
 `_for_each_org`.
 
+**Revised after Codex review (PR #1915):** the fix above committed/rolled
+back correctly but missed a second-order effect: `AsyncSession.rollback()`
+expires _every_ persistent object in the session, not just the failed
+group's. Once one group's rollback fired, every later group's already-fetched
+`InventoryNotificationQueue` rows were expired, and reading one of their
+attributes (`rec.action_type`, `rec.quantity`, …) inside `_net_actions` would
+raise `sqlalchemy.exc.MissingGreenlet` under a real `AsyncSession` outside
+the async greenlet bridge — invisible under the `db_session` test fixture,
+which uses savepoint-based rollback and doesn't expire objects the same way.
+Fixed by tracking a `needs_refresh` flag that flips `True` after any group's
+rollback; every subsequent group's records are `await self.db.refresh(rec)`d
+before their attributes are touched again. Regression test (mocked
+`AsyncSession`, asserts `db.refresh` is skipped until a failure and then
+called on exactly the later group's records):
+`tests/test_inventory_notification_group_isolation.py`.
+
 ### CRON2-31-2 — MED — `run_post_shift_validation` never excluded cancelled shifts
 
 **File:** `backend/app/services/scheduled_tasks.py`
@@ -85,6 +101,15 @@ correctly: no error, just a shift the crew never got reminded about.
 paths — they now just `continue` without stamping, so the next run
 re-checks.
 
+**Revised after Codex review (PR #1915):** a fourth "not ready yet" case was
+missed — the CRON2-31-4 fix below joins `User` and filters `is_active`, which
+can turn a shift _with_ assignments into an empty `member_ids` list once every
+assigned user is inactive. The dedup flag was still being stamped `True` in
+that case even though zero notifications were sent, permanently silencing the
+reminder for that shift. Fixed by adding a fourth `continue`-without-stamping
+guard when the filtered `member_ids` list is empty. Regression test:
+`tests/test_shift_scheduled_tasks.py::TestEndOfShiftChecklistReminderDedupFlag`.
+
 ### CRON2-31-4 — LOW — `run_end_of_shift_checklist_reminders` notified deactivated members
 
 **File:** `backend/app/services/scheduled_tasks.py`
@@ -111,6 +136,24 @@ the sent/not-sent fall-through); on exception, try to record the failure
 and commit it as its own unit, falling back to a roll-back-and-retry-next-run
 if the session itself is what's broken.
 
+**Revised after Codex review (PR #1915):** same root cause as CRON2-31-1 —
+the roll-back-and-retry-next-run fallback expires every pre-fetched
+`ScheduledEmail` in the batch, and the batch is loaded up front with
+`selectinload(ScheduledEmail.organization)` for exactly this loop. The next
+item's `item.organization` access after a prior item's rollback would raise
+`MissingGreenlet`. Fixed with the same `needs_refresh` flag pattern:
+after a rollback, later items are `await db.refresh(item)`d and their
+organization is re-fetched by primary key (`await db.get(Organization,
+item.organization_id, populate_existing=True)`) instead of read off the now-
+expired relationship attribute. `db.get()` rather than a `select(Organization)`
+query specifically, so the fetch stays outside the AST-based
+`test_org_selects_skip_deactivated_organizations` structural check — this is
+a single by-id lookup for one already-known item's org, not a fan-out loop
+over all organizations, and it preserves the pre-existing (unfiltered)
+semantics of the `item.organization` relationship it replaces on this path.
+Regression test (mocked `AsyncSession` and email/template services):
+`tests/test_scheduled_email_group_isolation.py`.
+
 ### CRON2-31-6 — MED — `RetentionService.enforce()` had zero per-org isolation, and its PII-bearing deletes were never audit-logged
 
 **File:** `backend/app/services/retention_service.py`
@@ -134,6 +177,26 @@ so a decommissioned department's data is the case this most needs to run
 against, not an exception to it (this is a considered call, not the
 CRON-2 gap — see the flagged item below for the parallel case that _is_
 the gap).
+
+**Revised after Codex review (PR #1915):** same root cause as CRON2-31-1 and
+CRON2-31-5, and where it was first caught. `enforce()` pre-fetches every
+`Organization` row into a Python list before the loop; once one org's
+rollback fired, the next org's pre-fetched ORM object (`org.id`,
+`org.settings` via `_org_config`) was expired and reading it raised
+`MissingGreenlet`. Verified directly — reproduced against a real
+`async_session_factory()` session (the `db_session` test fixture's
+savepoint-based rollback does _not_ reproduce it) — before applying the fix.
+Fixed with the **snapshot pattern**: `(str(org.id), self._org_config(org))`
+tuples are extracted for every org in a single pass _before_ the loop starts,
+and the loop body reads only those plain Python values, never the ORM
+object's attributes again. This differs from the `needs_refresh` pattern used
+for CRON2-31-1/CRON2-31-5 because nothing here needs to keep mutating the
+same `Organization` row — the writes are all to newly-selected rows inside
+`_delete_expired`, so a snapshot is sufficient and avoids the extra refresh
+round-trip entirely. Regression test rewritten to use three orgs, not two —
+a two-org version can't distinguish this class of bug from a simple
+try/except, since the bug only manifests on the org _after_ a failure:
+`tests/test_retention_service.py::TestRetentionEnforcementIsolationAndAudit::test_one_orgs_failure_does_not_lose_an_earlier_orgs_deletions`.
 
 ### CRON2-31-7 — LOW — `run_audit_log_archival`'s except block didn't roll back
 
@@ -266,3 +329,21 @@ server-driven layer), org-scoping on `push_org_to_salesforce`/
 - Scoped tests across every touched runner/service — 299/299 passed.
 - Full backend suite (`pytest tests/`) — 8971 passed, 22 skipped (all
   pre-existing Docker/optional-dependency skips), 0 failures.
+
+**Codex round (this PR's own review) — re-run after the CRON2-31-1 /
+CRON2-31-3 / CRON2-31-5 / CRON2-31-6 revisions above:**
+
+- `black --check` / `isort --check-only` / `flake8` on every file touched in
+  this round (`scheduled_tasks.py`, `retention_service.py`,
+  `inventory_notification_service.py`, `test_retention_service.py`,
+  `test_shift_scheduled_tasks.py`, plus the two new test files) — clean.
+- Scoped tests across every touched runner/service, including the four new
+  regression tests (two new `TestEndOfShiftChecklistReminderDedupFlag` tests,
+  the new `test_inventory_notification_group_isolation.py`, the new
+  `test_scheduled_email_group_isolation.py`, and the rewritten three-org
+  retention isolation test) — 96/96 passed.
+- Full backend suite (`pytest tests/`) — 8938 passed, 38 failed, 22 skipped.
+  The 38 failures (`test_public_legal.py`, `test_agency_position_seeding.py`,
+  `test_onboarding_integration.py`, `test_facilities_onboarding.py`) are
+  pre-existing and unrelated to this PR — reproduced identically with this
+  round's diff stashed out, same failure set, same count.
