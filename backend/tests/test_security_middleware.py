@@ -11,7 +11,8 @@ Covers:
 
 import secrets
 import time
-from unittest.mock import MagicMock, patch
+from contextlib import asynccontextmanager
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi import HTTPException
@@ -19,6 +20,7 @@ from fastapi import HTTPException
 from app.core.security_middleware import (
     CSRFProtection,
     InputSanitizer,
+    IPBlockingMiddleware,
     RateLimiter,
     SecurityHeadersMiddleware,
     public_rate_limit,
@@ -869,3 +871,61 @@ class TestVerifyCSRFTokenDependency:
         with pytest.raises(HTTPException) as exc_info:
             await verify_csrf_token(request)
         assert exc_info.value.status_code == 403
+
+
+class TestIPBlockingMiddlewareBlockedAttemptLogging:
+    """A blocked request must be visible in BOTH the audit log and the
+    blocked_access_attempts table — GET /ip-security/blocked-attempts reads
+    only the latter, so a block that never inserts one is invisible there
+    even though it was correctly denied and audit-logged."""
+
+    @pytest.mark.unit
+    @pytest.mark.asyncio
+    async def test_logs_to_both_audit_and_blocked_attempts_table(self):
+        from app.models.ip_security import BlockedAccessAttempt
+
+        request = MagicMock()
+        request.url.path = "/api/v1/events"
+        request.method = "GET"
+        request.headers = {"user-agent": "curl/8.0"}
+
+        db = MagicMock()
+        db.add = MagicMock()
+        db.commit = AsyncMock()
+
+        @asynccontextmanager
+        async def fake_session_factory():
+            yield db
+
+        geoip = MagicMock()
+        geoip.lookup_ip.return_value = {
+            "country_code": "RU",
+            "country_name": "Russia",
+        }
+
+        log_audit_event = AsyncMock()
+
+        middleware = IPBlockingMiddleware(app=None)
+        with (
+            patch("app.core.geoip.get_geoip_service", return_value=geoip),
+            patch(
+                "app.core.database.async_session_factory",
+                fake_session_factory,
+            ),
+            patch("app.core.audit.log_audit_event", log_audit_event),
+        ):
+            await middleware._log_blocked_attempt(
+                request, "203.0.113.9", "country_blocked"
+            )
+
+        log_audit_event.assert_awaited_once()
+        db.add.assert_called_once()
+        row = db.add.call_args.args[0]
+        assert isinstance(row, BlockedAccessAttempt)
+        assert row.ip_address == "203.0.113.9"
+        assert row.block_reason == "country_blocked"
+        assert row.country_code == "RU"
+        assert row.country_name == "Russia"
+        assert row.request_path == "/api/v1/events"
+        assert row.request_method == "GET"
+        db.commit.assert_awaited_once()
