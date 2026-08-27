@@ -85,7 +85,6 @@ ONBOARDING_LEGACY_MODULES = [
     "compliance",
     "meetings",
     "fundraising",
-    "incidents",
     "equipment",
     "vehicles",
     "budget",

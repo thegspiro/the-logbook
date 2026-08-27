@@ -553,15 +553,15 @@ describe('inventoryService', () => {
     });
   });
 
-  describe('batchCheckout', () => {
-    it('should POST to /inventory/batch-checkout', async () => {
+  describe('distributeItems', () => {
+    it('should POST to /inventory/distribute-items', async () => {
       const data = { user_id: 'u1', item_codes: ['BC-1', 'BC-2'] };
       const response = { successful: 2, failed: 0 };
       mockPost.mockResolvedValueOnce({ data: response });
 
-      const result = await inventoryService.batchCheckout(data as never);
+      const result = await inventoryService.distributeItems(data as never);
 
-      expect(mockPost).toHaveBeenCalledWith('/inventory/batch-checkout', data);
+      expect(mockPost).toHaveBeenCalledWith('/inventory/distribute-items', data);
       expect(result).toEqual(response);
     });
   });
@@ -621,7 +621,7 @@ describe('inventoryService', () => {
 
   describe('fulfillEquipmentRequest', () => {
     it('should PUT /inventory/requests/:id/fulfill with fulfillment data', async () => {
-      const data = { item_id: 'i9', quantity: 2, override_allowance: false };
+      const data = { fulfillment_type: 'issuance' as const, item_id: 'i9', quantity: 2, override_allowance: false };
       const response = {
         id: 'r1',
         status: 'fulfilled',
@@ -635,14 +635,6 @@ describe('inventoryService', () => {
 
       expect(mockPut).toHaveBeenCalledWith('/inventory/requests/r1/fulfill', data);
       expect(result).toEqual(response);
-    });
-
-    it('should PUT an empty body when no data is provided', async () => {
-      mockPut.mockResolvedValueOnce({ data: { id: 'r1', status: 'fulfilled' } });
-
-      await inventoryService.fulfillEquipmentRequest('r1');
-
-      expect(mockPut).toHaveBeenCalledWith('/inventory/requests/r1/fulfill', {});
     });
   });
 

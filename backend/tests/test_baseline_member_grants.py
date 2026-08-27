@@ -125,6 +125,15 @@ def test_baseline_holds_no_manage_grant():
     assert manage == [], f"baseline members would hold management grants: {manage}"
 
 
+def test_facilities_view_is_not_a_baseline_grant():
+    """Facility records are an officer/manager workspace, not a member amenity."""
+    for label, registry, slug, field in BASELINE_SOURCES:
+        assert "facilities.view" not in registry[slug][field], (
+            f"the seeded {label} carries facilities.view, which opens the "
+            "leadership facilities workspace to regular members"
+        )
+
+
 def test_baseline_excludes_the_reporting_and_audit_grants():
     """Department-wide reporting stays with the officers who answer for it.
 

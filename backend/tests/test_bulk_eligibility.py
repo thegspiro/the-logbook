@@ -82,15 +82,15 @@ class TestBulkEligibility:
         assert service._get_held_position_slugs.await_count == 1
         assert service._get_training_positions.await_count == 1
 
-    async def test_a_held_position_counts_the_same_as_a_rank(self):
-        # The board must offer the seat the signup endpoint will accept.
+    async def test_a_held_position_does_not_count_as_a_rank(self):
+        # RBAC role assignment must not unlock an operational shift seat.
         service = _service(
             [_shift("s1", positions=[{"position": "ems"}])],
             held=["emt"],
             grants={"emt": ["ems", "firefighter"]},
         )
         answers = await service.get_eligible_positions_bulk(USER, ORG, ["s1"])
-        assert answers["s1"] == ["ems"]
+        assert answers["s1"] == []
 
     async def test_narrows_to_each_shift_s_own_seats(self):
         shifts = [

@@ -5,10 +5,11 @@ Handles fiscal years, budgets, purchase requests, expense reports,
 check requests, dues, approval chains, and QuickBooks export.
 """
 
+from decimal import Decimal
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from fastapi.responses import PlainTextResponse
+from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import (
@@ -68,7 +69,7 @@ from app.schemas.finance import (
     PurchaseRequestResponse,
     PurchaseRequestUpdate,
 )
-from app.services.finance_service import FinanceService
+from app.services.finance_service import BudgetLimitExceededError, FinanceService
 
 router = APIRouter()
 
@@ -113,6 +114,8 @@ async def create_fiscal_year(
             username=current_user.username,
         )
         return fy
+    except BudgetLimitExceededError as e:
+        raise HTTPException(status_code=409, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
     except Exception as e:
@@ -146,6 +149,8 @@ async def update_fiscal_year(
             str(current_user.organization_id),
             **data.model_dump(exclude_unset=True),
         )
+    except BudgetLimitExceededError as e:
+        raise HTTPException(status_code=409, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
     except Exception as e:
@@ -173,6 +178,8 @@ async def activate_fiscal_year(
             username=current_user.username,
         )
         return fy
+    except BudgetLimitExceededError as e:
+        raise HTTPException(status_code=409, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
     except Exception as e:
@@ -188,6 +195,8 @@ async def lock_fiscal_year(
     service = FinanceService(db)
     try:
         return await service.lock_fiscal_year(fy_id, str(current_user.organization_id))
+    except BudgetLimitExceededError as e:
+        raise HTTPException(status_code=409, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
     except Exception as e:
@@ -227,6 +236,8 @@ async def create_budget_category(
             str(current_user.organization_id),
             **data.model_dump(),
         )
+    except BudgetLimitExceededError as e:
+        raise HTTPException(status_code=409, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
     except Exception as e:
@@ -247,6 +258,8 @@ async def update_budget_category(
             str(current_user.organization_id),
             **data.model_dump(exclude_unset=True),
         )
+    except BudgetLimitExceededError as e:
+        raise HTTPException(status_code=409, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
     except Exception as e:
@@ -262,6 +275,8 @@ async def delete_budget_category(
     service = FinanceService(db)
     try:
         await service.delete_budget_category(cat_id, str(current_user.organization_id))
+    except BudgetLimitExceededError as e:
+        raise HTTPException(status_code=409, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
     except Exception as e:
@@ -300,6 +315,8 @@ async def create_budget(
             str(current_user.id),
             **data.model_dump(),
         )
+    except BudgetLimitExceededError as e:
+        raise HTTPException(status_code=409, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
     except Exception as e:
@@ -333,6 +350,8 @@ async def update_budget(
             str(current_user.organization_id),
             **data.model_dump(exclude_unset=True),
         )
+    except BudgetLimitExceededError as e:
+        raise HTTPException(status_code=409, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
     except Exception as e:
@@ -350,6 +369,8 @@ async def get_budget_summary(
         return await service.get_budget_summary(
             str(current_user.organization_id), fiscal_year_id
         )
+    except BudgetLimitExceededError as e:
+        raise HTTPException(status_code=409, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
     except Exception as e:
@@ -405,6 +426,8 @@ async def create_approval_chain(
             username=current_user.username,
         )
         return chain
+    except BudgetLimitExceededError as e:
+        raise HTTPException(status_code=409, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
     except Exception as e:
@@ -440,6 +463,8 @@ async def update_approval_chain(
             str(current_user.organization_id),
             **data.model_dump(exclude_unset=True),
         )
+    except BudgetLimitExceededError as e:
+        raise HTTPException(status_code=409, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
     except Exception as e:
@@ -455,6 +480,8 @@ async def delete_approval_chain(
     service = FinanceService(db)
     try:
         await service.delete_approval_chain(chain_id, str(current_user.organization_id))
+    except BudgetLimitExceededError as e:
+        raise HTTPException(status_code=409, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
     except Exception as e:
@@ -479,6 +506,8 @@ async def add_chain_step(
             str(current_user.organization_id),
             **data.model_dump(),
         )
+    except BudgetLimitExceededError as e:
+        raise HTTPException(status_code=409, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
     except Exception as e:
@@ -504,6 +533,8 @@ async def update_chain_step(
             str(current_user.organization_id),
             **data.model_dump(exclude_unset=True),
         )
+    except BudgetLimitExceededError as e:
+        raise HTTPException(status_code=409, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
     except Exception as e:
@@ -522,6 +553,8 @@ async def delete_chain_step(
         await service.delete_chain_step(
             step_id, chain_id, str(current_user.organization_id)
         )
+    except BudgetLimitExceededError as e:
+        raise HTTPException(status_code=409, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
     except Exception as e:
@@ -531,7 +564,7 @@ async def delete_chain_step(
 @router.get("/approval-chains/preview", response_model=ApprovalChainResponse)
 async def preview_approval_chain(
     entity_type: str = Query(...),
-    amount: float = Query(...),
+    amount: Decimal = Query(..., decimal_places=2),
     category_id: Optional[str] = Query(None),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("finance.view")),
@@ -550,6 +583,8 @@ async def preview_approval_chain(
                 detail="No matching approval chain found",
             )
         return chain
+    except BudgetLimitExceededError as e:
+        raise HTTPException(status_code=409, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
     except Exception as e:
@@ -563,12 +598,16 @@ async def preview_approval_chain(
 
 @router.get("/approvals/pending", response_model=list[PendingApprovalResponse])
 async def get_pending_approvals(
+    pagination: PaginationParams = Depends(),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("finance.approve")),
 ):
     service = FinanceService(db)
     return await service.get_pending_approvals(
-        str(current_user.id), str(current_user.organization_id)
+        str(current_user.id),
+        str(current_user.organization_id),
+        skip=pagination.skip,
+        limit=pagination.limit,
     )
 
 
@@ -600,6 +639,8 @@ async def approve_step(
             username=current_user.username,
         )
         return record
+    except BudgetLimitExceededError as e:
+        raise HTTPException(status_code=409, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
     except Exception as e:
@@ -634,6 +675,8 @@ async def deny_step(
             username=current_user.username,
         )
         return record
+    except BudgetLimitExceededError as e:
+        raise HTTPException(status_code=409, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
     except Exception as e:
@@ -689,13 +732,15 @@ async def create_purchase_request(
             username=current_user.username,
         )
         return pr
+    except BudgetLimitExceededError as e:
+        raise HTTPException(status_code=409, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=safe_error_detail(e))
 
 
-async def _with_approval_steps(service, payload, entity_type, entity_id):
+async def _with_approval_steps(service, payload, entity_type, entity_id, org_id):
     """Attach the approval records for a finance document.
 
     `ApprovalStepRecord` is polymorphic — it keys on (entity_type, entity_id)
@@ -705,7 +750,7 @@ async def _with_approval_steps(service, payload, entity_type, entity_id):
     just said "No approval steps configured for this request".
     """
     steps = []
-    for record in await service.get_approval_records(entity_type, entity_id):
+    for record in await service.get_approval_records(entity_type, entity_id, org_id):
         step = ApprovalStepRecordResponse.model_validate(record)
         # `step_name` and `step_order` describe the chain step, not the record,
         # so they have to be copied across from the eager-loaded relationship —
@@ -733,6 +778,7 @@ async def get_purchase_request(
         PurchaseRequestResponse.model_validate(pr),
         ApprovalEntityType.PURCHASE_REQUEST,
         pr.id,
+        str(current_user.organization_id),
     )
 
 
@@ -750,6 +796,8 @@ async def update_purchase_request(
             str(current_user.organization_id),
             **data.model_dump(exclude_unset=True),
         )
+    except BudgetLimitExceededError as e:
+        raise HTTPException(status_code=409, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
     except Exception as e:
@@ -780,6 +828,8 @@ async def submit_purchase_request(
             username=current_user.username,
         )
         return pr
+    except BudgetLimitExceededError as e:
+        raise HTTPException(status_code=409, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
     except Exception as e:
@@ -798,6 +848,8 @@ async def mark_pr_ordered(
     service = FinanceService(db)
     try:
         return await service.mark_pr_ordered(pr_id, str(current_user.organization_id))
+    except BudgetLimitExceededError as e:
+        raise HTTPException(status_code=409, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
     except Exception as e:
@@ -816,6 +868,8 @@ async def mark_pr_received(
     service = FinanceService(db)
     try:
         return await service.mark_pr_received(pr_id, str(current_user.organization_id))
+    except BudgetLimitExceededError as e:
+        raise HTTPException(status_code=409, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
     except Exception as e:
@@ -828,7 +882,7 @@ async def mark_pr_received(
 )
 async def mark_pr_paid(
     pr_id: str,
-    actual_amount: Optional[float] = Query(None),
+    actual_amount: Optional[Decimal] = Query(None, decimal_places=2),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("finance.manage")),
 ):
@@ -840,6 +894,8 @@ async def mark_pr_paid(
             actual_amount,
             acted_by=str(current_user.id),
         )
+    except BudgetLimitExceededError as e:
+        raise HTTPException(status_code=409, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
     except Exception as e:
@@ -860,6 +916,8 @@ async def cancel_purchase_request(
         return await service.cancel_purchase_request(
             pr_id, str(current_user.organization_id)
         )
+    except BudgetLimitExceededError as e:
+        raise HTTPException(status_code=409, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
     except Exception as e:
@@ -917,6 +975,8 @@ async def create_expense_report(
             **er_data,
         )
         return er
+    except BudgetLimitExceededError as e:
+        raise HTTPException(status_code=409, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
     except Exception as e:
@@ -945,6 +1005,7 @@ async def get_expense_report(
         ExpenseReportResponse.model_validate(er),
         ApprovalEntityType.EXPENSE_REPORT,
         er.id,
+        str(current_user.organization_id),
     )
 
 
@@ -962,6 +1023,8 @@ async def update_expense_report(
             str(current_user.organization_id),
             **data.model_dump(exclude_unset=True),
         )
+    except BudgetLimitExceededError as e:
+        raise HTTPException(status_code=409, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
     except Exception as e:
@@ -986,6 +1049,8 @@ async def add_expense_line_item(
             str(current_user.organization_id),
             **data.model_dump(),
         )
+    except BudgetLimitExceededError as e:
+        raise HTTPException(status_code=409, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
     except Exception as e:
@@ -1006,6 +1071,8 @@ async def submit_expense_report(
         return await service.submit_expense_report(
             er_id, str(current_user.organization_id)
         )
+    except BudgetLimitExceededError as e:
+        raise HTTPException(status_code=409, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
     except Exception as e:
@@ -1030,6 +1097,8 @@ async def mark_expense_paid(
             payment_method,
             acted_by=str(current_user.id),
         )
+    except BudgetLimitExceededError as e:
+        raise HTTPException(status_code=409, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
     except Exception as e:
@@ -1071,6 +1140,8 @@ async def create_check_request(
             str(current_user.id),
             **data.model_dump(),
         )
+    except BudgetLimitExceededError as e:
+        raise HTTPException(status_code=409, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
     except Exception as e:
@@ -1092,6 +1163,7 @@ async def get_check_request(
         CheckRequestResponse.model_validate(cr),
         ApprovalEntityType.CHECK_REQUEST,
         cr.id,
+        str(current_user.organization_id),
     )
 
 
@@ -1109,6 +1181,8 @@ async def update_check_request(
             str(current_user.organization_id),
             **data.model_dump(exclude_unset=True),
         )
+    except BudgetLimitExceededError as e:
+        raise HTTPException(status_code=409, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
     except Exception as e:
@@ -1129,6 +1203,8 @@ async def submit_check_request(
         return await service.submit_check_request(
             cr_id, str(current_user.organization_id)
         )
+    except BudgetLimitExceededError as e:
+        raise HTTPException(status_code=409, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
     except Exception as e:
@@ -1153,6 +1229,8 @@ async def issue_check(
             check_number,
             acted_by=str(current_user.id),
         )
+    except BudgetLimitExceededError as e:
+        raise HTTPException(status_code=409, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
     except Exception as e:
@@ -1171,6 +1249,8 @@ async def void_check(
     service = FinanceService(db)
     try:
         return await service.void_check(cr_id, str(current_user.organization_id))
+    except BudgetLimitExceededError as e:
+        raise HTTPException(status_code=409, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
     except Exception as e:
@@ -1211,6 +1291,8 @@ async def create_dues_schedule(
             str(current_user.id),
             **data.model_dump(),
         )
+    except BudgetLimitExceededError as e:
+        raise HTTPException(status_code=409, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
     except Exception as e:
@@ -1231,6 +1313,8 @@ async def update_dues_schedule(
             str(current_user.organization_id),
             **data.model_dump(exclude_unset=True),
         )
+    except BudgetLimitExceededError as e:
+        raise HTTPException(status_code=409, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
     except Exception as e:
@@ -1252,6 +1336,8 @@ async def generate_member_dues(
             schedule_id, str(current_user.organization_id)
         )
         return {"generated": count}
+    except BudgetLimitExceededError as e:
+        raise HTTPException(status_code=409, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
     except Exception as e:
@@ -1295,6 +1381,8 @@ async def record_dues_payment(
             recorded_by=str(current_user.id),
             **data.model_dump(),
         )
+    except BudgetLimitExceededError as e:
+        raise HTTPException(status_code=409, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
     except Exception as e:
@@ -1324,6 +1412,8 @@ async def list_dues_payments(
             str(current_user.organization_id),
             viewer_user_id=viewer_user_id,
         )
+    except BudgetLimitExceededError as e:
+        raise HTTPException(status_code=409, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=404, detail=safe_error_detail(e))
     except Exception as e:
@@ -1345,6 +1435,8 @@ async def waive_dues(
             str(current_user.id),
             data.reason,
         )
+    except BudgetLimitExceededError as e:
+        raise HTTPException(status_code=409, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
     except Exception as e:
@@ -1384,6 +1476,8 @@ async def unwaive_dues(
             username=current_user.username,
         )
         return dues
+    except BudgetLimitExceededError as e:
+        raise HTTPException(status_code=409, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
     except Exception as e:
@@ -1435,6 +1529,8 @@ async def create_export_mapping(
             str(current_user.organization_id),
             **data.model_dump(),
         )
+    except BudgetLimitExceededError as e:
+        raise HTTPException(status_code=409, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
     except Exception as e:
@@ -1455,6 +1551,8 @@ async def update_export_mapping(
             str(current_user.organization_id),
             **data.model_dump(exclude_unset=True),
         )
+    except BudgetLimitExceededError as e:
+        raise HTTPException(status_code=409, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
     except Exception as e:
@@ -1469,18 +1567,20 @@ async def generate_export(
 ):
     service = FinanceService(db)
     try:
-        csv_content, record_count = await service.generate_export(
+        csv_stream = await service.generate_export(
             str(current_user.organization_id),
             str(current_user.id),
             data.date_range_start,
             data.date_range_end,
             data.file_format,
         )
-        return PlainTextResponse(
-            content=csv_content,
+        return StreamingResponse(
+            content=csv_stream,
             media_type="text/csv",
             headers={"Content-Disposition": "attachment; filename=finance_export.csv"},
         )
+    except BudgetLimitExceededError as e:
+        raise HTTPException(status_code=409, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=400, detail=safe_error_detail(e))
     except Exception as e:

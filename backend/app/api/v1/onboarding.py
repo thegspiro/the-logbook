@@ -56,6 +56,50 @@ router = APIRouter(prefix="/onboarding", tags=["onboarding"])
 
 
 # ============================================
+# Rate limiting
+# ============================================
+#
+# Each onboarding route that used bare Depends(check_rate_limit) shared one
+# "auth" counter with every other bare use of check_rate_limit in the app
+# (see check_rate_limit's own docstring on why: without scope, unrelated
+# operations exhaust each other's budget). A department retrying /test/email
+# a few times while fixing an SMTP typo, or /reset after a validation error,
+# could lock its IP out of /system-owner or /reset for 30 minutes with no
+# other way to complete or restart bootstrap — a self-inflicted DoS on the
+# one path that provisions the whole instance. One wrapper per route, same
+# defaults as check_rate_limit, isolated scope — matches the pattern already
+# used for admin password resets (users.py's _rate_limit_admin_reset).
+
+
+async def _rate_limit_onboarding_start(request: Request) -> None:
+    await check_rate_limit(request, scope="onboarding_start")
+
+
+async def _rate_limit_onboarding_system_info(request: Request) -> None:
+    await check_rate_limit(request, scope="onboarding_system_info")
+
+
+async def _rate_limit_onboarding_security_check(request: Request) -> None:
+    await check_rate_limit(request, scope="onboarding_security_check")
+
+
+async def _rate_limit_onboarding_database_check(request: Request) -> None:
+    await check_rate_limit(request, scope="onboarding_database_check")
+
+
+async def _rate_limit_onboarding_system_owner(request: Request) -> None:
+    await check_rate_limit(request, scope="onboarding_system_owner")
+
+
+async def _rate_limit_onboarding_test_email(request: Request) -> None:
+    await check_rate_limit(request, scope="onboarding_test_email")
+
+
+async def _rate_limit_onboarding_reset(request: Request) -> None:
+    await check_rate_limit(request, scope="onboarding_reset")
+
+
+# ============================================
 # Request/Response Models
 # ============================================
 
@@ -271,11 +315,25 @@ class AuthConfigRequest(BaseModel):
     platform: str = Field(..., description="Platform: google, microsoft, authentik")
 
 
+class ITTeamMemberRequest(BaseModel):
+    """A single IT team member collected during onboarding"""
+
+    name: str = Field("", max_length=255)
+    email: str = Field("", max_length=255)
+    phone: str = Field("", max_length=20)
+    role: str = Field("", max_length=100)
+
+
 class ITTeamRequest(BaseModel):
     """Request model for saving IT team information"""
 
-    it_team: list[dict[str, Any]] = Field(
-        default_factory=list, description="IT team members"
+    it_team: list[ITTeamMemberRequest] = Field(
+        default_factory=list,
+        # Same rationale as StationsRequest/ApparatusListRequest: a cap so a
+        # malformed or hostile payload cannot drive an unbounded write loop
+        # (each entry does a password hash + DB round-trip at /complete).
+        max_length=50,
+        description="IT team members",
     )
     backup_access: dict[str, Any] = Field(..., description="Backup access information")
 
@@ -364,7 +422,12 @@ class RolesSetupRequest(BaseModel):
     """Request model for role setup during onboarding"""
 
     roles: list[RoleSetupItem] = Field(
-        ..., min_length=1, description="List of roles to create for the organization"
+        ...,
+        min_length=1,
+        # Same rationale as StationsRequest/ApparatusListRequest: bounds the
+        # per-request Role-row write loop.
+        max_length=200,
+        description="List of roles to create for the organization",
     )
 
 
@@ -384,6 +447,7 @@ class PositionsSetupRequest(BaseModel):
     positions: list[RoleSetupItem] = Field(
         ...,
         min_length=1,
+        max_length=200,
         description="List of positions to create for the organization",
     )
 
@@ -797,7 +861,7 @@ async def get_onboarding_status(db: AsyncSession = Depends(get_db)):
 @router.post(
     "/start",
     response_model=StartSessionResponse,
-    dependencies=[Depends(check_rate_limit)],
+    dependencies=[Depends(_rate_limit_onboarding_start)],
 )
 async def start_onboarding(
     request: Request, response: Response, db: AsyncSession = Depends(get_db)
@@ -853,7 +917,7 @@ async def start_onboarding(
 @router.get(
     "/system-info",
     response_model=SystemInfoResponse,
-    dependencies=[Depends(check_rate_limit)],
+    dependencies=[Depends(_rate_limit_onboarding_system_info)],
 )
 async def get_system_info(request: Request, db: AsyncSession = Depends(get_db)):
     """
@@ -870,7 +934,7 @@ async def get_system_info(request: Request, db: AsyncSession = Depends(get_db)):
 @router.get(
     "/security-check",
     response_model=SecurityCheckResponse,
-    dependencies=[Depends(check_rate_limit)],
+    dependencies=[Depends(_rate_limit_onboarding_security_check)],
 )
 async def verify_security(request: Request, db: AsyncSession = Depends(get_db)):
     """
@@ -902,7 +966,7 @@ async def verify_security(request: Request, db: AsyncSession = Depends(get_db)):
 @router.get(
     "/database-check",
     response_model=DatabaseCheckResponse,
-    dependencies=[Depends(check_rate_limit)],
+    dependencies=[Depends(_rate_limit_onboarding_database_check)],
 )
 async def verify_database(request: Request, db: AsyncSession = Depends(get_db)):
     """
@@ -1023,7 +1087,9 @@ async def create_organization(
         )
 
 
-@router.post("/system-owner", dependencies=[Depends(check_rate_limit)])
+@router.post(
+    "/system-owner", dependencies=[Depends(_rate_limit_onboarding_system_owner)]
+)
 async def create_system_owner(
     request: Request, user_data: SystemOwnerCreate, db: AsyncSession = Depends(get_db)
 ):
@@ -1264,7 +1330,7 @@ async def complete_onboarding(
 @router.post(
     "/test/email",
     response_model=EmailTestResponse,
-    dependencies=[Depends(check_rate_limit)],
+    dependencies=[Depends(_rate_limit_onboarding_test_email)],
 )
 async def verify_email_configuration(
     request: EmailTestRequest, raw_request: Request, db: AsyncSession = Depends(get_db)
@@ -1355,6 +1421,16 @@ async def save_department_info(
     # Validate session
     session = await validate_session(request, db)
 
+    # Reject once onboarding is complete — matches the sibling /session/*
+    # mutations (ONB-3/ONB-9); a still-valid session must not keep rewriting
+    # a completed org's onboarding-session data indefinitely.
+    if not await OnboardingService(db).needs_onboarding():
+        raise CodedHTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Onboarding has already been completed",
+            error_code=ErrorCode.ONBD_ALREADY_COMPLETED,
+        )
+
     # Validate and sanitize logo before storing
     validated_logo = validate_logo_image(data.logo)
 
@@ -1390,6 +1466,16 @@ async def save_email_config(
 
     # Validate session
     session = await validate_session(request, db)
+
+    # Reject once onboarding is complete — matches the sibling /session/*
+    # mutations (ONB-3/ONB-9); a still-valid session must not keep rewriting
+    # a completed org's onboarding-session data indefinitely.
+    if not await OnboardingService(db).needs_onboarding():
+        raise CodedHTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Onboarding has already been completed",
+            error_code=ErrorCode.ONBD_ALREADY_COMPLETED,
+        )
 
     # Validate platform
     # Keep this list aligned with EmailConfigRequest and the choices rendered
@@ -1437,6 +1523,16 @@ async def save_file_storage_config(
     # Validate session
     session = await validate_session(request, db)
 
+    # Reject once onboarding is complete — matches the sibling /session/*
+    # mutations (ONB-3/ONB-9); a still-valid session must not keep rewriting
+    # a completed org's onboarding-session data indefinitely.
+    if not await OnboardingService(db).needs_onboarding():
+        raise CodedHTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Onboarding has already been completed",
+            error_code=ErrorCode.ONBD_ALREADY_COMPLETED,
+        )
+
     # Validate platform
     valid_platforms = ["googledrive", "onedrive", "s3", "local", "other"]
     if data.platform not in valid_platforms:
@@ -1477,6 +1573,16 @@ async def save_auth_config(
     # Validate session
     session = await validate_session(request, db)
 
+    # Reject once onboarding is complete — matches the sibling /session/*
+    # mutations (ONB-3/ONB-9); a still-valid session must not keep rewriting
+    # a completed org's onboarding-session data indefinitely.
+    if not await OnboardingService(db).needs_onboarding():
+        raise CodedHTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Onboarding has already been completed",
+            error_code=ErrorCode.ONBD_ALREADY_COMPLETED,
+        )
+
     # Validate platform
     valid_platforms = ["google", "microsoft", "authentik", "local"]
     if data.platform not in valid_platforms:
@@ -1509,10 +1615,21 @@ async def save_it_team(
     # Validate session
     session = await validate_session(request, db)
 
-    # Update session data with IT team info
+    # Reject once onboarding is complete — matches the sibling /session/*
+    # mutations (ONB-3/ONB-9); a still-valid session must not keep rewriting
+    # a completed org's onboarding-session data indefinitely.
+    if not await OnboardingService(db).needs_onboarding():
+        raise CodedHTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Onboarding has already been completed",
+            error_code=ErrorCode.ONBD_ALREADY_COMPLETED,
+        )
+
+    # Update session data with IT team info. session.data is a JSON column —
+    # store plain dicts, not the pydantic models themselves.
     session.data = session.data or {}
     session.data["it_team"] = {
-        "members": data.it_team,
+        "members": [m.model_dump() for m in data.it_team],
         "backup_access": data.backup_access,
         "saved_at": datetime.now(timezone.utc).isoformat(),
     }
@@ -1667,6 +1784,16 @@ async def save_session_modules(
     """
     # Validate session
     session = await validate_session(request, db)
+
+    # Reject once onboarding is complete — matches the sibling /session/*
+    # mutations (ONB-3/ONB-9); a still-valid session must not keep rewriting
+    # a completed org's onboarding-session data indefinitely.
+    if not await OnboardingService(db).needs_onboarding():
+        raise CodedHTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Onboarding has already been completed",
+            error_code=ErrorCode.ONBD_ALREADY_COMPLETED,
+        )
 
     # One accepted set, shared with the wizard's own module step. This used
     # to be a second hardcoded list, and it did not list the Department
@@ -2111,7 +2238,7 @@ async def get_session_data(request: Request, db: AsyncSession = Depends(get_db))
     }
 
 
-@router.post("/reset", dependencies=[Depends(check_rate_limit)])
+@router.post("/reset", dependencies=[Depends(_rate_limit_onboarding_reset)])
 async def reset_onboarding(
     request: Request,
     db: AsyncSession = Depends(get_db),

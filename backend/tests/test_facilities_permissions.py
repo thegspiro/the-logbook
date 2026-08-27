@@ -7,10 +7,7 @@ introspection, so it runs in the sandbox):
 1. Every route is permission-gated (no bare-auth or open endpoints).
 2. Sensitive resource families — access keys/codes, utility accounts and
    readings, capital projects, insurance policies, occupants — are NOT
-   readable with the baseline ``facilities.view`` grant. The default
-   "member" position holds ``facilities.view``, so exposing these reads to
-   it would hand every member door/alarm codes, account numbers, budgets,
-   and lease terms.
+   readable with the lower-privilege ``facilities.view`` grant.
 3. ``facilities.view_sensitive`` is a READ-ONLY grant: sensitive GETs accept
    it (so explicitly authorized roles can read this data), but no mutation on
    the router does.
@@ -67,6 +64,40 @@ def test_every_facilities_route_is_permission_gated():
         if not _permission_sets(route)
     ]
     assert not ungated, f"Routes without a permission check: {ungated}"
+
+
+def test_delete_permission_is_granular_across_every_destructive_route():
+    """DELETE and facility archive accept the dedicated grant; no other
+    mutation may accidentally inherit destructive authority."""
+    destructive = []
+    unexpected = []
+    for route in _api_routes():
+        accepts_delete = any(
+            "facilities.delete" in permissions
+            for permissions in _permission_sets(route)
+        )
+        is_destructive = route.methods == {"DELETE"} or (
+            route.methods == {"POST"} and route.path == "/{facility_id}/archive"
+        )
+        if is_destructive:
+            destructive.append(f"{sorted(route.methods)} {route.path}")
+            assert (
+                accepts_delete
+            ), f"Destructive route missing facilities.delete: {route.path}"
+            assert any(
+                {"facilities.delete", "facilities.manage"} <= permissions
+                for permissions in _permission_sets(route)
+            ), f"Destructive route must retain manager access: {route.path}"
+        elif accepts_delete:
+            unexpected.append(f"{sorted(route.methods)} {route.path}")
+
+    assert (
+        len(destructive) == 20
+    ), f"Expected all 19 DELETE routes plus archive, found {destructive}"
+    assert not unexpected, (
+        "facilities.delete must grant destructive operations only, found on: "
+        f"{unexpected}"
+    )
 
 
 def test_sensitive_families_are_not_readable_with_facilities_view():
@@ -139,9 +170,9 @@ def test_default_positions_grant_sensitive_read_only_to_org_wide_roles():
     ):
         assert "facilities.manage" in perms(slug), slug
 
-    # The baseline member stays operational-only.
+    # The baseline member cannot enter the facilities workspace at all.
     member = perms("member")
-    assert "facilities.view" in member
+    assert "facilities.view" not in member
     assert not member & {
         "facilities.view_sensitive",
         "facilities.edit",

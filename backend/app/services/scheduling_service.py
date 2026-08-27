@@ -6129,8 +6129,13 @@ class SchedulingService:
 
                 if req.requirement_type == RequirementType.SHIFTS.value:
                     completed_value = att["shift_count"]
+                    compliance_value = completed_value
                 else:
                     completed_value = att["total_hours"]
+                    # Keep the quarter-hour figure for presentation, but grade
+                    # against the attendance actually stored.  Rounding here
+                    # can otherwise erase a shortfall of nearly 7.5 minutes.
+                    compliance_value = float(att["total_minutes"]) / 60.0
 
                 # Adjust required value for rolling-period requirements
                 # by excluding months the member was on leave.
@@ -6150,7 +6155,7 @@ class SchedulingService:
                     ),
                     1,
                 )
-                is_compliant = completed_value >= member_required
+                is_compliant = compliance_value >= member_required
 
                 if is_compliant:
                     compliant_count += 1

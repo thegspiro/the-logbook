@@ -22,6 +22,7 @@ import { NFC_ID_CARDS_INTEGRATION } from '../../modules/membership/constants/idC
 import { OPEN_MOBILE_NAV_EVENT } from './BottomNavigation';
 import { canOpenAdministrationSection } from './adminNavigation';
 import { LEGAL_DOCUMENTS_PERMISSIONS } from '../../modules/governance';
+import { FACILITY_ENTRY_PERMISSIONS } from '../../modules/facilities/routes';
 import { useNotificationCountStore } from '../../hooks/useNotificationCount';
 import { useOnlineStatus } from '../../hooks/useOnlineStatus';
 import { usePendingSyncStore } from '../../stores/pendingSyncStore';
@@ -184,7 +185,9 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
         ...(isModuleOn('apparatus')
           ? [{ label: 'Apparatus', path: '/apparatus' }]
           : [{ label: 'Apparatus', path: '/apparatus-basic' }]),
-        ...(isModuleOn('facilities') ? [{ label: 'Facilities', path: '/facilities' }] : []),
+        ...(isModuleOn('facilities')
+          ? [{ label: 'Facilities', path: '/facilities', anyPermission: [...FACILITY_ENTRY_PERMISSIONS] }]
+          : []),
       ],
     },
     ...(isModuleOn('facilities') ? [] : [{ label: 'Locations', path: '/locations' } as NavItem]),
@@ -324,6 +327,10 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
   };
 
   const notificationsActive = isActive('/notifications');
+  // The bell links to a route the module gate now refuses, and the count
+  // beside it comes from an endpoint that answers 403 — so with Notifications
+  // off it is an entry to a refusal that can never show a number.
+  const showNotifications = isModuleOn('notifications');
   const accountActive = isActive('/account');
   const activeDestination = navItems
     .flatMap((item) => (item.subItems?.length ? item.subItems : [item]))
@@ -508,25 +515,27 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
                       <span>{pendingSyncCount > 0 ? `Offline · ${pendingSyncCount} pending` : 'Offline'}</span>
                     </span>
                   ))}
-                <a
-                  href="/notifications?tab=inbox"
-                  onClick={(e) => handleNavigation('/notifications?tab=inbox', e)}
-                  className={`focus:ring-theme-focus-ring relative rounded-md p-2 transition-colors focus:ring-2 focus:outline-hidden ${
-                    notificationsActive
-                      ? 'text-theme-text-primary'
-                      : 'text-theme-text-secondary hover:bg-theme-surface-hover'
-                  }`}
-                  title="Notifications"
-                  aria-label={notifUnreadCount > 0 ? `Notifications (${notifUnreadCount} unread)` : 'Notifications'}
-                  aria-current={notificationsActive ? 'page' : undefined}
-                >
-                  <Bell className="h-4 w-4" aria-hidden="true" />
-                  {notifUnreadCount > 0 && (
-                    <span className="absolute -top-0.5 -right-0.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">
-                      {notifUnreadCount > 99 ? '99+' : notifUnreadCount}
-                    </span>
-                  )}
-                </a>
+                {showNotifications && (
+                  <a
+                    href="/notifications?tab=inbox"
+                    onClick={(e) => handleNavigation('/notifications?tab=inbox', e)}
+                    className={`focus:ring-theme-focus-ring relative rounded-md p-2 transition-colors focus:ring-2 focus:outline-hidden ${
+                      notificationsActive
+                        ? 'text-theme-text-primary'
+                        : 'text-theme-text-secondary hover:bg-theme-surface-hover'
+                    }`}
+                    title="Notifications"
+                    aria-label={notifUnreadCount > 0 ? `Notifications (${notifUnreadCount} unread)` : 'Notifications'}
+                    aria-current={notificationsActive ? 'page' : undefined}
+                  >
+                    <Bell className="h-4 w-4" aria-hidden="true" />
+                    {notifUnreadCount > 0 && (
+                      <span className="absolute -top-0.5 -right-0.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">
+                        {notifUnreadCount > 99 ? '99+' : notifUnreadCount}
+                      </span>
+                    )}
+                  </a>
+                )}
                 <a
                   href="/account"
                   onClick={(e) => handleNavigation('/account', e)}
@@ -712,22 +721,24 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
                       <span>{pendingSyncCount} pending sync — tap to retry</span>
                     </button>
                   )}
-                  <a
-                    href="/notifications?tab=inbox"
-                    onClick={(e) => handleNavigation('/notifications?tab=inbox', e)}
-                    aria-current={notificationsActive ? 'page' : undefined}
-                    className={`hover:bg-theme-surface-hover focus:ring-theme-focus-ring flex items-center space-x-2 rounded-md px-3 py-2 text-sm font-medium transition-colors focus:ring-2 focus:outline-hidden ${
-                      notificationsActive ? 'text-theme-text-primary font-bold' : 'text-theme-text-secondary'
-                    }`}
-                  >
-                    <Bell className="h-4 w-4" aria-hidden="true" />
-                    <span>Notifications</span>
-                    {notifUnreadCount > 0 && (
-                      <span className="flex h-4 min-w-[16px] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">
-                        {notifUnreadCount > 99 ? '99+' : notifUnreadCount}
-                      </span>
-                    )}
-                  </a>
+                  {showNotifications && (
+                    <a
+                      href="/notifications?tab=inbox"
+                      onClick={(e) => handleNavigation('/notifications?tab=inbox', e)}
+                      aria-current={notificationsActive ? 'page' : undefined}
+                      className={`hover:bg-theme-surface-hover focus:ring-theme-focus-ring flex items-center space-x-2 rounded-md px-3 py-2 text-sm font-medium transition-colors focus:ring-2 focus:outline-hidden ${
+                        notificationsActive ? 'text-theme-text-primary font-bold' : 'text-theme-text-secondary'
+                      }`}
+                    >
+                      <Bell className="h-4 w-4" aria-hidden="true" />
+                      <span>Notifications</span>
+                      {notifUnreadCount > 0 && (
+                        <span className="flex h-4 min-w-[16px] items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">
+                          {notifUnreadCount > 99 ? '99+' : notifUnreadCount}
+                        </span>
+                      )}
+                    </a>
+                  )}
                   <a
                     href="/account"
                     onClick={(e) => handleNavigation('/account', e)}

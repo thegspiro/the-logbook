@@ -471,10 +471,6 @@ class IPSecurityService:
         return list(result.scalars().all())
 
     # ============================================
-    # Query: Get Active Allowed IPs for User
-    # ============================================
-
-    # ============================================
     # Query: Get Active Allowed IPs for Organization
     # ============================================
 
@@ -622,10 +618,6 @@ class IPSecurityService:
         return list(result.scalars().all())
 
     # ============================================
-    # Blocked Access Logging
-    # ============================================
-
-    # ============================================
     # Country Block Rules
     # ============================================
 
@@ -647,17 +639,40 @@ class IPSecurityService:
         country_name: Optional[str] = None,
         risk_level: str = "high",
     ) -> CountryBlockRule:
-        """Add a country to the blocked list."""
-        rule = CountryBlockRule(
-            country_code=country_code.upper(),
-            country_name=country_name,
-            is_blocked=True,
-            reason=reason,
-            risk_level=risk_level,
-            created_by=admin_id,
-        )
+        """Add a country to the blocked list.
 
-        db.add(rule)
+        ``country_code`` is unique, and unblocking a country is a soft delete
+        (``remove_blocked_country`` sets ``is_blocked = False`` and never
+        deletes the row) — so a country that was blocked, then unblocked,
+        already has a row. Update it in place rather than always inserting,
+        or a re-block hits the unique constraint and 500s instead of
+        succeeding.
+        """
+        country_code = country_code.upper()
+        existing = await db.execute(
+            select(CountryBlockRule).where(
+                CountryBlockRule.country_code == country_code
+            )
+        )
+        rule = existing.scalar_one_or_none()
+        if rule is not None:
+            rule.is_blocked = True
+            rule.reason = reason
+            rule.risk_level = risk_level
+            rule.updated_by = admin_id
+            if country_name is not None:
+                rule.country_name = country_name
+        else:
+            rule = CountryBlockRule(
+                country_code=country_code,
+                country_name=country_name,
+                is_blocked=True,
+                reason=reason,
+                risk_level=risk_level,
+                created_by=admin_id,
+            )
+            db.add(rule)
+
         await db.commit()
         await db.refresh(rule)
 

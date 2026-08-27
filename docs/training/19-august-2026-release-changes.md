@@ -1359,10 +1359,26 @@ own crew. A label can carry a QR code.
 **Status is per printer.** One printer failing to answer no longer suppresses
 the answers from the others.
 
-> **[SCREENSHOT NEEDED — Settings → Label Printers.** _Demo data:_ two registered
-> printers, one ZPL and one ESC/POS, one marked default, with a status result
-> visible on at least one so the reader sees what a healthy answer looks like.
-> Use RFC 5737 documentation addresses (`192.0.2.x`), never a real one.**]**
+> **Before Check status can reach anything, an operator has to allow it.** The
+> backend will only open a print socket to an address inside
+> `LABEL_PRINTER_ALLOWED_NETWORKS`, and **that setting is empty by default**,
+> which disables direct network printing outright. It is a platform setting in
+> the server's environment, not something a department administrator can change
+> from this screen — deliberately, so that registering a printer cannot be
+> turned into a way of making the server connect to arbitrary hosts. An address
+> outside it is refused before any connection is attempted, with
+> _"…does not resolve to an operator-approved label-printer network"_. If every
+> printer you register reports that, the allowlist is what to fix, and it is a
+> conversation with whoever runs the server.
+>
+> A printer that _is_ allowed and answers reports in green, on one line: its
+> model, resolution and firmware, e.g. **"ZD421 · 203 dpi · V93.21.01Z"** —
+> with any warnings it raised appended after a dash. The screenshot below
+> cannot show that line: the addresses in it are RFC 5737 documentation
+> addresses, which no allowlist will ever contain, and the alternative was
+> publishing a routable printer address.
+
+![Settings → Label Printers with two registrations: a ZPL watch-desk printer marked default and an ESC/POS printer in the supply room, each on a documentation address](./images/19-33-label-printers.png)
 
 ## Every administration page opens the same way
 

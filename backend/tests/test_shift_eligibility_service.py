@@ -175,10 +175,9 @@ class TestGetEligiblePositions:
         out = await ShiftEligibilityService(db).get_eligible_positions(_user(), "org-1")
         assert out == ["driver", "ems", "officer"]
 
-    async def test_held_position_confers_eligibility_without_a_rank(self):
-        # The reported defect: a department that models EMT as a *position*
-        # (onboarding's role setup creates one with slug "emt") and leaves
-        # User.rank unset had every one of its EMTs refused self-signup.
+    async def test_held_rbac_position_does_not_confer_operational_eligibility(self):
+        # A role manager can assign an RBAC position, so its slug cannot be
+        # trusted as evidence that the member holds the matching qualification.
         org = _org()
         db = _db(
             [
@@ -192,19 +191,18 @@ class TestGetEligiblePositions:
         out = await ShiftEligibilityService(db).get_eligible_positions(
             _user(rank=None), "org-1"
         )
-        assert out == ["ems", "firefighter"]
+        assert out == []
 
-    async def test_held_position_falls_back_to_seed_defaults(self):
-        # An org onboarded before "emt" joined DEFAULT_RANKS has no row for it
-        # — seed_defaults only fires on an empty table — so the built-in
-        # default answers rather than leaving the member with nothing.
+    async def test_held_position_cannot_use_seed_rank_defaults(self):
+        # Rank defaults must not turn an identically named, assignable RBAC
+        # position into an operational qualification.
         db = _db(
             [_one(_org()), _rank_rows([]), _held_rows(["emt"]), _qual_rows(), _rows([])]
         )
         out = await ShiftEligibilityService(db).get_eligible_positions(
             _user(rank=None), "org-1"
         )
-        assert out == ["ems", "firefighter"]
+        assert out == []
 
     async def test_configured_rank_row_overrides_the_default(self):
         # An admin who narrows a rank gets what they configured, not the seed.
@@ -218,7 +216,7 @@ class TestGetEligiblePositions:
             ]
         )
         out = await ShiftEligibilityService(db).get_eligible_positions(
-            _user(rank=None), "org-1"
+            _user(rank="emt"), "org-1"
         )
         assert out == ["ems"]
 
@@ -601,9 +599,8 @@ class TestPositionRoster:
         out = await ShiftEligibilityService(db).get_position_roster("org-1", "driver")
         assert out["members"] == []
 
-    async def test_held_position_source_listed(self):
-        # Mirrors the signup gate: the roster must show the EMT-by-position
-        # member it now lets sign up, or the two disagree.
+    async def test_held_position_is_not_an_eligibility_source(self):
+        # The roster mirrors signup: an RBAC position is not a credential.
         db = self._db_for(
             users=[_member("u1", rank="")],
             ranks=[("emt", "EMT", ["ems", "firefighter"])],
@@ -612,7 +609,7 @@ class TestPositionRoster:
             held=[("u1", "emt", "EMT"), ("u1", "member", "Member")],
         )
         out = await ShiftEligibilityService(db).get_position_roster("org-1", "ems")
-        assert out["members"][0]["sources"] == [{"type": "position", "label": "EMT"}]
+        assert out["members"] == []
 
     async def test_rank_mirroring_position_is_not_reported_twice(self):
         # Onboarding gives every member the system position mirroring their
@@ -648,7 +645,6 @@ class TestPositionRoster:
 
         assert out["members"][0]["sources"] == [
             {"type": "rank", "label": "Lieutenant"},
-            {"type": "position", "label": "Engineer"},
         ]
 
     async def test_rank_and_personal_qualifications_both_report(self):
@@ -686,13 +682,11 @@ class TestPositionRoster:
         ems = await roster_for("ems")
         assert ems["members"][0]["sources"] == [
             {"type": "rank", "label": "Lieutenant"},
-            {"type": "position", "label": "EMT"},
         ]
 
         fire = await roster_for("firefighter")
         assert fire["members"][0]["sources"] == [
             {"type": "rank", "label": "Lieutenant"},
-            {"type": "position", "label": "Firefighter"},
         ]
 
     async def test_duplicate_held_position_rows_report_once(self):
@@ -705,7 +699,7 @@ class TestPositionRoster:
         )
         out = await ShiftEligibilityService(db).get_position_roster("org-1", "ems")
 
-        assert out["members"][0]["sources"] == [{"type": "position", "label": "EMT"}]
+        assert out["members"] == []
 
     async def test_a_qualification_carries_the_date_it_lapses(self):
         """Resolving as of today is not enough on its own.
@@ -951,7 +945,7 @@ class TestAmbulanceEmtSeatIsFillable:
             ]
         )
         eligible = await ShiftEligibilityService(db).get_eligible_positions(
-            _user(rank=None), "org-1", "s1"
+            _user(rank="emt"), "org-1", "s1"
         )
         assert "ems" in eligible
 
