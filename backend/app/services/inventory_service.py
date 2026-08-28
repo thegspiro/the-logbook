@@ -79,8 +79,21 @@ from app.utils.sql_search import LIKE_ESCAPE_CHAR, like_pattern
 
 # Valid status→condition combinations.  If a status is listed here,
 # only the listed conditions are allowed.
+#
+# AVAILABLE excludes POOR/DAMAGED/OUT_OF_SERVICE so an item cannot become
+# distributable while unsafe -- assign/checkout/issue all gate on
+# status == AVAILABLE, so this one entry closes that path everywhere.
+# Mirrors the unsafe-condition check review_return_request already applies
+# when receiving a physical return (it sets IN_MAINTENANCE rather than
+# AVAILABLE for the same three conditions, via a direct attribute set that
+# does not go through this validator).
 _VALID_STATE_COMBOS: dict[ItemStatus, set[ItemCondition] | None] = {
     ItemStatus.RETIRED: {ItemCondition.RETIRED},
+    ItemStatus.AVAILABLE: {
+        ItemCondition.EXCELLENT,
+        ItemCondition.GOOD,
+        ItemCondition.FAIR,
+    },
 }
 
 # Conditions that are forced when entering a status
@@ -3748,6 +3761,7 @@ class InventoryService:
                     "reason": transfer_reason,
                     "immediate": immediate,
                 },
+                user_id=str(performed_by),
                 organization_id=str(organization_id),
             )
             await self.db.commit()
@@ -5243,10 +5257,15 @@ class InventoryService:
         for serialized gear, a matching barcode/asset/serial identifier.  The hold,
         inventory state, inspection result, and follow-up are committed together.
         """
+        # Lock the request row itself: without this, a denial and a physical
+        # receipt racing on the same REQUESTED request can both pass this
+        # status check before either commits, so one review silently
+        # overwrites the other's outcome (Pitfall #27).
         result = await self.db.execute(
             select(ReturnRequest)
             .where(ReturnRequest.id == str(request_id))
             .where(ReturnRequest.organization_id == str(organization_id))
+            .with_for_update()
         )
         req = result.scalar_one_or_none()
         if not req:
@@ -6230,6 +6249,12 @@ class InventoryService:
                 None,
                 f"Quantity exceeds the outstanding quantity ({outstanding}); confirm over-receipt",
             )
+        # Lock the item row before crediting on-hand stock: without this,
+        # a concurrent issuance's read-modify-write of the same `quantity`
+        # column can be silently overwritten by this one (Pitfall #27).
+        item = await self._get_item_locked(UUID(str(row.item_id)), organization_id)
+        if not item:
+            return None, "Linked inventory item not found"
         lot = InventoryLot(
             organization_id=str(organization_id),
             inventory_item_id=row.item_id,
@@ -6254,6 +6279,7 @@ class InventoryService:
             received_by=current_user_id,
         )
         self.db.add(receipt)
+        item.quantity = (item.quantity or 0) + data["quantity"]
         row.quantity_received += data["quantity"]
         row.actual_unit_cost = data["unit_cost"]
         row.status = (

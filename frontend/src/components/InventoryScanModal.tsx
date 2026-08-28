@@ -107,7 +107,6 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
   const [transferResult, setTransferResult] = useState<ResultItem | null>(null);
   const [transferCondition, setTransferCondition] = useState('good');
   const [transferReason, setTransferReason] = useState('');
-  const [transferImmediate, setTransferImmediate] = useState(true);
   const [holderConfirmed, setHolderConfirmed] = useState(false);
   const canTransfer = useAuthStore((state) => state.checkPermission)('inventory.manage');
   const [searchResults, setSearchResults] = useState<ScanLookupResult[]>([]);
@@ -637,20 +636,35 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
     setSubmitting(true);
     try {
       await inventoryService.transferItem({
-        item_id: transferResult.item_id, new_holder_id: userId,
-        current_holder_id: conflict.holder_id, current_record_id: conflict.record_id,
-        holding_type: conflict.holding_type, return_condition: transferCondition,
-        transfer_reason: transferReason.trim(), immediate: transferImmediate,
+        item_id: transferResult.item_id,
+        new_holder_id: userId,
+        current_holder_id: conflict.holder_id,
+        current_record_id: conflict.record_id,
+        holding_type: conflict.holding_type,
+        return_condition: transferCondition,
+        // The backend always performs the transfer immediately regardless of
+        // this flag (it is recorded only for audit context) -- there is no
+        // deferred-transfer workflow, so the UI no longer offers a choice
+        // that has no effect.
+        transfer_reason: transferReason.trim(),
+        immediate: true,
       });
-      setResults((current) => current?.map((item) => {
-        if (item !== transferResult) return item;
-        const { error: _error, conflict: _conflict, ...completed } = item;
-        return { ...completed, success: true, action: 'transferred' };
-      }) ?? null);
+      setResults(
+        (current) =>
+          current?.map((item) => {
+            if (item !== transferResult) return item;
+            const { error: _error, conflict: _conflict, ...completed } = item;
+            return { ...completed, success: true, action: 'transferred' };
+          }) ?? null
+      );
       setTransferResult(null);
     } catch {
-      setLookupError('Transfer failed because custody changed or the operation could not be completed. Rescan the item.');
-    } finally { setSubmitting(false); }
+      setLookupError(
+        'Transfer failed because custody changed or the operation could not be completed. Rescan the item.'
+      );
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   // ── Render ───────────────────────────────────────────────────
@@ -768,11 +782,20 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
                           {r.success ? r.action.replace(/_/g, ' ') : r.error}
                         </p>
                         {r.conflict && (
-                          <div role="alert" className="mt-2 rounded-md border-2 border-red-500 bg-red-100 p-3 text-sm text-red-950 dark:bg-red-950 dark:text-red-100">
+                          <div
+                            role="alert"
+                            className="mt-2 rounded-md border-2 border-red-500 bg-red-100 p-3 text-sm text-red-950 dark:bg-red-950 dark:text-red-100"
+                          >
                             <p className="font-bold">Already held — standard assignment was blocked</p>
-                            <p>Current holder: <strong>{r.conflict.holder_name}</strong></p>
-                            <p>{r.conflict.holding_type} since {formatDateTime(r.conflict.held_since, tz)}</p>
-                            {r.conflict.expected_return_date && <p>Expected return: {formatDateTime(r.conflict.expected_return_date, tz)}</p>}
+                            <p>
+                              Current holder: <strong>{r.conflict.holder_name}</strong>
+                            </p>
+                            <p>
+                              {r.conflict.holding_type} since {formatDateTime(r.conflict.held_since, tz)}
+                            </p>
+                            {r.conflict.expected_return_date && (
+                              <p>Expected return: {formatDateTime(r.conflict.expected_return_date, tz)}</p>
+                            )}
                             {canTransfer && (
                               <button type="button" className="btn-secondary mt-2" onClick={() => setTransferResult(r)}>
                                 Transfer item
@@ -1105,12 +1128,49 @@ export const InventoryScanModal: React.FC<InventoryScanModalProps> = ({
           <div className="absolute inset-0 z-20 flex items-center justify-center rounded-lg bg-black/50">
             <DialogPanel onClose={() => setTransferResult(null)} className="mx-4 max-w-md space-y-3 p-5">
               <h4 className="text-theme-text-primary font-bold">Confirm custody transfer</h4>
-              <label className="flex gap-2 text-sm"><input type="checkbox" checked={holderConfirmed} onChange={(e) => setHolderConfirmed(e.target.checked)} />
-                I confirm the current holder is {transferResult.conflict.holder_name}</label>
-              <label className="block text-sm">Return condition<select className="form-input mt-1 w-full" value={transferCondition} onChange={(e) => setTransferCondition(e.target.value)}>{RETURN_CONDITION_OPTIONS.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}</select></label>
-              <label className="block text-sm">Transfer reason<textarea className="form-input mt-1 w-full" required value={transferReason} onChange={(e) => setTransferReason(e.target.value)} /></label>
-              <label className="flex gap-2 text-sm"><input type="checkbox" checked={transferImmediate} onChange={(e) => setTransferImmediate(e.target.checked)} /> Transfer is immediate</label>
-              <div className="flex justify-end gap-2"><button className="btn-secondary" onClick={() => setTransferResult(null)}>Cancel</button><button className="btn-primary" disabled={!holderConfirmed || !transferReason.trim() || submitting} onClick={() => void handleTransfer()}>Confirm transfer</button></div>
+              <label className="flex gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={holderConfirmed}
+                  onChange={(e) => setHolderConfirmed(e.target.checked)}
+                />
+                I confirm the current holder is {transferResult.conflict.holder_name}
+              </label>
+              <label className="block text-sm">
+                Return condition
+                <select
+                  className="form-input mt-1 w-full"
+                  value={transferCondition}
+                  onChange={(e) => setTransferCondition(e.target.value)}
+                >
+                  {RETURN_CONDITION_OPTIONS.map((c) => (
+                    <option key={c.value} value={c.value}>
+                      {c.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="block text-sm">
+                Transfer reason
+                <textarea
+                  className="form-input mt-1 w-full"
+                  required
+                  value={transferReason}
+                  onChange={(e) => setTransferReason(e.target.value)}
+                />
+              </label>
+              <div className="flex justify-end gap-2">
+                <button className="btn-secondary" onClick={() => setTransferResult(null)}>
+                  Cancel
+                </button>
+                <button
+                  className="btn-primary"
+                  disabled={!holderConfirmed || !transferReason.trim() || submitting}
+                  onClick={() => void handleTransfer()}
+                >
+                  Confirm transfer
+                </button>
+              </div>
             </DialogPanel>
           </div>
         )}

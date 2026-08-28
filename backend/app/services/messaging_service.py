@@ -218,6 +218,7 @@ class MessagingService:
                 return None, "Message not found"
 
             now = datetime.now(timezone.utc)
+            was_pending = _as_utc(message.scheduled_at) is not None
             if "scheduled_at" in updates:
                 updates["scheduled_at"] = _as_utc(updates["scheduled_at"])
             if "expires_at" in updates:
@@ -308,6 +309,17 @@ class MessagingService:
                     elif key == "target_type":
                         value = MessageTargetType(value)
                     setattr(message, key, value)
+
+            audience_changed = bool(audience_fields.intersection(updates))
+            published_by_update = was_pending and message.scheduled_at is None
+            if published_by_update:
+                await self.materialize_recipients(message)
+            elif audience_changed and message.scheduled_at is None:
+                await self.reconcile_recipients(message)
+
+            # The endpoint uses this transient flag to enqueue the same channel
+            # fan-out as a scheduler publication without persisting extra state.
+            message._published_by_update = published_by_update
 
             await self.db.commit()
             await self.db.refresh(message)
@@ -578,6 +590,31 @@ class MessagingService:
             )
         return len(users)
 
+    async def reconcile_recipients(self, message: DepartmentMessage) -> int:
+        """Rebuild a live audience while retaining resolution for members kept."""
+        users = await self._targeted_users(message, str(message.organization_id))
+        targeted = {str(user.id) for user in users}
+        result = await self.db.execute(
+            select(DepartmentMessageRecipient).where(
+                DepartmentMessageRecipient.message_id == message.id,
+                DepartmentMessageRecipient.organization_id
+                == str(message.organization_id),
+            )
+        )
+        existing = {str(row.user_id): row for row in result.scalars().all()}
+        for user_id in targeted - existing.keys():
+            self.db.add(
+                DepartmentMessageRecipient(
+                    id=generate_uuid(),
+                    message_id=message.id,
+                    user_id=user_id,
+                    organization_id=str(message.organization_id),
+                )
+            )
+        for user_id in existing.keys() - targeted:
+            await self.db.delete(existing[user_id])
+        return len(targeted)
+
     @staticmethod
     def _user_targeting_context(user) -> Tuple[List[str], List[str], str]:
         """Extract the (role_ids, role_names, status) a user is matched on."""
@@ -751,30 +788,29 @@ class MessagingService:
             if not message.requires_acknowledgment:
                 return False, "Message does not require acknowledgment", False
 
-            existing = await self.db.execute(
-                select(DepartmentMessageRecipient).where(
+            now = datetime.now(timezone.utc)
+            claimed = await self.db.execute(
+                update(DepartmentMessageRecipient)
+                .where(
                     DepartmentMessageRecipient.message_id == message_id,
                     DepartmentMessageRecipient.user_id == user_id,
                     DepartmentMessageRecipient.organization_id == organization_id,
+                    DepartmentMessageRecipient.acknowledged_at.is_(None),
+                )
+                .values(
+                    read_at=func.coalesce(DepartmentMessageRecipient.read_at, now),
+                    acknowledged_at=now,
                 )
             )
-            record = existing.scalar_one_or_none()
-
-            if not record:
-                return False, "Message not found", False
-            already_acknowledged = record.acknowledged_at is not None
-            if not already_acknowledged:
-                now = datetime.now(timezone.utc)
-                record.read_at = record.read_at or now
-                record.acknowledged_at = now
+            newly_acknowledged = bool(claimed.rowcount)
             notification_changed = await self._mark_message_notification_read(
                 message_id, user_id, organization_id
             )
-            if already_acknowledged and not notification_changed:
+            if not newly_acknowledged and not notification_changed:
                 return True, None, False
             await self.db.commit()
 
-            return True, None, not already_acknowledged
+            return True, None, newly_acknowledged
         except Exception as e:
             await self.db.rollback()
             return False, safe_error_detail(e), False

@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**260 tables · 4432 columns · 839 foreign keys**
+**261 tables · 4438 columns · 842 foreign keys**
 
 ---
 
@@ -422,6 +422,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 |---|---|---|---|
 | [`department_message_deliveries`](#department_message_deliveries) | `DepartmentMessageDelivery` | 9 | Durable, per-recipient claim and result for an external delivery. |
 | [`department_message_reads`](#department_message_reads) | `DepartmentMessageRead` | 5 | Tracks which users have read/acknowledged a department message. |
+| [`department_message_recipients`](#department_message_recipients) | `DepartmentMessageRecipient` | 6 | Durable, queryable delivery and resolution state for one recipient. |
 | [`department_messages`](#department_messages) | `DepartmentMessage` | 19 | Department Message model |
 | [`notification_logs`](#notification_logs) | `NotificationLog` | 20 | Notification Log model |
 | [`notification_rules`](#notification_rules) | `NotificationRule` | 12 | Notification Rule model |
@@ -6153,6 +6154,31 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 - UNIQUE `uq_dept_msg_read_user` (`message_id`, `user_id`)
 
+### `department_message_recipients`
+
+**DepartmentMessageRecipient** · `app/models/notification.py`
+
+> Durable, queryable delivery and resolution state for one recipient.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `message_id` | VARCHAR(36) | no | FK |  | → `department_messages.id` ON DELETE CASCADE |
+| `user_id` | VARCHAR(36) | no | FK |  | → `users.id` ON DELETE CASCADE |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `read_at` | DATETIME | yes |  |  |  |
+| `acknowledged_at` | DATETIME | yes |  |  |  |
+
+**Indexes**
+
+- `idx_dept_msg_recipient_org_user_message` (`organization_id`, `user_id`, `message_id`)
+- `idx_dept_msg_recipient_unacknowledged` (`organization_id`, `user_id`, `acknowledged_at`)
+- `idx_dept_msg_recipient_unread` (`organization_id`, `user_id`, `read_at`)
+
+**Constraints**
+
+- UNIQUE `uq_dept_msg_recipient_user` (`message_id`, `user_id`)
+
 ### `department_messages`
 
 **DepartmentMessage** · `app/models/notification.py`
@@ -9203,7 +9229,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 Every foreign key in the schema, grouped by the table it points at — the map of which id lives where.
 
-### → `users` (313 references)
+### → `users` (314 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -9264,6 +9290,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `course_cohorts` | `generated_by` | SET NULL | yes |
 | `department_message_deliveries` | `recipient_id` | CASCADE | no |
 | `department_message_reads` | `user_id` | CASCADE | no |
+| `department_message_recipients` | `user_id` | CASCADE | no |
 | `department_messages` | `posted_by` | SET NULL | yes |
 | `departure_clearance_items` | `resolved_by` | NO ACTION | yes |
 | `departure_clearances` | `completed_by` | NO ACTION | yes |
@@ -9521,7 +9548,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `votes` | `voter_id` | SET NULL | yes |
 | `xapi_statements` | `user_id` | SET NULL | yes |
 
-### → `organizations` (206 references)
+### → `organizations` (207 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -9560,6 +9587,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `course_cohort_classes` | `organization_id` | CASCADE | no |
 | `course_cohort_members` | `organization_id` | CASCADE | no |
 | `course_cohorts` | `organization_id` | CASCADE | no |
+| `department_message_recipients` | `organization_id` | CASCADE | no |
 | `department_messages` | `organization_id` | CASCADE | no |
 | `departure_clearance_items` | `organization_id` | CASCADE | no |
 | `departure_clearances` | `organization_id` | CASCADE | no |
@@ -10012,6 +10040,15 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `equipment_check_bulk_requests` | `compartment_id` | CASCADE | no |
 | `shift_equipment_check_seals` | `template_compartment_id` | SET NULL | yes |
 
+### → `department_messages` (4 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `department_message_deliveries` | `message_id` | CASCADE | no |
+| `department_message_reads` | `message_id` | CASCADE | no |
+| `department_message_recipients` | `message_id` | CASCADE | no |
+| `notification_logs` | `department_message_id` | CASCADE | yes |
+
 ### → `email_templates` (4 references)
 
 | From table | Column | On delete | Nullable |
@@ -10081,14 +10118,6 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `check_requests` | `budget_id` | SET NULL | yes |
 | `expense_line_items` | `budget_id` | SET NULL | yes |
 | `purchase_requests` | `budget_id` | SET NULL | yes |
-
-### → `department_messages` (3 references)
-
-| From table | Column | On delete | Nullable |
-|---|---|---|---|
-| `department_message_deliveries` | `message_id` | CASCADE | no |
-| `department_message_reads` | `message_id` | CASCADE | no |
-| `notification_logs` | `department_message_id` | CASCADE | yes |
 
 ### → `equipment_check_templates` (3 references)
 

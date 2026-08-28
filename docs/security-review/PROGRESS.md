@@ -16,9 +16,290 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-[PR #1952](https://github.com/thegspiro/the-logbook/pull/1952) — feature 09
-(medical screening, PHI, pass 2), no findings, documentation only. Awaiting
-merge before starting feature 10 (documents & legal), pass 2.
+None.
+
+---
+
+### 2026-08-28 — Feature 14 (Equipment check & shifts), pass 2 ✅ merged — PR #1963
+
+Merged (`d1f43285`). Confirmed on `origin/main` by ancestry check
+(`git log origin/main --oneline` shows the merge commit at HEAD, directly
+above #1962's merge commit `2da165c6`). No review-thread follow-up needed
+beyond the same-day scope-correction commit already included in the merge
+(the two Codex-flagged adjacent files, both verified clean — see below).
+Rotation row 14 -> done. Next: 15 scheduling.
+
+### 2026-08-28 — Feature 14 (Equipment check & shifts), pass 2 — no findings
+
+Scoped to the full domain since pass 1's merge (`2a7e47ee`, PR #1842): all
+six declared/adjacent backend files (`equipment_check.py`,
+`shift_completion.py`, `equipment_check_service.py`,
+`shift_completion_service.py`, `equipment_check_pdf.py`,
+`models/apparatus.py`) came back **byte-identical**
+(`git diff --stat`, not assumed), and no migration since pass 1 touches an
+equipment-check/shift-completion/deployed-lot table. A broad grep across
+`frontend/src` found 41 files mentioning the feature by name; of the 10 that
+changed since pass 1, every one was an incidental substring hit from an
+unrelated rotation feature landing in the same window (notifications, the
+new testing module, training, inventory, a scheduling my-attendance fix) —
+none touches this feature's own code, and the `/equipment-checks`
+`UNCACHEABLE_PREFIXES` entry EC-14 added in pass 1 is present, unmodified.
+
+Given the zero diff, re-verified every pass-1 finding's fix mechanism by
+reading the current code directly rather than re-citing the doc (EC-1, EC-2/
+EC2-4, EC-6, EC-9, EC-10, EC-12, EC-13, EC-14 all confirmed intact at their
+original lines), plus a fresh AST-based route/permission enumeration
+reproducing 47/47 + 21/21 routes with no drift from pass 1's table. Also
+checked, not previously written up explicitly: the module's one `.ilike()`
+call still declares `escape=LIKE_ESCAPE_CHAR`; `export_csv` still uses
+`SafeCsvWriter`; every `SET NULL` FK in `models/apparatus.py` is
+`nullable=True`; no unsafe shallow-copy JSON mutation in either service
+file; the ~12,400 L of equipment-check frontend pages have zero
+`window.confirm`/`alert`/`prompt`, zero `dangerouslySetInnerHTML`, zero
+banned `.toLocale*` calls, and zero direct `fetch()` (grepped, not read
+line-by-line — noted as partial-scope rather than assumed clean);
+`EquipmentCheckForm.tsx`'s offline-draft `localStorage` key is covered by
+`clearAllDrafts()`'s equipment-check prefix match, correctly purged on
+logout (the pre-existing FE-6/FE-7 mechanism, traced here for the first
+time against this feature's specific key); and both batch endpoints
+(`batch_create_shift_reports`, `batch_review_reports`) resolve
+client-supplied ids through already-org-scoped paths, re-verified by
+reading the branches directly. No findings, no code changes. Completion
+gate: flake8/black/isort clean (isort 8.0.1, CI's pin, already installed),
+migrations 389 revisions/single head, scoped tests 296 passed/1 skipped,
+full backend suite 9179 passed/22 skipped/0 failed, `tsc`/`eslint` clean
+(10 pre-existing warnings, same set as SEC-00/AP-13 pass 2). Full detail in
+`EC-14-equipment-check-shifts.md`.
+
+**Scope correction (same-day follow-up on Codex review of PR #1963):** the
+zero-diff claim above covered only the six files pass 1 declared, not
+adjacent files outside that list. Codex correctly flagged two:
+`scheduled_tasks.py` (end-of-shift equipment-check reminder task) and
+`scheduling_service.py` (`ShiftCall.responding_members`, read by
+`ShiftCompletionService` for trainee call attribution) — both had changed
+since `2a7e47ee` (confirmed via `git log`, commits `c19ecc0f`, `f439cf07`,
+`27c78fcf`, `b10a8ca7`, and the message-delivery chain). Read both in full
+against the changed hunks: the reminder task is org-scoped throughout (per-org
+processing, `shift_ids` built only from an already org-filtered `Shift`
+query) and its diff is a dedup/inactive-user correctness fix from a different
+feature's PR (#1915, CRON2-31), not a tenant or auth change. The
+`responding_members` validation is a real, already-applied XC-1 fix
+(`f439cf07`, feature 15's own pass) that batches an in-org check before
+persisting; traced `ShiftCompletionService`'s consumption of it and confirmed
+a trainee's call count can only be auto-populated from calls on a shift the
+trainee is already tied to via attendance/assignment — the JSON field cannot
+be used to attribute a call to an untied trainee. **Verdict: both clean, no
+findings, no code change.** Full detail in the "Adjacent files reviewed on
+follow-up" subsection of `EC-14-equipment-check-shifts.md`. Rotation row 14
+-> awaiting PR merge. Next: 15 scheduling, once this PR merges.
+
+---
+
+### 2026-08-28 — Feature 13 (Apparatus & NFC), pass 2 ✅ merged — PR #1961
+
+Merged (`1c71d8e1`). Confirmed on `origin/main` by ancestry check
+(`git log origin/main --oneline` shows the merge commit at HEAD). No
+review-thread follow-up needed — AP-7 was the only finding, already fixed
+before the PR was opened, and CI was green with no Codex comments requiring
+a push. Rotation row 13 -> done. Next: 14 equipment check & shifts.
+
+### 2026-08-28 — Feature 13 (Apparatus & NFC), pass 2 — 1 fixed (LOW), 0 flagged, 2 doc corrections
+
+Picked up a stalled rotation: PR #1959 (feature 12, facilities) had merged
+over 2 hours prior with no follow-up (well past the usual ~30-90 min
+cadence) and the Open PR row read "None", so this iteration resumed at
+feature 13 per the rotation order rather than waiting further. Scoped to
+the full domain since pass 1's merge (`37936879`, PR #1838): all 10
+declared/adjacent backend files came back **byte-identical**
+(`git diff --stat`, not assumed), and no apparatus/NFC/EVOC migration
+landed since pass 1. The only change under `modules/apparatus/` is
+`routes.tsx` gaining `requiredModule="apparatus"` on its four routes —
+client-side parity for a new, whole-app change (`70449d96`, unrelated to
+this rotation) that mounted the `apparatus` router behind a server-side
+`module_gate("apparatus", "Apparatus")` for the first time. Traced rather
+than trusted: the gate's "no session passes through" clause is inert for
+this router (no public/token routes in `apparatus.py`), so it's a pure AND
+on top of every route's existing permission check; `nfc_tags.py` remains
+deliberately ungated at the module level, with each of its 5 routes
+independently calling `require_nfc_id_cards` (re-confirmed by reading the
+file, not re-citing pass 1's claim).
+
+Given the zero backend diff, did not re-read ~8,000 lines cover to cover.
+Instead: a fresh AST-based enumeration of every route decorator's auth
+dependency (confirmed 88/88 + 5/5, with two routes' long signatures
+initially defeating the walk's regex capture — followed up by reading both
+functions directly, both correctly gated), a full direct read of
+`nfc_tag_service.py` against tenant isolation and data exposure (the one
+file in this feature that had never had more than one pass), and targeted
+re-verification of pass 1's specific "Verified good" mechanisms by reading
+the actual code (assert_in_org call count, the driver-exception conditional-
+UPDATE race guard, the EVOC eligibility query's org-scoping, the
+`list_driver_exception_approvers` response shape) rather than re-citing the
+claim. Found and fixed **AP-7** (LOW, defense-in-depth): `NfcTagService.
+_name_map`, the helper that resolves `member_name`/`issued_by_name` for
+card responses, ran `select(User...).where(User.id.in_(ids))` with no
+`organization_id` filter on the query itself — the same Pitfall #14a shape
+AP-6 (pass 1) fixed one file over in `admin_hours_service.py`, and for the
+same reason not currently exploitable: every id it's ever called with is
+already drawn from an org-scoped `NfcTag` row or `current_user.id`, across
+three different call sites, which is exactly the cross-method dependency
+Pitfall #14 warns against relying on. Fixed by adding a required
+`organization_id` parameter and filtering directly; behavior-neutral for
+every valid call. New guard test class (`TestNameMapOrgScoping`, 3 tests,
+whereclause-specific per the hollow-assertion lesson from AP-6's own guard
+test) confirmed to fail pre-fix via `git stash`. Also corrected two
+stale counts carried since pass 1/app-review: `nfc_tags.py` has always had
+5 routes, not 6; `apparatus_service.py` has 16 `assert_in_org` sites, not
+17 (the "17" traces to app-review pass 4, 2026-08-09) — neither miscount
+changed any conclusion (both undercounted claims remain true at the
+corrected number), corrected in `AP-13-apparatus-nfc.md` in place.
+Completion gate: flake8/black/isort clean (isort 8.0.1, CI's pin, already
+installed), migrations 389 revisions/single head/no schema change, scoped
+tests 239 passed/1 skipped, full backend suite 9179 passed/22 skipped/0
+failed, `tsc`/`eslint` clean (10 pre-existing warnings, same set as
+SEC-00/feature 34), `routeIntegrity`/apparatus-module vitest 40/40 passed.
+No FLAGGED items this pass, so no `KNOWN_LIMITATIONS.md` entry; the fix is
+behavior-neutral and not user-visible, so no `CHANGELOG.md` entry (matching
+how AP-6 was handled in pass 1). Full detail in `AP-13-apparatus-nfc.md`.
+Rotation row 13 -> awaiting PR merge. Next: 14 equipment check & shifts,
+once this PR merges.
+
+---
+
+### 2026-08-28 — Feature 12 (Facilities), pass 2 ✅ merged — PR #1959
+
+Merged (`b39a548c`), including the 2 additional fixes Codex found on the
+draft PR (docstring's position list was missing `vice_president`/`secretary`;
+the new `PromptDialog` edit flow could close a different, still-open dialog
+if an earlier slow update resolved after the user switched targets). CI
+green on the final head (17/17 checks), both review threads resolved.
+Confirmed on `origin/main` by ancestry check. Rotation row 12 -> done. Next:
+13 apparatus & NFC.
+
+### 2026-08-28 — Feature 12 (Facilities), pass 2 — 3 fixed (1 MED, 2 LOW), 0 flagged
+
+Scoped to the full domain since pass 1's merge (`4e8c6b0c`, PR #1836). Both
+declared backend files (`facilities_service.py`, `models/facilities.py`)
+unchanged; the real churn was a new cross-module document-reference
+validator in `facilities.py` (landed via PR #1953/DOC-10 pass 2 but never
+documented there — reviewed here for the first time), the granular
+`facilities.delete` permission wired to every delete route, two
+`facilities.view` revocation migrations narrowing it from a baseline member
+grant to leadership/facilities-manager only, a new folder-ACL migration, a
+new frontend `FilesSection` component, and a stale-response-race guard in
+`facilitiesStore.ts`. Fixed: a stale module docstring still calling
+`facilities.view` "the baseline member grant" (FAC-10, LOW); the new
+`FilesSection` used `window.prompt` for caption/description edits, a
+CLAUDE.md Pitfall #16 violation, replaced with `PromptDialog` and corrected
+to send an explicit `null` on clear rather than omitting the key (FAC-11,
+MED); the Files section's delete button was gated on `facilities.manage`
+instead of the hook's general `canDelete`, hiding the button from holders
+of the new granular delete-only grant despite the backend already
+authorizing them (FAC-12, LOW). Verified good: all of pass 1's fixes intact;
+the new document-reference validator is org-scoped with no bypass via
+update; the granular-delete rollout grants no new access (every position
+holding it already holds `facilities.manage`); both revocation migrations
+correctly guard the `create_all`-only `positions` table; the facilities
+router carries the whole-app module gate. Full backend suite 9176
+passed/22 skipped; full frontend suite 5383/5384 (one confirmed-flaky,
+unrelated `NotificationCard.test.tsx` failure, recorded rather than
+ignored). Full detail in `FAC-12-facilities.md`. Rotation row 12 ->
+awaiting merge. Next: 13 apparatus & NFC, once #1959 merges.
+
+### 2026-08-28 — Feature 11 (Inventory), pass 2 ✅ merged — PR #1957
+
+Merged (`656755cf`), including the 6 fixes (INV-10 through INV-15) and the
+2 flags (INV-16, INV-17) mirrored to `KNOWN_LIMITATIONS.md`. CI green on the
+final head (all 17 checks), no unresolved review threads requiring further
+action — the two open threads are the two flagged items, already replied to
+with the disposition and correctly left for an owner decision. Confirmed on
+`origin/main` by ancestry check. Rotation row 11 -> done. Next: 12 facilities.
+
+### 2026-08-28 — Feature 11 (Inventory), pass 2 — 6 fixed (3 HIGH), 2 flagged (corrected after initial "no findings")
+
+Scoped to the full domain since pass 1's merge (`acfc34c3`, PR #1835). This
+range carried substantial new feature work (six commits: distribute-items
+replacing batch-checkout, an explicit custody `/transfer` endpoint,
+request-intent/fulfillment-type separation, a versioned row-locked
+reorder-receiving workflow with a new `reorder_receipts` table, a
+three-stage return-request lifecycle with independent physical
+verification, and an optimistic-concurrency write-off review). The backend
+diff was read in full and reviewed carefully; the first version pushed to
+PR #1957 waved through the frontend diff on the (true but incomplete)
+reasoning that client-side code cannot itself create an auth/tenant gap —
+missing that this feature ships real business logic in its components. An
+automated review on the PR caught 7 issues; each was independently
+verified against the actual code, not taken on the bot's word. Fixed: a
+missing row lock let concurrent deny/receive on the same return request
+overwrite each other (INV-10, HIGH); `receive_reorder` never credited
+`InventoryItem.quantity`, so received stock could not actually be issued
+(INV-11, HIGH — the entire feature this range centers on was
+non-functional); the item-status validator allowed a damaged/unsafe item
+to return to `AVAILABLE`, becoming distributable (INV-12, HIGH — a
+life-safety issue for a fire department); stale `followUp`/quantity state
+in `ReturnRequestsPanel` could misfile a write-off/charge-review against
+the wrong item (INV-13, MED); a custody-transfer audit event omitted the
+acting user (INV-14, LOW); a "Transfer is immediate" checkbox had no
+effect and was removed (INV-15, LOW). Flagged: ordinary reorder PATCH
+edits bypass the versioned workflow (INV-16, MED — API-contract decision);
+"Complete work" always creates a new maintenance record instead of closing
+the open one (INV-17, MED — needs new data-fetching + a multi-open-record
+decision). Both mirrored to `KNOWN_LIMITATIONS.md`. Two pre-existing tests
+that encoded the old, incorrect state-validation rule as expected behavior
+were corrected, not deleted. New guard tests added for INV-10/11/12. Full
+backend suite: 9173 passed. Frontend: `tsc`/`eslint` clean. Full detail in
+`INV-11-inventory.md`. INV-7/LBL-1 (pass 1 fixes) confirmed still intact;
+INV-8/INV-9 (pass 1 flags) confirmed still open, no new information this
+pass. Rotation row 11 -> awaiting merge. Next: 12 facilities, once #1957
+merges.
+
+### 2026-08-28 — Feature 10 (Documents & legal), pass 2 ✅ merged — PR #1953
+
+Merged (`ba4a89ca`), including the CHANGELOG.md conflict-resolution merge
+commit tended after main advanced past the PR's base. Confirmed on
+`origin/main` by ancestry check. CI green on the final head, no unresolved
+review threads. Rotation row 10 -> done. Next: 11 inventory.
+
+### 2026-08-27 — Feature 10 (Documents & legal), pass 2 — 1 real finding, fixed
+
+Scoped to the full domain since pass 1's final merge (`6ab8b31e`, PR
+#1826). Zero changes to any endpoint/schema/model file; one real change in
+`documents_service.py` (+30/-1), landed via a Facilities PR (#1836, feature
+12, not yet reached in this rotation) rather than by this rotation: a
+partial fix for the exact Pitfall #27 race pass 1 had predicted for the
+apparatus/facility/event folder-provisioning helpers. It locked the
+`Organization` row in `ensure_facility_folder` but left the two existence
+checks after it as plain reads — insufficient per Pitfall #27's own second
+half, since the caller (`GET /facilities/{id}/folders`) already reads the
+`Facility` row first, establishing the REPEATABLE READ snapshot before the
+lock is acquired. Two concurrent first-time visits to the same facility's
+folder tab could each still see "no folder yet" and each create a
+duplicate folder tree. Fixed by making both existence checks locking reads
+too; extended the existing (too-weak) guard test to actually distinguish
+"org locked" from "org and existence checks locked," confirmed to fail
+pre-fix via `git stash`. No migrations touch document/legal tables since
+pass 1; no frontend changes (broad content-grep hits were all incidental).
+Full detail in `DOC-10-documents-legal.md`. Rotation row 10 -> done. Next:
+11 inventory.
+
+---
+
+### 2026-08-27 — Feature 09 (Medical screening, PHI), pass 2 ✅ merged — PR #1952
+
+Merged, with the doc-correction commit (`1670bd4d`) included. Confirmed on
+`origin/main` by ancestry check. Codex left 3 P2 review comments; all
+verified against the actual code and were real doc-accuracy issues (not
+security defects — the backend module gate is authoritative and correctly
+enforces in every case): the Open PR wording had already been fixed by a
+later commit on the same PR before the review ran; the onboarding
+description said "offered during setup" when `medical_screening` is
+settings-only and never offered by the wizard; and the frontend's
+module-off skip in `Dashboard.tsx` doesn't cover the genuinely-unconfigured-
+org state, where `useEnabledModules`' deliberate permissive default lets
+the call through and the backend correctly 403s it (a UX-only mismatch,
+not a leak, since the failure is caught and cleared silently). All three
+corrected and threads resolved. Rotation row 09 -> done. Next: 10
+documents & legal.
 
 ---
 
@@ -1265,11 +1546,11 @@ each row's prior PR is recorded in the Log, not repeated here.
 | 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ✅     |
 | 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ✅     |
 | 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ✅     |
-| 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | 🔄     |
-| 11  | Inventory                 | INV    | `endpoints/inventory.py` (6539 L), `inventory_service.py`                                                                                       | ⬜     |
-| 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ⬜     |
-| 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | ⬜     |
-| 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | ⬜     |
+| 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ✅     |
+| 11  | Inventory                 | INV    | `endpoints/inventory.py` (6539 L), `inventory_service.py`                                                                                       | ✅     |
+| 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ✅     |
+| 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | ✅     |
+| 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | ✅     |
 | 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                | ⬜     |
 | 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                       | ⬜     |
 | 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`                                                                                   | ⬜     |

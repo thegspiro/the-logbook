@@ -1,7 +1,7 @@
 """Add durable department message recipient fan-out.
 
 Revision ID: e5f6a7b8c9d0
-Revises: d4e5f6a7b8c9
+Revises: 5128feb36dd2
 """
 
 import json
@@ -11,7 +11,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision = "e5f6a7b8c9d0"
-down_revision = "d4e5f6a7b8c9"
+down_revision = "5128feb36dd2"
 branch_labels = None
 depends_on = None
 
@@ -77,11 +77,15 @@ def upgrade():
         for r in bind.execute(sa.select(reads)).mappings()
     }
     rows = []
-    for message in bind.execute(sa.select(messages)).mappings():
+    for message in bind.execute(
+        sa.select(messages).where(messages.c.scheduled_at.is_(None))
+    ).mappings():
         target = getattr(message["target_type"], "value", message["target_type"])
         for user in bind.execute(
             sa.select(users).where(
-                users.c.organization_id == message["organization_id"]
+                users.c.organization_id == message["organization_id"],
+                users.c.status == "active",
+                users.c.deleted_at.is_(None),
             )
         ).mappings():
             uid = str(user["id"])
@@ -116,4 +120,38 @@ def upgrade():
 
 
 def downgrade():
+    bind = op.get_bind()
+    meta = sa.MetaData()
+    reads = sa.Table("department_message_reads", meta, autoload_with=bind)
+    recipients = sa.Table("department_message_recipients", meta, autoload_with=bind)
+    for recipient in bind.execute(sa.select(recipients)).mappings():
+        existing = (
+            bind.execute(
+                sa.select(reads).where(
+                    reads.c.message_id == recipient["message_id"],
+                    reads.c.user_id == recipient["user_id"],
+                )
+            )
+            .mappings()
+            .first()
+        )
+        values = {
+            "read_at": recipient["read_at"],
+            "acknowledged_at": recipient["acknowledged_at"],
+        }
+        if existing:
+            bind.execute(
+                reads.update().where(reads.c.id == existing["id"]).values(**values)
+            )
+        elif (
+            recipient["read_at"] is not None or recipient["acknowledged_at"] is not None
+        ):
+            bind.execute(
+                reads.insert().values(
+                    id=str(uuid.uuid4()),
+                    message_id=recipient["message_id"],
+                    user_id=recipient["user_id"],
+                    **values,
+                )
+            )
     op.drop_table("department_message_recipients")
