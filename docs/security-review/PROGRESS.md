@@ -16,7 +16,75 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-None.
+[PR #1963](https://github.com/thegspiro/the-logbook/pull/1963) (feature 14,
+equipment check & shifts, pass 2) — branch
+`claude/security-review-equipment-check`.
+
+---
+
+### 2026-08-28 — Feature 14 (Equipment check & shifts), pass 2 — no findings
+
+Scoped to the full domain since pass 1's merge (`2a7e47ee`, PR #1842): all
+six declared/adjacent backend files (`equipment_check.py`,
+`shift_completion.py`, `equipment_check_service.py`,
+`shift_completion_service.py`, `equipment_check_pdf.py`,
+`models/apparatus.py`) came back **byte-identical**
+(`git diff --stat`, not assumed), and no migration since pass 1 touches an
+equipment-check/shift-completion/deployed-lot table. A broad grep across
+`frontend/src` found 41 files mentioning the feature by name; of the 10 that
+changed since pass 1, every one was an incidental substring hit from an
+unrelated rotation feature landing in the same window (notifications, the
+new testing module, training, inventory, a scheduling my-attendance fix) —
+none touches this feature's own code, and the `/equipment-checks`
+`UNCACHEABLE_PREFIXES` entry EC-14 added in pass 1 is present, unmodified.
+
+Given the zero diff, re-verified every pass-1 finding's fix mechanism by
+reading the current code directly rather than re-citing the doc (EC-1, EC-2/
+EC2-4, EC-6, EC-9, EC-10, EC-12, EC-13, EC-14 all confirmed intact at their
+original lines), plus a fresh AST-based route/permission enumeration
+reproducing 47/47 + 21/21 routes with no drift from pass 1's table. Also
+checked, not previously written up explicitly: the module's one `.ilike()`
+call still declares `escape=LIKE_ESCAPE_CHAR`; `export_csv` still uses
+`SafeCsvWriter`; every `SET NULL` FK in `models/apparatus.py` is
+`nullable=True`; no unsafe shallow-copy JSON mutation in either service
+file; the ~12,400 L of equipment-check frontend pages have zero
+`window.confirm`/`alert`/`prompt`, zero `dangerouslySetInnerHTML`, zero
+banned `.toLocale*` calls, and zero direct `fetch()` (grepped, not read
+line-by-line — noted as partial-scope rather than assumed clean);
+`EquipmentCheckForm.tsx`'s offline-draft `localStorage` key is covered by
+`clearAllDrafts()`'s equipment-check prefix match, correctly purged on
+logout (the pre-existing FE-6/FE-7 mechanism, traced here for the first
+time against this feature's specific key); and both batch endpoints
+(`batch_create_shift_reports`, `batch_review_reports`) resolve
+client-supplied ids through already-org-scoped paths, re-verified by
+reading the branches directly. No findings, no code changes. Completion
+gate: flake8/black/isort clean (isort 8.0.1, CI's pin, already installed),
+migrations 389 revisions/single head, scoped tests 296 passed/1 skipped,
+full backend suite 9179 passed/22 skipped/0 failed, `tsc`/`eslint` clean
+(10 pre-existing warnings, same set as SEC-00/AP-13 pass 2). Full detail in
+`EC-14-equipment-check-shifts.md`.
+
+**Scope correction (same-day follow-up on Codex review of PR #1963):** the
+zero-diff claim above covered only the six files pass 1 declared, not
+adjacent files outside that list. Codex correctly flagged two:
+`scheduled_tasks.py` (end-of-shift equipment-check reminder task) and
+`scheduling_service.py` (`ShiftCall.responding_members`, read by
+`ShiftCompletionService` for trainee call attribution) — both had changed
+since `2a7e47ee` (confirmed via `git log`, commits `c19ecc0f`, `f439cf07`,
+`27c78fcf`, `b10a8ca7`, and the message-delivery chain). Read both in full
+against the changed hunks: the reminder task is org-scoped throughout (per-org
+processing, `shift_ids` built only from an already org-filtered `Shift`
+query) and its diff is a dedup/inactive-user correctness fix from a different
+feature's PR (#1915, CRON2-31), not a tenant or auth change. The
+`responding_members` validation is a real, already-applied XC-1 fix
+(`f439cf07`, feature 15's own pass) that batches an in-org check before
+persisting; traced `ShiftCompletionService`'s consumption of it and confirmed
+a trainee's call count can only be auto-populated from calls on a shift the
+trainee is already tied to via attendance/assignment — the JSON field cannot
+be used to attribute a call to an untied trainee. **Verdict: both clean, no
+findings, no code change.** Full detail in the "Adjacent files reviewed on
+follow-up" subsection of `EC-14-equipment-check-shifts.md`. Rotation row 14
+-> awaiting PR merge. Next: 15 scheduling, once this PR merges.
 
 ---
 
@@ -1475,7 +1543,7 @@ each row's prior PR is recorded in the Log, not repeated here.
 | 11  | Inventory                 | INV    | `endpoints/inventory.py` (6539 L), `inventory_service.py`                                                                                       | ✅     |
 | 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ✅     |
 | 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | ✅     |
-| 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | ⬜     |
+| 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | ✅     |
 | 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                | ⬜     |
 | 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                       | ⬜     |
 | 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`                                                                                   | ⬜     |
