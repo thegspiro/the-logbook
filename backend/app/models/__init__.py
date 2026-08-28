@@ -278,6 +278,7 @@ from app.models.notification import (
     DepartmentMessage,
     DepartmentMessageDelivery,
     DepartmentMessageRead,
+    DepartmentMessageRecipient,
     MessagePriority,
     MessageTargetType,
     NotificationCategory,
@@ -438,6 +439,7 @@ __all__ = [
     "DepartmentMessage",
     "DepartmentMessageDelivery",
     "DepartmentMessageRead",
+    "DepartmentMessageRecipient",
     "MessagePriority",
     "MessageTargetType",
     # Integration models
