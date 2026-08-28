@@ -16,11 +16,12 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-[PR #1971](https://github.com/thegspiro/the-logbook/pull/1971) (bookkeeping —
-closing out SCH-15/#1968's merge) — branch `claude/security-review-bookkeeping-sch15` —
-and [PR #1973](https://github.com/thegspiro/the-logbook/pull/1973) (feature
-16, events & requests, pass 2) — branch `claude/security-review-events`. See
-the log entries below for both.
+[PR #1973](https://github.com/thegspiro/the-logbook/pull/1973) (feature 16,
+events & requests, pass 2) — branch `claude/security-review-events`. (The
+bookkeeping PR for SCH-15/#1968's merge was opened twice by two concurrent
+sessions — #1970 and #1971; #1971 was closed as a duplicate of #1970, which
+merged first and also resolved #1968's Codex threads.) See the log entries
+below.
 
 ---
 
@@ -153,11 +154,13 @@ PR merge. Next: 17 training core, once this PR and the bookkeeping PR
 
 ### 2026-08-28 — Feature 15 (Scheduling), pass 2 ✅ merged — PR #1968
 
-Merged (`a28d39e6`). Confirmed on `origin/main` by ancestry check (`git log
-origin/main --oneline` shows the merge commit at HEAD, directly above
-#1967's merge commit `80c87d91`). No review-thread follow-up needed beyond
-the three Codex-flagged corrections already folded into the merged PR (see
-below). Rotation row 15 -> done. Next: 16 events & requests.
+Merged (`a28d39e6`). All three Codex P2 review threads (migration scope gap,
+weak guard test, overstated `_account_is_active` claim) were independently
+re-verified as real and addressed within the PR, replied to, and resolved
+before merge; CI green on the final head (17/17 checks). Confirmed on
+`origin/main` by ancestry check (`git log origin/main --oneline` shows the
+merge commit at HEAD, directly above #1967's merge commit `80c87d91`).
+Rotation row 15 -> done. Next: 16 events & requests.
 
 ### 2026-08-28 — Feature 15 (Scheduling), pass 2 — 1 test fix, 2 stale-doc corrections, 0 flagged
 
