@@ -19,6 +19,10 @@ feature. The rotation cannot outrun its own review queue.
 [PR #1953](https://github.com/thegspiro/the-logbook/pull/1953) — feature 10
 (documents & legal, pass 2), 1 real finding (facility-folder locking gap),
 fixed. Awaiting merge before starting feature 11 (inventory), pass 2.
+Tended 2026-08-28: rebased the CHANGELOG.md conflict against main (both
+entries kept, no functional conflict) and re-ran the completion gate
+(flake8/black/isort, migration chain, 206 targeted tests) — all clean; CI
+re-running on the merge commit.
 
 ---
 
