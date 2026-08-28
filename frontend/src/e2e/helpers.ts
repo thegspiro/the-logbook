@@ -219,6 +219,23 @@ const routes = ({ empty = false, permissions = [] }: MockOptions): [string, () =
   ['**/api/v1/inventory/summary/by-location**', () => []],
   ['**/api/v1/locations**', () => []],
 
+  [
+    '**/api/v1/facilities/dashboard**',
+    () => ({
+      totalFacilities: 0,
+      operationalFacilities: 0,
+      overdueMaintenance: 0,
+      upcomingInspections: 0,
+      overdueMaintenanceRecords: [],
+      upcomingInspectionRecords: [],
+      recentMaintenanceCompletions: [],
+    }),
+  ],
+  ['**/api/v1/facilities/page**', () => ({ items: [], total: 0, skip: 0, limit: 24 })],
+  ['**/api/v1/facilities/types**', () => []],
+  ['**/api/v1/facilities/statuses**', () => []],
+  ['**/api/v1/facilities/maintenance-types**', () => []],
+
   ['**/api/v1/forms**', () => ({ forms: [], total: 0 })],
   ['**/api/v1/prospective-members**', () => ({ applicants: [], total: 0 })],
   ['**/api/v1/members**', () => ({ members: [], users: [], total: 0 })],
