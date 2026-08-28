@@ -1,248 +1,377 @@
 # Security Review 11 — Inventory
 
-**Prefix:** `INV` · **Iteration:** 11 · **Reviewed:** 2026-08-26 · **PR:** [#1835](https://github.com/thegspiro/the-logbook/pull/1835)
+**Prefix:** `INV` · **Iteration:** 11 · **Reviewed:** 2026-08-28 (pass 2) · **PR:** [#1957](https://github.com/thegspiro/the-logbook/pull/1957)
 
-**Backend:** `api/v1/endpoints/inventory.py` (132 routes, 1 WebSocket),
-`services/inventory_service.py` (~7,450 L), `api/v1/endpoints/labels.py`
-(shared cross-module label/printer routes — bundled with Inventory since
-`docs/module-audit/inventory.md` audited them together), `services/label_service.py`,
+**Backend:** `api/v1/endpoints/inventory.py`, `services/inventory_service.py`,
+`api/v1/endpoints/labels.py`, `services/label_service.py`,
 `services/label_printer_service.py`
-**Frontend:** none dedicated (rendered in-app); label printing UI lives in
-`components/labels/`
-**Migrations:** none this iteration (no schema change)
+**Frontend:** `modules/inventory/*` (pages, routes, service), shared
+`components/InventoryScanModal.tsx`, `components/ReturnRequestsPanel.tsx`
+**Migrations:** `8fb3757b80ec` (equipment-request duration),
+`a8f3c1d7e902` (reorder receiving workflow), `f4a9c2d81e70` (physical return
+receipt) — all landed since pass 1
 
 ---
 
+## Correction
+
+The version of this pass first pushed to PR #1957 concluded "no findings."
+That was wrong, and the reason is recorded here rather than quietly
+overwritten: the backend diff was read in full and reviewed carefully, but
+the frontend diff was waved through on the reasoning that "client-side code
+cannot itself create an authorization or tenant-isolation gap" — true for
+the seven checklist dimensions this rotation exists to check, but the
+inventory feature work landed real functional and data-integrity defects
+that reasoning has no way to catch, including one (INV-13, stale follow-up
+state) that lives entirely in a frontend component
+(`ReturnRequestsPanel.tsx`) this pass never opened. An automated review
+(Codex) on PR #1957 caught seven of them; each was independently verified
+against the actual code before being fixed or flagged below — bot findings
+are bug reports, not findings on their own word. `git diff --stat` is not a
+substitute for reading a changed file, even a frontend one, when the module
+under review ships real business logic in its components.
+
 ## Scope
 
-This is the third pass over this module: module-audit iteration 3 (INV-1
-through INV-6), then app-review Tier B (4 passes + a follow-up, 2026-08-06
-through 2026-08-11), then three more permission-tightening commits
-(`d7be097b`, `ccea2576`, `4361358a`) landed directly against `main` outside
-either rotation. Re-verified every previously-fixed item still holds
-(INV-1/2/3/5/6 all confirmed unchanged in current code) and that INV-4 — the
-~13-method XC-1 FK-scoping sweep, the biggest item either prior pass left
-open — is genuinely closed (`assert_in_org`/`_assert_item_fks_in_org`/
-`_assert_reorder_fks_in_org` present at every method app-review pass 4's
-table names).
+Second pass over this module: re-verify pass 1's fixes/flags still hold,
+then review everything that changed since pass 1's merge (`acfc34c3`, PR
+#1835). That range is substantial — six commits' worth of real feature work,
+not a quiet interval:
 
-**Endpoint count discrepancy, corrected:** `module-audit/inventory.md` states
-"5,605 L, 116 endpoints" as of iteration 3, but the file already had 132
-`@router.`-decorated endpoints by the time that doc's own commit landed —
-the stated snapshot was stale on arrival, not a sign of undocumented growth.
-The oldest state recoverable from this repo's history (`918e4b04`,
-2026-08-16, a consequence of this repo's squashed/rewritten history — the
-same limitation AUTH-01/SF-04/FIN-05 already documented) has 118 endpoints;
-`918e4b04..HEAD` adds exactly 14 (`/setup/*` + `/vendors*`, all
-`inventory.manage`-gated, reviewed below) to reach the current 132. The
-2-endpoint gap between the audit's claimed 116 and the oldest recoverable
-118 predates any git state this repo retains — noted rather than guessed at.
-Corrected the count in `module-audit/inventory.md`.
+- `distribute-items` replaces `batch-checkout` with an explicit
+  per-scan operation (`permanent_assignment` / `temporary_loan`) instead of
+  inferring intent from item status, and reports a structured
+  `InventoryHoldingConflict` when the item is already held.
+- `POST /transfer` — an explicit chain-of-custody transfer between two
+  members, closing the old holding record and opening its successor
+  atomically.
+- Equipment requests: `requested_duration` (member intent) is now stored
+  separately from `fulfillment_type` (what the quartermaster actually did),
+  with a `substitution_override_reason` required when fulfilling outside the
+  requested item/category.
+- Reorder requests: a versioned, row-locked status-transition workflow
+  (`/transition`, `/correct-status`) plus an idempotent, lot-creating
+  receiving endpoint (`/receipts`) backed by a new `reorder_receipts` table.
+- Return requests: three-stage lifecycle (`requested` → `received` →
+  `inspected`) replacing the old `pending`/`approved`, with independent
+  physical-receipt verification (barcode/asset match for serialized items,
+  quantity match for pool items) before a member's claimed return closes
+  their holding.
+- Write-off review: an optimistic-concurrency snapshot check
+  (`expected_item_status`/`expected_holder_signature`) plus a mandatory
+  acknowledgement for held/high-value items before approval.
+- `labels.py`: audit logging added for two PII-adjacent modules
+  (`prospective_members`, `membership`) on both generate and print.
 
-Every endpoint was enumerated mechanically (all 132, not sampled) and its
-auth dependency read; the 10 bare-`get_current_user` routes were each read in
-full to confirm self-scoping. `inventory_service.py`'s by-id tenant-isolation
-sweep (INV-4) and the new `/vendors*`/`/setup/*` service methods were read in
-full. The 14-method growth in `labels.py`/`label_printer_service.py` since
-the last audit (server-side ZPL/ESC-POS raw-socket printing, added
-2026-08-21/24) was read in full, since neither prior pass on this module ever
-saw it — the SSRF boundary (`printer_transport.py`: private-LAN-only,
-loopback/link-local/reserved refused, host resolved once to close the
-DNS-rebinding window) was already built defensively and is unchanged;
-LBL-1 below is a narrower error-handling gap in one caller of it.
+`inventory.py`'s and `labels.py`'s diffs against pass 1 were read in full
+(245 and 41 changed lines respectively); the corresponding
+`inventory_service.py` methods were read in full — `distribute_items`,
+`transfer_item_holding`, `_active_holding_conflict`, `review_return_request`,
+`review_write_off`, `transition_reorder_request`, `correct_reorder_status`,
+`receive_reorder`, `update_lot`, `update_item`, `_validate_item_state`,
+`create_maintenance_record`, `get_reorder_request`, and
+`_assert_reorder_fks_in_org`. The `reorder_receipts` model and its migration
+were read in full. Schema changes (199 lines) were read in full. On
+correction, every inventory-touching frontend file the diff-stat listed was
+read in full: `InventoryScanModal.tsx`, `ReturnRequestsPanel.tsx`,
+`InventoryMaintenancePage.tsx`, `InventoryAdminHub.tsx`,
+`EquipmentRequestsPage.tsx`, `ReorderRequestsPage.tsx`, `WriteOffsPage.tsx`,
+`MyEquipmentPage.tsx`.
 
-## Route inventory
+## Route inventory (new/changed only — see PR #1835's file for the full 132+26 baseline, unchanged)
 
-All 132 `inventory.py` routes carry auth (0 `NONE` findings). 121 use
-`require_permission`/`require_all_permissions`; 10 use bare
-`get_current_user` with in-body self-scoping; 1 (`/ws`) authenticates
-manually (decodes the JWT, re-checks active/non-deleted/org-matched before
-joining an org-scoped `ws_manager`).
+| Method | Path                                        | Auth dependency      | Permission         | Org-scoped | Notes                                                                      |
+| ------ | ------------------------------------------- | -------------------- | ------------------ | ---------- | -------------------------------------------------------------------------- |
+| POST   | `/distribute-items` (was `/batch-checkout`) | `require_permission` | `inventory.manage` | ✅         | replaces removed route, same gate                                          |
+| POST   | `/transfer`                                 | `require_permission` | `inventory.manage` | ✅         | new                                                                        |
+| POST   | `/reorder-requests/{id}/transition`         | `require_permission` | `inventory.manage` | ✅         | new, row-locked + versioned                                                |
+| POST   | `/reorder-requests/{id}/correct-status`     | `require_permission` | `inventory.manage` | ✅         | new, row-locked + versioned                                                |
+| POST   | `/reorder-requests/{id}/receipts`           | `require_permission` | `inventory.manage` | ✅         | new, row-locked + idempotent                                               |
+| PATCH  | `/lots/{lot_id}`                            | `require_permission` | `inventory.manage` | ✅         | unchanged gate; now catches `ValueError` → 400 instead of an unhandled 500 |
 
-| Group                                                                         | Routes | Permission                                                                        | Org-scoped | Notes                                                                                 |
-| ----------------------------------------------------------------------------- | -----: | --------------------------------------------------------------------------------- | ---------- | ------------------------------------------------------------------------------------- |
-| Categories                                                                    |      5 | `.view` (read) / `.manage` (write)                                                | ✅         |                                                                                       |
-| Items (CRUD, bulk, import/export)                                             |      9 | `.view` / `.manage`                                                               | ✅         | holder identity redacted from `.view` responses (`_redact_holder`)                    |
-| Item history / issuances / checkout-active / overdue                          |      4 | `.manage`                                                                         | ✅         | tightened from `.view` (commit `ccea2576`) — names every holder                       |
-| Assign / unassign / issue / return / checkout / checkin                       |      9 | `.manage`                                                                         | ✅         |                                                                                       |
-| Per-member reads (assignments/issuances/inventory/clearance/issuance-history) |      5 | bare `get_current_user`, self-or-quartermaster                                    | ✅         | shared `_require_self_or_quartermaster` helper (verified in each body)                |
-| Extend checkout                                                               |      1 | bare `get_current_user`                                                           | ✅         | org-scoped fetch + is-own-or-manage check inline                                      |
-| Maintenance                                                                   |      3 | `.view` (item-scoped history) / `.manage`                                         | ✅         | INV-3's item-in-org guard intact                                                      |
-| Summaries (org/location/low-stock/members)                                    |      5 | `.view` (branches to `[]`/own-only for non-admin) / `.manage` for members-summary | ✅         | members-summary tightened to `.manage` (`ccea2576`)                                   |
-| Impact planner (options/plans/analyze/reorder/issue/pdf)                      |      9 | `.manage`                                                                         | ✅         |                                                                                       |
-| Lookup / batch checkout / batch return                                        |      3 | `.view` / `.manage`                                                               | ✅         |                                                                                       |
-| Label formats / generate (item-catalog PDF)                                   |      2 | `.view` (formats) / `.manage` (generate)                                          | ✅         | generate tightened to `.manage` (`ccea2576`) — was a catalog-read bypass              |
-| Departure clearances (initiate/list/resolve/complete)                         |      4 | `.manage`                                                                         | ✅         |                                                                                       |
-| **Departure clearance by id**                                                 |      1 | **`.view` → fixed to `.manage` (INV-7)**                                          | ✅         | see Findings — the one clearance route not covered by the `ccea2576`/`d7be097b` sweep |
-| Equipment requests (create/list/review/fulfill)                               |      4 | bare `get_current_user` (self-scoped create/list) / `.manage`                     | ✅         | `item_id` validated in-org (INV-2, still fixed)                                       |
-| Storage areas                                                                 |      4 | `.view` / `.manage`                                                               | ✅         |                                                                                       |
-| Write-offs                                                                    |      3 | `.manage`                                                                         | ✅         |                                                                                       |
-| NFPA compliance / exposures / summary / retirement-due                        |      6 | `.view` (read) / `.manage` (write)                                                | ✅         |                                                                                       |
-| WebSocket                                                                     |      1 | manual (JWT decode + org/active check)                                            | ✅         |                                                                                       |
-| Size variants / bulk issue / allowances / charges                             |      8 | `.manage`                                                                         | ✅         |                                                                                       |
-| Allowance check (cross-member usage)                                          |      1 | `.view`                                                                           | ✅         | flagged, not fixed — see Findings (INV-8)                                             |
-| Return requests                                                               |      3 | bare `get_current_user` (self-scoped) / `.manage`                                 | ✅         |                                                                                       |
-| Reorder requests                                                              |      5 | `.manage`                                                                         | ✅         | LIKE search escaped (INV-5, still fixed)                                              |
-| Variant groups / kits / kit-issue                                             |      9 | `.view` (read) / `.manage` (write)                                                | ✅         | kit `optional` flag fully wired (INV-6, closed 2026-08-11)                            |
-| Member size preferences (cross-member)                                        |      2 | `.view` (get) / `.manage` (set)                                                   | ✅         | flagged, not fixed — see Findings (INV-9)                                             |
-| Own size preferences / label preset                                           |      4 | `.view` (self-only target, incl. 2 mutating GETs/PUTs)                            | ✅         | not a privilege issue — hardcoded to `current_user.id`                                |
-| Lots (list/add/bulk/update/delete/expiring)                                   |      6 | `.view` (read) / `.manage` (write)                                                | ✅         |                                                                                       |
-| **Setup + vendors (new since last audit)**                                    |     14 | `.manage` (12) / `.view` (2, financials redacted)                                 | ✅         | reviewed in full below — no defect found                                              |
-
-`labels.py` (shared, 26 routes across item/module label generation and
-printer config): all `.manage`/`settings.manage`-gated except `POST
-/labels/print`, which is intentionally reachable on the target module's own
-`.view` permission (printing a label reveals nothing the PDF preview does
-not — verified true for label _content_). **LBL-1** below is that route's
-printer-error handling, not its authorization.
-
-### `/setup/*` + `/vendors*` (new since 2026-08-16, first review)
-
-All 14 read in full. Every mutation (`create/update/deactivate` vendor,
-contacts, attach-name, merge, category-preset apply) requires
-`inventory.manage`. The two `.view`-gated reads (`list_vendors`, `get_vendor`)
-redact account numbers, payment terms and spend totals for callers without
-`inventory.manage` via `_vendor_response(..., include_financials=...)` —
-verified at both call sites (lines ~4164, ~4216) — leaving only the vendor
-directory (name, contacts) visible at `.view`, which matches the item catalog's
-own precedent. No IDOR: `get_vendor`/`update_vendor`/`deactivate_vendor`/
-contact and merge endpoints all resolve through `InventoryService`'s
-org-scoped vendor lookups. No defect found.
+No new route relaxed a permission, added a bare `get_current_user` route, or
+introduced an unauthenticated path. `/batch-checkout` was removed outright
+(not deprecated-and-left), so there is no stale duplicate route carrying the
+old, less-precise semantics.
 
 ## Verified good ✅
 
-- **Auth coverage 132/132**, enumerated above, 0 `NONE` findings.
-- **Tenant isolation (service layer)** remains solid — INV-4's `assert_in_org`
-  sweep covers every previously-flagged create/update FK
-  (`create_category`/`update_category`, `create_item`/`update_item`,
-  `create_maintenance_record`/`update_maintenance_record`,
-  `create_write_off_request`, `create_size_variants`, `create_return_request`,
-  `create_reorder_request`/`update_reorder_request`, `create_equipment_kit`,
-  `create_reorder_from_plan`), each via `_assert_item_fks_in_org` /
-  `_assert_reorder_fks_in_org` / direct `assert_in_org` calls — confirmed
-  present in current code, not re-derived from the app-review table alone.
-- **No raw SQL, and every LIKE search escapes wildcards** — `search_by_code`,
-  `get_items`, `list_reorder_requests` (INV-5) all use the bound-parameter
-  `.replace()` escape; none of the three vendor/setup searches added since
-  bypass it (`list_vendors`'s `search` param is applied via the same escaped
-  helper pattern).
-- **The label-printer SSRF boundary is real and unchanged**: port allowlist
-  (raw-print ports only), loopback/link-local/reserved address classes
-  refused, host resolved once to the literal address used for the connection
-  (closes the DNS-rebinding TOCTOU) — `app/utils/printer_transport.py`,
-  read in full, matches the design the commit that introduced it (`21463e2e`)
-  describes.
-- **Lint:** flake8 clean on both changed files and the full `app/`/`tests/`/
-  `alembic/` tree (see gate below). No TODO/FIXME/HACK in the touched code.
+- **Every new mutation is `inventory.manage`-gated**, matching every sibling
+  route in the module (checked against the full permission table in pass 1's
+  file, still accurate for the unchanged 132/26 baseline).
+- **New by-id/by-FK access is org-scoped**: `transfer_item_holding` resolves
+  the item via `_get_item_locked` (org-filtered `SELECT ... FOR UPDATE`) and
+  the specific holding record via a compound filter on id + org + item +
+  **current holder** + active flag — a stale or mismatched
+  `current_record_id`/`current_holder_id` fails closed ("Holding changed;
+  rescan the item") rather than transferring the wrong record.
+  `new_holder_id` is validated in-org via `is_in_org` (XC-1).
+  `transition_reorder_request`/`correct_reorder_status`/`receive_reorder`
+  all fetch the `ReorderRequest` row with `.where(id ==, organization_id ==)
+.with_for_update()` before mutating (XC-3 + Pitfall #27's row-lock half).
+- **The reorder receiving path is idempotent**: `receive_reorder` checks for
+  a prior `ReorderReceipt` row keyed on `(reorder_request_id,
+idempotency_key)` — enforced at the DB level by `uq_reorder_receipt_key`,
+  not just the pre-check — before creating the lot, so a retried request
+  (double-tap, client retry after a dropped response) cannot double-record
+  a receipt. See INV-11 below for what it did **not** do correctly on first
+  read.
+- **`reorder_receipts`, `reorder_requests`, and `inventory_lots` are all
+  migration-created tables** (`20260306_0501_...`, `20260724_0001_...`),
+  confirmed by grepping every `alembic/versions/*.py` for their
+  `create_table` calls — so `a8f3c1d7e902`'s unguarded `op.add_column` /
+  `ALTER TABLE ... MODIFY status ENUM(...)` calls against them are safe on
+  the empty database CI migrates from scratch (Pitfall #26 does not apply
+  here). `f4a9c2d81e70`, altering `return_requests` — a `create_all`-only
+  table per its own comment, confirmed by the same grep returning nothing —
+  correctly guards the entire body on `_has_table` first. `reorder_receipts`
+  gets its own `organization_id`-led index (`ix_reorder_receipts_org`)
+  specifically because every read of it is org-scoped first and the
+  request-id index can't serve that filter.
+- **`received_by` on `ReorderReceipt`** is `ondelete="SET NULL"` and
+  correctly `nullable=True` (Pitfall #2); `organization_id` and
+  `reorder_request_id` are `CASCADE` and `nullable=False`, appropriate since
+  a receipt cannot outlive its org or its parent request.
+- **Physical-receipt verification is real, not cosmetic**:
+  `review_return_request` requires an independent `observed_condition` for
+  every receipt, and for `TrackingType.INDIVIDUAL` items requires the
+  reviewer's scanned `verified_identifier` to match the item's own
+  barcode/asset-tag/serial before the request can move to `received` — a
+  member's claim to have returned gear cannot close the holding on its own.
+  Each of the three holding types resolved on receipt
+  (`ItemAssignment`/`CheckOutRecord`/`ItemIssuance`) is re-fetched org- and
+  requester-scoped with `.with_for_update()` immediately before mutation.
+- **No new injection surface**: no new `.ilike(`/`.like(` or `csv.writer`
+  usage anywhere in the diff.
+- **No new `window.confirm`/`alert`/`prompt`, no new CSV export** anywhere
+  in the frontend diff (Pitfalls 15/16).
 
 ## Findings
 
-### INV-7 — MED — `GET /clearances/{clearance_id}` bypassed the quartermaster gate its sibling route already has — ✅ FIXED
+### INV-10 — HIGH — Concurrent deny/receive on a return request can overwrite each other — ✅ FIXED
 
-**What:** `get_departure_clearance` was gated on `inventory.view` — the
-baseline permission every seeded Member position holds — and returns the
-full `DepartureClearanceResponse`: the departing member's `user_id` plus
-every line item (item name, serial, value, disposition).
-**Where:** `backend/app/api/v1/endpoints/inventory.py:3264`.
-**Failure scenario:** any authenticated member who learns or guesses a
-clearance UUID (e.g. surfaced in a future notification link, or shared
-between staff over chat) can `GET /inventory/clearances/{id}` and read
-another member's full departure gear detail — the same PII/inventory-detail
-disclosure the `ccea2576`/`d7be097b` sweep closed on
-`/items/{id}/history`, `/checkout/active`, `/checkout/overdue`, and
-`/users/{user_id}/clearance` (this route's own identically-shaped sibling,
-already gated self-or-quartermaster). This one route was missed by that
-sweep — every other clearance route (`initiate`/`list`/`resolve`/`complete`)
-was already `inventory.manage`-only, making `.view` here an outlier, not a
-deliberate choice.
-**Impact:** cross-member disclosure of departure-clearance detail (LOW
-practical severity — clearance ids are UUIDs and the feature has no frontend
-consumer today per `KNOWN_LIMITATIONS.md`'s "Departure Clearance Is
-Backend-Only" entry, so there is no UI flow that hands a member this id —
-but the access-control gap itself is real and matches a class this rotation
-treats as MED elsewhere).
-**Fix:** changed the dependency to `require_permission("inventory.manage")`,
-matching every other clearance route and the sibling by-user route. No
-frontend caller exists to update (confirmed no reference to `/clearances/`
-anywhere in `frontend/src`). Guard test added (see below).
+**What:** `review_return_request` read the `ReturnRequest` row with a plain
+`SELECT`, no `.with_for_update()`, before checking `req.status !=
+REQUESTED`.
+**Where:** `backend/app/services/inventory_service.py` (the `ReturnRequest`
+lookup at the top of `review_return_request`).
+**Failure scenario:** two quartermasters act on the same REQUESTED return at
+nearly the same time — one denies it, one physically receives it. Both read
+`status == REQUESTED` before either commits, so both proceed: the deny path
+commits a `DENIED` status while the receive path, unaware, closes the
+member's holding and later commits `RECEIVED`/`INSPECTED` over it (or vice
+versa, depending on commit order). The request ends up in one state with a
+holding closed or reopened inconsistently with it.
+**Impact:** a denied return can still close out the member's holding as
+though it were received, or a received return's item-condition/follow-up
+work is lost under a denial that lands after it — a chain-of-custody record
+and a physical-safety decision (was this gear inspected?) can silently
+disagree with what the database says happened.
+**Fix:** added `.with_for_update()` to the initial lookup. The second
+reviewer's transaction now blocks until the first commits, then re-reads
+the row's now-current status via the locking read and returns "Request is
+already denied/received" instead of proceeding — the same pattern
+`transfer_item_holding` and the reorder workflow already use. Guard test
+added (source-inspection, see below) so a future refactor that drops the
+lock fails immediately rather than needing a real concurrency reproduction.
 
-### LBL-1 — LOW — `POST /labels/print` echoed the printer's host:port to any module viewer — ✅ FIXED
+### INV-11 — HIGH — Received reorder stock was never credited to the item's on-hand quantity — ✅ FIXED
 
-**What:** `print_labels` catches `PrinterUnreachableError` and returned
-`str(e)` verbatim as the HTTP 502 detail. The transport's error messages
-embed the printer's configured LAN host and port (e.g. "Could not connect to
-the printer at 10.0.0.7:9100."). This route is gated on the _target
-module's_ own view-or-manage permission — `apparatus.view`,
-`facilities.view`, and `members.view` are all baseline grants per
-`MODULE_LABELS`'s own comment — not on `settings.manage` like its neighbours
-(`test`/`status`/`probe`, three routes up in the same file).
-**Where:** `backend/app/api/v1/endpoints/labels.py:482` (pre-fix).
-**Failure scenario:** any member with `apparatus.view` (etc.) who triggers a
-label print while the org's configured printer is unreachable — or an
-attacker deliberately probing — learns the printer's internal LAN
-address and port, information the settings-gated config routes are
-explicitly allowed to disclose only because the caller is the admin who
-configured it.
-**Impact:** internal network topology disclosure to any authenticated
-member of the relevant module — the exact class already fixed one file over
-in `station_documents.py`'s `print_station_document` (this rotation's own
-recent DOC-10 pass), whose fix comment explicitly (and incorrectly, for this
-one route) assumed labels.py's printer routes were all `settings.manage`-gated.
-**Fix:** mirrored the `station_documents.py` fix exactly — log the real
-error server-side (`logger.error`), return a generic 502 detail with no
-host/port. The three `settings.manage`-gated routes (`test`/`status`/`probe`)
-are left unchanged; that caller is always the admin who configured the
-printer. Guard test added (`test_labels_endpoint.py`).
+**What:** `receive_reorder` created an `InventoryLot` and a `ReorderReceipt`,
+and incremented `ReorderRequest.quantity_received`, but never touched
+`InventoryItem.quantity` — the column `issue_from_pool` (and everything that
+calls it: distribution, equipment-request fulfillment) actually checks
+before allowing an issuance.
+**Where:** `backend/app/services/inventory_service.py:receive_reorder`.
+**Failure scenario:** a quartermaster orders 10 units of a pool-tracked
+item, receives 4 through the new receiving workflow, and the UI correctly
+shows the reorder as partially received with a lot on file — but
+`issue_from_pool` still sees the pre-receiving `item.quantity` and refuses
+to issue units that, as far as the receiving screen is concerned, already
+arrived.
+**Impact:** the entire feature this iteration's diff centers on — reorder
+receiving — did not do the one thing receiving stock is for. Not a
+tenant-isolation or auth defect, but a correctness defect severe enough to
+make the shipped feature non-functional for its stated purpose.
+**Fix:** lock the linked `InventoryItem` row (`_get_item_locked`, matching
+Pitfall #27) immediately before crediting it, then `item.quantity =
+(item.quantity or 0) + data["quantity"]` alongside the existing
+`quantity_received` increment, inside the same already-locked-request
+transaction. Guard tests added (new file, real-database-backed): receiving
+credits the item's on-hand quantity, and a second receipt that completes
+the order brings the item to the expected final total.
 
-### INV-8 — LOW — `GET /allowances/check/{user_id}/{category_id}` — cross-member allowance usage on `.view` — FLAGGED
+### INV-12 — HIGH — An item completed with an unsafe condition could still return to service — ✅ FIXED
 
-A member holding only `inventory.view` can query another member's
-issuance-allowance usage count for a given category by user id. Low
-sensitivity (a count, not gear detail or PII), consistent with this
-rotation's pattern of flagging rather than guessing at owner-decision-level
-gates when the data exposed is minor. Mirrored to `KNOWN_LIMITATIONS.md`.
+**What:** `_VALID_STATE_COMBOS` constrained only `RETIRED` to require
+`ItemCondition.RETIRED`; `AVAILABLE` accepted any condition. The new
+maintenance-completion flow writes `item.condition` from the technician's
+`condition_after` field (`create_maintenance_record`, already existing
+behavior, confirmed unchanged), and the new "Return to service" action
+(`InventoryMaintenancePage.tsx`) sends only `{status: 'available'}` with no
+regard for that condition.
+**Where:** `backend/app/services/inventory_service.py` (`_VALID_STATE_COMBOS`);
+`frontend/src/modules/inventory/pages/InventoryMaintenancePage.tsx`
+(`returnToService`).
+**Failure scenario:** a technician completes maintenance on an item and
+records `condition_after: damaged` (or `poor`/`out_of_service`) — the
+completion modal's own copy says the item "remains out of service until you
+deliberately return it to service." Clicking "Return to service" then sent
+`status: available` with no condition change, and the backend accepted it:
+the item became `AVAILABLE` while still `damaged`. Assignment, checkout,
+and pool issuance all gate purely on `status == AVAILABLE`, so the unsafe
+item was immediately distributable to a member.
+**Impact:** for a fire department, an "available" self-contained breathing
+apparatus, harness, or radio that is actually damaged or out of service is
+a life-safety issue, not just a data-quality one.
+**Fix:** added `ItemStatus.AVAILABLE: {EXCELLENT, GOOD, FAIR}` to
+`_VALID_STATE_COMBOS`, mirroring the unsafe-condition check
+`review_return_request` already applies on its own (separate) path when
+receiving a physical return. `update_item` now rejects the transition with
+a 400 rather than silently accepting it. Two existing tests
+(`test_retire_item`, `test_non_retired_statuses_accept_standard_conditions`)
+encoded the old, incorrect invariant as expected behavior and were
+corrected rather than deleted — the retire test's setup no longer needs an
+`available`+`poor` item (changed to `in_maintenance`+`poor`, which is
+unaffected), and the matrix test was split into "non-RETIRED-non-AVAILABLE
+statuses accept anything" plus a new `test_available_requires_safe_condition`
+asserting the corrected rule for every `ItemCondition` value.
 
-### INV-9 — LOW — `GET /members/{user_id}/size-preferences` — cross-member physical data on `.view` — FLAGGED
+### INV-13 — MED — Stale follow-up/quantity selection could leak between return reviews — ✅ FIXED
 
-Same shape as INV-8: any member can read a named colleague's stored size
-preferences (physical measurements) via `inventory.view`. Not fixed here
-because, unlike INV-7, there is no established sibling precedent in this
-module for what the intended gate is (uniform/PPE size data may be
-legitimately visible to more roles than clearance detail — e.g. a
-supply-request workflow) — an owner decision rather than a mechanical
-one-line match. Mirrored to `KNOWN_LIMITATIONS.md`.
+**What:** `ReturnRequestsPanel.tsx`'s `followUp` and `receivedQuantity`
+state persisted across modal openings; only `observedCondition`,
+`verifiedIdentifier`, and `reviewNotes` were reset when opening the review
+modal for a new request. `handleReview` sent `follow_up: followUp`
+whenever `reviewAction === 'received'`, regardless of whether the
+follow-up selector was actually shown (it is hidden unless the _current_
+review's observed condition is unsafe).
+**Where:** `frontend/src/components/ReturnRequestsPanel.tsx`.
+**Failure scenario:** a quartermaster reviews a damaged return, selects
+follow-up "Write-off review," submits. They open the next request — a
+different item returned in good condition, so the follow-up selector is
+hidden — and receive it. `followUp` is still `"write_off"` in component
+state, and it is sent anyway, creating a write-off review against an item
+nobody flagged as unsafe. The same staleness applies to
+`receivedQuantity` for a pool item.
+**Impact:** silently misfiled write-off/maintenance/charge-review requests
+against the wrong item, discovered only when someone notices the
+mismatched paperwork.
+**Fix:** reset `followUp` to `'auto'` and `receivedQuantity` to `1` at both
+places the modal opens (receive and deny) and after a successful submit;
+changed `handleReview` to send `follow_up` only when the observed condition
+is actually unsafe (`UNSAFE_CONDITIONS.includes(observedCondition)`, the
+same set already used to decide whether to show the selector — previously
+duplicated as an inline literal, now one constant).
+
+### INV-14 — LOW — Custody-transfer audit event had no acting user — ✅ FIXED
+
+**What:** `transfer_item_holding`'s `log_audit_event` call omitted
+`user_id`, even though `performed_by` was already available in scope.
+**Where:** `backend/app/services/inventory_service.py:transfer_item_holding`.
+**Failure scenario:** investigating who transferred an item's custody from
+the audit log alone comes up empty for `inventory_item_transferred` events
+— the org and the old/new holders are recorded, but not who performed the
+transfer.
+**Fix:** pass `user_id=str(performed_by)` to `log_audit_event`, matching
+every other audit call in this file.
+
+### INV-15 — LOW — "Transfer is immediate" checkbox had no effect — ✅ FIXED
+
+**What:** `InventoryScanModal.tsx`'s transfer-confirmation dialog offered a
+"Transfer is immediate" checkbox wired to an `immediate` field on
+`InventoryTransferRequest`. `transfer_item_holding` accepts that field only
+to embed it in the audit log payload; the transfer itself is always
+performed immediately (old holding closed, new one opened, same
+transaction) regardless of its value.
+**Where:** `frontend/src/components/InventoryScanModal.tsx`.
+**Failure scenario:** unchecking the box implies a deferred/pending
+transfer is possible — no such state exists. Custody moves immediately
+either way, so the control could lead a quartermaster to believe a
+transfer had not yet taken effect when it had.
+**Fix:** removed the checkbox and the `transferImmediate` state; the
+request now always sends `immediate: true`, matching actual behavior.
+Building genuine deferred-transfer semantics (a pending state held open
+until a physical handoff is separately confirmed) would be a real feature,
+not a bug fix, and is not implemented here.
+
+## Flagged (owner decision)
+
+### INV-16 — MED — Ordinary reorder edits bypass the versioned workflow — FLAGGED
+
+`PATCH /reorder-requests/{id}` (`update_reorder_request`) neither locks the
+row nor increments `version`, unlike `/transition`, `/correct-status`, and
+`/receipts`. A manager editing `quantity_requested` or vendor details
+through the plain PATCH endpoint while another manager is mid
+transition/receipt is not serialized against them, and — since
+`quantity_received` is guarded but `quantity_requested` is not — lowering
+the requested quantity after partial receipt can leave `quantity_received`
+greater than the (now smaller) `quantity_requested`, a state
+`receive_reorder`'s own outstanding-quantity check does not anticipate.
+Not fixed here because closing it means picking one of two designs with
+real API-contract consequences: require every PATCH caller to start
+sending `expected_version` (a breaking change for the existing frontend
+edit form), or restrict which fields PATCH may touch once receiving has
+started (a product decision about what "editing an order in flight" should
+even mean). Mirrored to `KNOWN_LIMITATIONS.md`.
+
+### INV-17 — MED — "Complete work" always creates a new maintenance record rather than closing the open one — FLAGGED
+
+`InventoryMaintenancePage.tsx`'s completion flow always calls
+`createMaintenanceRecord` with `is_completed: true`, even when the item
+already has an open (scheduled or in-progress) record for the same work.
+The original record is never marked closed, so it remains permanently
+"due" in `getMaintenanceDueItems` while a second, completed record exists
+alongside it — maintenance history and outstanding-work/compliance
+reporting disagree even after the item is genuinely back in service. Not
+fixed here because a correct fix needs to identify _which_ open record (if
+more than one exists for an item, which is itself not currently
+prevented) the completion is closing, which needs new data-fetching in the
+modal (the "Due items" tab does not currently load an item's record list)
+and a decision about the multiple-open-records case. Mirrored to
+`KNOWN_LIMITATIONS.md`.
 
 ## Schema & migration notes
 
-No schema changes this iteration. Re-confirmed from prior passes: all
-inventory tables are `create_all`-only (no dedicated creating migrations);
-the `EquipmentKitItem.optional` column (INV-6) has `nullable=False` with a
-`server_default`, consistent with Pitfall #2 (not a `SET NULL` FK, n/a there).
+Three migrations landed since pass 1, all correctly structured:
+`8fb3757b80ec` (adds `equipment_requests.requested_duration`, guarded on the
+column already existing per the fast-path-init race, table itself always
+present via `20260222_0450_...`), `a8f3c1d7e902` (reorder-receiving schema:
+`reorder_requests.version`, `inventory_lots.storage_location`/`unit_cost`,
+the new `reorder_receipts` table, and `organizations.reorder_vendor_required`
+/`reorder_po_required` — all against migration-created tables, no guard
+needed), `f4a9c2d81e70` (return-request lifecycle columns and enum values,
+correctly guarded on `_has_table("return_requests")` since that table is
+`create_all`-only). `validate_migrations.py --strict` confirms a single head
+(see gate below). No JSON columns touched. No seeded-grant changes. No
+migration needed for this pass's own fixes (all logic-only).
 
 ## Guard tests added
 
-- `tests/test_inventory_member_visibility.py::test_reads_that_name_the_holder_require_quartermaster`
-  — extended the existing parametrized guard (which already covers
-  `/items/{item_id}/history`, `/items/{item_id}/issuances`,
-  `/checkout/active`, `/checkout/overdue`) with
-  `/clearances/{clearance_id}`, asserting it requires exactly
-  `inventory.manage` and not `inventory.view`. Fails on reintroduction of
-  INV-7.
-- `tests/test_labels_endpoint.py` (new file) —
-  `test_printer_unreachable_error_is_redacted`: calls `print_labels` with a
-  mocked `PrinterUnreachableError` carrying a host:port, as a caller holding
-  only `apparatus.view`, and asserts the resulting 502's detail contains
-  neither. Mirrors `test_print_documents.py`'s identical guard for the
-  station-document path. Fails on reintroduction of LBL-1.
+- `tests/test_inventory_return_receipt.py::test_review_return_request_locks_the_request_row`
+  — source-inspection assertion that the `ReturnRequest` lookup in
+  `review_return_request` uses `.with_for_update()` before the status
+  check. Fails on reintroduction of INV-10.
+- `tests/test_inventory_reorder_receiving_db.py` (new file, real-database
+  backed) — `test_receiving_stock_increases_the_item_on_hand_quantity` and
+  `test_a_second_full_receipt_makes_the_item_fully_available` assert
+  `InventoryItem.quantity` actually increases on receipt and reaches the
+  expected total across two partial receipts. Fails on reintroduction of
+  INV-11.
+- `tests/test_inventory_service.py::TestStatusTransitionMatrix::test_available_requires_safe_condition`
+  — asserts `AVAILABLE` accepts only `EXCELLENT`/`GOOD`/`FAIR` across every
+  `ItemCondition` value. Fails on reintroduction of INV-12.
 
 ## Completion gate
 
-| Check                                             | Result                                                           |
-| ------------------------------------------------- | ---------------------------------------------------------------- |
-| `flake8 app/ tests/ alembic/`                     | ✅ 0 violations                                                  |
-| `black --check app/ tests/ alembic/`              | ✅ 1246 files unchanged                                          |
-| `isort --check-only app/ tests/ alembic/`         | ✅ clean                                                         |
-| `python3 scripts/validate_migrations.py --strict` | ✅ single head, no schema change this iteration                  |
-| `pytest tests/ -k "inventory or label"`           | ✅ 657 passed, 1 skipped (pre-existing optional-dependency skip) |
-| `pytest tests/` (full backend suite)              | ✅ 8302 passed, 22 skipped (pre-existing Docker/no-MySQL skips)  |
-| `tsc --noEmit` / `eslint .`                       | n/a — no frontend change this iteration                          |
+| Check                                                                 | Result                                                              |
+| --------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                         | ✅ 0 violations                                                     |
+| `black --check app/ tests/ alembic/`                                  | ✅ clean                                                            |
+| `isort --check-only app/ tests/ alembic/`                             | ✅ clean                                                            |
+| `python3 scripts/validate_migrations.py --strict`                     | ✅ single head                                                      |
+| `pytest tests/ -k "inventory or label"`                               | ✅ 702 passed (704 after guard-test additions), 1 pre-existing skip |
+| `pytest tests/` (full backend suite)                                  | ✅ 9173 passed, 22 pre-existing skips                               |
+| `tsc --noEmit`                                                        | ✅ clean                                                            |
+| `eslint .`                                                            | ✅ 0 errors, 10 pre-existing warnings (none in touched files)       |
+| Frontend component tests (`InventoryScanModal`, `ReturnRequestsPage`) | ✅ 4 passed                                                         |

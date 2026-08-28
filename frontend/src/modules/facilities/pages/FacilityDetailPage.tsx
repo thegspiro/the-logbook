@@ -263,7 +263,7 @@ export default function FacilityDetailPage() {
               facilityId={facility.id}
               canCreate={canCreate}
               canEdit={canEdit}
-              canDelete={canManage}
+              canDelete={canDelete}
               canViewSensitive={canViewSensitive}
             />
           )}

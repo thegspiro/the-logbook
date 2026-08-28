@@ -2,10 +2,17 @@ import { useCallback, useEffect, useState } from 'react';
 import { Camera, FileText, Loader2, Pencil, Trash2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { FileDropzone } from '@/components/ux/FileDropzone';
+import { PromptDialog } from '@/components/ux/PromptDialog';
 import { useConfirm } from '@/contexts/ConfirmContext';
 import { documentsService } from '@/services/documentsService';
 import { facilitiesService, type FacilityDocument, type FacilityPhoto } from '@/services/facilitiesServices';
 import { getErrorMessage } from '@/utils/errorHandling';
+import { blankToNull } from '@/utils/formValues';
+
+interface EditTarget {
+  kind: 'photo' | 'document';
+  item: FacilityPhoto | FacilityDocument;
+}
 
 interface FilesSectionProps {
   facilityId: string;
@@ -27,6 +34,7 @@ export default function FilesSection({
   const [documents, setDocuments] = useState<FacilityDocument[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
+  const [editTarget, setEditTarget] = useState<EditTarget | null>(null);
   const { confirm } = useConfirm();
 
   const load = useCallback(async () => {
@@ -74,12 +82,16 @@ export default function FilesSection({
     }
   };
 
-  const edit = async (kind: 'photo' | 'document', item: FacilityPhoto | FacilityDocument) => {
-    const current = kind === 'photo' ? (item as FacilityPhoto).caption : (item as FacilityDocument).description;
-    const value = window.prompt(kind === 'photo' ? 'Photo caption' : 'Document description', current ?? '');
-    if (value === null) return;
-    if (kind === 'photo') await facilitiesService.updatePhoto(item.id, { caption: value });
-    else await facilitiesService.updateFacilityDocument(item.id, { description: value });
+  const submitEdit = async (value: string) => {
+    if (!editTarget) return;
+    const target = editTarget;
+    const { kind, item } = target;
+    if (kind === 'photo') await facilitiesService.updatePhoto(item.id, { caption: blankToNull(value) });
+    else await facilitiesService.updateFacilityDocument(item.id, { description: blankToNull(value) });
+    // Only close the dialog this request opened -- a slower earlier submit
+    // completing after the user dismissed it and opened a different edit
+    // must not clear (and discard) that second, still-open edit.
+    setEditTarget((current) => (current === target ? null : current));
     await load();
   };
 
@@ -122,7 +134,11 @@ export default function FilesSection({
               <span className="text-theme-text-primary truncate">{item.fileName}</span>
               <div className="flex gap-1">
                 {canEdit && (
-                  <button aria-label={`Edit ${item.fileName}`} onClick={() => void edit(kind, item)} className="p-2">
+                  <button
+                    aria-label={`Edit ${item.fileName}`}
+                    onClick={() => setEditTarget({ kind, item })}
+                    className="p-2"
+                  >
                     <Pencil className="h-4 w-4" />
                   </button>
                 )}
@@ -156,6 +172,22 @@ export default function FilesSection({
       )}
       {list('photo', photos)}
       {canViewSensitive && list('document', documents)}
+      <PromptDialog
+        isOpen={editTarget !== null}
+        onClose={() => setEditTarget(null)}
+        onSubmit={(value) => void submitEdit(value)}
+        title={editTarget?.kind === 'photo' ? 'Edit photo caption' : 'Edit document description'}
+        label={editTarget?.kind === 'photo' ? 'Caption' : 'Description'}
+        defaultValue={
+          editTarget
+            ? ((editTarget.kind === 'photo'
+                ? (editTarget.item as FacilityPhoto).caption
+                : (editTarget.item as FacilityDocument).description) ?? '')
+            : ''
+        }
+        required={false}
+        confirmLabel="Save"
+      />
     </div>
   );
 }

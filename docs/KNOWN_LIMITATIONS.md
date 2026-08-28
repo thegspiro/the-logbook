@@ -1807,6 +1807,38 @@ supply-ordering workflow needing a colleague's size) — narrowing the gate is
 a product decision about who should see it, not a mechanical match. (Security
 review INV-8/INV-9, `docs/security-review/INV-11-inventory.md`.)
 
+## Inventory — Ordinary Reorder Edits Bypass the Versioned Workflow (2026-08-28)
+
+`PATCH /reorder-requests/{id}` (`update_reorder_request`) neither locks the
+row nor increments `version`, unlike the `/transition`, `/correct-status`,
+and `/receipts` endpoints added alongside it. An edit through the plain
+PATCH endpoint is not serialized against a concurrent transition/receipt on
+the same request, and lowering `quantity_requested` after a partial receipt
+can leave `quantity_received` above the new (smaller) total — a state
+`receive_reorder`'s outstanding-quantity check does not anticipate.
+
+Not fixed because closing it means choosing between two designs with real
+API-contract consequences: requiring every PATCH caller to send
+`expected_version` (breaking the existing frontend edit form), or
+restricting which fields PATCH may touch once receiving has started (a
+product decision about what "editing an order in flight" means). (Security
+review INV-16, `docs/security-review/INV-11-inventory.md`.)
+
+## Inventory — "Complete Work" Always Creates a New Maintenance Record (2026-08-28)
+
+`InventoryMaintenancePage.tsx`'s maintenance-completion flow always calls
+`createMaintenanceRecord` rather than updating an item's existing open
+(scheduled/in-progress) record. The original record is never closed, so it
+stays permanently "due" in `getMaintenanceDueItems` alongside the new
+completed record — maintenance history and outstanding-work/compliance
+reporting disagree even after the item is genuinely back in service.
+
+Not fixed because a correct fix needs to identify which open record a
+completion is closing (an item is not currently prevented from having more
+than one), which needs new data-fetching in the modal and a decision about
+the multiple-open-records case. (Security review INV-17,
+`docs/security-review/INV-11-inventory.md`.)
+
 ## Membership — Department Email Generation Has No Settings Screen (2026-08-12)
 
 The backend implements department email generation end to end.

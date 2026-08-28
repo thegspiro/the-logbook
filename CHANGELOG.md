@@ -7,6 +7,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Facility file edits could be silently swallowed, and the delete button was missing for some managers (2026-08-28)
+
+**Fixed**
+
+- Editing a facility photo's caption or a facility document's description no
+  longer uses the browser's native prompt dialog, which some browsers
+  silently block after repeated use — a blocked edit previously looked
+  identical to pressing Cancel, with no error shown.
+- Clearing a facility photo caption or document description to blank now
+  actually clears it, instead of leaving the old value in place.
+- Staff granted the dedicated "delete facility records" permission (without
+  full facility management access) can now see the delete button on
+  facility photos and documents, matching every other facility section.
+
+### Damaged inventory could be marked available, and received reorder stock couldn't be issued (2026-08-28)
+
+**Fixed**
+
+- Completing maintenance work and recording the item's condition as poor,
+  damaged, or out of service no longer allows that item to be returned to
+  service. "Return to service" now requires the item to actually be in
+  good condition — an item logged as damaged stays out of service until a
+  later inspection records a safe condition.
+- Two quartermasters acting on the same member-submitted return request at
+  the same time (one denying it, one physically receiving it) could
+  overwrite each other's decision. Reviewing a return request is now
+  serialized so only one outcome is ever recorded.
+- Stock recorded through the new reorder-receiving workflow now actually
+  becomes available to issue. Previously, receiving stock created a
+  purchase record but never updated the item's on-hand count, so newly
+  received units could not be checked out or issued to members.
+- The return-request review screen no longer carries a safety follow-up
+  choice (e.g. "send to write-off review") over from one reviewed request
+  to the next. A follow-up selected for a damaged item no longer applies
+  itself to the next request reviewed, even if that item was in good
+  condition.
+- Removed the "Transfer is immediate" checkbox from the item-transfer
+  screen — custody transfers have always taken effect immediately, and the
+  checkbox implied a deferred option that did not exist.
+- Custody-transfer audit log entries now record who performed the
+  transfer.
+
 ### A facility's files were readable by the whole department through the Documents module (2026-08-27)
 
 **Fixed**
@@ -27,6 +69,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A documents administrator no longer sees facility files by virtue of that
   role alone. Access to a facility's files now requires a facilities grant,
   which is what the facility screens have always required.
+
+### Two people opening a facility's file tab for the first time at the same moment could get duplicate folders (2026-08-27)
+
+**Fixed**
+
+- The first time anyone opened a facility's Files tab, the app created that
+  facility's folder structure automatically. If two people did this within
+  the same moment (e.g. two officers opening the same new facility right
+  after it was added), both could end up creating a duplicate set of
+  folders instead of sharing one. This is now prevented.
 
 ### Transferring a prospect to full membership could grant more access than the transferring member had, and a double-click could create two accounts for one prospect (2026-08-27)
 

@@ -642,3 +642,63 @@ class TestCheckIn:
         assert result["status"] == NfcCheckInStatus.REFUSED
         assert "Not yet in this phase." in result["message"]
         assert PHASE_GATE_PREFIX not in result["message"]
+
+
+# =============================================================================
+# Org scoping — the name-lookup helper
+# =============================================================================
+
+
+class TestNameMapOrgScoping:
+    """AP-13 (pass 2): ``_name_map`` looked up display names by a bare
+    ``User.id.in_(ids)`` with no ``organization_id`` filter on the query
+    itself. Every current caller only ever feeds it ids drawn from an
+    already-org-scoped ``NfcTag`` row (``user_id`` / ``issued_by``), so this
+    was not reachable with a cross-org id today -- but that safety lived in
+    the caller, not the query, which is exactly the shape CLAUDE.md Pitfall
+    #14a warns against relying on. Locks the filter onto the query itself.
+
+    Asserts against the compiled WHERE clause specifically: a substring check
+    against the whole statement would still pass with the filter removed,
+    since ``organization_id`` isn't one of the selected columns here -- but
+    matching the established pattern (test_admin_hours_service.py, PR #1838)
+    keeps the assertion meaningful even if the selected columns ever change.
+    """
+
+    def _capturing_db(self, rows):
+        captured = {}
+
+        async def _exec(stmt, *a, **k):
+            captured["stmt"] = stmt
+            return MagicMock(__iter__=lambda self: iter(rows))
+
+        db = MagicMock()
+        db.execute = AsyncMock(side_effect=_exec)
+        return db, captured
+
+    async def test_name_map_query_is_org_scoped(self):
+        db, captured = self._capturing_db([])
+        service = NfcTagService(db)
+
+        await service._name_map(ORG, {"u1", "u2"})
+
+        assert "organization_id" in str(captured["stmt"].whereclause)
+
+    async def test_name_map_returns_names_for_in_org_ids(self):
+        row = SimpleNamespace(id="u1", first_name="Dana", last_name="Ruiz")
+        db, _captured = self._capturing_db([row])
+        service = NfcTagService(db)
+
+        names = await service._name_map(ORG, {"u1"})
+
+        assert names == {"u1": "Dana Ruiz"}
+
+    async def test_name_map_short_circuits_on_no_ids(self):
+        """No query at all for an empty id set -- nothing to leak either way."""
+        db, _captured = self._capturing_db([])
+        service = NfcTagService(db)
+
+        names = await service._name_map(ORG, set())
+
+        assert names == {}
+        db.execute.assert_not_called()
