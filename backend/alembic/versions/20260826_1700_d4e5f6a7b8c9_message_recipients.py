@@ -83,7 +83,9 @@ def upgrade():
         target = getattr(message["target_type"], "value", message["target_type"])
         for user in bind.execute(
             sa.select(users).where(
-                users.c.organization_id == message["organization_id"]
+                users.c.organization_id == message["organization_id"],
+                users.c.status == "active",
+                users.c.deleted_at.is_(None),
             )
         ).mappings():
             uid = str(user["id"])
