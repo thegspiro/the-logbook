@@ -16,11 +16,21 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-[PR #1959](https://github.com/thegspiro/the-logbook/pull/1959) — feature 12
-(facilities), pass 2. 3 findings fixed (1 MED, 2 LOW), 0 flagged. Awaiting
-CI/merge before feature 13 (apparatus & NFC) starts.
+None. [PR #1959](https://github.com/thegspiro/the-logbook/pull/1959) (feature
+12, facilities, pass 2) merged at `b39a548c`. Next: feature 13 (apparatus &
+NFC), pass 2.
 
 ---
+
+### 2026-08-28 — Feature 12 (Facilities), pass 2 ✅ merged — PR #1959
+
+Merged (`b39a548c`), including the 2 additional fixes Codex found on the
+draft PR (docstring's position list was missing `vice_president`/`secretary`;
+the new `PromptDialog` edit flow could close a different, still-open dialog
+if an earlier slow update resolved after the user switched targets). CI
+green on the final head (17/17 checks), both review threads resolved.
+Confirmed on `origin/main` by ancestry check. Rotation row 12 -> done. Next:
+13 apparatus & NFC.
 
 ### 2026-08-28 — Feature 12 (Facilities), pass 2 — 3 fixed (1 MED, 2 LOW), 0 flagged
 
@@ -1394,7 +1404,7 @@ each row's prior PR is recorded in the Log, not repeated here.
 | 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ✅     |
 | 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ✅     |
 | 11  | Inventory                 | INV    | `endpoints/inventory.py` (6539 L), `inventory_service.py`                                                                                       | ✅     |
-| 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ⏳     |
+| 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ✅     |
 | 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | ⬜     |
 | 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | ⬜     |
 | 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                | ⬜     |
