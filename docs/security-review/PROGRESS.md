@@ -16,7 +16,7 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-[PR #TBD](https://github.com/thegspiro/the-logbook/pull/TBD) (feature 14,
+[PR #1963](https://github.com/thegspiro/the-logbook/pull/1963) (feature 14,
 equipment check & shifts, pass 2) — branch
 `claude/security-review-equipment-check`.
 
