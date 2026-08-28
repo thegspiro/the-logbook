@@ -53,6 +53,7 @@ const captureTemplate = async (): Promise<string> => {
   try {
     renderWithRouter(<ImportMembers />);
     await user.click(screen.getByText('Download CSV Template'));
+    await waitFor(() => expect(captured).not.toBe(''));
   } finally {
     globalThis.Blob = originalBlob;
     URL.createObjectURL = originalCreateObjectURL;
@@ -79,7 +80,7 @@ const clickImport = async (): Promise<void> => {
 describe('ImportMembers', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockGetRoles.mockResolvedValue([]);
+    mockGetRoles.mockResolvedValue([{ id: 'member-role', slug: 'member', name: 'Member' }]);
     mockGetUsers.mockResolvedValue([]);
     mockCreateMember.mockResolvedValue({ id: 'u1' });
   });
@@ -104,6 +105,14 @@ describe('ImportMembers', () => {
     await screen.findByText(IMPORT_BUTTON);
     expect(mockToastError).not.toHaveBeenCalledWith(expect.stringContaining('Missing required columns'));
     expect(mockToast).not.toHaveBeenCalledWith(expect.stringContaining('unrecognized column'), expect.anything());
+  });
+
+  it('uses the organization member-position display name in the template', async () => {
+    mockGetRoles.mockResolvedValue([{ id: 'member-role', slug: 'member', name: 'Volunteer' }]);
+
+    const template = await captureTemplate();
+
+    expect(template).toContain(',Volunteer,');
   });
 
   it('rejects the template example row rather than importing John Doe', async () => {
