@@ -16,11 +16,35 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-None. [PR #1953](https://github.com/thegspiro/the-logbook/pull/1953) (feature
-10, documents & legal, pass 2) merged at `ba4a89ca`. Next: feature 11
-(inventory), pass 2.
+None. Feature 11 (inventory), pass 2, found no findings and needed no code
+change — recorded directly, no PR. Next: feature 12 (facilities), pass 2.
 
 ---
+
+### 2026-08-28 — Feature 11 (Inventory), pass 2 — no findings
+
+Scoped to the full domain since pass 1's merge (`acfc34c3`, PR #1835). Unlike
+recent quiet pass-2s, this range carried substantial new feature work (six
+commits: distribute-items replacing batch-checkout, an explicit custody
+`/transfer` endpoint, request-intent/fulfillment-type separation, a
+versioned row-locked reorder-receiving workflow with a new `reorder_receipts`
+table, a three-stage return-request lifecycle with independent physical
+verification, and an optimistic-concurrency write-off review). Read every
+new/changed endpoint and its full service method rather than sampling.
+Every new mutation is `inventory.manage`-gated, matching the module's
+existing pattern; every new by-id/FK access is org-scoped, and every new
+concurrency-sensitive path (reorder transitions, receiving, custody
+transfer) locks the contended row and — where a lock alone would not
+suffice, per Pitfall #27 — adds optimistic versioning or an idempotency key.
+Confirmed `reorder_requests`/`inventory_lots` are migration-created tables
+(so the new migration's unguarded `ADD COLUMN`s are safe on a fresh CI
+database) and that the `return_requests` migration correctly guards on
+`_has_table` since that table is `create_all`-only (Pitfall #26 checked
+both ways, not assumed). INV-7/LBL-1 (pass 1 fixes) confirmed still intact;
+INV-8/INV-9 (pass 1 flags) confirmed still open and already mirrored in
+`KNOWN_LIMITATIONS.md` — no new information this pass, so left as is. No
+code changes; full detail in `INV-11-inventory.md`. Rotation row 11 -> done.
+Next: 12 facilities.
 
 ### 2026-08-28 — Feature 10 (Documents & legal), pass 2 ✅ merged — PR #1953
 
@@ -1316,8 +1340,8 @@ each row's prior PR is recorded in the Log, not repeated here.
 | 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ✅     |
 | 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ✅     |
 | 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ✅     |
-| 11  | Inventory                 | INV    | `endpoints/inventory.py` (6539 L), `inventory_service.py`                                                                                       | 🔄     |
-| 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ⬜     |
+| 11  | Inventory                 | INV    | `endpoints/inventory.py` (6539 L), `inventory_service.py`                                                                                       | ✅     |
+| 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | 🔄     |
 | 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | ⬜     |
 | 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | ⬜     |
 | 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                | ⬜     |
