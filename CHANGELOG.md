@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### The facility lookup-editor dialog could overflow short viewports (2026-08-28)
+
+**Fixed**
+
+- Adding or editing a facility type, facility status, or maintenance type
+  now caps the dialog's height and scrolls internally instead of
+  overflowing the screen. Previously, on a viewport shorter than the
+  dialog, the title and the Save/Cancel buttons could render off-screen
+  with nothing to scroll to reach them.
+
 ### Facility file edits could be silently swallowed, and the delete button was missing for some managers (2026-08-28)
 
 **Fixed**
