@@ -208,11 +208,20 @@ class ShiftEligibilityService:
 
         ``get_position_roster`` already filters ``User.is_active`` and so gets
         this right; self-signup did not, which made the roster stricter than the
-        endpoint it exists to mirror. Fresh logins are blocked either way —
-        ``AuthService`` checks ``is_active`` — but a session opened before the
-        status change outlives it, because ``get_current_user`` does not
-        re-check and 239 endpoints depend on it rather than on
-        ``get_current_active_user``.
+        endpoint it exists to mirror.
+
+        This is not closing a stale-session gap: ``get_current_user`` calls
+        ``AuthService.get_user_from_token``, which reloads the user on every
+        request and returns ``None`` unless ``is_active`` holds, so a member's
+        own session is already rejected the request after their status
+        changes. The gap this closes is narrower and does not run through
+        that check at all — ``_validate_assignment_candidate``'s
+        ``enforce_position_eligibility`` branch loads the *candidate* by a
+        client-supplied ``user_id`` with no status filter, and that candidate
+        is not always the caller: an officer's own session is perfectly valid
+        while they assign a *different*, now-retired or suspended member to a
+        shift (``create_assignment`` with ``self_signup=False``). Without this
+        check, that target's inactive status was never consulted by anything.
 
         Absent status means "not a real User row" — a stub, or a caller passing
         a lighter object — and is left alone rather than guessed at. The gate is

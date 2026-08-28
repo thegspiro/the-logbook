@@ -16,7 +16,118 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-None.
+[PR #1968](https://github.com/thegspiro/the-logbook/pull/1968) (feature 15,
+scheduling, pass 2) — branch `claude/security-review-scheduling`.
+
+(The bookkeeping PR #1965, closing out #1963's merge, has since merged
+— confirmed via `git log origin/main`.)
+
+---
+
+### 2026-08-28 — Feature 15 (Scheduling), pass 2 — 1 test fix, 2 stale-doc corrections, 0 flagged
+
+Scoped to the full domain since pass 1's **final** merge (`5d19cefa`, PR
+#1847 — the Codex-follow-up merge, not the earlier `c92f0438`/#1846 that
+preceded it). `git diff --stat` against the seven declared/adjacent backend
+files found real churn in three (`scheduling.py` +20/-20,
+`scheduling_service.py` +6/-1, `scheduling_module_config_service.py`
++70/-0), none touching auth/permission/tenant-scoping code paths.
+**Correction (Codex follow-up on this PR):** "no new migration on a
+scheduling table" was false — that `git diff --stat` was scoped to source
+files and never included `alembic/versions/`, so it could not have found one.
+`20260826_1400_e2c8f5a71d40_canonicalize_paramedic_seat.py` does touch
+`shifts.positions`/`shift_templates.positions`; reviewed in full against
+`CHECKLIST.md` dimension 7 (guards `create_all`-only tables, idempotent,
+correctly scoped, irreversible for a stated reason, follows its
+already-reviewed same-day sibling migration exactly) and recorded as
+reviewed-clean in `SCH-15-scheduling.md`, not just re-asserted good. A grep for other backend files referencing
+`ShiftCall`/`ShiftSwapRequest`/`ShiftAssignment`/`StandingShiftClaim`/
+`SchedulingService` changed since pass 1 (per the EC-14 lesson) found
+`shift_eligibility_service.py` (+90/-43) carrying a real, already-applied
+security fix from a different feature's PR (Codex-authored, `a72fed15`):
+member-held RBAC positions no longer grant _operational_ shift-position
+eligibility (closing a role-manager self-escalation path), verified by
+reading the current code rather than trusting the commit message.
+`scheduled_tasks.py`'s CRON2-31 changes to the two scheduling cron tasks were
+also traced and confirmed org-scoped throughout, matching EC-14 pass 2's
+verification of this same file's equipment-check task.
+
+**Frontend scope correction, found before Codex could catch it this time:**
+pass 1 (and every prior scheduling audit) scoped the frontend to
+`modules/scheduling/` (56 files) only. `pages/scheduling/` — 81 files, ~34,000
+lines, holding the actual shift board, my-shifts/open-shifts tabs, swap/
+time-off UI, platoons, and position roster — was never mentioned in any prior
+scheduling doc. Swept this pass: only one file changed since pass 1
+(`PositionRosterPage.tsx`, read in full — clean, uses the approved date
+utilities and plain JSX text interpolation); the other 80 were checked with
+the same targeted `window.confirm`/`dangerouslySetInnerHTML`/banned-`.toLocale*`/
+direct-`fetch()` greps EC-14 used for its equipment-check pages in this same
+directory (all clean), noted as partial-scope rather than assumed fully
+reviewed.
+
+**SCH-11 (NIT, docs-only, fixed):** SCH-5 ("swap accept-path skips
+re-validation + a looser approver-identity check than manager review") had
+been carried as **Open** in `KNOWN_LIMITATIONS.md` (two rows), `docs/
+module-audit/scheduling.md`, and `docs/app-review/scheduling.md` since
+2026-08-06 — but `respond_to_swap_offer`, added 2026-08-24 (two days _before_
+SCH-15 pass 1, not new this pass), already resolves it: it replaced the
+general swap-accept path with a narrower one-way-offer accept, re-validates
+the target shift's live state (capacity/cancellation/finalization) before
+moving the seat, and enforces a strict identity check on the responder; every
+two-way exchange is confined to the already-hardened manager-review path.
+Pass 1 had actually read this method (noted in "Verified good" as
+"SCH-5-adjacent," reviewed for capacity locking) but never connected it to
+closing SCH-5. All four documents corrected to ✅ Resolved, each citing
+`scheduling_service.py`'s exact validation calls and (originally)
+`tests/test_swap_offer_response.py` (17 tests, re-run and confirmed passing).
+**Correction (Codex follow-up):** the cited test for the
+cancelled/finalized-shift half was weak —
+`test_the_acceptance_path_runs_that_validation` only greps the calling
+method's source for the helper's name, and every one of the 17 tests mocks
+`_validate_assignment_candidate`
+outright, so none could fail if `require_mutable=True` were dropped or the
+helper's own check broke. Fixed, not just reworded: strengthened the existing
+kwargs assertion to check `require_mutable`/`reject_past` explicitly, and
+added two real (unmocked) tests that reject acceptance against a cancelled
+and a finalized shift respectively. 19 tests now pass; confirmed the new
+ones fail without the fix by temporarily reverting `require_mutable=True`.
+
+Route/permission enumeration re-run from scratch (AST walk, not a diff):
+96/96 routes (92+3+1, unchanged from pass 1) carry a recognized auth
+dependency. SCH-9's fix and SCH-10's flag both re-verified intact at their
+current lines (SCH-10's KNOWN_LIMITATIONS entry was already kept current by
+the training-extended pass, TRX-18 — no correction needed here). A new
+`ShiftPosition.PARAMEDIC` enum member (landed via an adjacent qualifications
+feature) needs no migration: confirmed `shift_assignments`/
+`standing_shift_claims` are both in `enum_normalization.py`'s
+`_TARGET_COLUMNS`, which widens the live MySQL `ENUM(...)` DDL to the current
+Python enum on every startup, unconditionally.
+
+**Correction (Codex follow-up):** the `_account_is_active` gate
+(`shift_eligibility_service.py`) was written up as closing a "stale session"
+gap — a retired/suspended member's own valid session outliving their status
+change. That's not accurate: `get_current_user` calls
+`AuthService.get_user_from_token`, which reloads the user and enforces
+`is_active` fresh on every single request, so no such window exists on that
+path. The real gap is narrower — `_validate_assignment_candidate`'s
+`enforce_position_eligibility` branch loads a client-supplied candidate
+`user_id` with no status filter at all, and that candidate is a _third
+party_ when an officer assigns someone else to a shift
+(`create_assignment(self_signup=False)`) — a path that never goes through
+`get_current_user` for the target member, so their inactive status was never
+consulted before this fix. Corrected in `SCH-15-scheduling.md` and in the
+misleading docstring the code itself carried (same inaccurate claim, fixed at
+its source).
+
+Full detail in
+`SCH-15-scheduling.md` → Pass 2. Completion gate (post-follow-up):
+flake8/black/isort clean (isort already installed), migrations 389
+revisions/single head, scoped tests 716 passed/1 skipped, full backend suite
+9181 passed/22 skipped/0 failed (+2 over the pre-follow-up baseline of 9179 —
+the two new swap-offer guard tests), `tsc`/`eslint` clean (10 pre-existing
+warnings, same set as
+SEC-00/AP-13/EC-14 pass 2). Rotation row 15 -> awaiting PR merge. Next: 16
+events & requests, once this PR merges.
 
 ---
 
@@ -1551,7 +1662,7 @@ each row's prior PR is recorded in the Log, not repeated here.
 | 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ✅     |
 | 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | ✅     |
 | 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | ✅     |
-| 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                | ⬜     |
+| 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                | ✅     |
 | 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                       | ⬜     |
 | 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`                                                                                   | ⬜     |
 | 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ⬜     |
