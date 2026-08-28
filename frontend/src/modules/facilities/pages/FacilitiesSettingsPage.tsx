@@ -220,7 +220,7 @@ function LookupDialog({
       aria-modal="true"
       aria-labelledby="lookup-title"
     >
-      <form className="card w-full max-w-md space-y-4 p-5" onSubmit={(event) => void submit(event)}>
+      <form className="card modal-panel-scroll w-full max-w-md space-y-4 p-5" onSubmit={(event) => void submit(event)}>
         <h2 id="lookup-title" className="text-lg font-semibold">
           {item ? 'Edit' : 'Add'} {definitions[kind].singular}
         </h2>
