@@ -583,6 +583,16 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
                 icon: AlertTriangle,
                 permission: 'settings.manage',
               },
+              ...(isModuleOn('testing')
+                ? [
+                    {
+                      label: 'Testing Home',
+                      path: '/testing',
+                      icon: ClipboardCheck,
+                      permission: 'settings.manage',
+                    },
+                  ]
+                : []),
             ],
           } as NavItem,
         ]

@@ -147,6 +147,57 @@ def derive_membership_type(
     return _OPERATIONAL_LEGACY.get(status, "active")
 
 
+#: Refused in these words by every path that could pair an administrative
+#: member with an operational rank -- the create, the profile update and the
+#: prospect conversion. One constant rather than three literals, for the same
+#: reason ``rank_not_configured_message`` is one: an operator who hits the rule
+#: on two different screens must not be told two different things.
+ADMINISTRATIVE_RANK_MESSAGE = (
+    "Administrative members do not hold an operational rank. "
+    "Move the member to an operational class first, or leave the rank blank."
+)
+
+
+def effective_member_class(
+    member_class: Optional[str],
+    membership_type: Optional[str] = None,
+) -> Optional[str]:
+    """The class to judge a member by, whichever column the caller wrote.
+
+    ``_reconcile_membership`` fills ``member_class`` at **flush**, not on
+    assignment, so a request that has only set ``membership_type`` still sees a
+    stale (or ``None``) class on the in-memory object. Any rule evaluated
+    mid-request has to derive the class itself, which is what
+    ``ElectionService._user_has_role_type`` already does by hand.
+
+    Returns ``None`` for an unset class over a membership *tier* id the split
+    map does not know. Callers must treat that as "not established", never as a
+    default class: guessing is the widening ``split_membership_type`` refuses
+    to do. An entirely empty pair is different and resolves to the default
+    operational class, matching the column default.
+    """
+    if member_class and member_class.strip():
+        return member_class.strip().lower()
+    return split_membership_type(membership_type)[0]
+
+
+def is_administrative(
+    member_class: Optional[str],
+    membership_type: Optional[str] = None,
+) -> bool:
+    """Whether this member is administrative, and therefore holds no rank.
+
+    Asks specifically about the administrative class rather than about the
+    absence of the operational one. The difference is not stylistic: a custom
+    membership tier resolves to ``None`` (see ``split_membership_type``), so
+    ``not is_operational(...)`` is true for every department running a
+    configured tier like ``senior`` -- and would strip their ranks.
+    """
+    return effective_member_class(member_class, membership_type) == (
+        MemberClass.ADMINISTRATIVE
+    )
+
+
 def is_operational(member_class: Optional[str]) -> bool:
     """Whether this member is on the operational side of the house.
 

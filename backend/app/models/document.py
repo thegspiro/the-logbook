@@ -285,6 +285,14 @@ class DocumentFolder(Base):
         JSON, nullable=True
     )  # List of role slugs; null = no restriction
 
+    # List of permission names, ANY of which admits the holder; null = no
+    # restriction. Distinct from allowed_roles because a module's own contract
+    # is written in permissions, not role slugs: a facility's files are gated
+    # on facilities.view_sensitive/edit/manage, which no set of role slugs
+    # names stably — a department renames or adds roles, and a slug list
+    # silently stops matching while the permission does not.
+    required_permissions = Column(JSON, nullable=True)
+
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(

@@ -86,6 +86,49 @@ def _module(permission: str) -> str:
     return permission.split(".")[0]
 
 
+def _module_permission_constants(tree: ast.Module) -> dict[str, list[str]]:
+    """Module-level tuples/lists of string literals, by name.
+
+    Narrow on purpose: module scope, and every element a plain string. A
+    constant assembled at runtime resolves to nothing, so its gate stays
+    unreachable and the guard test reports it rather than this quietly
+    inventing a permission set it cannot actually see.
+    """
+    found: dict[str, list[str]] = {}
+    for node in tree.body:
+        if not isinstance(node, (ast.Assign, ast.AnnAssign)):
+            continue
+        value = node.value
+        if not isinstance(value, (ast.Tuple, ast.List)):
+            continue
+        if not value.elts or not all(
+            isinstance(el, ast.Constant) and isinstance(el.value, str)
+            for el in value.elts
+        ):
+            continue
+        targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+        for target in targets:
+            if isinstance(target, ast.Name):
+                found[target.id] = [el.value for el in value.elts]
+    return found
+
+
+def _resolved_args(call: ast.Call, constants: dict[str, list[str]]) -> list[str] | None:
+    """The permissions this gate accepts, or None if they cannot be read."""
+    perms: list[str] = []
+    for arg in call.args:
+        if isinstance(arg, ast.Constant) and isinstance(arg.value, str):
+            perms.append(arg.value)
+        elif isinstance(arg, ast.Starred) and isinstance(arg.value, ast.Name):
+            resolved = constants.get(arg.value.id)
+            if resolved is None:
+                return None
+            perms.extend(resolved)
+        else:
+            return None
+    return perms
+
+
 def _permission_gates() -> list[tuple[str, str, list[str]]]:
     """Every ``require_permission`` gate in the endpoint layer.
 
@@ -94,13 +137,23 @@ def _permission_gates() -> list[tuple[str, str, list[str]]]:
     ``dependencies=[...]`` list, which ``equipment_check.py`` uses. Reading
     only the signature misses the latter silently.
 
-    Gates built from anything other than string literals are skipped — there
-    are none today, and a computed gate would need reading rather than
-    asserting on.
+    Two argument forms are read: string literals, and a ``*`` unpack of a
+    module-level tuple/list of literals
+    (``require_permission(*_SENSITIVE_READ_PERMISSIONS)``), which
+    ``facilities.py`` uses where a route and a redaction helper must share one
+    permission set. Resolving the constant rather than skipping the call is
+    what keeps that gate *inspected* by the composition rules below — a skipped
+    gate is not a neutral omission, it is an officer endpoint this file stops
+    checking. ``test_every_written_gate_is_actually_reached`` is the guard that
+    notices when a syntax slips past.
+
+    Anything else — a gate assembled at runtime — is still skipped, and the
+    guard test turns that skip into a failure rather than a silent gap.
     """
     gates = []
     for path in sorted(ENDPOINTS.glob("*.py")):
         tree = ast.parse(path.read_text())
+        constants = _module_permission_constants(tree)
         for node in ast.walk(tree):
             if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 continue
@@ -112,9 +165,10 @@ def _permission_gates() -> list[tuple[str, str, list[str]]]:
                         and call.func.id == "require_permission"
                     ):
                         continue
-                    if not all(isinstance(a, ast.Constant) for a in call.args):
+                    perms = _resolved_args(call, constants)
+                    if perms is None:
                         continue
-                    gates.append((path.name, node.name, [a.value for a in call.args]))
+                    gates.append((path.name, node.name, perms))
     return gates
 
 
