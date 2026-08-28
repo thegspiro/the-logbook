@@ -1237,10 +1237,9 @@ class TestStatusTransitionMatrix:
                 assert err is not None, f"RETIRED + {cond} should be invalid"
 
     @pytest.mark.unit
-    def test_non_retired_statuses_accept_standard_conditions(self):
-        """Non-RETIRED statuses should accept any standard condition."""
-        non_retired = [
-            ItemStatus.AVAILABLE,
+    def test_non_retired_non_available_statuses_accept_standard_conditions(self):
+        """Statuses other than RETIRED/AVAILABLE should accept any standard condition."""
+        other_statuses = [
             ItemStatus.CHECKED_OUT,
             ItemStatus.IN_MAINTENANCE,
             ItemStatus.LOST,
@@ -1254,10 +1253,23 @@ class TestStatusTransitionMatrix:
             ItemCondition.DAMAGED,
             ItemCondition.OUT_OF_SERVICE,
         ]
-        for st in non_retired:
+        for st in other_statuses:
             for cond in standard:
                 err = InventoryService._validate_item_state(st, cond)
                 assert err is None, f"{st} + {cond} should be valid but got: {err}"
+
+    @pytest.mark.unit
+    def test_available_requires_safe_condition(self):
+        """AVAILABLE must reject POOR/DAMAGED/OUT_OF_SERVICE -- an unsafe item
+        must not become distributable (assign/checkout/issue all gate on
+        status == AVAILABLE)."""
+        safe = {ItemCondition.EXCELLENT, ItemCondition.GOOD, ItemCondition.FAIR}
+        for cond in ItemCondition:
+            err = InventoryService._validate_item_state(ItemStatus.AVAILABLE, cond)
+            if cond in safe:
+                assert err is None, f"AVAILABLE + {cond} should be valid but got: {err}"
+            else:
+                assert err is not None, f"AVAILABLE + {cond} should be invalid"
 
     @pytest.mark.unit
     def test_assigned_status_always_requires_user(self):

@@ -17,37 +17,48 @@ feature. The rotation cannot outrun its own review queue.
 ## Open PR
 
 [PR #1957](https://github.com/thegspiro/the-logbook/pull/1957) — feature 11
-(inventory), pass 2. No findings and no code change; docs-only (this file +
-`INV-11-inventory.md`). Awaiting merge before feature 12 (facilities) starts.
+(inventory), pass 2. 6 findings fixed (3 HIGH, 3 LOW/MED), 2 flagged. Awaiting
+CI/merge before feature 12 (facilities) starts.
 
 ---
 
-### 2026-08-28 — Feature 11 (Inventory), pass 2 — no findings
+### 2026-08-28 — Feature 11 (Inventory), pass 2 — 6 fixed (3 HIGH), 2 flagged (corrected after initial "no findings")
 
-Scoped to the full domain since pass 1's merge (`acfc34c3`, PR #1835). Unlike
-recent quiet pass-2s, this range carried substantial new feature work (six
-commits: distribute-items replacing batch-checkout, an explicit custody
-`/transfer` endpoint, request-intent/fulfillment-type separation, a
-versioned row-locked reorder-receiving workflow with a new `reorder_receipts`
-table, a three-stage return-request lifecycle with independent physical
-verification, and an optimistic-concurrency write-off review). Read every
-new/changed endpoint and its full service method rather than sampling.
-Every new mutation is `inventory.manage`-gated, matching the module's
-existing pattern; every new by-id/FK access is org-scoped, and every new
-concurrency-sensitive path (reorder transitions, receiving, custody
-transfer) locks the contended row and — where a lock alone would not
-suffice, per Pitfall #27 — adds optimistic versioning or an idempotency key.
-Confirmed `reorder_requests`/`inventory_lots` are migration-created tables
-(so the new migration's unguarded `ADD COLUMN`s are safe on a fresh CI
-database) and that the `return_requests` migration correctly guards on
-`_has_table` since that table is `create_all`-only (Pitfall #26 checked
-both ways, not assumed). INV-7/LBL-1 (pass 1 fixes) confirmed still intact;
-INV-8/INV-9 (pass 1 flags) confirmed still open and already mirrored in
-`KNOWN_LIMITATIONS.md` — no new information this pass, so left as is. No
-code changes; full detail in `INV-11-inventory.md`. Opened as PR #1957
-(docs-only) rather than committed directly, per this session's branch
-constraints. Rotation row 11 -> awaiting merge. Next: 12 facilities, once
-#1957 merges.
+Scoped to the full domain since pass 1's merge (`acfc34c3`, PR #1835). This
+range carried substantial new feature work (six commits: distribute-items
+replacing batch-checkout, an explicit custody `/transfer` endpoint,
+request-intent/fulfillment-type separation, a versioned row-locked
+reorder-receiving workflow with a new `reorder_receipts` table, a
+three-stage return-request lifecycle with independent physical
+verification, and an optimistic-concurrency write-off review). The backend
+diff was read in full and reviewed carefully; the first version pushed to
+PR #1957 waved through the frontend diff on the (true but incomplete)
+reasoning that client-side code cannot itself create an auth/tenant gap —
+missing that this feature ships real business logic in its components. An
+automated review on the PR caught 7 issues; each was independently
+verified against the actual code, not taken on the bot's word. Fixed: a
+missing row lock let concurrent deny/receive on the same return request
+overwrite each other (INV-10, HIGH); `receive_reorder` never credited
+`InventoryItem.quantity`, so received stock could not actually be issued
+(INV-11, HIGH — the entire feature this range centers on was
+non-functional); the item-status validator allowed a damaged/unsafe item
+to return to `AVAILABLE`, becoming distributable (INV-12, HIGH — a
+life-safety issue for a fire department); stale `followUp`/quantity state
+in `ReturnRequestsPanel` could misfile a write-off/charge-review against
+the wrong item (INV-13, MED); a custody-transfer audit event omitted the
+acting user (INV-14, LOW); a "Transfer is immediate" checkbox had no
+effect and was removed (INV-15, LOW). Flagged: ordinary reorder PATCH
+edits bypass the versioned workflow (INV-16, MED — API-contract decision);
+"Complete work" always creates a new maintenance record instead of closing
+the open one (INV-17, MED — needs new data-fetching + a multi-open-record
+decision). Both mirrored to `KNOWN_LIMITATIONS.md`. Two pre-existing tests
+that encoded the old, incorrect state-validation rule as expected behavior
+were corrected, not deleted. New guard tests added for INV-10/11/12. Full
+backend suite: 9173 passed. Frontend: `tsc`/`eslint` clean. Full detail in
+`INV-11-inventory.md`. INV-7/LBL-1 (pass 1 fixes) confirmed still intact;
+INV-8/INV-9 (pass 1 flags) confirmed still open, no new information this
+pass. Rotation row 11 -> awaiting merge. Next: 12 facilities, once #1957
+merges.
 
 ### 2026-08-28 — Feature 10 (Documents & legal), pass 2 ✅ merged — PR #1953
 
