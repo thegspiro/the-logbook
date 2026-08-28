@@ -16,7 +16,7 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-[PR #1966](https://github.com/thegspiro/the-logbook/pull/1966) (feature 15,
+[PR #1968](https://github.com/thegspiro/the-logbook/pull/1968) (feature 15,
 scheduling, pass 2) — branch `claude/security-review-scheduling`.
 
 (Separately, [PR #1965](https://github.com/thegspiro/the-logbook/pull/1965)
