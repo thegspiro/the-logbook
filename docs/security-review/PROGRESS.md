@@ -16,9 +16,8 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-Pending — feature 13 (apparatus & NFC), pass 2, about to be opened on
-`claude/security-review-apparatus-nfc`. This row is updated with the PR
-number in a quick follow-up commit once it exists.
+[PR #1961](https://github.com/thegspiro/the-logbook/pull/1961) (feature 13,
+apparatus & NFC, pass 2) — branch `claude/security-review-apparatus-nfc`.
 
 ---
 
