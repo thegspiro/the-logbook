@@ -16,10 +16,17 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-[PR #1961](https://github.com/thegspiro/the-logbook/pull/1961) (feature 13,
-apparatus & NFC, pass 2) — branch `claude/security-review-apparatus-nfc`.
+None.
 
 ---
+
+### 2026-08-28 — Feature 13 (Apparatus & NFC), pass 2 ✅ merged — PR #1961
+
+Merged (`1c71d8e1`). Confirmed on `origin/main` by ancestry check
+(`git log origin/main --oneline` shows the merge commit at HEAD). No
+review-thread follow-up needed — AP-7 was the only finding, already fixed
+before the PR was opened, and CI was green with no Codex comments requiring
+a push. Rotation row 13 -> done. Next: 14 equipment check & shifts.
 
 ### 2026-08-28 — Feature 13 (Apparatus & NFC), pass 2 — 1 fixed (LOW), 0 flagged, 2 doc corrections
 
