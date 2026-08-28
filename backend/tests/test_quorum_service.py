@@ -89,6 +89,27 @@ class TestQuorumRecalcLocking:
         stmt = db.execute.await_args_list[0].args[0]
         assert "FOR UPDATE" in str(stmt)
 
+    async def test_minutes_fetch_repopulates_an_already_loaded_instance(self):
+        """The lock alone is not enough on a session that already holds this
+        row. set_meeting_quorum_config loads and commits this same
+        MeetingMinutes instance before calling here; with
+        expire_on_commit=False it stays in the session's identity map, and a
+        re-SELECT for a row already in the identity map does not copy the new
+        row's columns onto the cached Python object unless the query opts
+        into populate_existing -- the lock is acquired at the SQL level, but
+        `minutes.attendees` would still read the pre-lock value. Same
+        requirement as membership_pipeline_service.py's
+        `execution_options(populate_existing=True)`."""
+        minutes = _minutes(
+            quorum_type="count", quorum_threshold=2, attendees=_attendees(2)
+        )
+        db = _db([_one(minutes)])
+
+        await QuorumService(db).calculate_quorum("min-1", "org-1")
+
+        stmt = db.execute.await_args_list[0].args[0]
+        assert stmt.get_execution_options().get("populate_existing") is True
+
 
 class TestCountQuorum:
     async def test_count_override_met(self):

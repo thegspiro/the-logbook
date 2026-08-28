@@ -92,6 +92,47 @@ Complete reference of all pages in the application, organized by module.
 
 ---
 
+## Testing Home
+
+| URL                     | Page                   | Permission    | Module    |
+| ----------------------- | ---------------------- | ------------- | --------- |
+| `/testing`              | Testing Home           | Authenticated | `testing` |
+| `/testing/report/print` | Testing Report (print) | Authenticated | `testing` |
+
+> An index of every route in this document, as boxes that open the page and
+> record Pass/Fail/Blocked plus a note. The run is stored per department, one
+> row per tester per page (`/api/v1/testing-checklist`), so a member testing
+> from their own account and an officer testing from theirs contribute to the
+> same list.
+>
+> Each box also shows the gate its route enforces and whether the signed-in
+> account satisfies it, which is how the permission gates are tested from the
+> outside — so the route is deliberately **authenticated-only**: a page a
+> firefighter could not open would be useless for checking what a firefighter
+> is refused. The navigation entry is gated on `settings.manage`; the URL is
+> not.
+>
+> The module is **off by default** and is not offered during onboarding — a
+> department turns **Testing Checklist** on under Settings → Modules when it
+> wants it. While it is off the nav entry, the route and `/api/v1/testing-checklist`
+> all refuse; recorded marks are kept and return when it is switched back on.
+>
+> Marks belong to a **run** — one named pass over the checklist. The newest run
+> is the current one, so starting a run archives the previous one; earlier runs
+> stay readable and exportable from the picker. Each mark also records the build
+> it was made against and what the app predicted that account would meet, which
+> is what turns "this page opened for a firefighter" into a reported finding
+> rather than a pass. Exports: CSV, a page-by-tester permission matrix, the
+> printable report at `/testing/report/print`, and Markdown.
+>
+> `settings.manage` (which the System Owner's `*` covers) additionally opens
+> **every tester's** marks: each box lists what other accounts found and the
+> position they held, and the same grant unlocks clearing the department's
+> whole run — an audited, irreversible action. Without it a tester reads and
+> clears only their own. See TESTING_CHECKLIST.md → "How to work through this".
+
+---
+
 ## Members
 
 ### Member-Facing Pages

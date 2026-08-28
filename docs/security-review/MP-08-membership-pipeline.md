@@ -1,6 +1,159 @@
 # Security Review — Membership Pipeline
 
-**Prefix:** `MP` · **Iteration:** 8 · **Reviewed:** 2026-08-25 · **PR:** (this PR)
+**Prefix:** `MP` · **Iteration:** 8 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2) · **PR:** [#1815](https://github.com/thegspiro/the-logbook/pull/1815) (pass 1), (this PR) (pass 2)
+
+---
+
+## Pass 2 (2026-08-27)
+
+> **Revision note:** the backend section below, as first drafted, concluded
+> the 2 changed backend files needed no further review since they matched
+> already-Codex-reviewed work from PR #1931. That comparison was correct as
+> far as it went, but incomplete — Codex's review of this PR's draft found
+> two real, separate P1 issues in the same `transfer_prospect`/
+> `transfer_to_membership`/`_do_transfer` path that PR #1931's review never
+> had reason to look for (it was scoped to the administrative-rank pairing,
+> not to `role_ids` or to concurrency): a missing role-grant ceiling on the
+> transfer's `role_ids`, and a missing row lock making the transfer's
+> already-once-fixed `ProspectStatus.TRANSFERRED` guard a check-before-write
+> race. Both are recorded under Findings with what was actually done. The
+> original draft's backend paragraph is left below for the record, followed
+> by the corrected conclusion.
+
+Scoped to the **full domain** since pass 1's merge commit (`aad49be4`,
+PR #1815): `endpoints/membership_pipeline.py`, `services/membership_pipeline_service.py`,
+`models/membership_pipeline.py`, `schemas/membership_pipeline.py`,
+`api/prospect_privacy.py`, every migration since (checked by content, not
+filename, for anything touching prospect/pipeline/stage tables), and —
+learning from ELEC-06/USR-07 pass 2's own correction — a `git diff --stat`
+against `frontend/src/` broadly rather than only `modules/prospective-members/`,
+which also caught `frontend/src/modules/membership/routes.tsx` and the new
+`frontend/src/utils/membership.ts`, both outside that directory.
+
+**Backend (2 files changed, both already reviewed):** `endpoints/membership_pipeline.py`
+(+42/-1) and `services/membership_pipeline_service.py` (+37) both changed
+only for the privilege-ceiling fix already made and Codex-reviewed earlier
+in this same rotation, on PR #1931 (feature 02, permissions & roles pass 2)
+— `transfer_prospect` resolves and validates the prospect before checking
+the administrative-rank ceiling (avoiding a false CRITICAL on an invalid
+prospect id), and `_do_transfer` refuses an administrative class paired with
+a rank via `is_administrative(...)`, matching
+`TestEveryWriterIsCovered.test_the_prospect_transfer_path_refuses_the_pair`
+(verified during USR-07 pass 2). This is an INSERT path (a new `User` row
+via prospect conversion) rather than an update-in-place, and the
+`ProspectStatus.TRANSFERRED` guard already prevents a double-transfer race,
+so it does not need the `populate_existing`/row-lock treatment the update
+writers required — no finding.
+
+**Corrected backend conclusion (Codex review on this PR):** the two findings
+below are both real and both fixed.
+
+- **Missing role-grant ceiling on `transfer_prospect`'s `role_ids`.**
+  `TransferProspectRequest` carries a caller-supplied `role_ids` list, and
+  `_do_transfer` resolved those ids with only an `organization_id` filter and
+  attached every match to the new `User` — `create_member`'s identical
+  `role_ids` handling calls `_enforce_role_grant_ceiling` right after the
+  same org-scoped resolution; `transfer_prospect` never did. A caller
+  holding only `members.manage`/`prospective_members.manage` (neither of
+  which implies `roles.manage`) could submit a wildcard or otherwise
+  more-privileged role's id and mint an account with permissions beyond
+  their own — and since the same request also controls
+  `department_email`, they could point the new account's welcome email at
+  an address they control and log in as it themselves, a full-tenant
+  escalation through the transfer path rather than the (already-guarded)
+  direct-create or assign paths. Fixed in `transfer_prospect`
+  (`endpoints/membership_pipeline.py`): after the existing rank-ceiling
+  check and before calling `service.transfer_to_membership`, resolve
+  `data.role_ids` the same way `create_member` does (org-scoped, 400 on any
+  id that doesn't resolve) and run `_enforce_role_grant_ceiling` on the
+  result. Covered by
+  `test_transfer_prospect_calls_role_ceiling` in
+  `test_privilege_ceiling_wiring.py`.
+- **`transfer_to_membership` is a check-before-write with no row lock.**
+  `get_prospect` supports `lock_for_update=True` and the pattern is already
+  established elsewhere in this service (`complete_step_for_prospect` locks
+  before its own status check, with the exact comment explaining why) — but
+  `transfer_to_membership` called `get_prospect` with no lock, checked
+  `ProspectStatus.TRANSFERRED`, and only set that status _after_ creating
+  the new `User` row in `_do_transfer`. Two concurrent transfer requests
+  supplying distinct `username`/`membership_id`/`department_email` values
+  (so the `User` table's uniqueness indexes don't conflict) can both observe
+  `ACTIVE` before either commits, and both create a separate `User` account
+  for the same prospect — the second write to `prospect.transferred_user_id`
+  simply overwrites the first, silently orphaning one of the two accounts
+  from the prospect record while leaving both live. This is the same
+  read-then-write shape CLAUDE.md Pitfall #27 documents for capacity checks,
+  applied to a one-time status transition instead of a count. Fixed by
+  adding `lock_for_update=True` to `transfer_to_membership`'s `get_prospect`
+  call, ahead of the `TRANSFERRED` check (the row lock serializes the
+  decision; `get_prospect`'s query already carries
+  `.execution_options(populate_existing=True)` unconditionally, so no
+  separate staleness fix was needed here). Covered by
+  `test_transfer_locks_the_prospect_before_checking_status` in
+  `test_membership_pipeline_flow.py`.
+
+**Migrations:** content-grepped (`prospect|membership_pipeline|pipeline_stage`,
+case-insensitive) across every migration added since pass 1; the 3 hits are
+all false positives — permission-string substring matches in unrelated,
+already-reviewed storefront-grant-backfill migrations, not schema changes to
+any membership-pipeline table.
+
+**Frontend:** reviewed via a dedicated pass over the diff for `PipelineSettingsPage.tsx`
+(527 L changed), `ProspectiveMembersPage.tsx` (237 L changed),
+`ApplicantDetailDrawer.tsx`, `ConversionModal.tsx`, `StageConfigModal.tsx`,
+`prospective-members/routes.tsx`, `services/api.ts`, `types/index.ts`, the
+new `PipelineBuilder.test.tsx`, and the new `frontend/src/utils/membership.ts`
+(the frontend counterpart to `backend/app/utils/membership.py`'s class/status
+split, diffed line-by-line against it). Findings:
+
+- Most of the diff is `DialogPortal` adoption on every fixed-position dialog
+  shell — the established fix for the fixed-dialog-in-a-`backdrop-blur`
+  defect (Pitfall #21 family) — structural only, no behavior change.
+- `mapStageUpdateToBackend` used `?? undefined` on `inactivity_timeout_days`,
+  collapsing an explicit `null` (clear a per-stage override) into an omitted
+  key, which the backend's `exclude_unset=True` update path reads as "leave
+  alone" — unticking a custom timeout silently failed to persist. Already
+  fixed in this diff (forwards `null` verbatim) and covered by new tests in
+  `stageMapping.test.ts`/`PipelineBuilder.test.tsx`; the create path
+  correctly keeps `null → undefined` since no "leave alone" meaning exists
+  on create. No further action.
+- `DEFAULT_STAGE_CONFIGS` previously covered only 7 of 12 stage types,
+  crashing the editor on a stored `checklist`/`reference_check`/
+  `multi_approval`/`medical_screening`/`interview_requirement` stage.
+  Already fixed in this diff (one canonical table shared by the editor and
+  the read boundary) and covered by new tests. No further action.
+- `frontend/src/utils/membership.ts` matches `app/utils/membership.py`'s
+  `_SPLIT`/`is_administrative` exactly, including the no-guessing behavior
+  for unknown/custom tiers; no label or comment misrepresents backend
+  enforcement (the exact bug class `BallotBuilder.tsx` had in ELEC-06 pass 2
+  — not repeated here).
+- `ConversionModal` disables/clears the Rank input when "Administrative" is
+  picked — client-side only, but confirmed backed by the same server-side
+  refusal reviewed above (`_do_transfer`'s `is_administrative(...)` check),
+  so this is defense-in-depth, not the actual gate.
+- Module gating (`requiredModule`/`moduleLabel`) added to
+  `prospective-members/routes.tsx` and a training-history route in
+  `membership/routes.tsx`. Confirmed in `ProtectedRoute.tsx` that the module
+  check runs strictly after the existing `requiredPermission`/`requiredRole`
+  checks and is documented as a usability gate, not access control —
+  additive, not a weakening.
+- No stale-response race: neither page's diff added new fetch/`useEffect`
+  logic (both are pure reindentation from the `DialogPortal` change).
+
+Frontend: no confirmed security findings, no code changes needed (the diff's
+own bugs were already fixed and tested within it). Backend: 2 real P1
+findings, both fixed above and each covered by a guard test confirmed to
+fail against the pre-fix code via `git stash` before being counted.
+Completion gate: flake8/black/isort clean on every changed file;
+`test_membership_pipeline_flow.py` + `test_privilege_ceiling_wiring.py` +
+`test_prospect_create_privacy.py` + `test_rejected_prospect_dropped.py` +
+`test_administrative_rank_restriction.py` (95 tests) all pass; full backend
+suite 9112 passed / 22 skipped (pre-existing, environment-related) / 0
+failed. Rotation row 08 -> done.
+
+---
+
+## Pass 1 (2026-08-25)
 
 **Backend:** `endpoints/membership_pipeline.py` (2,255 L, 51 routes), `services/membership_pipeline_service.py` (5,690 L), `models/membership_pipeline.py`, `schemas/membership_pipeline.py`, `api/prospect_privacy.py`
 **Frontend:** `modules/prospective-members/` (not re-read in full this pass — see Scope)

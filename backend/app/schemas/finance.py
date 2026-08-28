@@ -6,7 +6,7 @@ purchase requests, expense reports, check requests, dues,
 approval chains, and export operations.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Optional
 
@@ -614,7 +614,7 @@ class DuesScheduleUpdate(BaseModel):
     amount: Optional[Decimal] = Field(None, gt=0, decimal_places=2)
     frequency: Optional[str] = None
     due_date: Optional[datetime] = None
-    grace_period_days: Optional[int] = Field(None, ge=0, decimal_places=2)
+    grace_period_days: Optional[int] = Field(None, ge=0)
     late_fee_amount: Optional[Decimal] = Field(None, decimal_places=2)
     fiscal_year_id: Optional[str] = None
     applies_to_membership_types: Optional[list[str]] = None
@@ -782,6 +782,19 @@ class ExportRequest(BaseModel):
     date_range_start: datetime
     date_range_end: datetime
     file_format: str = "csv"
+
+    @field_validator("date_range_start", "date_range_end")
+    @classmethod
+    def _normalize_datetime(cls, v: datetime) -> datetime:
+        # Pydantic v2 accepts both naive and timezone-aware ISO datetimes, but
+        # comparing/subtracting the two forms raises TypeError -- a bare
+        # Python exception the model validator below does not turn into a
+        # 422 -- so a payload mixing them 500'd. Treat naive as UTC (the
+        # project-wide wire convention), matching schemas/election.py's
+        # _as_utc.
+        if v.tzinfo is None:
+            return v.replace(tzinfo=timezone.utc)
+        return v
 
     @model_validator(mode="after")
     def validate_date_range(self):

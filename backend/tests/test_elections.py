@@ -160,6 +160,30 @@ class TestVoterTypeMembershipBoundaries:
 
         assert await service._user_has_role_type(user, [voter_type])
 
+    @pytest.mark.asyncio
+    async def test_administrative_is_eligible_for_administrative_category(self):
+        service = _make_service()
+        user = SimpleNamespace(
+            member_class="administrative", member_status="regular", roles=[]
+        )
+
+        assert await service._user_has_role_type(user, ["administrative"])
+
+    @pytest.mark.asyncio
+    async def test_social_is_eligible_only_for_social_category(self):
+        """'social' is a real, reachable eligible_voter_types value -- the
+        schema accepts any string, falling back to a role-slug match -- and
+        must not also satisfy 'operational'/'administrative'/'regular'."""
+        service = _make_service()
+        user = SimpleNamespace(
+            member_class="social", member_status="honorary", roles=[]
+        )
+
+        assert await service._user_has_role_type(user, ["social"])
+        assert not await service._user_has_role_type(user, ["operational"])
+        assert not await service._user_has_role_type(user, ["administrative"])
+        assert not await service._user_has_role_type(user, ["regular"])
+
 
 # ===================================================================
 # 1. Vote Signing & Integrity

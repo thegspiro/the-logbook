@@ -138,6 +138,29 @@ class AdminUserCreate(MembershipClassificationFields):
     station: Optional[str] = Field(None, max_length=100)
     platoon: Optional[str] = Field(None, max_length=20)
 
+    # Address
+    address_street: Optional[str] = Field(None, max_length=255)
+    address_city: Optional[str] = Field(None, max_length=100)
+    address_state: Optional[str] = Field(None, max_length=50)
+    address_zip: Optional[str] = Field(None, max_length=20)
+    address_country: Optional[str] = Field(default="USA", max_length=100)
+
+    # Emergency contacts
+    emergency_contacts: List[EmergencyContact] = Field(default_factory=list)
+
+    # Admin options
+    password: Optional[str] = Field(
+        None,
+        min_length=12,
+        description="Optional initial password. If omitted a temporary password is auto-generated.",
+    )
+    role_ids: List[UUID] = Field(
+        default_factory=list, description="Initial roles to assign"
+    )
+    send_welcome_email: bool = Field(
+        default=True, description="Send welcome email with password setup link"
+    )
+
 
 class UserUpdate(MembershipClassificationFields):
     """Schema for updating a user"""
