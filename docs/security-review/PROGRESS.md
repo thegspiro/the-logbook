@@ -16,11 +16,18 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-[PR #1963](https://github.com/thegspiro/the-logbook/pull/1963) (feature 14,
-equipment check & shifts, pass 2) — branch
-`claude/security-review-equipment-check`.
+None.
 
 ---
+
+### 2026-08-28 — Feature 14 (Equipment check & shifts), pass 2 ✅ merged — PR #1963
+
+Merged (`d1f43285`). Confirmed on `origin/main` by ancestry check
+(`git log origin/main --oneline` shows the merge commit at HEAD, directly
+above #1962's merge commit `2da165c6`). No review-thread follow-up needed
+beyond the same-day scope-correction commit already included in the merge
+(the two Codex-flagged adjacent files, both verified clean — see below).
+Rotation row 14 -> done. Next: 15 scheduling.
 
 ### 2026-08-28 — Feature 14 (Equipment check & shifts), pass 2 — no findings
 
