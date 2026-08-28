@@ -16,14 +16,23 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-[PR #1973](https://github.com/thegspiro/the-logbook/pull/1973) (feature 16,
-events & requests, pass 2) — branch `claude/security-review-events`. (The
-bookkeeping PR for SCH-15/#1968's merge was opened twice by two concurrent
-sessions — #1970 and #1971; #1971 was closed as a duplicate of #1970, which
-merged first and also resolved #1968's Codex threads.) See the log entries
-below.
+None.
 
 ---
+
+### 2026-08-28 — Feature 16 (Events & requests), pass 2 ✅ merged — PR #1973
+
+Merged (`7e27b765`). Codex had hit its usage limit and could not review this
+PR directly, so the fix-commit history (5 comments raised against the
+original draft on a prior Codex pass over this same branch, all independently
+re-verified real and addressed — see below) stood as the review record. CI
+green on the final head (17/17 checks); the one E2E failure surfaced mid-PR
+(`mobile-route-integrity.spec.ts`) was traced to the pre-existing, unrelated
+`main` bug tracked on #1971/fixed by #1972, which had already merged into
+`main` by the time this PR's base was updated — confirmed clean on the final
+run. No merge conflict (base was current `main`). Confirmed on `origin/main`
+by ancestry check (`git log origin/main --oneline` shows the merge commit at
+HEAD). Rotation row 16 -> done. Next: 17 training (core).
 
 ### 2026-08-28 — Feature 16 (Events & requests), pass 2 — 3 fixes (EV-17 HIGH, EV-18/EV-19 MED), 3 scope corrections, 2 stale-doc corrections
 
