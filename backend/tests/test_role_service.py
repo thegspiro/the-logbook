@@ -15,6 +15,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from app.core.permissions import permission_matches
 from app.services.role_service import RoleManagementService, slugify
 
 
@@ -118,6 +119,58 @@ def _mutation_db():
 
 
 class TestRoleMutationAuditing:
+    async def test_member_system_position_display_name_can_change(self):
+        db = _mutation_db()
+        service = RoleManagementService()
+        member = SimpleNamespace(
+            id="member-role",
+            organization_id="org-1",
+            name="Member",
+            slug="member",
+            description="Baseline",
+            permissions=["events.view"],
+            is_system=True,
+            priority=10,
+        )
+        service.get_role = AsyncMock(return_value=member)
+
+        with patch(
+            "app.services.role_service.log_audit_event",
+            new=AsyncMock(return_value=object()),
+        ) as audit:
+            updated = await service.update_role(
+                db, "member-role", "org-1", "admin-1", name="Volunteer"
+            )
+
+        assert updated.name == "Volunteer"
+        assert updated.slug == "member"
+        assert updated.permissions == ["events.view"]
+        assert permission_matches("events.view", set(updated.permissions))
+        assert audit.await_args.kwargs["event_data"]["changes"]["name"] == {
+            "old": "Member",
+            "new": "Volunteer",
+        }
+
+    async def test_other_system_position_name_update_is_rejected(self):
+        db = _mutation_db()
+        service = RoleManagementService()
+        service.get_role = AsyncMock(
+            return_value=SimpleNamespace(
+                id="chief-role",
+                name="Chief",
+                slug="chief",
+                is_system=True,
+            )
+        )
+
+        with pytest.raises(ValueError, match="Cannot rename this system position"):
+            await service.update_role(
+                db, "chief-role", "org-1", "admin-1", name="Commander"
+            )
+
+        db.flush.assert_not_awaited()
+        db.commit.assert_not_awaited()
+
     async def test_create_has_one_canonical_audit_before_commit(self):
         db = _mutation_db()
         service = RoleManagementService()
