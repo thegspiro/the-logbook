@@ -263,7 +263,9 @@ export const RoleManagementPage: React.FC = () => {
                 {editingRole?.is_system && (
                   <div className="rounded-lg border border-yellow-200 bg-yellow-50 p-4 dark:border-yellow-500/30 dark:bg-yellow-500/10">
                     <p className="text-sm text-yellow-800 dark:text-yellow-400">
-                      This is a system role. Only the description and permissions can be modified.
+                      {editingRole.slug === 'member'
+                        ? 'This is the regular-member system role. Its display name may be customized; the internal “member” slug remains unchanged.'
+                        : 'This is a system role. Only the description and permissions can be modified.'}
                     </p>
                   </div>
                 )}
@@ -277,7 +279,7 @@ export const RoleManagementPage: React.FC = () => {
                     type="text"
                     value={formData.name}
                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                    disabled={editingRole?.is_system}
+                    disabled={editingRole?.is_system && editingRole.slug !== 'member'}
                     required
                     aria-required="true"
                     className="border-theme-surface-border bg-theme-surface-secondary text-theme-text-primary focus:border-theme-focus-ring focus:ring-theme-focus-ring disabled:bg-theme-surface-hover mt-1 block w-full rounded-md shadow-xs sm:text-sm"
