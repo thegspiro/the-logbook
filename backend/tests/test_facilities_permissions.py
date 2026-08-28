@@ -20,14 +20,23 @@ import json
 from datetime import date, datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import AsyncMock, patch
+from uuid import uuid4
 
+import pytest
 import sqlalchemy as sa
 from alembic.operations import Operations
 from alembic.runtime.migration import MigrationContext
+from fastapi import HTTPException
 from fastapi.routing import APIRoute
 
 from app.api.dependencies import PermissionChecker
-from app.api.v1.endpoints.facilities import _facility_response_for, router
+from app.api.v1.endpoints.facilities import (
+    _SENSITIVE_READ_PERMISSIONS,
+    _facility_response_for,
+    _validate_shared_document_reference,
+    router,
+)
 from app.core.permissions import (
     DEFAULT_POSITIONS,
     OPERATIONAL_RANKS,
@@ -42,6 +51,7 @@ SENSITIVE_PREFIXES = (
     "/capital-projects",
     "/insurance-policies",
     "/occupants",
+    "/documents",
 )
 
 
@@ -420,3 +430,109 @@ def test_operational_reads_stay_available_to_facilities_view():
         assert any(
             "facilities.view" in permissions for permissions in _permission_sets(route)
         ), f"GET {route.path or '/'} no longer accepts facilities.view"
+
+
+def test_file_crud_uses_four_distinct_facility_grants():
+    """Reading, creating, editing and deleting are independent contracts."""
+    expected = {
+        ("GET", "/photos"): {"facilities.view", "facilities.manage"},
+        ("GET", "/documents"): set(_SENSITIVE_READ_PERMISSIONS),
+        ("POST", "/photos"): {
+            "facilities.create",
+            "facilities.edit",
+            "facilities.manage",
+        },
+        ("POST", "/documents"): {
+            "facilities.create",
+            "facilities.edit",
+            "facilities.manage",
+        },
+        ("PATCH", "/photos/{photo_id}"): {"facilities.edit", "facilities.manage"},
+        ("PATCH", "/documents/{document_id}"): {"facilities.edit", "facilities.manage"},
+        ("DELETE", "/photos/{photo_id}"): {
+            "facilities.delete",
+            "facilities.manage",
+        },
+        ("DELETE", "/documents/{document_id}"): {
+            "facilities.delete",
+            "facilities.manage",
+        },
+    }
+    actual = {}
+    for route in _api_routes():
+        for method in route.methods:
+            key = (method, route.path)
+            if key in expected:
+                actual[key] = _permission_sets(route)[0]
+    assert actual == expected
+
+
+@pytest.mark.asyncio
+async def test_shared_file_reference_files_an_unfiled_document_into_the_facility():
+    """An unfiled document is organization level — get_documents hands it to
+    anyone with documents.view — so leaving a facility's file loose at the org
+    root protects the record and not the bytes it points at. Filing it into the
+    facility folder, which carries required_permissions, is what closes that."""
+    org_id = str(uuid4())
+    facility_id = str(uuid4())
+    user = SimpleNamespace(organization_id=org_id)
+    document = SimpleNamespace(id=str(uuid4()), folder_id=None)
+    facility = SimpleNamespace(id=facility_id, name="Station 1")
+    folder = SimpleNamespace(id="folder-1")
+    db = AsyncMock()
+
+    with patch(
+        "app.api.v1.endpoints.facilities.DocumentsService.get_document_by_id",
+        new=AsyncMock(return_value=document),
+    ), patch(
+        "app.api.v1.endpoints.facilities.FacilitiesService.get_facility",
+        new=AsyncMock(return_value=facility),
+    ), patch(
+        "app.api.v1.endpoints.facilities.DocumentsService.ensure_facility_folder",
+        new=AsyncMock(return_value=folder),
+    ) as ensure:
+        await _validate_shared_document_reference(
+            db, f"document:{document.id}", user, facility_id
+        )
+
+    assert document.folder_id == "folder-1"
+    assert str(ensure.await_args.args[1]) == facility_id
+
+
+@pytest.mark.asyncio
+async def test_shared_file_reference_leaves_an_already_filed_document_alone():
+    """Re-parenting another module's document because a facility happens to
+    reference it would be the more surprising behaviour; the reference is still
+    validated either way."""
+    user = SimpleNamespace(organization_id=str(uuid4()))
+    document = SimpleNamespace(id=str(uuid4()), folder_id="somewhere-else")
+
+    with patch(
+        "app.api.v1.endpoints.facilities.DocumentsService.get_document_by_id",
+        new=AsyncMock(return_value=document),
+    ), patch(
+        "app.api.v1.endpoints.facilities.DocumentsService.ensure_facility_folder",
+        new=AsyncMock(),
+    ) as ensure:
+        await _validate_shared_document_reference(
+            AsyncMock(), f"document:{document.id}", user, str(uuid4())
+        )
+
+    assert document.folder_id == "somewhere-else"
+    ensure.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_shared_file_reference_rejects_cross_organization_document():
+    """The org-scoped storage lookup must not allow attaching another org's ID."""
+    user = SimpleNamespace(organization_id=str(uuid4()))
+    with patch(
+        "app.api.v1.endpoints.facilities.DocumentsService.get_document_by_id",
+        new=AsyncMock(return_value=None),
+    ) as lookup:
+        with pytest.raises(HTTPException) as exc:
+            await _validate_shared_document_reference(
+                AsyncMock(), f"document:{uuid4()}", user, str(uuid4())
+            )
+    assert exc.value.status_code == 404
+    assert str(lookup.await_args.args[1]) == user.organization_id

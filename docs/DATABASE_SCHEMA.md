@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**258 tables · 4408 columns · 834 foreign keys**
+**261 tables · 4438 columns · 842 foreign keys**
 
 ---
 
@@ -146,7 +146,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 | Table | Model | Columns | Purpose |
 |---|---|---|---|
-| [`document_folders`](#document_folders) | `DocumentFolder` | 16 | Document Folder model |
+| [`document_folders`](#document_folders) | `DocumentFolder` | 17 | Document Folder model |
 | [`documents`](#documents) | `Document` | 19 | Document model |
 
 ### Elections
@@ -422,6 +422,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 |---|---|---|---|
 | [`department_message_deliveries`](#department_message_deliveries) | `DepartmentMessageDelivery` | 9 | Durable, per-recipient claim and result for an external delivery. |
 | [`department_message_reads`](#department_message_reads) | `DepartmentMessageRead` | 5 | Tracks which users have read/acknowledged a department message. |
+| [`department_message_recipients`](#department_message_recipients) | `DepartmentMessageRecipient` | 6 | Durable, queryable delivery and resolution state for one recipient. |
 | [`department_messages`](#department_messages) | `DepartmentMessage` | 19 | Department Message model |
 | [`notification_logs`](#notification_logs) | `NotificationLog` | 20 | Notification Log model |
 | [`notification_rules`](#notification_rules) | `NotificationRule` | 12 | Notification Rule model |
@@ -522,6 +523,15 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`store_products`](#store_products) | `StoreProduct` | 28 | A sellable item in the department catalog |
 | [`store_settings`](#store_settings) | `StoreSettings` | 43 | Per-organization storefront configuration (one row per org). |
 | [`store_window_products`](#store_window_products) | `StoreWindowProduct` | 9 | Which catalog products a window offers, with per-window overrides |
+
+### Testing_Checklist
+
+<sub>`app/models/testing_checklist.py`</sub>
+
+| Table | Model | Columns | Purpose |
+|---|---|---|---|
+| [`testing_checklist_entries`](#testing_checklist_entries) | `TestingChecklistEntry` | 14 | One tester's finding on one page, in one run. |
+| [`testing_runs`](#testing_runs) | `TestingRun` | 9 | One named pass over the checklist. |
 
 ### Training
 
@@ -1960,6 +1970,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `visibility` | ENUM(`organization`, `leadership`, `owner`) | no |  | `organization` |  |
 | `owner_user_id` | VARCHAR(36) | yes | FK, IDX |  | → `users.id` ON DELETE SET NULL |
 | `allowed_roles` | JSON | yes |  |  |  |
+| `required_permissions` | JSON | yes |  |  |  |
 | `created_at` | DATETIME | yes |  | `now()` |  |
 | `updated_at` | DATETIME | yes |  | `now()` |  |
 | `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` |
@@ -6143,6 +6154,31 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 - UNIQUE `uq_dept_msg_read_user` (`message_id`, `user_id`)
 
+### `department_message_recipients`
+
+**DepartmentMessageRecipient** · `app/models/notification.py`
+
+> Durable, queryable delivery and resolution state for one recipient.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `message_id` | VARCHAR(36) | no | FK |  | → `department_messages.id` ON DELETE CASCADE |
+| `user_id` | VARCHAR(36) | no | FK |  | → `users.id` ON DELETE CASCADE |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `read_at` | DATETIME | yes |  |  |  |
+| `acknowledged_at` | DATETIME | yes |  |  |  |
+
+**Indexes**
+
+- `idx_dept_msg_recipient_org_user_message` (`organization_id`, `user_id`, `message_id`)
+- `idx_dept_msg_recipient_unacknowledged` (`organization_id`, `user_id`, `acknowledged_at`)
+- `idx_dept_msg_recipient_unread` (`organization_id`, `user_id`, `read_at`)
+
+**Constraints**
+
+- UNIQUE `uq_dept_msg_recipient_user` (`message_id`, `user_id`)
+
 ### `department_messages`
 
 **DepartmentMessage** · `app/models/notification.py`
@@ -7106,6 +7142,59 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 **Constraints**
 
 - UNIQUE `uq_store_window_products_window_product` (`window_id`, `product_id`)
+
+## Testing_Checklist
+
+### `testing_checklist_entries`
+
+**TestingChecklistEntry** · `app/models/testing_checklist.py`
+
+> One tester's finding on one page, in one run. Never merged with another tester's: two accounts marking the same page are two observations, and the one made by the account holding fewer grants is usually the interesting one.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `run_id` | VARCHAR(36) | no | FK, UQ-IDX |  | → `testing_runs.id` ON DELETE CASCADE |
+| `user_id` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `route_path` | VARCHAR(200) | no |  |  |  |
+| `status` | ENUM(`untested`, `pass`, `fail`, `blocked`) | no |  | `'untested'` |  |
+| `note` | TEXT | yes |  |  |  |
+| `params` | JSON | yes |  |  |  |
+| `tested_as` | JSON | yes |  |  |  |
+| `build_id` | VARCHAR(64) | yes |  |  |  |
+| `expected_access` | ENUM(`open`, `allowed`, `denied`, `module-off`) | yes |  |  |  |
+| `checked_at` | DATETIME | yes |  |  |  |
+| `created_at` | DATETIME | no |  | `now()` |  |
+| `updated_at` | DATETIME | no |  | `now()` |  |
+
+**Indexes**
+
+- UNIQUE `idx_testing_check_unique` (`run_id`, `user_id`, `route_path`)
+- `ix_testing_checklist_entries_organization_id` (`organization_id`)
+
+### `testing_runs`
+
+**TestingRun** · `app/models/testing_checklist.py`
+
+> One named pass over the checklist. Starting a run archives the previous one by existing: the newest run is the current one. Nothing is closed, so there is no "two active runs" state to repair, and every earlier run stays readable and exportable.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, UQ-IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `sequence` | INTEGER | no |  |  |  |
+| `label` | VARCHAR(120) | no |  |  |  |
+| `build_id` | VARCHAR(64) | yes |  |  |  |
+| `started_by_id` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
+| `started_at` | DATETIME | no |  | `now()` |  |
+| `created_at` | DATETIME | no |  | `now()` |  |
+| `updated_at` | DATETIME | no |  | `now()` |  |
+
+**Indexes**
+
+- UNIQUE `idx_testing_run_org_sequence` (`organization_id`, `sequence`)
+- `ix_testing_runs_organization_id` (`organization_id`)
 
 ## Training
 
@@ -9140,7 +9229,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 Every foreign key in the schema, grouped by the table it points at — the map of which id lives where.
 
-### → `users` (311 references)
+### → `users` (314 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -9201,6 +9290,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `course_cohorts` | `generated_by` | SET NULL | yes |
 | `department_message_deliveries` | `recipient_id` | CASCADE | no |
 | `department_message_reads` | `user_id` | CASCADE | no |
+| `department_message_recipients` | `user_id` | CASCADE | no |
 | `department_messages` | `posted_by` | SET NULL | yes |
 | `departure_clearance_items` | `resolved_by` | NO ACTION | yes |
 | `departure_clearances` | `completed_by` | NO ACTION | yes |
@@ -9430,6 +9520,8 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `store_product_images` | `uploaded_by` | SET NULL | yes |
 | `store_products` | `created_by` | SET NULL | yes |
 | `template_change_logs` | `user_id` | SET NULL | yes |
+| `testing_checklist_entries` | `user_id` | SET NULL | yes |
+| `testing_runs` | `started_by_id` | SET NULL | yes |
 | `training_approvals` | `approved_by` | SET NULL | yes |
 | `training_categories` | `created_by` | SET NULL | yes |
 | `training_courses` | `created_by` | SET NULL | yes |
@@ -9456,7 +9548,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `votes` | `voter_id` | SET NULL | yes |
 | `xapi_statements` | `user_id` | SET NULL | yes |
 
-### → `organizations` (204 references)
+### → `organizations` (207 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -9495,6 +9587,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `course_cohort_classes` | `organization_id` | CASCADE | no |
 | `course_cohort_members` | `organization_id` | CASCADE | no |
 | `course_cohorts` | `organization_id` | CASCADE | no |
+| `department_message_recipients` | `organization_id` | CASCADE | no |
 | `department_messages` | `organization_id` | CASCADE | no |
 | `departure_clearance_items` | `organization_id` | CASCADE | no |
 | `departure_clearances` | `organization_id` | CASCADE | no |
@@ -9649,6 +9742,8 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `store_settings` | `organization_id` | CASCADE | no |
 | `store_window_products` | `organization_id` | CASCADE | no |
 | `template_change_logs` | `organization_id` | CASCADE | no |
+| `testing_checklist_entries` | `organization_id` | CASCADE | no |
+| `testing_runs` | `organization_id` | CASCADE | no |
 | `training_approvals` | `organization_id` | CASCADE | no |
 | `training_categories` | `organization_id` | CASCADE | no |
 | `training_courses` | `organization_id` | CASCADE | no |
@@ -9945,6 +10040,15 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `equipment_check_bulk_requests` | `compartment_id` | CASCADE | no |
 | `shift_equipment_check_seals` | `template_compartment_id` | SET NULL | yes |
 
+### → `department_messages` (4 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `department_message_deliveries` | `message_id` | CASCADE | no |
+| `department_message_reads` | `message_id` | CASCADE | no |
+| `department_message_recipients` | `message_id` | CASCADE | no |
+| `notification_logs` | `department_message_id` | CASCADE | yes |
+
 ### → `email_templates` (4 references)
 
 | From table | Column | On delete | Nullable |
@@ -10014,14 +10118,6 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `check_requests` | `budget_id` | SET NULL | yes |
 | `expense_line_items` | `budget_id` | SET NULL | yes |
 | `purchase_requests` | `budget_id` | SET NULL | yes |
-
-### → `department_messages` (3 references)
-
-| From table | Column | On delete | Nullable |
-|---|---|---|---|
-| `department_message_deliveries` | `message_id` | CASCADE | no |
-| `department_message_reads` | `message_id` | CASCADE | no |
-| `notification_logs` | `department_message_id` | CASCADE | yes |
 
 ### → `equipment_check_templates` (3 references)
 
@@ -10478,6 +10574,12 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
 | `store_order_items` | `variant_id` | SET NULL | yes |
+
+### → `testing_runs` (1 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `testing_checklist_entries` | `run_id` | CASCADE | no |
 
 ---
 

@@ -278,6 +278,7 @@ from app.models.notification import (
     DepartmentMessage,
     DepartmentMessageDelivery,
     DepartmentMessageRead,
+    DepartmentMessageRecipient,
     MessagePriority,
     MessageTargetType,
     NotificationCategory,
@@ -320,6 +321,12 @@ from app.models.storefront import (
     StoreSettings,
     StoreWindowProduct,
     StoreWindowStatus,
+)
+from app.models.testing_checklist import (
+    TestingAccessExpectation,
+    TestingChecklistEntry,
+    TestingCheckStatus,
+    TestingRun,
 )
 from app.models.training import (
     ExternalCategoryMapping,
@@ -432,6 +439,7 @@ __all__ = [
     "DepartmentMessage",
     "DepartmentMessageDelivery",
     "DepartmentMessageRead",
+    "DepartmentMessageRecipient",
     "MessagePriority",
     "MessageTargetType",
     # Integration models
@@ -723,4 +731,9 @@ __all__ = [
     "LegalDocumentRevision",
     "LegalDocumentType",
     "LegalRevisionStatus",
+    # Testing checklist models
+    "TestingAccessExpectation",
+    "TestingCheckStatus",
+    "TestingChecklistEntry",
+    "TestingRun",
 ]

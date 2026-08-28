@@ -37,12 +37,23 @@ def _user(uid="u1", roles=None):
     return SimpleNamespace(id=uid, roles=role_objs)
 
 
-def _folder(visibility, owner_user_id=None, allowed_roles=None, fid="f1"):
+def _folder(
+    visibility,
+    owner_user_id=None,
+    allowed_roles=None,
+    fid="f1",
+    required_permissions=None,
+):
+    # required_permissions is spelled out rather than defaulted away: the ACL
+    # reads it directly instead of via getattr, because a getattr default would
+    # make an unloaded or half-built folder read as "unrestricted" — failing
+    # open on the one rule that gates another module's sensitive data.
     return SimpleNamespace(
         id=fid,
         visibility=visibility,
         owner_user_id=owner_user_id,
         allowed_roles=allowed_roles,
+        required_permissions=required_permissions,
     )
 
 
@@ -168,9 +179,45 @@ class TestAccessibleFolderIds:
     can access, or it leaks documents from restricted/owner-only folders."""
 
     async def test_leadership_has_no_restriction(self):
+        """The fast path still applies — but only once the org is known to hold
+        no permission-gated folder, which costs the one folder read below."""
         svc = _svc()
+        result = MagicMock()
+        result.scalars.return_value.all.return_value = [
+            _folder(FolderVisibility.ORGANIZATION, fid="f-org"),
+            _folder(FolderVisibility.LEADERSHIP, fid="f-lead"),
+        ]
+        svc.db.execute = AsyncMock(return_value=result)
+
         chief = _user(roles=[(["documents.manage"], "chief")])
         assert await svc.accessible_folder_ids("org-1", chief) is None
+
+    async def test_leadership_is_still_filtered_by_required_permissions(self):
+        """ "No restriction" would hand a documents administrator the facility
+        files that facilities.view_sensitive exists to withhold, which is the
+        leak the field was added to close."""
+        svc = _svc()
+        result = MagicMock()
+        result.scalars.return_value.all.return_value = [
+            _folder(FolderVisibility.ORGANIZATION, fid="f-org"),
+            _folder(
+                FolderVisibility.ORGANIZATION,
+                fid="f-facility",
+                required_permissions=["facilities.view_sensitive"],
+            ),
+        ]
+        svc.db.execute = AsyncMock(return_value=result)
+
+        chief = _user(roles=[(["documents.manage"], "chief")])
+        assert await svc.accessible_folder_ids("org-1", chief) == {"f-org"}
+
+        holder = _user(
+            roles=[(["documents.manage", "facilities.view_sensitive"], "facilities")]
+        )
+        assert await svc.accessible_folder_ids("org-1", holder) == {
+            "f-org",
+            "f-facility",
+        }
 
     async def test_non_leadership_filtered_to_accessible(self):
         svc = _svc()

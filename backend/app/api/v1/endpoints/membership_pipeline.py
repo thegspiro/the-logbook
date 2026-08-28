@@ -42,6 +42,7 @@ from app.api.prospect_privacy import (
 from app.api.v1.endpoints.users import (
     _canonical_rank_or_400,
     _enforce_rank_grant_ceiling,
+    _enforce_role_grant_ceiling,
 )
 from app.core.audit import log_audit_event
 from app.core.database import get_db
@@ -50,7 +51,7 @@ from app.core.security_middleware import get_client_ip
 from app.core.utils import safe_error_detail
 from app.models.event import Event
 from app.models.membership_pipeline import ProspectStatus
-from app.models.user import User
+from app.models.user import Role, User
 from app.schemas.membership_pipeline import (
     ActivityLogResponse,
     AdvanceProspectRequest,
@@ -1538,6 +1539,26 @@ async def transfer_prospect(
     await _enforce_rank_grant_ceiling(
         current_user, canonical_rank, db, get_client_ip(request)
     )
+
+    # Same escalation surface as create_member's role_ids handling: a bare
+    # members.manage/prospective_members.manage holder must not transfer a
+    # prospect in carrying a role whose permissions exceed their own
+    # (Codex review on this PR).
+    if data.role_ids:
+        role_result = await db.execute(
+            select(Role)
+            .where(Role.id.in_([str(rid) for rid in data.role_ids]))
+            .where(Role.organization_id == str(current_user.organization_id))
+        )
+        requested_roles = role_result.scalars().all()
+        if len(requested_roles) != len(data.role_ids):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="One or more role IDs are invalid",
+            )
+        await _enforce_role_grant_ceiling(
+            current_user, list(requested_roles), db, get_client_ip(request)
+        )
 
     result = await service.transfer_to_membership(
         prospect_id=str(prospect_id),

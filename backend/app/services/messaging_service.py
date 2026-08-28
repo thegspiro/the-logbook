@@ -8,14 +8,14 @@ Handles creation, targeting, delivery, and read tracking.
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
-from sqlalchemy import desc, func, or_, select, update
+from sqlalchemy import and_, desc, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.utils import generate_uuid, safe_error_detail
 from app.models.notification import (
     DepartmentMessage,
-    DepartmentMessageRead,
+    DepartmentMessageRecipient,
     MessagePriority,
     MessageTargetType,
     NotificationChannel,
@@ -117,6 +117,8 @@ class MessagingService:
                 scheduled_at=effective_scheduled,
             )
             self.db.add(message)
+            if effective_scheduled is None:
+                await self.materialize_recipients(message)
             await self.db.commit()
             await self.db.refresh(message)
             return message, None
@@ -216,6 +218,7 @@ class MessagingService:
                 return None, "Message not found"
 
             now = datetime.now(timezone.utc)
+            was_pending = _as_utc(message.scheduled_at) is not None
             if "scheduled_at" in updates:
                 updates["scheduled_at"] = _as_utc(updates["scheduled_at"])
             if "expires_at" in updates:
@@ -307,6 +310,17 @@ class MessagingService:
                         value = MessageTargetType(value)
                     setattr(message, key, value)
 
+            audience_changed = bool(audience_fields.intersection(updates))
+            published_by_update = was_pending and message.scheduled_at is None
+            if published_by_update:
+                await self.materialize_recipients(message)
+            elif audience_changed and message.scheduled_at is None:
+                await self.reconcile_recipients(message)
+
+            # The endpoint uses this transient flag to enqueue the same channel
+            # fan-out as a scheduler publication without persisting extra state.
+            message._published_by_update = published_by_update
+
             await self.db.commit()
             await self.db.refresh(message)
             return message, None
@@ -354,18 +368,19 @@ class MessagingService:
         """
         now = datetime.now(timezone.utc)
 
-        # First get the user's roles and status
-        user = await self._get_targeting_user(organization_id, user_id)
-        if not user:
-            return []
-
-        user_role_ids, user_role_names, user_status = self._user_targeting_context(user)
-
-        # Get all active, non-expired, non-deleted messages for this org
-        query = select(DepartmentMessage).where(
-            DepartmentMessage.organization_id == organization_id,
-            DepartmentMessage.is_active.is_(True),
-            DepartmentMessage.deleted_at.is_(None),
+        query = (
+            select(DepartmentMessage, DepartmentMessageRecipient)
+            .join(
+                DepartmentMessageRecipient,
+                DepartmentMessageRecipient.message_id == DepartmentMessage.id,
+            )
+            .where(
+                DepartmentMessageRecipient.organization_id == organization_id,
+                DepartmentMessageRecipient.user_id == user_id,
+                DepartmentMessage.organization_id == organization_id,
+                DepartmentMessage.is_active.is_(True),
+                DepartmentMessage.deleted_at.is_(None),
+            )
         )
         # Exclude expired
         query = query.where(
@@ -381,58 +396,35 @@ class MessagingService:
                 DepartmentMessage.scheduled_at <= now,
             )
         )
-        query = query.order_by(
-            desc(DepartmentMessage.is_pinned),
-            desc(DepartmentMessage.is_persistent),
-            desc(DepartmentMessage.created_at),
-            desc(DepartmentMessage.id),
+        if not include_read:
+            query = query.where(
+                or_(
+                    DepartmentMessage.is_persistent.is_(True),
+                    and_(
+                        DepartmentMessage.requires_acknowledgment.is_(True),
+                        DepartmentMessageRecipient.acknowledged_at.is_(None),
+                    ),
+                    and_(
+                        DepartmentMessage.requires_acknowledgment.is_(False),
+                        DepartmentMessageRecipient.read_at.is_(None),
+                    ),
+                )
+            )
+        query = (
+            query.order_by(
+                desc(DepartmentMessage.is_pinned),
+                desc(DepartmentMessage.is_persistent),
+                desc(DepartmentMessage.created_at),
+                desc(DepartmentMessage.id),
+            )
+            .offset(skip)
+            .limit(limit)
         )
 
         result = await self.db.execute(query)
-        all_messages = result.scalars().all()
-
-        # Filter by targeting
-        visible_messages = []
-        for msg in all_messages:
-            if self._is_targeted(
-                msg, user_id, user_role_ids, user_role_names, user_status
-            ):
-                visible_messages.append(msg)
-
-        # Get read statuses for this user
-        msg_ids = [m.id for m in visible_messages]
-        if msg_ids:
-            reads_result = await self.db.execute(
-                select(DepartmentMessageRead).where(
-                    DepartmentMessageRead.user_id == user_id,
-                    DepartmentMessageRead.message_id.in_(msg_ids),
-                )
-            )
-            reads = {r.message_id: r for r in reads_result.scalars().all()}
-        else:
-            reads = {}
-
-        # Optionally filter out messages the user has already resolved.
-        # A message is "resolved" when acknowledged (if it requires
-        # acknowledgment) or otherwise when read. Persistent messages are
-        # always shown regardless of resolution — that is what makes them
-        # persistent — so they never drop off the inbox until an admin clears
-        # them.
-        enriched = []
-        for msg in visible_messages:
-            read_record = reads.get(msg.id)
-            is_read = read_record is not None
-            is_acknowledged = (
-                read_record.acknowledged_at is not None if read_record else False
-            )
-            resolved = is_acknowledged if msg.requires_acknowledgment else is_read
-            if not include_read and resolved and not msg.is_persistent:
-                continue
-            enriched.append(self._inbox_entry(msg, read_record))
-
-        # Paginate before resolving authors so a small preview never loads names
-        # for messages that will not be returned.
-        enriched = enriched[skip : skip + limit]
+        enriched = [
+            self._inbox_entry(msg, recipient) for msg, recipient in result.all()
+        ]
 
         await self._attach_author_names(enriched, organization_id)
 
@@ -454,9 +446,10 @@ class MessagingService:
             return None
 
         read_result = await self.db.execute(
-            select(DepartmentMessageRead).where(
-                DepartmentMessageRead.message_id == message.id,
-                DepartmentMessageRead.user_id == user_id,
+            select(DepartmentMessageRecipient).where(
+                DepartmentMessageRecipient.message_id == message.id,
+                DepartmentMessageRecipient.user_id == user_id,
+                DepartmentMessageRecipient.organization_id == organization_id,
             )
         )
         entry = self._inbox_entry(message, read_result.scalar_one_or_none())
@@ -465,7 +458,7 @@ class MessagingService:
 
     @staticmethod
     def _inbox_entry(
-        msg: DepartmentMessage, read_record: Optional[DepartmentMessageRead]
+        msg: DepartmentMessage, read_record: Optional[DepartmentMessageRecipient]
     ) -> Dict[str, Any]:
         """Shape one message + the caller's read record into an inbox entry.
 
@@ -493,7 +486,7 @@ class MessagingService:
             "author_name": None,
             "created_at": (msg.created_at.isoformat() if msg.created_at else None),
             "expires_at": (msg.expires_at.isoformat() if msg.expires_at else None),
-            "is_read": read_record is not None,
+            "is_read": bool(read_record and read_record.read_at is not None),
             "read_at": (
                 read_record.read_at.isoformat()
                 if read_record and read_record.read_at
@@ -542,25 +535,15 @@ class MessagingService:
         acknowledgment is not cleared from the count merely by being opened.
         """
         now = datetime.now(timezone.utc)
-
-        user = await self._get_targeting_user(organization_id, user_id)
-        if not user:
-            return 0
-
-        user_role_ids, user_role_names, user_status = self._user_targeting_context(user)
-
-        # Load only the columns needed to evaluate targeting/resolution —
-        # crucially NOT the body — for active, non-expired, non-deleted rows.
         query = (
-            select(
-                DepartmentMessage.id,
-                DepartmentMessage.target_type,
-                DepartmentMessage.target_roles,
-                DepartmentMessage.target_statuses,
-                DepartmentMessage.target_member_ids,
-                DepartmentMessage.requires_acknowledgment,
+            select(func.count(DepartmentMessageRecipient.id))
+            .join(
+                DepartmentMessage,
+                DepartmentMessage.id == DepartmentMessageRecipient.message_id,
             )
             .where(
+                DepartmentMessageRecipient.organization_id == organization_id,
+                DepartmentMessageRecipient.user_id == user_id,
                 DepartmentMessage.organization_id == organization_id,
                 DepartmentMessage.is_active.is_(True),
                 DepartmentMessage.deleted_at.is_(None),
@@ -577,45 +560,60 @@ class MessagingService:
                     DepartmentMessage.scheduled_at <= now,
                 )
             )
+            .where(
+                or_(
+                    and_(
+                        DepartmentMessage.requires_acknowledgment.is_(True),
+                        DepartmentMessageRecipient.acknowledged_at.is_(None),
+                    ),
+                    and_(
+                        DepartmentMessage.requires_acknowledgment.is_(False),
+                        DepartmentMessageRecipient.read_at.is_(None),
+                    ),
+                )
+            )
         )
         result = await self.db.execute(query)
-        rows = result.all()
+        return result.scalar() or 0
 
-        visible = [
-            row
-            for row in rows
-            if self._is_targeted(
-                row, user_id, user_role_ids, user_role_names, user_status
+    async def materialize_recipients(self, message: DepartmentMessage) -> int:
+        """Persist the audience at publish time so inbox reads are pure SQL."""
+        users = await self._targeted_users(message, str(message.organization_id))
+        for user in users:
+            self.db.add(
+                DepartmentMessageRecipient(
+                    id=generate_uuid(),
+                    message_id=message.id,
+                    user_id=str(user.id),
+                    organization_id=str(message.organization_id),
+                )
             )
-        ]
-        if not visible:
-            return 0
+        return len(users)
 
-        visible_ids = [row.id for row in visible]
-
-        # Fetch the caller's read/ack state for the visible messages.
-        read_result = await self.db.execute(
-            select(
-                DepartmentMessageRead.message_id,
-                DepartmentMessageRead.acknowledged_at,
-            ).where(
-                DepartmentMessageRead.user_id == user_id,
-                DepartmentMessageRead.message_id.in_(visible_ids),
+    async def reconcile_recipients(self, message: DepartmentMessage) -> int:
+        """Rebuild a live audience while retaining resolution for members kept."""
+        users = await self._targeted_users(message, str(message.organization_id))
+        targeted = {str(user.id) for user in users}
+        result = await self.db.execute(
+            select(DepartmentMessageRecipient).where(
+                DepartmentMessageRecipient.message_id == message.id,
+                DepartmentMessageRecipient.organization_id
+                == str(message.organization_id),
             )
         )
-        acknowledged_by_msg = {r.message_id: r.acknowledged_at for r in read_result}
-
-        pending = 0
-        for row in visible:
-            has_read_record = row.id in acknowledged_by_msg
-            is_acknowledged = acknowledged_by_msg.get(row.id) is not None
-            resolved = (
-                is_acknowledged if row.requires_acknowledgment else has_read_record
+        existing = {str(row.user_id): row for row in result.scalars().all()}
+        for user_id in targeted - existing.keys():
+            self.db.add(
+                DepartmentMessageRecipient(
+                    id=generate_uuid(),
+                    message_id=message.id,
+                    user_id=user_id,
+                    organization_id=str(message.organization_id),
+                )
             )
-            if not resolved:
-                pending += 1
-
-        return pending
+        for user_id in existing.keys() - targeted:
+            await self.db.delete(existing[user_id])
+        return len(targeted)
 
     @staticmethod
     def _user_targeting_context(user) -> Tuple[List[str], List[str], str]:
@@ -716,7 +714,14 @@ class MessagingService:
         """
         now = datetime.now(timezone.utc)
         message_result = await self.db.execute(
-            select(DepartmentMessage).where(
+            select(DepartmentMessage)
+            .join(
+                DepartmentMessageRecipient,
+                DepartmentMessageRecipient.message_id == DepartmentMessage.id,
+            )
+            .where(
+                DepartmentMessageRecipient.organization_id == organization_id,
+                DepartmentMessageRecipient.user_id == user_id,
                 DepartmentMessage.id == message_id,
                 DepartmentMessage.organization_id == organization_id,
                 DepartmentMessage.is_active.is_(True),
@@ -734,12 +739,6 @@ class MessagingService:
         message = message_result.scalar_one_or_none()
         if not message:
             return None
-        user = await self._get_targeting_user(organization_id, user_id)
-        if not user:
-            return None
-        role_ids, role_names, status = self._user_targeting_context(user)
-        if not self._is_targeted(message, str(user_id), role_ids, role_names, status):
-            return None
         return message
 
     async def mark_as_read(
@@ -753,28 +752,23 @@ class MessagingService:
                 return False, "Message not found"
 
             existing = await self.db.execute(
-                select(DepartmentMessageRead).where(
-                    DepartmentMessageRead.message_id == message_id,
-                    DepartmentMessageRead.user_id == user_id,
+                select(DepartmentMessageRecipient).where(
+                    DepartmentMessageRecipient.message_id == message_id,
+                    DepartmentMessageRecipient.user_id == user_id,
+                    DepartmentMessageRecipient.organization_id == organization_id,
                 )
             )
             record = existing.scalar_one_or_none()
-            if record:
-                if await self._mark_message_notification_read(
-                    message_id, user_id, organization_id
-                ):
-                    await self.db.commit()
-                return True, None  # Already read
-
-            read_record = DepartmentMessageRead(
-                id=generate_uuid(),
-                message_id=message_id,
-                user_id=user_id,
-            )
-            self.db.add(read_record)
-            await self._mark_message_notification_read(
+            if not record:
+                return False, "Message not found"
+            already_read = record.read_at is not None
+            if not already_read:
+                record.read_at = datetime.now(timezone.utc)
+            notification_changed = await self._mark_message_notification_read(
                 message_id, user_id, organization_id
             )
+            if already_read and not notification_changed:
+                return True, None
             await self.db.commit()
             return True, None
         except Exception as e:
@@ -794,40 +788,29 @@ class MessagingService:
             if not message.requires_acknowledgment:
                 return False, "Message does not require acknowledgment", False
 
-            existing = await self.db.execute(
-                select(DepartmentMessageRead).where(
-                    DepartmentMessageRead.message_id == message_id,
-                    DepartmentMessageRead.user_id == user_id,
+            now = datetime.now(timezone.utc)
+            claimed = await self.db.execute(
+                update(DepartmentMessageRecipient)
+                .where(
+                    DepartmentMessageRecipient.message_id == message_id,
+                    DepartmentMessageRecipient.user_id == user_id,
+                    DepartmentMessageRecipient.organization_id == organization_id,
+                    DepartmentMessageRecipient.acknowledged_at.is_(None),
+                )
+                .values(
+                    read_at=func.coalesce(DepartmentMessageRecipient.read_at, now),
+                    acknowledged_at=now,
                 )
             )
-            record = existing.scalar_one_or_none()
+            newly_acknowledged = bool(claimed.rowcount)
+            notification_changed = await self._mark_message_notification_read(
+                message_id, user_id, organization_id
+            )
+            if not newly_acknowledged and not notification_changed:
+                return True, None, False
+            await self.db.commit()
 
-            if record:
-                if record.acknowledged_at:
-                    if await self._mark_message_notification_read(
-                        message_id, user_id, organization_id
-                    ):
-                        await self.db.commit()
-                    return True, None, False
-                record.acknowledged_at = datetime.now(timezone.utc)
-                await self._mark_message_notification_read(
-                    message_id, user_id, organization_id
-                )
-                await self.db.commit()
-            else:
-                read_record = DepartmentMessageRead(
-                    id=generate_uuid(),
-                    message_id=message_id,
-                    user_id=user_id,
-                    acknowledged_at=datetime.now(timezone.utc),
-                )
-                self.db.add(read_record)
-                await self._mark_message_notification_read(
-                    message_id, user_id, organization_id
-                )
-                await self.db.commit()
-
-            return True, None, True
+            return True, None, newly_acknowledged
         except Exception as e:
             await self.db.rollback()
             return False, safe_error_detail(e), False
@@ -954,21 +937,27 @@ class MessagingService:
             return {"error": "Message not found"}
 
         read_count = await self.db.execute(
-            select(func.count(DepartmentMessageRead.id)).where(
-                DepartmentMessageRead.message_id == message_id,
+            select(func.count(DepartmentMessageRecipient.id)).where(
+                DepartmentMessageRecipient.message_id == message_id,
+                DepartmentMessageRecipient.read_at.isnot(None),
             )
         )
         ack_count = await self.db.execute(
-            select(func.count(DepartmentMessageRead.id)).where(
-                DepartmentMessageRead.message_id == message_id,
-                DepartmentMessageRead.acknowledged_at.isnot(None),
+            select(func.count(DepartmentMessageRecipient.id)).where(
+                DepartmentMessageRecipient.message_id == message_id,
+                DepartmentMessageRecipient.acknowledged_at.isnot(None),
             )
         )
-        targeted = await self._targeted_users(message, organization_id)
+        targeted_count = await self.db.execute(
+            select(func.count(DepartmentMessageRecipient.id)).where(
+                DepartmentMessageRecipient.message_id == message_id,
+                DepartmentMessageRecipient.organization_id == organization_id,
+            )
+        )
 
         return {
             "message_id": message_id,
-            "total_targeted": len(targeted),
+            "total_targeted": targeted_count.scalar() or 0,
             "total_reads": read_count.scalar() or 0,
             "total_acknowledged": ack_count.scalar() or 0,
         }
@@ -986,24 +975,24 @@ class MessagingService:
         if not message:
             return None
 
-        targeted = await self._targeted_users(message, organization_id)
-
-        reads: Dict[str, DepartmentMessageRead] = {}
-        if targeted:
-            reads_result = await self.db.execute(
-                select(DepartmentMessageRead).where(
-                    DepartmentMessageRead.message_id == message_id,
-                    DepartmentMessageRead.user_id.in_([str(u.id) for u in targeted]),
-                )
+        recipient_result = await self.db.execute(
+            select(User, DepartmentMessageRecipient)
+            .join(
+                DepartmentMessageRecipient,
+                DepartmentMessageRecipient.user_id == User.id,
             )
-            reads = {r.user_id: r for r in reads_result.scalars().all()}
+            .where(
+                DepartmentMessageRecipient.message_id == message_id,
+                DepartmentMessageRecipient.organization_id == organization_id,
+            )
+        )
+        targeted_rows = recipient_result.all()
 
         recipients = []
         total_read = 0
         total_acknowledged = 0
-        for u in targeted:
-            record = reads.get(str(u.id))
-            is_read = record is not None
+        for u, record in targeted_rows:
+            is_read = record.read_at is not None
             is_acknowledged = bool(record and record.acknowledged_at is not None)
             if is_read:
                 total_read += 1
@@ -1038,7 +1027,7 @@ class MessagingService:
         return {
             "message_id": message_id,
             "requires_acknowledgment": message.requires_acknowledgment,
-            "total_targeted": len(targeted),
+            "total_targeted": len(targeted_rows),
             "total_read": total_read,
             "total_acknowledged": total_acknowledged,
             "recipients": recipients,

@@ -25,6 +25,7 @@ import { DeleteMemberModal } from '../components/DeleteMemberModal';
 import { useRanks } from '../hooks/useRanks';
 import { UserStatus } from '../constants/enums';
 import { useConfirm } from '../contexts/ConfirmContext';
+import { ADMINISTRATIVE_RANK_HINT, isAdministrativeMember } from '../utils/membership';
 
 type ViewMode = 'by-member' | 'by-role';
 
@@ -134,6 +135,11 @@ export const MembersAdminPage: React.FC = () => {
     setSelectedUserIds(usersWithRole.map((u) => u.id));
     setEditingMembers(true);
   };
+
+  // This drawer edits the profile but not the membership type, so the class is
+  // read-only here: the rank field is greyed rather than cleared. Changing an
+  // administrative member's class is done on the full edit page.
+  const profileIsAdministrative = isAdministrativeMember(undefined, profileUser?.membership_type);
 
   const handleSaveProfile = async () => {
     if (!profileUser) return;
@@ -826,7 +832,7 @@ export const MembersAdminPage: React.FC = () => {
                   value={profileForm.rank}
                   onChange={(e) => setProfileForm((prev) => ({ ...prev, rank: e.target.value }))}
                   className="form-input px-3 text-sm"
-                  disabled={savingProfile}
+                  disabled={savingProfile || profileIsAdministrative}
                 >
                   <option value="">Select Rank</option>
                   {rankOptions.map((r) => (
@@ -835,6 +841,9 @@ export const MembersAdminPage: React.FC = () => {
                     </option>
                   ))}
                 </select>
+                {profileIsAdministrative && (
+                  <p className="text-theme-text-muted mt-1 text-[11px]">{ADMINISTRATIVE_RANK_HINT}</p>
+                )}
               </div>
               <div>
                 <label className="text-theme-text-muted mb-1 block text-xs font-medium uppercase">Station</label>
