@@ -81,9 +81,10 @@ closing SCH-5. All four documents corrected to ✅ Resolved, each citing
 `scheduling_service.py`'s exact validation calls and (originally)
 `tests/test_swap_offer_response.py` (17 tests, re-run and confirmed passing).
 **Correction (Codex follow-up):** the cited test for the
-cancelled/finalized-shift half was weak — `test_the_acceptance_path_runs_
-that_validation` only greps the calling method's source for the helper's
-name, and every one of the 17 tests mocks `_validate_assignment_candidate`
+cancelled/finalized-shift half was weak —
+`test_the_acceptance_path_runs_that_validation` only greps the calling
+method's source for the helper's name, and every one of the 17 tests mocks
+`_validate_assignment_candidate`
 outright, so none could fail if `require_mutable=True` were dropped or the
 helper's own check broke. Fixed, not just reworded: strengthened the existing
 kwargs assertion to check `require_mutable`/`reject_past` explicitly, and

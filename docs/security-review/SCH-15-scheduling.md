@@ -511,8 +511,8 @@ No fix needed. This was a scope gap in how the migration was searched for
   window either: it's built from that same request's fresh DB read, not
   carried across requests.
 
-  The actual, narrower gap `_account_is_active` closes: `_validate_assignment_
-candidate`'s `enforce_position_eligibility` branch
+  The actual, narrower gap `_account_is_active` closes:
+  `_validate_assignment_candidate`'s `enforce_position_eligibility` branch
   (`scheduling_service.py:2982-2991`) loads the _candidate_ by a
   client-supplied `user_id` with **no** status or `deleted_at` filter, and
   that candidate is not always the caller's own session — `create_assignment`
