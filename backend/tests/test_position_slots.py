@@ -321,7 +321,7 @@ class TestApparatusOptionSchema:
             ],
         )
 
-        assert option.positions == [
+        assert [slot.model_dump() for slot in option.positions or []] == [
             {
                 "position": "driver",
                 "required": True,
