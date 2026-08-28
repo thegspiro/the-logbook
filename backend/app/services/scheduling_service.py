@@ -340,6 +340,10 @@ class SchedulingService:
                         {
                             "position": p["position"],
                             "required": p.get("required", True),
+                            "allow_administrative_members": p.get(
+                                "allow_administrative_members"
+                            )
+                            is True,
                         }
                     )
                 # Skip unrecognised entries silently

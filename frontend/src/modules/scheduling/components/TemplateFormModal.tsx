@@ -92,7 +92,11 @@ const TemplateFormModal: React.FC<TemplateFormModalProps> = ({
     if (defaults) {
       setFormData((prev) => ({
         ...prev,
-        positions: defaults.positions.map((p) => ({ position: p, required: true })),
+        positions: defaults.positions.map((p) => ({
+          position: p,
+          required: true,
+          allow_administrative_members: false,
+        })),
         min_staffing: String(defaults.minStaffing),
       }));
     }
@@ -173,7 +177,9 @@ const TemplateFormModal: React.FC<TemplateFormModalProps> = ({
       const effectivePositions: PositionEntry[] =
         formData.category === 'event' && formData.resources.length > 0
           ? formData.resources.flatMap((r) =>
-              Array.from({ length: r.quantity }, () => r.positions.map((p) => ({ position: p, required: true }))).flat()
+              Array.from({ length: r.quantity }, () =>
+                r.positions.map((p) => ({ position: p, required: true, allow_administrative_members: false }))
+              ).flat()
             )
           : formData.positions;
       const payload: Record<string, unknown> = {
@@ -763,6 +769,19 @@ const TemplateFormModal: React.FC<TemplateFormModalProps> = ({
                         >
                           {entry.required ? 'Required' : 'Optional'}
                         </button>
+                        <label className="text-theme-text-secondary flex items-center gap-1.5 text-xs whitespace-nowrap">
+                          <input
+                            type="checkbox"
+                            checked={entry.allow_administrative_members === true}
+                            onChange={(e) => {
+                              const updated = [...formData.positions];
+                              updated[i] = { ...entry, allow_administrative_members: e.target.checked };
+                              setFormData((prev) => ({ ...prev, positions: updated }));
+                            }}
+                            className="border-theme-input-border rounded-sm"
+                          />
+                          Administrative access
+                        </label>
                         <button
                           type="button"
                           onClick={() => {
@@ -783,7 +802,10 @@ const TemplateFormModal: React.FC<TemplateFormModalProps> = ({
                   onClick={() =>
                     setFormData((prev) => ({
                       ...prev,
-                      positions: [...prev.positions, { position: 'firefighter', required: true }],
+                      positions: [
+                        ...prev.positions,
+                        { position: 'firefighter', required: true, allow_administrative_members: false },
+                      ],
                     }))
                   }
                   className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium text-red-600 transition-colors hover:bg-red-500/10 dark:text-red-400"
@@ -810,8 +832,11 @@ const TemplateFormModal: React.FC<TemplateFormModalProps> = ({
                 onChange={(e) => setFormData((prev) => ({ ...prev, open_to_all_members: e.target.checked }))}
                 className="border-theme-input-border rounded-sm"
               />
-              Open to all members (allow non-operational members to sign up)
+              Open to all operational members regardless of rank or training
             </label>
+            <p className="text-theme-text-muted -mt-2 ml-6 text-xs">
+              Administrative members can only use positions individually marked Administrative access above.
+            </p>
           </div>
 
           <div className="border-theme-surface-border flex shrink-0 justify-end gap-3 border-t p-6 pt-4">

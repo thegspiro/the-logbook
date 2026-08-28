@@ -42,6 +42,7 @@ from app.services.qualification_service import (
     positions_for_qualifications,
     qualification_label,
 )
+from app.utils.membership import is_administrative
 
 # Mapping from training program target_position values to the shift
 # position they unlock upon completion.
@@ -260,10 +261,17 @@ class ShiftEligibilityService:
         if not self._account_is_active(user):
             return []
 
+        administrative = is_administrative(
+            getattr(user, "member_class", None),
+            getattr(user, "membership_type", None),
+        )
+
         # ----- Step 1: Check for open-to-all shift -----
         shift = None
         if shift_id:
             shift = await self._get_shift(shift_id, organization_id)
+            if shift and administrative:
+                return self._administrative_shift_positions(shift)
             if shift and shift.open_to_all_members:
                 return self._shift_position_list(shift)
 
@@ -365,6 +373,9 @@ class ShiftEligibilityService:
         excluded = self.get_excluded_membership_types(org)
         member_type = getattr(user, "membership_type", None) or "active"
         blocked = member_type in excluded
+        administrative = is_administrative(
+            getattr(user, "member_class", None), member_type
+        )
 
         base: Set[str] = set()
         if not blocked:
@@ -399,6 +410,9 @@ class ShiftEligibilityService:
                 # Empty rather than absent: the caller asked about it, and a
                 # missing key would read as "not answered yet".
                 answers[str(shift_id)] = []
+                continue
+            if administrative:
+                answers[str(shift_id)] = self._administrative_shift_positions(shift)
                 continue
             if shift.open_to_all_members:
                 answers[str(shift_id)] = sorted(set(self._shift_position_list(shift)))
@@ -682,6 +696,18 @@ class ShiftEligibilityService:
                 if pos:
                     result.append(pos)
         return result
+
+    def _administrative_shift_positions(self, shift: Shift) -> List[str]:
+        """Return only positions explicitly opened to administrative members."""
+        return sorted(
+            {
+                str(entry.get("position"))
+                for entry in (shift.positions or [])
+                if isinstance(entry, dict)
+                and entry.get("position")
+                and entry.get("allow_administrative_members") is True
+            }
+        )
 
     async def _get_slug_eligibility_map(
         self, organization_id: str

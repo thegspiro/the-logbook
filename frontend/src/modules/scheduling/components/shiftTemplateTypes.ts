@@ -365,6 +365,7 @@ export interface TemplateFormData {
 export interface PositionEntry {
   position: string;
   required: boolean;
+  allow_administrative_members?: boolean;
 }
 
 export interface PatternFormData {

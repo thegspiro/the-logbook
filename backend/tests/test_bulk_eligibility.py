@@ -122,6 +122,43 @@ class TestBulkEligibility:
         answers = await service.get_eligible_positions_bulk(blocked, ORG, ["s1"])
         assert answers["s1"] == []
 
+    async def test_administrative_member_sees_only_explicit_positions(self):
+        service = _service(
+            [
+                _shift(
+                    "s1",
+                    positions=[
+                        {"position": "driver"},
+                        {
+                            "position": "support",
+                            "allow_administrative_members": True,
+                        },
+                    ],
+                    open_to_all=True,
+                ),
+                _shift("s2", positions=[{"position": "firefighter"}]),
+            ],
+            rank=["driver"],
+            training=["firefighter"],
+            qualifications=["ems"],
+            excluded=["administrative"],
+        )
+        administrative = SimpleNamespace(
+            id=USER.id,
+            rank="ff",
+            member_class="administrative",
+            membership_type="administrative",
+        )
+
+        answers = await service.get_eligible_positions_bulk(
+            administrative, ORG, ["s1", "s2"]
+        )
+
+        assert answers == {"s1": ["support"], "s2": []}
+        service._get_slug_eligibility_map.assert_not_awaited()
+        service._get_training_positions.assert_not_awaited()
+        service._get_qualification_positions.assert_not_awaited()
+
     async def test_an_unknown_shift_answers_empty_rather_than_absent(self):
         # A missing key would read as "not answered yet" and leave the claim
         # button waiting on a reply that already arrived.
