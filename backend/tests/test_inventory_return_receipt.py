@@ -1,5 +1,6 @@
 """Physical return receipt workflow: evidence, inventory state and follow-ups."""
 
+import inspect
 from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
@@ -219,3 +220,16 @@ async def test_partial_pool_return_reduces_open_holding_and_validates_quantity()
     assert issuance.quantity_issued == 3
     assert item.quantity == 5
     assert item.quantity_issued == 3
+
+
+def test_review_return_request_locks_the_request_row():
+    """A denial and a physical receipt racing on the same REQUESTED request
+    must not both pass the status check before either commits -- one review
+    would silently overwrite the other's outcome (CLAUDE.md pitfall #27).
+    The lock has to sit on the initial lookup, before the status is read."""
+    source = inspect.getsource(InventoryService.review_return_request)
+    lookup = source.split("if not req")[0]
+    assert "with_for_update" in lookup, (
+        "review_return_request's ReturnRequest lookup must use "
+        ".with_for_update() before checking req.status"
+    )

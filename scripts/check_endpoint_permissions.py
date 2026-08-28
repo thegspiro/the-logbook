@@ -197,8 +197,54 @@ def authorizer_permissions(tree: ast.AST) -> dict[str, set[str]]:
     return found
 
 
-def _permissions_from_calls(nodes, authorizers: dict[str, set[str]]) -> set[str]:
+def module_permission_constants(tree: ast.AST) -> dict[str, set[str]]:
+    """Module-level tuples/lists of permission literals, by name.
+
+    A route that shares a permission set with a redaction helper names it once
+    as a constant and unpacks it — ``require_permission(*_SENSITIVE_READ_
+    PERMISSIONS)``. Reading only ``ast.Constant`` arguments saw no permissions
+    at all there and reported the route as ``undefended``: the script's most
+    alarming finding, against a route that is in fact gated. The only way to
+    satisfy the checker was to re-type the literals at the call site, which is
+    exactly the duplication the constant exists to prevent — and a second copy
+    is what lets the two drift apart later.
+
+    Deliberately narrow: module scope only, and every element must be a
+    dotted permission literal. A tuple built at runtime, or one holding a
+    non-literal, resolves to nothing and the route reads as undefended — the
+    safe direction, since the script must never infer a gate it cannot see.
+    """
+    found: dict[str, set[str]] = {}
+    for node in getattr(tree, "body", []):
+        if not isinstance(node, (ast.Assign, ast.AnnAssign)):
+            continue
+        value = node.value
+        if not isinstance(value, (ast.Tuple, ast.List)):
+            continue
+        targets = node.targets if isinstance(node, ast.Assign) else [node.target]
+        names = [t.id for t in targets if isinstance(t, ast.Name)]
+        if not names:
+            continue
+        perms = {
+            el.value
+            for el in value.elts
+            if isinstance(el, ast.Constant)
+            and isinstance(el.value, str)
+            and PERM_TOKEN_RE.fullmatch(el.value)
+        }
+        if perms and len(perms) == len(value.elts):
+            for name in names:
+                found[name] = perms
+    return found
+
+
+def _permissions_from_calls(
+    nodes,
+    authorizers: dict[str, set[str]],
+    constants: dict[str, set[str]] | None = None,
+) -> set[str]:
     """Permissions enforced by helper calls anywhere under `nodes`."""
+    constants = constants or {}
     perms: set[str] = set()
     for root in nodes:
         for sub in ast.walk(root):
@@ -213,12 +259,20 @@ def _permissions_from_calls(nodes, authorizers: dict[str, set[str]]) -> set[str]
                     # and an id, so only dotted permission literals qualify.
                     if name in PERMISSION_HELPERS or PERM_TOKEN_RE.fullmatch(arg.value):
                         perms.add(arg.value)
+                elif isinstance(arg, ast.Starred) and isinstance(arg.value, ast.Name):
+                    # `require_permission(*_SENSITIVE_READ_PERMISSIONS)` — the
+                    # literals live in a module constant, not at the call site.
+                    perms |= constants.get(arg.value.id, set())
             # A helper that hardcodes its own permission contributes it here.
             perms |= authorizers.get(name, set())
     return perms
 
 
-def enforced_permissions(node: ast.AST, authorizers: dict[str, set[str]]) -> set[str]:
+def enforced_permissions(
+    node: ast.AST,
+    authorizers: dict[str, set[str]],
+    constants: dict[str, set[str]] | None = None,
+) -> set[str]:
     """Permissions this route enforces, from the signature *and* the body.
 
     Two enforcement patterns are in use, and reading only the first is what
@@ -245,9 +299,9 @@ def enforced_permissions(node: ast.AST, authorizers: dict[str, set[str]]) -> set
     """
     args = node.args
     signature = list(args.defaults) + [d for d in args.kw_defaults if d]
-    return _permissions_from_calls(signature, authorizers) | _permissions_from_calls(
-        node.body, authorizers
-    )
+    return _permissions_from_calls(
+        signature, authorizers, constants
+    ) | _permissions_from_calls(node.body, authorizers, constants)
 
 
 def _permission_clause(doc: str, match: re.Match) -> str:
@@ -290,6 +344,7 @@ def analyze() -> tuple[list[Finding], int]:
         # Resolved once per module: a body authorizer and the routes calling it
         # always live in the same endpoint file.
         authorizers = authorizer_permissions(tree)
+        constants = module_permission_constants(tree)
 
         for node in ast.walk(tree):
             if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
@@ -301,7 +356,7 @@ def analyze() -> tuple[list[Finding], int]:
                 continue
 
             checked += 1
-            enforced = enforced_permissions(node, authorizers)
+            enforced = enforced_permissions(node, authorizers, constants)
             documented, auth_only = documented_permissions(doc)
 
             if documented and enforced and documented != enforced:

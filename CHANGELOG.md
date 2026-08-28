@@ -7,6 +7,170 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Facility file edits could be silently swallowed, and the delete button was missing for some managers (2026-08-28)
+
+**Fixed**
+
+- Editing a facility photo's caption or a facility document's description no
+  longer uses the browser's native prompt dialog, which some browsers
+  silently block after repeated use — a blocked edit previously looked
+  identical to pressing Cancel, with no error shown.
+- Clearing a facility photo caption or document description to blank now
+  actually clears it, instead of leaving the old value in place.
+- Staff granted the dedicated "delete facility records" permission (without
+  full facility management access) can now see the delete button on
+  facility photos and documents, matching every other facility section.
+
+### Damaged inventory could be marked available, and received reorder stock couldn't be issued (2026-08-28)
+
+**Fixed**
+
+- Completing maintenance work and recording the item's condition as poor,
+  damaged, or out of service no longer allows that item to be returned to
+  service. "Return to service" now requires the item to actually be in
+  good condition — an item logged as damaged stays out of service until a
+  later inspection records a safe condition.
+- Two quartermasters acting on the same member-submitted return request at
+  the same time (one denying it, one physically receiving it) could
+  overwrite each other's decision. Reviewing a return request is now
+  serialized so only one outcome is ever recorded.
+- Stock recorded through the new reorder-receiving workflow now actually
+  becomes available to issue. Previously, receiving stock created a
+  purchase record but never updated the item's on-hand count, so newly
+  received units could not be checked out or issued to members.
+- The return-request review screen no longer carries a safety follow-up
+  choice (e.g. "send to write-off review") over from one reviewed request
+  to the next. A follow-up selected for a damaged item no longer applies
+  itself to the next request reviewed, even if that item was in good
+  condition.
+- Removed the "Transfer is immediate" checkbox from the item-transfer
+  screen — custody transfers have always taken effect immediately, and the
+  checkbox implied a deferred option that did not exist.
+- Custody-transfer audit log entries now record who performed the
+  transfer.
+
+### A facility's files were readable by the whole department through the Documents module (2026-08-27)
+
+**Fixed**
+
+- The Facility detail Files section stores each uploaded file in the shared
+  Documents module and keeps only a reference on the facility record. The
+  facility record is restricted to members holding "view sensitive facility
+  data", facility edit, or facility management — but the stored file was not.
+  Uploads landed outside any folder, and a file in no folder is treated as
+  organization-wide, so anyone who could open the Documents module could list
+  and download a facility's insurance policies, lease documents, capital
+  project files and inspection paperwork. The restriction on the record was
+  real; the file it pointed at was not covered by it.
+- Facility file folders are now restricted to the same three grants, and a
+  newly uploaded facility file is filed into its facility's folder as soon as
+  it is attached. Departments already using the Files section have their
+  existing facility folders corrected automatically on upgrade.
+- A documents administrator no longer sees facility files by virtue of that
+  role alone. Access to a facility's files now requires a facilities grant,
+  which is what the facility screens have always required.
+
+### Two people opening a facility's file tab for the first time at the same moment could get duplicate folders (2026-08-27)
+
+**Fixed**
+
+- The first time anyone opened a facility's Files tab, the app created that
+  facility's folder structure automatically. If two people did this within
+  the same moment (e.g. two officers opening the same new facility right
+  after it was added), both could end up creating a duplicate set of
+  folders instead of sharing one. This is now prevented.
+
+### Transferring a prospect to full membership could grant more access than the transferring member had, and a double-click could create two accounts for one prospect (2026-08-27)
+
+**Fixed**
+
+- Converting a prospective member into a full member could assign that new
+  account a role carrying more permissions than the staff member doing the
+  conversion actually had, including a role that controls the whole
+  organization — the same safeguard already applied when creating a member
+  directly now also applies when converting one from the prospect pipeline.
+- Two transfer requests submitted for the same prospect at nearly the same
+  time (e.g. a double-click, or two coordinators acting at once) could each
+  create a separate member account for that one prospect. The transfer now
+  serializes so only one account is ever created.
+
+### Creating a new member was completely broken, and a member's rank/class safeguard had three gaps (2026-08-27)
+
+**Fixed**
+
+- Creating a new member failed every time with a server error. Restoring
+  the account's password, initial roles, welcome-email option, mailing
+  address, and emergency contacts to the create-member form fixed it.
+- The safeguard that keeps an administrative member from also holding an
+  operational rank (which would carry chain-of-command permissions that
+  role isn't meant to have) had three gaps: the automatic, scheduled
+  tier-advancement process wasn't covered by it at all; a member updating
+  their own record could, in rare timing, still slip past it; and
+  clearing a member's classification back to the default while assigning
+  a rank in the same save was incorrectly rejected. All three are closed.
+
+### A voter with a stale browser session could be blocked from voting, and a recalculated quorum could read a stale attendee count (2026-08-27)
+
+**Fixed**
+
+- A member who received a ballot link by email, but who also had an
+  unrelated, expired or ended session from previously using the app in the
+  same browser, could be blocked from opening or voting on the ballot
+  entirely. The ballot link no longer requires a valid active session.
+- After changing a meeting's quorum settings, the quorum recount that runs
+  immediately afterward could occasionally use an out-of-date attendee
+  count from just before the change, rather than the current one.
+- A ballot-builder option was mislabeled as including probationary and
+  life members when it did not; an admin relying on the label could have
+  unintentionally left those members off a ballot meant to include them.
+  The label now correctly describes who the option reaches.
+
+### Two approvers acting at the same moment could double-charge a budget, and a budget's cap could be quietly bypassed (2026-08-27)
+
+**Fixed**
+
+- Approving or denying a purchase/expense/check-request approval step didn't
+  lock the step record while checking it was still pending. Two authorized
+  approvers acting on the same step within the same moment could both pass
+  that check and both finalize it — encumbering the associated budget twice
+  for what was really a single approval.
+- A multi-step approval chain (e.g. Supervisor, then Treasurer, then Chief)
+  didn't enforce that steps be acted on in order. A later reviewer — an
+  internal user, or an external emailed approver, who could each act at any
+  time — could approve or deny their step before earlier reviewers acted.
+  A denial finalizes the whole request immediately, so an out-of-order
+  denial could kill a request before earlier reviewers ever weighed in.
+  Approving or denying a step now requires that every earlier step in the
+  chain has already been resolved.
+- A chain that starts with an informational notice step (or has one
+  following only auto-approved steps) could get permanently stuck: the
+  notice was never marked sent until the first real approval, but nothing
+  could be approved until the notice was marked sent. Chains like this now
+  activate correctly from the start.
+- Every external approver's email invite/link was sent — and its one-week
+  expiry started — the moment a request was submitted, even for approvers
+  several steps down the chain. If earlier steps took a while to resolve,
+  a later approver's link could expire before it was ever their turn, with
+  no way to get a new one. Invites (and their expiry) now go out only once
+  it's actually that approver's turn.
+- A misconfigured approval chain with two steps at the same position could,
+  on some database configurations, cause the wrong one to be treated as
+  "current," blocking the step actually shown as actionable. Fixed to
+  consistently agree with what's shown as actionable.
+- Editing a budget's total amount didn't check it against what was already
+  spent or committed against that budget. A budget could be reduced below
+  its already-committed total and the reduction would be accepted, silently
+  breaking the guarantee that a budget's spending never exceeds its cap.
+- Updating a dues schedule's grace period would fail every time due to a
+  copy-paste error in field validation.
+- Requesting a finance export with a date range that mixed a plain date and
+  a fully-specified (timezone-included) date could crash instead of showing
+  a normal validation error.
+- One expense-report form still converted dollar amounts through
+  floating-point math when submitting, unlike the rest of the finance
+  module's forms, which could very rarely round a line-item amount
+  incorrectly.
+
 ### Two paths could hand out permissions beyond what the requester held (2026-08-27)
 
 **Fixed**
@@ -25,6 +189,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   a rank to a name that grants more than the person renaming it holds
   themselves is now blocked the same way; renaming to an ordinary custom
   name is unaffected.
+
+### Testing runs, exports and permission checking (2026-08-27)
+
+**Added**
+
+- The testing checklist now works in **runs** — one named pass over the app,
+  e.g. "Pre-launch, build 1.4". Starting a new run archives the one before it:
+  its marks stay readable and exportable from the run picker instead of being
+  cleared away. The first mark opens a run on its own.
+- **Every mark is checked against what the app expected.** A refusal that
+  happened as predicted is counted as a gate verified; a page that opened for
+  an account that should have been refused is flagged where the mark was made,
+  counted in the header, and listed in the printed report as a permissions
+  defect.
+- Marks record the build they were made against, so after a deployment the ones
+  made on an earlier build are marked and can be filtered with **Needs
+  re-test**.
+- **Exports for reporting:** a CSV of every mark, a page-by-tester permission
+  matrix, a printable report (coverage, failures with notes, gate mismatches,
+  coverage by area) for saving as PDF, and the existing Markdown.
+- **Keyboard marking:** `j`/`k` to move between boxes, `p`/`f`/`b` to mark the
+  focused one, `n` to jump to the next page with no mark.
+
+### The testing checklist is now a module you can switch off (2026-08-27)
+
+**Changed**
+
+- The Testing Home at `/testing` — the page listing every screen in the app so
+  a department can walk them before going live — is now a module of its own,
+  and it is **off by default**. A department that was using it will find it
+  gone after this upgrade until an administrator turns **Testing Checklist**
+  back on under Settings → Modules. Nothing recorded is lost: marks and notes
+  stay in place and reappear when the module is switched on again.
+- While the module is off, the navigation entry, the page and the data behind
+  it all refuse — the same way every other switched-off module behaves.
+- The module is not offered during first-time setup. It is a tool for checking
+  an installation, not a decision a department needs to make while making
+  every other one.
 
 ### A few training-related pages could briefly cache data they shouldn't (2026-08-27)
 

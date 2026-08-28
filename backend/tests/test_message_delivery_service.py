@@ -429,10 +429,13 @@ class TestPublishScheduledMessages:
 
         with patch.object(
             MessageDeliveryService, "deliver", new=AsyncMock()
-        ) as deliver:
+        ) as deliver, patch.object(
+            MessagingService, "materialize_recipients", new=AsyncMock()
+        ) as materialize:
             result = await run_publish_scheduled_messages(db)
 
         assert result["published"] == 1
+        materialize.assert_awaited_once_with(due)
         # Marked live before delivery so a failure can't cause a re-escalation.
         assert due.scheduled_at is None
         deliver.assert_awaited_once()

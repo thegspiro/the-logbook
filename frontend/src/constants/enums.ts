@@ -290,6 +290,31 @@ export const MembershipType = {
 export type MembershipType = (typeof MembershipType)[keyof typeof MembershipType];
 
 // ============================================
+// Member Class and Status
+// ============================================
+// The two independent facts `MembershipType` fuses into one value: what kind of
+// member somebody is, and where they sit on the membership ladder. Mirrors
+// `MemberClass` / `MemberStatus` in backend/app/utils/membership.py, which is
+// the authority whenever the pair and the legacy value disagree.
+export const MemberClass = {
+  OPERATIONAL: 'operational',
+  ADMINISTRATIVE: 'administrative',
+  SOCIAL: 'social',
+} as const;
+export type MemberClass = (typeof MemberClass)[keyof typeof MemberClass];
+
+export const MemberStatus = {
+  PROSPECTIVE: 'prospective',
+  PROBATIONARY: 'probationary',
+  REGULAR: 'regular',
+  LIFE: 'life',
+  RETIRED: 'retired',
+  HONORARY: 'honorary',
+  JUNIOR: 'junior',
+} as const;
+export type MemberStatus = (typeof MemberStatus)[keyof typeof MemberStatus];
+
+// ============================================
 // Pipeline / Applicant Stage Types
 // ============================================
 export const StageType = {

@@ -1,6 +1,167 @@
 # Security Review 06 — Elections & Ballots
 
-**Prefix:** `ELEC` · **Iteration:** 06 · **Reviewed:** 2026-08-25 · **PR:** TBD
+**Prefix:** `ELEC` · **Iteration:** 06 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2) · **PR:** [#1810](https://github.com/thegspiro/the-logbook/pull/1810) (pass 1)
+
+---
+
+## Pass 2 (2026-08-27)
+
+**Scope correction (Codex review on PR #1948):** the first draft of this
+section scoped its frontend check to `modules/elections/` and missed
+`frontend/src/components/BallotBuilder.tsx` — a shared component, outside
+that directory, that also changed since pass 1's merge and carried a real
+defect (ELEC-19 below). The exact class of mistake feature 04 already
+corrected: a component a feature touches is not guaranteed to live under
+the feature's own module directory. Re-swept with `git diff --stat` against
+`frontend/src/` broadly, not a directory glob, before writing "no findings"
+again.
+
+Scoped to the **full elections domain** since pass 1's merge commit
+(`56b897ec`, PR #1810) — `endpoints/elections.py`, `election_service.py`,
+`quorum_service.py`, `models/election.py`, `schemas/election.py`, every
+frontend file under `frontend/src/` referencing election/ballot/quorum
+concerns (not just `modules/elections/`), and every migration since,
+checked by content (not just filename) for anything touching election
+tables or eligibility logic. Four real changes since pass 1, all reviewed
+in full — three carried real defects, caught by Codex across two review
+rounds on this PR and independently verified against the actual code
+before fixing, not taken on the bot's word:
+
+- **`election_service.py` (+58/-25) — voter eligibility rewritten for the
+  member-class/status split.** A same-day feature
+  (`20260826_1400_f1a2b3c4d5e6_split_member_class_and_status.py`) replaced
+  the fused `membership_type` column with independent `member_class`
+  (operational/administrative/social) and `member_status`
+  (prospective/probationary/regular/life/retired/honorary/junior) columns.
+  `_user_has_role_type` — the function every ballot-eligibility and
+  results-visibility check in the module calls — was rewritten to read the
+  new columns, with a fallback to `split_membership_type()` for a
+  pre-migration row. This is exactly the kind of change that could
+  silently widen a restricted ballot's electorate, so it was read in full
+  rather than skimmed:
+  - Every legacy category (`operational`, `administrative`, `regular`,
+    `life`, `probationary`) reproduces its pre-split meaning exactly —
+    `operational` now requires `member_class == operational AND
+member_status == regular`, matching the old `membership_type == "active"`
+    check precisely, not just "any operational member" (which would have
+    wrongly included probationary and retired members). `regular` and
+    `life` are likewise class-**and**-status, not class-only.
+  - `split_membership_type()`'s fallback deliberately returns `(None,
+None)` for an org-configured custom tier (e.g. `"senior"`) rather than
+    defaulting to a permissive value — confirmed by reading its docstring's
+    own stated reasoning and cross-checked against the `_reconcile_membership`
+    event listener (`models/user.py:542`, wired to both `before_insert` and
+    `before_update`), which fills both columns on every ORM write, making
+    the fallback a rare defense-in-depth path rather than the common case.
+  - A new `"social"` category was added (`member_class == social`). Not
+    dead code: `eligible_voter_types` (`schemas/election.py:86`) accepts
+    any string with no fixed enum, falling back to a role-slug match, so
+    an admin can set `"social"` today. Verified it satisfies only its own
+    category, not `operational`/`administrative`/`regular` (no prior test
+    covered this — added one).
+  - The migration itself: guarded on `users` table existence (Pitfall
+    #26), deliberately no `server_default` (would silently misclassify
+    non-operational-regular rows on a raw-SQL insert — documented
+    reasoning in the migration matches the fallback's), reversible with a
+    documented, bounded information loss.
+- **`election_service.py`, `notify_leadership_of_rollback` (~L4908) — an
+  unrelated correctness fix in the same file.** Removed a
+  `.join(User.roles)` that produced one row per position held, double-
+  counting and double-emailing a leadership member who held two roles.
+  Not a security issue (no access-control implication, an org-scoped
+  notification path); confirmed no other instance of the same join pattern
+  remains in the file (`get_package_recipients`'s sibling query was already
+  correct).
+- **`quorum_service.py` (+8) — `calculate_quorum` takes a
+  `.with_for_update()` locking read on the `MeetingMinutes` row before
+  computing `present_count` from its own `attendees` JSON column.** First
+  draft called this Pitfall #27-compliant by construction (count read off
+  the same locked row, no separate query to miss) — **wrong**, caught on
+  Codex's first round. The lock is necessary but not sufficient on a
+  session that already holds this row: `PATCH /minutes/{id}/quorum-config`
+  (`set_meeting_quorum_config`) loads and commits the same
+  `MeetingMinutes` instance, then calls `calculate_quorum` on the _same_
+  session, before this method ever runs. With `expire_on_commit=False`
+  (`core/database.py`) that instance stays in the session's identity map,
+  and SQLAlchemy's default behavior on a re-`SELECT` for a row already in
+  the identity map is to return the cached Python object **without**
+  copying the new row's columns onto it — the lock is acquired at the SQL
+  level, but `minutes.attendees` still reads the pre-lock value unless the
+  query opts into `populate_existing`. This exact pattern (lock +
+  `populate_existing`) was already established elsewhere in the codebase
+  (`membership_pipeline_service.py`, `inventory_service.py`) for the
+  identical reason — this file just hadn't caught up. Fixed by adding
+  `.execution_options(populate_existing=True)`. Guarded by
+  `test_minutes_fetch_repopulates_an_already_loaded_instance`
+  (`test_quorum_service.py`), confirmed to fail pre-fix via `git stash`.
+- **`frontend/src/modules/elections/routes.tsx` (+18/-14) —
+  `requiredModule="elections"` added to all three election routes,
+  mirroring a pre-existing backend `module_gate("elections", "Elections")`
+  (`api/v1/api.py:206`, unchanged).** First draft called this "not a new
+  access-control boundary" and stopped there — **incomplete**, caught on
+  Codex's first round, and a real bug independent of this diff (the gate
+  itself predates pass 1; this diff only made the frontend consistent with
+  it). `module_gate` mounts `require_module` on the _whole_ `elections`
+  router, including the explicitly public, token-authorized ballot routes
+  (`POST /ballot/lookup`, `/ballot/vote`, `/ballot/vote/bulk`,
+  `GET /{id}/verify-receipt`) — none of which declare a `current_user`
+  dependency themselves. `require_module` resolves the caller's org via
+  `get_optional_current_user`, which (correctly, for routes that read who
+  is asking) raises rather than downgrading an invalid credential to
+  anonymous. A voter clicking an emailed ballot link while their browser
+  still carries an unrelated, expired/revoked `access_token` cookie from a
+  since-ended main-app session therefore got a 401 before their ballot
+  token was ever evaluated — the module gate, not the ballot logic,
+  rejected them. Fixed by having `get_request_enabled_modules` call
+  `get_optional_current_user` directly (not via `Depends`) and catch an
+  invalid-credential `HTTPException`, treating it the same as no session
+  at all for the _module flag_ specifically — an unusable session carries
+  no more organization information than none. Does not weaken
+  authentication anywhere else: an endpoint that declares its own
+  `Depends(get_current_user)` still resolves and rejects independently.
+  Guarded by
+  `test_an_invalid_session_cookie_does_not_block_a_public_route_either`
+  (`test_module_api_gating.py`), alongside the existing
+  `test_a_request_with_no_session_is_not_turned_into_a_401` it mirrors.
+- **`frontend/src/components/BallotBuilder.tsx` (+26/-9, outside
+  `modules/elections/` — the file the first draft's scope missed) —
+  ELEC-19, caught on Codex's second round.** Relabeled the
+  `eligible_voter_types` picker for the member-class/status split, but got
+  `operational` backwards: the new label read "Operational Members — any
+  status, incl. probationary & life". `ElectionService._user_has_role_type`
+  requires `member_class == operational AND member_status == regular` for
+  the `operational` _category_ specifically (preserving its legacy
+  `membership_type == "active"` meaning) — it does **not** include
+  probationary, life, or retired members, even though those are all
+  operational-class. An administrator relying on the new label would build
+  a ballot believing probationary/life members were included when they
+  were not — silent under-inclusion, not a privilege escalation, but a
+  real defect in an election tool where turnout matters. The label (and
+  the file's explanatory comment, which encoded the same wrong "class
+  alone" mental model) corrected to state the narrower, accurate
+  requirement.
+
+**3 real findings, all fixed.** Plus one test gap closed (the new
+`"social"` category had no coverage — added
+`test_social_is_eligible_only_for_social_category` and
+`test_administrative_is_eligible_for_administrative_category`).
+
+**Completion gate (pass 2):** flake8/black/isort clean on `app/ tests/
+alembic/`; `validate_migrations.py --strict` passed (383 revisions, single
+head); scoped backend tests (`-k "elections or quorum or ballot or
+module_gat"`) 269 passed, 1 skipped (pre-existing), 0 failed; full backend
+suite 9069 passed, 22 skipped (pre-existing), 0 failed; `tsc --noEmit` 0
+errors; `eslint src/components/BallotBuilder.tsx src/modules/elections/`
+0 errors. Two of the three new guard tests confirmed to fail against the
+pre-fix code via `git stash`; the module-gating fix changes _how_ the
+dependency is resolved (a plain call instead of `Depends`), so its test
+harness had to change with it and a clean stash-diff wasn't meaningful —
+correctness there rests on tracing FastAPI's dependency-resolution order
+directly, not a before/after run.
+
+---
+
+## Pass 1 (2026-08-25)
 
 **Backend:** `api/v1/endpoints/elections.py` (3,809 L, 65 routes — 56
 `require_permission`-gated, 5 authenticated-only self-scoped, 4 intentionally

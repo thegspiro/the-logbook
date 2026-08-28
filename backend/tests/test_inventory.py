@@ -173,7 +173,11 @@ class TestItemCRUD:
 
         item, _ = await svc.create_item(
             organization_id=uuid.UUID(org_id),
-            item_data={"name": "Old Radio", "condition": "poor", "status": "available"},
+            item_data={
+                "name": "Old Radio",
+                "condition": "poor",
+                "status": "in_maintenance",
+            },
             created_by=uuid.UUID(user_id),
         )
 

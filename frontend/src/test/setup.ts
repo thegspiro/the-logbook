@@ -86,6 +86,11 @@ if (typeof Blob !== 'undefined' && typeof Blob.prototype.text !== 'function') {
   });
 }
 
+// jsdom implements no layout, so Element.scrollIntoView does not exist at all
+// — a component that keeps a focused item in view throws rather than no-ops.
+// Stubbed globally for the same reason as scrollTo above.
+Element.prototype.scrollIntoView = vi.fn();
+
 // Mock IntersectionObserver
 globalThis.IntersectionObserver = class IntersectionObserver {
   readonly root: Element | null = null;

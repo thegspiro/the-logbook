@@ -16,11 +16,610 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-Feature 05 (finance & approvals, pass 2) —
-[PR #1942](https://github.com/thegspiro/the-logbook/pull/1942). No findings;
-docs-only change. Next after merge: 06 elections & ballots, pass 2.
+[PR #1963](https://github.com/thegspiro/the-logbook/pull/1963) (feature 14,
+equipment check & shifts, pass 2) — branch
+`claude/security-review-equipment-check`.
 
 ---
+
+### 2026-08-28 — Feature 14 (Equipment check & shifts), pass 2 — no findings
+
+Scoped to the full domain since pass 1's merge (`2a7e47ee`, PR #1842): all
+six declared/adjacent backend files (`equipment_check.py`,
+`shift_completion.py`, `equipment_check_service.py`,
+`shift_completion_service.py`, `equipment_check_pdf.py`,
+`models/apparatus.py`) came back **byte-identical**
+(`git diff --stat`, not assumed), and no migration since pass 1 touches an
+equipment-check/shift-completion/deployed-lot table. A broad grep across
+`frontend/src` found 41 files mentioning the feature by name; of the 10 that
+changed since pass 1, every one was an incidental substring hit from an
+unrelated rotation feature landing in the same window (notifications, the
+new testing module, training, inventory, a scheduling my-attendance fix) —
+none touches this feature's own code, and the `/equipment-checks`
+`UNCACHEABLE_PREFIXES` entry EC-14 added in pass 1 is present, unmodified.
+
+Given the zero diff, re-verified every pass-1 finding's fix mechanism by
+reading the current code directly rather than re-citing the doc (EC-1, EC-2/
+EC2-4, EC-6, EC-9, EC-10, EC-12, EC-13, EC-14 all confirmed intact at their
+original lines), plus a fresh AST-based route/permission enumeration
+reproducing 47/47 + 21/21 routes with no drift from pass 1's table. Also
+checked, not previously written up explicitly: the module's one `.ilike()`
+call still declares `escape=LIKE_ESCAPE_CHAR`; `export_csv` still uses
+`SafeCsvWriter`; every `SET NULL` FK in `models/apparatus.py` is
+`nullable=True`; no unsafe shallow-copy JSON mutation in either service
+file; the ~12,400 L of equipment-check frontend pages have zero
+`window.confirm`/`alert`/`prompt`, zero `dangerouslySetInnerHTML`, zero
+banned `.toLocale*` calls, and zero direct `fetch()` (grepped, not read
+line-by-line — noted as partial-scope rather than assumed clean);
+`EquipmentCheckForm.tsx`'s offline-draft `localStorage` key is covered by
+`clearAllDrafts()`'s equipment-check prefix match, correctly purged on
+logout (the pre-existing FE-6/FE-7 mechanism, traced here for the first
+time against this feature's specific key); and both batch endpoints
+(`batch_create_shift_reports`, `batch_review_reports`) resolve
+client-supplied ids through already-org-scoped paths, re-verified by
+reading the branches directly. No findings, no code changes. Completion
+gate: flake8/black/isort clean (isort 8.0.1, CI's pin, already installed),
+migrations 389 revisions/single head, scoped tests 296 passed/1 skipped,
+full backend suite 9179 passed/22 skipped/0 failed, `tsc`/`eslint` clean
+(10 pre-existing warnings, same set as SEC-00/AP-13 pass 2). Full detail in
+`EC-14-equipment-check-shifts.md`.
+
+**Scope correction (same-day follow-up on Codex review of PR #1963):** the
+zero-diff claim above covered only the six files pass 1 declared, not
+adjacent files outside that list. Codex correctly flagged two:
+`scheduled_tasks.py` (end-of-shift equipment-check reminder task) and
+`scheduling_service.py` (`ShiftCall.responding_members`, read by
+`ShiftCompletionService` for trainee call attribution) — both had changed
+since `2a7e47ee` (confirmed via `git log`, commits `c19ecc0f`, `f439cf07`,
+`27c78fcf`, `b10a8ca7`, and the message-delivery chain). Read both in full
+against the changed hunks: the reminder task is org-scoped throughout (per-org
+processing, `shift_ids` built only from an already org-filtered `Shift`
+query) and its diff is a dedup/inactive-user correctness fix from a different
+feature's PR (#1915, CRON2-31), not a tenant or auth change. The
+`responding_members` validation is a real, already-applied XC-1 fix
+(`f439cf07`, feature 15's own pass) that batches an in-org check before
+persisting; traced `ShiftCompletionService`'s consumption of it and confirmed
+a trainee's call count can only be auto-populated from calls on a shift the
+trainee is already tied to via attendance/assignment — the JSON field cannot
+be used to attribute a call to an untied trainee. **Verdict: both clean, no
+findings, no code change.** Full detail in the "Adjacent files reviewed on
+follow-up" subsection of `EC-14-equipment-check-shifts.md`. Rotation row 14
+-> awaiting PR merge. Next: 15 scheduling, once this PR merges.
+
+---
+
+### 2026-08-28 — Feature 13 (Apparatus & NFC), pass 2 ✅ merged — PR #1961
+
+Merged (`1c71d8e1`). Confirmed on `origin/main` by ancestry check
+(`git log origin/main --oneline` shows the merge commit at HEAD). No
+review-thread follow-up needed — AP-7 was the only finding, already fixed
+before the PR was opened, and CI was green with no Codex comments requiring
+a push. Rotation row 13 -> done. Next: 14 equipment check & shifts.
+
+### 2026-08-28 — Feature 13 (Apparatus & NFC), pass 2 — 1 fixed (LOW), 0 flagged, 2 doc corrections
+
+Picked up a stalled rotation: PR #1959 (feature 12, facilities) had merged
+over 2 hours prior with no follow-up (well past the usual ~30-90 min
+cadence) and the Open PR row read "None", so this iteration resumed at
+feature 13 per the rotation order rather than waiting further. Scoped to
+the full domain since pass 1's merge (`37936879`, PR #1838): all 10
+declared/adjacent backend files came back **byte-identical**
+(`git diff --stat`, not assumed), and no apparatus/NFC/EVOC migration
+landed since pass 1. The only change under `modules/apparatus/` is
+`routes.tsx` gaining `requiredModule="apparatus"` on its four routes —
+client-side parity for a new, whole-app change (`70449d96`, unrelated to
+this rotation) that mounted the `apparatus` router behind a server-side
+`module_gate("apparatus", "Apparatus")` for the first time. Traced rather
+than trusted: the gate's "no session passes through" clause is inert for
+this router (no public/token routes in `apparatus.py`), so it's a pure AND
+on top of every route's existing permission check; `nfc_tags.py` remains
+deliberately ungated at the module level, with each of its 5 routes
+independently calling `require_nfc_id_cards` (re-confirmed by reading the
+file, not re-citing pass 1's claim).
+
+Given the zero backend diff, did not re-read ~8,000 lines cover to cover.
+Instead: a fresh AST-based enumeration of every route decorator's auth
+dependency (confirmed 88/88 + 5/5, with two routes' long signatures
+initially defeating the walk's regex capture — followed up by reading both
+functions directly, both correctly gated), a full direct read of
+`nfc_tag_service.py` against tenant isolation and data exposure (the one
+file in this feature that had never had more than one pass), and targeted
+re-verification of pass 1's specific "Verified good" mechanisms by reading
+the actual code (assert_in_org call count, the driver-exception conditional-
+UPDATE race guard, the EVOC eligibility query's org-scoping, the
+`list_driver_exception_approvers` response shape) rather than re-citing the
+claim. Found and fixed **AP-7** (LOW, defense-in-depth): `NfcTagService.
+_name_map`, the helper that resolves `member_name`/`issued_by_name` for
+card responses, ran `select(User...).where(User.id.in_(ids))` with no
+`organization_id` filter on the query itself — the same Pitfall #14a shape
+AP-6 (pass 1) fixed one file over in `admin_hours_service.py`, and for the
+same reason not currently exploitable: every id it's ever called with is
+already drawn from an org-scoped `NfcTag` row or `current_user.id`, across
+three different call sites, which is exactly the cross-method dependency
+Pitfall #14 warns against relying on. Fixed by adding a required
+`organization_id` parameter and filtering directly; behavior-neutral for
+every valid call. New guard test class (`TestNameMapOrgScoping`, 3 tests,
+whereclause-specific per the hollow-assertion lesson from AP-6's own guard
+test) confirmed to fail pre-fix via `git stash`. Also corrected two
+stale counts carried since pass 1/app-review: `nfc_tags.py` has always had
+5 routes, not 6; `apparatus_service.py` has 16 `assert_in_org` sites, not
+17 (the "17" traces to app-review pass 4, 2026-08-09) — neither miscount
+changed any conclusion (both undercounted claims remain true at the
+corrected number), corrected in `AP-13-apparatus-nfc.md` in place.
+Completion gate: flake8/black/isort clean (isort 8.0.1, CI's pin, already
+installed), migrations 389 revisions/single head/no schema change, scoped
+tests 239 passed/1 skipped, full backend suite 9179 passed/22 skipped/0
+failed, `tsc`/`eslint` clean (10 pre-existing warnings, same set as
+SEC-00/feature 34), `routeIntegrity`/apparatus-module vitest 40/40 passed.
+No FLAGGED items this pass, so no `KNOWN_LIMITATIONS.md` entry; the fix is
+behavior-neutral and not user-visible, so no `CHANGELOG.md` entry (matching
+how AP-6 was handled in pass 1). Full detail in `AP-13-apparatus-nfc.md`.
+Rotation row 13 -> awaiting PR merge. Next: 14 equipment check & shifts,
+once this PR merges.
+
+---
+
+### 2026-08-28 — Feature 12 (Facilities), pass 2 ✅ merged — PR #1959
+
+Merged (`b39a548c`), including the 2 additional fixes Codex found on the
+draft PR (docstring's position list was missing `vice_president`/`secretary`;
+the new `PromptDialog` edit flow could close a different, still-open dialog
+if an earlier slow update resolved after the user switched targets). CI
+green on the final head (17/17 checks), both review threads resolved.
+Confirmed on `origin/main` by ancestry check. Rotation row 12 -> done. Next:
+13 apparatus & NFC.
+
+### 2026-08-28 — Feature 12 (Facilities), pass 2 — 3 fixed (1 MED, 2 LOW), 0 flagged
+
+Scoped to the full domain since pass 1's merge (`4e8c6b0c`, PR #1836). Both
+declared backend files (`facilities_service.py`, `models/facilities.py`)
+unchanged; the real churn was a new cross-module document-reference
+validator in `facilities.py` (landed via PR #1953/DOC-10 pass 2 but never
+documented there — reviewed here for the first time), the granular
+`facilities.delete` permission wired to every delete route, two
+`facilities.view` revocation migrations narrowing it from a baseline member
+grant to leadership/facilities-manager only, a new folder-ACL migration, a
+new frontend `FilesSection` component, and a stale-response-race guard in
+`facilitiesStore.ts`. Fixed: a stale module docstring still calling
+`facilities.view` "the baseline member grant" (FAC-10, LOW); the new
+`FilesSection` used `window.prompt` for caption/description edits, a
+CLAUDE.md Pitfall #16 violation, replaced with `PromptDialog` and corrected
+to send an explicit `null` on clear rather than omitting the key (FAC-11,
+MED); the Files section's delete button was gated on `facilities.manage`
+instead of the hook's general `canDelete`, hiding the button from holders
+of the new granular delete-only grant despite the backend already
+authorizing them (FAC-12, LOW). Verified good: all of pass 1's fixes intact;
+the new document-reference validator is org-scoped with no bypass via
+update; the granular-delete rollout grants no new access (every position
+holding it already holds `facilities.manage`); both revocation migrations
+correctly guard the `create_all`-only `positions` table; the facilities
+router carries the whole-app module gate. Full backend suite 9176
+passed/22 skipped; full frontend suite 5383/5384 (one confirmed-flaky,
+unrelated `NotificationCard.test.tsx` failure, recorded rather than
+ignored). Full detail in `FAC-12-facilities.md`. Rotation row 12 ->
+awaiting merge. Next: 13 apparatus & NFC, once #1959 merges.
+
+### 2026-08-28 — Feature 11 (Inventory), pass 2 ✅ merged — PR #1957
+
+Merged (`656755cf`), including the 6 fixes (INV-10 through INV-15) and the
+2 flags (INV-16, INV-17) mirrored to `KNOWN_LIMITATIONS.md`. CI green on the
+final head (all 17 checks), no unresolved review threads requiring further
+action — the two open threads are the two flagged items, already replied to
+with the disposition and correctly left for an owner decision. Confirmed on
+`origin/main` by ancestry check. Rotation row 11 -> done. Next: 12 facilities.
+
+### 2026-08-28 — Feature 11 (Inventory), pass 2 — 6 fixed (3 HIGH), 2 flagged (corrected after initial "no findings")
+
+Scoped to the full domain since pass 1's merge (`acfc34c3`, PR #1835). This
+range carried substantial new feature work (six commits: distribute-items
+replacing batch-checkout, an explicit custody `/transfer` endpoint,
+request-intent/fulfillment-type separation, a versioned row-locked
+reorder-receiving workflow with a new `reorder_receipts` table, a
+three-stage return-request lifecycle with independent physical
+verification, and an optimistic-concurrency write-off review). The backend
+diff was read in full and reviewed carefully; the first version pushed to
+PR #1957 waved through the frontend diff on the (true but incomplete)
+reasoning that client-side code cannot itself create an auth/tenant gap —
+missing that this feature ships real business logic in its components. An
+automated review on the PR caught 7 issues; each was independently
+verified against the actual code, not taken on the bot's word. Fixed: a
+missing row lock let concurrent deny/receive on the same return request
+overwrite each other (INV-10, HIGH); `receive_reorder` never credited
+`InventoryItem.quantity`, so received stock could not actually be issued
+(INV-11, HIGH — the entire feature this range centers on was
+non-functional); the item-status validator allowed a damaged/unsafe item
+to return to `AVAILABLE`, becoming distributable (INV-12, HIGH — a
+life-safety issue for a fire department); stale `followUp`/quantity state
+in `ReturnRequestsPanel` could misfile a write-off/charge-review against
+the wrong item (INV-13, MED); a custody-transfer audit event omitted the
+acting user (INV-14, LOW); a "Transfer is immediate" checkbox had no
+effect and was removed (INV-15, LOW). Flagged: ordinary reorder PATCH
+edits bypass the versioned workflow (INV-16, MED — API-contract decision);
+"Complete work" always creates a new maintenance record instead of closing
+the open one (INV-17, MED — needs new data-fetching + a multi-open-record
+decision). Both mirrored to `KNOWN_LIMITATIONS.md`. Two pre-existing tests
+that encoded the old, incorrect state-validation rule as expected behavior
+were corrected, not deleted. New guard tests added for INV-10/11/12. Full
+backend suite: 9173 passed. Frontend: `tsc`/`eslint` clean. Full detail in
+`INV-11-inventory.md`. INV-7/LBL-1 (pass 1 fixes) confirmed still intact;
+INV-8/INV-9 (pass 1 flags) confirmed still open, no new information this
+pass. Rotation row 11 -> awaiting merge. Next: 12 facilities, once #1957
+merges.
+
+### 2026-08-28 — Feature 10 (Documents & legal), pass 2 ✅ merged — PR #1953
+
+Merged (`ba4a89ca`), including the CHANGELOG.md conflict-resolution merge
+commit tended after main advanced past the PR's base. Confirmed on
+`origin/main` by ancestry check. CI green on the final head, no unresolved
+review threads. Rotation row 10 -> done. Next: 11 inventory.
+
+### 2026-08-27 — Feature 10 (Documents & legal), pass 2 — 1 real finding, fixed
+
+Scoped to the full domain since pass 1's final merge (`6ab8b31e`, PR
+#1826). Zero changes to any endpoint/schema/model file; one real change in
+`documents_service.py` (+30/-1), landed via a Facilities PR (#1836, feature
+12, not yet reached in this rotation) rather than by this rotation: a
+partial fix for the exact Pitfall #27 race pass 1 had predicted for the
+apparatus/facility/event folder-provisioning helpers. It locked the
+`Organization` row in `ensure_facility_folder` but left the two existence
+checks after it as plain reads — insufficient per Pitfall #27's own second
+half, since the caller (`GET /facilities/{id}/folders`) already reads the
+`Facility` row first, establishing the REPEATABLE READ snapshot before the
+lock is acquired. Two concurrent first-time visits to the same facility's
+folder tab could each still see "no folder yet" and each create a
+duplicate folder tree. Fixed by making both existence checks locking reads
+too; extended the existing (too-weak) guard test to actually distinguish
+"org locked" from "org and existence checks locked," confirmed to fail
+pre-fix via `git stash`. No migrations touch document/legal tables since
+pass 1; no frontend changes (broad content-grep hits were all incidental).
+Full detail in `DOC-10-documents-legal.md`. Rotation row 10 -> done. Next:
+11 inventory.
+
+---
+
+### 2026-08-27 — Feature 09 (Medical screening, PHI), pass 2 ✅ merged — PR #1952
+
+Merged, with the doc-correction commit (`1670bd4d`) included. Confirmed on
+`origin/main` by ancestry check. Codex left 3 P2 review comments; all
+verified against the actual code and were real doc-accuracy issues (not
+security defects — the backend module gate is authoritative and correctly
+enforces in every case): the Open PR wording had already been fixed by a
+later commit on the same PR before the review ran; the onboarding
+description said "offered during setup" when `medical_screening` is
+settings-only and never offered by the wizard; and the frontend's
+module-off skip in `Dashboard.tsx` doesn't cover the genuinely-unconfigured-
+org state, where `useEnabledModules`' deliberate permissive default lets
+the call through and the backend correctly 403s it (a UX-only mismatch,
+not a leak, since the failure is caught and cleared silently). All three
+corrected and threads resolved. Rotation row 09 -> done. Next: 10
+documents & legal.
+
+---
+
+### 2026-08-27 — Feature 09 (Medical screening, PHI), pass 2 — no findings
+
+Scoped to the full domain since pass 1's merge (`daf5eaca`, PR #1816). Zero
+changes to any of the 4 declared backend files, and no new migrations
+touching the module's tables. One real, non-trivial change landed outside
+those files: `medical_screening.router` is now gated server-side by a new
+`module_gate("medical_screening", ...)` dependency in `api/v1/api.py`,
+mirrored client-side in `routes.tsx`/`Dashboard.tsx`. Traced the whole
+mechanism rather than taking it at face value: `require_module`'s resolver
+is `get_request_enabled_modules`, the exact function this rotation already
+hardened in ELEC-06 pass 2 (invalid-session-cookie handling); the module
+gate is a pure AND on top of each route's existing permission check, never
+a substitute; the one route with no permission string (`/compliance/me`)
+still requires `Depends(get_current_user)` independently, so the module
+gate's "anonymous passes through" clause (there for routers with
+token-authenticated public routes) is a no-op on this router, not a gap.
+Frontend module gating confirmed to run strictly after the existing
+permission/role checks in `ProtectedRoute.tsx`, same ordering already
+verified for MP-08's equivalent change. `test_module_api_gating.py` +
+3 medical-screening test files: 67 passed, 0 failed. No code changes, no
+new PR needed beyond the doc update. Full detail in
+`MS-09-medical-screening.md`. Rotation row 09 -> done. Next: 10 documents &
+legal.
+
+---
+
+### 2026-08-27 — Feature 08 (Membership pipeline), pass 2 ✅ merged — PR #1950
+
+Merged, with the 2-bug fix commit (`6c824ed1`) included. Confirmed on
+`origin/main` by ancestry check. Both Codex P1 findings (missing
+role-grant ceiling on prospect transfer, missing row lock on the transfer's
+check-before-write) fixed, regression-tested, and their review threads
+replied to and resolved before merge. Rotation row 08 -> done. Next: 09
+medical screening (PHI).
+
+### 2026-08-27 — Feature 08 (Membership pipeline), pass 2 — Codex caught 2 real P1 bugs, both fixed
+
+Scoped to the full domain since pass 1's merge (`aad49be4`, PR #1815). The
+frontend diff (dialog-portal adoption across 5 components, a
+stage-timeout-clearing fix, a stage-config-default fix, module gating, and
+the new `frontend/src/utils/membership.ts`) was reviewed in full and had no
+findings — its own bugs were already fixed and tested within the diff, and
+`membership.ts` matches `backend/app/utils/membership.py` line-by-line, no
+mislabeled UI text of the kind ELEC-06 pass 2 found in `BallotBuilder.tsx`.
+The backend's initial "already-reviewed on PR #1931" read was incomplete:
+Codex's review of the draft PR found two real, separate P1 issues in the
+same transfer-prospect path that PR #1931's narrower review never had
+reason to look for — `transfer_prospect` accepted a caller-supplied
+`role_ids` list and attached every resolved role to the new account with no
+`_enforce_role_grant_ceiling` check (a bare `members.manage`/
+`prospective_members.manage` holder could mint an account with a
+wildcard/more-privileged role, and via the request's own
+`department_email` field, log in as it themselves); and
+`transfer_to_membership` read the prospect without `lock_for_update`, so
+two concurrent transfer requests with distinct usernames could both pass
+the `ProspectStatus.TRANSFERRED` check and each create a separate `User`
+account for one prospect. Both fixed (role ceiling added to the endpoint;
+row lock added ahead of the status check in the service), each covered by
+a guard test confirmed to fail against the pre-fix code via `git stash`.
+Full detail in `MP-08-membership-pipeline.md`. Rotation row 08 -> done.
+Next: 09 medical screening (PHI).
+
+### 2026-08-27 — Feature 07 (Users & organizations), pass 2 ✅ merged — PR #1949
+
+Merged, with the 5-bug fix commit included. Confirmed on `origin/main`
+by ancestry check. This PR sat green and mergeable for over an hour
+without auto-merging (unlike every other PR in this rotation so far) —
+proactively notified the user by push, since the unmerged fix meant
+member creation stayed broken on `main` in the meantime. Final tally: 5
+real findings (a production-breaking schema regression that broke every
+member-creation request, plus three separate gaps in the administrative-
+member-holds-no-rank invariant: an unlocked fourth writer, a missing
+`populate_existing` on two locked ones, and an explicit-null
+misjudgment), all fixed, across two Codex review rounds. Rotation row 07
+-> done. Next: 08 membership pipeline.
+
+### 2026-08-27 — Feature 07 (Users & organizations), pass 2 — Codex caught 5 real bugs across 2 rounds, all fixed
+
+Full-domain diff since pass 1's merge (`5f610f1f`, PR #1814): the
+member-class/status split (already read in full during ELEC-06 for its
+eligibility angle) reaches this module directly via `users.py`/
+`member_status.py`/`schemas/user.py`. First draft called the
+class/rank-contradiction invariant fully closed by three locked writers
+plus two pre-existing structural tests. It wasn't -- Codex caught three
+separate gaps in that same invariant, plus one production-breaking
+regression the diff's own removed lines should have flagged:
+
+- **`schemas/user.py` (P1, production-breaking).** `AdminUserCreate`'s
+  refactor onto `MembershipClassificationFields` silently dropped
+  `password`, `role_ids`, `send_welcome_email`, every address field, and
+  `emergency_contacts`. Every `POST /api/v1/users` hit `user_data.password`
+  with no such attribute and raised `AttributeError` -- member creation
+  was completely broken on `main`. Every existing test for this route was
+  source-inspection style and would never have caught a field silently
+  disappearing. Fixed; guarded by a new test extracting every
+  `user_data.<attr>` access from the route's source and asserting each is
+  a declared field, so the two can't drift silently again.
+- **A fourth, unlocked writer.** `MembershipTierService.advance_all` (the
+  scheduled tier-advancement scan) also clears rank on a move into an
+  administrative tier, but its batch SELECT was never locked -- the cited
+  "every writer" tests only covered three. Fixed with a per-member lock
+  taken right before each mutation (not the whole batch upfront).
+- **The lock alone wasn't enough on a self-update.** Neither locking read
+  had `populate_existing=True`; on a self-update, `get_current_user`
+  already put the same row in the session's identity map, so a re-SELECT
+  under the lock could still return pre-lock values. The exact bug
+  ELEC-06 already found and fixed in `quorum_service.py`; this file
+  hadn't caught up. Fixed on both locking reads.
+- **An explicit `member_class: null` was judged against the wrong
+  value.** `update_data.get("member_class") or user.member_class` can't
+  tell "omitted" from "explicitly cleared" -- both read back None. An
+  explicit null resets to the operational default, not "keep the old
+  class", so clearing an administrative member's class while assigning a
+  rank in the same request was wrongly refused. Fixed by checking key
+  presence before falling back.
+
+All fixes independently verified against the real code before fixing
+(reproduced the AttributeError directly, traced the identity-map
+behavior, traced the exclude_unset semantics) -- not taken on Codex's
+word. Also confirmed real and already-fixed: `_canonical_rank_or_400`
+(unconstrained rank strings) and a real prior frontend bug (rank-list
+cache leaking across orgs, now scoped and guarding the same stale-
+response race AUTH-3 found elsewhere). Completion gate: flake8/black/
+isort clean, migrations valid, scoped tests 430 passed/1 skipped, full
+backend suite 9110 passed/22 skipped/0 failed, `tsc`/`eslint` clean.
+Every new/modified guard test confirmed to fail pre-fix via `git stash`.
+Rotation row 07 -> awaiting
+PR merge.
+
+### 2026-08-27 — Feature 06 (Elections & ballots), pass 2 ✅ merged — PR #1948
+
+Merged, with the 3-bug fix commit included (pushed directly to the
+still-open PR ahead of auto-merge). Confirmed on `origin/main` by
+ancestry check. Final tally: 3 real findings (quorum staleness via a
+missing `populate_existing`, a module gate blocking public ballot routes
+on a stale session cookie, a mislabeled ballot-builder option), all
+fixed, across two Codex review rounds — plus one scoping-methodology
+repeat: the pass's own frontend check was scoped to `modules/elections/`
+and missed `BallotBuilder.tsx`, which lives outside it. Rotation row 06
+-> done. Next: 07 users & organizations.
+
+### 2026-08-27 — Feature 06 (Elections & ballots), pass 2 — Codex caught 3 real bugs across 2 rounds, all fixed
+
+Full-domain diff since pass 1's merge (`56b897ec`, PR #1810). First draft
+scoped its frontend check to `modules/elections/` and missed
+`frontend/src/components/BallotBuilder.tsx` — a shared component outside
+that directory that also changed and carried a real defect. Same class of
+mistake feature 04 already corrected once; re-swept against `frontend/src/`
+broadly this time, not a directory glob.
+
+The significant backend change: a same-day feature split the fused
+`membership_type` column into independent `member_class`/`member_status`
+columns and rewrote `election_service.py`'s `_user_has_role_type` (the
+function every ballot-eligibility check calls) to read them. Read in full
+given the stakes — every legacy voter category reproduces its pre-split
+meaning exactly, the unknown-tier fallback fails closed, the
+`_reconcile_membership` ORM listener keeps the columns populated. **This
+part had no findings** — but three other things in this diff did:
+
+- **Quorum staleness.** `quorum_service.py`'s new `.with_for_update()`
+  lock was declared Pitfall #27-complete on first pass — wrong. On a
+  session that already holds the `MeetingMinutes` row (the
+  quorum-config-update endpoint loads+commits the same instance just
+  before calling this method), a re-`SELECT` with `expire_on_commit=False`
+  returns the cached, pre-lock Python object unless the query opts into
+  `populate_existing` — an established pattern elsewhere in this codebase
+  that this file hadn't caught up to. Fixed.
+- **Module gate blocking public ballot routes.** `module_gate("elections",
+...)` (pre-existing, not part of this diff, but a real bug regardless)
+  gates the whole router including the token-authorized public ballot
+  routes. `get_optional_current_user` correctly raises on an invalid
+  credential rather than downgrading to anonymous — but that means a
+  voter with a stale/expired session cookie from an unrelated main-app
+  visit got a 401 before their ballot token was ever checked. Fixed by
+  having the module-flag resolution catch an invalid-credential exception
+  specifically, without weakening any endpoint that declares its own auth
+  dependency.
+- **Mislabeled ballot-builder option (ELEC-19, the one the scope miss
+  hid).** `BallotBuilder.tsx`'s new `"operational"` label claimed "any
+  status, incl. probationary & life" — backwards. The backend requires
+  status == regular for that category specifically; an admin trusting the
+  new label would silently exclude probationary/life members from a
+  ballot meant to include them. Label and explanatory comment corrected.
+
+All three independently verified against the real code (traced
+`expire_on_commit`/identity-map behavior, traced FastAPI's
+dependency-resolution order, re-read `_user_has_role_type` against the
+new label) before fixing — not taken on Codex's word. Plus one test gap
+closed (a new `"social"` voter category had no coverage). Completion
+gate: flake8/black/isort clean, migrations 383 revisions, scoped tests
+269 passed/1 skipped, full backend suite 9069 passed/22 skipped/0 failed,
+`tsc`/`eslint` clean. Rotation row 06 -> awaiting PR merge.
+
+### 2026-08-27 — Feature 05 (Finance & approvals), pass 2 ✅ merged — PR #1946
+
+Merged, with the FIN-16/17/18 fix commit included (pushed directly to the
+still-open PR ahead of auto-merge, for once). Confirmed on `origin/main`
+by ancestry check, not just the merge notification. Final tally for this
+pass: 9 real findings across FIN-10 through FIN-18, all fixed, plus 1
+documentation correction — three successive Codex rounds, each catching
+something the previous round's own fix and tests had missed (a genuine
+concurrency bug, a ceiling bypass, two schema regressions, a frontend
+precision gap, then an ordering bug the first fix's own review didn't
+question, then two deadlocks and a portability gap _that_ fix introduced).
+**Process note for future iterations**: this rotation's PRs kept
+auto-merging the instant CI went green — three times in a row here, twice
+before a follow-up commit could land (forcing a rebase onto new `main` and
+a fresh PR each time) and once caught in time by pushing directly to the
+still-open PR. When Codex is still actively reviewing a PR, watch for
+review comments landing in the same window CI turns green, and don't
+assume "CI green" means "done" until either Codex has had time to weigh in
+or the PR has actually closed. Rotation row 05 -> done for pass 2. Next:
+06 elections & ballots.
+
+### 2026-08-27 — Feature 05 (Finance & approvals), pass 2 — Codex round 3 on #1946 caught FIN-16/17/18 (deadlocks + portability), fixed
+
+Enforcing chain order (FIN-15) surfaced two real deadlocks and one
+portability gap that FIN-15's own tests didn't cover:
+
+- **FIN-16** — `create_approval_records` never advanced any step at
+  creation time (only `approve_step`/`approve_by_token` did, after a
+  success). A chain starting with a NOTIFICATION step (or one following
+  only auto-approved steps) left that notification `PENDING` forever, and
+  FIN-15's order check then refused to let the real approval step skip
+  past it -- a hard deadlock. Fixed by calling step advancement once,
+  immediately after creating a chain's records.
+- **FIN-17** — every EMAIL step's token was generated and its 7-day expiry
+  clock started at chain creation, regardless of position. Combined with
+  FIN-15, a step whose predecessors took a week or more could expire
+  before ever being reachable, with no resend path -- neither "act early"
+  nor "act on time" was possible. Fixed by deferring token generation and
+  the invite email until a step actually becomes reachable, generalizing
+  `_advance_notification_steps` (renamed `_advance_reachable_steps`) to
+  handle both notification-send and token-issue in one pass.
+- **FIN-18** — `get_approval_records` (which `get_current_pending_step`
+  reads) ordered by `step_order`+`created_at` with no `id` tiebreaker, but
+  `get_pending_approvals`' own subquery already breaks such ties with
+  `id` -- nothing stops two steps sharing a `step_order`, and records for
+  one entity are created in the same instant. On a database that doesn't
+  happen to return ties in `id` order, FIN-15's check could reject the
+  exact step the pending-approvals list told the user was actionable.
+  Fixed by adding the same `id` tiebreaker.
+
+Three new regression tests (DB-backed), two of the three confirmed to fail
+pre-fix via `git stash`; the third (FIN-18) asserts correct, portable
+behavior rather than a locally-reproducible failure -- this dev database
+happens to return the tie in primary-key order without the tiebreaker.
+Completion gate re-run clean: flake8/black/isort, migrations 383
+revisions, scoped tests 246 passed/1 skipped, full backend suite 9065
+passed/22 skipped/0 failed. Pushed directly to #1946 (still open when
+this landed, CI green but not yet auto-merged).
+
+### 2026-08-27 — Feature 05 (Finance & approvals), pass 2 — Codex round 2 on #1944 caught FIN-15 (approval-chain ordering), fixed
+
+`create_approval_records` marks every step in a chain `PENDING` up front —
+including emailing an EMAIL-type step's token immediately, regardless of
+its position — but none of `approve_step`/`deny_step`/`approve_by_token`/
+`deny_by_token` checked that the acted-on record was the chain's _current_
+step (earliest `step_order` still `PENDING`), only that its own status was
+`PENDING`. A `get_current_pending_step` helper already existed to answer
+that and was never called anywhere — dead code next to the gap it should
+have closed. A later-step approver (by record id, or by the token emailed
+to them at the same moment as everyone else's) could act out of order;
+denial is the sharp edge, since a single deny finalizes the whole entity
+immediately, killing the request before earlier reviewers ever weighed in.
+Fixed with a shared `_ensure_current_step` check wired into all four action
+paths, inside the same lock each already holds for FIN-10. Two new
+regression tests (one DB-backed multi-step-chain test, one mock-based
+token-path test), both confirmed to fail pre-fix via `git stash`. Full
+completion gate re-run clean (flake8/black/isort, migrations 383 revisions,
+scoped tests 243 passed/1 skipped, full backend suite 9060 passed/22
+skipped/0 failed, frontend gates clean). Pushed to PR #1944, which itself
+merged before this commit landed — re-pushed as a fresh PR, #1946, rebased
+onto current `main` (see Open PR above).
+
+### 2026-08-27 — Feature 05 (Finance & approvals), pass 2 — Codex caught 5 real bugs, all fixed
+
+Codex reviewed PR #1942 (the "no findings" doc-only push below) and flagged
+6 issues; 5 verified as real defects (not just documentation gaps) and
+fixed, 1 was a documentation correction. #1942 merged (docs-only, as
+originally pushed) before this fix commit could be pushed to it, so the fix
+went out as a fresh PR, #1944, rebased onto current `main`:
+
+- **FIN-10** — `approve_step`/`deny_step` read `ApprovalStepRecord` without
+  `.with_for_update()`, unlike the token-based `approve_by_token`/
+  `deny_by_token` siblings. Two approvers acting on the same step at once
+  could both pass the pending check and both finalize -> double-encumbered
+  budget. Fixed by locking both reads.
+- **FIN-11** — `update_budget` (`PUT /budgets/{id}`) set `amount_budgeted`
+  with no lock and no check against `amount_spent + amount_encumbered` —
+  a silent side door around the hard ceiling `_mutate_budget` enforces.
+  Fixed: same locking read, raises `BudgetLimitExceededError` on a
+  reduction below the committed total (the endpoint's exception handler
+  for this was previously dead code).
+- **FIN-12** — `DuesScheduleUpdate.grace_period_days` had a copy-pasted
+  `decimal_places=2` constraint on an `int` field; pydantic-core raised a
+  bare `TypeError` on every valid integer, breaking the update path
+  entirely. Fixed by dropping the stray constraint.
+- **FIN-13** — `ExportRequest`'s date-range validator compared naive and
+  aware datetimes directly, raising an uncaught `TypeError` (a 500) for a
+  mixed-format request instead of a 422. Fixed with a `field_validator`
+  normalizing naive input to UTC, mirroring `schemas/election.py`'s
+  `_as_utc`.
+- **FIN-14** — `ExpenseReportFormPage.tsx` was the one finance form the
+  `MonetaryAmount`/`DecimalString` hardening pass missed (also: the frontend
+  file count was 10, not 8 as first documented) — it still sent
+  `Number(item.amount)`, a live float-precision gap since the backend
+  already required a 2-decimal `Decimal`. Fixed to `.toFixed(2)`, matching
+  the sibling forms.
+- **Doc-only correction** — the migration review wrongly said `status` was
+  nullable and its table-existence guard unnecessary; `status` is
+  `nullable=False` and the guard is required (Pitfall #26,
+  `finance_export_logs` is `create_all`-only). The migration code itself
+  was already correct.
+
+Every fix independently re-verified against the real code (reproduced each
+schema TypeError directly; confirmed the missing lock by reading the token
+path; confirmed the frontend gap against the backend schema it feeds) before
+fixing — not taken on Codex's word. Six new regression tests added, each
+confirmed to fail on the pre-fix code via `git stash`. Completion gate:
+flake8/black/isort clean, migrations valid, scoped tests 240 passed/1
+skipped, full backend suite green (re-confirmed after the rebase onto
+`main`), frontend `tsc`/`eslint`/`vitest` (80 tests) clean. Pushed as
+PR #1944.
 
 ### 2026-08-27 — Feature 05 (Finance & approvals), pass 2 — no findings
 
@@ -935,16 +1534,16 @@ each row's prior PR is recorded in the Log, not repeated here.
 | 02  | Permissions & roles       | PERM   | `dependencies.py`, `core/permissions.py`, `roles.py`, `operational_ranks.py`, `officers.py`, `org_chart.py`                                     | ✅     |
 | 03  | Public surface & webhooks | PUB    | `api/public/*` (20 unauth routes), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`                                      | ✅     |
 | 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                              | ✅     |
-| 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                     | ⏳     |
-| 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | ⬜     |
-| 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ⬜     |
-| 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ⬜     |
-| 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ⬜     |
-| 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ⬜     |
-| 11  | Inventory                 | INV    | `endpoints/inventory.py` (6539 L), `inventory_service.py`                                                                                       | ⬜     |
-| 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ⬜     |
-| 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | ⬜     |
-| 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | ⬜     |
+| 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                     | ✅     |
+| 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | ✅     |
+| 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ✅     |
+| 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ✅     |
+| 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ✅     |
+| 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ✅     |
+| 11  | Inventory                 | INV    | `endpoints/inventory.py` (6539 L), `inventory_service.py`                                                                                       | ✅     |
+| 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ✅     |
+| 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | ✅     |
+| 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | ✅     |
 | 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                | ⬜     |
 | 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                       | ⬜     |
 | 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`                                                                                   | ⬜     |

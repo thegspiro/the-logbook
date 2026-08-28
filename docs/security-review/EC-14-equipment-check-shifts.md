@@ -1,6 +1,8 @@
 # Security Review 14 — Equipment Check & Shift Completion
 
-**Prefix:** `EC` · **Iteration:** 14 · **Reviewed:** 2026-08-26 · **PR:** [#1842](https://github.com/thegspiro/the-logbook/pull/1842)
+**Prefix:** `EC` · **Iteration:** 14 · **Reviewed:** 2026-08-26 (pass 1),
+2026-08-28 (pass 2) · **PR:** [#1842](https://github.com/thegspiro/the-logbook/pull/1842)
+(pass 1)
 
 **Backend:** `api/v1/endpoints/equipment_check.py` (47 routes),
 `api/v1/endpoints/shift_completion.py` (21 routes),
@@ -10,6 +12,253 @@
 **Migrations:** none this iteration (no schema change)
 
 ---
+
+## Pass 2 (2026-08-28) — zero diff across the six declared files; two adjacent files reviewed on Codex follow-up, both clean
+
+**Diff scope.** Pass 1 merged as `2a7e47ee` (PR #1842). `git diff --stat
+2a7e47ee..origin/main` for all six declared backend files (`equipment_check.py`,
+`shift_completion.py`, `equipment_check_service.py`,
+`shift_completion_service.py`, `equipment_check_pdf.py`, `models/apparatus.py`)
+returned **no output — byte-identical**. No migration since pass 1 touches an
+equipment-check/shift-completion/deployed-lot table (`git log
+2a7e47ee..origin/main -- backend/alembic/versions/` lists 19 new migration
+files; none references `equipment_check`, `shift_completion`,
+`check_template`, or `deployed_lot`). A broad `grep` across `frontend/src` for
+every file mentioning `equipment-check`/`equipment_check`/`shift-completion`/
+`shift_completion` found 41 hits; diffing those specific files since `2a7e47ee`
+turned up ten with changes, all incidental substring matches from unrelated
+rotation features landing in the same window — `NotificationCard.tsx` (a
+generic CTA-label addition + an unrelated mark-read-await fix),
+`SideNavigation.tsx`/`TopNavigation.tsx` (nav-only diffs not touching the
+`equipment_check.*` permission strings they reference), `training.ts`/
+`testingRegistry.ts` (a new `grants_qualification` field and a new testing
+module, feature 19's territory), `eventServices.ts` (inventory type additions,
+feature 11's territory), `mobile-route-inventory.ts` (route-list entries,
+unchanged paths), and `apiCache.ts`/`apiCache.test.ts` (three new
+`UNCACHEABLE_PREFIXES` entries for other features' endpoints — the
+`/equipment-checks` entry EC-14 added in pass 1 is present, unmodified, at its
+original line). `modules/scheduling/services/api.ts` changed (an unrelated
+`getMyAttendance` 404-handling fix, FE2-34-8 from the frontend-shared pass),
+but touches scheduling's shift-attendance polling, not this feature's
+equipment-check/shift-completion surface. **Net: nothing in the six declared
+files changed.**
+
+**Scope correction (Codex review of this PR).** The zero-diff claim above
+covered only the six files pass 1 declared; it did not check adjacent files
+outside that list that also implement pieces of this feature.
+[Codex flagged](https://github.com/thegspiro/the-logbook/pull/1963#discussion_r3880196422)
+two: `app/services/scheduled_tasks.py` (end-of-shift equipment-check reminder
+task) and `app/services/scheduling_service.py` (`ShiftCall.responding_members`,
+which `ShiftCompletionService` reads for trainee call attribution). Both had
+in fact changed since `2a7e47ee` — confirmed with `git log
+2a7e47ee..origin/main -- backend/app/services/scheduled_tasks.py
+backend/app/services/scheduling_service.py`, commits including `c19ecc0f`,
+`f439cf07`, `27c78fcf`, `b10a8ca7`, and the message-delivery-idempotency
+chain. Both are reviewed below. **Verdict: clean, no findings, no code
+change required.**
+
+### Adjacent files reviewed on follow-up
+
+**`scheduled_tasks.py` — `run_end_of_shift_checklist_reminders`
+(:2218-2410).** This is the end-of-shift equipment-check reminder task named
+in the Codex comment. Read the full function plus its three changed hunks
+since `2a7e47ee` (all from `c19ecc0f`, PR #1915 — a different rotation
+feature's fix, CRON2-31):
+
+- The `Shift` query at :2257 filters `Shift.organization_id == str(org.id)`,
+  and the function itself only runs per-org via `_for_each_org` (:509),
+  which itself filters `Organization.active.isnot(False)`. `shift_ids` (:2268)
+  is built exclusively from that org-scoped result, so the two batched
+  follow-up queries (`ShiftEquipmentCheck`/`ShiftAssignment` `.where(...
+.in_(shift_ids))`, :2272 and :2280) cannot pull another org's rows — a
+  foreign id could not appear in `shift_ids` to begin with. `NotificationLog`
+  rows are created with `organization_id=str(org.id)` (:2381) and
+  `recipient_id` drawn only from `assigned_map`, itself keyed from the same
+  org-scoped `shift_ids` join. No cross-org read or notify path.
+- The three-hunk change adds `.join(User, ...).where(User.is_active.is_(True))`
+  to the assignment lookup (:2282-2290) and stops stamping the
+  `eos_checklist_reminder_sent` dedup flag on three early-`continue` branches
+  (no apparatus yet, no templates yet, every assignee filtered out) that
+  previously stamped it. Both are correctness/availability fixes (a
+  deactivated member no longer gets a reminder; a shift assigned or given an
+  apparatus later in the window still gets its reminder instead of being
+  silently and permanently skipped) — neither touches auth, tenant scoping,
+  or what data reaches whom beyond narrowing the recipient set to active
+  users, which is a tightening, not a loosening.
+- `resolve_check_templates` (:548), which this function calls, is unchanged
+  since `2a7e47ee` and out of this diff's scope; it filters
+  `EquipmentCheckTemplate.organization_id == str(organization_id)`
+  correctly. Its apparatus-type fallback (:577) resolves `Apparatus.id ==
+str(apparatus_id)` without an org filter, but `apparatus_id` here is never
+  client-supplied — it comes from `shift.apparatus_id` on an already
+  org-scoped `Shift` row — so this is not reachable cross-tenant through this
+  path. Pre-existing, unchanged, noted rather than silently passed over.
+- `run_post_shift_validation` (:1359-1420ish) also references equipment
+  checklists (folds "outstanding end-of-shift checklists" into its message)
+  and gained a `Shift.status != ShiftStatus.CANCELLED` filter in the same
+  window (CRON2-31-3) — a correctness fix for a different bug (a cancelled
+  shift generating a bogus validation prompt forever), not a tenant or auth
+  change. Same org-scoping shape as above (`Shift.organization_id ==
+str(org.id)`, unchanged).
+
+No finding. Checked against CHECKLIST.md's seven dimensions for what
+changed: tenant isolation (§3) and abuse resistance (§6, the dedup-flag
+fixes prevent both notification-storm and permanently-silenced-reminder
+failure modes) are the only dimensions this diff touches, and both check out.
+
+**`scheduling_service.py` — `ShiftCall.responding_members` validation
+(:1183-1202, :2073-2087, :2137-2141).** This is a real, already-applied XC-1
+fix, from `f439cf07` ("re-verify SCH-1..8, fix 1 XC-1 gap in shift calls"),
+feature 15's own pass — reviewed here for the first time from EC-14's angle
+since `ShiftCompletionService` (this feature's territory) is a reader.
+
+- `_all_users_in_org` (:1183) is a batched `SELECT User.id WHERE id IN (...)
+AND organization_id = :org` check; `create_shift_call` (:2057) and
+  `update_shift_call` (:2128) both call it against `responding_members`
+  before persisting, rejecting the write with `"One or more members are not
+in your organization"` if any id doesn't resolve in-org. This closes
+  exactly the XC-1 gap CLAUDE.md Pitfall #14c describes: a client-supplied FK
+  id array stored into JSON with no prior existence/tenancy check.
+- Both mutating methods re-verify the shift itself is in-org
+  (`get_shift_by_id`/`get_shift_call_by_id`, both filtering
+  `organization_id`) independent of the endpoint-level check.
+- The endpoints (`api/v1/endpoints/scheduling.py:1418-1511`) gate
+  create/update/delete behind `scheduling.manage` **or** being the shift's
+  named officer, resolved through `_authorize_shift_management` (:180),
+  which itself fetches the shift org-scoped first (404 if not in-org) before
+  checking permission — XC-3 and the permission-sensitivity match (§2) both
+  hold: this is officer-level write access to per-incident attribution data,
+  not a member-self-service surface.
+- **Traced the `ShiftCompletionService` consumer specifically** (the
+  concern the Codex comment raised): `_get_trainee_call_data_from_shift`
+  (`shift_completion_service.py:112`) searches `ShiftCall.responding_members`
+  for `trainee_id` to auto-populate a report's call count. Its one caller,
+  `create_report` (:238), only reaches it after `shift_id` is validated
+  `Shift.organization_id == str(organization_id)` (:241) **and** `trainee_id`
+  is confirmed to have a `ShiftAttendance` or `ShiftAssignment` row on that
+  specific shift (:253-274) — so a caller cannot use this path to attribute
+  a call to a trainee who was never tied to the shift in the first place;
+  `responding_members` only ever narrows an already-validated trainee's
+  count, it cannot manufacture one. The reverse reader,
+  `compute_member_call_counts` (:677, unchanged, out of this diff), is only
+  called from two sites that both resolve `shift_id` through an org-scoped
+  `Shift` fetch first (`scheduling.py:590`, `scheduling_service.py:6416`
+  inside `finalize_shift`) — checked because the code comment on the new
+  validation cites it as a reader, not because it changed.
+- The remaining two hunks in this file's diff (:6129, :6155 —
+  `compliance_value` graded from raw stored minutes instead of the rounded
+  hours figure) are a compliance-requirement grading fix, unrelated to
+  `responding_members`/call attribution and outside what the Codex comment
+  raised; not reviewed as part of this pass (scheduling's own requirements
+  surface is feature 15's territory).
+
+No finding. Checked against CHECKLIST.md: tenant isolation (§3, XC-1 — the
+fix is sound and complete) and authorization (§2, permission matches
+sensitivity) are the dimensions this diff touches; both check out.
+
+**Given zero diff, re-verified every pass-1 fix by reading the current code
+directly** (not by re-citing the doc), plus a fresh AST-based route/permission
+enumeration, rather than treating "unchanged" as "still correct by
+assumption":
+
+- **Route/permission enumeration.** A Python AST walk of both endpoint files'
+  `@router.<verb>` decorators (walking `Depends(...)` in each function
+  signature, plus router-level `dependencies=` lists) reproduced **47/47** and
+  **21/21** routes with the exact permission strings pass 1's route inventory
+  table lists — no drift, no new route, no route that lost its dependency.
+- **EC-1** (`_update_apparatus_deficiency`, `app/services/
+equipment_check_service.py:1072`) — still filters
+  `Apparatus.id == apparatus_id, Apparatus.organization_id ==
+organization_id`; read the function body directly.
+- **EC-2 / EC2-4** (`item_names` lookup, `equipment_check_service.py:2265`) —
+  still filters `InventoryItem.organization_id == organization_id`, with the
+  original EC2-4 explanatory comment intact.
+- **EC-6** (`create_report`'s `shift_id`-absent branch,
+  `shift_completion_service.py:294`) — still validates `trainee_id` is a user
+  in the caller's org before creating the report.
+- **EC-9** (`get_report`, `shift_completion_service.py:1145`) — still takes an
+  optional `organization_id` and filters on it; all four call sites
+  (`get_shift_report` endpoint at `shift_completion.py:513`,
+  `acknowledge_report`/`update_report`/`review_report` in the service) still
+  pass the caller's org. Traced `acknowledge_report`
+  (`shift_completion_service.py:1439`) and `review_report`
+  (`:1483`, reached from both the single and batch-review endpoints) end to
+  end — both resolve their target exclusively through the org-scoped
+  `get_report`, so `POST /shift-completion/batch-review`'s client-supplied
+  `report_ids` list cannot touch a foreign-org report.
+- **EC-10** (`complete_incomplete_check`,
+  `equipment_check_service.py:1742`) — still re-applies the auto-fail rule
+  before computing aggregate counts.
+- **EC-12** (`report_item_used`,
+  `equipment_check_service.py:2662`) — still locks the item
+  (`for_update=True`) and takes a locking read on the item's
+  `CheckItemDeployedLot` rows before the consume, in the same lock order
+  `swap_item_lot` uses.
+- **EC-13** (`update_deployed_lot`,
+  `equipment_check_service.py:2839`) — still raises `PermissionError` when a
+  submit-only caller (`allow_metadata_change=False`) requests a quantity
+  above the lot's stored value; `swap_item_lot`'s `enforce_submitter_limits`
+  (`:3203`–`3242`) still reads that now-protected `quantity` as its cap.
+- **EC-14** (`apiCache.ts`'s `/equipment-checks` prefix) — present, unmodified.
+- **EC-11** (compliance metrics) — still hardcoded
+  (`equipment_check_service.py:4213,4280`); confirmed still an unbuilt
+  feature, not a regression.
+- **`get_item_deployments` vs. its sibling's permission gate** — still
+  documented as the carried-forward, deliberately-unadjudicated discrepancy
+  in `tests/test_permission_gate_composition.py:79-80` and
+  `docs/KNOWN_LIMITATIONS.md`. Unchanged; not re-flagged as new.
+
+**Additional checks this pass** (not previously written up as explicit
+verified-good items):
+
+- **LIKE escaping** — the module's one `.ilike()` call
+  (`equipment_check_service.py:4330`, the failed-item-search filter) still
+  passes `like_pattern(item_name)` with `escape=LIKE_ESCAPE_CHAR`. No raw SQL
+  (`text(...)`) anywhere in either service file.
+- **CSV export** — `export_csv` (`equipment_check.py:1286-1291`) uses
+  `SafeCsvWriter`, not a bare `csv.writer`.
+- **`SET NULL` nullability** — every `ondelete="SET NULL"` FK in
+  `models/apparatus.py` is paired with `nullable=True` (spot-checked
+  directly; also covered by the whole-app `test_set_null_fks_are_nullable`
+  guard test).
+- **JSON columns** (`crew_positions`, `custom_field_values`,
+  `assigned_positions`, `item_ids`, `changes`) — no shallow-copy-then-reassign
+  mutation pattern found; every write is either a fresh assignment or a
+  read-only access, not an in-place nested mutation of a value already
+  attached to a tracked instance.
+- **Frontend equipment-check pages** (`EquipmentCheckForm.tsx`,
+  `EquipmentCheckTemplateBuilder.tsx`, `MyChecklistsPage.tsx`,
+  `CheckLogPage.tsx`, `ShiftCheckInPage.tsx`, `ShiftDetailPanel.tsx`,
+  `ApparatusInventoryPage.tsx`, `FleetBoardPage.tsx`,
+  `ApparatusDetailPage.tsx`, `EquipmentChecksTab.tsx` — ~12,400 L combined):
+  grepped rather than read line-by-line (partial-scope, noted rather than
+  silently assumed) for `window.confirm`/`alert`/`prompt`
+  (CLAUDE.md Pitfall #16), `dangerouslySetInnerHTML`, banned
+  `.toLocale*` date methods, and direct `fetch()` bypassing the API client —
+  **zero hits for all four**. `EquipmentCheckForm.tsx`'s offline draft
+  (`localStorage` key `equipment-check-draft-{shiftId}-{templateId}`, saving
+  in-progress check results/notes/seals) is swept by
+  `shiftReportDrafts.ts::clearAllDrafts()`'s `EQUIPMENT_CHECK_DRAFT_KEY_PREFIX`
+  match on logout, which `purgeLocalMemberData()` runs from `authStore.ts` —
+  this is the pre-existing FE-6/FE-7 mechanism (feature 34's pass 2), traced
+  directly here rather than assumed, and it correctly covers this feature's
+  draft key. Not a new fix; recorded because it was never previously verified
+  as covering this specific key prefix.
+- **Batch endpoints re-checked for tenant isolation on client-supplied ids**
+  (`batch_create_shift_reports`'s `crew_member_ids`,
+  `batch_review_reports`'s `report_ids`): the review-batch path resolves
+  exclusively through the org-scoped `get_report` (above). The create-batch
+  path's `shift_id`-present branch never validates `trainee_id` directly, but
+  requires a pre-existing `ShiftAssignment`/`ShiftAttendance` row linking
+  `trainee_id` to the already org-validated `shift_id` — those link rows are
+  created only through the (separately-reviewed, feature 15's) scheduling
+  module's own org-scoped assignment flow, so a foreign `trainee_id` cannot
+  satisfy the check. This is the same reasoning EC-6's fix already recorded
+  for this exact branch ("the `shift_id`-present path already tied the
+  trainee via attendance/assignment") — re-verified by reading the branch
+  directly rather than re-citing it, not a new finding.
+
+**No findings.** No code changes this pass.
 
 ## Revision note
 
@@ -265,7 +514,7 @@ findings.
   tests) — EC-13.
 - `apiCache.test.ts` (1 new test, 4 assertions) — EC-14.
 
-## Completion gate
+## Completion gate (pass 1)
 
 | Check                                                                                                | Result                                                          |
 | ---------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
@@ -278,3 +527,19 @@ findings.
 | `tsc --noEmit`                                                                                       | ✅ clean                                                        |
 | `eslint .`                                                                                           | ✅ 0 errors, 5 pre-existing warnings (unrelated)                |
 | `vitest run src/utils/apiCache.test.ts`                                                              | ✅ 81 passed                                                    |
+
+## Completion gate (pass 2)
+
+No code changes this pass, so the full gate was still run against current
+`main` to confirm nothing regressed underneath this feature since pass 1.
+
+| Check                                                                                | Result                                                                                                      |
+| ------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                                        | ✅ 0 violations                                                                                             |
+| `black --check app/ tests/ alembic/`                                                 | ✅ 1323 files unchanged                                                                                     |
+| `isort --check-only app/ tests/ alembic/` (isort 8.0.1, CI's pin, already installed) | ✅ clean                                                                                                    |
+| `python3 scripts/validate_migrations.py --strict`                                    | ✅ 389 revisions, single head `e5f6a7b8c9d0`                                                                |
+| `pytest tests/ -q -k "equipment_check or shift_completion"`                          | ✅ 296 passed, 1 skipped (pre-existing, `pywebpush` not installed)                                          |
+| `pytest tests/` (full backend suite)                                                 | ✅ 9179 passed, 22 skipped (pre-existing Docker/no-MySQL skips), 0 failed                                   |
+| `npx tsc --noEmit`                                                                   | ✅ 0 errors                                                                                                 |
+| `npx eslint .`                                                                       | ✅ 0 errors, 10 pre-existing warnings (same set as SEC-00 pass 2 / AP-13 pass 2, unrelated to this feature) |

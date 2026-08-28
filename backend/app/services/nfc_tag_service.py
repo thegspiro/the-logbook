@@ -129,7 +129,8 @@ class NfcTagService:
         tags = list(result.scalars().all())
 
         names = await self._name_map(
-            {t.user_id for t in tags} | {t.issued_by for t in tags if t.issued_by}
+            organization_id,
+            {t.user_id for t in tags} | {t.issued_by for t in tags if t.issued_by},
         )
         items = [self._to_dict(tag, names) for tag in tags]
         return items, len(items)
@@ -196,7 +197,7 @@ class NfcTagService:
         await self.db.flush()
         await self.db.refresh(tag)
 
-        names = await self._name_map({tag.user_id, tag.issued_by})
+        names = await self._name_map(organization_id, {tag.user_id, tag.issued_by})
         return self._to_dict(tag, names)
 
     async def update_tag(
@@ -237,7 +238,7 @@ class NfcTagService:
 
         await self.db.flush()
         await self.db.refresh(tag)
-        names = await self._name_map({tag.user_id, tag.issued_by})
+        names = await self._name_map(organization_id, {tag.user_id, tag.issued_by})
         return self._to_dict(tag, names)
 
     async def delete_tag(self, tag_id: str, organization_id: str) -> bool:
@@ -688,12 +689,21 @@ class NfcTagService:
             "duration_minutes": duration_minutes,
         }
 
-    async def _name_map(self, user_ids: set) -> Dict[str, str]:
+    async def _name_map(self, organization_id: str, user_ids: set) -> Dict[str, str]:
+        """Look up display names for a set of ids the caller already knows are
+        in this org (drawn from an org-scoped ``NfcTag`` row's ``user_id`` /
+        ``issued_by``, never a client-supplied id directly) — the org filter
+        here is defense-in-depth on the query itself, per CLAUDE.md Pitfall
+        #14a, rather than the only thing standing between this and a leak.
+        """
         ids = {str(u) for u in user_ids if u}
         if not ids:
             return {}
         result = await self.db.execute(
-            select(User.id, User.first_name, User.last_name).where(User.id.in_(ids))
+            select(User.id, User.first_name, User.last_name).where(
+                User.id.in_(ids),
+                User.organization_id == str(organization_id),
+            )
         )
         return {
             row.id: f"{row.first_name or ''} {row.last_name or ''}".strip()

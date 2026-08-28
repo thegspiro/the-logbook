@@ -17,6 +17,7 @@ const STATUS_BADGES: Record<string, string> = {
 };
 
 const CONDITION_OPTIONS = ['excellent', 'good', 'fair', 'poor', 'damaged', 'out_of_service'] as const;
+const UNSAFE_CONDITIONS = ['poor', 'damaged', 'out_of_service'] as const;
 
 const ReturnRequestsPanel: React.FC = () => {
   const tz = useTimezone();
@@ -65,13 +66,21 @@ const ReturnRequestsPanel: React.FC = () => {
             : undefined,
         received_quantity:
           reviewAction === 'received' && reviewModal.request.return_type === 'issuance' ? receivedQuantity : undefined,
-        follow_up: reviewAction === 'received' ? followUp : undefined,
+        // Only send a follow-up when the selector was actually shown -- a
+        // choice made on a previous, unsafe-condition review must not carry
+        // over silently to a later review of a different, safe-condition item.
+        follow_up:
+          reviewAction === 'received' && (UNSAFE_CONDITIONS as readonly string[]).includes(observedCondition)
+            ? followUp
+            : undefined,
       });
       toast.success(`Return request ${reviewAction}`);
       setReviewModal({ open: false, request: null });
       setReviewNotes('');
       setObservedCondition('');
       setVerifiedIdentifier('');
+      setReceivedQuantity(1);
+      setFollowUp('auto');
       await loadRequests();
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to review request'));
@@ -163,6 +172,8 @@ const ReturnRequestsPanel: React.FC = () => {
                           setObservedCondition('');
                           setVerifiedIdentifier('');
                           setReviewNotes('');
+                          setReceivedQuantity(1);
+                          setFollowUp('auto');
                         }}
                         className="rounded-lg bg-green-600 p-1.5 text-white transition-colors hover:bg-green-700"
                         title="Receive item"
@@ -176,6 +187,8 @@ const ReturnRequestsPanel: React.FC = () => {
                           setObservedCondition('');
                           setVerifiedIdentifier('');
                           setReviewNotes('');
+                          setReceivedQuantity(1);
+                          setFollowUp('auto');
                         }}
                         className="rounded-lg bg-red-800 p-1.5 text-white transition-colors hover:bg-red-900"
                         title="Deny return"
@@ -285,26 +298,27 @@ const ReturnRequestsPanel: React.FC = () => {
                       />
                     </div>
                   )}
-                  {reviewAction === 'received' && ['poor', 'damaged', 'out_of_service'].includes(observedCondition) && (
-                    <div>
-                      <label htmlFor="follow-up" className="form-label">
-                        Safety follow-up
-                      </label>
-                      <select
-                        id="follow-up"
-                        className="form-input"
-                        value={followUp}
-                        onChange={(e) => setFollowUp(e.target.value as typeof followUp)}
-                      >
-                        <option value="auto">Automatic (recommended)</option>
-                        <option value="maintenance">Maintenance</option>
-                        {reviewModal.request.return_type === 'issuance' && (
-                          <option value="charge_review">Charge review</option>
-                        )}
-                        <option value="write_off">Write-off review</option>
-                      </select>
-                    </div>
-                  )}
+                  {reviewAction === 'received' &&
+                    (UNSAFE_CONDITIONS as readonly string[]).includes(observedCondition) && (
+                      <div>
+                        <label htmlFor="follow-up" className="form-label">
+                          Safety follow-up
+                        </label>
+                        <select
+                          id="follow-up"
+                          className="form-input"
+                          value={followUp}
+                          onChange={(e) => setFollowUp(e.target.value as typeof followUp)}
+                        >
+                          <option value="auto">Automatic (recommended)</option>
+                          <option value="maintenance">Maintenance</option>
+                          {reviewModal.request.return_type === 'issuance' && (
+                            <option value="charge_review">Charge review</option>
+                          )}
+                          <option value="write_off">Write-off review</option>
+                        </select>
+                      </div>
+                    )}
 
                   <div>
                     <label htmlFor="review-notes" className="text-theme-text-secondary mb-1 block text-sm font-medium">
