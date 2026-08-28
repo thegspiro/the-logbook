@@ -24,15 +24,23 @@ scheduling, pass 2) — branch `claude/security-review-scheduling`.
 
 ---
 
-### 2026-08-28 — Feature 15 (Scheduling), pass 2 — 0 fixes, 1 stale-doc correction, 0 flagged
+### 2026-08-28 — Feature 15 (Scheduling), pass 2 — 1 test fix, 2 stale-doc corrections, 0 flagged
 
 Scoped to the full domain since pass 1's **final** merge (`5d19cefa`, PR
 #1847 — the Codex-follow-up merge, not the earlier `c92f0438`/#1846 that
 preceded it). `git diff --stat` against the seven declared/adjacent backend
 files found real churn in three (`scheduling.py` +20/-20,
 `scheduling_service.py` +6/-1, `scheduling_module_config_service.py`
-+70/-0), none touching auth/permission/tenant-scoping code paths, and no new
-migration on a scheduling table. A grep for other backend files referencing
++70/-0), none touching auth/permission/tenant-scoping code paths.
+**Correction (Codex follow-up on this PR):** "no new migration on a
+scheduling table" was false — that `git diff --stat` was scoped to source
+files and never included `alembic/versions/`, so it could not have found one.
+`20260826_1400_e2c8f5a71d40_canonicalize_paramedic_seat.py` does touch
+`shifts.positions`/`shift_templates.positions`; reviewed in full against
+`CHECKLIST.md` dimension 7 (guards `create_all`-only tables, idempotent,
+correctly scoped, irreversible for a stated reason, follows its
+already-reviewed same-day sibling migration exactly) and recorded as
+reviewed-clean in `SCH-15-scheduling.md`, not just re-asserted good. A grep for other backend files referencing
 `ShiftCall`/`ShiftSwapRequest`/`ShiftAssignment`/`StandingShiftClaim`/
 `SchedulingService` changed since pass 1 (per the EC-14 lesson) found
 `shift_eligibility_service.py` (+90/-43) carrying a real, already-applied
@@ -70,9 +78,18 @@ two-way exchange is confined to the already-hardened manager-review path.
 Pass 1 had actually read this method (noted in "Verified good" as
 "SCH-5-adjacent," reviewed for capacity locking) but never connected it to
 closing SCH-5. All four documents corrected to ✅ Resolved, each citing
-`scheduling_service.py`'s exact validation calls and the pre-existing
-`tests/test_swap_offer_response.py` (17 tests, re-run and confirmed passing,
-not newly written). No code changed — a documentation-accuracy fix only.
+`scheduling_service.py`'s exact validation calls and (originally)
+`tests/test_swap_offer_response.py` (17 tests, re-run and confirmed passing).
+**Correction (Codex follow-up):** the cited test for the
+cancelled/finalized-shift half was weak — `test_the_acceptance_path_runs_
+that_validation` only greps the calling method's source for the helper's
+name, and every one of the 17 tests mocks `_validate_assignment_candidate`
+outright, so none could fail if `require_mutable=True` were dropped or the
+helper's own check broke. Fixed, not just reworded: strengthened the existing
+kwargs assertion to check `require_mutable`/`reject_past` explicitly, and
+added two real (unmocked) tests that reject acceptance against a cancelled
+and a finalized shift respectively. 19 tests now pass; confirmed the new
+ones fail without the fix by temporarily reverting `require_mutable=True`.
 
 Route/permission enumeration re-run from scratch (AST walk, not a diff):
 96/96 routes (92+3+1, unchanged from pass 1) carry a recognized auth
@@ -83,11 +100,31 @@ the training-extended pass, TRX-18 — no correction needed here). A new
 feature) needs no migration: confirmed `shift_assignments`/
 `standing_shift_claims` are both in `enum_normalization.py`'s
 `_TARGET_COLUMNS`, which widens the live MySQL `ENUM(...)` DDL to the current
-Python enum on every startup, unconditionally. Full detail in
-`SCH-15-scheduling.md` → Pass 2. Completion gate: flake8/black/isort clean
-(isort already installed), migrations 389 revisions/single head, scoped
-tests 681 passed/1 skipped, full backend suite 9179 passed/22 skipped/0
-failed, `tsc`/`eslint` clean (10 pre-existing warnings, same set as
+Python enum on every startup, unconditionally.
+
+**Correction (Codex follow-up):** the `_account_is_active` gate
+(`shift_eligibility_service.py`) was written up as closing a "stale session"
+gap — a retired/suspended member's own valid session outliving their status
+change. That's not accurate: `get_current_user` calls
+`AuthService.get_user_from_token`, which reloads the user and enforces
+`is_active` fresh on every single request, so no such window exists on that
+path. The real gap is narrower — `_validate_assignment_candidate`'s
+`enforce_position_eligibility` branch loads a client-supplied candidate
+`user_id` with no status filter at all, and that candidate is a _third
+party_ when an officer assigns someone else to a shift
+(`create_assignment(self_signup=False)`) — a path that never goes through
+`get_current_user` for the target member, so their inactive status was never
+consulted before this fix. Corrected in `SCH-15-scheduling.md` and in the
+misleading docstring the code itself carried (same inaccurate claim, fixed at
+its source).
+
+Full detail in
+`SCH-15-scheduling.md` → Pass 2. Completion gate (post-follow-up):
+flake8/black/isort clean (isort already installed), migrations 389
+revisions/single head, scoped tests 716 passed/1 skipped, full backend suite
+9181 passed/22 skipped/0 failed (+2 over the pre-follow-up baseline of 9179 —
+the two new swap-offer guard tests), `tsc`/`eslint` clean (10 pre-existing
+warnings, same set as
 SEC-00/AP-13/EC-14 pass 2). Rotation row 15 -> awaiting PR merge. Next: 16
 events & requests, once this PR merges.
 

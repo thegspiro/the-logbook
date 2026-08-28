@@ -322,11 +322,23 @@ chain validated at a single head (`b272a5d5535c`, 371 revisions).
 
 ---
 
-## Pass 2 (2026-08-28) — 0 fixes, 1 stale-doc correction (SCH-5 resolved), 0 new findings
+## Pass 2 (2026-08-28) — 1 fix (test), 2 stale-doc corrections (SCH-5 resolved; migration scope; `_account_is_active` purpose), 0 new findings
 
-**PR:** #1966 · **Scoped since pass 1's merge:** `5d19cefa` (PR #1847, the
-Codex-follow-up merge — the final state pass 1's doc reflects, not the earlier
-`c92f0438`/#1846 merge that preceded it).
+**PR:** #1968 (was mis-cited as #1966 in an earlier revision of this
+section — corrected) · **Scoped since pass 1's merge:** `5d19cefa` (PR #1847,
+the Codex-follow-up merge — the final state pass 1's doc reflects, not the
+earlier `c92f0438`/#1846 merge that preceded it).
+
+**Codex follow-up (same PR, same day):** three P2 findings against this
+pass's own first draft — a real scope gap (a migration search that never
+looked in `alembic/versions/`), a real test-strength gap (SCH-11's cited test
+couldn't have caught the regression it was named for), and a real
+mechanism-accuracy error (the `_account_is_active` write-up, and the
+identical claim in the code's own docstring, both misattributed to a
+"stale session" gap that `get_current_user` already closes on every request).
+All three verified independently against the current code before acting;
+none dismissed. See the migration-review subsection, the SCH-11 correction,
+and the `_account_is_active` correction below for each.
 
 ### Scope
 
@@ -335,9 +347,20 @@ Codex-follow-up merge — the final state pass 1's doc reflects, not the earlier
 `standing_shift_service.py`, `integration_services/calcom_service.py` shows
 real (non-byte-identical) churn in three files: `scheduling.py` (+20/-20),
 `scheduling_service.py` (+6/-1), `scheduling_module_config_service.py`
-(+70/-0, all-new). No new migration touches a scheduling table (`shifts`,
-`shift_assignments`, `shift_swap_requests`, `shift_calls`, `shift_templates`,
-`shift_patterns`, `shift_time_off`, `standing_shift_claims`) since pass 1.
+(+70/-0, all-new).
+
+**Correction (Codex review of this PR):** the line above originally read "No
+new migration touches a scheduling table... since pass 1." That was false —
+`backend/alembic/versions/20260826_1400_e2c8f5a71d40_canonicalize_paramedic_seat.py`
+was added in this exact range (`Create Date: 2026-08-26 14:00:00`, after pass
+1's `5d19cefa` scope point) and rewrites both `shifts.positions` and
+`shift_templates.positions`. The `git diff --stat` command that produced the
+claim above was scoped to the six declared source files and never listed
+`alembic/versions/` at all, so it could not have found a migration if one
+existed — the check that ran and the claim it was used to support did not
+match. Reviewed in full below, in its own subsection rather than folded into
+the file list above, precisely so a future pass greps for "migration" and
+finds it.
 
 **Adjacent-file grep, per the EC-14 lesson** (files referencing `ShiftCall`,
 `ShiftSwapRequest`, `ShiftAssignment`, `StandingShiftClaim`,
@@ -385,6 +408,50 @@ EC-14 used for its equipment-check frontend pages
 partial-scope, not assumed clean, consistent with how EC-14 pass 2 flagged its
 own equivalent grep-only sweep.
 
+### Migration review (added on Codex follow-up) — `e2c8f5a71d40` — ✅ reviewed, clean
+
+`20260826_1400_e2c8f5a71d40_canonicalize_paramedic_seat.py` rewrites stored
+crew-seat entries so a case variant of "paramedic" (`"Paramedic"`, `"PARAMEDIC"`,
+...) folds onto the canonical `"paramedic"` token, matching what
+`app/utils/positions.canonical_position` now does on every write. Checked
+against `CHECKLIST.md` dimension 7 (schema & migration integrity):
+
+- **Guards a `create_all`-only table (Pitfall #26).** `upgrade()` calls
+  `_has_table(table)` before touching any of its four targets
+  (`basic_apparatus`, `shifts`, `shift_templates`, `apparatus`) and also checks
+  the column is present, so it is a no-op — not a crash — against a database
+  that has not run `create_all` yet (e.g. CI's `alembic upgrade head` against
+  an empty schema). Confirmed by reading `_has_table`/`upgrade()` directly.
+- **Idempotent.** `_settle()` returns `None` (skip the row) when folding
+  produces no change, so a second run of the same migration touches zero rows
+  the first run already settled — re-running it is a no-op, not a
+  double-write.
+- **Correctly scoped — does not destroy or rename data it shouldn't.**
+  `_canonical()` only case-folds the exact string `"paramedic"`; every other
+  spelling (a department's own custom seat, e.g. `"Medic"`) passes through
+  `_settle()` unchanged, matching the explicit intent in the module docstring
+  and in `app/utils/positions.py`'s own docstring (custom seat names must
+  round-trip verbatim). It also preserves the stored _shape_ — a string entry
+  stays a string, a `{"position", "required"}` dict stays a dict — rather than
+  reshaping into `normalize_stored_positions`'s output; that full reshape was
+  already done by the earlier `20260819_2037_1eeb053d59b7`, and folding a name
+  is the only thing this migration is for.
+- **Irreversible, and documented as such for a specific reason.** `downgrade()`
+  is a no-op with a docstring pointing at the module-level explanation: nothing
+  records which spelling a row originally carried, so rewriting `"paramedic"`
+  back to a capitalized form would corrupt rows that were always correct.
+- **Follows an established, already-reviewed precedent exactly.** Its sibling
+  migration from the same day, `20260826_1200_d7a4e9c31b60_canonicalize_crew_seat_names.py`
+  (`"EMT"` → `"ems"`), has the identical shape — frozen inlined vocabulary
+  (not imported from `app/utils/positions.py`, per Pitfall #20's "a migration
+  must keep transforming rows the way it did the day it ran"), the same
+  `_has_table`/column guard, the same no-op downgrade for the same reason. This
+  migration is the second application of a pattern already proven safe, not a
+  new one.
+
+No fix needed. This was a scope gap in how the migration was searched for
+(see the correction above), not a defect in the migration itself.
+
 ### Verified good ✅ (re-confirmed by reading the current code, not re-citing the doc)
 
 - **Route/permission enumeration re-run from scratch** (AST walk over all
@@ -430,9 +497,34 @@ own equivalent grep-only sweep.
   ignored, per the inline comment, "for compatibility with lightweight
   session adapters"). Also verified: the new `_account_is_active` gate runs
   **ahead of** the open-to-all-shift bypass in both `get_eligible_positions`
-  and `get_eligible_positions_bulk`, so a retired/suspended member cannot
-  self-signup for an open-to-all shift on a session opened before their
-  status changed.
+  and `get_eligible_positions_bulk`. **Correction (Codex review of this PR):**
+  the original write-up described this as closing a "stale session" gap —
+  wrong, and the code's own docstring made the same claim before this pass
+  corrected it too. `get_current_user` calls
+  `AuthService.get_user_from_token` (`app/services/auth_service.py:684-778`),
+  which reloads the `User` row from the database on **every** request and
+  returns `None` unless `user.is_active` holds (`status == ACTIVE` and no
+  `deleted_at`, `app/models/user.py:515-518`) — so a member's own session is
+  already rejected on the very next request after their status changes,
+  regardless of this gate. The per-request `request.state` cache in
+  `get_current_user` (`app/api/dependencies.py:121-123`) doesn't reopen that
+  window either: it's built from that same request's fresh DB read, not
+  carried across requests.
+
+  The actual, narrower gap `_account_is_active` closes: `_validate_assignment_
+candidate`'s `enforce_position_eligibility` branch
+  (`scheduling_service.py:2982-2991`) loads the _candidate_ by a
+  client-supplied `user_id` with **no** status or `deleted_at` filter, and
+  that candidate is not always the caller's own session — `create_assignment`
+  calls it with `self_signup=False` when an officer assigns a _different_
+  member to a shift. An officer's own session is perfectly valid throughout;
+  the target's retired/suspended/on-leave status was never checked by
+  anything before this fix, because that member's session — valid or not —
+  is never consulted on this path at all. Fixed the same inaccurate claim in
+  the code's own docstring (`shift_eligibility_service.py:200-225`) in this
+  pass, so the mechanism is now stated correctly at its source, not just
+  here.
+
 - **`scheduled_tasks.py`'s CRON2-31 changes to the two scheduling-specific
   cron tasks** (`run_shift_reminders`, `run_post_shift_validation`) are
   dedup/rollback-safety correctness fixes, not security changes, and remain
@@ -458,7 +550,7 @@ own equivalent grep-only sweep.
 
 ### Findings
 
-#### SCH-11 — NIT (doc correction) — SCH-5 was already resolved, not open — ✅ FIXED (docs only)
+#### SCH-11 — NIT (doc correction, plus a Codex-follow-up test fix) — SCH-5 was already resolved, not open — ✅ FIXED
 
 **What:** `KNOWN_LIMITATIONS.md` (two separate rows), `docs/module-audit/scheduling.md`,
 and `docs/app-review/scheduling.md` all still described SCH-5 ("swap
@@ -505,30 +597,63 @@ by this class of gap at all: they can only be approved through
 fully and enforces separation of duties, and which this pass re-read in full
 (`scheduling_service.py:4030-4261`) and confirms unchanged.
 
-**Test coverage:** `tests/test_swap_offer_response.py` (17 tests, added in
-the same commit range as the redesign) exercises exactly the two claims
-above by name (`test_only_the_member_it_was_offered_to`,
+**Test coverage:** `tests/test_swap_offer_response.py` (17 tests at the time
+this pass first ran, added in the same commit range as the redesign)
+exercises the two claims above by name (`test_only_the_member_it_was_offered_to`,
 `test_not_the_offerer_themselves`,
 `test_an_ineligible_accepter_is_refused_and_the_seat_stays_put`,
-`test_a_two_way_swap_still_goes_to_a_duty_officer`,
-`test_the_acceptance_path_runs_that_validation` — a source-inspection test
-confirming `_validate_assignment_candidate` is actually called, not just
-present in the file) plus a
+`test_a_two_way_swap_still_goes_to_a_duty_officer`) plus a
 `test_approved_time_off_is_rechecked_not_only_at_candidate_selection` case
-the original SCH-5 write-up didn't anticipate. All 17 confirmed passing
-against current `main` (re-run this pass, not assumed from a prior report).
+the original SCH-5 write-up didn't anticipate.
 
-**Impact:** none — this is a documentation-accuracy correction, not a
-behavior change. No code was modified.
+**Correction (Codex review of this PR) — the coverage claim for the
+cancelled/finalized-shift half was wrong; fixed, not just corrected in
+prose.** `test_the_acceptance_path_runs_that_validation` was cited above as
+guarding the "target shift's live state is re-validated at accept time"
+sub-claim. It does not: it is `assert "_validate_assignment_candidate" in
+inspect.getsource(...)`, a check on the _text_ of the calling method, and
+every other test in the file replaces `_validate_assignment_candidate` with a
+bare `AsyncMock(return_value=validation_error)` — so none of the 17 could
+fail if `require_mutable=True` were dropped from the call, or if
+`_validate_assignment_candidate`'s own `CANCELLED`/`is_finalized` check broke.
+Verified by reading the test file directly, not by taking the finding on
+faith. Two changes now close this, in `tests/test_swap_offer_response.py`:
+
+1. `test_the_seat_being_handed_over_is_excluded_from_the_checks` (which
+   already inspects `_validate_assignment_candidate`'s call kwargs for other
+   arguments) now also asserts `kwargs["require_mutable"] is True` and
+   `kwargs["reject_past"] is True` — this fails if either argument is dropped
+   from the call, which the mocked style can support since it's the call
+   itself, not the mock's internal logic, under test.
+2. Two new tests, `test_a_cancelled_shift_is_rejected_at_acceptance` and
+   `test_a_finalized_shift_is_rejected_at_acceptance`, run the **real**
+   `_validate_assignment_candidate` — no mock — against a shift whose
+   `status`/`is_finalized` marks it immutable, and assert
+   `respond_to_swap_offer` returns `"Shift was cancelled"` /
+   `"Shift was finalized"` and leaves the assignment and swap-request status
+   untouched. `require_mutable`'s checks run before any further database
+   access in `_validate_assignment_candidate`, so the existing
+   `_Session` test double (which only queues three canned rows) needs no
+   changes to reach them. Confirmed both new tests fail (with
+   `require_mutable=False` swapped in temporarily) and the strengthened kwarg
+   assertion fails the same way, then confirmed all 19 pass against the
+   unmodified code.
+
+All 19 tests (17 + 2 new) confirmed passing against current `main`.
+
+**Impact:** the SCH-5 resolution itself is unaffected — `respond_to_swap_offer`
+was already correct, re-read directly at its current lines in this pass. What
+was wrong was the _evidence_ offered for it: a test that would not have
+caught the regression it was cited as guarding against. That gap is now
+closed by the two changes above, not by re-describing the existing test.
 
 **Fix:** updated the four documents above to mark SCH-5 (and the also-stale
 "SCH-6 manual_hours has no bound" half of the combined `KNOWN_LIMITATIONS.md`
 row — SCH-6's `hours` value was already `Field(gt=0, le=48)` at the schema
 even at the time that row was written, per the app-review doc's own "Not a
 finding" note) resolved, each citing the specific mechanism and test file
-above rather than a bare "fixed" claim. No guard test added — the existing
-17-test file already guards this class; adding a second one would duplicate
-coverage rather than close a gap.
+above rather than a bare "fixed" claim. Guard tests added this follow-up —
+see above and "Guard tests added (pass 2)" below.
 
 ### No new findings
 
@@ -544,18 +669,27 @@ capacity/count-then-insert pattern requiring a Pitfall #27 lock.
 
 ## Guard tests added (pass 2)
 
-None — SCH-11 is a documentation correction covered by pre-existing tests
-(`tests/test_swap_offer_response.py`, confirmed passing, not newly written).
+- `tests/test_swap_offer_response.py::TestAcceptance::test_the_seat_being_handed_over_is_excluded_from_the_checks`
+  — strengthened (not new) to also assert `require_mutable=True` and
+  `reject_past=True` on the `_validate_assignment_candidate` call.
+- `tests/test_swap_offer_response.py::TestTheValidationIsRecheckedAtAcceptance::test_a_cancelled_shift_is_rejected_at_acceptance`
+  — new, runs the real (unmocked) validation against a `CANCELLED` shift.
+- `tests/test_swap_offer_response.py::TestTheValidationIsRecheckedAtAcceptance::test_a_finalized_shift_is_rejected_at_acceptance`
+  — new, same shape against a finalized shift.
 
-## Completion gate (pass 2)
+Added on Codex follow-up (see the SCH-11 correction above) — the original
+pass 2 claimed no guard test was needed here, which was itself wrong; see that
+correction for why.
 
-| Check                                                 | Result                                                      |
-| ----------------------------------------------------- | ----------------------------------------------------------- |
-| `flake8 app/ tests/ alembic/`                         | ✅ 0 violations                                             |
-| `black --check app/ tests/ alembic/`                  | ✅ 1323 files unchanged                                     |
-| `isort --check-only app/ tests/ alembic/`             | ✅ clean (installed, not skipped)                           |
-| `python3 scripts/validate_migrations.py --strict`     | ✅ single head, 389 revisions                               |
-| `pytest tests/ -q -k "scheduling or shift or calcom"` | ✅ 681 passed, 1 skipped (pre-existing optional-dep skip)   |
-| `pytest tests/` (full backend suite)                  | ✅ 9179 passed, 22 skipped (pre-existing Docker/no-MySQL)   |
-| `tsc --noEmit`                                        | ✅ 0 errors                                                 |
-| `eslint .`                                            | ✅ 0 errors, 10 warnings (pre-existing, same set as SEC-00) |
+## Completion gate (pass 2, including the Codex follow-up)
+
+| Check                                               | Result                                                                                                                                                                 |
+| --------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                       | ✅ 0 violations                                                                                                                                                        |
+| `black --check app/ tests/ alembic/`                | ✅ 1323 files unchanged                                                                                                                                                |
+| `isort --check-only app/ tests/ alembic/`           | ✅ clean (installed, not skipped)                                                                                                                                      |
+| `python3 scripts/validate_migrations.py --strict`   | ✅ single head, 389 revisions                                                                                                                                          |
+| `pytest tests/ -q -k "scheduling or shift or swap"` | ✅ 716 passed, 1 skipped (pre-existing optional-dep skip)                                                                                                              |
+| `pytest tests/` (full backend suite)                | ✅ 9181 passed, 22 skipped (pre-existing Docker/no-MySQL) — +2 over the pre-follow-up baseline of 9179, the two new `test_swap_offer_response.py` tests, 0 regressions |
+| `tsc --noEmit`                                      | ✅ 0 errors (no frontend file changed this follow-up)                                                                                                                  |
+| `eslint .`                                          | ✅ 0 errors, 10 warnings (pre-existing, same set as SEC-00)                                                                                                            |
