@@ -16,13 +16,18 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-[PR #1968](https://github.com/thegspiro/the-logbook/pull/1968) (feature 15,
-scheduling, pass 2) — branch `claude/security-review-scheduling`.
-
-(The bookkeeping PR #1965, closing out #1963's merge, has since merged
-— confirmed via `git log origin/main`.)
+None.
 
 ---
+
+### 2026-08-28 — Feature 15 (Scheduling), pass 2 ✅ merged — PR #1968
+
+Merged (`a28d39e6`). All three Codex P2 review threads (migration scope gap,
+weak guard test, overstated `_account_is_active` claim) were independently
+re-verified as real and addressed within the PR, replied to, and resolved
+before merge; CI green on the final head (17/17 checks). Confirmed on
+`origin/main` by ancestry check (`git log origin/main --oneline` shows the
+merge commit at HEAD). Rotation row 15 -> done. Next: 16 events & requests.
 
 ### 2026-08-28 — Feature 15 (Scheduling), pass 2 — 1 test fix, 2 stale-doc corrections, 0 flagged
 
