@@ -255,6 +255,38 @@ class TestInboxQuery:
         assert "users.organization_id = :organization_id_1" in str(author_query)
 
 
+class TestQueryableRecipientInbox:
+    """Recipient fan-out keeps audience and resolution filtering in SQL."""
+
+    async def test_small_page_is_one_bounded_history_query(self):
+        result = MagicMock(all=MagicMock(return_value=[]))
+        db = MagicMock(execute=AsyncMock(return_value=result))
+
+        await MessagingService(db).get_inbox("org-1", "u1", skip=5, limit=2)
+
+        assert db.execute.await_count == 1
+        query = db.execute.await_args.args[0]
+        sql = str(query)
+        assert "JOIN department_message_recipients" in sql
+        assert "ORDER BY" in sql
+        assert "LIMIT" in sql
+        assert "OFFSET" in sql
+        assert query.compile().params["param_1"] == 2
+        assert query.compile().params["param_2"] == 5
+
+    async def test_unread_count_is_a_single_joined_count_statement(self):
+        result = MagicMock(scalar=MagicMock(return_value=3))
+        db = MagicMock(execute=AsyncMock(return_value=result))
+
+        assert await MessagingService(db).get_unread_count("org-1", "u1") == 3
+
+        sql = str(db.execute.await_args.args[0])
+        assert "count(department_message_recipients.id)" in sql
+        assert "JOIN department_messages" in sql
+        assert "acknowledged_at IS NULL" in sql
+        assert "read_at IS NULL" in sql
+
+
 class TestReadAckVisibilityGate:
     """mark_as_read / acknowledge_message must only record against a message
     the user can actually see (in-org and targeted), or a user could pollute
@@ -297,17 +329,9 @@ class TestReadAckVisibilityGate:
         assert "department_messages.scheduled_at <=" in sql
 
     async def test_mark_as_read_rejects_untargeted_message(self):
-        message = _msg("m1", "roles", roles=["chief"])
         db = MagicMock()
         db.execute = AsyncMock(
-            side_effect=[
-                MagicMock(scalar_one_or_none=MagicMock(return_value=message)),
-                MagicMock(
-                    scalar_one_or_none=MagicMock(
-                        return_value=self._user(roles=("officer",))
-                    )
-                ),
-            ]
+            return_value=MagicMock(scalar_one_or_none=MagicMock(return_value=None))
         )
         db.add = MagicMock()
         ok, err = await MessagingService(db).mark_as_read("m1", "u1", "org-1")
@@ -320,8 +344,11 @@ class TestReadAckVisibilityGate:
         db.execute = AsyncMock(
             side_effect=[
                 MagicMock(scalar_one_or_none=MagicMock(return_value=message)),
-                MagicMock(scalar_one_or_none=MagicMock(return_value=self._user())),
-                MagicMock(scalar_one_or_none=MagicMock(return_value=None)),
+                MagicMock(
+                    scalar_one_or_none=MagicMock(
+                        return_value=SimpleNamespace(read_at=None)
+                    )
+                ),
                 SimpleNamespace(rowcount=1),
             ]
         )
@@ -330,8 +357,8 @@ class TestReadAckVisibilityGate:
         ok, err = await MessagingService(db).mark_as_read("m1", "u1", "org-1")
         assert ok is True
         assert err is None
-        db.add.assert_called_once()
-        notification_update = db.execute.await_args_list[3].args[0]
+        db.add.assert_not_called()
+        notification_update = db.execute.await_args_list[2].args[0]
         sql = str(notification_update)
         assert "UPDATE notification_logs" in sql
         assert "notification_logs.organization_id" in sql
@@ -341,13 +368,9 @@ class TestReadAckVisibilityGate:
         assert notification_update.compile().params["recipient_id_1"] == "u1"
 
     async def test_acknowledge_rejects_untargeted_message(self):
-        message = _msg("m1", "members", members=["someone-else"])
         db = MagicMock()
         db.execute = AsyncMock(
-            side_effect=[
-                MagicMock(scalar_one_or_none=MagicMock(return_value=message)),
-                MagicMock(scalar_one_or_none=MagicMock(return_value=self._user())),
-            ]
+            return_value=MagicMock(scalar_one_or_none=MagicMock(return_value=None))
         )
         db.add = MagicMock()
         ok, _, _ = await MessagingService(db).acknowledge_message("m1", "u1", "org-1")
@@ -358,10 +381,7 @@ class TestReadAckVisibilityGate:
         message = _msg("m1", "all", requires_acknowledgment=False)
         db = MagicMock()
         db.execute = AsyncMock(
-            side_effect=[
-                MagicMock(scalar_one_or_none=MagicMock(return_value=message)),
-                MagicMock(scalar_one_or_none=MagicMock(return_value=self._user())),
-            ]
+            return_value=MagicMock(scalar_one_or_none=MagicMock(return_value=message))
         )
         db.add = MagicMock()
 
@@ -382,7 +402,6 @@ class TestReadAckVisibilityGate:
         db.execute = AsyncMock(
             side_effect=[
                 MagicMock(scalar_one_or_none=MagicMock(return_value=message)),
-                MagicMock(scalar_one_or_none=MagicMock(return_value=self._user())),
                 MagicMock(scalar_one_or_none=MagicMock(return_value=read_record)),
                 SimpleNamespace(rowcount=1),
             ]
@@ -398,7 +417,7 @@ class TestReadAckVisibilityGate:
         assert changed is False
         assert read_record.acknowledged_at == acknowledged_at
         db.commit.assert_awaited_once()
-        notification_update = db.execute.await_args_list[3].args[0]
+        notification_update = db.execute.await_args_list[2].args[0]
         assert "UPDATE notification_logs" in str(notification_update)
 
 
@@ -534,6 +553,9 @@ class TestCreateScheduling:
     def _db(self):
         db = MagicMock()
         db.add = MagicMock()
+        recipients = MagicMock()
+        recipients.scalars.return_value.all.return_value = []
+        db.execute = AsyncMock(return_value=recipients)
         db.commit = AsyncMock()
         db.rollback = AsyncMock()
         db.refresh = AsyncMock()
