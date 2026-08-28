@@ -16,9 +16,72 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-None. [PR #1959](https://github.com/thegspiro/the-logbook/pull/1959) (feature
-12, facilities, pass 2) merged at `b39a548c`. Next: feature 13 (apparatus &
-NFC), pass 2.
+Pending — feature 13 (apparatus & NFC), pass 2, about to be opened on
+`claude/security-review-apparatus-nfc`. This row is updated with the PR
+number in a quick follow-up commit once it exists.
+
+---
+
+### 2026-08-28 — Feature 13 (Apparatus & NFC), pass 2 — 1 fixed (LOW), 0 flagged, 2 doc corrections
+
+Picked up a stalled rotation: PR #1959 (feature 12, facilities) had merged
+over 2 hours prior with no follow-up (well past the usual ~30-90 min
+cadence) and the Open PR row read "None", so this iteration resumed at
+feature 13 per the rotation order rather than waiting further. Scoped to
+the full domain since pass 1's merge (`37936879`, PR #1838): all 10
+declared/adjacent backend files came back **byte-identical**
+(`git diff --stat`, not assumed), and no apparatus/NFC/EVOC migration
+landed since pass 1. The only change under `modules/apparatus/` is
+`routes.tsx` gaining `requiredModule="apparatus"` on its four routes —
+client-side parity for a new, whole-app change (`70449d96`, unrelated to
+this rotation) that mounted the `apparatus` router behind a server-side
+`module_gate("apparatus", "Apparatus")` for the first time. Traced rather
+than trusted: the gate's "no session passes through" clause is inert for
+this router (no public/token routes in `apparatus.py`), so it's a pure AND
+on top of every route's existing permission check; `nfc_tags.py` remains
+deliberately ungated at the module level, with each of its 5 routes
+independently calling `require_nfc_id_cards` (re-confirmed by reading the
+file, not re-citing pass 1's claim).
+
+Given the zero backend diff, did not re-read ~8,000 lines cover to cover.
+Instead: a fresh AST-based enumeration of every route decorator's auth
+dependency (confirmed 88/88 + 5/5, with two routes' long signatures
+initially defeating the walk's regex capture — followed up by reading both
+functions directly, both correctly gated), a full direct read of
+`nfc_tag_service.py` against tenant isolation and data exposure (the one
+file in this feature that had never had more than one pass), and targeted
+re-verification of pass 1's specific "Verified good" mechanisms by reading
+the actual code (assert_in_org call count, the driver-exception conditional-
+UPDATE race guard, the EVOC eligibility query's org-scoping, the
+`list_driver_exception_approvers` response shape) rather than re-citing the
+claim. Found and fixed **AP-7** (LOW, defense-in-depth): `NfcTagService.
+_name_map`, the helper that resolves `member_name`/`issued_by_name` for
+card responses, ran `select(User...).where(User.id.in_(ids))` with no
+`organization_id` filter on the query itself — the same Pitfall #14a shape
+AP-6 (pass 1) fixed one file over in `admin_hours_service.py`, and for the
+same reason not currently exploitable: every id it's ever called with is
+already drawn from an org-scoped `NfcTag` row or `current_user.id`, across
+three different call sites, which is exactly the cross-method dependency
+Pitfall #14 warns against relying on. Fixed by adding a required
+`organization_id` parameter and filtering directly; behavior-neutral for
+every valid call. New guard test class (`TestNameMapOrgScoping`, 3 tests,
+whereclause-specific per the hollow-assertion lesson from AP-6's own guard
+test) confirmed to fail pre-fix via `git stash`. Also corrected two
+stale counts carried since pass 1/app-review: `nfc_tags.py` has always had
+5 routes, not 6; `apparatus_service.py` has 16 `assert_in_org` sites, not
+17 (the "17" traces to app-review pass 4, 2026-08-09) — neither miscount
+changed any conclusion (both undercounted claims remain true at the
+corrected number), corrected in `AP-13-apparatus-nfc.md` in place.
+Completion gate: flake8/black/isort clean (isort 8.0.1, CI's pin, already
+installed), migrations 389 revisions/single head/no schema change, scoped
+tests 239 passed/1 skipped, full backend suite 9179 passed/22 skipped/0
+failed, `tsc`/`eslint` clean (10 pre-existing warnings, same set as
+SEC-00/feature 34), `routeIntegrity`/apparatus-module vitest 40/40 passed.
+No FLAGGED items this pass, so no `KNOWN_LIMITATIONS.md` entry; the fix is
+behavior-neutral and not user-visible, so no `CHANGELOG.md` entry (matching
+how AP-6 was handled in pass 1). Full detail in `AP-13-apparatus-nfc.md`.
+Rotation row 13 -> awaiting PR merge. Next: 14 equipment check & shifts,
+once this PR merges.
 
 ---
 
@@ -1405,7 +1468,7 @@ each row's prior PR is recorded in the Log, not repeated here.
 | 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ✅     |
 | 11  | Inventory                 | INV    | `endpoints/inventory.py` (6539 L), `inventory_service.py`                                                                                       | ✅     |
 | 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ✅     |
-| 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | 🔄     |
+| 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | ✅     |
 | 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | ⬜     |
 | 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                | ⬜     |
 | 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                       | ⬜     |
