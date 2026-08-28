@@ -24,7 +24,68 @@ the log entries below for both.
 
 ---
 
-### 2026-08-28 — Feature 16 (Events & requests), pass 2 — no findings, 1 frontend scope correction, 1 doc-completeness correction
+### 2026-08-28 — Feature 16 (Events & requests), pass 2 — 3 fixes (EV-17 HIGH, EV-18/EV-19 MED), 3 scope corrections, 2 stale-doc corrections
+
+> **Revised after Codex review of PR #1973.** This entry originally read "no
+> findings, 1 frontend scope correction, 1 doc-completeness correction."
+> Codex raised **five P2 comments against that draft and all five were
+> confirmed real** on independent re-reading of the current code; none was
+> dismissed. Three were defects (**EV-17**, a HIGH cross-tenant attachment
+> read; **EV-18** and **EV-19**, MED ordering defects on the public intake
+> endpoint), two were scope gaps (a basename-only frontend discovery command
+> that missed `pages/events-settings/`; `api/public/portal.py`, a changed
+> public `Event` consumer outside the enumerated backend scope). All three
+> defects are fixed with guard tests in this PR; both scope gaps are closed
+> and the affected files reviewed. The summary below is the corrected one.
+> Detail per finding in `EV-16-events-requests.md` → **Findings (pass 2)**.
+>
+> **EV-17 (HIGH, ✅ fixed)** — `EventCreate`/`EventUpdate`/
+> `RecurringEventCreate` accept an unconstrained
+> `attachments: List[Dict[str, str]]`, all four service write paths persisted
+> it verbatim, and `download_event_attachment` confined the stored
+> `file_path` only to the **shared** `/app/uploads/event-attachments` root,
+> not to the caller's own org subdirectory. An `events.manage` holder who
+> obtained another tenant's stored path could attach it to an event in their
+> own org and download that tenant's file. Same defect, same shape, as
+> **DOC-24** (P1) already fixed in the documents module. Closed at both ends
+> via the new `app/utils/event_attachments.py`: `validate_attachments_for_org`
+> on every write path (400 on a foreign path), and org-scoped containment on
+> download **and** delete. Guard test
+> `tests/test_event_attachment_org_scoping.py`, 12 cases.
+>
+> **EV-18 (MED, ✅ fixed)** — the per-IP limiter was a call in the handler
+> body while `require_captcha` was a route `Depends`, so FastAPI necessarily
+> ran the CAPTCHA dependency first and one IP could drive unbounded outbound
+> provider verifications. Now
+> `dependencies=[Depends(_rate_limit_public_request), Depends(require_captcha)]`,
+> matching `api/public/forms.py`'s existing pairing. Guard test asserts the
+> declaration order on the live `APIRoute`.
+>
+> **EV-19 (MED, ✅ fixed)** — `daily_cap_exceeded` is an atomic Redis `INCR`,
+> so consulting it spends a slot; the `min_lead_time_days` rejection ran
+> after it, letting distributed callers exhaust a department's whole daily
+> allowance with too-soon dates that were never going to be stored. Lead-time
+> validation moved above the counter, restoring the "valid-only cap" contract
+> `forms_service.py` already documents. Guard test asserts a flood of
+> rejected submissions leaves the counter untouched and a valid one still
+> succeeds.
+>
+> **Frontend scope (✅ corrected)** — `find -iname "*event*"` matches
+> basenames, so it enumerated `pages/events-settings/` the directory and none
+> of its nine files, including `PipelineSection.tsx` (the EV-5 opt-in UI this
+> pass claimed to have re-verified). Rebuilt two ways that agree — `-ipath`
+> recursion (70) plus an import-graph closure from the route entry points
+> (+4 events-exclusive generically-named files) — for a true surface of
+> **74**, not 54. None of the 20 newly-found files changed since pass 1, so
+> the changed set and its conclusions are unaffected; `PipelineSection.tsx`
+> read in full (purely presentational, enforcement is server-side) and all 74
+> re-swept clean.
+>
+> **Backend scope (✅ corrected)** — `api/public/portal.py` (+35/-5) changed
+> in range and gates `GET /public/v1/events`. Reviewed: the change _adds_ a
+> module-enablement gate, both refusals return an identical 503 (no oracle),
+> and there is no client-supplied org id anywhere on the path. Clean, no
+> finding.
 
 Scoped to the full domain since pass 1's merge (`c68a9bef`, PR #1848 —
 single merge, no Codex follow-up to re-scope against). All four declared
@@ -67,9 +128,11 @@ discipline, the six frontend cache-exclusion entries, and all 12
 rotation's own docs, **EV-5** (public-intake per-org opt-in + honeypot +
 daily cap) — resolved 2026-08-17, before pass 1 ran, but pass 1's doc never
 mentioned or verified it: read `submit_public_event_request` in full and
-confirmed all four controls present and correctly ordered (rate limit →
-opt-in, indistinguishable from "org not found" → honeypot, before any
-write → daily cap, counted only after authorization). One doc-completeness
+confirmed all four controls present — though **not** correctly ordered, as
+this sentence originally claimed: see EV-18 and EV-19 above, both raised by
+Codex against this very claim and both fixed. The controls are all there
+(opt-in, indistinguishable from "org not found" → honeypot, before any
+write → daily cap); their sequence was the defect. One doc-completeness
 correction (NIT): pass 1's permission-tier summary omitted
 `GET /{event_id}/folder`'s `require_permission("events.view")` gate — not a
 defect (`events.view` is a baseline member grant, more restrictive than the
@@ -78,11 +141,12 @@ metadata + a document count), just missing from the enumeration. No new
 security findings; no regression in any pass-1 fix. Full detail in
 `EV-16-events-requests.md` → Pass 2. Completion gate: flake8/black/isort
 clean (isort 8.0.1, CI's pin, already installed), migrations 389
-revisions/single head, `pytest -k "events or event_request"` 177
-passed/1 skipped, `pytest -k "event"` (broader net — most test files are
-singular `test_event_*`) 560 passed/1 skipped, full backend suite 9181
-passed/22 skipped/0 failed (unchanged from PR #1968's post-merge count —
-no code change this pass), `tsc`/`eslint` clean (10 pre-existing warnings,
+revisions/single head, `pytest -k "events or event_request or portal or
+attachment"` 285 passed/1 pre-existing skip, `pytest -k "event"` (broader
+net — most test files are singular `test_event_*`) 589 passed/1 pre-existing
+skip, full backend suite **9196 passed/22 pre-existing skips/0 failed**
+(9181 at PR #1968's post-merge baseline, plus the 15 new guard cases added
+for EV-17/EV-18/EV-19), `tsc`/`eslint` clean (10 pre-existing warnings,
 same set as SEC-00/AP-13/EC-14/SCH-15 pass 2). Rotation row 16 -> awaiting
 PR merge. Next: 17 training core, once this PR and the bookkeeping PR
 #1971 both merge.
