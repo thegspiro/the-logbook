@@ -467,7 +467,25 @@ async def _ensure_member_can_view_shift(
     service: SchedulingService, current_user: User, shift
 ) -> None:
     """Prevent direct detail URLs from bypassing member list visibility."""
-    if user_has_permission(current_user, "scheduling.manage"):
+    if user_has_permission(current_user, "scheduling.manage") or _is_shift_officer(
+        shift, current_user
+    ):
+        return
+    assignment = await service.db.execute(
+        select(ShiftAssignment.id).where(
+            ShiftAssignment.shift_id == str(shift.id),
+            ShiftAssignment.organization_id == str(current_user.organization_id),
+            ShiftAssignment.user_id == str(current_user.id),
+            ShiftAssignment.assignment_status.in_(
+                [
+                    AssignmentStatus.ASSIGNED,
+                    AssignmentStatus.CONFIRMED,
+                    AssignmentStatus.PENDING,
+                ]
+            ),
+        )
+    )
+    if assignment.scalar_one_or_none() is not None:
         return
     eligible = await ShiftEligibilityService(service.db).get_eligible_positions(
         current_user, str(current_user.organization_id), str(shift.id)
@@ -1276,6 +1294,7 @@ async def get_week_calendar(
             status_code=400, detail="Invalid date format. Use YYYY-MM-DD."
         )
     shifts = await service.get_week_shifts(current_user.organization_id, start)
+    shifts = await _member_visible_shifts(service, current_user, shifts)
     return await _enrich_shifts(service, current_user.organization_id, shifts)
 
 
@@ -1292,6 +1311,7 @@ async def get_month_calendar(
     y = year or today.year
     m = month or today.month
     shifts = await service.get_month_shifts(current_user.organization_id, y, m)
+    shifts = await _member_visible_shifts(service, current_user, shifts)
     return await _enrich_shifts(service, current_user.organization_id, shifts)
 
 
