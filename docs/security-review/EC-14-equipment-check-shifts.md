@@ -13,7 +13,7 @@
 
 ---
 
-## Pass 2 (2026-08-28) — zero diff since pass 1's merge; re-verified, no new findings
+## Pass 2 (2026-08-28) — zero diff across the six declared files; two adjacent files reviewed on Codex follow-up, both clean
 
 **Diff scope.** Pass 1 merged as `2a7e47ee` (PR #1842). `git diff --stat
 2a7e47ee..origin/main` for all six declared backend files (`equipment_check.py`,
@@ -40,8 +40,121 @@ unchanged paths), and `apiCache.ts`/`apiCache.test.ts` (three new
 original line). `modules/scheduling/services/api.ts` changed (an unrelated
 `getMyAttendance` 404-handling fix, FE2-34-8 from the frontend-shared pass),
 but touches scheduling's shift-attendance polling, not this feature's
-equipment-check/shift-completion surface. **Net: nothing in this feature's
-actual code changed.**
+equipment-check/shift-completion surface. **Net: nothing in the six declared
+files changed.**
+
+**Scope correction (Codex review of this PR).** The zero-diff claim above
+covered only the six files pass 1 declared; it did not check adjacent files
+outside that list that also implement pieces of this feature.
+[Codex flagged](https://github.com/thegspiro/the-logbook/pull/1963#discussion_r3880196422)
+two: `app/services/scheduled_tasks.py` (end-of-shift equipment-check reminder
+task) and `app/services/scheduling_service.py` (`ShiftCall.responding_members`,
+which `ShiftCompletionService` reads for trainee call attribution). Both had
+in fact changed since `2a7e47ee` — confirmed with `git log
+2a7e47ee..origin/main -- backend/app/services/scheduled_tasks.py
+backend/app/services/scheduling_service.py`, commits including `c19ecc0f`,
+`f439cf07`, `27c78fcf`, `b10a8ca7`, and the message-delivery-idempotency
+chain. Both are reviewed below. **Verdict: clean, no findings, no code
+change required.**
+
+### Adjacent files reviewed on follow-up
+
+**`scheduled_tasks.py` — `run_end_of_shift_checklist_reminders`
+(:2218-2410).** This is the end-of-shift equipment-check reminder task named
+in the Codex comment. Read the full function plus its three changed hunks
+since `2a7e47ee` (all from `c19ecc0f`, PR #1915 — a different rotation
+feature's fix, CRON2-31):
+
+- The `Shift` query at :2257 filters `Shift.organization_id == str(org.id)`,
+  and the function itself only runs per-org via `_for_each_org` (:509),
+  which itself filters `Organization.active.isnot(False)`. `shift_ids` (:2268)
+  is built exclusively from that org-scoped result, so the two batched
+  follow-up queries (`ShiftEquipmentCheck`/`ShiftAssignment` `.where(...
+.in_(shift_ids))`, :2272 and :2280) cannot pull another org's rows — a
+  foreign id could not appear in `shift_ids` to begin with. `NotificationLog`
+  rows are created with `organization_id=str(org.id)` (:2381) and
+  `recipient_id` drawn only from `assigned_map`, itself keyed from the same
+  org-scoped `shift_ids` join. No cross-org read or notify path.
+- The three-hunk change adds `.join(User, ...).where(User.is_active.is_(True))`
+  to the assignment lookup (:2282-2290) and stops stamping the
+  `eos_checklist_reminder_sent` dedup flag on three early-`continue` branches
+  (no apparatus yet, no templates yet, every assignee filtered out) that
+  previously stamped it. Both are correctness/availability fixes (a
+  deactivated member no longer gets a reminder; a shift assigned or given an
+  apparatus later in the window still gets its reminder instead of being
+  silently and permanently skipped) — neither touches auth, tenant scoping,
+  or what data reaches whom beyond narrowing the recipient set to active
+  users, which is a tightening, not a loosening.
+- `resolve_check_templates` (:548), which this function calls, is unchanged
+  since `2a7e47ee` and out of this diff's scope; it filters
+  `EquipmentCheckTemplate.organization_id == str(organization_id)`
+  correctly. Its apparatus-type fallback (:577) resolves `Apparatus.id ==
+str(apparatus_id)` without an org filter, but `apparatus_id` here is never
+  client-supplied — it comes from `shift.apparatus_id` on an already
+  org-scoped `Shift` row — so this is not reachable cross-tenant through this
+  path. Pre-existing, unchanged, noted rather than silently passed over.
+- `run_post_shift_validation` (:1359-1420ish) also references equipment
+  checklists (folds "outstanding end-of-shift checklists" into its message)
+  and gained a `Shift.status != ShiftStatus.CANCELLED` filter in the same
+  window (CRON2-31-3) — a correctness fix for a different bug (a cancelled
+  shift generating a bogus validation prompt forever), not a tenant or auth
+  change. Same org-scoping shape as above (`Shift.organization_id ==
+str(org.id)`, unchanged).
+
+No finding. Checked against CHECKLIST.md's seven dimensions for what
+changed: tenant isolation (§3) and abuse resistance (§6, the dedup-flag
+fixes prevent both notification-storm and permanently-silenced-reminder
+failure modes) are the only dimensions this diff touches, and both check out.
+
+**`scheduling_service.py` — `ShiftCall.responding_members` validation
+(:1183-1202, :2073-2087, :2137-2141).** This is a real, already-applied XC-1
+fix, from `f439cf07` ("re-verify SCH-1..8, fix 1 XC-1 gap in shift calls"),
+feature 15's own pass — reviewed here for the first time from EC-14's angle
+since `ShiftCompletionService` (this feature's territory) is a reader.
+
+- `_all_users_in_org` (:1183) is a batched `SELECT User.id WHERE id IN (...)
+AND organization_id = :org` check; `create_shift_call` (:2057) and
+  `update_shift_call` (:2128) both call it against `responding_members`
+  before persisting, rejecting the write with `"One or more members are not
+in your organization"` if any id doesn't resolve in-org. This closes
+  exactly the XC-1 gap CLAUDE.md Pitfall #14c describes: a client-supplied FK
+  id array stored into JSON with no prior existence/tenancy check.
+- Both mutating methods re-verify the shift itself is in-org
+  (`get_shift_by_id`/`get_shift_call_by_id`, both filtering
+  `organization_id`) independent of the endpoint-level check.
+- The endpoints (`api/v1/endpoints/scheduling.py:1418-1511`) gate
+  create/update/delete behind `scheduling.manage` **or** being the shift's
+  named officer, resolved through `_authorize_shift_management` (:180),
+  which itself fetches the shift org-scoped first (404 if not in-org) before
+  checking permission — XC-3 and the permission-sensitivity match (§2) both
+  hold: this is officer-level write access to per-incident attribution data,
+  not a member-self-service surface.
+- **Traced the `ShiftCompletionService` consumer specifically** (the
+  concern the Codex comment raised): `_get_trainee_call_data_from_shift`
+  (`shift_completion_service.py:112`) searches `ShiftCall.responding_members`
+  for `trainee_id` to auto-populate a report's call count. Its one caller,
+  `create_report` (:238), only reaches it after `shift_id` is validated
+  `Shift.organization_id == str(organization_id)` (:241) **and** `trainee_id`
+  is confirmed to have a `ShiftAttendance` or `ShiftAssignment` row on that
+  specific shift (:253-274) — so a caller cannot use this path to attribute
+  a call to a trainee who was never tied to the shift in the first place;
+  `responding_members` only ever narrows an already-validated trainee's
+  count, it cannot manufacture one. The reverse reader,
+  `compute_member_call_counts` (:677, unchanged, out of this diff), is only
+  called from two sites that both resolve `shift_id` through an org-scoped
+  `Shift` fetch first (`scheduling.py:590`, `scheduling_service.py:6416`
+  inside `finalize_shift`) — checked because the code comment on the new
+  validation cites it as a reader, not because it changed.
+- The remaining two hunks in this file's diff (:6129, :6155 —
+  `compliance_value` graded from raw stored minutes instead of the rounded
+  hours figure) are a compliance-requirement grading fix, unrelated to
+  `responding_members`/call attribution and outside what the Codex comment
+  raised; not reviewed as part of this pass (scheduling's own requirements
+  surface is feature 15's territory).
+
+No finding. Checked against CHECKLIST.md: tenant isolation (§3, XC-1 — the
+fix is sound and complete) and authorization (§2, permission matches
+sensitivity) are the dimensions this diff touches; both check out.
 
 **Given zero diff, re-verified every pass-1 fix by reading the current code
 directly** (not by re-citing the doc), plus a fresh AST-based route/permission

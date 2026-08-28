@@ -62,8 +62,29 @@ gate: flake8/black/isort clean (isort 8.0.1, CI's pin, already installed),
 migrations 389 revisions/single head, scoped tests 296 passed/1 skipped,
 full backend suite 9179 passed/22 skipped/0 failed, `tsc`/`eslint` clean
 (10 pre-existing warnings, same set as SEC-00/AP-13 pass 2). Full detail in
-`EC-14-equipment-check-shifts.md`. Rotation row 14 -> awaiting PR merge.
-Next: 15 scheduling, once this PR merges.
+`EC-14-equipment-check-shifts.md`.
+
+**Scope correction (same-day follow-up on Codex review of PR #1963):** the
+zero-diff claim above covered only the six files pass 1 declared, not
+adjacent files outside that list. Codex correctly flagged two:
+`scheduled_tasks.py` (end-of-shift equipment-check reminder task) and
+`scheduling_service.py` (`ShiftCall.responding_members`, read by
+`ShiftCompletionService` for trainee call attribution) — both had changed
+since `2a7e47ee` (confirmed via `git log`, commits `c19ecc0f`, `f439cf07`,
+`27c78fcf`, `b10a8ca7`, and the message-delivery chain). Read both in full
+against the changed hunks: the reminder task is org-scoped throughout (per-org
+processing, `shift_ids` built only from an already org-filtered `Shift`
+query) and its diff is a dedup/inactive-user correctness fix from a different
+feature's PR (#1915, CRON2-31), not a tenant or auth change. The
+`responding_members` validation is a real, already-applied XC-1 fix
+(`f439cf07`, feature 15's own pass) that batches an in-org check before
+persisting; traced `ShiftCompletionService`'s consumption of it and confirmed
+a trainee's call count can only be auto-populated from calls on a shift the
+trainee is already tied to via attendance/assignment — the JSON field cannot
+be used to attribute a call to an untied trainee. **Verdict: both clean, no
+findings, no code change.** Full detail in the "Adjacent files reviewed on
+follow-up" subsection of `EC-14-equipment-check-shifts.md`. Rotation row 14
+-> awaiting PR merge. Next: 15 scheduling, once this PR merges.
 
 ---
 
