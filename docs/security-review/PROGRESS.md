@@ -16,11 +16,50 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-[PR #1957](https://github.com/thegspiro/the-logbook/pull/1957) — feature 11
-(inventory), pass 2. 6 findings fixed (3 HIGH, 3 LOW/MED), 2 flagged. Awaiting
-CI/merge before feature 12 (facilities) starts.
+[PR #1959](https://github.com/thegspiro/the-logbook/pull/1959) — feature 12
+(facilities), pass 2. 3 findings fixed (1 MED, 2 LOW), 0 flagged. Awaiting
+CI/merge before feature 13 (apparatus & NFC) starts.
 
 ---
+
+### 2026-08-28 — Feature 12 (Facilities), pass 2 — 3 fixed (1 MED, 2 LOW), 0 flagged
+
+Scoped to the full domain since pass 1's merge (`4e8c6b0c`, PR #1836). Both
+declared backend files (`facilities_service.py`, `models/facilities.py`)
+unchanged; the real churn was a new cross-module document-reference
+validator in `facilities.py` (landed via PR #1953/DOC-10 pass 2 but never
+documented there — reviewed here for the first time), the granular
+`facilities.delete` permission wired to every delete route, two
+`facilities.view` revocation migrations narrowing it from a baseline member
+grant to leadership/facilities-manager only, a new folder-ACL migration, a
+new frontend `FilesSection` component, and a stale-response-race guard in
+`facilitiesStore.ts`. Fixed: a stale module docstring still calling
+`facilities.view` "the baseline member grant" (FAC-10, LOW); the new
+`FilesSection` used `window.prompt` for caption/description edits, a
+CLAUDE.md Pitfall #16 violation, replaced with `PromptDialog` and corrected
+to send an explicit `null` on clear rather than omitting the key (FAC-11,
+MED); the Files section's delete button was gated on `facilities.manage`
+instead of the hook's general `canDelete`, hiding the button from holders
+of the new granular delete-only grant despite the backend already
+authorizing them (FAC-12, LOW). Verified good: all of pass 1's fixes intact;
+the new document-reference validator is org-scoped with no bypass via
+update; the granular-delete rollout grants no new access (every position
+holding it already holds `facilities.manage`); both revocation migrations
+correctly guard the `create_all`-only `positions` table; the facilities
+router carries the whole-app module gate. Full backend suite 9176
+passed/22 skipped; full frontend suite 5383/5384 (one confirmed-flaky,
+unrelated `NotificationCard.test.tsx` failure, recorded rather than
+ignored). Full detail in `FAC-12-facilities.md`. Rotation row 12 ->
+awaiting merge. Next: 13 apparatus & NFC, once #1959 merges.
+
+### 2026-08-28 — Feature 11 (Inventory), pass 2 ✅ merged — PR #1957
+
+Merged (`656755cf`), including the 6 fixes (INV-10 through INV-15) and the
+2 flags (INV-16, INV-17) mirrored to `KNOWN_LIMITATIONS.md`. CI green on the
+final head (all 17 checks), no unresolved review threads requiring further
+action — the two open threads are the two flagged items, already replied to
+with the disposition and correctly left for an owner decision. Confirmed on
+`origin/main` by ancestry check. Rotation row 11 -> done. Next: 12 facilities.
 
 ### 2026-08-28 — Feature 11 (Inventory), pass 2 — 6 fixed (3 HIGH), 2 flagged (corrected after initial "no findings")
 
@@ -1354,8 +1393,8 @@ each row's prior PR is recorded in the Log, not repeated here.
 | 08  | Membership pipeline       | MP     | `membership_pipeline.py`, `membership_pipeline_service.py`                                                                                      | ✅     |
 | 09  | Medical screening (PHI)   | MS     | `medical_screening.py`, `medical_screening_service.py`                                                                                          | ✅     |
 | 10  | Documents & legal         | DOC    | `documents.py`, `station_documents.py`, `legal_documents.py`                                                                                    | ✅     |
-| 11  | Inventory                 | INV    | `endpoints/inventory.py` (6539 L), `inventory_service.py`                                                                                       | ⏳     |
-| 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ⬜     |
+| 11  | Inventory                 | INV    | `endpoints/inventory.py` (6539 L), `inventory_service.py`                                                                                       | ✅     |
+| 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ⏳     |
 | 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | ⬜     |
 | 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | ⬜     |
 | 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                | ⬜     |
