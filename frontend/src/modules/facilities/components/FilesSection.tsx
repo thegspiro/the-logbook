@@ -84,10 +84,14 @@ export default function FilesSection({
 
   const submitEdit = async (value: string) => {
     if (!editTarget) return;
-    const { kind, item } = editTarget;
+    const target = editTarget;
+    const { kind, item } = target;
     if (kind === 'photo') await facilitiesService.updatePhoto(item.id, { caption: blankToNull(value) });
     else await facilitiesService.updateFacilityDocument(item.id, { description: blankToNull(value) });
-    setEditTarget(null);
+    // Only close the dialog this request opened -- a slower earlier submit
+    // completing after the user dismissed it and opened a different edit
+    // must not clear (and discard) that second, still-open edit.
+    setEditTarget((current) => (current === target ? null : current));
     await load();
   };
 

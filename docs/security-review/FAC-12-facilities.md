@@ -368,6 +368,21 @@ only... it must not imply create, edit, maintenance, sensitive-read, or
 general management" — the Files section is exactly a destructive-controls
 consumer, not one of the excluded categories).
 
+**Codex review on the draft PR caught two more real issues, both fixed:**
+
+- The FAC-10 docstring's "only" list of positions retaining `facilities.view`
+  omitted `vice_president` and `secretary` (`permissions.py:1536,1623`), both
+  of which the registry does grant it. Corrected the list and marked it
+  explicitly non-exhaustive against a department's own customized positions,
+  so the next reader can't treat it as a closed enumeration either.
+- The FAC-11 `PromptDialog` rewrite unconditionally cleared `editTarget` when
+  its update resolved. If that request was slow, the user could dismiss the
+  dialog and open a different file's edit before it finished; the first
+  request's completion would then close the second, still-open dialog and
+  discard its in-progress input. Fixed by capturing the target the request
+  was submitted for and only clearing state if it is still the current one
+  (`setEditTarget((current) => (current === target ? null : current))`).
+
 ## Completion gate (pass 2)
 
 | Check                                             | Result                                                                |
