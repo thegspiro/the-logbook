@@ -338,6 +338,7 @@ async def get_message(
 async def update_message(
     message_id: str,
     data: MessageUpdate,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("notifications.manage")),
 ):
@@ -349,6 +350,10 @@ async def update_message(
     )
     if error:
         _raise_message_error(error)
+    if getattr(message, "_published_by_update", False):
+        background_tasks.add_task(
+            deliver_department_message, message.id, current_user.organization_id
+        )
     await log_audit_event(
         db=db,
         event_type="message_updated",

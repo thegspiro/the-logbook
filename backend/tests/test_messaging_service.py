@@ -109,150 +109,78 @@ class TestTargetedUsers:
 
 
 class TestUnreadCount:
-    def _user(self, roles=("officer",), status="active"):
-        return SimpleNamespace(
-            roles=[SimpleNamespace(id=r, name=r) for r in roles],
-            status=SimpleNamespace(value=status),
-        )
+    @pytest.mark.parametrize("count", [0, 1, 3])
+    async def test_returns_sql_count(self, count):
+        result = MagicMock(scalar=MagicMock(return_value=count))
+        db = MagicMock(execute=AsyncMock(return_value=result))
 
-    def _read(self, message_id, acknowledged_at=None):
-        # Mirrors the (message_id, acknowledged_at) row the lightweight unread
-        # query now selects.
-        return SimpleNamespace(message_id=message_id, acknowledged_at=acknowledged_at)
+        assert await MessagingService(db).get_unread_count("org-1", "u1") == count
+        assert db.execute.await_count == 1
 
-    def _db(self, user, messages, reads):
-        db = MagicMock()
-        user_res = MagicMock(scalar_one_or_none=MagicMock(return_value=user))
-        # get_unread_count now selects columns (not full ORM objects) and reads
-        # them via result.all().
-        msg_res = MagicMock(all=MagicMock(return_value=messages))
-        # The reads result is iterated directly (for r in result).
-        db.execute = AsyncMock(side_effect=[user_res, msg_res, list(reads)])
-        return db
+    async def test_ack_required_state_is_filtered_in_sql(self):
+        result = MagicMock(scalar=MagicMock(return_value=1))
+        db = MagicMock(execute=AsyncMock(return_value=result))
 
-    async def test_returns_zero_when_user_missing(self):
-        db = MagicMock()
-        db.execute = AsyncMock(
-            return_value=MagicMock(scalar_one_or_none=MagicMock(return_value=None))
-        )
-        assert await MessagingService(db).get_unread_count("org-1", "u1") == 0
+        await MessagingService(db).get_unread_count("org-1", "u1")
 
-    async def test_counts_visible_minus_read(self):
-        messages = [
-            _msg("m1", "all"),
-            _msg("m2", "roles", roles=["officer"]),
-            _msg("m3", "roles", roles=["chief"]),  # not visible to officer
-        ]
-        # m1 has a read record -> resolved. m2 unread -> pending.
-        db = self._db(
-            self._user(roles=("officer",)), messages, reads=[self._read("m1")]
-        )
-        assert await MessagingService(db).get_unread_count("org-1", "u1") == 1
-
-    async def test_ack_required_message_stays_pending_until_acknowledged(self):
-        # A read-but-not-acknowledged ack-required message is still pending.
-        messages = [_msg("m1", "all", requires_acknowledgment=True)]
-        db = self._db(
-            self._user(), messages, reads=[self._read("m1", acknowledged_at=None)]
-        )
-        assert await MessagingService(db).get_unread_count("org-1", "u1") == 1
-
-    async def test_ack_required_message_clears_once_acknowledged(self):
-        messages = [_msg("m1", "all", requires_acknowledgment=True)]
-        db = self._db(
-            self._user(),
-            messages,
-            reads=[self._read("m1", acknowledged_at=datetime.now(timezone.utc))],
-        )
-        assert await MessagingService(db).get_unread_count("org-1", "u1") == 0
-
-    async def test_zero_when_nothing_visible(self):
-        messages = [_msg("m1", "roles", roles=["chief"])]
-        db = MagicMock()
-        user_res = MagicMock(
-            scalar_one_or_none=MagicMock(return_value=self._user(roles=("officer",)))
-        )
-        msg_res = MagicMock(all=MagicMock(return_value=messages))
-        # No read query should run when nothing is visible.
-        db.execute = AsyncMock(side_effect=[user_res, msg_res])
-        assert await MessagingService(db).get_unread_count("org-1", "u1") == 0
+        sql = str(db.execute.await_args.args[0])
+        assert "acknowledged_at IS NULL" in sql
+        assert "read_at IS NULL" in sql
 
 
 class TestInboxQuery:
-    async def _queries(self):
-        user = SimpleNamespace(roles=[], status=SimpleNamespace(value="active"))
-        user_result = MagicMock(scalar_one_or_none=MagicMock(return_value=user))
-        messages_result = MagicMock()
-        messages_result.scalars.return_value.all.return_value = []
-        db = MagicMock()
-        db.execute = AsyncMock(side_effect=[user_result, messages_result])
-
+    async def _query(self):
+        result = MagicMock(all=MagicMock(return_value=[]))
+        db = MagicMock(execute=AsyncMock(return_value=result))
         await MessagingService(db).get_inbox("org-1", "u1", limit=10)
+        return db.execute.await_args.args[0]
 
-        return [call.args[0] for call in db.execute.await_args_list]
-
-    async def test_scopes_user_lookup_to_the_requested_organization(self):
-        user_query, _ = await self._queries()
-
-        sql = str(user_query)
-        assert "users.id = :id_1" in sql
-        assert "users.organization_id = :organization_id_1" in sql
+    async def test_scopes_recipient_lookup_to_org_and_user(self):
+        query = await self._query()
+        sql = str(query)
+        assert "department_message_recipients.organization_id" in sql
+        assert "department_message_recipients.user_id" in sql
 
     async def test_uses_stable_persistent_first_ordering(self):
-        _, messages_query = await self._queries()
-
+        query = await self._query()
         assert (
             "department_messages.is_pinned DESC, "
             "department_messages.is_persistent DESC, "
             "department_messages.created_at DESC, "
             "department_messages.id DESC"
-        ) in str(messages_query)
+        ) in str(query)
 
     async def test_paginates_before_loading_org_scoped_author_names(self):
-        user = SimpleNamespace(roles=[], status=SimpleNamespace(value="active"))
-        messages = [
-            SimpleNamespace(
-                id=f"m-{number}",
-                title=f"Message {number}",
-                body="Body",
-                priority="normal",
-                target_type="all",
-                target_roles=None,
-                target_statuses=None,
-                target_member_ids=None,
-                is_pinned=False,
-                is_persistent=False,
-                requires_acknowledgment=False,
-                posted_by=f"author-{number}",
-                created_at=None,
-                expires_at=None,
-            )
-            for number in range(2)
-        ]
-        user_result = MagicMock(scalar_one_or_none=MagicMock(return_value=user))
-        messages_result = MagicMock()
-        messages_result.scalars.return_value.all.return_value = messages
-        reads_result = MagicMock()
-        reads_result.scalars.return_value.all.return_value = []
-        authors_result = MagicMock(
+        message = SimpleNamespace(
+            id="m-0",
+            title="Message 0",
+            body="Body",
+            priority="normal",
+            target_type="all",
+            is_pinned=False,
+            is_persistent=False,
+            requires_acknowledgment=False,
+            posted_by="author-0",
+            created_at=None,
+            expires_at=None,
+        )
+        recipient = SimpleNamespace(read_at=None, acknowledged_at=None)
+        page = MagicMock(all=MagicMock(return_value=[(message, recipient)]))
+        authors = MagicMock(
             all=MagicMock(
                 return_value=[
                     SimpleNamespace(id="author-0", first_name=None, last_name=None)
                 ]
             )
         )
-        db = MagicMock()
-        db.execute = AsyncMock(
-            side_effect=[user_result, messages_result, reads_result, authors_result]
-        )
+        db = MagicMock(execute=AsyncMock(side_effect=[page, authors]))
 
         inbox = await MessagingService(db).get_inbox("org-1", "u1", limit=1)
 
-        assert [message["id"] for message in inbox] == ["m-0"]
+        assert [item["id"] for item in inbox] == ["m-0"]
         assert inbox[0]["author_name"] == "Unknown"
-        author_query = db.execute.await_args_list[3].args[0]
-        assert author_query.compile().params["id_1"] == ["author-0"]
-        assert "users.organization_id = :organization_id_1" in str(author_query)
+        author_query = db.execute.await_args_list[1].args[0]
+        assert "users.organization_id" in str(author_query)
 
 
 class TestQueryableRecipientInbox:
@@ -402,7 +330,7 @@ class TestReadAckVisibilityGate:
         db.execute = AsyncMock(
             side_effect=[
                 MagicMock(scalar_one_or_none=MagicMock(return_value=message)),
-                MagicMock(scalar_one_or_none=MagicMock(return_value=read_record)),
+                SimpleNamespace(rowcount=0),
                 SimpleNamespace(rowcount=1),
             ]
         )
@@ -500,11 +428,11 @@ class TestAcknowledgmentReport:
 
         db = MagicMock()
         msg_res = MagicMock(scalar_one_or_none=MagicMock(return_value=message))
-        users_res = MagicMock()
-        users_res.scalars.return_value.all.return_value = users
-        reads_res = MagicMock()
-        reads_res.scalars.return_value.all.return_value = [read_u1]
-        db.execute = AsyncMock(side_effect=[msg_res, users_res, reads_res])
+        pending = SimpleNamespace(read_at=None, acknowledged_at=None)
+        recipients_res = MagicMock(
+            all=MagicMock(return_value=[(users[0], read_u1), (users[1], pending)])
+        )
+        db.execute = AsyncMock(side_effect=[msg_res, recipients_res])
 
         report = await MessagingService(db).get_acknowledgment_report("m1", "org-1")
 
@@ -823,19 +751,9 @@ class TestGetInboxMessage:
         assert entry is None
 
     async def test_returns_none_when_message_is_not_targeted_at_caller(self):
-        message = self._live_message()
-        message.target_type = "roles"
-        message.target_roles = ["chief"]
-        user = SimpleNamespace(
-            roles=[SimpleNamespace(id="officer", name="officer")],
-            status=SimpleNamespace(value="active"),
-        )
         db = MagicMock()
         db.execute = AsyncMock(
-            side_effect=[
-                MagicMock(scalar_one_or_none=MagicMock(return_value=message)),
-                MagicMock(scalar_one_or_none=MagicMock(return_value=user)),
-            ]
+            return_value=MagicMock(scalar_one_or_none=MagicMock(return_value=None))
         )
 
         entry = await MessagingService(db).get_inbox_message("org-1", "u1", "m1")
@@ -844,7 +762,6 @@ class TestGetInboxMessage:
 
     async def test_returns_entry_with_read_state_and_author(self):
         message = self._live_message()
-        user = SimpleNamespace(roles=[], status=SimpleNamespace(value="active"))
         acknowledged_at = datetime(2026, 8, 21, 18, 0, tzinfo=timezone.utc)
         read = SimpleNamespace(
             message_id="m1",
@@ -864,7 +781,6 @@ class TestGetInboxMessage:
         db.execute = AsyncMock(
             side_effect=[
                 MagicMock(scalar_one_or_none=MagicMock(return_value=message)),
-                MagicMock(scalar_one_or_none=MagicMock(return_value=user)),
                 MagicMock(scalar_one_or_none=MagicMock(return_value=read)),
                 authors_result,
             ]
@@ -882,13 +798,11 @@ class TestGetInboxMessage:
 
     async def test_author_lookup_is_scoped_to_the_organization(self):
         message = self._live_message()
-        user = SimpleNamespace(roles=[], status=SimpleNamespace(value="active"))
         authors_result = MagicMock(all=MagicMock(return_value=[]))
         db = MagicMock()
         db.execute = AsyncMock(
             side_effect=[
                 MagicMock(scalar_one_or_none=MagicMock(return_value=message)),
-                MagicMock(scalar_one_or_none=MagicMock(return_value=user)),
                 MagicMock(scalar_one_or_none=MagicMock(return_value=None)),
                 authors_result,
             ]
@@ -899,7 +813,7 @@ class TestGetInboxMessage:
         assert entry is not None
         assert entry["is_read"] is False
         assert entry["author_name"] == "Unknown"
-        author_query = db.execute.await_args_list[3].args[0]
+        author_query = db.execute.await_args_list[2].args[0]
         assert "users.organization_id = :organization_id_1" in str(author_query)
 
 

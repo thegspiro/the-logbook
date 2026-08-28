@@ -77,7 +77,9 @@ def upgrade():
         for r in bind.execute(sa.select(reads)).mappings()
     }
     rows = []
-    for message in bind.execute(sa.select(messages)).mappings():
+    for message in bind.execute(
+        sa.select(messages).where(messages.c.scheduled_at.is_(None))
+    ).mappings():
         target = getattr(message["target_type"], "value", message["target_type"])
         for user in bind.execute(
             sa.select(users).where(
@@ -116,4 +118,38 @@ def upgrade():
 
 
 def downgrade():
+    bind = op.get_bind()
+    meta = sa.MetaData()
+    reads = sa.Table("department_message_reads", meta, autoload_with=bind)
+    recipients = sa.Table("department_message_recipients", meta, autoload_with=bind)
+    for recipient in bind.execute(sa.select(recipients)).mappings():
+        existing = (
+            bind.execute(
+                sa.select(reads).where(
+                    reads.c.message_id == recipient["message_id"],
+                    reads.c.user_id == recipient["user_id"],
+                )
+            )
+            .mappings()
+            .first()
+        )
+        values = {
+            "read_at": recipient["read_at"],
+            "acknowledged_at": recipient["acknowledged_at"],
+        }
+        if existing:
+            bind.execute(
+                reads.update().where(reads.c.id == existing["id"]).values(**values)
+            )
+        elif (
+            recipient["read_at"] is not None or recipient["acknowledged_at"] is not None
+        ):
+            bind.execute(
+                reads.insert().values(
+                    id=str(uuid.uuid4()),
+                    message_id=recipient["message_id"],
+                    user_id=recipient["user_id"],
+                    **values,
+                )
+            )
     op.drop_table("department_message_recipients")
