@@ -834,6 +834,17 @@ class DocumentsService:
         MultipleResultsFound. Locking the organization row for the duration
         serializes concurrent first-accesses across the org's facilities —
         cheap, since this only runs once per facility ever.
+
+        The lock alone is not sufficient (Pitfall #27's second half): the
+        caller (``GET /facilities/{id}/folders``) reads the ``Facility`` row
+        before this method ever runs, which under this app's default
+        REPEATABLE READ establishes the transaction's snapshot before the
+        organization lock is acquired. A plain ``SELECT`` for
+        ``facilities_root``/``facility_folder`` after that would still
+        answer from that earlier snapshot and could report "no folder yet"
+        even though a concurrent transaction already created and committed
+        one while this one waited for the lock. Both existence checks below
+        are therefore locking reads too, not just the organization row.
         """
         org = await self.db.scalar(
             select(Organization)
@@ -851,6 +862,7 @@ class DocumentsService:
             .where(DocumentFolder.is_system.is_(True))
             .order_by(DocumentFolder.id)
             .limit(1)
+            .with_for_update()
         )
         facilities_root = result.scalar_one_or_none()
 
@@ -884,6 +896,7 @@ class DocumentsService:
             .where(DocumentFolder.slug == f"facility-{facility_id_str}")
             .order_by(DocumentFolder.id)
             .limit(1)
+            .with_for_update()
         )
         facility_folder = result.scalar_one_or_none()
 

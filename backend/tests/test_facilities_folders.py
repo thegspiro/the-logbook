@@ -41,6 +41,29 @@ class TestFolderCreationIsLocked:
             "both insert a duplicate facility folder."
         )
 
+    def test_ensure_facility_folder_also_locks_both_existence_checks(self):
+        """DOC-10 pass 2 (2026-08-27): the organization-row lock above is
+        necessary but not sufficient -- Pitfall #27's second half. The
+        caller, GET /facilities/{id}/folders, reads the Facility row via
+        FacilitiesService.get_facility (a plain SELECT) before this method
+        ever runs, which under this app's default REPEATABLE READ
+        establishes the transaction's snapshot before the organization lock
+        is even acquired. A plain SELECT for facilities_root/facility_folder
+        after that lock would still answer from that earlier snapshot and
+        could report "no folder yet" even though a concurrent transaction
+        already created and committed one while this one waited for the
+        lock -- the exact shape demonstrated in CLAUDE.md Pitfall #27's own
+        two-transaction trace. Both existence checks must be locking reads
+        too, not just the organization row."""
+        source = inspect.getsource(DocumentsService.ensure_facility_folder)
+        assert source.count("with_for_update()") >= 3, (
+            "ensure_facility_folder locks fewer than 3 reads (organization + "
+            "facilities_root + facility_folder) -- the organization lock "
+            "alone does not make the facility-folder existence checks see "
+            "latest-committed data, so two concurrent first-accesses can "
+            "still both decide no folder exists and both create one"
+        )
+
 
 class TestFacilityFolderDocumentCountRedaction:
     async def _call(self, current_user):
