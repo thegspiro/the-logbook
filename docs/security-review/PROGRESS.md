@@ -16,13 +16,83 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-[PR #1968](https://github.com/thegspiro/the-logbook/pull/1968) (feature 15,
-scheduling, pass 2) — branch `claude/security-review-scheduling`.
-
-(The bookkeeping PR #1965, closing out #1963's merge, has since merged
-— confirmed via `git log origin/main`.)
+[PR #1971](https://github.com/thegspiro/the-logbook/pull/1971) (bookkeeping —
+closing out SCH-15/#1968's merge) and the feature 16 (events & requests) PR
+opened by this iteration — branch `claude/security-review-events`. See the
+log entries below for both.
 
 ---
+
+### 2026-08-28 — Feature 16 (Events & requests), pass 2 — no findings, 1 frontend scope correction, 1 doc-completeness correction
+
+Scoped to the full domain since pass 1's merge (`c68a9bef`, PR #1848 —
+single merge, no Codex follow-up to re-scope against). All four declared
+backend files plus the models/schemas came back **byte-identical** except
+`event_service.py` (+17/-6, `git diff --stat`, not assumed), which is
+feature 21's own already-applied, already-verified cross-org fix
+(`3024a941`, admin-hours) threading `organization_id` through this file's
+three call sites into `AdminHoursService.delete_event_attendance_entries` —
+read all three call sites directly and confirmed the value is always the
+already-org-validated caller org, not attacker-influenceable. No migration
+since pass 1 touches an events/event-request table (`git diff --stat`
+against `alembic/versions/` directly, not scoped to source files — the
+exact gap Codex found in SCH-15 pass 2 — then grepped each of the 18 new
+files for "event" by content and confirmed none is this feature's).
+
+**Frontend scope correction, found before Codex could catch it this time**
+(the SCH-15/EC-14 lesson): pass 1 scoped its frontend check to
+`modules/events/` — a two-file route-registration barrel — and never
+mentioned that the real ~20,650-line, 54-file events frontend lives
+entirely outside it, in `pages/Event*.tsx`, `components/event-detail/`,
+`components/events/`, `services/eventServices.ts`, and three more shared
+files. Swept the real surface this pass: only 2 of 54 files changed since
+pass 1 (`EventForm.tsx`, a display-only label tweak; `eventServices.ts`,
+entirely unrelated INV-11 inventory type additions that happen to live in
+this shared file) — both read in full, neither security-relevant. The
+other 52 were grep-swept (`window.confirm`/`alert`/`prompt`,
+`dangerouslySetInnerHTML`, banned `.toLocale*`, `date-fns` import, direct
+`fetch(`) — all clean, noted as partial-scope rather than assumed
+line-by-line read, matching how EC-14/SCH-15 disposed of their own large
+unchanged frontend surfaces.
+
+Re-verified every pass-1 "Verified good" mechanism by reading the current
+code rather than re-citing the doc: fresh AST route enumeration (55/55 +
+23/23, unchanged), both halves of the Pitfall #27 RSVP-capacity lock,
+EV-11's `template_id` org-check, JSON-column mutation discipline on every
+write site, the `get_check_in_monitoring_stats` string-comparison claim,
+the 256-bit status-token claim, the `exclude_unset`-only update-payload
+discipline, the six frontend cache-exclusion entries, and all 12
+`SET NULL` FKs' `nullable=True`. Also verified, for the first time in this
+rotation's own docs, **EV-5** (public-intake per-org opt-in + honeypot +
+daily cap) — resolved 2026-08-17, before pass 1 ran, but pass 1's doc never
+mentioned or verified it: read `submit_public_event_request` in full and
+confirmed all four controls present and correctly ordered (rate limit →
+opt-in, indistinguishable from "org not found" → honeypot, before any
+write → daily cap, counted only after authorization). One doc-completeness
+correction (NIT): pass 1's permission-tier summary omitted
+`GET /{event_id}/folder`'s `require_permission("events.view")` gate — not a
+defect (`events.view` is a baseline member grant, more restrictive than the
+bare-authentication routes beside it, and the endpoint returns only folder
+metadata + a document count), just missing from the enumeration. No new
+security findings; no regression in any pass-1 fix. Full detail in
+`EV-16-events-requests.md` → Pass 2. Completion gate: flake8/black/isort
+clean (isort 8.0.1, CI's pin, already installed), migrations 389
+revisions/single head, `pytest -k "events or event_request"` 177
+passed/1 skipped, `pytest -k "event"` (broader net — most test files are
+singular `test_event_*`) 560 passed/1 skipped, full backend suite 9181
+passed/22 skipped/0 failed (unchanged from PR #1968's post-merge count —
+no code change this pass), `tsc`/`eslint` clean (10 pre-existing warnings,
+same set as SEC-00/AP-13/EC-14/SCH-15 pass 2). Rotation row 16 -> awaiting
+PR merge. Next: 17 training core, once this PR and the bookkeeping PR
+#1971 both merge.
+
+### 2026-08-28 — Feature 15 (Scheduling), pass 2 ✅ merged — PR #1968
+
+Merged (`a28d39e6`). Confirmed on `origin/main` by ancestry check (`git log
+origin/main --oneline` shows the merge commit at HEAD, directly above
+#1967's merge commit `80c87d91`). No review-thread follow-up needed beyond
+the three Codex-flagged corrections already folded into the merged PR (see
+below). Rotation row 15 -> done. Next: 16 events & requests.
 
 ### 2026-08-28 — Feature 15 (Scheduling), pass 2 — 1 test fix, 2 stale-doc corrections, 0 flagged
 
@@ -1663,7 +1733,7 @@ each row's prior PR is recorded in the Log, not repeated here.
 | 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | ✅     |
 | 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | ✅     |
 | 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                | ✅     |
-| 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                       | ⬜     |
+| 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                       | ✅     |
 | 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`                                                                                   | ⬜     |
 | 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ⬜     |
 | 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3723 L)                                                                                                          | ⬜     |
