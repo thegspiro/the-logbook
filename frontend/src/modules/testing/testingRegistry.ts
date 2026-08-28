@@ -652,6 +652,13 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
         module: 'facilities',
       },
       {
+        path: '/facilities/settings',
+        label: 'Facility settings',
+        note: 'Lookup values used by facilities and maintenance records',
+        permission: 'facilities.manage',
+        module: 'facilities',
+      },
+      {
         path: '/facilities/print-labels',
         label: 'Print facility labels',
         anyPermission: FACILITY_ENTRY_PERMISSIONS,
