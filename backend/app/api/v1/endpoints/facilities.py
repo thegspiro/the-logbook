@@ -6,7 +6,12 @@ maintenance tracking, building systems, inspections, photos, and documents.
 
 Read-permission tiers: operational data (facilities, rooms, systems,
 maintenance, inspections, contacts, shutoffs, compliance, photos) is readable
-with ``facilities.view`` — the baseline member grant. Facility documents and
+with ``facilities.view``. As of the 2026-08-26/27 revocations this is no
+longer a baseline member grant — regular members and station-scoped ranks
+(captain, lieutenant, and below) do not hold it; only administrative/
+leadership positions (president, treasurer, quartermaster, safety officer,
+training officer, facilities manager) and chiefs (via ``facilities.manage``)
+can reach this module at all. Facility documents and
 other sensitive data (access keys/codes, utility accounts and readings,
 capital projects, insurance policies, occupants) require ``facilities.view_sensitive``,
 ``facilities.edit``, or ``facilities.manage``: door/alarm codes, account

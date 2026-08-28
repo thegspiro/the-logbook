@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Facility file edits could be silently swallowed, and the delete button was missing for some managers (2026-08-28)
+
+**Fixed**
+
+- Editing a facility photo's caption or a facility document's description no
+  longer uses the browser's native prompt dialog, which some browsers
+  silently block after repeated use — a blocked edit previously looked
+  identical to pressing Cancel, with no error shown.
+- Clearing a facility photo caption or document description to blank now
+  actually clears it, instead of leaving the old value in place.
+- Staff granted the dedicated "delete facility records" permission (without
+  full facility management access) can now see the delete button on
+  facility photos and documents, matching every other facility section.
+
 ### Damaged inventory could be marked available, and received reorder stock couldn't be issued (2026-08-28)
 
 **Fixed**

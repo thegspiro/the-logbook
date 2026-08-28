@@ -1,6 +1,6 @@
 # Security Review 12 — Facilities
 
-**Prefix:** `FAC` · **Iteration:** 12 · **Reviewed:** 2026-08-26 · **PR:** [#1836](https://github.com/thegspiro/the-logbook/pull/1836)
+**Prefix:** `FAC` · **Iteration:** 12 · **Reviewed:** 2026-08-26 (pass 1), 2026-08-28 (pass 2) · **PR:** [#1836](https://github.com/thegspiro/the-logbook/pull/1836) (pass 1), (this PR) (pass 2)
 
 **Backend:** `api/v1/endpoints/facilities.py` (98 routes), `services/facilities_service.py`
 (~3,290 L), `services/documents_service.py` (the new folder-bridge methods),
@@ -238,3 +238,144 @@ scope for a Facilities-feature iteration. `FacilityMaintenance.maintenance_type_
 | `pytest tests/ -k "facilities or documents"`      | ✅ 211 passed, 1 skipped (pre-existing optional-dependency skip) |
 | `pytest tests/` (full backend suite)              | ✅ 8317 passed, 22 skipped (pre-existing Docker/no-MySQL skips)  |
 | `tsc --noEmit` / `eslint .`                       | n/a — no frontend change                                         |
+
+---
+
+## Pass 2 (2026-08-28)
+
+Scoped to the full domain since pass 1's merge (`4e8c6b0c`, PR #1836):
+`git diff --stat` against `backend/app/api/v1/endpoints/facilities.py`,
+`facilities_service.py`, `models/facilities.py`, `schemas/facilities.py`,
+`frontend/src/modules/facilities/`, and every migration in that window
+content-relevant to `document_folders`/`positions`/facility permissions.
+This range carried substantially more product work than code churn in the
+declared backend service/model/schema files (both unchanged): a new
+cross-module document-reference validator in the endpoint file, a granular
+`facilities.delete` permission wired to every delete route, four permission
+migrations restricting `facilities.view` to leadership/facilities-manager
+positions instead of the baseline member grant, a new folder-ACL migration,
+a new `FilesSection` frontend component, a stale-response-race guard added
+to `facilitiesStore.ts`, and the whole-app module-gating sweep (verified to
+include this router: `module_gate("facilities", "Facilities")` at
+`api.py:153`).
+
+**Verified good (re-confirmed and newly checked):**
+
+- FAC-3/FAC2-1, FAC-5, FAC-6, FAC-7, FAC-8, FAC-9 (pass 1 fixes) all still
+  intact — spot-checked each site, no regression.
+- `_validate_shared_document_reference` (new, `facilities.py:127`, landed via
+  PR #1953/DOC-10 pass 2, not documented in that pass's own findings file):
+  org-scoped document lookup (`get_document_by_id` filters
+  `organization_id`), 404 on a missing/cross-org document is indistinguishable
+  from a genuinely missing one, and the update schemas
+  (`FacilityPhotoUpdate`/`FacilityDocumentUpdate`) do not expose `file_path`
+  at all — so a caller cannot bypass the validator by creating a photo/
+  document normally and then `PATCH`ing a different reference in. A benign
+  same-org, unfiled-document "adoption" race (two concurrent creates
+  referencing the same never-before-filed document into two different
+  facilities) exists but is a data-placement quirk, not a security defect —
+  the last write wins which facility's folder the document lands in, nothing
+  is disclosed or lost. Not fixed: low value for the complexity of a locking
+  fix on a one-time, cross-facility, same-org coincidence.
+- Granular `facilities.delete` (PR #1897 "Honor granular facility deletion
+  permission"): every position that holds `facilities.delete` in the
+  registry (`core/permissions.py`) already also holds `facilities.manage`
+  alongside it (checked all 3 occurrences) — wiring it into the delete
+  routes' `require_permission("facilities.delete", "facilities.manage")`
+  grants no principal new access; it only makes a previously-dead permission
+  meaningful (the CLAUDE.md Pitfall #19 shape, in the safe direction). A
+  department's own custom role that was granted `facilities.delete` alone
+  before this change gaining real delete power now is the intended effect
+  of "honoring" the grant, not a regression.
+- `facilities.view` revocation migrations (`e4f5a6b7c8d9`,
+  `c7e2b9a41f83`): both guard `"positions" not in ... get_table_names()`
+  before reflecting (Pitfall #26 — `positions` is a `create_all`-only
+  table), scope to `is_system = True` only, and match the current registry
+  (`OPERATIONAL_RANKS`/`DEFAULT_POSITIONS` no longer grant
+  `FACILITIES_VIEW` to any rank from `member` through `lieutenant`/chiefs —
+  only administrative positions and `facilities_manager` do).
+- `document_folders.required_permissions` migration (`a9c4e7b2f631`):
+  guards the `create_all`-only table the same way, matches by fixed
+  system-assigned slug (not user-editable), and the permission set matches
+  the endpoint's own `_SENSITIVE_READ_PERMISSIONS`.
+- Module gating: `facilities.router` is registered with
+  `module_gate("facilities", "Facilities")` — confirmed at the
+  `include_router` call site, not just claimed by the sweep's own commit
+  message.
+
+**Findings:**
+
+### FAC-10 — LOW (doc accuracy) — module docstring called `facilities.view` "the baseline member grant" after it no longer is — ✅ FIXED
+
+**What:** The module docstring at the top of `facilities.py` still described
+`facilities.view` as "the baseline member grant," carried forward unchanged
+since before the 2026-08-26/27 revocation migrations
+(`e4f5a6b7c8d9`, `c7e2b9a41f83`) removed it from the default `member`,
+`firefighter`, `emt`, `engineer`, `captain`, `lieutenant`, and chief
+positions. It is now a leadership/facilities-manager-only grant (president,
+treasurer, quartermaster, safety officer, training officer, facilities
+manager) plus chiefs via `facilities.manage`. A reader trusting the
+docstring — the next engineer adding an endpoint, or a future review pass —
+would wrongly assume the whole department can reach baseline facility data.
+**Where:** `app/api/v1/endpoints/facilities.py:1-19` (module docstring).
+**Fix:** Docstring corrected to state the current, narrower grant population
+and cite the revocation migrations by date.
+
+### FAC-11 — MED (reliability, CLAUDE.md Pitfall #16) — new Files section used `window.prompt`, which a browser can silently no-op — ✅ FIXED
+
+**What:** The new `FilesSection.tsx` (frontend-only, ships in this window,
+not present at pass 1) called `window.prompt()` to edit a photo caption or
+document description. Per CLAUDE.md Pitfall #16, Chrome suppresses repeated
+`window.prompt` dialogs (and any dialog in a cross-origin frame), and a
+suppressed prompt returns `null` — indistinguishable from the user pressing
+Cancel. The existing `if (value === null) return;` guard then silently
+no-ops the edit with no error and no indication to the user that anything
+was blocked.
+**Where:** `frontend/src/modules/facilities/components/FilesSection.tsx`
+(`edit`, now `submitEdit`).
+**Fix:** Replaced with the project's `PromptDialog` component
+(`components/ux/PromptDialog`), matching the pattern already used in
+`CheckRequestDetailPage.tsx`. While rewiring, corrected a second issue this
+introduced: clearing the field to empty must send an explicit `null` on this
+**update** payload (`blankToNull`, not `|| undefined` — CLAUDE.md Pitfall #1's
+update-path amendment), or the omitted key leaves the old caption/description
+in place behind a success toast. The two service methods
+(`facilitiesService.updatePhoto`/`updateFacilityDocument`) only typed their
+payload as `Partial<FacilityPhotoCreate>`/`Partial<FacilityDocumentCreate>`
+(`caption`/`description: string`, no `null`), so the parameter types were
+widened for just those two fields rather than casting past the type error.
+
+### FAC-12 — LOW (authorization consistency) — Files section delete button gated on `facilities.manage` instead of the granular delete grant — ✅ FIXED
+
+**What:** Every other mutable section on `FacilityDetailPage` passes the
+hook's general `canDelete` (`canManage || facilities.delete`) for its delete
+affordance. The new `FilesSection` was wired to `canManage` alone
+(`<FilesSection ... canDelete={canManage} .../>`), so a principal holding
+only the new granular `facilities.delete` grant — exactly the population
+PR #1897 was written to enable — passes the backend's
+`require_permission("facilities.delete", "facilities.manage")` on
+`DELETE /photos/{id}` and `DELETE /documents/{id}` but never sees the delete
+button for facility files, while seeing it on every other section. Fail-
+closed (a UX/consistency defect, not an access-control gap — the backend
+authorization was already correct), but a real inconsistency introduced in
+the same window as the granular-delete rollout it undermines.
+**Where:** `frontend/src/modules/facilities/pages/FacilityDetailPage.tsx`
+(`FilesSection` call site).
+**Fix:** Changed to pass `canDelete`, matching every sibling section on the
+same page and the hook's own stated intent
+(`useFacilitiesAccess.ts`: "Granular delete grants destructive controls
+only... it must not imply create, edit, maintenance, sensitive-read, or
+general management" — the Files section is exactly a destructive-controls
+consumer, not one of the excluded categories).
+
+## Completion gate (pass 2)
+
+| Check                                             | Result    |
+| ------------------------------------------------- | --------- |
+| `flake8 app/ tests/ alembic/`                     | see below |
+| `black --check app/ tests/ alembic/`              | see below |
+| `isort --check-only app/ tests/ alembic/`         | see below |
+| `python3 scripts/validate_migrations.py --strict` | see below |
+| `pytest tests/ -k "facilities"`                   | see below |
+| `tsc --noEmit`                                    | see below |
+| `eslint .`                                        | see below |
