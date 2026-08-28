@@ -75,6 +75,7 @@ const ALL_ROUTES: RouteCheck[] = [
   { path: '/locations', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/locations/qr-codes', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/facilities', maxSmallTargets: 0, maxTinyText: 0 },
+  { path: '/facilities/settings', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/governance/org-chart', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/elections', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/minutes', maxSmallTargets: 0, maxTinyText: 0 },
@@ -123,8 +124,11 @@ test.describe('mobile presentation', () => {
     // in the list below redirects and this pass silently measures the
     // dashboard instead of the page it names. `inventory.manage` is granted for
     // /inventory, which is manager-only — without it the run reported
-    // "rendered little content" for a page that renders plenty.
-    await signIn(page, { permissions: ['inventory.manage'] });
+    // "rendered little content" for a page that renders plenty. `facilities.manage`
+    // is granted for the same reason: /facilities/settings requires it, and
+    // without it that route (and /facilities itself, which only needs
+    // facilities.view) would silently measure the dashboard instead.
+    await signIn(page, { permissions: ['inventory.manage', 'facilities.manage'] });
 
     const crashed: string[] = [];
     const overflowed: string[] = [];
