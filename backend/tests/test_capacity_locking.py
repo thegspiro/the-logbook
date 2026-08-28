@@ -24,7 +24,12 @@ locking read (which makes the number current).
 import inspect
 import re
 
-from app.services import event_request_service, event_service, scheduling_service
+from app.services import (
+    event_request_service,
+    event_service,
+    finance_service,
+    scheduling_service,
+)
 
 
 def _source_of(obj) -> str:
@@ -208,4 +213,48 @@ class TestOutreachRoleSeats:
     def test_the_role_seat_count_is_a_locking_read(self):
         _assert_every_count_locks(
             event_request_service.resolve_outreach_signup_role, expected=1
+        )
+
+
+class TestFinanceApprovalStepLocking:
+    """approve_step/deny_step read-then-write the same status field
+    approve_by_token/deny_by_token already lock. Two authorized approvers
+    acting on the same pending step both pass the not-pending check off a
+    plain SELECT unless that read is locking too — the same shape as a
+    seat-capacity race, just with a status transition instead of a count."""
+
+    def test_approve_step_locks_the_record(self):
+        source = _source_of(finance_service.FinanceService.approve_step)
+        assert "with_for_update()" in source, (
+            "Two approvers acting on the same step concurrently both see "
+            "PENDING off a plain SELECT and both finalize -- double-"
+            "encumbering the budget -- unless this read locks the row, "
+            "matching approve_by_token."
+        )
+
+    def test_deny_step_locks_the_record(self):
+        source = _source_of(finance_service.FinanceService.deny_step)
+        assert "with_for_update()" in source, (
+            "Same race as approve_step, on the deny path -- matching " "deny_by_token."
+        )
+
+
+class TestFinanceBudgetCeilingOnUpdate:
+    """PUT /budgets/{id} sets amount_budgeted directly and is a second way
+    to move the same value _mutate_budget's hard ceiling protects. A plain
+    read-then-write here is the same shape as the capacity races above:
+    the row has to be locked, and the reduction has to be checked against
+    the locked row's current amount_spent + amount_encumbered."""
+
+    def test_update_budget_locks_the_row(self):
+        source = _source_of(finance_service.FinanceService.update_budget)
+        assert "with_for_update()" in source, (
+            "update_budget must lock the budget row before checking a "
+            "reduced amount_budgeted against amount_spent + "
+            "amount_encumbered, or a concurrent spend can race past the "
+            "check the same way an unlocked capacity count does."
+        )
+        assert "BudgetLimitExceededError" in source, (
+            "A reduction below what is already committed must raise the "
+            "same ceiling error _mutate_budget raises, not silently persist."
         )

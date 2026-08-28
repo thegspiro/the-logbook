@@ -872,7 +872,10 @@ export const facilitiesService = {
     const response = await api.post<FacilityPhoto>('/facilities/photos', data);
     return response.data;
   },
-  async updatePhoto(photoId: string, data: Partial<FacilityPhotoCreate>): Promise<FacilityPhoto> {
+  async updatePhoto(
+    photoId: string,
+    data: Partial<Omit<FacilityPhotoCreate, 'caption'>> & { caption?: string | null }
+  ): Promise<FacilityPhoto> {
     const response = await api.patch<FacilityPhoto>(`/facilities/photos/${photoId}`, data);
     return response.data;
   },
@@ -893,7 +896,10 @@ export const facilitiesService = {
     const response = await api.post<FacilityDocument>('/facilities/documents', data);
     return response.data;
   },
-  async updateFacilityDocument(documentId: string, data: Partial<FacilityDocumentCreate>): Promise<FacilityDocument> {
+  async updateFacilityDocument(
+    documentId: string,
+    data: Partial<Omit<FacilityDocumentCreate, 'description'>> & { description?: string | null }
+  ): Promise<FacilityDocument> {
     const response = await api.patch<FacilityDocument>(`/facilities/documents/${documentId}`, data);
     return response.data;
   },

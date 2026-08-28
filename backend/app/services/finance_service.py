@@ -9,16 +9,28 @@ and QuickBooks export.
 import html
 import io
 import secrets
+from collections.abc import AsyncIterator
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Optional
 
 from loguru import logger
-from sqlalchemy import Integer, and_, cast, func, or_, select
+from sqlalchemy import (
+    Integer,
+    and_,
+    cast,
+    exists,
+    func,
+    literal,
+    or_,
+    select,
+    union_all,
+)
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import aliased, contains_eager, selectinload
 
+from app.api.dependencies import PaginationParams
 from app.core.config import settings
 from app.models.finance import (
     ApprovalChain,
@@ -54,6 +66,21 @@ from app.services.separation_of_duties import (
 from app.utils.csv_export import SafeCsvWriter
 from app.utils.model_updates import apply_updates
 from app.utils.sql_search import LIKE_ESCAPE_CHAR
+
+
+class BudgetLimitExceededError(Exception):
+    """A proposed finance transaction would exceed its organization's budget.
+
+    This is a stable domain error (rather than a persistence error) so API
+    adapters can consistently report a conflict.  Overspending is deliberately
+    fail-closed: purchase requests, check requests, and individual expense
+    report lines have no override path, including for finance administrators.
+    """
+
+    code = "budget_limit_exceeded"
+
+    def __init__(self) -> None:
+        super().__init__("Insufficient available budget")
 
 
 def _apply_payment_totals(dues: MemberDues) -> None:
@@ -103,11 +130,15 @@ class FinanceService:
     # Fiscal Years
     # ========================================
 
-    async def list_fiscal_years(self, org_id: str) -> list[FiscalYear]:
+    async def list_fiscal_years(
+        self, org_id: str, pagination: PaginationParams
+    ) -> list[FiscalYear]:
         result = await self.db.execute(
             select(FiscalYear)
             .where(FiscalYear.organization_id == org_id)
-            .order_by(FiscalYear.start_date.desc())
+            .order_by(FiscalYear.start_date.desc(), FiscalYear.id)
+            .offset(pagination.skip)
+            .limit(pagination.limit)
         )
         return list(result.scalars().all())
 
@@ -187,11 +218,15 @@ class FinanceService:
     # Budget Categories
     # ========================================
 
-    async def list_budget_categories(self, org_id: str) -> list[BudgetCategory]:
+    async def list_budget_categories(
+        self, org_id: str, pagination: PaginationParams
+    ) -> list[BudgetCategory]:
         result = await self.db.execute(
             select(BudgetCategory)
             .where(BudgetCategory.organization_id == org_id)
-            .order_by(BudgetCategory.sort_order)
+            .order_by(BudgetCategory.sort_order, BudgetCategory.id)
+            .offset(pagination.skip)
+            .limit(pagination.limit)
         )
         return list(result.scalars().all())
 
@@ -238,6 +273,7 @@ class FinanceService:
     async def list_budgets(
         self,
         org_id: str,
+        pagination: PaginationParams,
         fiscal_year_id: Optional[str] = None,
         category_id: Optional[str] = None,
     ) -> list[Budget]:
@@ -246,6 +282,9 @@ class FinanceService:
             query = query.where(Budget.fiscal_year_id == fiscal_year_id)
         if category_id:
             query = query.where(Budget.category_id == category_id)
+        query = (
+            query.order_by(Budget.id).offset(pagination.skip).limit(pagination.limit)
+        )
         result = await self.db.execute(query)
         return list(result.scalars().all())
 
@@ -267,10 +306,23 @@ class FinanceService:
         return budget
 
     async def update_budget(self, budget_id: str, org_id: str, **kwargs) -> Budget:
-        budget = await self.get_budget(budget_id, org_id)
+        await self._validate_finance_fks(org_id, kwargs)
+        # amount_budgeted changes the ceiling _mutate_budget enforces, so this
+        # read must be the same locking read that ceiling check uses -- a
+        # plain read here would let a reduction race a concurrent spend/
+        # encumbrance past it (CLAUDE.md pitfall #27).
+        result = await self.db.execute(
+            select(Budget)
+            .where(Budget.id == budget_id, Budget.organization_id == org_id)
+            .with_for_update()
+        )
+        budget = result.scalar_one_or_none()
         if not budget:
             raise ValueError("Budget not found")
-        await self._validate_finance_fks(org_id, kwargs)
+        if "amount_budgeted" in kwargs and kwargs["amount_budgeted"] is not None:
+            new_amount = Decimal(kwargs["amount_budgeted"])
+            if new_amount < budget.amount_spent + budget.amount_encumbered:
+                raise BudgetLimitExceededError()
         apply_updates(budget, kwargs)
         await self.db.flush()
         await self.db.refresh(budget, ["updated_at"])
@@ -292,9 +344,9 @@ class FinanceService:
             )
         )
         row = result.one()
-        total_budgeted = float(row.total_budgeted)
-        total_spent = float(row.total_spent)
-        total_encumbered = float(row.total_encumbered)
+        total_budgeted = row.total_budgeted
+        total_spent = row.total_spent
+        total_encumbered = row.total_encumbered
         total_remaining = total_budgeted - total_spent - total_encumbered
         percent_used = (total_spent / total_budgeted * 100) if total_budgeted > 0 else 0
         return {
@@ -302,7 +354,7 @@ class FinanceService:
             "total_spent": total_spent,
             "total_encumbered": total_encumbered,
             "total_remaining": total_remaining,
-            "percent_used": round(percent_used, 2),
+            "percent_used": round(float(percent_used), 2),
             "category_breakdown": [],
         }
 
@@ -310,12 +362,16 @@ class FinanceService:
     # Approval Chains
     # ========================================
 
-    async def list_approval_chains(self, org_id: str) -> list[ApprovalChain]:
+    async def list_approval_chains(
+        self, org_id: str, pagination: PaginationParams
+    ) -> list[ApprovalChain]:
         result = await self.db.execute(
             select(ApprovalChain)
             .options(selectinload(ApprovalChain.steps))
             .where(ApprovalChain.organization_id == org_id)
-            .order_by(ApprovalChain.name)
+            .order_by(ApprovalChain.name, ApprovalChain.id)
+            .offset(pagination.skip)
+            .limit(pagination.limit)
         )
         return list(result.scalars().unique().all())
 
@@ -418,7 +474,7 @@ class FinanceService:
         self,
         org_id: str,
         entity_type: ApprovalEntityType,
-        amount: float,
+        amount: Decimal,
         budget_category_id: Optional[str] = None,
     ) -> Optional[ApprovalChain]:
         """Find the most specific matching approval chain"""
@@ -454,9 +510,9 @@ class FinanceService:
                 continue
 
             # Check amount range
-            if chain.min_amount is not None and amount < float(chain.min_amount):
+            if chain.min_amount is not None and amount < chain.min_amount:
                 continue
-            if chain.max_amount is not None and amount > float(chain.max_amount):
+            if chain.max_amount is not None and amount > chain.max_amount:
                 continue
 
             # Score by specificity
@@ -488,12 +544,11 @@ class FinanceService:
         chain: ApprovalChain,
         entity_type: ApprovalEntityType,
         entity_id: str,
-        amount: float,
+        amount: Decimal,
         requester_id: str,
     ) -> list[ApprovalStepRecord]:
         """Create step records for an entity going through an approval chain"""
         records = []
-        email_targets: list[tuple[ApprovalStepRecord, ApprovalChainStep]] = []
         for step in chain.steps:
             status = ApprovalStepStatus.PENDING
 
@@ -501,7 +556,7 @@ class FinanceService:
             if (
                 step.step_type == ApprovalStepType.APPROVAL
                 and step.auto_approve_under is not None
-                and amount < float(step.auto_approve_under)
+                and amount < step.auto_approve_under
             ):
                 status = ApprovalStepStatus.AUTO_APPROVED
 
@@ -517,26 +572,24 @@ class FinanceService:
                 status=status,
             )
 
-            # Generate token for EMAIL approver type
-            if (
-                step.step_type == ApprovalStepType.APPROVAL
-                and step.approver_type
-                and step.approver_type.value == "email"
-            ):
-                record.approval_token = secrets.token_urlsafe(32)
-                record.token_expires_at = datetime.now(timezone.utc) + timedelta(days=7)
-                if status == ApprovalStepStatus.PENDING:
-                    email_targets.append((record, step))
+            # EMAIL-approver tokens are NOT generated here -- see
+            # _advance_reachable_steps. Issuing every step's token at once
+            # started every step's 7-day expiry at chain creation, so a step
+            # whose predecessors took a week or more to resolve could expire
+            # before it ever became actionable, with no resend path.
 
             self.db.add(record)
             records.append(record)
 
         await self.db.flush()
 
-        # Email each external approver their token link (best-effort — a mail
-        # failure must not roll back the records the entity depends on).
-        for record, step in email_targets:
-            await self.send_approval_request_email(record, step)
+        # Send the invite (and start the expiry clock) for whichever steps
+        # are reachable right now -- a chain can start with a NOTIFICATION
+        # step, or an EMAIL approval step following only auto-approved
+        # steps, so this is not always just "step 1".
+        await self._advance_reachable_steps(
+            entity_type, entity_id, chain.organization_id
+        )
 
         return records
 
@@ -580,7 +633,7 @@ class FinanceService:
             return False
 
     async def get_approval_records(
-        self, entity_type: ApprovalEntityType, entity_id: str
+        self, entity_type: ApprovalEntityType, entity_id: str, org_id: str
     ) -> list[ApprovalStepRecord]:
         result = await self.db.execute(
             select(ApprovalStepRecord)
@@ -589,26 +642,58 @@ class FinanceService:
                 ApprovalChainStep,
                 ApprovalChainStep.id == ApprovalStepRecord.step_id,
             )
+            .join(ApprovalChain, ApprovalChain.id == ApprovalStepRecord.chain_id)
             .where(
                 ApprovalStepRecord.entity_type == entity_type,
                 ApprovalStepRecord.entity_id == entity_id,
+                ApprovalChain.organization_id == org_id,
             )
-            # Chain position, not created_at: records for one entity are
-            # created in the same instant, so DATETIME ties would make the
-            # "current pending step" nondeterministic.
-            .order_by(ApprovalChainStep.step_order, ApprovalStepRecord.created_at)
+            # Chain position, not created_at alone: records for one entity are
+            # created in the same instant, so DATETIME ties are common, and
+            # step_order itself isn't unique (no DB/schema constraint stops
+            # two steps sharing one order). The id tiebreaker matches
+            # get_pending_approvals' has_earlier_pending_step subquery, which
+            # a caller may already be reading to decide what's actionable --
+            # a different tiebreak here would let this method reject exactly
+            # the step that query presented as current.
+            .order_by(
+                ApprovalChainStep.step_order,
+                ApprovalStepRecord.created_at,
+                ApprovalStepRecord.id,
+            )
         )
         return list(result.scalars().all())
 
     async def get_current_pending_step(
-        self, entity_type: ApprovalEntityType, entity_id: str
+        self, entity_type: ApprovalEntityType, entity_id: str, org_id: str
     ) -> Optional[ApprovalStepRecord]:
         """Get the first non-completed step for an entity"""
-        records = await self.get_approval_records(entity_type, entity_id)
+        records = await self.get_approval_records(entity_type, entity_id, org_id)
         for record in records:
             if record.status == ApprovalStepStatus.PENDING:
                 return record
         return None
+
+    async def _ensure_current_step(
+        self, record: ApprovalStepRecord, org_id: str
+    ) -> None:
+        """Reject acting on a step out of chain order.
+
+        Every step is created PENDING up front (create_approval_records), and
+        an EMAIL-type step's token is emailed immediately regardless of its
+        position -- so without this, a later-step approver (or anyone who
+        knows/is emailed a later record's id/token) can approve or deny
+        before an earlier step has been acted on. Denying finalizes the
+        whole entity immediately, so an out-of-order deny doesn't just
+        skip ahead -- it kills the request while earlier reviewers never
+        weighed in, defeating the point of a multi-step chain. Called with
+        `record` already status==PENDING and already locked by the caller.
+        """
+        current = await self.get_current_pending_step(
+            record.entity_type, record.entity_id, org_id
+        )
+        if current is None or current.id != record.id:
+            raise ValueError("An earlier approval step is still pending")
 
     async def approve_step(
         self,
@@ -630,12 +715,14 @@ class FinanceService:
                 ApprovalStepRecord.id == step_record_id,
                 ApprovalChain.organization_id == org_id,
             )
+            .with_for_update()
         )
         record = result.scalar_one_or_none()
         if not record:
             raise ValueError("Approval step record not found")
         if record.status != ApprovalStepStatus.PENDING:
             raise ValueError("This step is not pending approval")
+        await self._ensure_current_step(record, org_id)
 
         # SEC (FIN-4): holding finance.approve says nothing about *whose*
         # request this is. Without this, a treasurer could raise a check
@@ -644,7 +731,7 @@ class FinanceService:
         # unguarded: withdrawing your own request is not a conflict.
         assert_different_person(
             approver_id,
-            await self._entity_creator_id(record.entity_type, record.entity_id),
+            await self._entity_creator_id(record.entity_type, record.entity_id, org_id),
             action="approve",
             record=record.entity_type.value.replace("_", " "),
         )
@@ -657,16 +744,18 @@ class FinanceService:
 
         await self.db.flush()
 
-        # Process next steps (advance notification steps automatically)
-        await self._advance_notification_steps(record.entity_type, record.entity_id)
+        # Process next steps (advance whatever just became reachable)
+        await self._advance_reachable_steps(
+            record.entity_type, record.entity_id, org_id
+        )
 
         # Check if all steps are complete
         all_complete = await self._check_all_steps_complete(
-            record.entity_type, record.entity_id
+            record.entity_type, record.entity_id, org_id
         )
         if all_complete:
             await self._finalize_approval(
-                record.entity_type, record.entity_id, approver_id
+                record.entity_type, record.entity_id, approver_id, org_id
             )
 
         logger.info("Approval step {} approved by {}", step_record_id, approver_id)
@@ -690,12 +779,14 @@ class FinanceService:
                 ApprovalStepRecord.id == step_record_id,
                 ApprovalChain.organization_id == org_id,
             )
+            .with_for_update()
         )
         record = result.scalar_one_or_none()
         if not record:
             raise ValueError("Approval step record not found")
         if record.status != ApprovalStepStatus.PENDING:
             raise ValueError("This step is not pending approval")
+        await self._ensure_current_step(record, org_id)
 
         now = datetime.now(timezone.utc)
         record.status = ApprovalStepStatus.DENIED
@@ -705,7 +796,7 @@ class FinanceService:
 
         # Deny the entire entity
         await self._finalize_denial(
-            record.entity_type, record.entity_id, denier_id, notes
+            record.entity_type, record.entity_id, denier_id, notes, org_id
         )
 
         await self.db.flush()
@@ -728,19 +819,25 @@ class FinanceService:
         """
         result = await self.db.execute(
             select(ApprovalStepRecord)
-            .options(selectinload(ApprovalStepRecord.step))
+            .join(ApprovalChain, ApprovalChain.id == ApprovalStepRecord.chain_id)
+            .options(
+                selectinload(ApprovalStepRecord.step),
+                contains_eager(ApprovalStepRecord.chain),
+            )
             .where(ApprovalStepRecord.approval_token == token)
             .with_for_update()
         )
         record = result.scalar_one_or_none()
         if not record:
             raise ValueError("Invalid approval token")
+        org_id = record.chain.organization_id
         if record.status != ApprovalStepStatus.PENDING:
             raise ValueError("This step has already been acted on")
         if record.token_expires_at and record.token_expires_at < datetime.now(
             timezone.utc
         ):
             raise ValueError("Approval token has expired")
+        await self._ensure_current_step(record, org_id)
 
         step = record.step
         if (
@@ -750,7 +847,7 @@ class FinanceService:
         ):
             approver_email = (step.approver_value or "").strip().lower()
             requester_email = await self._entity_creator_email(
-                record.entity_type, record.entity_id
+                record.entity_type, record.entity_id, org_id
             )
             if (
                 approver_email
@@ -770,12 +867,16 @@ class FinanceService:
         record.approval_token = None
 
         await self.db.flush()
-        await self._advance_notification_steps(record.entity_type, record.entity_id)
+        await self._advance_reachable_steps(
+            record.entity_type, record.entity_id, org_id
+        )
         all_complete = await self._check_all_steps_complete(
-            record.entity_type, record.entity_id
+            record.entity_type, record.entity_id, org_id
         )
         if all_complete:
-            await self._finalize_approval(record.entity_type, record.entity_id, None)
+            await self._finalize_approval(
+                record.entity_type, record.entity_id, None, org_id
+            )
 
         return record
 
@@ -785,117 +886,166 @@ class FinanceService:
         """Deny a step via email token (for external approvers)"""
         result = await self.db.execute(
             select(ApprovalStepRecord)
+            .join(ApprovalChain, ApprovalChain.id == ApprovalStepRecord.chain_id)
+            .options(contains_eager(ApprovalStepRecord.chain))
             .where(ApprovalStepRecord.approval_token == token)
             .with_for_update()
         )
         record = result.scalar_one_or_none()
         if not record:
             raise ValueError("Invalid approval token")
+        org_id = record.chain.organization_id
         if record.status != ApprovalStepStatus.PENDING:
             raise ValueError("This step has already been acted on")
         if record.token_expires_at and record.token_expires_at < datetime.now(
             timezone.utc
         ):
             raise ValueError("Approval token has expired")
+        await self._ensure_current_step(record, org_id)
 
         record.status = ApprovalStepStatus.DENIED
         record.acted_at = datetime.now(timezone.utc)
         record.notes = notes
         record.approval_token = None
 
-        await self._finalize_denial(record.entity_type, record.entity_id, None, notes)
+        await self._finalize_denial(
+            record.entity_type, record.entity_id, None, notes, org_id
+        )
         await self.db.flush()
         return record
 
-    async def get_pending_approvals(self, user_id: str, org_id: str) -> list[dict]:
-        """Get all pending approval steps for the current org.
+    async def get_pending_approvals(
+        self, user_id: str, org_id: str, *, skip: int = 0, limit: int = 100
+    ) -> list[dict]:
+        """Return one currently actionable step per entity in one query.
 
-        FIN-9: the record query used to carry no organization filter at all,
-        scanning every tenant's PENDING approval steps and then running two
-        more queries per record (`_get_entity_info`, `get_current_pending_step`)
-        before `_get_entity_info`'s own org filter discarded anything that
-        wasn't this org's. The result was already org-confined; the query cost
-        wasn't. Resolving each entity type's org-scoped id set first and
-        filtering the record query on it keeps the same output — those ids are
-        exactly what `_get_entity_info` would have kept — while confining the
-        scan and the per-record follow-up queries to this organization.
+        ``user_id`` remains part of the public service signature for callers that
+        will eventually filter permission-based assignments.  Organization scope
+        is applied inside every arm of the entity union and again to requesters.
         """
-        # Correlated existence subqueries, not materialized id lists: the
-        # database does the filtering against its own indexes rather than
-        # Python holding every purchase-request/expense-report/check-request
-        # id an org has ever created (Codex review, PR #1809).
-        pr_ids = select(PurchaseRequest.id).where(
-            PurchaseRequest.organization_id == org_id
-        )
-        er_ids = select(ExpenseReport.id).where(ExpenseReport.organization_id == org_id)
-        cr_ids = select(CheckRequest.id).where(CheckRequest.organization_id == org_id)
+        del user_id
+        entities = union_all(
+            select(
+                PurchaseRequest.id.label("entity_id"),
+                literal(ApprovalEntityType.PURCHASE_REQUEST.value).label("entity_type"),
+                PurchaseRequest.title.label("title"),
+                PurchaseRequest.estimated_amount.label("amount"),
+                PurchaseRequest.requested_by.label("requester_id"),
+                PurchaseRequest.created_at.label("submitted_at"),
+            ).where(PurchaseRequest.organization_id == org_id),
+            select(
+                ExpenseReport.id,
+                literal(ApprovalEntityType.EXPENSE_REPORT.value),
+                ExpenseReport.title,
+                ExpenseReport.total_amount,
+                ExpenseReport.submitted_by,
+                ExpenseReport.created_at,
+            ).where(ExpenseReport.organization_id == org_id),
+            select(
+                CheckRequest.id,
+                literal(ApprovalEntityType.CHECK_REQUEST.value),
+                literal("Check to ") + CheckRequest.payee_name,
+                CheckRequest.amount,
+                CheckRequest.requested_by,
+                CheckRequest.created_at,
+            ).where(CheckRequest.organization_id == org_id),
+        ).subquery("pending_entities")
 
-        result = await self.db.execute(
-            select(ApprovalStepRecord)
-            .options(selectinload(ApprovalStepRecord.step))
+        prior_record = aliased(ApprovalStepRecord)
+        prior_step = aliased(ApprovalChainStep)
+        has_earlier_pending_step = exists(
+            select(1)
+            .select_from(prior_record)
+            .join(prior_step, prior_step.id == prior_record.step_id)
             .where(
-                ApprovalStepRecord.status == ApprovalStepStatus.PENDING,
+                prior_record.entity_type == ApprovalStepRecord.entity_type,
+                prior_record.entity_id == ApprovalStepRecord.entity_id,
+                prior_record.status == ApprovalStepStatus.PENDING,
                 or_(
+                    prior_step.step_order < ApprovalChainStep.step_order,
                     and_(
-                        ApprovalStepRecord.entity_type
-                        == ApprovalEntityType.PURCHASE_REQUEST,
-                        ApprovalStepRecord.entity_id.in_(pr_ids),
-                    ),
-                    and_(
-                        ApprovalStepRecord.entity_type
-                        == ApprovalEntityType.EXPENSE_REPORT,
-                        ApprovalStepRecord.entity_id.in_(er_ids),
-                    ),
-                    and_(
-                        ApprovalStepRecord.entity_type
-                        == ApprovalEntityType.CHECK_REQUEST,
-                        ApprovalStepRecord.entity_id.in_(cr_ids),
+                        prior_step.step_order == ApprovalChainStep.step_order,
+                        or_(
+                            prior_record.created_at < ApprovalStepRecord.created_at,
+                            and_(
+                                prior_record.created_at
+                                == ApprovalStepRecord.created_at,
+                                prior_record.id < ApprovalStepRecord.id,
+                            ),
+                        ),
                     ),
                 ),
             )
         )
-        pending_records = list(result.scalars().all())
+
+        result = await self.db.execute(
+            select(
+                ApprovalStepRecord.id.label("step_record_id"),
+                ApprovalStepRecord.entity_type,
+                entities.c.entity_id,
+                entities.c.title,
+                entities.c.amount,
+                entities.c.submitted_at,
+                ApprovalChainStep.name.label("step_name"),
+                ApprovalChainStep.step_order,
+                User.first_name,
+                User.last_name,
+                User.username,
+            )
+            .join(
+                entities,
+                and_(
+                    entities.c.entity_id == ApprovalStepRecord.entity_id,
+                    entities.c.entity_type == ApprovalStepRecord.entity_type,
+                ),
+            )
+            .join(ApprovalChainStep, ApprovalChainStep.id == ApprovalStepRecord.step_id)
+            .outerjoin(
+                User,
+                and_(
+                    User.id == entities.c.requester_id,
+                    User.organization_id == org_id,
+                    User.deleted_at.is_(None),
+                ),
+            )
+            .where(
+                ApprovalStepRecord.status == ApprovalStepStatus.PENDING,
+                ~has_earlier_pending_step,
+            )
+            .order_by(
+                entities.c.submitted_at.desc(),
+                entities.c.entity_type,
+                entities.c.entity_id,
+                ApprovalStepRecord.id,
+            )
+            .offset(skip)
+            .limit(limit)
+        )
 
         approvals = []
-        for record in pending_records:
-            # Determine entity details
-            entity_info = await self._get_entity_info(
-                record.entity_type, record.entity_id, org_id
-            )
-            if not entity_info:
-                continue
-
-            # Check if this step is the current active step
-            current_step = await self.get_current_pending_step(
-                record.entity_type, record.entity_id
-            )
-            if not current_step or current_step.id != record.id:
-                continue
-
-            step_name = record.step.name if record.step else "Unknown"
-            step_order = record.step.step_order if record.step else 0
-
+        for row in result:
+            requester_name = " ".join(filter(None, (row.first_name, row.last_name)))
+            requester_name = requester_name.strip() or row.username or "Unknown"
             approvals.append(
                 {
-                    "step_record_id": record.id,
-                    "entity_type": record.entity_type.value,
-                    "entity_id": record.entity_id,
-                    "entity_title": entity_info.get("title", ""),
-                    "entity_amount": entity_info.get("amount", 0),
-                    "requester_name": entity_info.get("requester_name", ""),
-                    "step_name": step_name,
-                    "step_order": step_order,
-                    "submitted_at": entity_info.get("submitted_at", record.created_at),
+                    "step_record_id": row.step_record_id,
+                    "entity_type": row.entity_type.value,
+                    "entity_id": row.entity_id,
+                    "entity_title": row.title,
+                    "entity_amount": float(row.amount),
+                    "requester_name": requester_name,
+                    "step_name": row.step_name,
+                    "step_order": row.step_order,
+                    "submitted_at": row.submitted_at,
                 }
             )
-
         return approvals
 
     async def preview_approval_chain(
         self,
         org_id: str,
         entity_type: str,
-        amount: float,
+        amount: Decimal,
         category_id: Optional[str] = None,
     ) -> Optional[ApprovalChain]:
         """Preview which chain would be selected for given parameters"""
@@ -905,50 +1055,75 @@ class FinanceService:
             raise ValueError(f"Invalid entity type: {entity_type}")
         return await self.resolve_approval_chain(org_id, et, amount, category_id)
 
-    async def _advance_notification_steps(
+    async def _advance_reachable_steps(
         self,
         entity_type: ApprovalEntityType,
         entity_id: str,
+        org_id: str,
     ) -> None:
-        """Auto-advance any notification steps that are now reachable"""
-        records = await self.get_approval_records(entity_type, entity_id)
+        """Activate every step whose prior steps are all resolved.
+
+        A NOTIFICATION step is marked SENT once reachable. An EMAIL-type
+        APPROVAL step's token/expiry is generated -- and the invite emailed
+        -- only once the step is reachable, not at chain creation: issuing
+        every step's token up front started every step's 7-day expiry
+        immediately, so a step whose predecessors took a week or more to
+        resolve could already be expired by the time _ensure_current_step
+        would finally let it be acted on, with no resend path. Called after
+        creating the chain's records and after any action that could make a
+        new step reachable (an approval, never a denial -- denial finalizes
+        the whole entity, so there is no "next" step to reach).
+        """
+        records = await self.get_approval_records(entity_type, entity_id, org_id)
         for record in records:
             if record.status != ApprovalStepStatus.PENDING:
                 continue
             if not record.step:
                 continue
+
+            prior_complete = True
+            for prior in records:
+                if prior.step and prior.step.step_order < record.step.step_order:
+                    if prior.status == ApprovalStepStatus.PENDING:
+                        prior_complete = False
+                        break
+            if not prior_complete:
+                continue
+
             if record.step.step_type == ApprovalStepType.NOTIFICATION:
-                # All prior steps must be complete
-                prior_complete = True
-                for prior in records:
-                    if prior.step and prior.step.step_order < record.step.step_order:
-                        if prior.status in (ApprovalStepStatus.PENDING,):
-                            prior_complete = False
-                            break
-                if prior_complete:
-                    record.status = ApprovalStepStatus.SENT
-                    record.acted_at = datetime.now(timezone.utc)
-                    # In production, trigger email sending here
-                    logger.info(
-                        "Notification step {} auto-sent for {} {}",
-                        record.id,
-                        entity_type.value,
-                        entity_id,
-                    )
+                record.status = ApprovalStepStatus.SENT
+                record.acted_at = datetime.now(timezone.utc)
+                # In production, trigger email sending here
+                logger.info(
+                    "Notification step {} auto-sent for {} {}",
+                    record.id,
+                    entity_type.value,
+                    entity_id,
+                )
+            elif (
+                record.step.step_type == ApprovalStepType.APPROVAL
+                and record.step.approver_type
+                and record.step.approver_type.value == "email"
+                and not record.approval_token
+            ):
+                record.approval_token = secrets.token_urlsafe(32)
+                record.token_expires_at = datetime.now(timezone.utc) + timedelta(days=7)
+                await self.send_approval_request_email(record, record.step)
 
     async def _check_all_steps_complete(
         self,
         entity_type: ApprovalEntityType,
         entity_id: str,
+        org_id: str,
     ) -> bool:
-        records = await self.get_approval_records(entity_type, entity_id)
+        records = await self.get_approval_records(entity_type, entity_id, org_id)
         for record in records:
             if record.status == ApprovalStepStatus.PENDING:
                 return False
         return True
 
     async def _entity_creator_id(
-        self, entity_type: ApprovalEntityType, entity_id: str
+        self, entity_type: ApprovalEntityType, entity_id: str, org_id: str
     ) -> Optional[str]:
         """Who raised the request an approval step belongs to.
 
@@ -977,12 +1152,14 @@ class FinanceService:
 
         model, requester_column = mapping
         result = await self.db.execute(
-            select(requester_column).where(model.id == entity_id)
+            select(requester_column).where(
+                model.id == entity_id, model.organization_id == org_id
+            )
         )
         return result.scalar_one_or_none()
 
     async def _entity_creator_email(
-        self, entity_type: ApprovalEntityType, entity_id: str
+        self, entity_type: ApprovalEntityType, entity_id: str, org_id: str
     ) -> Optional[str]:
         """Email of whoever raised the request, for the token-approval path.
 
@@ -990,7 +1167,7 @@ class FinanceService:
         approve_by_token(). Returns None if the requester id can't be
         resolved or that user no longer exists.
         """
-        requester_id = await self._entity_creator_id(entity_type, entity_id)
+        requester_id = await self._entity_creator_id(entity_type, entity_id, org_id)
         if not requester_id:
             return None
         result = await self.db.execute(
@@ -1003,12 +1180,16 @@ class FinanceService:
         entity_type: ApprovalEntityType,
         entity_id: str,
         approver_id: Optional[str],
+        org_id: str,
     ) -> None:
         """Set the entity status to APPROVED and update denormalized fields"""
         now = datetime.now(timezone.utc)
         if entity_type == ApprovalEntityType.PURCHASE_REQUEST:
             result = await self.db.execute(
-                select(PurchaseRequest).where(PurchaseRequest.id == entity_id)
+                select(PurchaseRequest).where(
+                    PurchaseRequest.id == entity_id,
+                    PurchaseRequest.organization_id == org_id,
+                )
             )
             entity = result.scalar_one_or_none()
             if entity:
@@ -1019,12 +1200,15 @@ class FinanceService:
                 if entity.budget_id:
                     await self._encumber_budget(
                         entity.budget_id,
-                        float(entity.estimated_amount),
+                        entity.estimated_amount,
                         entity.organization_id,
                     )
         elif entity_type == ApprovalEntityType.EXPENSE_REPORT:
             result = await self.db.execute(
-                select(ExpenseReport).where(ExpenseReport.id == entity_id)
+                select(ExpenseReport).where(
+                    ExpenseReport.id == entity_id,
+                    ExpenseReport.organization_id == org_id,
+                )
             )
             entity = result.scalar_one_or_none()
             if entity:
@@ -1033,7 +1217,10 @@ class FinanceService:
                 entity.approved_at = now
         elif entity_type == ApprovalEntityType.CHECK_REQUEST:
             result = await self.db.execute(
-                select(CheckRequest).where(CheckRequest.id == entity_id)
+                select(CheckRequest).where(
+                    CheckRequest.id == entity_id,
+                    CheckRequest.organization_id == org_id,
+                )
             )
             entity = result.scalar_one_or_none()
             if entity:
@@ -1049,11 +1236,15 @@ class FinanceService:
         entity_id: str,
         denier_id: Optional[str],
         reason: Optional[str],
+        org_id: str,
     ) -> None:
         """Set the entity status to DENIED"""
         if entity_type == ApprovalEntityType.PURCHASE_REQUEST:
             result = await self.db.execute(
-                select(PurchaseRequest).where(PurchaseRequest.id == entity_id)
+                select(PurchaseRequest).where(
+                    PurchaseRequest.id == entity_id,
+                    PurchaseRequest.organization_id == org_id,
+                )
             )
             entity = result.scalar_one_or_none()
             if entity:
@@ -1068,7 +1259,10 @@ class FinanceService:
                 # and silently corrupted other PRs' encumbrances on that budget.
         elif entity_type == ApprovalEntityType.EXPENSE_REPORT:
             result = await self.db.execute(
-                select(ExpenseReport).where(ExpenseReport.id == entity_id)
+                select(ExpenseReport).where(
+                    ExpenseReport.id == entity_id,
+                    ExpenseReport.organization_id == org_id,
+                )
             )
             entity = result.scalar_one_or_none()
             if entity:
@@ -1077,7 +1271,10 @@ class FinanceService:
                 entity.denial_reason = reason
         elif entity_type == ApprovalEntityType.CHECK_REQUEST:
             result = await self.db.execute(
-                select(CheckRequest).where(CheckRequest.id == entity_id)
+                select(CheckRequest).where(
+                    CheckRequest.id == entity_id,
+                    CheckRequest.organization_id == org_id,
+                )
             )
             entity = result.scalar_one_or_none()
             if entity:
@@ -1105,7 +1302,7 @@ class FinanceService:
             if entity:
                 return {
                     "title": entity.title,
-                    "amount": float(entity.estimated_amount),
+                    "amount": entity.estimated_amount,
                     "requester_name": "",
                     "submitted_at": entity.created_at,
                 }
@@ -1120,7 +1317,7 @@ class FinanceService:
             if entity:
                 return {
                     "title": entity.title,
-                    "amount": float(entity.total_amount),
+                    "amount": entity.total_amount,
                     "requester_name": "",
                     "submitted_at": entity.created_at,
                 }
@@ -1135,7 +1332,7 @@ class FinanceService:
             if entity:
                 return {
                     "title": f"Check to {entity.payee_name}",
-                    "amount": float(entity.amount),
+                    "amount": entity.amount,
                     "requester_name": "",
                     "submitted_at": entity.created_at,
                 }
@@ -1235,6 +1432,7 @@ class FinanceService:
     async def list_purchase_requests(
         self,
         org_id: str,
+        pagination: PaginationParams,
         status: Optional[str] = None,
         fiscal_year_id: Optional[str] = None,
     ) -> list[PurchaseRequest]:
@@ -1243,7 +1441,11 @@ class FinanceService:
             query = query.where(PurchaseRequest.status == status)
         if fiscal_year_id:
             query = query.where(PurchaseRequest.fiscal_year_id == fiscal_year_id)
-        query = query.order_by(PurchaseRequest.created_at.desc())
+        query = (
+            query.order_by(PurchaseRequest.created_at.desc(), PurchaseRequest.id)
+            .offset(pagination.skip)
+            .limit(pagination.limit)
+        )
         result = await self.db.execute(query)
         return list(result.scalars().all())
 
@@ -1311,7 +1513,7 @@ class FinanceService:
         chain = await self.resolve_approval_chain(
             org_id,
             ApprovalEntityType.PURCHASE_REQUEST,
-            float(pr.estimated_amount),
+            pr.estimated_amount,
             budget_category_id,
         )
 
@@ -1321,16 +1523,16 @@ class FinanceService:
                 chain,
                 ApprovalEntityType.PURCHASE_REQUEST,
                 pr.id,
-                float(pr.estimated_amount),
+                pr.estimated_amount,
                 pr.requested_by,
             )
             # Check if all steps were auto-approved
             all_complete = await self._check_all_steps_complete(
-                ApprovalEntityType.PURCHASE_REQUEST, pr.id
+                ApprovalEntityType.PURCHASE_REQUEST, pr.id, org_id
             )
             if all_complete:
                 await self._finalize_approval(
-                    ApprovalEntityType.PURCHASE_REQUEST, pr.id, None
+                    ApprovalEntityType.PURCHASE_REQUEST, pr.id, None, org_id
                 )
         else:
             # No chain — needs manual approval
@@ -1369,7 +1571,7 @@ class FinanceService:
         self,
         pr_id: str,
         org_id: str,
-        actual_amount: Optional[float] = None,
+        actual_amount: Optional[Decimal] = None,
         acted_by: Optional[str] = None,
     ) -> PurchaseRequest:
         pr = await self.get_purchase_request(pr_id, org_id)
@@ -1389,15 +1591,20 @@ class FinanceService:
         pr.status = PurchaseRequestStatus.PAID
         pr.paid_at = datetime.now(timezone.utc)
         if actual_amount is not None:
-            pr.actual_amount = Decimal(str(actual_amount))
+            pr.actual_amount = actual_amount
 
         # Move from encumbered to spent
         if pr.budget_id:
-            amount = float(pr.actual_amount or pr.estimated_amount)
-            await self._release_encumbrance(
-                pr.budget_id, float(pr.estimated_amount), org_id
+            amount = pr.actual_amount or pr.estimated_amount
+            # One locked mutation avoids briefly counting both the existing
+            # encumbrance and the resulting spend.  It also permits an actual
+            # amount up to the remaining budget after releasing the estimate.
+            await self._mutate_budget(
+                pr.budget_id,
+                org_id,
+                encumbered_delta=-pr.estimated_amount,
+                spent_delta=amount,
             )
-            await self._add_to_spent(pr.budget_id, amount, org_id)
 
         await self.db.flush()
         await self.db.refresh(pr, ["updated_at"])
@@ -1416,9 +1623,7 @@ class FinanceService:
             PurchaseRequestStatus.ORDERED,
             PurchaseRequestStatus.RECEIVED,
         ):
-            await self._release_encumbrance(
-                pr.budget_id, float(pr.estimated_amount), org_id
-            )
+            await self._release_encumbrance(pr.budget_id, pr.estimated_amount, org_id)
 
         pr.status = PurchaseRequestStatus.CANCELLED
         await self.db.flush()
@@ -1432,6 +1637,7 @@ class FinanceService:
     async def list_expense_reports(
         self,
         org_id: str,
+        pagination: PaginationParams,
         status: Optional[str] = None,
         restrict_to_user: Optional[str] = None,
     ) -> list[ExpenseReport]:
@@ -1448,7 +1654,11 @@ class FinanceService:
             query = query.where(ExpenseReport.submitted_by == restrict_to_user)
         if status:
             query = query.where(ExpenseReport.status == status)
-        query = query.order_by(ExpenseReport.created_at.desc())
+        query = (
+            query.order_by(ExpenseReport.created_at.desc(), ExpenseReport.id)
+            .offset(pagination.skip)
+            .limit(pagination.limit)
+        )
         result = await self.db.execute(query)
         return list(result.scalars().unique().all())
 
@@ -1556,7 +1766,7 @@ class FinanceService:
             raise ValueError("Expense report not found")
         if er.status != ExpenseReportStatus.DRAFT:
             raise ValueError("Only draft reports can be submitted")
-        if float(er.total_amount) <= 0:
+        if er.total_amount <= 0:
             raise ValueError("Expense report must have line items")
 
         er.status = ExpenseReportStatus.SUBMITTED
@@ -1564,7 +1774,7 @@ class FinanceService:
         chain = await self.resolve_approval_chain(
             org_id,
             ApprovalEntityType.EXPENSE_REPORT,
-            float(er.total_amount),
+            er.total_amount,
         )
 
         if chain and chain.steps:
@@ -1573,15 +1783,15 @@ class FinanceService:
                 chain,
                 ApprovalEntityType.EXPENSE_REPORT,
                 er.id,
-                float(er.total_amount),
+                er.total_amount,
                 er.submitted_by,
             )
             all_complete = await self._check_all_steps_complete(
-                ApprovalEntityType.EXPENSE_REPORT, er.id
+                ApprovalEntityType.EXPENSE_REPORT, er.id, org_id
             )
             if all_complete:
                 await self._finalize_approval(
-                    ApprovalEntityType.EXPENSE_REPORT, er.id, None
+                    ApprovalEntityType.EXPENSE_REPORT, er.id, None, org_id
                 )
         else:
             er.status = ExpenseReportStatus.PENDING_APPROVAL
@@ -1614,7 +1824,7 @@ class FinanceService:
         # Add to spent for each line item's budget
         for item in er.line_items:
             if item.budget_id:
-                await self._add_to_spent(item.budget_id, float(item.amount), org_id)
+                await self._add_to_spent(item.budget_id, item.amount, org_id)
 
         await self.db.flush()
         await self.db.refresh(er, ["updated_at"])
@@ -1627,12 +1837,17 @@ class FinanceService:
     async def list_check_requests(
         self,
         org_id: str,
+        pagination: PaginationParams,
         status: Optional[str] = None,
     ) -> list[CheckRequest]:
         query = select(CheckRequest).where(CheckRequest.organization_id == org_id)
         if status:
             query = query.where(CheckRequest.status == status)
-        query = query.order_by(CheckRequest.created_at.desc())
+        query = (
+            query.order_by(CheckRequest.created_at.desc(), CheckRequest.id)
+            .offset(pagination.skip)
+            .limit(pagination.limit)
+        )
         result = await self.db.execute(query)
         return list(result.scalars().all())
 
@@ -1698,7 +1913,7 @@ class FinanceService:
         chain = await self.resolve_approval_chain(
             org_id,
             ApprovalEntityType.CHECK_REQUEST,
-            float(cr.amount),
+            cr.amount,
             budget_category_id,
         )
 
@@ -1708,15 +1923,15 @@ class FinanceService:
                 chain,
                 ApprovalEntityType.CHECK_REQUEST,
                 cr.id,
-                float(cr.amount),
+                cr.amount,
                 cr.requested_by,
             )
             all_complete = await self._check_all_steps_complete(
-                ApprovalEntityType.CHECK_REQUEST, cr.id
+                ApprovalEntityType.CHECK_REQUEST, cr.id, org_id
             )
             if all_complete:
                 await self._finalize_approval(
-                    ApprovalEntityType.CHECK_REQUEST, cr.id, None
+                    ApprovalEntityType.CHECK_REQUEST, cr.id, None, org_id
                 )
         else:
             cr.status = CheckRequestStatus.PENDING_APPROVAL
@@ -1748,7 +1963,7 @@ class FinanceService:
         cr.check_date = check_date or datetime.now(timezone.utc)
 
         if cr.budget_id:
-            await self._add_to_spent(cr.budget_id, float(cr.amount), org_id)
+            await self._add_to_spent(cr.budget_id, cr.amount, org_id)
 
         await self.db.flush()
         await self.db.refresh(cr, ["updated_at"])
@@ -1780,11 +1995,15 @@ class FinanceService:
     # Dues & Assessments
     # ========================================
 
-    async def list_dues_schedules(self, org_id: str) -> list[DuesSchedule]:
+    async def list_dues_schedules(
+        self, org_id: str, pagination: PaginationParams
+    ) -> list[DuesSchedule]:
         result = await self.db.execute(
             select(DuesSchedule)
             .where(DuesSchedule.organization_id == org_id)
-            .order_by(DuesSchedule.due_date.desc())
+            .order_by(DuesSchedule.due_date.desc(), DuesSchedule.id)
+            .offset(pagination.skip)
+            .limit(pagination.limit)
         )
         return list(result.scalars().all())
 
@@ -1866,6 +2085,7 @@ class FinanceService:
     async def list_member_dues(
         self,
         org_id: str,
+        pagination: PaginationParams,
         schedule_id: Optional[str] = None,
         user_id: Optional[str] = None,
         status: Optional[str] = None,
@@ -1877,6 +2097,11 @@ class FinanceService:
             query = query.where(MemberDues.user_id == user_id)
         if status:
             query = query.where(MemberDues.status == status)
+        query = (
+            query.order_by(MemberDues.due_date.desc(), MemberDues.id)
+            .offset(pagination.skip)
+            .limit(pagination.limit)
+        )
         result = await self.db.execute(query)
         return list(result.scalars().all())
 
@@ -2056,10 +2281,11 @@ class FinanceService:
         result = await self.db.execute(query)
         all_dues = list(result.scalars().all())
 
-        total_expected = sum(float(d.amount_due) for d in all_dues)
-        total_collected = sum(float(d.amount_paid) for d in all_dues)
+        total_expected = sum((d.amount_due for d in all_dues), Decimal("0.00"))
+        total_collected = sum((d.amount_paid for d in all_dues), Decimal("0.00"))
         total_waived = sum(
-            float(d.amount_due) for d in all_dues if d.status == DuesStatus.WAIVED
+            (d.amount_due for d in all_dues if d.status == DuesStatus.WAIVED),
+            Decimal("0.00"),
         )
         total_outstanding = total_expected - total_collected - total_waived
         collection_rate = (
@@ -2071,7 +2297,7 @@ class FinanceService:
             "total_collected": total_collected,
             "total_outstanding": total_outstanding,
             "total_waived": total_waived,
-            "collection_rate": round(collection_rate, 2),
+            "collection_rate": round(float(collection_rate), 2),
             "members_paid": sum(1 for d in all_dues if d.status == DuesStatus.PAID),
             "members_overdue": sum(
                 1 for d in all_dues if d.status == DuesStatus.OVERDUE
@@ -2083,9 +2309,15 @@ class FinanceService:
     # Export
     # ========================================
 
-    async def list_export_mappings(self, org_id: str) -> list[ExportMapping]:
+    async def list_export_mappings(
+        self, org_id: str, pagination: PaginationParams
+    ) -> list[ExportMapping]:
         result = await self.db.execute(
-            select(ExportMapping).where(ExportMapping.organization_id == org_id)
+            select(ExportMapping)
+            .where(ExportMapping.organization_id == org_id)
+            .order_by(ExportMapping.id)
+            .offset(pagination.skip)
+            .limit(pagination.limit)
         )
         return list(result.scalars().all())
 
@@ -2120,117 +2352,186 @@ class FinanceService:
         date_start: datetime,
         date_end: datetime,
         file_format: str = "csv",
-    ) -> tuple[str, int]:
-        """Generate a QuickBooks-compatible export file"""
-        # Gather all paid transactions in date range
-        pr_result = await self.db.execute(
-            select(PurchaseRequest).where(
-                PurchaseRequest.organization_id == org_id,
-                PurchaseRequest.status == PurchaseRequestStatus.PAID,
-                PurchaseRequest.paid_at >= date_start,
-                PurchaseRequest.paid_at <= date_end,
-            )
+        batch_size: int = 500,
+        max_records: int = 10_000,
+    ) -> AsyncIterator[str]:
+        """Prepare a bounded export and return its incremental CSV stream."""
+        filters = (
+            PurchaseRequest.organization_id == org_id,
+            PurchaseRequest.status == PurchaseRequestStatus.PAID,
+            PurchaseRequest.paid_at >= date_start,
+            PurchaseRequest.paid_at <= date_end,
         )
-        prs = list(pr_result.scalars().all())
-
-        cr_result = await self.db.execute(
-            select(CheckRequest).where(
-                CheckRequest.organization_id == org_id,
-                CheckRequest.status == CheckRequestStatus.ISSUED,
-                CheckRequest.check_date >= date_start,
-                CheckRequest.check_date <= date_end,
-            )
+        pr_count = await self.db.scalar(
+            select(func.count()).select_from(PurchaseRequest).where(*filters)
         )
-        crs = list(cr_result.scalars().all())
-
-        er_result = await self.db.execute(
-            select(ExpenseReport)
-            .options(selectinload(ExpenseReport.line_items))
-            .where(
-                ExpenseReport.organization_id == org_id,
-                ExpenseReport.status == ExpenseReportStatus.PAID,
-                ExpenseReport.paid_at >= date_start,
-                ExpenseReport.paid_at <= date_end,
-            )
+        cr_filters = (
+            CheckRequest.organization_id == org_id,
+            CheckRequest.status == CheckRequestStatus.ISSUED,
+            CheckRequest.check_date >= date_start,
+            CheckRequest.check_date <= date_end,
         )
-        ers = list(er_result.scalars().unique().all())
-
-        # Build CSV. SafeCsvWriter neutralizes spreadsheet formula injection in
-        # free-text cells (names, memos).
-        output = io.StringIO()
-        writer = SafeCsvWriter(output)
-        writer.writerow(
-            ["Date", "Type", "Num", "Name", "Memo", "Account", "Debit", "Credit"]
+        cr_count = await self.db.scalar(
+            select(func.count()).select_from(CheckRequest).where(*cr_filters)
         )
-
-        record_count = 0
-
-        for pr in prs:
-            writer.writerow(
-                [
-                    pr.paid_at.strftime("%m/%d/%Y") if pr.paid_at else "",
-                    "Bill Pmt",
-                    pr.request_number,
-                    pr.vendor or "",
-                    pr.title,
-                    "",
-                    str(pr.actual_amount or pr.estimated_amount),
-                    "",
-                ]
+        er_filters = (
+            ExpenseReport.organization_id == org_id,
+            ExpenseReport.status == ExpenseReportStatus.PAID,
+            ExpenseReport.paid_at >= date_start,
+            ExpenseReport.paid_at <= date_end,
+        )
+        line_count = await self.db.scalar(
+            select(func.count())
+            .select_from(ExpenseLineItem)
+            .join(ExpenseReport)
+            .where(*er_filters)
+        )
+        total = int(pr_count or 0) + int(cr_count or 0) + int(line_count or 0)
+        if total > max_records:
+            raise ValueError(
+                f"Synchronous exports support at most {max_records} rows; "
+                f"this request contains {total}. Narrow the date range"
             )
-            record_count += 1
 
-        for cr in crs:
-            writer.writerow(
-                [
-                    cr.check_date.strftime("%m/%d/%Y") if cr.check_date else "",
-                    "Check",
-                    cr.check_number or cr.request_number,
-                    cr.payee_name,
-                    cr.memo or cr.purpose or "",
-                    "",
-                    str(cr.amount),
-                    "",
-                ]
-            )
-            record_count += 1
-
-        for er in ers:
-            for item in er.line_items:
-                writer.writerow(
-                    [
-                        er.paid_at.strftime("%m/%d/%Y") if er.paid_at else "",
-                        "Expense",
-                        er.report_number,
-                        item.merchant or "",
-                        item.description,
-                        "",
-                        str(item.amount),
-                        "",
-                    ]
-                )
-                record_count += 1
-
-        # Log the export
         log = ExportLog(
             organization_id=org_id,
             export_type="transactions",
             date_range_start=date_start,
             date_range_end=date_end,
-            record_count=record_count,
+            record_count=0,
             file_format=file_format,
             exported_by=exported_by,
         )
         self.db.add(log)
-        await self.db.flush()
+        await self.db.commit()  # Persist pending before any bytes reach the client.
 
-        return output.getvalue(), record_count
+        async def stream() -> AsyncIterator[str]:
+            output = io.StringIO()
+            writer = SafeCsvWriter(output)
+            delivered = 0
 
-    async def list_export_logs(self, org_id: str) -> list[ExportLog]:
+            def csv_chunk(rows: list[list[str]]) -> str:
+                output.seek(0)
+                output.truncate(0)
+                writer.writerows(rows)
+                return output.getvalue()
+
+            try:
+                yield csv_chunk(
+                    [
+                        [
+                            "Date",
+                            "Type",
+                            "Num",
+                            "Name",
+                            "Memo",
+                            "Account",
+                            "Debit",
+                            "Credit",
+                        ]
+                    ]
+                )
+                for model, where, ordering, render in (
+                    (
+                        PurchaseRequest,
+                        filters,
+                        (PurchaseRequest.paid_at, PurchaseRequest.id),
+                        lambda pr: [
+                            pr.paid_at.strftime("%m/%d/%Y"),
+                            "Bill Pmt",
+                            pr.request_number,
+                            pr.vendor or "",
+                            pr.title,
+                            "",
+                            str(pr.actual_amount or pr.estimated_amount),
+                            "",
+                        ],
+                    ),
+                    (
+                        CheckRequest,
+                        cr_filters,
+                        (CheckRequest.check_date, CheckRequest.id),
+                        lambda cr: [
+                            cr.check_date.strftime("%m/%d/%Y"),
+                            "Check",
+                            cr.check_number or cr.request_number,
+                            cr.payee_name,
+                            cr.memo or cr.purpose or "",
+                            "",
+                            str(cr.amount),
+                            "",
+                        ],
+                    ),
+                ):
+                    for offset in range(0, total, batch_size):
+                        result = await self.db.execute(
+                            select(model)
+                            .where(*where)
+                            .order_by(*ordering)
+                            .offset(offset)
+                            .limit(batch_size)
+                        )
+                        records = list(result.scalars())
+                        if not records:
+                            break
+                        delivered += len(records)
+                        yield csv_chunk([render(record) for record in records])
+
+                for offset in range(0, int(line_count or 0), batch_size):
+                    result = await self.db.execute(
+                        select(ExpenseLineItem, ExpenseReport)
+                        .join(ExpenseReport)
+                        .where(*er_filters)
+                        .order_by(
+                            ExpenseReport.paid_at, ExpenseReport.id, ExpenseLineItem.id
+                        )
+                        .offset(offset)
+                        .limit(batch_size)
+                    )
+                    records = list(result.all())
+                    if not records:
+                        break
+                    delivered += len(records)
+                    yield csv_chunk(
+                        [
+                            [
+                                er.paid_at.strftime("%m/%d/%Y"),
+                                "Expense",
+                                er.report_number,
+                                item.merchant or "",
+                                item.description,
+                                "",
+                                str(item.amount),
+                                "",
+                            ]
+                            for item, er in records
+                        ]
+                    )
+
+                log.status = "successful"
+                log.record_count = delivered
+                log.completed_at = datetime.now(timezone.utc)
+                await self.db.commit()
+            except BaseException:
+                await self.db.rollback()
+                log.status = "partial" if delivered else "failed"
+                log.record_count = delivered
+                log.error_message = "Export stream interrupted before completion"
+                log.completed_at = datetime.now(timezone.utc)
+                await self.db.commit()
+                raise
+
+        return stream()
+
+    async def list_export_logs(
+        self, org_id: str, pagination: PaginationParams
+    ) -> list[ExportLog]:
         result = await self.db.execute(
             select(ExportLog)
             .where(ExportLog.organization_id == org_id)
-            .order_by(ExportLog.exported_at.desc())
+            .order_by(ExportLog.exported_at.desc(), ExportLog.id)
+            .offset(pagination.skip)
+            .limit(pagination.limit)
         )
         return list(result.scalars().all())
 
@@ -2299,6 +2600,12 @@ class FinanceService:
     # Budget Helpers
     # ========================================
 
+    # Overspend policy: every purchase-request encumbrance, issued check, and
+    # expense-report line must fit within amount_budgeted. Equality is allowed;
+    # exceeding the limit is not. There is intentionally no administrative or
+    # approval-based override: adding one requires an explicit permission,
+    # audit trail, and API contract rather than an implicit bypass here.
+    #
     # These helpers mutate a Budget's running totals. The budget_id ultimately
     # originates from a client-supplied FK on the referencing PR/CR/expense, so
     # every fetch is org-scoped to the referencing record's organization — a
@@ -2307,46 +2614,51 @@ class FinanceService:
     # organization_id, which is always the caller's own org (records are
     # org-stamped on create).
     async def _encumber_budget(
-        self, budget_id: str, amount: float, org_id: str
+        self, budget_id: str, amount: Decimal, org_id: str
     ) -> None:
-        result = await self.db.execute(
-            select(Budget).where(
-                Budget.id == budget_id,
-                Budget.organization_id == org_id,
-            )
+        await self._mutate_budget(
+            budget_id, org_id, encumbered_delta=Decimal(str(amount))
         )
-        budget = result.scalar_one_or_none()
-        if budget:
-            budget.amount_encumbered = budget.amount_encumbered + Decimal(str(amount))
-            await self.db.flush()
 
     async def _release_encumbrance(
-        self, budget_id: str, amount: float, org_id: str
+        self, budget_id: str, amount: Decimal, org_id: str
     ) -> None:
-        result = await self.db.execute(
-            select(Budget).where(
-                Budget.id == budget_id,
-                Budget.organization_id == org_id,
-            )
+        await self._mutate_budget(
+            budget_id, org_id, encumbered_delta=-Decimal(str(amount))
         )
-        budget = result.scalar_one_or_none()
-        if budget:
-            budget.amount_encumbered = max(
-                Decimal("0"),
-                budget.amount_encumbered - Decimal(str(amount)),
-            )
-            await self.db.flush()
 
-    async def _add_to_spent(self, budget_id: str, amount: float, org_id: str) -> None:
+    async def _add_to_spent(self, budget_id: str, amount: Decimal, org_id: str) -> None:
+        await self._mutate_budget(budget_id, org_id, spent_delta=Decimal(str(amount)))
+
+    async def _mutate_budget(
+        self,
+        budget_id: str,
+        org_id: str,
+        *,
+        spent_delta: Decimal = Decimal("0"),
+        encumbered_delta: Decimal = Decimal("0"),
+    ) -> None:
+        """Apply budget deltas under a row lock and enforce the hard ceiling."""
         result = await self.db.execute(
-            select(Budget).where(
+            select(Budget)
+            .where(
                 Budget.id == budget_id,
                 Budget.organization_id == org_id,
             )
+            .with_for_update()
         )
         budget = result.scalar_one_or_none()
         if budget:
-            budget.amount_spent = budget.amount_spent + Decimal(str(amount))
+            new_spent = budget.amount_spent + Decimal(spent_delta)
+            new_encumbered = budget.amount_encumbered + Decimal(encumbered_delta)
+            # Releases are idempotently bounded at zero, preserving the former
+            # behavior while ensuring the ceiling check uses the final totals.
+            new_spent = max(Decimal("0"), new_spent)
+            new_encumbered = max(Decimal("0"), new_encumbered)
+            if new_spent + new_encumbered > budget.amount_budgeted:
+                raise BudgetLimitExceededError()
+            budget.amount_spent = new_spent
+            budget.amount_encumbered = new_encumbered
             await self.db.flush()
 
     async def _validate_finance_fks(self, org_id: str, data: dict) -> None:

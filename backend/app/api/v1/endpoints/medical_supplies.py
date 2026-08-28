@@ -537,11 +537,14 @@ async def update_medical_lot(
     if not await service.lot_in_domain(lot_id, org_id, MEDICAL_ITEM_TYPES):
         raise HTTPException(status_code=404, detail="Stock lot not found")
 
-    lot = await service.update_lot(
-        lot_id=lot_id,
-        organization_id=org_id,
-        data=data.model_dump(exclude_unset=True),
-    )
+    try:
+        lot = await service.update_lot(
+            lot_id=lot_id,
+            organization_id=org_id,
+            data=data.model_dump(exclude_unset=True),
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=safe_error_detail(e))
     if lot is None:
         raise HTTPException(status_code=404, detail="Stock lot not found")
     return lot

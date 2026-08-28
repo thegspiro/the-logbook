@@ -34,6 +34,18 @@ from app.utils.sql_search import LIKE_ESCAPE_CHAR, like_pattern
 # Permissions that grant leadership-level access to all folders
 LEADERSHIP_PERMISSIONS = {"documents.manage", "members.manage", "*"}
 
+# The facilities module gates its sensitive records — access codes, utility
+# accounts, capital projects, insurance policies, lease terms — on this set,
+# and the facility file tree stores the bytes behind those records. It has to
+# carry the same gate or the record is protected and the file it points at is
+# not. Kept identical to _SENSITIVE_READ_PERMISSIONS in the facilities
+# endpoint; tests/test_facility_folder_access.py asserts the two agree.
+FACILITY_SENSITIVE_PERMISSIONS = [
+    "facilities.view_sensitive",
+    "facilities.edit",
+    "facilities.manage",
+]
+
 
 def _get_user_permissions(user: User) -> Set[str]:
     """Collect all permissions from a user's roles."""
@@ -125,32 +137,16 @@ class DocumentsService:
         result = await self.db.execute(query)
         folders = result.scalars().all()
 
-        # Apply access filtering if a user is provided
+        # Apply access filtering if a user is provided.
+        #
+        # Delegated to can_access_folder rather than repeated here. This block
+        # used to re-implement the same rules inline, and the two copies did
+        # not stay equal: the by-id path learned required_permissions while the
+        # listing kept its own visibility-only walk, so a permission-gated
+        # folder stayed hidden from a direct fetch and listed in the browser.
+        # One owner for the rule is what keeps those answers the same.
         if current_user is not None:
-            user_perms = _get_user_permissions(current_user)
-            leadership = _is_leadership(user_perms)
-
-            if not leadership:
-                user_id = str(current_user.id)
-                user_roles = _get_user_role_slugs(current_user)
-                visible: List[DocumentFolder] = []
-
-                for f in folders:
-                    vis = f.visibility or FolderVisibility.ORGANIZATION
-
-                    # Organization-wide folders are always visible
-                    if vis == FolderVisibility.ORGANIZATION:
-                        # But check allowed_roles if set
-                        if f.allowed_roles and not (user_roles & set(f.allowed_roles)):
-                            continue
-                        visible.append(f)
-                    elif vis == FolderVisibility.OWNER:
-                        if f.owner_user_id and str(f.owner_user_id) == user_id:
-                            visible.append(f)
-                    # visibility='leadership' is hidden from non-leadership
-                    # (intentionally omitted from visible list)
-
-                folders = visible
+            folders = [f for f in folders if self.can_access_folder(f, current_user)]
 
         # Add document counts
         for folder in folders:
@@ -175,8 +171,26 @@ class DocumentsService:
         return result.scalar_one_or_none()
 
     def can_access_folder(self, folder: DocumentFolder, user: User) -> bool:
-        """Check if a user can access a specific folder."""
+        """Check if a user can access a specific folder.
+
+        ``required_permissions`` is checked *before* the leadership bypass and
+        is the one rule leadership does not override. Every other restriction
+        here answers "is this person senior enough", which documents.manage
+        legitimately settles. This one answers "does this person hold the
+        module grant the data is gated on" — a facility's insurance policies
+        and lease terms are readable with facilities.view_sensitive and not
+        otherwise, and a documents administrator holding no facilities grant is
+        exactly who that contract excludes. Letting the bypass win here would
+        reopen the leak this field exists to close, one module at a time.
+        """
         user_perms = _get_user_permissions(user)
+
+        if folder.required_permissions:
+            if not (user_perms & set(folder.required_permissions)) and (
+                "*" not in user_perms
+            ):
+                return False
+
         if _is_leadership(user_perms):
             return True
 
@@ -226,15 +240,23 @@ class DocumentsService:
         documents without a folder returned every org document, including those
         in restricted/owner-only folders.
         """
-        user_perms = _get_user_permissions(user)
-        if _is_leadership(user_perms):
-            return None
         result = await self.db.execute(
             select(DocumentFolder).where(
                 DocumentFolder.organization_id == str(organization_id)
             )
         )
         folders = result.scalars().all()
+        # The leadership fast path returns None ("no folder restriction"), which
+        # is only sound while every restriction here is one leadership
+        # outranks. A required_permissions folder is not: skipping the filter
+        # for a documents administrator is precisely the read that field
+        # exists to refuse. Keep the fast path for orgs that have no such
+        # folder, so the common case still costs no filtering.
+        user_perms = _get_user_permissions(user)
+        if _is_leadership(user_perms) and not any(
+            f.required_permissions for f in folders
+        ):
+            return None
         return {f.id for f in folders if self.can_access_folder(f, user)}
 
     async def _creates_cycle(
@@ -725,6 +747,7 @@ class DocumentsService:
                     color=sub_def["color"],
                     sort_order=sub_def["sort_order"],
                     visibility=FolderVisibility.ORGANIZATION,
+                    required_permissions=list(FACILITY_SENSITIVE_PERMISSIONS),
                     is_system=False,
                 )
                 self.db.add(sub_folder)
@@ -811,6 +834,17 @@ class DocumentsService:
         MultipleResultsFound. Locking the organization row for the duration
         serializes concurrent first-accesses across the org's facilities —
         cheap, since this only runs once per facility ever.
+
+        The lock alone is not sufficient (Pitfall #27's second half): the
+        caller (``GET /facilities/{id}/folders``) reads the ``Facility`` row
+        before this method ever runs, which under this app's default
+        REPEATABLE READ establishes the transaction's snapshot before the
+        organization lock is acquired. A plain ``SELECT`` for
+        ``facilities_root``/``facility_folder`` after that would still
+        answer from that earlier snapshot and could report "no folder yet"
+        even though a concurrent transaction already created and committed
+        one while this one waited for the lock. Both existence checks below
+        are therefore locking reads too, not just the organization row.
         """
         org = await self.db.scalar(
             select(Organization)
@@ -828,6 +862,7 @@ class DocumentsService:
             .where(DocumentFolder.is_system.is_(True))
             .order_by(DocumentFolder.id)
             .limit(1)
+            .with_for_update()
         )
         facilities_root = result.scalar_one_or_none()
 
@@ -847,6 +882,7 @@ class DocumentsService:
                 sort_order=facilities_def["sort_order"],
                 is_system=True,
                 visibility=FolderVisibility.LEADERSHIP,
+                required_permissions=list(FACILITY_SENSITIVE_PERMISSIONS),
             )
             self.db.add(facilities_root)
             await self.db.flush()
@@ -860,6 +896,7 @@ class DocumentsService:
             .where(DocumentFolder.slug == f"facility-{facility_id_str}")
             .order_by(DocumentFolder.id)
             .limit(1)
+            .with_for_update()
         )
         facility_folder = result.scalar_one_or_none()
 
@@ -872,6 +909,7 @@ class DocumentsService:
                 icon="building",
                 color="text-indigo-400",
                 visibility=FolderVisibility.ORGANIZATION,
+                required_permissions=list(FACILITY_SENSITIVE_PERMISSIONS),
                 is_system=False,
             )
             self.db.add(facility_folder)

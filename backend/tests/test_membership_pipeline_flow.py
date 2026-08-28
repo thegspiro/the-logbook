@@ -6,6 +6,7 @@ pipeline: pipeline CRUD, prospect management, step progression, and
 the transfer-to-membership workflow.
 """
 
+import inspect
 import uuid
 
 import pytest
@@ -864,6 +865,34 @@ class TestTransferToMembership:
         )
 
         return prospect
+
+    def test_transfer_locks_the_prospect_before_checking_status(self):
+        """MP-08 pass 2 (2026-08-27, Codex): transfer_to_membership read the
+        prospect with a plain (unlocked) get_prospect call, then checked
+        ProspectStatus.TRANSFERRED, then created a User row and only *then*
+        set the prospect to TRANSFERRED -- a classic check-before-write.
+        Two concurrent transfer requests supplying distinct usernames can
+        both observe ACTIVE before either commits and each mint a separate
+        User account for the same prospect; the loser's write just
+        overwrites transferred_user_id (CLAUDE.md pitfall #27's shape, not a
+        capacity count but the same read-then-write race). Source-inspected
+        rather than driven concurrently, matching this rotation's existing
+        lock-wiring guards (test_administrative_rank_restriction.py,
+        test_privilege_ceiling_wiring.py) -- a real two-transaction race is
+        exercised in test_capacity_locking.py's sibling tests for the
+        count-based cases."""
+        source = inspect.getsource(MembershipPipelineService.transfer_to_membership)
+        assert "lock_for_update=True" in source, (
+            "transfer_to_membership no longer locks the prospect row before "
+            "checking its status -- reintroduces the double-transfer race"
+        )
+        lock_at = source.index("lock_for_update=True")
+        status_check_at = source.index("ProspectStatus.TRANSFERRED")
+        assert lock_at < status_check_at, (
+            "transfer_to_membership checks the prospect's status before "
+            "acquiring the row lock -- the check-before-write race is still "
+            "open even though a lock call exists somewhere in the function"
+        )
 
     async def test_transfer_creates_user(
         self, db_session: AsyncSession, setup_org_and_admin

@@ -221,9 +221,28 @@ class TestGenerate:
 
         monkeypatch.setitem(ls.MODULE_LABELS, "fake", ("inventory.view", fake_builder))
         svc = LabelService(MagicMock())
-        pdf, auto = await svc.generate(uuid4(), "fake", ["1"], "letter")
+        pdf, auto, count = await svc.generate(uuid4(), "fake", ["1"], "letter")
         assert pdf.getvalue()[:4] == b"%PDF"
         assert auto == 2
+        assert count == 1
+
+    async def test_returns_count_of_specs_actually_rendered(self, monkeypatch):
+        """The audit trail (labels.py) uses this count, not len(ids), so it
+        must reflect what was actually rendered, not what was requested."""
+
+        async def two_of_three_builder(db, org_id, ids, extra_lines):
+            # Simulates one requested id being filtered/nonexistent.
+            return [
+                LabelSpec(name="A", barcode_value="A1"),
+                LabelSpec(name="B", barcode_value="B1"),
+            ], 0
+
+        monkeypatch.setitem(
+            ls.MODULE_LABELS, "partial", ("inventory.view", two_of_three_builder)
+        )
+        svc = LabelService(MagicMock())
+        _, _, count = await svc.generate(uuid4(), "partial", ["1", "2", "3"], "letter")
+        assert count == 2
 
     async def test_empty_result_raises(self, monkeypatch):
         async def empty_builder(db, org_id, ids, extra_lines):

@@ -109,7 +109,7 @@ async def update_rule(
 ):
     """Update a notification rule"""
     service = NotificationsService(db)
-    update_data = rule.model_dump(exclude_none=True)
+    update_data = rule.model_dump(exclude_unset=True)
     result, error = await service.update_rule(
         rule_id, current_user.organization_id, update_data
     )

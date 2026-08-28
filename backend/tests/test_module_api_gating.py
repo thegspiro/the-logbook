@@ -17,37 +17,46 @@ would only surface as "the ballot link is broken", so it is pinned here.
 """
 
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi import Depends, FastAPI
 from httpx import ASGITransport, AsyncClient
 
-from app.api.dependencies import (
-    get_optional_current_user,
-    require_module,
-)
+from app.api.dependencies import require_module
 from app.core.database import get_db
 from app.core.error_codes import CodedHTTPException, ErrorCode
 
 ORG = "org-a"
 
 
-def _app(*, user, enabled):
-    """A one-route app behind the same gate the real routers mount."""
+def _app(*, user=None, enabled, user_error=None):
+    """A one-route app behind the same gate the real routers mount.
+
+    ``get_optional_current_user`` is patched at the module level, not via
+    ``app.dependency_overrides``: ``get_request_enabled_modules`` calls it
+    directly (a plain call it can wrap in try/except) rather than through a
+    ``Depends`` of its own, precisely so an invalid/expired credential can
+    be caught here instead of raising before the gate's body ever runs —
+    ``dependency_overrides`` only intercepts FastAPI's own Depends graph.
+    """
     api = FastAPI()
 
     @api.get("/thing", dependencies=[Depends(require_module("finance", "Finance"))])
     async def read_thing():
         return {"ok": True}
 
-    api.dependency_overrides[get_optional_current_user] = lambda: user
     api.dependency_overrides[get_db] = lambda: SimpleNamespace()
     modules = SimpleNamespace(enabled_modules=enabled)
-    return api, patch(
+    user_patch = patch(
+        "app.api.dependencies.get_optional_current_user",
+        new=AsyncMock(side_effect=user_error, return_value=user),
+    )
+    modules_patch = patch(
         "app.services.organization_service.OrganizationService.get_enabled_modules",
         new=AsyncMock(return_value=modules),
     )
+    return api, user_patch, modules_patch
 
 
 async def _get(app):
@@ -58,8 +67,8 @@ async def _get(app):
 
 async def test_a_disabled_module_refuses_the_request():
     user = SimpleNamespace(id="u1", organization_id=ORG)
-    app, modules = _app(user=user, enabled=["members", "events"])
-    with modules:
+    app, user_patch, modules_patch = _app(user=user, enabled=["members", "events"])
+    with user_patch, modules_patch:
         response = await _get(app)
 
     assert response.status_code == 403
@@ -87,8 +96,8 @@ async def test_the_refusal_carries_its_own_error_code():
 async def test_an_enabled_module_is_served_normally():
     """The gate has to let the enabled case through, or it is just a removal."""
     user = SimpleNamespace(id="u1", organization_id=ORG)
-    app, modules = _app(user=user, enabled=["members", "finance"])
-    with modules:
+    app, user_patch, modules_patch = _app(user=user, enabled=["members", "finance"])
+    with user_patch, modules_patch:
         response = await _get(app)
 
     assert response.status_code == 200
@@ -98,8 +107,8 @@ async def test_an_enabled_module_is_served_normally():
 async def test_the_error_names_the_module_not_the_internal_key():
     """An officer reads this, so it says "Finance", not "finance"."""
     user = SimpleNamespace(id="u1", organization_id=ORG)
-    app, modules = _app(user=user, enabled=[])
-    with modules:
+    app, user_patch, modules_patch = _app(user=user, enabled=[])
+    with user_patch, modules_patch:
         body = str((await _get(app)).json())
 
     assert "Finance module" in body
@@ -113,9 +122,38 @@ async def test_a_request_with_no_session_is_not_turned_into_a_401():
     session — the token authorizes them. A gate built on the mandatory
     current-user dependency would reject them before their own handler ran.
     """
-    app, modules = _app(user=None, enabled=[])
+    app, user_patch, modules_patch = _app(user=None, enabled=[])
     # No organization lookup should even be attempted for an anonymous caller.
-    with modules as mocked:
+    with user_patch, modules_patch as mocked:
+        response = await _get(app)
+
+    assert response.status_code == 200
+    mocked.assert_not_awaited()
+
+
+async def test_an_invalid_session_cookie_does_not_block_a_public_route_either():
+    """A voter clicking an emailed ballot link may also carry a stale/expired
+    ``access_token`` cookie from an unrelated, since-ended main-app session.
+
+    ``get_optional_current_user`` deliberately raises for a credential that
+    is present but rejected rather than silently treating it as anonymous
+    (right for routes that read who is asking). But that raise happens
+    before ``require_module``'s own body runs, and for the module flag
+    specifically an unusable session carries no more organization
+    information than no session at all -- so it must not turn a public
+    token route into a 401 either, the same as the true-anonymous case
+    above.
+    """
+    from app.core.error_codes import CodedHTTPException as _Coded
+    from app.core.error_codes import ErrorCode as _Code
+
+    invalid_session = _Coded(
+        status_code=401,
+        detail="Could not validate credentials",
+        error_code=_Code.AUTH_SESSION_INVALID,
+    )
+    app, user_patch, modules_patch = _app(enabled=[], user_error=invalid_session)
+    with user_patch, modules_patch as mocked:
         response = await _get(app)
 
     assert response.status_code == 200
@@ -132,10 +170,12 @@ async def test_the_module_lookup_happens_once_per_request():
         return {"ok": True}
 
     user = SimpleNamespace(id="u1", organization_id=ORG)
-    api.dependency_overrides[get_optional_current_user] = lambda: user
     api.dependency_overrides[get_db] = lambda: SimpleNamespace()
     modules = SimpleNamespace(enabled_modules=["finance"])
     with patch(
+        "app.api.dependencies.get_optional_current_user",
+        new=AsyncMock(return_value=user),
+    ), patch(
         "app.services.organization_service.OrganizationService.get_enabled_modules",
         new=AsyncMock(return_value=modules),
     ) as mocked:
@@ -174,6 +214,7 @@ EXPECTED_GATES = {
     "/api/v1/reports": "reports",
     "/api/v1/scheduling": "scheduling",
     "/api/v1/store": "storefront",
+    "/api/v1/testing-checklist": "testing",
     "/api/v1/training": "training",
 }
 
@@ -405,6 +446,59 @@ def test_module_routes_are_flat():
     )
 
 
+# frontend/src/modules/<directory> -> the module key that directory is the
+# home of. Every route under a home directory belongs to that module, so the
+# completeness check below applies to all of them.
+#
+# A directory absent from this map is not a gated module's home. It may still
+# carry a module gate on an individual route — /members/:userId/training is
+# Training's data hosted on a Membership route — and that route is gated on
+# its own merits without making every sibling route in Membership answerable
+# to Training.
+MODULE_HOME_DIRECTORIES = {
+    "apparatus": "apparatus",
+    "elections": "elections",
+    "facilities": "facilities",
+    "finance": "finance",
+    "grants-fundraising": "grants",
+    "integrations": "integrations",
+    "inventory": "inventory",
+    "medical-screening": "medical_screening",
+    "medical-supplies": "medical_supplies",
+    "minutes": "minutes",
+    "notifications": "notifications",
+    "prospective-members": "prospective_members",
+    "public-portal": "public_info",
+    "reports": "reports",
+    "scheduling": "scheduling",
+    "storefront": "storefront",
+    "testing": "testing",
+    "training": "training",
+}
+
+
+def test_every_api_gated_module_has_a_home_directory():
+    """The map above has to cover the gated set, or the check below skips one.
+
+    A module whose home directory is missing here is silently exempt from the
+    completeness check — which is the failure mode this whole test exists to
+    close, one level up.
+    """
+    missing = set(EXPECTED_GATES.values()) - set(MODULE_HOME_DIRECTORIES.values())
+    assert not missing, (
+        "these modules are gated in the API but have no frontend home "
+        f"directory recorded, so their routes are not checked: {sorted(missing)}"
+    )
+
+
+def test_a_home_directory_names_a_module_that_exists():
+    """A typo'd entry would exempt the directory it was meant to cover."""
+    from app.schemas.organization import ModuleSettings
+
+    unknown = set(MODULE_HOME_DIRECTORIES.values()) - set(ModuleSettings.model_fields)
+    assert not unknown, f"home directories naming no module field: {sorted(unknown)}"
+
+
 def test_a_gated_frontend_module_gates_every_one_of_its_routes():
     """A half-gated module is worse than an ungated one.
 
@@ -423,9 +517,8 @@ def test_a_gated_frontend_module_gates_every_one_of_its_routes():
     at, which carries one.
     """
     partial = {}
-    for module, routes in _module_routes().items():
-        source_has_gate = any("requiredModule=" in seg for _, seg in routes)
-        if not source_has_gate:
+    for directory, routes in _module_routes().items():
+        if directory not in MODULE_HOME_DIRECTORIES:
             continue
         ungated = [
             path
@@ -435,7 +528,7 @@ def test_a_gated_frontend_module_gates_every_one_of_its_routes():
             and path not in ROUTES_OPEN_BY_DESIGN
         ]
         if ungated:
-            partial[module] = ungated
+            partial[directory] = ungated
     assert not partial, (
         "routes inside a gated module with no module gate of their own. Add "
         "the gate, or record the route in ROUTES_OPEN_BY_DESIGN with the "
@@ -496,3 +589,66 @@ def test_a_ui_only_gate_is_still_gated_somewhere_in_the_ui():
         "these modules are exempt from the API gate because the UI gates them, "
         f"and the UI no longer does: {sorted(orphaned)}"
     )
+
+
+# ── The public portal, which the session-based gate cannot reach ────────────
+
+
+async def test_the_public_portal_refuses_when_public_info_is_off():
+    """``/api/public/v1`` is a second mount with API-key callers.
+
+    ``require_module`` resolves the organization from the caller's session,
+    and this router's callers are external websites holding an API key. So
+    gating ``/api/v1/public-portal`` left this one serving organization
+    details, events and member statistics from a module the department had
+    retired — the exact "the API kept answering" defect, on the surface that
+    publishes to the open internet.
+    """
+    from types import SimpleNamespace as NS
+
+    from fastapi import HTTPException
+
+    from app.api.public.portal import check_portal_enabled
+
+    config = NS(enabled=True, organization_id="org-a")
+    with patch(
+        "app.services.organization_service.OrganizationService.get_enabled_modules",
+        new=AsyncMock(return_value=NS(enabled_modules=["members", "events"])),
+    ):
+        with pytest.raises(HTTPException) as raised:
+            await check_portal_enabled(config, MagicMock())
+
+    assert raised.value.status_code == 503
+
+
+async def test_the_public_portal_serves_when_the_module_is_on():
+    """Both switches have to hold, so the enabled case must still pass."""
+    from types import SimpleNamespace as NS
+
+    from app.api.public.portal import check_portal_enabled
+
+    config = NS(enabled=True, organization_id="org-a")
+    with patch(
+        "app.services.organization_service.OrganizationService.get_enabled_modules",
+        new=AsyncMock(return_value=NS(enabled_modules=["members", "public_info"])),
+    ):
+        await check_portal_enabled(config, MagicMock())
+
+
+async def test_the_portals_own_switch_still_refuses_independently():
+    """The module being on does not override the portal's own off switch."""
+    from types import SimpleNamespace as NS
+
+    from fastapi import HTTPException
+
+    from app.api.public.portal import check_portal_enabled
+
+    config = NS(enabled=False, organization_id="org-a")
+    with patch(
+        "app.services.organization_service.OrganizationService.get_enabled_modules",
+        new=AsyncMock(return_value=NS(enabled_modules=["public_info"])),
+    ):
+        with pytest.raises(HTTPException) as raised:
+            await check_portal_enabled(config, MagicMock())
+
+    assert raised.value.status_code == 503

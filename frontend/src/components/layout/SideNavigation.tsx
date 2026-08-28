@@ -53,6 +53,7 @@ import { NFC_ID_CARDS_INTEGRATION } from '../../modules/membership/constants/idC
 import { OPEN_MOBILE_NAV_EVENT } from './BottomNavigation';
 import { canOpenAdministrationSection } from './adminNavigation';
 import { LEGAL_DOCUMENTS_PERMISSIONS } from '../../modules/governance';
+import { FACILITY_ENTRY_PERMISSIONS } from '../../modules/facilities/routes';
 import { prefetchRoute } from '../../utils/routePrefetch';
 import { useNotificationCountStore } from '../../hooks/useNotificationCount';
 import { useOnlineStatus } from '../../hooks/useOnlineStatus';
@@ -294,7 +295,16 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
         ...(isModuleOn('apparatus')
           ? [{ label: 'Apparatus', path: '/apparatus', icon: Truck }]
           : [{ label: 'Apparatus', path: '/apparatus-basic', icon: Truck }]),
-        ...(isModuleOn('facilities') ? [{ label: 'Facilities', path: '/facilities', icon: Building2 }] : []),
+        ...(isModuleOn('facilities')
+          ? [
+              {
+                label: 'Facilities',
+                path: '/facilities',
+                icon: Building2,
+                anyPermission: [...FACILITY_ENTRY_PERMISSIONS],
+              },
+            ]
+          : []),
       ],
     },
     // When Facilities module is off, show a lightweight Locations page
@@ -573,6 +583,16 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
                 icon: AlertTriangle,
                 permission: 'settings.manage',
               },
+              ...(isModuleOn('testing')
+                ? [
+                    {
+                      label: 'Testing Home',
+                      path: '/testing',
+                      icon: ClipboardCheck,
+                      permission: 'settings.manage',
+                    },
+                  ]
+                : []),
             ],
           } as NavItem,
         ]

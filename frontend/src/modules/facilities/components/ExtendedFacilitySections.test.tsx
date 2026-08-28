@@ -47,7 +47,7 @@ describe('extended facility sections', () => {
   it('loads facility-scoped utility records for viewers without mutation controls', async () => {
     render(
       <ConfirmProvider>
-        <UtilitiesSection facilityId="facility-1" canManage={false} canCreate={false} canEdit={false} />
+        <UtilitiesSection facilityId="facility-1" canDelete={false} canCreate={false} canEdit={false} />
       </ConfirmProvider>
     );
 
@@ -60,7 +60,7 @@ describe('extended facility sections', () => {
   it('shows add controls to managers', async () => {
     render(
       <ConfirmProvider>
-        <UtilitiesSection facilityId="facility-1" canManage canCreate canEdit />
+        <UtilitiesSection facilityId="facility-1" canDelete canCreate canEdit />
       </ConfirmProvider>
     );
 
@@ -68,10 +68,22 @@ describe('extended facility sections', () => {
     expect(screen.getByRole('button', { name: /Delete/i })).toBeInTheDocument();
   });
 
+  it('gives facilities.delete holders only the destructive control', async () => {
+    render(
+      <ConfirmProvider>
+        <UtilitiesSection facilityId="facility-1" canDelete canCreate={false} canEdit={false} />
+      </ConfirmProvider>
+    );
+
+    expect(await screen.findByRole('button', { name: /Delete/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Add' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Edit/i })).not.toBeInTheDocument();
+  });
+
   it('gives facilities.edit holders create/update controls but no delete (matches backend gates)', async () => {
     render(
       <ConfirmProvider>
-        <UtilitiesSection facilityId="facility-1" canManage={false} canCreate canEdit />
+        <UtilitiesSection facilityId="facility-1" canDelete={false} canCreate canEdit />
       </ConfirmProvider>
     );
 
@@ -83,7 +95,7 @@ describe('extended facility sections', () => {
   it('gives facilities.create holders add controls without edit or delete controls', async () => {
     render(
       <ConfirmProvider>
-        <UtilitiesSection facilityId="facility-1" canManage={false} canCreate canEdit={false} />
+        <UtilitiesSection facilityId="facility-1" canDelete={false} canCreate canEdit={false} />
       </ConfirmProvider>
     );
 
@@ -95,7 +107,7 @@ describe('extended facility sections', () => {
   it('fetches once per facility instead of refetching after every completed request', async () => {
     render(
       <ConfirmProvider>
-        <UtilitiesSection facilityId="facility-1" canManage={false} canCreate={false} canEdit={false} />
+        <UtilitiesSection facilityId="facility-1" canDelete={false} canCreate={false} canEdit={false} />
       </ConfirmProvider>
     );
 
@@ -132,7 +144,7 @@ describe('extended facility sections', () => {
 
     render(
       <ConfirmProvider>
-        <UtilitiesSection facilityId="facility-1" canManage={false} canCreate={false} canEdit={false} />
+        <UtilitiesSection facilityId="facility-1" canDelete={false} canCreate={false} canEdit={false} />
       </ConfirmProvider>
     );
 
@@ -158,7 +170,7 @@ describe('extended facility sections', () => {
 
     render(
       <ConfirmProvider>
-        <UtilitiesSection facilityId="facility-1" canManage={false} canCreate canEdit />
+        <UtilitiesSection facilityId="facility-1" canDelete={false} canCreate canEdit />
       </ConfirmProvider>
     );
 
@@ -180,7 +192,7 @@ describe('extended facility sections', () => {
   it('sends the account id in the reading payload (backend schema requires it)', async () => {
     render(
       <ConfirmProvider>
-        <UtilitiesSection facilityId="facility-1" canManage={false} canCreate canEdit />
+        <UtilitiesSection facilityId="facility-1" canDelete={false} canCreate canEdit />
       </ConfirmProvider>
     );
 
@@ -211,7 +223,7 @@ describe('extended facility sections', () => {
 
     render(
       <ConfirmProvider>
-        <CapitalProjectsSection facilityId="facility-1" canManage={false} canCreate canEdit />
+        <CapitalProjectsSection facilityId="facility-1" canDelete={false} canCreate canEdit />
       </ConfirmProvider>
     );
 
@@ -234,7 +246,7 @@ describe('extended facility sections', () => {
   it('offers the equipment policy type the backend enum supports', async () => {
     render(
       <ConfirmProvider>
-        <InsuranceSection facilityId="facility-1" canManage={false} canCreate canEdit />
+        <InsuranceSection facilityId="facility-1" canDelete={false} canCreate canEdit />
       </ConfirmProvider>
     );
 

@@ -24,6 +24,7 @@ def _pending_record(step=None):
     record.entity_id = "entity-id"
     record.approval_token = "approval-token"
     record.step = step
+    record.chain.organization_id = "token-org-id"
     return record
 
 
@@ -42,7 +43,8 @@ async def test_token_action_locks_and_consumes_token(action):
     db.execute = AsyncMock(return_value=_result(record))
     db.flush = AsyncMock()
     service = FinanceService(db)
-    service._advance_notification_steps = AsyncMock()
+    service.get_current_pending_step = AsyncMock(return_value=record)
+    service._advance_reachable_steps = AsyncMock()
     service._check_all_steps_complete = AsyncMock(return_value=False)
     service._finalize_denial = AsyncMock()
 
@@ -54,6 +56,33 @@ async def test_token_action_locks_and_consumes_token(action):
     assert record.approval_token is None
     assert record.notes == "reviewed"
     db.flush.assert_awaited_once()
+    if action == "approve_by_token":
+        service._advance_reachable_steps.assert_awaited_once_with(
+            record.entity_type, record.entity_id, "token-org-id"
+        )
+        service._check_all_steps_complete.assert_awaited_once_with(
+            record.entity_type, record.entity_id, "token-org-id"
+        )
+
+
+@pytest.mark.parametrize("action", ["approve_by_token", "deny_by_token"])
+async def test_token_action_rejects_a_later_step_out_of_order(action):
+    """Every step in a chain is created PENDING up front and an EMAIL step's
+    token is emailed immediately regardless of chain position, so without an
+    order check whoever holds a later step's token could act before an
+    earlier step resolves -- and a deny finalizes the whole entity right
+    away, killing the request before earlier reviewers weighed in."""
+    record = _pending_record()
+    earlier_step = _pending_record()  # a different, still-pending record
+    db = MagicMock()
+    db.execute = AsyncMock(return_value=_result(record))
+    service = FinanceService(db)
+    service.get_current_pending_step = AsyncMock(return_value=earlier_step)
+
+    with pytest.raises(ValueError, match="earlier approval step"):
+        await getattr(service, action)(record.approval_token, "too soon")
+
+    assert record.status == ApprovalStepStatus.PENDING  # never mutated
 
 
 class TestApproveByTokenSelfApprovalGuard:
@@ -72,8 +101,9 @@ class TestApproveByTokenSelfApprovalGuard:
         db.execute = AsyncMock(return_value=_result(record))
         db.flush = AsyncMock()
         service = FinanceService(db)
+        service.get_current_pending_step = AsyncMock(return_value=record)
         service._entity_creator_email = AsyncMock(return_value=requester_email)
-        service._advance_notification_steps = AsyncMock()
+        service._advance_reachable_steps = AsyncMock()
         service._check_all_steps_complete = AsyncMock(return_value=False)
         return service
 
@@ -85,7 +115,7 @@ class TestApproveByTokenSelfApprovalGuard:
             await service.approve_by_token(record.approval_token, "self-approving")
 
         assert record.status == ApprovalStepStatus.PENDING  # never mutated
-        service._advance_notification_steps.assert_not_awaited()
+        service._advance_reachable_steps.assert_not_awaited()
 
     async def test_rejects_case_insensitively(self):
         record = _pending_record(step=_email_step("Treasurer@Dept.org"))

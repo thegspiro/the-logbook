@@ -74,6 +74,11 @@ from app.services.user_deletion_service import (
     release_user_references,
 )
 from app.services.user_service import UserService
+from app.utils.membership import (
+    ADMINISTRATIVE_RANK_MESSAGE,
+    DEFAULT_CLASS,
+    is_administrative,
+)
 from app.utils.security_notifications import notify_security_event
 
 router = APIRouter()
@@ -261,6 +266,7 @@ async def create_member(
     await _enforce_rank_grant_ceiling(
         current_user, canonical_rank, db, get_client_ip(request)
     )
+    _refuse_administrative_rank(user_data.member_class, None, canonical_rank)
 
     # Auto-generate membership number if not provided and auto-generation is on
     membership_number = user_data.membership_number
@@ -270,6 +276,39 @@ async def create_member(
         org_service = OrganizationService(db)
         membership_number = await org_service.generate_next_membership_id(
             current_user.organization_id
+        )
+
+    # Resolve and ceiling-check the requested roles BEFORE the user row is
+    # created. A denied ceiling check reports a CRITICAL alert via
+    # report_privilege_escalation_attempt, which commits the transaction so
+    # the alert survives the 403 about to be raised — if that ran after
+    # db.add(new_user)/flush() below, the commit would also persist the
+    # should-be-rejected user, leaving a live, ACTIVE, password-set account
+    # with no roles behind a request the caller believes failed outright.
+    roles: list[Role] = []
+    if user_data.role_ids:
+        # Verify all role IDs exist and belong to the organization
+        result = await db.execute(
+            select(Role)
+            .where(Role.id.in_([str(rid) for rid in user_data.role_ids]))
+            .where(Role.organization_id == str(current_user.organization_id))
+        )
+        roles = result.scalars().all()
+
+        if len(roles) != len(user_data.role_ids):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="One or more role IDs are invalid",
+            )
+
+        # Same privilege ceiling the assign/add-role paths enforce: a caller may
+        # only grant roles whose permissions are a subset of their own. Without
+        # this, a plain `users.create` holder could create an account, set its
+        # password, attach a wildcard/"System Owner" role, and log in as it —
+        # full-tenant escalation through the create path instead of the (already
+        # guarded) assign path.
+        await _enforce_role_grant_ceiling(
+            current_user, list(roles), db, get_client_ip(request)
         )
 
     # Create new user
@@ -306,35 +345,22 @@ async def create_member(
         password_changed_at=datetime.now(timezone.utc),
     )
 
+    # Set only when the caller asked for one. `_reconcile_membership` treats any
+    # assignment to either column as "the caller wrote the new pair" and then
+    # derives `membership_type` from it, so writing a bare None here would claim
+    # authorship of a standing nobody stated and pin every new member to the
+    # default pair — the opposite of the omit-and-derive path the listener
+    # documents. The listener fills whichever half is missing.
+    if user_data.member_class or user_data.member_status:
+        new_user.member_class = user_data.member_class
+        new_user.member_status = user_data.member_status
+
     db.add(new_user)
     await db.flush()  # Flush to get the user ID
 
-    # Assign initial roles if provided
+    # Assign initial roles if provided (already resolved and ceiling-checked
+    # above, before this user row existed).
     if user_data.role_ids:
-        # Verify all role IDs exist and belong to the organization
-        result = await db.execute(
-            select(Role)
-            .where(Role.id.in_([str(rid) for rid in user_data.role_ids]))
-            .where(Role.organization_id == str(current_user.organization_id))
-        )
-        roles = result.scalars().all()
-
-        if len(roles) != len(user_data.role_ids):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="One or more role IDs are invalid",
-            )
-
-        # Same privilege ceiling the assign/add-role paths enforce: a caller may
-        # only grant roles whose permissions are a subset of their own. Without
-        # this, a plain `users.create` holder could create an account, set its
-        # password, attach a wildcard/"System Owner" role, and log in as it —
-        # full-tenant escalation through the create path instead of the (already
-        # guarded) assign path.
-        await _enforce_role_grant_ceiling(
-            current_user, list(roles), db, get_client_ip(request)
-        )
-
         for role in roles:
             await db.execute(
                 user_roles.insert().values(
@@ -789,6 +815,31 @@ async def _enforce_rank_grant_ceiling(
                     "beyond your own."
                 ),
             )
+
+
+def _refuse_administrative_rank(
+    member_class: str | None,
+    membership_type: str | None,
+    rank: str | None,
+) -> None:
+    """Refuse a write that makes somebody an administrative member *with* a rank.
+
+    A rank is not decoration: ``_collect_user_permissions`` unions
+    ``get_rank_default_permissions(user.rank)`` into a member's effective
+    permissions, so an administrative member carrying ``fire_chief`` holds
+    ``settings.manage``/``security.manage`` through the operational chain of
+    command they are by definition outside of.
+
+    Only the contradictory *pair* is refused. A class change that merely strands
+    an existing rank clears it instead (see the callers) — the operator is not
+    asserting the rank there, so refusing would make them do two saves for one
+    decision.
+    """
+    if rank and is_administrative(member_class, membership_type):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=ADMINISTRATIVE_RANK_MESSAGE,
+        )
 
 
 async def _enforce_account_reset_ceiling(
@@ -1408,11 +1459,33 @@ async def update_user_profile(
                 detail="You do not have permission to update this user's profile",
             )
 
+    # Locked, because "an administrative member holds no operational rank" is a
+    # read-then-write and the two halves live in different endpoints. Without
+    # this, a request setting a rank and a request setting the class to
+    # administrative can both read an operational, rankless member, both pass
+    # their own check, and each write only its own column — leaving a row that
+    # is administrative *and* ranked, which neither request would have allowed.
+    # A locking read for the same reason the capacity checks use one: under
+    # REPEATABLE READ a plain SELECT answers from the transaction's first
+    # snapshot, so acquiring the lock without re-reading buys nothing.
+    #
+    # populate_existing is required alongside the lock, not optional, on a
+    # self-update specifically: get_current_user already loaded this same
+    # User row into this request's session (same Depends(get_db) session),
+    # so with expire_on_commit=False the instance sits in the identity map
+    # before this SELECT ever runs. Without populate_existing, re-selecting a
+    # row already in the identity map returns the cached pre-lock object
+    # without copying the new row's columns onto it -- the lock is acquired
+    # at the SQL level, but `user.member_class`/`user.rank` would still read
+    # whatever they were before a concurrent request's commit. Same
+    # requirement as quorum_service.py's calculate_quorum.
     result = await db.execute(
         select(User)
         .where(User.id == str(user_id))
         .where(User.organization_id == str(current_user.organization_id))
         .where(User.deleted_at.is_(None))
+        .with_for_update()
+        .execution_options(populate_existing=True)
         .options(selectinload(User.roles))
     )
     user = result.scalar_one_or_none()
@@ -1490,6 +1563,44 @@ async def update_user_profile(
                     perm_user, update_data["rank"], db, None
                 )
 
+        # An administrative member holds no operational rank. Judge against the
+        # class this save *lands on* — the payload's when it sets one, the
+        # stored one otherwise — because the two can move in the same request.
+        #
+        # "in update_data" (present, however set) has to be checked before
+        # falling back to the stored value: model_dump(exclude_unset=True)
+        # keeps a key the client explicitly sent even when its value is null,
+        # and an explicit `member_class: null` is a request to clear it, which
+        # _reconcile_membership resolves to DEFAULT_CLASS -- not "leave the
+        # old class in place". `update_data.get("member_class") or
+        # user.member_class` could not tell the two apart: both an omitted key
+        # and an explicit null read back as None from `.get`, so an explicit
+        # clear was judged against the stale administrative class it was
+        # clearing, wrongly rejecting a rank the resulting (operational) class
+        # would have allowed.
+        if "member_class" in update_data:
+            resulting_class = update_data["member_class"] or DEFAULT_CLASS
+        else:
+            resulting_class = user.member_class
+        resulting_type = user.membership_type
+        if "rank" in update_data:
+            _refuse_administrative_rank(
+                resulting_class, resulting_type, update_data["rank"]
+            )
+        elif user.rank and is_administrative(resulting_class, resulting_type):
+            # The save moves them to administrative and says nothing about the
+            # rank they already carry. Clear it rather than refuse: the operator
+            # is not asserting the rank, and leaving it would leave its default
+            # permissions live on a member now outside the chain of command.
+            update_data["rank"] = None
+
+    # Snapshot for the audit trail before `emergency_contacts` is popped below.
+    # Taken from `update_data` rather than the raw payload because a move to the
+    # administrative class clears the member's rank without the client having
+    # named the field, and a permission-bearing change nobody requested is
+    # exactly the kind the trail has to show.
+    audited_fields = list(update_data.keys())
+
     # Handle emergency_contacts separately (needs serialization)
     if "emergency_contacts" in update_data:
         ec_list = update_data.pop("emergency_contacts")
@@ -1513,6 +1624,14 @@ async def update_user_profile(
         "rank",
         "station",
         "platoon",
+        # Gated above by `restricted_fields`, which exists precisely so these
+        # two can be written under `members.manage`. Omitting them here made
+        # that gate guard a write the endpoint then discarded: the request was
+        # permission-checked, audited and answered 200, and the member's class
+        # never changed. `_reconcile_membership` re-derives `membership_type`
+        # from whichever of the pair lands.
+        "member_class",
+        "member_status",
         "address_street",
         "address_city",
         "address_state",
@@ -1547,9 +1666,7 @@ async def update_user_profile(
             "updated_user_id": str(user_id),
             "updated_by": str(current_user.id),
             "is_self_update": is_self,
-            "fields_updated": list(
-                profile_update.model_dump(exclude_unset=True).keys()
-            ),
+            "fields_updated": audited_fields,
         },
         user_id=str(current_user.id),
         username=current_user.username,

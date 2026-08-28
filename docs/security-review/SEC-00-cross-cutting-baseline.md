@@ -1,6 +1,63 @@
 # Security Review 00 — Cross-Cutting Baseline
 
-**Prefix:** `SEC` · **Iteration:** 00 · **Reviewed:** 2026-08-25 · **PR:** [#1799](https://github.com/thegspiro/the-logbook/pull/1799)
+**Prefix:** `SEC` · **Iteration:** 00 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2) · **PR:** [#1799](https://github.com/thegspiro/the-logbook/pull/1799) (pass 1)
+
+---
+
+## Pass 2 (2026-08-27) — re-sweep after rotation pass 1
+
+Pass 1 completed the full 35-feature rotation (#1799–#1918) and closed SEC-1
+through SEC-4 with two of the five sweeps converted into standing guard tests
+(`test_like_escaping.py`, `test_database_schema.py::TestColumnConstraints::
+test_set_null_fks_are_nullable`). This pass re-runs the same five sweeps
+against everything that landed during pass 1 and since (the endpoint count grew
+by one file — `app/api/prospect_privacy.py`, a `Depends()` helper module with
+no routes of its own, not a new router — and the Alembic chain grew from 355 to
+381 revisions). It does not re-derive pass 1's conclusions; it re-verifies them
+against current code, per the rotation's own rule.
+
+| #   | Class swept                      | Method                                                                                                                              | Result                                                                                                                                   |
+| --- | -------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Formula injection in exports     | `grep` for `csv.writer(` / `csv.DictWriter(` outside `csv_export.py`                                                                | **clean** — 0 sites, unchanged                                                                                                           |
+| 2   | `SET NULL` on `NOT NULL` columns | `test_set_null_fks_are_nullable` (guard test added pass 1)                                                                          | **clean** — passes                                                                                                                       |
+| 3   | Proxy-IP attribution             | grep `request.client.host`                                                                                                          | **clean** — same 3 hits as pass 1 (2 comments, 1 deliberate use inside `get_client_ip`)                                                  |
+| 4   | Alembic chain integrity          | `backend/scripts/validate_migrations.py --strict`                                                                                   | **clean** — 381 revisions, single head `8fb3757b80ec`, no duplicate ids                                                                  |
+| 5   | LIKE-wildcard handling           | `test_every_like_call_declares_the_escape_character` + `test_wildcard_escaping_lives_only_in_sql_search` (guard tests added pass 1) | **clean** — both pass; no new `.like()`/`.ilike()` call site has reintroduced a raw copy of the transform or dropped the `escape=` kwarg |
+
+**Route auth coverage re-check:** an AST walk of every `@router.<verb>`
+decorator in `api/v1/endpoints/`, `api/v1/onboarding.py`, and `api/public/`
+found 68 routes with no recognized auth dependency (pass 1: 69 — the
+one-route difference is a rename/refactor within the same already-accounted
+surface, not a new gap). Every route is still confined to the same five
+features pass 1 named: auth (14), event_requests.py's 4 public routes,
+elections.py's 4 token-scoped routes, onboarding.py's 24 bootstrap routes, and
+the public/* surface (22, including `salesforce_sync.py`'s OAuth callback).
+**No new ungated route outside those five features.**
+
+**Correction (Codex review on PR #1924):** the walk above was scoped by
+directory glob (`endpoints/*.py`), which is narrower than pass 1's actual
+"whole `app/api/`" scope and silently excluded
+`app/api/v1/public_portal_admin.py` — a router mounted directly in
+`api.py` (`from app.api.v1 import onboarding, public_portal_admin`, not
+`from app.api.v1.endpoints import ...`) with 13 real route decorators. Derived
+the file list from `api.py`'s router registrations instead of a directory
+glob and re-ran: 80 files, 1526 routes (up from 1513 — the 13 newly-included
+routes), same 68 ungated routes as above. All 13 `public_portal_admin.py`
+routes carry `Depends(get_current_user)`; the corrected scan changes the
+denominator, not the finding. **No new ungated route.**
+
+No findings this pass. All five pass-1 invariants hold; two are now enforced
+by tests rather than by review, exactly as pass 1 intended.
+
+**Completion gate (pass 2):** `flake8`/`black --check`/`isort --check-only`
+clean across `app/ tests/ alembic/`; `validate_migrations.py --strict` passed;
+`test_like_escaping.py` (2/2) and the `SET NULL` guard test pass; `tsc
+--noEmit` 0 errors; `eslint .` 0 errors (10 pre-existing warnings, same set as
+feature 34's gate). No code changes this pass — documentation only.
+
+---
+
+## Pass 1 (2026-08-25)
 
 **Scope:** whole codebase — `backend/app/` (66 v1 endpoint files, 11 public
 endpoint files, 108 services, 42 model modules, 355 Alembic revisions).
@@ -30,13 +87,13 @@ iterations 01–34. A clean sweep here does **not** mean a feature is clean.
 
 ## Sweep results
 
-| # | Class swept | Method | Result |
-| - | ----------- | ------ | ------ |
-| 1 | Formula injection in exports | `grep` for `csv.writer(` / `csv.DictWriter(` outside `csv_export.py` | **clean** — 0 sites; every exporter uses `SafeCsvWriter` |
-| 2 | `SET NULL` on `NOT NULL` columns | grep every `ondelete="SET NULL"`, check the 3 lines that follow for `nullable=True` | **clean** — 0 sites; also guarded by `tests/test_database_schema.py::test_set_null_fks_are_nullable` |
-| 3 | Proxy-IP attribution | grep `request.client.host` | **clean** — 3 hits, all non-runtime: 2 explanatory comments and 1 deliberate `direct_ip` inside `get_client_ip` itself. AXC-1 closed this class and it has stayed closed |
-| 4 | Alembic chain integrity | `backend/scripts/validate_migrations.py` | **clean** — 355 revisions, single head `f2a91c7d6b04`, no duplicate ids, no orphans |
-| 5 | LIKE-wildcard handling | AST walk of every `.like()` / `.ilike()` call | **3 findings — SEC-1/2/3, all fixed below** |
+| #   | Class swept                      | Method                                                                              | Result                                                                                                                                                                   |
+| --- | -------------------------------- | ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1   | Formula injection in exports     | `grep` for `csv.writer(` / `csv.DictWriter(` outside `csv_export.py`                | **clean** — 0 sites; every exporter uses `SafeCsvWriter`                                                                                                                 |
+| 2   | `SET NULL` on `NOT NULL` columns | grep every `ondelete="SET NULL"`, check the 3 lines that follow for `nullable=True` | **clean** — 0 sites; also guarded by `tests/test_database_schema.py::test_set_null_fks_are_nullable`                                                                     |
+| 3   | Proxy-IP attribution             | grep `request.client.host`                                                          | **clean** — 3 hits, all non-runtime: 2 explanatory comments and 1 deliberate `direct_ip` inside `get_client_ip` itself. AXC-1 closed this class and it has stayed closed |
+| 4   | Alembic chain integrity          | `backend/scripts/validate_migrations.py`                                            | **clean** — 355 revisions, single head `f2a91c7d6b04`, no duplicate ids, no orphans                                                                                      |
+| 5   | LIKE-wildcard handling           | AST walk of every `.like()` / `.ilike()` call                                       | **3 findings — SEC-1/2/3, all fixed below**                                                                                                                              |
 
 A sixth sweep (model↔migration drift) is written up under
 [Schema & migration notes](#schema--migration-notes) — it found no defect, but
@@ -96,6 +153,7 @@ iterations start from a list rather than re-deriving one.
 wildcard escaping at all.
 
 **Where:**
+
 - `backend/app/services/messaging_service.py:124` — `pattern = f"%{search.strip()}%"`
 - `backend/app/api/v1/endpoints/message_history.py:80` — `pattern = f"%{search}%"`
 
@@ -139,7 +197,7 @@ is inert".
 **Impact:** latent rather than live — on the default `sql_mode` these queries
 behave correctly today. It is recorded as MED rather than LOW because the
 failure is configuration-triggered, silent, simultaneous across the whole
-application, and invisible in code review: the escaping *looks* present.
+application, and invisible in code review: the escaping _looks_ present.
 
 **Fix:** every `like`/`ilike` call in `app/` now passes
 `escape=LIKE_ESCAPE_CHAR` — 76 of 76, no exceptions. That includes the 21 sites
@@ -180,7 +238,7 @@ renamed `number_prefix` so it cannot shadow the helper.
 
 **What:** `search_items_by_code` runs its DB query against the LIKE-escaped
 pattern (correct), then re-scans the returned rows **in Python** to decide which
-field matched — and compared against the *escaped* string rather than the raw
+field matched — and compared against the _escaped_ string rather than the raw
 input.
 
 **Where:** `backend/app/services/inventory_service.py:3392` (was
@@ -191,7 +249,7 @@ or `\` — e.g. `50%`. The escape transform turns it into `50\%`. The database
 correctly returns the item whose `asset_tag` is `50%`, but the Python loop then
 tests `"50\%" in "50%"`, which is false for every field, so the match falls
 through to the `matched_field = "name"` default. The UI reports the item was
-found by *name* when it was found by *asset tag*, and `matched_value` shows the
+found by _name_ when it was found by _asset tag_, and `matched_value` shows the
 item's name instead of the code that was scanned.
 
 **Impact:** wrong attribution in a scanning workflow, silently — the item is
@@ -257,14 +315,14 @@ passes.
 
 ## Completion gate
 
-| Check | Result |
-| ----- | ------ |
-| `flake8 app/ tests/ alembic/` | ✅ 0 violations |
-| `black --check app/ tests/ alembic/` | ✅ 1216 files unchanged |
-| `isort --check-only app/ tests/ alembic/` | ✅ clean — see the note below |
+| Check                                                 | Result                                              |
+| ----------------------------------------------------- | --------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                         | ✅ 0 violations                                     |
+| `black --check app/ tests/ alembic/`                  | ✅ 1216 files unchanged                             |
+| `isort --check-only app/ tests/ alembic/`             | ✅ clean — see the note below                       |
 | `python3 -m pytest tests/ -k "<19 touched services>"` | ✅ **1715 passed, 1 skipped, 0 failed**, 325 errors |
-| `backend/scripts/validate_migrations.py` | ✅ 355 revisions, single head |
-| `tsc --noEmit` / `eslint .` | n/a — no frontend file changed this iteration |
+| `backend/scripts/validate_migrations.py`              | ✅ 355 revisions, single head                       |
+| `tsc --noEmit` / `eslint .`                           | n/a — no frontend file changed this iteration       |
 
 The 325 errors are the sandbox's missing MySQL (`OperationalError(2003, "Can't
 connect to MySQL server on 'localhost'")` at fixture setup), the same limitation
@@ -273,10 +331,10 @@ recorded in `docs/app-review/PROGRESS.md`'s baseline.
 The same selection was run against unmodified `HEAD` in a separate git
 worktree, which is what makes the result evidence rather than an assertion:
 
-| Run | Passed | Skipped | Errors |
-| --- | -----: | ------: | -----: |
-| `HEAD` (unmodified) | 1713 | 1 | 325 |
-| this branch | **1715** | 1 | **325** |
+| Run                 |   Passed | Skipped |  Errors |
+| ------------------- | -------: | ------: | ------: |
+| `HEAD` (unmodified) |     1713 |       1 |     325 |
+| this branch         | **1715** |       1 | **325** |
 
 The error count is identical, so nothing moved from passing to erroring. The
 `+2` is exactly the two tests added in `test_like_escaping.py`. That is the
@@ -293,7 +351,7 @@ real thing. CI did, and it failed: `storefront_service.py` had its
 The cause is specific and worth recording, because it is the one file where the
 import was not newly added — it already existed at line 58, my sweep stripped it
 along with the misplaced ones, and the AST pass that put it back inserts after
-the *last* top-level import rather than in sorted position. Every other file got
+the _last_ top-level import rather than in sorted position. Every other file got
 a new import that happened to sort correctly; this one did not.
 
 `isort==8.0.1` (CI's pin) was then installed and run over `app/ tests/

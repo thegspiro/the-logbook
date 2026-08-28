@@ -43,6 +43,7 @@ from app.models.membership_pipeline import (
     StepProgressStatus,
 )
 from app.models.user import Organization, User, UserStatus, generate_uuid
+from app.utils.membership import ADMINISTRATIVE_RANK_MESSAGE, is_administrative
 from app.utils.model_updates import apply_updates
 from app.utils.org_scoping import assert_in_org, is_in_org
 from app.utils.prospect_fields import FIELD_TYPE_MAP as _SHARED_FIELD_TYPE_MAP
@@ -2393,7 +2394,14 @@ class MembershipPipelineService:
         membership_type: Optional[str] = None,
     ) -> Optional[Dict[str, Any]]:
         """Transfer a prospect to a full User record"""
-        prospect = await self.get_prospect(prospect_id, organization_id)
+        # Serialize on the prospect row: without the lock, two concurrent
+        # transfer requests can both observe ACTIVE before either commits and
+        # each create a User record for the same prospect, with the loser's
+        # write merely overwriting transferred_user_id (Codex review on this
+        # PR; same read-then-write shape as Pitfall #27's capacity checks).
+        prospect = await self.get_prospect(
+            prospect_id, organization_id, lock_for_update=True
+        )
         if not prospect:
             return None
 
@@ -2462,6 +2470,16 @@ class MembershipPipelineService:
             # no dictionary key downstream and leave the new member with no
             # permissions and no eligible seats.
             rank = canonical
+
+            # An administrative member holds no operational rank — its default
+            # permissions would put somebody outside the chain of command into
+            # it. The conversion screen offers both in one step, so refuse the
+            # pair rather than silently drop the rank the operator typed.
+            if is_administrative(None, membership_type):
+                return {
+                    "success": False,
+                    "message": ADMINISTRATIVE_RANK_MESSAGE,
+                }
 
         # Check for existing users with the same email (prevents duplicates)
         existing_matches = await self.check_existing_members(

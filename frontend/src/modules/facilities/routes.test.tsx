@@ -30,9 +30,13 @@ vi.mock('../../components/ProtectedRoute', () => ({
   },
 }));
 
-import { getFacilitiesRoutes } from './routes';
+import { FACILITY_ENTRY_PERMISSIONS, getFacilitiesRoutes } from './routes';
 
 describe('getFacilitiesRoutes', () => {
+  it('defines facility workspace access for authorized readers and managers', () => {
+    expect([...FACILITY_ENTRY_PERMISSIONS]).toEqual(['facilities.view', 'facilities.manage']);
+  });
+
   it.each([
     ['read-only leader', ['facilities.view'], false],
     ['regular member', [], false],

@@ -76,6 +76,7 @@ ONBOARDING_SETTINGS_ONLY_MODULES = [
     "incidents",
     "medical_screening",
     "public_info",
+    "testing",
 ]
 
 # Accepted from older saved sessions but not presented by the wizard. These are
@@ -85,7 +86,6 @@ ONBOARDING_LEGACY_MODULES = [
     "compliance",
     "meetings",
     "fundraising",
-    "incidents",
     "equipment",
     "vehicles",
     "budget",

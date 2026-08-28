@@ -234,9 +234,11 @@ describe('Dashboard', () => {
       renderWithRouter(<Dashboard />);
 
       expect(await screen.findByRole('heading', { name: 'Next 7 Days' })).toBeInTheDocument();
-      expect(screen.getByText('Shift · Engine 1')).toBeInTheDocument();
-      expect(screen.getByText('Open Shift')).toBeInTheDocument();
-      expect(screen.getByText('Ladder Ops Drill')).toBeInTheDocument();
+      // The heading renders above the timeline's own skeleton, so it is no
+      // evidence the three sources have merged yet.
+      expect(await screen.findByText('Shift · Engine 1')).toBeInTheDocument();
+      expect(await screen.findByText('Open Shift')).toBeInTheDocument();
+      expect(await screen.findByText('Ladder Ops Drill')).toBeInTheDocument();
     });
 
     it('marks the member’s own shifts as theirs', async () => {
@@ -743,9 +745,13 @@ describe('Dashboard', () => {
       renderWithRouter(<Dashboard />);
 
       const feed = await screen.findByRole('region', { name: 'My Updates' });
-      expect(within(feed).getByText('Station 2 Bay Doors Out of Service')).toBeInTheDocument();
-      expect(within(feed).getByText('SCBA annual inspection mandatory by March 31')).toBeInTheDocument();
-      expect(within(feed).getByText('Persistent')).toBeInTheDocument();
+      // findByText, not getByText: the region renders as soon as the card
+      // mounts, with a skeleton inside it, so its presence is no evidence the
+      // feed has loaded. The panel waits on both the message and the
+      // notification fetch, and those do not settle in a fixed order.
+      expect(await within(feed).findByText('Station 2 Bay Doors Out of Service')).toBeInTheDocument();
+      expect(await within(feed).findByText('SCBA annual inspection mandatory by March 31')).toBeInTheDocument();
+      expect(await within(feed).findByText('Persistent')).toBeInTheDocument();
     });
 
     // The inbox arrives ordered pinned -> persistent -> newest, and the feed
@@ -839,7 +845,7 @@ describe('Dashboard', () => {
       renderWithRouter(<Dashboard />);
 
       const feed = await screen.findByRole('region', { name: 'My Updates' });
-      const link = within(feed).getByRole('link', { name: 'https://example.com/form' });
+      const link = await within(feed).findByRole('link', { name: 'https://example.com/form' });
       // jsdom can't navigate; keep the click from hitting the default handler.
       link.addEventListener('click', (e) => e.preventDefault());
       await user.click(link);
@@ -870,7 +876,7 @@ describe('Dashboard', () => {
       renderWithRouter(<Dashboard />);
 
       const feed = await screen.findByRole('region', { name: 'My Updates' });
-      const link = within(feed).getByRole('link', { name: 'https://example.com/form' });
+      const link = await within(feed).findByRole('link', { name: 'https://example.com/form' });
       link.addEventListener('click', (e) => e.preventDefault());
 
       link.focus();

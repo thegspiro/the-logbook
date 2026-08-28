@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.audit import log_audit_event
 from app.models.meeting import Meeting, MeetingAttendee
 from app.models.user import MemberLeaveOfAbsence, Organization, User, UserStatus
+from app.utils.membership import is_administrative
 
 
 class MembershipTierService:
@@ -210,13 +211,13 @@ class MembershipTierService:
         advanced = []
         now = datetime.now(timezone.utc)
 
-        for member in members:
-            yos = self.years_of_service(member.hire_date)
+        for candidate in members:
+            yos = self.years_of_service(candidate.hire_date)
             target_tier = self.resolve_tier(tiers, yos)
             if not target_tier:
                 continue
 
-            current_type = member.membership_type or "active"
+            current_type = candidate.membership_type or "active"
             if current_type == target_tier["id"]:
                 continue
 
@@ -228,9 +229,54 @@ class MembershipTierService:
             if target_tier.get("sort_order", 0) <= current_order:
                 continue
 
+            # Lock this member's row before mutating it: this is another
+            # writer of the class/rank invariant update_user_profile and
+            # change_membership_type already serialize against via their own
+            # locks, and the batch SELECT above is unlocked -- without
+            # re-selecting under a lock here, a concurrent profile update
+            # racing this scan could land the same administrative-member-
+            # holding-a-rank contradiction those two close. populate_existing
+            # because this request's session may already hold the row (e.g.
+            # this scan running back-to-back with another write in the same
+            # transaction).
+            locked_result = await self.db.execute(
+                select(User)
+                .where(User.id == candidate.id)
+                .with_for_update()
+                .execution_options(populate_existing=True)
+            )
+            member = locked_result.scalar_one_or_none()
+            if not member or member.deleted_at is not None:
+                continue
+            # Re-check eligibility under the lock: the batch read above may
+            # now be stale (another transaction already advanced or changed
+            # this member's type since).
+            current_type = member.membership_type or "active"
+            if current_type == target_tier["id"]:
+                continue
+            current_tier_def = self.get_tier_by_id(tiers, current_type)
+            current_order = (
+                current_tier_def.get("sort_order", 0) if current_tier_def else 0
+            )
+            if target_tier.get("sort_order", 0) <= current_order:
+                continue
+
             previous_type = current_type
             member.membership_type = target_tier["id"]
             member.membership_type_changed_at = now
+
+            # An administrative member holds no operational rank, and this is a
+            # writer of the membership class like any other — an unattended one,
+            # which is what makes it the dangerous one. Tier ids are
+            # organization-configurable, so a department that names a tier
+            # `administrative` moves ranked operational members into that class
+            # on a schedule, and without this they would keep every permission
+            # their rank confers while nobody is watching the change happen.
+            cleared_rank = member.rank
+            if cleared_rank and is_administrative(None, target_tier["id"]):
+                member.rank = None
+            else:
+                cleared_rank = None
 
             advanced.append(
                 {
@@ -239,6 +285,7 @@ class MembershipTierService:
                     "previous_tier": previous_type,
                     "new_tier": target_tier["id"],
                     "years_of_service": yos,
+                    "cleared_rank": cleared_rank,
                 }
             )
 

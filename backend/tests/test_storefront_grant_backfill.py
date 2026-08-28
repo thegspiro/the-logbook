@@ -27,13 +27,15 @@ _MIGRATION = (
 
 _STOREFRONT_GRANTS = ("storefront.view", "storefront.order", "storefront.manage")
 
-# A migration that runs *after* the backfill and takes a permission back off
-# some of the same slugs. See ``_pristine_registry_set``.
-_LATER_REVOCATION = (
-    Path(__file__).resolve().parents[1]
-    / "alembic"
-    / "versions"
-    / "20260825_2015_a1f7c34e9b02_revoke_baseline_notifications_view.py"
+# Migrations that run *after* the backfill and take a permission back off some
+# of the same slugs. See ``_pristine_registry_set``. Each one leaves today's
+# registry one grant shorter than the row the backfill actually meets, so each
+# has to be added back here rather than trimmed out of the frozen snapshot.
+_VERSIONS = Path(__file__).resolve().parents[1] / "alembic" / "versions"
+_LATER_REVOCATIONS = (
+    _VERSIONS / "20260825_2015_a1f7c34e9b02_revoke_baseline_notifications_view.py",
+    _VERSIONS / "20260826_1700_e4f5a6b7c8d9_revoke_regular_member_facilities_view.py",
+    _VERSIONS / "20260827_1000_c7e2b9a41f83_revoke_officer_facilities_view.py",
 )
 
 
@@ -53,18 +55,20 @@ def _pristine_registry_set(slug: str) -> set[str]:
 
     ``_PRIOR_DEFAULTS`` freezes what a pristine pre-storefront row looks like
     at the point ``a4f8c1b92d17`` runs, and it is matched against real stored
-    rows — so it must keep describing them exactly. ``a1f7c34e9b02`` runs later
-    in the chain and revokes ``notifications.view`` from three of the same
-    slugs, which leaves today's registry one permission short of the row the
-    backfill actually encounters. Add it back rather than editing the frozen
-    snapshot: the snapshot is right, and trimming it to match a registry that
-    moved on afterwards is what would stop it matching a pristine row and quietly
-    turn the backfill into a no-op that still reports success.
+    rows — so it must keep describing them exactly. ``a1f7c34e9b02`` and
+    ``e4f5a6b7c8d9`` run later in the chain and revoke ``notifications.view``
+    and ``facilities.view`` from some of the same slugs, which leaves today's
+    registry short of the row the backfill actually encounters. Add them back
+    rather than editing the frozen snapshot: the snapshot is right, and
+    trimming it to match a registry that moved on afterwards is what would stop
+    it matching a pristine row and quietly turn the backfill into a no-op that
+    still reports success.
     """
     permissions = set(DEFAULT_POSITIONS[slug].get("permissions") or [])
-    revocation = _load_module(_LATER_REVOCATION, "_revoke_notifications_view")
-    if slug in revocation._SLUGS:
-        permissions.add(revocation._PERMISSION)
+    for index, path in enumerate(_LATER_REVOCATIONS):
+        revocation = _load_module(path, f"_later_revocation_{index}")
+        if slug in revocation._SLUGS:
+            permissions.add(revocation._PERMISSION)
     return permissions
 
 
