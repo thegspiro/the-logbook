@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Damaged inventory could be marked available, and received reorder stock couldn't be issued (2026-08-28)
+
+**Fixed**
+
+- Completing maintenance work and recording the item's condition as poor,
+  damaged, or out of service no longer allows that item to be returned to
+  service. "Return to service" now requires the item to actually be in
+  good condition — an item logged as damaged stays out of service until a
+  later inspection records a safe condition.
+- Two quartermasters acting on the same member-submitted return request at
+  the same time (one denying it, one physically receiving it) could
+  overwrite each other's decision. Reviewing a return request is now
+  serialized so only one outcome is ever recorded.
+- Stock recorded through the new reorder-receiving workflow now actually
+  becomes available to issue. Previously, receiving stock created a
+  purchase record but never updated the item's on-hand count, so newly
+  received units could not be checked out or issued to members.
+- The return-request review screen no longer carries a safety follow-up
+  choice (e.g. "send to write-off review") over from one reviewed request
+  to the next. A follow-up selected for a damaged item no longer applies
+  itself to the next request reviewed, even if that item was in good
+  condition.
+- Removed the "Transfer is immediate" checkbox from the item-transfer
+  screen — custody transfers have always taken effect immediately, and the
+  checkbox implied a deferred option that did not exist.
+- Custody-transfer audit log entries now record who performed the
+  transfer.
+
 ### A facility's files were readable by the whole department through the Documents module (2026-08-27)
 
 **Fixed**
