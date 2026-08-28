@@ -17,9 +17,10 @@ feature. The rotation cannot outrun its own review queue.
 ## Open PR
 
 [PR #1971](https://github.com/thegspiro/the-logbook/pull/1971) (bookkeeping —
-closing out SCH-15/#1968's merge) and the feature 16 (events & requests) PR
-opened by this iteration — branch `claude/security-review-events`. See the
-log entries below for both.
+closing out SCH-15/#1968's merge) — branch `claude/security-review-bookkeeping-sch15` —
+and [PR #1973](https://github.com/thegspiro/the-logbook/pull/1973) (feature
+16, events & requests, pass 2) — branch `claude/security-review-events`. See
+the log entries below for both.
 
 ---
 
