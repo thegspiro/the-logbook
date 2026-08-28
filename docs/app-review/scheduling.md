@@ -131,7 +131,7 @@ verifications this pass ruled out phantom findings; the real SCH-6 gap
 **2 regression tests added** (foreign apparatus on create; foreign manual-hours
 user on finalize).
 
-### SCH-5 — MEDIUM — Swap accept-path re-validation & self-approval — 🚩 FLAGGED (design change)
+### SCH-5 — MEDIUM — Swap accept-path re-validation & self-approval — ✅ RESOLVED (security review SCH-15 pass 2, 2026-08-28)
 
 When a swap is _accepted_ by the counterparty (vs. manager approval), the target
 shift's current state (capacity, cancellation, finalization) is not re-validated at
@@ -139,6 +139,15 @@ accept time, and the accept path's approver-identity check is looser than the
 manual-review path. Closing it is a behavior change to the swap-accept workflow
 (what to re-check, and whether an accept should be blocked on a now-full/cancelled
 target) — a design decision, not a drive-by. Recorded in `KNOWN_LIMITATIONS.md`.
+
+**Resolved by a later redesign:** `respond_to_swap_offer` (added 2026-08-24)
+replaced the general swap-accept path with a narrower one-way-offer accept;
+every two-way exchange still goes exclusively through the manager-review path
+above, which already re-validates and enforces separation of duties. The
+one-way accept path re-validates capacity/cancellation/finalization at accept
+time and enforces a strict identity check on the responder. See
+`docs/security-review/SCH-15-scheduling.md` → Pass 2 and the corrected entry
+in `KNOWN_LIMITATIONS.md`.
 
 ## Verified good ✅ (re-confirmed / phantom findings ruled out)
 
@@ -159,8 +168,10 @@ apparatus); SCH-5 stands.
 
 ## Future development
 
-1. **SCH-5** — re-validate the target shift at swap-accept time and tighten the
-   accept-path approver-identity check.
+1. ~~**SCH-5** — re-validate the target shift at swap-accept time and tighten the
+   accept-path approver-identity check.~~ ✅ Resolved 2026-08-24 by the
+   `respond_to_swap_offer` redesign; confirmed by security review SCH-15 pass 2
+   (2026-08-28).
 2. **SCH-6 station_id/template_id** — validate if/when the station link is wired up.
 
 ## Completion gate

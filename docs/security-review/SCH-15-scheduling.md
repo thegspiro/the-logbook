@@ -319,3 +319,243 @@ chain validated at a single head (`b272a5d5535c`, 371 revisions).
 | `pytest tests/test_scheduling_org_scoping.py tests/test_scheduling.py tests/test_call_tracking.py tests/test_scheduling_module_config_service.py tests/test_calcom_bookings_endpoint.py` | ✅ 196 passed                                                   |
 | `pytest tests/` (full backend suite)                                                                                                                                                     | ✅ 8546 passed, 22 skipped (pre-existing Docker/no-MySQL skips) |
 | `tsc --noEmit` / `eslint .`                                                                                                                                                              | n/a — no frontend file changed this iteration                   |
+
+---
+
+## Pass 2 (2026-08-28) — 0 fixes, 1 stale-doc correction (SCH-5 resolved), 0 new findings
+
+**PR:** #1966 · **Scoped since pass 1's merge:** `5d19cefa` (PR #1847, the
+Codex-follow-up merge — the final state pass 1's doc reflects, not the earlier
+`c92f0438`/#1846 merge that preceded it).
+
+### Scope
+
+`git diff --stat 5d19cefa..HEAD` on the three declared endpoint files plus
+`scheduling_service.py`, `scheduling_module_config_service.py`,
+`standing_shift_service.py`, `integration_services/calcom_service.py` shows
+real (non-byte-identical) churn in three files: `scheduling.py` (+20/-20),
+`scheduling_service.py` (+6/-1), `scheduling_module_config_service.py`
+(+70/-0, all-new). No new migration touches a scheduling table (`shifts`,
+`shift_assignments`, `shift_swap_requests`, `shift_calls`, `shift_templates`,
+`shift_patterns`, `shift_time_off`, `standing_shift_claims`) since pass 1.
+
+**Adjacent-file grep, per the EC-14 lesson** (files referencing `ShiftCall`,
+`ShiftSwapRequest`, `ShiftAssignment`, `StandingShiftClaim`,
+`SchedulingService`, `standing_shift_service`, `calcom_service`,
+`scheduling_module_config` outside the declared list, changed since
+`5d19cefa`): `api/v1/api.py` and `models/__init__.py` (both incidental —
+adding the unrelated new Testing Checklist module's router/model imports, no
+scheduling-relevant lines touched); `models/training.py` (+23/-1, the
+`grants_qualification` column on `TrainingCourse` — unrelated to scheduling —
+plus a new `ShiftPosition.PARAMEDIC` member, reviewed below);
+`schemas/scheduling.py` (+18/-3, `ShiftPosition.PARAMEDIC` +
+`PositionEligibilitySource.expires_on`, reviewed below);
+`email_template_service.py` (+2, an unrelated inventory-feature docstring
+key, no code path); `nfc_tag_service.py` (+15/-5, the AP-13 pass 2 fix already
+reviewed and merged under that rotation feature, not this one);
+`scheduled_tasks.py` (+168/-30, CRON2-31 dedup/rollback-safety fixes to the
+shift-start-reminder and post-shift-validation cron tasks, reviewed below);
+`shift_eligibility_service.py` (+90/-43, a real security fix — reviewed
+below — landed via a different feature's PR, already applied by Codex on that
+PR, not newly found here).
+
+**Frontend, swept broadly rather than scoped to `modules/scheduling/`** (the
+same correction feature 06's pass 2 had to make for `BallotBuilder.tsx`):
+`modules/scheduling/` (56 files, 4 changed — `services/api.ts`,
+`types/index.ts`, `types/shiftSettings.ts`, and
+`ApparatusTypeDefaultsCard.tsx` — all reviewed below) plus, **newly
+identified this pass**, `pages/scheduling/` — 81 files, ~34,000 lines,
+**never mentioned in any prior scheduling review** (module-audit, app-review,
+or SCH-15 pass 1 — confirmed by grep, zero hits for the path in any of the
+three). This directory holds real scheduling UI outside `modules/scheduling/`
+proper: the shift board (`board/ShiftBoard.tsx`, `MonthGrid.tsx`,
+`DayDetailPanel.tsx`, `GiveUpShiftModal.tsx`, `StandingShiftModal.tsx`,
+`ShiftSeatList.tsx`, `PhoneDaySheet.tsx`, `PhoneMonth.tsx`), `MyShiftsTab.tsx`,
+`OpenShiftsTab.tsx`, `RequestsTab.tsx`, `ShiftCloseoutWizard.tsx`,
+`ShiftReportsTab.tsx`, `PositionRosterPage.tsx`, `SchedulingPlatoonsPage.tsx`,
+`SchedulingSettingsPage.tsx`, `DriverExceptionsPanel.tsx`, and more — alongside
+a large amount of equipment-check UI already covered by EC-14's own frontend
+sweep (`EquipmentCheckForm.tsx`, `CheckLogPage.tsx`, `CheckLap.tsx`, etc.,
+which live in the same directory). Only **one** file under `pages/scheduling/`
+changed since pass 1 (`PositionRosterPage.tsx` + its test, +72/-11) — read in
+full (below). The other 79 files were swept with the same targeted greps
+EC-14 used for its equipment-check frontend pages
+(`window.confirm`/`alert`/`prompt`, `dangerouslySetInnerHTML`, banned
+`.toLocale*`, direct `fetch()`) rather than read line-by-line — noted as
+partial-scope, not assumed clean, consistent with how EC-14 pass 2 flagged its
+own equivalent grep-only sweep.
+
+### Verified good ✅ (re-confirmed by reading the current code, not re-citing the doc)
+
+- **Route/permission enumeration re-run from scratch** (AST walk over all
+  three endpoint files, not a diff against pass 1's table): **96/96 routes**
+  (92 + 3 + 1, unchanged) carry a recognized auth dependency
+  (`get_current_user`, `require_permission(...)`, or
+  `get_optional_current_user`) — 0 routes with no auth dependency. Matches
+  pass 1's inventory with no regression.
+- **SCH-9's fix is intact at its current lines**: `create_shift_call`
+  (`scheduling_service.py:2057-2098`) and `update_shift_call`
+  (`:2128-2152`) both still call the batched `_all_users_in_org` guard before
+  persisting `responding_members`, unchanged in shape from pass 1.
+- **SCH-10 remains accurately flagged** and is already being tracked
+  cross-cuttingly outside this feature: `KNOWN_LIMITATIONS.md`'s entry was
+  updated by the training-extended pass (TRX-18) to 8 call sites (was 7 at
+  SCH-15 pass 1); no correction needed from this pass.
+- **`ShiftPosition.PARAMEDIC`** (new enum member, `models/training.py`,
+  `schemas/scheduling.py`) backs a MySQL `Enum(...)` DDL column
+  (`shift_assignments.position`, `standing_shift_claims.position` — confirmed
+  by reading the column definitions directly, not assumed) and needs no
+  migration: `standing_shift_claims`/`shift_assignments` are both listed in
+  `app/utils/enum_normalization.py`'s `_TARGET_COLUMNS`, which widens the
+  live MySQL `ENUM(...)` DDL to match the Python enum's current value set on
+  **every** startup (`main.py:1510`, unconditional, not fresh-install-only) —
+  confirmed by reading `_normalize_one`'s comparison
+  (`set(current) == set(target)`) rather than assuming the comment's claim.
+- **`apparatus_type_defaults_for_org`** (new, `scheduling_module_config_service.py`)
+  reads `Organization.organization_type` filtered on the caller's own
+  `organization_id` (never a client-supplied id) — no tenant-isolation or
+  injection surface; a read-only display concern (EMS-only orgs no longer see
+  fire apparatus types in the picker fallback).
+- **The RBAC-position-eligibility fix is real and already applied**
+  (`a72fed15`, authored by Codex on a different feature's PR, landed on `main`
+  before this pass): `shift_eligibility_service.py` no longer resolves a
+  member's _held RBAC position_ (an org-chart/role slug like `captain`) as a
+  source of _operational_ shift-position eligibility — the removed comment in
+  the diff states the reason directly: a role manager could otherwise create
+  a position and grant themselves shift eligibility through it. Verified by
+  reading the current `_get_slug_eligibility_map`/`get_eligible_positions`,
+  not by trusting the commit message: the map is built only from
+  `operational_ranks` and qualification/training data now, and
+  `_get_held_position_slugs`'s result is deliberately discarded (called and
+  ignored, per the inline comment, "for compatibility with lightweight
+  session adapters"). Also verified: the new `_account_is_active` gate runs
+  **ahead of** the open-to-all-shift bypass in both `get_eligible_positions`
+  and `get_eligible_positions_bulk`, so a retired/suspended member cannot
+  self-signup for an open-to-all shift on a session opened before their
+  status changed.
+- **`scheduled_tasks.py`'s CRON2-31 changes to the two scheduling-specific
+  cron tasks** (`run_shift_reminders`, `run_post_shift_validation`) are
+  dedup/rollback-safety correctness fixes, not security changes, and remain
+  org-scoped throughout: both iterate `Organization` rows and issue every
+  inner query filtered to `Shift.organization_id == str(org.id)` (or against
+  ids drawn from that already-org-scoped shift), the same pattern EC-14 pass
+  2 verified for the equipment-check reminder task in this same file.
+- **`ShiftReportsTab.tsx`'s auto-save draft** (`saveDraft`/`loadDraft`/
+  `deleteDraft` from `utils/shiftReportDrafts.ts`, `shift-report-draft-*`
+  localStorage keys) is swept by the same `clearAllDrafts()` logout purge
+  EC-14 pass 2 confirmed for the equipment-check draft namespace — traced
+  here for the first time specifically against the scheduling shift-report
+  key: `clearAllDrafts()` matches both `DRAFT_KEY_PREFIX` ("shift-report-draft-")
+  and `EQUIPMENT_CHECK_DRAFT_KEY_PREFIX`, and the file's own `SEC (FE-6)`
+  comment names member PII/operational notes as the reason.
+- **`PositionRosterPage.tsx`** (the one `pages/scheduling/` file that
+  changed since pass 1) read in full: the new qualification-expiry badge uses
+  `formatCalendarDate`/`calendarDaysFromToday` from the approved
+  `dateFormatting.ts` (no banned `.toLocale*`/raw `Date` formatting), and
+  every rendered `source.label` goes through plain JSX text interpolation
+  (React-escaped), never `dangerouslySetInnerHTML` — no XSS surface from the
+  new training-program/qualification label text.
+
+### Findings
+
+#### SCH-11 — NIT (doc correction) — SCH-5 was already resolved, not open — ✅ FIXED (docs only)
+
+**What:** `KNOWN_LIMITATIONS.md` (two separate rows), `docs/module-audit/scheduling.md`,
+and `docs/app-review/scheduling.md` all still described SCH-5 ("swap
+accept-path skips target re-validation + a looser approver-identity check
+than manager review") as **Open**, deferred for an owner decision. SCH-15
+pass 1 (2026-08-26) noted the current `respond_to_swap_offer` method in its
+"Verified good" section as "SCH-5-adjacent" — reviewed for capacity locking
+(Pitfall #27) — but never connected that to closing the SCH-5 finding itself,
+so the stale "Open" status persisted through pass 1 unchanged.
+
+**Where:** `docs/KNOWN_LIMITATIONS.md` (both the combined SCH-5/6 row and the
+standalone SCH-5 row), `docs/module-audit/scheduling.md:71`,
+`docs/app-review/scheduling.md:134,162`.
+
+**Investigation:** `respond_to_swap_offer` (`scheduling_service.py:4263-4409`,
+introduced `0fd34614`, 2026-08-24 — two days before pass 1, not new this
+pass) is a deliberate redesign, not a partial fix: it replaced the general
+"accept a swap" path with a narrower **one-way offer** accept, and the
+docstring states explicitly that "a two-way exchange moves two rosters and
+stays with the manager review that exists for it" — confirmed by reading
+`respond_to_swap_offer` itself (rejects with "A two-way swap has to be
+reviewed by a duty officer" whenever `requesting_shift_id` is set) and by
+enumerating the swap-request routes (`get`, `review`, `respond`, `cancel` —
+no fifth "self-accept a two-way swap" route exists). Both SCH-5 sub-claims no
+longer hold against the current code:
+
+- **"Target shift's state (capacity, cancellation, finalization) is not
+  re-validated at accept time"** — it now is:
+  `_validate_assignment_candidate(require_mutable=True, reject_past=True,
+enforce_capacity=True)` is called before the seat moves
+  (`scheduling_service.py:4363-4373`), and `require_mutable` rejects both
+  `ShiftStatus.CANCELLED` and `shift.is_finalized`
+  (`scheduling_service.py:2825-2829`) — read directly, not assumed from the
+  parameter name.
+- **"The approver-identity check is looser than the manual-review path"** —
+  it is now a strict equality check: `str(swap_request.target_user_id) !=
+str(responder_id)` rejects with "This offer was not made to you"
+  (`scheduling_service.py:4305-4308`), before any other validation runs.
+
+Two-way exchanges (the case SCH-5's own capacity/cancellation/finalization
+concern is sharpest for, since a seat swap moves two rosters) are unaffected
+by this class of gap at all: they can only be approved through
+`review_swap_request`, which SCH-15 pass 1 already verified re-validates
+fully and enforces separation of duties, and which this pass re-read in full
+(`scheduling_service.py:4030-4261`) and confirms unchanged.
+
+**Test coverage:** `tests/test_swap_offer_response.py` (17 tests, added in
+the same commit range as the redesign) exercises exactly the two claims
+above by name (`test_only_the_member_it_was_offered_to`,
+`test_not_the_offerer_themselves`,
+`test_an_ineligible_accepter_is_refused_and_the_seat_stays_put`,
+`test_a_two_way_swap_still_goes_to_a_duty_officer`,
+`test_the_acceptance_path_runs_that_validation` — a source-inspection test
+confirming `_validate_assignment_candidate` is actually called, not just
+present in the file) plus a
+`test_approved_time_off_is_rechecked_not_only_at_candidate_selection` case
+the original SCH-5 write-up didn't anticipate. All 17 confirmed passing
+against current `main` (re-run this pass, not assumed from a prior report).
+
+**Impact:** none — this is a documentation-accuracy correction, not a
+behavior change. No code was modified.
+
+**Fix:** updated the four documents above to mark SCH-5 (and the also-stale
+"SCH-6 manual_hours has no bound" half of the combined `KNOWN_LIMITATIONS.md`
+row — SCH-6's `hours` value was already `Field(gt=0, le=48)` at the schema
+even at the time that row was written, per the app-review doc's own "Not a
+finding" note) resolved, each citing the specific mechanism and test file
+above rather than a bare "fixed" claim. No guard test added — the existing
+17-test file already guards this class; adding a second one would duplicate
+coverage rather than close a gap.
+
+### No new findings
+
+Every other checklist dimension came back clean on the files that actually
+changed since pass 1: no new `.like()`/`.ilike()` call (still zero in
+`scheduling_service.py`); no new CSV/export surface; no new JSON-column
+mutation (the two changed service files don't touch `Shift.positions`/
+`.activities`/`ShiftCall.responding_members`/`ShiftPattern.*`); no new
+client-supplied FK id reaching a write path unvalidated (`apparatus_type_defaults_for_org`'s
+only input is the caller's own `organization_id`); no new `SET NULL` FK
+without `nullable=True` (no new columns at all this pass); no new
+capacity/count-then-insert pattern requiring a Pitfall #27 lock.
+
+## Guard tests added (pass 2)
+
+None — SCH-11 is a documentation correction covered by pre-existing tests
+(`tests/test_swap_offer_response.py`, confirmed passing, not newly written).
+
+## Completion gate (pass 2)
+
+| Check                                                 | Result                                                      |
+| ----------------------------------------------------- | ----------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                         | ✅ 0 violations                                             |
+| `black --check app/ tests/ alembic/`                  | ✅ 1323 files unchanged                                     |
+| `isort --check-only app/ tests/ alembic/`             | ✅ clean (installed, not skipped)                           |
+| `python3 scripts/validate_migrations.py --strict`     | ✅ single head, 389 revisions                               |
+| `pytest tests/ -q -k "scheduling or shift or calcom"` | ✅ 681 passed, 1 skipped (pre-existing optional-dep skip)   |
+| `pytest tests/` (full backend suite)                  | ✅ 9179 passed, 22 skipped (pre-existing Docker/no-MySQL)   |
+| `tsc --noEmit`                                        | ✅ 0 errors                                                 |
+| `eslint .`                                            | ✅ 0 errors, 10 warnings (pre-existing, same set as SEC-00) |

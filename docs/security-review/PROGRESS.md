@@ -16,11 +16,92 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-[PR #1963](https://github.com/thegspiro/the-logbook/pull/1963) (feature 14,
-equipment check & shifts, pass 2) — branch
-`claude/security-review-equipment-check`.
+[PR #1966](https://github.com/thegspiro/the-logbook/pull/1966) (feature 15,
+scheduling, pass 2) — branch `claude/security-review-scheduling`.
+
+(Separately, [PR #1965](https://github.com/thegspiro/the-logbook/pull/1965)
+is open doing bookkeeping only — closing out #1963's merge — per this
+rotation's established pattern of the bookkeeping PR not occupying this row.)
 
 ---
+
+### 2026-08-28 — Feature 15 (Scheduling), pass 2 — 0 fixes, 1 stale-doc correction, 0 flagged
+
+Scoped to the full domain since pass 1's **final** merge (`5d19cefa`, PR
+#1847 — the Codex-follow-up merge, not the earlier `c92f0438`/#1846 that
+preceded it). `git diff --stat` against the seven declared/adjacent backend
+files found real churn in three (`scheduling.py` +20/-20,
+`scheduling_service.py` +6/-1, `scheduling_module_config_service.py`
++70/-0), none touching auth/permission/tenant-scoping code paths, and no new
+migration on a scheduling table. A grep for other backend files referencing
+`ShiftCall`/`ShiftSwapRequest`/`ShiftAssignment`/`StandingShiftClaim`/
+`SchedulingService` changed since pass 1 (per the EC-14 lesson) found
+`shift_eligibility_service.py` (+90/-43) carrying a real, already-applied
+security fix from a different feature's PR (Codex-authored, `a72fed15`):
+member-held RBAC positions no longer grant _operational_ shift-position
+eligibility (closing a role-manager self-escalation path), verified by
+reading the current code rather than trusting the commit message.
+`scheduled_tasks.py`'s CRON2-31 changes to the two scheduling cron tasks were
+also traced and confirmed org-scoped throughout, matching EC-14 pass 2's
+verification of this same file's equipment-check task.
+
+**Frontend scope correction, found before Codex could catch it this time:**
+pass 1 (and every prior scheduling audit) scoped the frontend to
+`modules/scheduling/` (56 files) only. `pages/scheduling/` — 81 files, ~34,000
+lines, holding the actual shift board, my-shifts/open-shifts tabs, swap/
+time-off UI, platoons, and position roster — was never mentioned in any prior
+scheduling doc. Swept this pass: only one file changed since pass 1
+(`PositionRosterPage.tsx`, read in full — clean, uses the approved date
+utilities and plain JSX text interpolation); the other 80 were checked with
+the same targeted `window.confirm`/`dangerouslySetInnerHTML`/banned-`.toLocale*`/
+direct-`fetch()` greps EC-14 used for its equipment-check pages in this same
+directory (all clean), noted as partial-scope rather than assumed fully
+reviewed.
+
+**SCH-11 (NIT, docs-only, fixed):** SCH-5 ("swap accept-path skips
+re-validation + a looser approver-identity check than manager review") had
+been carried as **Open** in `KNOWN_LIMITATIONS.md` (two rows), `docs/
+module-audit/scheduling.md`, and `docs/app-review/scheduling.md` since
+2026-08-06 — but `respond_to_swap_offer`, added 2026-08-24 (two days _before_
+SCH-15 pass 1, not new this pass), already resolves it: it replaced the
+general swap-accept path with a narrower one-way-offer accept, re-validates
+the target shift's live state (capacity/cancellation/finalization) before
+moving the seat, and enforces a strict identity check on the responder; every
+two-way exchange is confined to the already-hardened manager-review path.
+Pass 1 had actually read this method (noted in "Verified good" as
+"SCH-5-adjacent," reviewed for capacity locking) but never connected it to
+closing SCH-5. All four documents corrected to ✅ Resolved, each citing
+`scheduling_service.py`'s exact validation calls and the pre-existing
+`tests/test_swap_offer_response.py` (17 tests, re-run and confirmed passing,
+not newly written). No code changed — a documentation-accuracy fix only.
+
+Route/permission enumeration re-run from scratch (AST walk, not a diff):
+96/96 routes (92+3+1, unchanged from pass 1) carry a recognized auth
+dependency. SCH-9's fix and SCH-10's flag both re-verified intact at their
+current lines (SCH-10's KNOWN_LIMITATIONS entry was already kept current by
+the training-extended pass, TRX-18 — no correction needed here). A new
+`ShiftPosition.PARAMEDIC` enum member (landed via an adjacent qualifications
+feature) needs no migration: confirmed `shift_assignments`/
+`standing_shift_claims` are both in `enum_normalization.py`'s
+`_TARGET_COLUMNS`, which widens the live MySQL `ENUM(...)` DDL to the current
+Python enum on every startup, unconditionally. Full detail in
+`SCH-15-scheduling.md` → Pass 2. Completion gate: flake8/black/isort clean
+(isort already installed), migrations 389 revisions/single head, scoped
+tests 681 passed/1 skipped, full backend suite 9179 passed/22 skipped/0
+failed, `tsc`/`eslint` clean (10 pre-existing warnings, same set as
+SEC-00/AP-13/EC-14 pass 2). Rotation row 15 -> awaiting PR merge. Next: 16
+events & requests, once this PR merges.
+
+---
+
+### 2026-08-28 — Feature 14 (Equipment check & shifts), pass 2 ✅ merged — PR #1963
+
+Merged (`d1f43285`). Confirmed on `origin/main` by ancestry check
+(`git log origin/main --oneline` shows the merge commit at HEAD, directly
+above #1962's merge commit `2da165c6`). No review-thread follow-up needed
+beyond the same-day scope-correction commit already included in the merge
+(the two Codex-flagged adjacent files, both verified clean — see below).
+Rotation row 14 -> done. Next: 15 scheduling.
 
 ### 2026-08-28 — Feature 14 (Equipment check & shifts), pass 2 — no findings
 
@@ -1544,7 +1625,7 @@ each row's prior PR is recorded in the Log, not repeated here.
 | 12  | Facilities                | FAC    | `endpoints/facilities.py` (3724 L), `facilities_service.py`                                                                                     | ✅     |
 | 13  | Apparatus & NFC           | AP     | `apparatus.py`, `nfc_tags.py`                                                                                                                   | ✅     |
 | 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | ✅     |
-| 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                | ⬜     |
+| 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                | ✅     |
 | 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                       | ⬜     |
 | 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`                                                                                   | ⬜     |
 | 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ⬜     |
