@@ -17,8 +17,10 @@ vi.mock('@/modules/scheduling', () => ({
 }));
 
 vi.mock('@/stores/authStore', () => ({
-  useAuthStore: (selector: (state: { checkPermission: () => boolean }) => unknown) =>
-    selector({ checkPermission: () => false }),
+  useAuthStore: (selector?: (state: { checkPermission: () => boolean }) => unknown) => {
+    const state = { checkPermission: () => false };
+    return selector ? selector(state) : state;
+  },
 }));
 
 const template = {
@@ -82,6 +84,18 @@ function renderBuilder() {
   );
 }
 
+function renderNewBuilder() {
+  return render(
+    <MemoryRouter initialEntries={['/templates/new']}>
+      <ConfirmProvider>
+        <Routes>
+          <Route path="/templates/new" element={<EquipmentCheckTemplateBuilder />} />
+        </Routes>
+      </ConfirmProvider>
+    </MemoryRouter>
+  );
+}
+
 describe('EquipmentCheckTemplateBuilder responsive actions', () => {
   beforeEach(() => getTemplate.mockResolvedValue(template));
 
@@ -116,5 +130,21 @@ describe('EquipmentCheckTemplateBuilder responsive actions', () => {
     expect(within(menu).getByRole('button', { name: 'Move up' })).toBeDisabled();
     expect(within(menu).getByRole('button', { name: 'Move down' })).toBeDisabled();
     expect(within(menu).getByRole('button', { name: 'Delete' })).toBeVisible();
+  });
+});
+
+describe('EquipmentCheckTemplateBuilder creation guidance', () => {
+  it('preserves preset test instructions and marks the review step ready', async () => {
+    const user = userEvent.setup();
+    renderNewBuilder();
+
+    await user.selectOptions(screen.getByLabelText('Template Type'), 'vehicle');
+    await user.click(screen.getByRole('button', { name: /use a vehicle layout/i }));
+    await user.click(screen.getByRole('button', { name: /engine \/ pumper/i }));
+    await user.click(screen.getByRole('button', { name: /preview/i }));
+
+    expect(screen.getAllByText('Switch it on and confirm it works.').length).toBeGreaterThan(0);
+    expect(screen.getByText('Review').closest('div')).toHaveTextContent(/items/);
+    expect(screen.getByText('Review').parentElement?.previousElementSibling).toHaveClass('bg-green-500');
   });
 });
