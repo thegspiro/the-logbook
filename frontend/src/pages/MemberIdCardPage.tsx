@@ -27,6 +27,7 @@ import { formatDate } from '../utils/dateFormatting';
 import { useTimezone } from '../hooks/useTimezone';
 import { useRanks } from '../hooks/useRanks';
 import type { UserWithRoles } from '../types/role';
+import { isAdministrativeMember } from '../utils/membership';
 
 const STATUS_COLORS: Record<string, string> = {
   active: 'bg-green-100 text-green-800 dark:bg-green-500/20 dark:text-green-400',
@@ -150,6 +151,7 @@ export const MemberIdCardPage: React.FC = () => {
     member.full_name || `${member.first_name ?? ''} ${member.last_name ?? ''}`.trim() || member.username;
   const initials = (member.first_name?.[0] ?? member.username?.[0] ?? '?').toUpperCase();
   const qrValue = getQRValue();
+  const isAdministrative = isAdministrativeMember(undefined, member.membership_type);
 
   return (
     <div className="flex min-h-screen flex-col items-center px-4 py-8 print:min-h-0 print:px-0 print:py-0">
@@ -214,14 +216,17 @@ export const MemberIdCardPage: React.FC = () => {
               </div>
             </div>
 
-            {/* Rank & Member Since */}
-            {(member.rank || member.hire_date) && (
+            {/* Operational members show their rank; administrative members have
+                no operational rank, so identify their member class instead. */}
+            {(member.rank || isAdministrative || member.hire_date) && (
               <div className="mb-4 grid grid-cols-2 gap-3">
-                {member.rank && (
+                {(member.rank || isAdministrative) && (
                   <div className="bg-theme-surface-hover rounded-lg px-3 py-2 text-center print:border print:border-gray-200 print:bg-gray-50">
-                    <p className="text-theme-text-muted text-xs tracking-wider uppercase print:text-gray-500">Rank</p>
+                    <p className="text-theme-text-muted text-xs tracking-wider uppercase print:text-gray-500">
+                      {isAdministrative ? 'Member Class' : 'Rank'}
+                    </p>
                     <p className="text-theme-text-primary text-sm font-semibold print:text-black">
-                      {formatRank(member.rank)}
+                      {isAdministrative ? 'Administrative' : formatRank(member.rank ?? '')}
                     </p>
                   </div>
                 )}
