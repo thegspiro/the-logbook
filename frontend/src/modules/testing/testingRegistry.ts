@@ -657,6 +657,12 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
         anyPermission: FACILITY_ENTRY_PERMISSIONS,
         module: 'facilities',
       },
+      {
+        path: '/facilities/settings',
+        label: 'Facility settings',
+        permission: 'facilities.manage',
+        module: 'facilities',
+      },
       { path: '/locations', label: 'Locations' },
       {
         path: '/locations/qr-codes',
