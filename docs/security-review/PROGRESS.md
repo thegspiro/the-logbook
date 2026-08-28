@@ -19,9 +19,8 @@ feature. The rotation cannot outrun its own review queue.
 [PR #1968](https://github.com/thegspiro/the-logbook/pull/1968) (feature 15,
 scheduling, pass 2) — branch `claude/security-review-scheduling`.
 
-(Separately, [PR #1965](https://github.com/thegspiro/the-logbook/pull/1965)
-is open doing bookkeeping only — closing out #1963's merge — per this
-rotation's established pattern of the bookkeeping PR not occupying this row.)
+(The bookkeeping PR #1965, closing out #1963's merge, has since merged
+— confirmed via `git log origin/main`.)
 
 ---
 
