@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### A facility's files were readable by the whole department through the Documents module (2026-08-27)
+
+**Fixed**
+
+- The Facility detail Files section stores each uploaded file in the shared
+  Documents module and keeps only a reference on the facility record. The
+  facility record is restricted to members holding "view sensitive facility
+  data", facility edit, or facility management — but the stored file was not.
+  Uploads landed outside any folder, and a file in no folder is treated as
+  organization-wide, so anyone who could open the Documents module could list
+  and download a facility's insurance policies, lease documents, capital
+  project files and inspection paperwork. The restriction on the record was
+  real; the file it pointed at was not covered by it.
+- Facility file folders are now restricted to the same three grants, and a
+  newly uploaded facility file is filed into its facility's folder as soon as
+  it is attached. Departments already using the Files section have their
+  existing facility folders corrected automatically on upgrade.
+- A documents administrator no longer sees facility files by virtue of that
+  role alone. Access to a facility's files now requires a facilities grant,
+  which is what the facility screens have always required.
+
 ### Two people opening a facility's file tab for the first time at the same moment could get duplicate folders (2026-08-27)
 
 **Fixed**

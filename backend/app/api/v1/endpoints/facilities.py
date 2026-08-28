@@ -125,9 +125,33 @@ _SENSITIVE_READ_PERMISSIONS = (
 
 
 async def _validate_shared_document_reference(
-    db: AsyncSession, file_path: str, current_user: User
+    db: AsyncSession,
+    file_path: str,
+    current_user: User,
+    facility_id: str,
 ) -> None:
-    """Reject forged/cross-organization references into shared storage."""
+    """Reject forged/cross-organization references, and file the document.
+
+    Validating the reference is only half the job. The upload that produces it
+    stores a folderless document, and a folderless document is organization
+    level — ``DocumentsService.get_documents`` returns it to anyone holding
+    ``documents.view``. So a facility record gated on
+    ``facilities.view_sensitive`` pointed at a file the whole department could
+    list and download through the Documents module, which is the contract this
+    endpoint family exists to enforce, defeated one layer down.
+
+    Filing the document into the facility's own folder is what closes it: that
+    tree carries ``required_permissions`` naming the same three grants, so the
+    bytes are gated exactly as the record is. Done here, at the point the
+    document becomes facility data, rather than at the upload — the uploader
+    does not yet know which facility it belongs to, and an unclassified upload
+    that is never referenced stays an ordinary personal upload.
+
+    Only an unfiled document is moved. A caller that deliberately filed it
+    somewhere else keeps that placement; re-parenting another module's document
+    because a facility happens to reference it would be the more surprising
+    behaviour, and the reference is still validated either way.
+    """
     if not file_path.startswith("document:"):
         raise HTTPException(
             status_code=400, detail="Files must use shared document storage"
@@ -138,12 +162,24 @@ async def _validate_shared_document_reference(
         raise HTTPException(
             status_code=400, detail="Invalid shared document reference"
         ) from exc
-    document = await DocumentsService(db).get_document_by_id(
-        document_id, UUID(str(current_user.organization_id))
-    )
+    organization_id = UUID(str(current_user.organization_id))
+    documents = DocumentsService(db)
+    document = await documents.get_document_by_id(document_id, organization_id)
     if document is None:
         # Deliberately indistinguishable from a missing same-org document.
         raise HTTPException(status_code=404, detail="Document not found")
+
+    if document.folder_id is None:
+        facility = await FacilitiesService(db).get_facility(
+            facility_id, str(organization_id), include_relations=False
+        )
+        if facility is None:
+            raise HTTPException(status_code=404, detail="Facility not found")
+        folder = await documents.ensure_facility_folder(
+            organization_id, str(facility.id), facility.name
+        )
+        document.folder_id = folder.id
+        await db.commit()
 
 
 def _facility_response_for(facility, current_user: User) -> FacilityResponse:
@@ -752,7 +788,7 @@ async def create_facility_photo(
 
     try:
         await _validate_shared_document_reference(
-            db, photo_data.file_path, current_user
+            db, photo_data.file_path, current_user, str(photo_data.facility_id)
         )
         photo = await service.create_photo(
             photo_data=photo_data,
@@ -900,7 +936,7 @@ async def create_facility_document(
 
     try:
         await _validate_shared_document_reference(
-            db, document_data.file_path, current_user
+            db, document_data.file_path, current_user, str(document_data.facility_id)
         )
         document = await service.create_document(
             document_data=document_data,

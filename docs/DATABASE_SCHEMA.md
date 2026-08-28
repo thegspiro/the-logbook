@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**260 tables · 4431 columns · 839 foreign keys**
+**260 tables · 4432 columns · 839 foreign keys**
 
 ---
 
@@ -146,7 +146,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 | Table | Model | Columns | Purpose |
 |---|---|---|---|
-| [`document_folders`](#document_folders) | `DocumentFolder` | 16 | Document Folder model |
+| [`document_folders`](#document_folders) | `DocumentFolder` | 17 | Document Folder model |
 | [`documents`](#documents) | `Document` | 19 | Document model |
 
 ### Elections
@@ -1969,6 +1969,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `visibility` | ENUM(`organization`, `leadership`, `owner`) | no |  | `organization` |  |
 | `owner_user_id` | VARCHAR(36) | yes | FK, IDX |  | → `users.id` ON DELETE SET NULL |
 | `allowed_roles` | JSON | yes |  |  |  |
+| `required_permissions` | JSON | yes |  |  |  |
 | `created_at` | DATETIME | yes |  | `now()` |  |
 | `updated_at` | DATETIME | yes |  | `now()` |  |
 | `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` |
