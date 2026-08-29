@@ -619,7 +619,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       }
     });
 
-  const updateCompartmentField = (idx: number, patch: Partial<CompartmentFormState>) => {
+  const updateCompartmentField = (idx: number, patch: Partial<CompartmentFormState>, dirty = true) => {
     setCompartments((prev) => {
       const next = [...prev];
       const existing = next[idx];
@@ -627,7 +627,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       next[idx] = { ...existing, ...patch };
       return next;
     });
-    markDirty();
+    if (dirty) markDirty();
   };
 
   const deleteCompartment = async (idx: number) => {
@@ -653,7 +653,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       }
     }
     setCompartments((prev) => prev.filter((_, i) => i !== idx));
-    markDirty();
+    if (!comp.id) markDirty();
   };
 
   const duplicateCompartment = (idx: number) => {
@@ -771,7 +771,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     }
 
     const updatedItems = comp.items.filter((_, i) => i !== itemIdx);
-    updateCompartmentField(compartmentIdx, { items: updatedItems });
+    updateCompartmentField(compartmentIdx, { items: updatedItems }, !item.id);
   };
 
   const duplicateItem = (compartmentIdx: number, itemIdx: number) => {
@@ -800,6 +800,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     if (!comp) return;
     const newIdx = direction === 'up' ? itemIdx - 1 : itemIdx + 1;
     if (newIdx < 0 || newIdx >= comp.items.length) return;
+    const previousItems = comp.items;
 
     setCompartments((prev) => {
       const next = [...prev];
@@ -819,10 +820,18 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       if (movedItem) reorderedItems.splice(newIdx, 0, movedItem);
       const savedIds = reorderedItems.map((item) => item.id).filter((id): id is string => Boolean(id));
       if (savedIds.length > 0) {
-        void schedulingService.reorderItems(comp.id, savedIds).catch(() => toast.error('Failed to save item order'));
+        void schedulingService.reorderItems(comp.id, savedIds).catch(() => {
+          setCompartments((prev) => {
+            const next = [...prev];
+            const current = next[compartmentIdx];
+            if (current) next[compartmentIdx] = { ...current, items: previousItems };
+            return next;
+          });
+          toast.error('Failed to save item order');
+        });
       }
     }
-    markDirty();
+    if (!isEditing || !comp.id) markDirty();
   };
 
   const moveItemToCompartment = async (fromCompIdx: number, itemIdx: number, toCompIdx: number) => {
@@ -834,6 +843,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     const item = fromComp.items[itemIdx];
     if (!item) return;
 
+    const previousCompartments = compartments;
     setCompartments((prev) => {
       const next = [...prev];
       const src = next[fromCompIdx];
@@ -853,10 +863,12 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           sort_order: toComp.items.length,
         });
       } catch {
+        setCompartments(previousCompartments);
         toast.error('Failed to move item on server');
+        return;
       }
     }
-    markDirty();
+    if (!isEditing || !item.id || !toComp.id) markDirty();
     toast.success(`Moved "${item.name || 'item'}" to ${toComp.name || 'compartment'}`);
   };
 
@@ -865,15 +877,17 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
   // ---------------------------------------------------------------------------
 
   const pendingCompartmentOrderRef = useRef(false);
+  const previousCompartmentOrderRef = useRef<CompartmentFormState[] | null>(null);
 
   const moveCompartment = (idx: number, direction: 'up' | 'down') => {
     const id = compartments[idx]?.id;
     // Unsaved records have no stable identity and therefore cannot be safely
     // represented in the reorder API. Save the template before reordering.
     if (!id) return;
+    previousCompartmentOrderRef.current = compartments;
     setCompartments((prev) => moveCompartmentInTree(prev, id, direction));
     pendingCompartmentOrderRef.current = true;
-    markDirty();
+    if (!isEditing) markDirty();
   };
 
   // Persistence deliberately follows the state update. This builds ordered_ids
@@ -884,9 +898,11 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     pendingCompartmentOrderRef.current = false;
     const savedIds = orderedCompartmentIds(compartments);
     if (savedIds.length > 0) {
-      void schedulingService
-        .reorderCompartments(templateId, savedIds)
-        .catch(() => toast.error('Failed to save compartment order'));
+      void schedulingService.reorderCompartments(templateId, savedIds).catch(() => {
+        if (previousCompartmentOrderRef.current) setCompartments(previousCompartmentOrderRef.current);
+        previousCompartmentOrderRef.current = null;
+        toast.error('Failed to save compartment order');
+      });
     }
   }, [compartments, isEditing, templateId]);
 
@@ -946,12 +962,14 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       return;
 
     const toDelete = [...selected].sort((a, b) => b - a);
+    const failed = new Set<number>();
     const deletePromises: Promise<void>[] = [];
     for (const itemIdx of toDelete) {
       const item = comp.items[itemIdx];
       if (item?.id) {
         deletePromises.push(
           schedulingService.deleteCheckItem(item.id).catch((err: unknown) => {
+            failed.add(itemIdx);
             toast.error(getErrorMessage(err, `Failed to delete ${item.name || 'item'}`));
           })
         );
@@ -959,10 +977,11 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     }
     await Promise.all(deletePromises);
 
-    const remaining = comp.items.filter((_, i) => !selected.has(i));
-    updateCompartmentField(compartmentIdx, { items: remaining });
-    setSelectedItems((prev) => ({ ...prev, [key]: new Set<number>() }));
-    toast.success(`Deleted ${count} item${count !== 1 ? 's' : ''}`);
+    const remaining = comp.items.filter((item, i) => !selected.has(i) || failed.has(i) || !item.id);
+    const deletedCount = count - failed.size;
+    updateCompartmentField(compartmentIdx, { items: remaining }, selected.size > deletedCount);
+    setSelectedItems((prev) => ({ ...prev, [key]: failed }));
+    if (deletedCount > 0) toast.success(`Deleted ${deletedCount} item${deletedCount !== 1 ? 's' : ''}`);
   };
 
   // ---------------------------------------------------------------------------
@@ -974,6 +993,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
   const [bulkPasteValues, setBulkPasteValues] = useState<Record<string, string>>({});
   const [showEquipmentPresets, setShowEquipmentPresets] = useState<Record<string, boolean>>({});
   const [bulkItemPending, setBulkItemPending] = useState<Record<string, boolean>>({});
+  const quickAddPending = useRef(new Set<string>());
   const bulkIdempotencyKeys = useRef<Record<string, { key: string; payload: string }>>({});
 
   const handleQuickAdd = async (compartmentIdx: number, payload: CatalogAddPayload) => {
@@ -982,41 +1002,51 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     const key = getCompKey(compartmentIdx);
     const name = payload.name.trim();
     if (!name) return;
+    if (quickAddPending.current.has(key)) return;
+    quickAddPending.current.add(key);
 
-    if (comp.id) {
-      try {
-        const createPayload: CheckTemplateItemCreate = {
-          name,
-          sort_order: comp.items.length,
-          // The catalog link travels with the item on the way in. Adding it
-          // afterwards is the step that never happened.
-          ...(payload.inventoryItemId ? { inventory_item_id: payload.inventoryItemId } : {}),
-          ...(payload.checkType ? { check_type: payload.checkType } : {}),
-          ...(payload.hasExpiration ? { has_expiration: true } : {}),
-        };
-        const created = await schedulingService.addCheckItem(comp.id, createPayload);
-        updateCompartmentField(compartmentIdx, {
-          items: [...comp.items, itemFormFromResponse(created)],
-        });
-      } catch (err: unknown) {
-        toast.error(getErrorMessage(err, 'Failed to add item'));
-        return;
-      }
-    } else {
-      updateCompartmentField(compartmentIdx, {
-        items: [
-          ...comp.items,
-          {
-            ...emptyItem(),
+    try {
+      if (comp.id) {
+        try {
+          const createPayload: CheckTemplateItemCreate = {
             name,
-            ...(payload.inventoryItemId ? { inventoryItemId: payload.inventoryItemId } : {}),
-            ...(payload.checkType ? { checkType: payload.checkType } : {}),
-            ...(payload.hasExpiration ? { hasExpiration: true } : {}),
-          },
-        ],
-      });
+            sort_order: comp.items.length,
+            // The catalog link travels with the item on the way in. Adding it
+            // afterwards is the step that never happened.
+            ...(payload.inventoryItemId ? { inventory_item_id: payload.inventoryItemId } : {}),
+            ...(payload.checkType ? { check_type: payload.checkType } : {}),
+            ...(payload.hasExpiration ? { has_expiration: true } : {}),
+          };
+          const created = await schedulingService.addCheckItem(comp.id, createPayload);
+          updateCompartmentField(
+            compartmentIdx,
+            {
+              items: [...comp.items, itemFormFromResponse(created)],
+            },
+            false
+          );
+        } catch (err: unknown) {
+          toast.error(getErrorMessage(err, 'Failed to add item'));
+          return;
+        }
+      } else {
+        updateCompartmentField(compartmentIdx, {
+          items: [
+            ...comp.items,
+            {
+              ...emptyItem(),
+              name,
+              ...(payload.inventoryItemId ? { inventoryItemId: payload.inventoryItemId } : {}),
+              ...(payload.checkType ? { checkType: payload.checkType } : {}),
+              ...(payload.hasExpiration ? { hasExpiration: true } : {}),
+            },
+          ],
+        });
+      }
+      setQuickAddValues((prev) => ({ ...prev, [key]: '' }));
+    } finally {
+      quickAddPending.current.delete(key);
     }
-    setQuickAddValues((prev) => ({ ...prev, [key]: '' }));
   };
 
   const handleBulkPaste = async (compartmentIdx: number) => {
@@ -1045,7 +1075,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
         const result = await schedulingService.addCheckItemsBulk(comp.id, payload, idempotencyKey);
         delete bulkIdempotencyKeys.current[requestKey];
         const newItems = result.items.map(itemFormFromResponse);
-        updateCompartmentField(compartmentIdx, { items: [...comp.items, ...newItems] });
+        updateCompartmentField(compartmentIdx, { items: [...comp.items, ...newItems] }, false);
         toast.success(`Added ${result.createdCount} item${result.createdCount !== 1 ? 's' : ''}`);
       } catch (err: unknown) {
         toast.error(getErrorMessage(err, 'Failed to add items'));
@@ -1425,6 +1455,32 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                   schedulingService.updateCheckItem(item.id, {
                     name: item.name || undefined,
                     description: item.description.trim() || undefined,
+                    check_type: item.checkType,
+                    is_required: item.isRequired,
+                    required_quantity: item.requiredQuantity ? Number(item.requiredQuantity) : undefined,
+                    expected_quantity: item.expectedQuantity ? Number(item.expectedQuantity) : undefined,
+                    critical_minimum_quantity: item.criticalMinimumQuantity
+                      ? Number(item.criticalMinimumQuantity)
+                      : undefined,
+                    min_level: item.minLevel ? Number(item.minLevel) : undefined,
+                    level_unit: item.levelUnit.trim() || undefined,
+                    serial_number: item.serialNumber.trim() || undefined,
+                    lot_number: item.lotNumber.trim() || undefined,
+                    inventory_item_id: item.inventoryItemId || undefined,
+                    image_url: item.imageUrl.trim() || undefined,
+                    has_expiration: item.hasExpiration,
+                    expiration_date: item.expirationDate.trim() || undefined,
+                    expiration_warning_days: item.expirationWarningDays
+                      ? Number(item.expirationWarningDays)
+                      : undefined,
+                  })
+                );
+              } else {
+                updatePromises.push(
+                  schedulingService.addCheckItem(comp.id, {
+                    name: item.name || 'Untitled Item',
+                    description: item.description.trim() || undefined,
+                    sort_order: comp.items.indexOf(item),
                     check_type: item.checkType,
                     is_required: item.isRequired,
                     required_quantity: item.requiredQuantity ? Number(item.requiredQuantity) : undefined,
