@@ -16,7 +16,66 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-None.
+[#TBD](https://github.com/thegspiro/the-logbook/pull/TBD) — Feature 19
+(Skills testing), pass 2. Branch `claude/security-review-skills-testing`.
+
+---
+
+### 2026-08-29 — Feature 19 (Skills testing), pass 2 — 1 fixed (NIT), 0 flagged
+
+Scoped to the full backend surface since pass 1's merge (`7a772a67`, PR
+#1901): the endpoint file, service file, schema file, model file, and the
+skill-sheet-library data module all came back **byte-identical**
+(`git diff --stat`, not assumed). No new migration touches a skills-testing
+table.
+
+Independently re-verified all four pass-1 fixes (SKT-1 through SKT-4) by
+reading the current code, not re-citing the doc — all intact, including both
+halves of SKT-4's Pitfall #27 capacity lock and the lock-ordering fix Codex's
+review added on PR #1901. Re-ran an AST route enumeration from scratch: 29/29
+routes carry either `get_current_user` or `require_permission`, matching pass
+1's inventory route-for-route. Swept every `select(SkillTest)`/
+`select(SkillTemplate)`/`select(SkillTestViewer)` call site mechanically for
+an `organization_id` filter (direct, or via an already-org-scoped parent row)
+— no gap. Read the surface pass 1 named but did not individually verify
+(`complete_test`, `cancel_test`, `bulk_validate_tests`, `release_test_results`,
+the `/viewers` routes, `email_test_results`, `export_tests_csv`) line by line
+this pass; no new backend finding.
+
+**SKT2-1** (NIT, fixed) — ten `SkillTest.is_practice == False  # noqa: E712`
+sites in the endpoint file (the same class **CS2-1** had already swept in the
+_service_ file and in `compliance_officer_service.py`, but evidently missed in
+the endpoint file's own later additions). `backend/setup.cfg` disables
+E712/E711 project-wide, so the `# noqa` comments were dead weight, not a live
+suppression — not a vulnerability, but ten unnecessary `# noqa`s is the
+opposite of CLAUDE.md's "documented, unavoidable reason" bar. Converted all
+ten to `.is_(False)`, matching CS2-1's precedent; no guard test added (mirrors
+how CS2-1 itself was disposed of, and E712 cannot regress into a real flake8
+failure while the ignore line stands).
+
+Also established, for the first time, a frontend scope for this feature (pass
+1 was backend-only): 16 files / ~9,000 L actually import a skills-testing
+service, store, or type export. All 16 grep-swept clean for
+`window.confirm`/`alert`/`prompt`, `dangerouslySetInnerHTML`, banned
+`.toLocale*`, `date-fns`, and direct `fetch(`. Checked the full skills-testing
+route surface against `UNCACHEABLE_PREFIXES` directly rather than assuming:
+unlike this feature's sibling training passes (TR2-1/TRX2-1), **no
+cache-exclusion gap found** — the existing `/training/skills-testing/tests`
+prefix entry already covers every PII-bearing route via `startsWith`, and the
+one PII-adjacent route it doesn't syntactically cover (`GET /candidates`) is a
+capped, minimal-PII name lookup by the endpoint's own design, not a listing.
+`skillsTestingService` routes through the shared `api` client
+(`withCredentials`, CSRF interceptor) rather than a bespoke module axios
+instance.
+
+Completion gate: flake8/black/isort clean (isort 8.0.1, CI's pin, already
+installed); `validate_migrations.py --strict` 393 revisions, single head;
+`pytest -k skill` 392 passed/1 pre-existing skip; full backend suite 9225
+passed/22 pre-existing skips/0 failed; `tsc --noEmit`/`npm run typecheck` 0
+errors; `eslint .` 0 errors (10 pre-existing warnings, none in touched files).
+Full write-up: `docs/security-review/SKT-19-skills-testing.md` → **Pass 2**.
+Rotation row 19 -> awaiting PR merge. Next: 20 compliance, once this PR
+merges.
 
 ---
 
@@ -2181,7 +2240,7 @@ each row's prior PR is recorded in the Log, not repeated here.
 | 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                       | ✅     |
 | 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`                                                                                   | ✅     |
 | 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ✅     |
-| 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3723 L)                                                                                                          | ⬜     |
+| 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3723 L)                                                                                                          | ⏳     |
 | 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ⬜     |
 | 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ⬜     |
 | 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ⬜     |
