@@ -460,6 +460,60 @@ with no pagination UI. A backend-only cap would silently truncate a large
 org's data rather than degrade gracefully — needs a paired frontend change,
 which is a product/UX decision outside this pass's fix criteria.
 
+#### TR2-3 — LOW/MED (data exposure) — Training-session approval roster missing from `UNCACHEABLE_PREFIXES` — ✅ FIXED
+
+**What:** caught by Codex's review of this PR, in the same data-exposure sweep
+TR2-1 covers. `GET /training/sessions/approve/{token}` (`training_sessions.py`)
+returns a `TrainingApprovalResponse` whose `attendees` array carries
+`AttendeeApprovalData.user_name`/`.user_email` per attendee — the same
+member-PII shape as TR2-1's two endpoints — but no `/training/sessions/`
+prefix was in `UNCACHEABLE_PREFIXES`, so `trainingService.getApprovalData()`
+served it through the same cached global axios client.
+
+**Where:** `frontend/src/utils/apiCache.ts` — `UNCACHEABLE_PREFIXES` array
+(endpoint: `app/api/v1/endpoints/training_sessions.py`'s
+`@router.get("/approve/{token}")`, schema:
+`app/schemas/training_session.py`'s `TrainingApprovalResponse`/
+`AttendeeApprovalData`).
+
+**Failure scenario:** identical to TR2-1 — an officer opens an approval link,
+the attendee roster (names + emails) sits in the in-memory cache for up to 90
+seconds, including past a point where the underlying session/approval state
+changed.
+
+**Impact:** LOW/MED — same-org only, requires holding a valid approval token
+to reach the endpoint at all, but the same PII-in-cache class as TR2-1.
+
+**Fix:** added `/training/sessions/approve/` to `UNCACHEABLE_PREFIXES`. Guard
+test: `apiCache.test.ts` → `'returns false for the training-session approval
+roster'`.
+
+#### TR2-4 — LOW (abuse resistance) — `get_training_dashboard_summary` is an unbounded per-request scan, now uncached — 🚩 FLAGGED
+
+Also raised by Codex, against the TR2-1 fix itself. `get_training_dashboard_summary`
+(`training.py`) loads every active `User` in the org, every active
+`TrainingRequirement`, and every `TrainingRecord` belonging to those users
+with no date bound or row limit, then evaluates each member's applicable
+requirements in Python. Before TR2-1, the response's 30s-fresh/90s-stale
+cache window absorbed repeated dashboard mounts within that window; TR2-1
+correctly removes that cache (the response carries per-member names, so
+caching it is the HIPAA-shaped problem TR2-1/TR2-3 close), which means every
+mount or manual refresh now re-runs this unbounded scan against the live
+database.
+
+See `docs/KNOWN_LIMITATIONS.md` → "Training — Dashboard Summary Is an
+Unbounded Per-Request Scan". Not fixed here: the query needs a
+date-window-aware bound (e.g. limiting `TrainingRecord` rows to what each
+requirement's own lookback/recertification window actually needs, matching
+`training_compliance.py`'s `get_requirement_date_window` logic) or a move to
+set-based/aggregate evaluation instead of loading every row into Python —
+either is a service-level query redesign entangled with the correctness of
+`evaluate_member_requirement`'s per-requirement date logic, not a safe
+drive-by change alongside a cache-exclusion security fix. Mirrors the same
+abuse-resistance class as TR2-2 (unbounded per-request read that grows with
+department history), and the fix removing this endpoint's cache-based
+mitigation makes it more pressing than TR2-2, not less.
+
 ### Verified good ✅ (pass 2, not previously stated this way)
 
 - **`list_courses`/`list_categories`/`list_requirements`/`get_training_programs`
@@ -485,4 +539,4 @@ training.py`, so the one write path that could otherwise fan out an
 | `pytest tests/ -q` (full backend suite)                    | ✅ 9200 passed, 22 skipped (pre-existing Docker/no-MySQL/optional skips) |
 | `cd frontend && npx tsc --noEmit`                          | ✅ 0 errors                                                              |
 | `cd frontend && npx eslint .`                              | ✅ 0 errors, 10 pre-existing warnings (none in touched files)            |
-| `cd frontend && npx vitest run src/utils/apiCache.test.ts` | ✅ 84 passed (3 new assertions for TR2-1)                                |
+| `cd frontend && npx vitest run src/utils/apiCache.test.ts` | ✅ 85 passed (4 new assertions total: TR2-1 + TR2-3)                     |

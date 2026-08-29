@@ -20,7 +20,7 @@ Feature 17 (Training core), pass 2 — branch `claude/security-review-training-c
 
 ---
 
-### 2026-08-29 — Feature 17 (Training core), pass 2 — 1 fix (TR2-1 LOW/MED), 1 flagged (TR2-2 LOW)
+### 2026-08-29 — Feature 17 (Training core), pass 2 — 2 fixed (TR2-1, TR2-3), 2 flagged (TR2-2, TR2-4)
 
 Re-verified all three pass-1 fixes (TR-11/TR-12/TR-13) and the route-auth
 coverage / baseline-grant / KNOWN_LIMITATIONS claims still hold — the six
@@ -29,21 +29,34 @@ unrelated 7-line spillover fix from the feature-18 pass. Independently
 re-enumerated all 91 routes across the three endpoint files (AST walk): no
 route without an auth dependency.
 
-New this pass: **TR2-1** (LOW/MED, data exposure) — `GET
+New this pass: **TR2-1** (LOW/MED, data exposure, fixed) — `GET
 /training/competency-matrix` and `GET /training/dashboard-summary` both
 return per-member names alongside compliance/competency status but were
 missing from the frontend's `UNCACHEABLE_PREFIXES` cache-exclusion list,
 unlike the identically-shaped `/training/compliance-matrix`. Fixed, with a
-guard test. **TR2-2** (LOW, abuse resistance) — `GET /training/records` has
-no `skip`/`limit`, unlike the rest of the codebase's per-record list
-endpoints; flagged (needs a paired frontend pagination UI, not a
-backend-only drive-by) and mirrored into `docs/KNOWN_LIMITATIONS.md`.
+guard test. **TR2-2** (LOW, abuse resistance, flagged) — `GET
+/training/records` has no `skip`/`limit`, unlike the rest of the codebase's
+per-record list endpoints; needs a paired frontend pagination UI, mirrored
+into `docs/KNOWN_LIMITATIONS.md`.
 
-Completion gate: flake8/black/isort clean (no Python touched);
+Codex's review of the PR caught two more in the same vein, both verified and
+addressed: **TR2-3** (LOW/MED, data exposure, fixed) — the training-session
+approval roster (`GET /training/sessions/approve/{token}`, attendee names +
+emails) had the identical missing-cache-exclusion gap as TR2-1; added to
+`UNCACHEABLE_PREFIXES` with a guard test. **TR2-4** (LOW, abuse resistance,
+flagged) — `get_training_dashboard_summary` scans every active member's full
+training history with no date bound on every call; TR2-1's fix correctly
+removes that endpoint's cache (it carries per-member PII), which means the
+unbounded scan it was masking now runs on every dashboard mount. Needs a
+query-level bound tied to `training_compliance.py`'s per-requirement
+date-window logic — a service redesign, not a drive-by fix alongside a
+cache-exclusion security patch — mirrored into `docs/KNOWN_LIMITATIONS.md`.
+
+Completion gate (final): flake8/black/isort clean (no Python touched);
 `validate_migrations.py --strict` 389 revisions, single head; `pytest -k
 training` 821 passed; full suite 9200 passed, 22 skipped (pre-existing);
 `tsc --noEmit` 0 errors; `eslint .` 0 errors (10 pre-existing warnings, none
-in touched files); `vitest run apiCache.test.ts` 84 passed. Full write-up:
+in touched files); `vitest run apiCache.test.ts` 85 passed. Full write-up:
 `docs/security-review/TR-17-training-core.md` → **Pass 2**.
 
 ---

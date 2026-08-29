@@ -485,6 +485,10 @@ describe('apiCache', () => {
       expect(isCacheable('/training/dashboard-summary')).toBe(false);
     });
 
+    it('returns false for the training-session approval roster', () => {
+      expect(isCacheable('/training/sessions/approve/some-token')).toBe(false);
+    });
+
     it('returns false for /messages/ endpoints', () => {
       expect(isCacheable('/messages/inbox')).toBe(false);
     });
