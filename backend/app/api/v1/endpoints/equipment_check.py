@@ -1149,15 +1149,7 @@ async def upload_check_item_photos(
     if not check_item:
         raise HTTPException(status_code=404, detail="Check item not found")
 
-    existing_urls: list = check_item.photo_urls or []
-    if len(existing_urls) + len(files) > MAX_PHOTOS_PER_ITEM:
-        raise HTTPException(
-            status_code=400,
-            detail=(
-                f"Item already has {len(existing_urls)} photo(s); "
-                f"maximum is {MAX_PHOTOS_PER_ITEM}"
-            ),
-        )
+    existing_urls: list[str] = check_item.photo_urls or []
 
     # Detect magic library availability once
     try:
@@ -1213,7 +1205,20 @@ async def upload_check_item_photos(
             ) from exc
         encoded = base64.b64encode(optimized).decode()
         data_uri = f"data:image/webp;base64,{encoded}"
-        new_urls.append(data_uri)
+        # Retrying after the server committed but its response was lost must
+        # not append the same evidence twice. Optimization is deterministic,
+        # so the stored data URI is also the content fingerprint.
+        if data_uri not in existing_urls and data_uri not in new_urls:
+            new_urls.append(data_uri)
+
+    if len(existing_urls) + len(new_urls) > MAX_PHOTOS_PER_ITEM:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Item already has {len(existing_urls)} photo(s); "
+                f"maximum is {MAX_PHOTOS_PER_ITEM}"
+            ),
+        )
 
     # Shallow copy suffices — strings are immutable
     updated_urls = list(existing_urls) + new_urls
