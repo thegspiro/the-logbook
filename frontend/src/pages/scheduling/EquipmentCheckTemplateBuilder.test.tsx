@@ -7,11 +7,15 @@ import { ConfirmProvider } from '../../contexts/ConfirmContext';
 import EquipmentCheckTemplateBuilder from './EquipmentCheckTemplateBuilder';
 
 const getTemplate = vi.fn();
+const createTemplate = vi.fn();
+const updateTemplate = vi.fn();
 
 vi.mock('@/modules/scheduling', () => ({
   schedulingService: {
     getApparatusOptions: vi.fn().mockResolvedValue({ options: [] }),
     getEquipmentCheckTemplate: (...args: unknown[]) => getTemplate(...args),
+    createEquipmentCheckTemplate: (...args: unknown[]) => createTemplate(...args),
+    updateEquipmentCheckTemplate: (...args: unknown[]) => updateTemplate(...args),
     getCsvSampleUrl: vi.fn().mockReturnValue('/sample.csv'),
   },
 }));
@@ -134,6 +138,48 @@ describe('EquipmentCheckTemplateBuilder responsive actions', () => {
 });
 
 describe('EquipmentCheckTemplateBuilder creation guidance', () => {
+  beforeEach(() => {
+    createTemplate.mockResolvedValue({ id: 'draft-1' });
+    updateTemplate.mockResolvedValue(template);
+  });
+
+  it('saves an incomplete new template as an inactive draft', async () => {
+    const user = userEvent.setup();
+    renderNewBuilder();
+
+    await user.click(screen.getByRole('button', { name: 'Save draft' }));
+
+    expect(createTemplate).toHaveBeenCalledWith(expect.objectContaining({ name: '', is_active: false }));
+  });
+
+  it('does not allow an invalid template to be published', () => {
+    renderNewBuilder();
+
+    expect(screen.getByRole('button', { name: 'Publish' })).toBeDisabled();
+    expect(screen.getByText('Template name is required.')).toBeInTheDocument();
+  });
+
+  it('publishes after the blocking structure issues are fixed', async () => {
+    const user = userEvent.setup();
+    renderNewBuilder();
+    await user.type(screen.getByLabelText(/Name/), 'Engine inspection');
+    await user.selectOptions(screen.getByLabelText('Template Type'), 'vehicle');
+    await user.click(screen.getByRole('button', { name: /use a vehicle layout/i }));
+    await user.click(screen.getByRole('button', { name: /engine \/ pumper/i }));
+    for (const itemName of ['Oil level', 'Coolant level', 'Power steering fluid', 'Tank water level']) {
+      await user.click(screen.getByRole('button', { name: `Expand ${itemName}` }));
+    }
+    for (const minimum of screen.getAllByPlaceholderText('0')) {
+      await user.type(minimum, '1');
+    }
+
+    const publish = screen.getByRole('button', { name: 'Publish' });
+    expect(publish).toBeEnabled();
+    await user.click(publish);
+
+    expect(createTemplate).toHaveBeenCalledWith(expect.objectContaining({ is_active: true }));
+  }, 30_000);
+
   it('preserves preset test instructions and marks the review step ready', async () => {
     renderNewBuilder();
 

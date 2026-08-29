@@ -281,7 +281,9 @@ class EquipmentCheckTemplateCreate(BaseModel):
     check_timing: CheckTiming
     template_type: str = Field(default="equipment", max_length=30)
     assigned_positions: Optional[List[str]] = None
-    is_active: bool = True
+    # A template is operational configuration, not usable content, until an
+    # explicit activation has passed the service readiness checks.
+    is_active: bool = False
     sort_order: int = 0
     compartments: Optional[List[CheckTemplateCompartmentCreate]] = None
 

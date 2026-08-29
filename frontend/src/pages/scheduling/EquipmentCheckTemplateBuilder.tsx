@@ -282,7 +282,7 @@ function defaultTemplateForm(): TemplateFormState {
     assignedPositions: [],
     apparatusType: '',
     apparatusId: '',
-    isActive: true,
+    isActive: false,
   };
 }
 
@@ -1295,35 +1295,36 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
   // Save
   // ---------------------------------------------------------------------------
 
-  const handleSave = async () => {
-    if (!form.name.trim()) {
-      toast.error('Template name is required');
-      return;
+  const publicationErrors = (() => {
+    const errors: string[] = [];
+    if (!form.name.trim()) errors.push('Template name is required.');
+    const operational = compartments.filter((comp) => !comp.isHeader);
+    if (operational.length === 0) errors.push('Add at least one operational compartment.');
+    for (const comp of operational) {
+      if (!comp.name.trim()) errors.push('Every operational compartment needs a name.');
+      if (comp.items.length === 0) errors.push(`Compartment "${comp.name || 'Untitled'}" needs at least one item.`);
+      for (const item of comp.items) {
+        if (!item.name.trim()) errors.push('Every checklist item needs a name.');
+        if (item.checkType === 'count' && !item.requiredQuantity && !item.expectedQuantity) {
+          errors.push(`Count item "${item.name || 'Untitled'}" needs an expected quantity.`);
+        }
+        if (item.checkType === 'level' && !item.minLevel) {
+          errors.push(`Level item "${item.name || 'Untitled'}" needs a minimum level.`);
+        }
+      }
     }
+    return [...new Set(errors)];
+  })();
 
-    // Validate compartments and items
+  const handleSave = async (publish = false) => {
+    if (publish && publicationErrors.length > 0) return;
+
+    // Non-blocking warnings may be overridden for both drafts and publication.
     const warnings: string[] = [];
     for (const comp of compartments) {
-      if (!comp.name.trim()) {
-        warnings.push('One or more compartments have no name.');
-        break;
-      }
-    }
-    for (const comp of compartments) {
-      if (comp.items.length === 0) {
-        warnings.push(`Compartment "${comp.name || 'Untitled'}" has no items.`);
-        break;
-      }
       for (const item of comp.items) {
-        if (!item.name.trim()) {
-          warnings.push(`One or more items in "${comp.name || 'Untitled'}" have no name.`);
-          break;
-        }
         if (item.hasExpiration && !item.expirationDate.trim()) {
           warnings.push(`"${item.name || 'Untitled'}" has expiration enabled but no date set.`);
-        }
-        if (item.checkType === 'count' && !item.requiredQuantity && !item.expectedQuantity) {
-          warnings.push(`"${item.name || 'Untitled'}" is a quantity check but has no expected quantity.`);
         }
         if (
           item.checkType === 'count' &&
@@ -1332,9 +1333,6 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           Number(item.criticalMinimumQuantity) >= Number(item.expectedQuantity)
         ) {
           warnings.push(`"${item.name || 'Untitled'}" has critical minimum >= expected quantity.`);
-        }
-        if (item.checkType === 'level' && !item.minLevel) {
-          warnings.push(`"${item.name || 'Untitled'}" is a level check but has no minimum level set.`);
         }
         if (item.checkType === 'expiry' && !item.serialNumber && !item.lotNumber) {
           warnings.push(`"${item.name || 'Untitled'}" is a date/lot check but has no serial or lot number.`);
@@ -1357,7 +1355,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       const compartmentPayloads: CheckTemplateCompartmentCreate[] = compartments
         .filter((c) => !c.id) // Only include unsaved compartments in create payload
         .map((c, idx) => ({
-          name: c.name || 'Untitled Compartment',
+          name: c.name,
           description: c.description.trim() || undefined,
           sort_order: idx,
           image_url: c.imageUrl.trim() || undefined,
@@ -1366,7 +1364,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           is_sealed: c.isSealed,
           parent_compartment_id: c.parentCompartmentId || undefined,
           items: c.items.map((item, itemIdx) => ({
-            name: item.name || 'Untitled Item',
+            name: item.name,
             description: item.description.trim() || undefined,
             sort_order: itemIdx,
             check_type: item.checkType,
@@ -1395,7 +1393,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           assigned_positions: form.assignedPositions.length > 0 ? form.assignedPositions : undefined,
           apparatus_type: form.apparatusType || undefined,
           apparatus_id: form.apparatusId || undefined,
-          is_active: form.isActive,
+          is_active: false,
         });
 
         // Save any new compartments that haven't been persisted yet
@@ -1409,7 +1407,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           if (comp.id) {
             updatePromises.push(
               schedulingService.updateCompartment(comp.id, {
-                name: comp.name || undefined,
+                name: comp.name,
                 description: comp.description.trim() || undefined,
                 image_url: comp.imageUrl.trim() || undefined,
                 is_header: comp.isHeader,
@@ -1423,7 +1421,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
               if (item.id) {
                 updatePromises.push(
                   schedulingService.updateCheckItem(item.id, {
-                    name: item.name || undefined,
+                    name: item.name,
                     description: item.description.trim() || undefined,
                     check_type: item.checkType,
                     is_required: item.isRequired,
@@ -1451,8 +1449,12 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
         }
         await Promise.all(updatePromises);
 
+        if (publish) {
+          await schedulingService.updateEquipmentCheckTemplate(templateId, { is_active: true });
+        }
+
         setIsDirty(false);
-        toast.success('Template updated');
+        toast.success(publish ? 'Template published' : 'Draft saved');
       } else {
         const createPayload: EquipmentCheckTemplateCreate = {
           name: form.name.trim(),
@@ -1462,9 +1464,9 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           assigned_positions: form.assignedPositions.length > 0 ? form.assignedPositions : undefined,
           apparatus_type: form.apparatusType || undefined,
           apparatus_id: form.apparatusId || undefined,
-          is_active: form.isActive,
+          is_active: publish,
           compartments: compartments.map((c, idx) => ({
-            name: c.name || 'Untitled Compartment',
+            name: c.name,
             description: c.description.trim() || undefined,
             sort_order: idx,
             image_url: c.imageUrl.trim() || undefined,
@@ -1473,7 +1475,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             is_sealed: c.isSealed,
             parent_compartment_id: c.parentCompartmentId || undefined,
             items: c.items.map((item, itemIdx) => ({
-              name: item.name || 'Untitled Item',
+              name: item.name,
               description: item.description.trim() || undefined,
               sort_order: itemIdx,
               check_type: item.checkType,
@@ -1497,7 +1499,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
         };
         const created = await schedulingService.createEquipmentCheckTemplate(createPayload);
         setIsDirty(false);
-        toast.success('Template created');
+        toast.success(publish ? 'Template published' : 'Draft saved');
         // Navigate to edit mode so subsequent saves work as updates
         void navigate(`/scheduling/equipment-check-templates/${created.id}`, { replace: true });
         return;
@@ -3386,10 +3388,11 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     <div className="space-y-4">
       {/* Name */}
       <div>
-        <label className={labelClass}>
+        <label className={labelClass} htmlFor="equipment-check-template-name">
           Name <span className="text-red-500">*</span>
         </label>
         <input
+          id="equipment-check-template-name"
           type="text"
           className={inputClass}
           placeholder="e.g. Engine Daily Check"
@@ -3521,19 +3524,9 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
         </p>
       </div>
 
-      {/* Active toggle */}
-      <div className="flex items-center gap-2">
-        <label className="text-theme-text-secondary flex items-center gap-2 text-sm">
-          <input
-            type="checkbox"
-            className={checkboxClass}
-            checked={form.isActive}
-            onChange={(e) => updateForm({ isActive: e.target.checked })}
-          />
-          Active
-        </label>
-        <span className="text-theme-text-muted text-[10px]">Inactive = hidden from shift checklists</span>
-      </div>
+      <p className="text-theme-text-muted text-xs">
+        Status: <strong>{form.isActive ? 'Published' : 'Draft'}</strong>. Drafts are hidden from shift checklists.
+      </p>
     </div>
   );
 
@@ -3662,13 +3655,37 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             type="button"
             onClick={() => void handleSave()}
             disabled={saving}
-            className="flex min-h-11 items-center gap-2 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:opacity-50 sm:min-h-10"
+            className="btn-secondary flex min-h-11 items-center gap-2 px-3 py-2 text-sm font-medium sm:min-h-10"
           >
             {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-            {saving ? 'Saving...' : 'Save'}
+            {saving ? 'Saving...' : 'Save draft'}
+          </button>
+          <button
+            type="button"
+            onClick={() => void handleSave(true)}
+            disabled={saving || publicationErrors.length > 0}
+            title={publicationErrors.join(' ')}
+            className="flex min-h-11 items-center gap-2 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50 sm:min-h-10"
+          >
+            Publish
           </button>
         </div>
       </div>
+
+      <section className="card mx-auto mb-5 max-w-7xl p-4" aria-labelledby="template-readiness-heading">
+        <h2 id="template-readiness-heading" className="text-theme-text-primary text-sm font-semibold">
+          Template readiness
+        </h2>
+        <p className="mt-2 text-sm text-green-700 dark:text-green-400">{setupReady ? '✓' : '○'} Setup</p>
+        <p className="text-sm text-green-700 dark:text-green-400">{structureReady ? '✓' : '○'} Locations</p>
+        {publicationErrors.length > 0 && (
+          <ul className="mt-2 list-inside list-disc text-sm text-amber-700 dark:text-amber-400">
+            {publicationErrors.map((error) => (
+              <li key={error}>{error}</li>
+            ))}
+          </ul>
+        )}
+      </section>
 
       <div className="mx-auto mb-5 grid max-w-7xl grid-cols-3 overflow-hidden rounded-xl border border-blue-500/15 bg-blue-500/5">
         {[

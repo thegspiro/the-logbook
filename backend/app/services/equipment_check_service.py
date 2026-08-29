@@ -100,6 +100,10 @@ class EquipmentCheckService:
     ) -> EquipmentCheckTemplate:
         """Create a new equipment check template with nested compartments."""
         compartments_data = data.pop("compartments", None) or []
+        if data.get("is_active"):
+            errors = self._publication_errors(data, compartments_data)
+            if errors:
+                raise ValueError("Template cannot be activated: " + "; ".join(errors))
 
         template = EquipmentCheckTemplate(
             id=generate_uuid(),
@@ -308,6 +312,14 @@ class EquipmentCheckService:
         if not template:
             return None
 
+        if data.get("is_active") and not template.is_active:
+            errors = self._publication_errors(
+                {"name": data.get("name", template.name)},
+                template.compartments,
+            )
+            if errors:
+                raise ValueError("Template cannot be activated: " + "; ".join(errors))
+
         # XC-1: create_template/clone_template validate the apparatus is in-org,
         # but this generic setattr loop did not — and the template's apparatus_id
         # is resolved to an apparatus *name* in the checklist/supply listings, so
@@ -324,6 +336,65 @@ class EquipmentCheckService:
 
         await self.db.commit()
         return await self.get_template(template_id, organization_id)
+
+    @staticmethod
+    def _publication_errors(
+        template_data: Dict[str, Any], compartments: Any
+    ) -> List[str]:
+        """Return blocking readiness failures for an operational template.
+
+        Draft persistence deliberately accepts these shapes.  This guard lives
+        in the service so every activation path applies the same rules even if
+        a client bypasses the builder.
+        """
+        errors: List[str] = []
+        if not str(template_data.get("name") or "").strip():
+            errors.append("template name is required")
+
+        operational_count = 0
+        for compartment in compartments:
+            get = (
+                compartment.get
+                if isinstance(compartment, dict)
+                else lambda key, default=None: getattr(compartment, key, default)
+            )
+            if get("is_header", False):
+                continue
+            operational_count += 1
+            label = str(get("name") or "").strip()
+            if not label:
+                errors.append("every operational compartment needs a name")
+            items = get("items", None) or []
+            if not items:
+                errors.append(
+                    f'operational compartment "{label or "Untitled"}" is empty'
+                )
+            for item in items:
+                item_get = (
+                    item.get
+                    if isinstance(item, dict)
+                    else lambda key, default=None: getattr(item, key, default)
+                )
+                item_label = str(item_get("name") or "").strip()
+                if not item_label:
+                    errors.append("every checklist item needs a name")
+                check_type = item_get("check_type", "pass_fail")
+                if (
+                    check_type == "count"
+                    and item_get("required_quantity") is None
+                    and item_get("expected_quantity") is None
+                ):
+                    errors.append(
+                        f'count item "{item_label or "Untitled"}" needs an expected quantity'
+                    )
+                if check_type == "level" and item_get("min_level") is None:
+                    errors.append(
+                        f'level item "{item_label or "Untitled"}" needs a minimum level'
+                    )
+
+        if operational_count == 0:
+            errors.append("at least one operational compartment is required")
+        return list(dict.fromkeys(errors))
 
     async def delete_template(self, template_id: str, organization_id: str) -> bool:
         """Delete a template and all its compartments/items."""
