@@ -153,6 +153,9 @@ const MobileActionMenu: React.FC<{ label: string; children: React.ReactNode }> =
 
 interface ItemFormState {
   id?: string;
+  /** Stable identity and delivery state for an optimistic quick-add row. */
+  clientKey?: string;
+  saveState?: 'saving' | 'failed';
   name: string;
   description: string;
   checkType: CheckType;
@@ -976,6 +979,83 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
   const [bulkItemPending, setBulkItemPending] = useState<Record<string, boolean>>({});
   const bulkIdempotencyKeys = useRef<Record<string, { key: string; payload: string }>>({});
 
+  interface QuickAddRequest {
+    compartmentId: string;
+    clientKey: string;
+    payload: CheckTemplateItemCreate;
+    idempotencyKey: string;
+  }
+
+  // Each compartment owns its own promise chain. A slow cab request must not
+  // block additions to a bag, while append ordering inside either remains the
+  // order in which the operator pressed Enter.
+  const quickAddChains = useRef<Record<string, Promise<void>>>({});
+  const quickAddRequests = useRef<Record<string, QuickAddRequest>>({});
+
+  const patchQuickAddRow = useCallback((request: QuickAddRequest, replacement: ItemFormState | null) => {
+    setCompartments((previous) =>
+      previous.map((candidate) =>
+        candidate.id !== request.compartmentId
+          ? candidate
+          : {
+              ...candidate,
+              items: replacement
+                ? candidate.items.map((item) => (item.clientKey === request.clientKey ? replacement : item))
+                : candidate.items.filter((item) => item.clientKey !== request.clientKey),
+            }
+      )
+    );
+  }, []);
+
+  const sendQuickAdd = useCallback(
+    async (request: QuickAddRequest) => {
+      patchQuickAddRow(request, {
+        ...emptyItem(),
+        name: request.payload.name,
+        checkType: normalizeCheckType(request.payload.check_type),
+        inventoryItemId: request.payload.inventory_item_id ?? '',
+        hasExpiration: request.payload.has_expiration ?? false,
+        clientKey: request.clientKey,
+        saveState: 'saving',
+      });
+      try {
+        const result = await schedulingService.addCheckItemsBulk(
+          request.compartmentId,
+          [request.payload],
+          request.idempotencyKey
+        );
+        const created = result.items[0];
+        if (!created) throw new Error('The server did not return the created item');
+        patchQuickAddRow(request, itemFormFromResponse(created));
+        delete quickAddRequests.current[request.clientKey];
+      } catch {
+        patchQuickAddRow(request, {
+          ...emptyItem(),
+          name: request.payload.name,
+          checkType: normalizeCheckType(request.payload.check_type),
+          inventoryItemId: request.payload.inventory_item_id ?? '',
+          hasExpiration: request.payload.has_expiration ?? false,
+          clientKey: request.clientKey,
+          saveState: 'failed',
+        });
+      }
+    },
+    [patchQuickAddRow]
+  );
+
+  const enqueueQuickAdd = useCallback(
+    (request: QuickAddRequest) => {
+      const previous = quickAddChains.current[request.compartmentId] ?? Promise.resolve();
+      const next = previous.catch(() => undefined).then(() => sendQuickAdd(request));
+      quickAddChains.current[request.compartmentId] = next;
+      void next.finally(() => {
+        if (quickAddChains.current[request.compartmentId] === next)
+          delete quickAddChains.current[request.compartmentId];
+      });
+    },
+    [sendQuickAdd]
+  );
+
   const handleQuickAdd = async (compartmentIdx: number, payload: CatalogAddPayload) => {
     const comp = compartments[compartmentIdx];
     if (!comp) return;
@@ -984,24 +1064,26 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     if (!name) return;
 
     if (comp.id) {
-      try {
-        const createPayload: CheckTemplateItemCreate = {
-          name,
-          sort_order: comp.items.length,
-          // The catalog link travels with the item on the way in. Adding it
-          // afterwards is the step that never happened.
-          ...(payload.inventoryItemId ? { inventory_item_id: payload.inventoryItemId } : {}),
-          ...(payload.checkType ? { check_type: payload.checkType } : {}),
-          ...(payload.hasExpiration ? { has_expiration: true } : {}),
-        };
-        const created = await schedulingService.addCheckItem(comp.id, createPayload);
-        updateCompartmentField(compartmentIdx, {
-          items: [...comp.items, itemFormFromResponse(created)],
-        });
-      } catch (err: unknown) {
-        toast.error(getErrorMessage(err, 'Failed to add item'));
-        return;
-      }
+      const createPayload: CheckTemplateItemCreate = {
+        name,
+        sort_order: comp.items.length,
+        // The catalog link travels with the item on the way in. Adding it
+        // afterwards is the step that never happened.
+        ...(payload.inventoryItemId ? { inventory_item_id: payload.inventoryItemId } : {}),
+        ...(payload.checkType ? { check_type: payload.checkType } : {}),
+        ...(payload.hasExpiration ? { has_expiration: true } : {}),
+      };
+      const request: QuickAddRequest = {
+        compartmentId: comp.id,
+        clientKey: crypto.randomUUID(),
+        payload: createPayload,
+        idempotencyKey: crypto.randomUUID(),
+      };
+      quickAddRequests.current[request.clientKey] = request;
+      updateCompartmentField(compartmentIdx, {
+        items: [...comp.items, { ...emptyItem(), name, clientKey: request.clientKey, saveState: 'saving' }],
+      });
+      enqueueQuickAdd(request);
     } else {
       updateCompartmentField(compartmentIdx, {
         items: [
@@ -2144,6 +2226,53 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
 
     const isHeader = item.checkType === 'header';
 
+    if (item.saveState) {
+      const retry = () => {
+        if (!item.clientKey) return;
+        const request = quickAddRequests.current[item.clientKey];
+        if (request) enqueueQuickAdd(request);
+      };
+      const remove = () => {
+        if (!item.clientKey) return;
+        const request = quickAddRequests.current[item.clientKey];
+        if (!request) return;
+        delete quickAddRequests.current[item.clientKey];
+        patchQuickAddRow(request, null);
+      };
+
+      return (
+        <div className="border-theme-surface-border bg-theme-surface flex items-center gap-3 rounded-md border px-3 py-3">
+          {item.saveState === 'saving' ? (
+            <Loader2 className="h-4 w-4 shrink-0 animate-spin text-blue-500" aria-hidden="true" />
+          ) : (
+            <AlertTriangle className="h-4 w-4 shrink-0 text-red-500" aria-hidden="true" />
+          )}
+          <span className="text-theme-text-primary min-w-0 flex-1 truncate text-sm font-medium">{item.name}</span>
+          <span className={item.saveState === 'saving' ? 'text-theme-text-muted text-xs' : 'text-xs text-red-600'}>
+            {item.saveState === 'saving' ? 'Saving…' : 'Not saved'}
+          </span>
+          {item.saveState === 'failed' && (
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                className="rounded px-2 py-1 text-xs font-medium text-blue-600 hover:bg-blue-50"
+                onClick={retry}
+              >
+                Retry
+              </button>
+              <button
+                type="button"
+                className="rounded px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50"
+                onClick={remove}
+              >
+                Remove
+              </button>
+            </div>
+          )}
+        </div>
+      );
+    }
+
     return (
       <div
         key={itemKey}
@@ -3276,13 +3405,13 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                 onDragEnd={(e: DragEndEvent) => handleItemDragEnd(idx, e)}
               >
                 <SortableContext
-                  items={comp.items.map((item, i) => item.id ?? `item-${idx}-${i}`)}
+                  items={comp.items.map((item, i) => item.id ?? item.clientKey ?? `item-${idx}-${i}`)}
                   strategy={verticalListSortingStrategy}
                 >
                   {comp.items.map((item, itemIdx) => (
                     <SortableItemWrapper
-                      key={item.id ?? `item-${idx}-${itemIdx}`}
-                      id={item.id ?? `item-${idx}-${itemIdx}`}
+                      key={item.id ?? item.clientKey ?? `item-${idx}-${itemIdx}`}
+                      id={item.id ?? item.clientKey ?? `item-${idx}-${itemIdx}`}
                     >
                       {({ listeners: itemListeners }) =>
                         renderItem(idx, itemIdx, item, itemListeners, comp.items.length)
