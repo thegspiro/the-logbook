@@ -153,6 +153,8 @@ const MobileActionMenu: React.FC<{ label: string; children: React.ReactNode }> =
 
 interface ItemFormState {
   id?: string;
+  clientKey?: string;
+  saveStatus?: 'saving' | 'failed';
   name: string;
   description: string;
   checkType: CheckType;
@@ -619,7 +621,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       }
     });
 
-  const updateCompartmentField = (idx: number, patch: Partial<CompartmentFormState>, dirty = true) => {
+  const updateCompartmentField = (idx: number, patch: Partial<CompartmentFormState>) => {
     setCompartments((prev) => {
       const next = [...prev];
       const existing = next[idx];
@@ -627,7 +629,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       next[idx] = { ...existing, ...patch };
       return next;
     });
-    if (dirty) markDirty();
+    markDirty();
   };
 
   const deleteCompartment = async (idx: number) => {
@@ -771,10 +773,10 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     }
 
     const updatedItems = comp.items.filter((_, i) => i !== itemIdx);
-    updateCompartmentField(compartmentIdx, { items: updatedItems }, !item.id);
+    updateCompartmentField(compartmentIdx, { items: updatedItems });
   };
 
-  const duplicateItem = async (compartmentIdx: number, itemIdx: number) => {
+  const duplicateItem = (compartmentIdx: number, itemIdx: number) => {
     const comp = compartments[compartmentIdx];
     if (!comp) return;
     const item = comp.items[itemIdx];
@@ -785,52 +787,6 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       ...rest,
       name: `${item.name} (copy)`,
     };
-
-    if (comp.id) {
-      const payload: CheckTemplateItemCreate = {
-        name: copy.name,
-        description: copy.description.trim() || undefined,
-        sort_order: itemIdx + 1,
-        check_type: copy.checkType,
-        is_required: copy.isRequired,
-        required_quantity: copy.requiredQuantity ? Number(copy.requiredQuantity) : undefined,
-        expected_quantity: copy.expectedQuantity ? Number(copy.expectedQuantity) : undefined,
-        critical_minimum_quantity: copy.criticalMinimumQuantity ? Number(copy.criticalMinimumQuantity) : undefined,
-        min_level: copy.minLevel ? Number(copy.minLevel) : undefined,
-        level_unit: copy.levelUnit.trim() || undefined,
-        serial_number: copy.serialNumber.trim() || undefined,
-        lot_number: copy.lotNumber.trim() || undefined,
-        inventory_item_id: copy.inventoryItemId || undefined,
-        image_url: copy.imageUrl.trim() || undefined,
-        has_expiration: copy.hasExpiration,
-        expiration_date: copy.expirationDate.trim() || undefined,
-        expiration_warning_days: copy.expirationWarningDays ? Number(copy.expirationWarningDays) : undefined,
-      };
-      const requestKey = `duplicate:${comp.id}:${item.id ?? String(itemIdx)}`;
-      const payloadFingerprint = JSON.stringify(payload);
-      const previousRequest = bulkIdempotencyKeys.current[requestKey];
-      const idempotencyKey =
-        previousRequest?.payload === payloadFingerprint ? previousRequest.key : crypto.randomUUID();
-      bulkIdempotencyKeys.current[requestKey] = { key: idempotencyKey, payload: payloadFingerprint };
-      try {
-        const result = await schedulingService.addCheckItemsBulk(comp.id, [payload], idempotencyKey);
-        const created = result.items[0];
-        if (!created) throw new Error('The duplicated item was not returned');
-        delete bulkIdempotencyKeys.current[requestKey];
-        const updatedItems = [...comp.items];
-        updatedItems.splice(itemIdx + 1, 0, itemFormFromResponse(created));
-        updateCompartmentField(compartmentIdx, { items: updatedItems }, false);
-        await schedulingService.reorderItems(
-          comp.id,
-          updatedItems.map((candidate) => candidate.id).filter((id): id is string => Boolean(id))
-        );
-        toast.success('Item duplicated');
-      } catch (err: unknown) {
-        toast.error(getErrorMessage(err, 'Failed to duplicate item'));
-      }
-      return;
-    }
-
     const updatedItems = [...comp.items];
     updatedItems.splice(itemIdx + 1, 0, copy);
     updateCompartmentField(compartmentIdx, { items: updatedItems });
@@ -841,7 +797,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
   // Move item up/down within a compartment
   // ---------------------------------------------------------------------------
 
-  const moveItem = async (compartmentIdx: number, itemIdx: number, direction: 'up' | 'down') => {
+  const moveItem = (compartmentIdx: number, itemIdx: number, direction: 'up' | 'down') => {
     const comp = compartments[compartmentIdx];
     if (!comp) return;
     const newIdx = direction === 'up' ? itemIdx - 1 : itemIdx + 1;
@@ -865,22 +821,10 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       if (movedItem) reorderedItems.splice(newIdx, 0, movedItem);
       const savedIds = reorderedItems.map((item) => item.id).filter((id): id is string => Boolean(id));
       if (savedIds.length > 0) {
-        try {
-          await schedulingService.reorderItems(comp.id, savedIds);
-        } catch {
-          setCompartments((prev) => {
-            const next = [...prev];
-            const current = next[compartmentIdx];
-            if (!current) return prev;
-            next[compartmentIdx] = { ...current, items: comp.items };
-            return next;
-          });
-          toast.error('Failed to save item order');
-          return;
-        }
+        void schedulingService.reorderItems(comp.id, savedIds).catch(() => toast.error('Failed to save item order'));
       }
     }
-    if (!isEditing || !comp.id) markDirty();
+    markDirty();
   };
 
   const moveItemToCompartment = async (fromCompIdx: number, itemIdx: number, toCompIdx: number) => {
@@ -911,20 +855,10 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           sort_order: toComp.items.length,
         });
       } catch {
-        setCompartments((prev) => {
-          const next = [...prev];
-          const src = next[fromCompIdx];
-          const dst = next[toCompIdx];
-          if (!src || !dst) return prev;
-          next[fromCompIdx] = { ...src, items: fromComp.items };
-          next[toCompIdx] = { ...dst, items: toComp.items };
-          return next;
-        });
         toast.error('Failed to move item on server');
-        return;
       }
     }
-    if (!isEditing || !item.id || !toComp.id) markDirty();
+    markDirty();
     toast.success(`Moved "${item.name || 'item'}" to ${toComp.name || 'compartment'}`);
   };
 
@@ -932,20 +866,16 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
   // Move compartment up/down
   // ---------------------------------------------------------------------------
 
-  const pendingCompartmentOrderRef = useRef<{ previous: CompartmentFormState[]; version: number } | null>(null);
-
-  const compartmentOrderVersionRef = useRef(0);
+  const pendingCompartmentOrderRef = useRef(false);
 
   const moveCompartment = (idx: number, direction: 'up' | 'down') => {
     const id = compartments[idx]?.id;
     // Unsaved records have no stable identity and therefore cannot be safely
     // represented in the reorder API. Save the template before reordering.
     if (!id) return;
-    setCompartments((prev) => {
-      pendingCompartmentOrderRef.current = { previous: prev, version: ++compartmentOrderVersionRef.current };
-
-      return moveCompartmentInTree(prev, id, direction);
-    });
+    setCompartments((prev) => moveCompartmentInTree(prev, id, direction));
+    pendingCompartmentOrderRef.current = true;
+    markDirty();
   };
 
   // Persistence deliberately follows the state update. This builds ordered_ids
@@ -953,17 +883,12 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
   // `compartments` closure.
   useEffect(() => {
     if (!pendingCompartmentOrderRef.current || !isEditing || !templateId) return;
-
-    const { previous, version } = pendingCompartmentOrderRef.current;
-
-    pendingCompartmentOrderRef.current = null;
+    pendingCompartmentOrderRef.current = false;
     const savedIds = orderedCompartmentIds(compartments);
     if (savedIds.length > 0) {
-      void schedulingService.reorderCompartments(templateId, savedIds).catch(() => {
-        if (version === compartmentOrderVersionRef.current) setCompartments(previous);
-
-        toast.error('Failed to save compartment order');
-      });
+      void schedulingService
+        .reorderCompartments(templateId, savedIds)
+        .catch(() => toast.error('Failed to save compartment order'));
     }
   }, [compartments, isEditing, templateId]);
 
@@ -1037,13 +962,9 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       bulkDeleteIdempotencyKeys.current[key] = { key: idempotencyKey, payload };
       const result = await schedulingService.deleteCheckItemsBulk(comp.id, itemIds, idempotencyKey);
       const deletedIds = new Set(result.deletedItemIds);
-      updateCompartmentField(
-        compartmentIdx,
-
-        { items: comp.items.filter((item) => !item.id || !deletedIds.has(item.id)) },
-
-        false
-      );
+      updateCompartmentField(compartmentIdx, {
+        items: comp.items.filter((item) => !item.id || !deletedIds.has(item.id)),
+      });
       setSelectedItems((prev) => ({ ...prev, [key]: new Set<number>() }));
       delete bulkDeleteIdempotencyKeys.current[key];
       const deletedCount = deletedIds.size;
@@ -1062,67 +983,128 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
   const [bulkPasteValues, setBulkPasteValues] = useState<Record<string, string>>({});
   const [showEquipmentPresets, setShowEquipmentPresets] = useState<Record<string, boolean>>({});
   const [bulkItemPending, setBulkItemPending] = useState<Record<string, boolean>>({});
-  const [quickItemPending, setQuickItemPending] = useState<Record<string, boolean>>({});
-
-  const quickAddPending = useRef(new Set<string>());
-
   const bulkIdempotencyKeys = useRef<Record<string, { key: string; payload: string }>>({});
+  const quickAddQueues = useRef<Record<string, Promise<void>>>({});
+  const quickAddJobs = useRef<Record<string, QuickAddJob>>({});
 
-  const handleQuickAdd = async (compartmentIdx: number, payload: CatalogAddPayload) => {
+  interface QuickAddJob {
+    clientKey: string;
+    compartmentId: string;
+    compartmentKey: string;
+    payload: CheckTemplateItemCreate;
+    idempotencyKey: string;
+  }
+
+  const replaceQuickAddItem = (compartmentKey: string, clientKey: string, replacement: ItemFormState | null) => {
+    setCompartments((previous) =>
+      previous.map((compartment, index) => {
+        if ((compartment.id ?? `comp-${index}`) !== compartmentKey) return compartment;
+        return {
+          ...compartment,
+          items: replacement
+            ? compartment.items.map((item) => (item.clientKey === clientKey ? replacement : item))
+            : compartment.items.filter((item) => item.clientKey !== clientKey),
+        };
+      })
+    );
+  };
+
+  const appendQuickAddItem = (compartmentKey: string, item: ItemFormState) => {
+    setCompartments((previous) =>
+      previous.map((compartment, index) =>
+        (compartment.id ?? `comp-${index}`) === compartmentKey
+          ? { ...compartment, items: [...compartment.items, item] }
+          : compartment
+      )
+    );
+    markDirty();
+  };
+
+  const runQuickAdd = (job: QuickAddJob) => {
+    quickAddJobs.current[job.clientKey] = job;
+    replaceQuickAddItem(job.compartmentKey, job.clientKey, {
+      ...emptyItem(),
+      name: job.payload.name,
+      ...(job.payload.inventory_item_id ? { inventoryItemId: job.payload.inventory_item_id } : {}),
+      ...(job.payload.check_type ? { checkType: job.payload.check_type as CheckType } : {}),
+      ...(job.payload.has_expiration ? { hasExpiration: true } : {}),
+      clientKey: job.clientKey,
+      saveStatus: 'saving',
+    });
+    const previous = quickAddQueues.current[job.compartmentKey] ?? Promise.resolve();
+    const request = previous.then(async () => {
+      try {
+        const result = await schedulingService.addCheckItemsBulk(job.compartmentId, [job.payload], job.idempotencyKey);
+        const created = result.items[0];
+        if (!created) throw new Error('The server did not return the saved item');
+        replaceQuickAddItem(job.compartmentKey, job.clientKey, itemFormFromResponse(created));
+        delete quickAddJobs.current[job.clientKey];
+      } catch (err: unknown) {
+        replaceQuickAddItem(job.compartmentKey, job.clientKey, {
+          ...emptyItem(),
+          name: job.payload.name,
+          ...(job.payload.inventory_item_id ? { inventoryItemId: job.payload.inventory_item_id } : {}),
+          ...(job.payload.check_type ? { checkType: job.payload.check_type as CheckType } : {}),
+          ...(job.payload.has_expiration ? { hasExpiration: true } : {}),
+          clientKey: job.clientKey,
+          saveStatus: 'failed',
+        });
+        toast.error(getErrorMessage(err, `Failed to add ${job.payload.name}`));
+      }
+    });
+    quickAddQueues.current[job.compartmentKey] = request;
+  };
+
+  const handleQuickAdd = (compartmentIdx: number, payload: CatalogAddPayload) => {
     const comp = compartments[compartmentIdx];
-    if (!comp) return false;
+    if (!comp) return;
     const key = getCompKey(compartmentIdx);
     const name = payload.name.trim();
+    if (!name) return;
 
-    if (!name) return false;
-    if (quickAddPending.current.has(key)) return false;
-    quickAddPending.current.add(key);
+    setQuickAddValues((prev) => ({ ...prev, [key]: '' }));
 
-    setQuickItemPending((prev) => ({ ...prev, [key]: true }));
-
-    try {
-      if (comp.id) {
-        const createPayload: CheckTemplateItemCreate = {
-          name,
-          sort_order: comp.items.length,
-          // The catalog link travels with the item on the way in. Adding it
-          // afterwards is the step that never happened.
-          ...(payload.inventoryItemId ? { inventory_item_id: payload.inventoryItemId } : {}),
-          ...(payload.checkType ? { check_type: payload.checkType } : {}),
-          ...(payload.hasExpiration ? { has_expiration: true } : {}),
-        };
-        const created = await schedulingService.addCheckItem(comp.id, createPayload);
-        updateCompartmentField(
-          compartmentIdx,
+    if (comp.id) {
+      const createPayload: CheckTemplateItemCreate = {
+        name,
+        sort_order: comp.items.length,
+        // The catalog link travels with the item on the way in. Adding it
+        // afterwards is the step that never happened.
+        ...(payload.inventoryItemId ? { inventory_item_id: payload.inventoryItemId } : {}),
+        ...(payload.checkType ? { check_type: payload.checkType } : {}),
+        ...(payload.hasExpiration ? { has_expiration: true } : {}),
+      };
+      const clientKey = crypto.randomUUID();
+      const job: QuickAddJob = {
+        clientKey,
+        compartmentId: comp.id,
+        compartmentKey: key,
+        payload: createPayload,
+        idempotencyKey: crypto.randomUUID(),
+      };
+      appendQuickAddItem(key, {
+        ...emptyItem(),
+        name,
+        ...(payload.inventoryItemId ? { inventoryItemId: payload.inventoryItemId } : {}),
+        ...(payload.checkType ? { checkType: payload.checkType } : {}),
+        ...(payload.hasExpiration ? { hasExpiration: true } : {}),
+        clientKey,
+        saveStatus: 'saving',
+      });
+      runQuickAdd(job);
+    } else {
+      updateCompartmentField(compartmentIdx, {
+        items: [
+          ...comp.items,
           {
-            items: [...comp.items, itemFormFromResponse(created)],
+            ...emptyItem(),
+            name,
+            ...(payload.inventoryItemId ? { inventoryItemId: payload.inventoryItemId } : {}),
+            ...(payload.checkType ? { checkType: payload.checkType } : {}),
+            ...(payload.hasExpiration ? { hasExpiration: true } : {}),
           },
-          false
-        );
-      } else {
-        updateCompartmentField(compartmentIdx, {
-          items: [
-            ...comp.items,
-            {
-              ...emptyItem(),
-              name,
-              ...(payload.inventoryItemId ? { inventoryItemId: payload.inventoryItemId } : {}),
-              ...(payload.checkType ? { checkType: payload.checkType } : {}),
-              ...(payload.hasExpiration ? { hasExpiration: true } : {}),
-            },
-          ],
-        });
-      }
-      setQuickAddValues((prev) => ({ ...prev, [key]: '' }));
-
-      return true;
-    } catch (err: unknown) {
-      toast.error(getErrorMessage(err, 'Failed to add item'));
-      return false;
-    } finally {
-      quickAddPending.current.delete(key);
-
-      setQuickItemPending((prev) => ({ ...prev, [key]: false }));
+        ],
+      });
     }
   };
 
@@ -1152,7 +1134,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
         const result = await schedulingService.addCheckItemsBulk(comp.id, payload, idempotencyKey);
         delete bulkIdempotencyKeys.current[requestKey];
         const newItems = result.items.map(itemFormFromResponse);
-        updateCompartmentField(compartmentIdx, { items: [...comp.items, ...newItems] }, false);
+        updateCompartmentField(compartmentIdx, { items: [...comp.items, ...newItems] });
         toast.success(`Added ${result.createdCount} item${result.createdCount !== 1 ? 's' : ''}`);
       } catch (err: unknown) {
         toast.error(getErrorMessage(err, 'Failed to add items'));
@@ -1552,32 +1534,6 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                       : undefined,
                   })
                 );
-              } else {
-                updatePromises.push(
-                  schedulingService.addCheckItem(comp.id, {
-                    name: item.name || 'Untitled Item',
-                    description: item.description.trim() || undefined,
-                    sort_order: comp.items.indexOf(item),
-                    check_type: item.checkType,
-                    is_required: item.isRequired,
-                    required_quantity: item.requiredQuantity ? Number(item.requiredQuantity) : undefined,
-                    expected_quantity: item.expectedQuantity ? Number(item.expectedQuantity) : undefined,
-                    critical_minimum_quantity: item.criticalMinimumQuantity
-                      ? Number(item.criticalMinimumQuantity)
-                      : undefined,
-                    min_level: item.minLevel ? Number(item.minLevel) : undefined,
-                    level_unit: item.levelUnit.trim() || undefined,
-                    serial_number: item.serialNumber.trim() || undefined,
-                    lot_number: item.lotNumber.trim() || undefined,
-                    inventory_item_id: item.inventoryItemId || undefined,
-                    image_url: item.imageUrl.trim() || undefined,
-                    has_expiration: item.hasExpiration,
-                    expiration_date: item.expirationDate.trim() || undefined,
-                    expiration_warning_days: item.expirationWarningDays
-                      ? Number(item.expirationWarningDays)
-                      : undefined,
-                  })
-                );
               }
             }
           }
@@ -1702,6 +1658,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       items: comp.items.map((item) => ({
         ...emptyItem(),
         name: item.name,
+        description: item.description ?? '',
         checkType: item.checkType,
       })),
     }));
@@ -2203,11 +2160,9 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     const overId = String(over.id);
     // reorderCompartment rejects cross-parent drops. Dragging a parent moves
     // its subtree because the returned array is canonical depth-first order.
-    setCompartments((prev) => {
-      pendingCompartmentOrderRef.current = { previous: prev, version: ++compartmentOrderVersionRef.current };
-
-      return reorderCompartment(prev, activeId, overId);
-    });
+    setCompartments((prev) => reorderCompartment(prev, activeId, overId));
+    pendingCompartmentOrderRef.current = true;
+    markDirty();
   };
 
   const handleItemDragEnd = (compIdx: number, event: DragEndEvent) => {
@@ -2241,16 +2196,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       if (movedItem) reorderedItems.splice(newIndex, 0, movedItem);
       const savedIds = reorderedItems.map((item) => item.id).filter((id): id is string => Boolean(id));
       if (savedIds.length > 0) {
-        void schedulingService.reorderItems(comp.id, savedIds).catch(() => {
-          setCompartments((prev) => {
-            const next = [...prev];
-            const current = next[compIdx];
-            if (!current) return prev;
-            next[compIdx] = { ...current, items: comp.items };
-            return next;
-          });
-          toast.error('Failed to save item order');
-        });
+        void schedulingService.reorderItems(comp.id, savedIds).catch(() => toast.error('Failed to save item order'));
       }
     }
   };
@@ -2278,7 +2224,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     dragHandleProps?: Record<string, unknown>,
     totalItems?: number
   ) => {
-    const itemKey = item.id ?? `item-${compIdx}-${itemIdx}`;
+    const itemKey = item.id ?? item.clientKey ?? `item-${compIdx}-${itemIdx}`;
     const isItemExpanded = expandedItems.has(itemKey);
     const checkTypeLabel = CHECK_TYPES.find((ct) => ct.value === item.checkType)?.label ?? item.checkType;
     const compKey = getCompKey(compIdx);
@@ -2287,6 +2233,51 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     const itemCount = totalItems ?? compartments[compIdx]?.items.length ?? 0;
 
     const isHeader = item.checkType === 'header';
+
+    if (item.saveStatus) {
+      return (
+        <div
+          className="border-theme-surface-border bg-theme-surface flex min-h-12 items-center gap-3 rounded-md border px-3 py-2"
+          aria-label={`${item.name} ${item.saveStatus === 'saving' ? 'Saving' : 'Not saved'}`}
+        >
+          {item.saveStatus === 'saving' ? (
+            <Loader2 className="h-4 w-4 shrink-0 animate-spin text-blue-500" aria-hidden="true" />
+          ) : (
+            <AlertTriangle className="h-4 w-4 shrink-0 text-red-500" aria-hidden="true" />
+          )}
+          <span className="text-theme-text-primary min-w-0 flex-1 truncate text-sm font-medium">{item.name}</span>
+          <span
+            className={`text-xs ${item.saveStatus === 'failed' ? 'text-red-600 dark:text-red-400' : 'text-theme-text-muted'}`}
+          >
+            {item.saveStatus === 'saving' ? 'Saving…' : 'Not saved'}
+          </span>
+          {item.saveStatus === 'failed' && item.clientKey && (
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                className="rounded px-2 py-1 text-xs font-medium text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-900/20"
+                onClick={() => {
+                  const job = quickAddJobs.current[item.clientKey ?? ''];
+                  if (job) runQuickAdd(job);
+                }}
+              >
+                Retry
+              </button>
+              <button
+                type="button"
+                className="rounded px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20"
+                onClick={() => {
+                  delete quickAddJobs.current[item.clientKey ?? ''];
+                  replaceQuickAddItem(compKey, item.clientKey ?? '', null);
+                }}
+              >
+                Remove
+              </button>
+            </div>
+          )}
+        </div>
+      );
+    }
 
     return (
       <div
@@ -2403,7 +2394,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             {/* Move up/down buttons */}
             <button
               type="button"
-              onClick={() => void moveItem(compIdx, itemIdx, 'up')}
+              onClick={() => moveItem(compIdx, itemIdx, 'up')}
               disabled={itemIdx === 0}
               className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-secondary rounded p-1 transition-colors disabled:cursor-not-allowed disabled:opacity-30"
               aria-label={`Move ${item.name || 'item'} up`}
@@ -2412,7 +2403,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             </button>
             <button
               type="button"
-              onClick={() => void moveItem(compIdx, itemIdx, 'down')}
+              onClick={() => moveItem(compIdx, itemIdx, 'down')}
               disabled={itemIdx === itemCount - 1}
               className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-secondary rounded p-1 transition-colors disabled:cursor-not-allowed disabled:opacity-30"
               aria-label={`Move ${item.name || 'item'} down`}
@@ -2421,7 +2412,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             </button>
             <button
               type="button"
-              onClick={() => void duplicateItem(compIdx, itemIdx)}
+              onClick={() => duplicateItem(compIdx, itemIdx)}
               className="text-theme-text-muted rounded p-1 transition-colors hover:bg-blue-50 hover:text-blue-600 dark:hover:bg-blue-900/20"
               aria-label={`Duplicate ${item.name || 'item'}`}
             >
@@ -2481,7 +2472,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
               type="button"
               className={mobileMenuItemClass}
               disabled={itemIdx === 0}
-              onClick={() => void moveItem(compIdx, itemIdx, 'up')}
+              onClick={() => moveItem(compIdx, itemIdx, 'up')}
             >
               <ChevronUp className="h-4 w-4" aria-hidden="true" /> Move up
             </button>
@@ -2489,11 +2480,11 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
               type="button"
               className={mobileMenuItemClass}
               disabled={itemIdx === itemCount - 1}
-              onClick={() => void moveItem(compIdx, itemIdx, 'down')}
+              onClick={() => moveItem(compIdx, itemIdx, 'down')}
             >
               <ChevronDown className="h-4 w-4" aria-hidden="true" /> Move down
             </button>
-            <button type="button" className={mobileMenuItemClass} onClick={() => void duplicateItem(compIdx, itemIdx)}>
+            <button type="button" className={mobileMenuItemClass} onClick={() => duplicateItem(compIdx, itemIdx)}>
               <Copy className="h-4 w-4" aria-hidden="true" /> Duplicate
             </button>
             {compartments.filter(
@@ -3420,13 +3411,13 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                 onDragEnd={(e: DragEndEvent) => handleItemDragEnd(idx, e)}
               >
                 <SortableContext
-                  items={comp.items.map((item, i) => item.id ?? `item-${idx}-${i}`)}
+                  items={comp.items.map((item, i) => item.id ?? item.clientKey ?? `item-${idx}-${i}`)}
                   strategy={verticalListSortingStrategy}
                 >
                   {comp.items.map((item, itemIdx) => (
                     <SortableItemWrapper
-                      key={item.id ?? `item-${idx}-${itemIdx}`}
-                      id={item.id ?? `item-${idx}-${itemIdx}`}
+                      key={item.id ?? item.clientKey ?? `item-${idx}-${itemIdx}`}
+                      id={item.id ?? item.clientKey ?? `item-${idx}-${itemIdx}`}
                     >
                       {({ listeners: itemListeners }) =>
                         renderItem(idx, itemIdx, item, itemListeners, comp.items.length)
@@ -3501,7 +3492,6 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                         onChange={(v) => setQuickAddValues((prev) => ({ ...prev, [compKey]: v }))}
                         onAdd={(payload) => handleQuickAdd(idx, payload)}
                         canCreateInventory={canManageInventory}
-                        disabled={quickItemPending[compKey] ?? false}
                       />
                     )}
                   </div>
@@ -3582,8 +3572,11 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
 
       {/* Template Type */}
       <div>
-        <label className={labelClass}>Template Type</label>
+        <label className={labelClass} htmlFor="equipment-check-template-type">
+          Template Type
+        </label>
         <select
+          id="equipment-check-template-type"
           className={selectClass}
           value={form.templateType}
           onChange={(e) => updateForm({ templateType: e.target.value as TemplateType })}
@@ -3824,7 +3817,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             number: 3,
             label: 'Review',
             detail: itemsReady ? `${stats.totalItems} items` : 'Preview checklist',
-            ready: false,
+            ready: itemsReady,
           },
         ].map((step, index) => (
           <div
