@@ -516,6 +516,79 @@ class TestShiftCheckCompletionStatus:
         assert summaries[0]["overall_status"] == overall_status
 
 
+class TestCloneCompartment:
+    @staticmethod
+    def source():
+        item = SimpleNamespace(
+            name="Portable suction",
+            description="Charged and operational",
+            sort_order=2,
+            check_type="function",
+            is_required=True,
+            required_quantity=1,
+            expected_quantity=1,
+            critical_minimum_quantity=1,
+            min_level=None,
+            level_unit=None,
+            serial_number="SN-1",
+            lot_number=None,
+            image_url=None,
+            equipment_id="equipment-1",
+            inventory_item_id="inventory-1",
+            has_expiration=False,
+            expiration_date=None,
+            expiration_warning_days=30,
+        )
+        return SimpleNamespace(
+            id="compartment-1",
+            template_id="template-1",
+            name="Airway bag",
+            description="Primary airway equipment",
+            sort_order=3,
+            image_url=None,
+            is_header=False,
+            container_type="bag",
+            is_sealed=True,
+            parent_compartment_id=None,
+            items=[item],
+        )
+
+    async def test_clones_children_and_returns_saved_ids(self, service, mock_db):
+        source = self.source()
+        saved = SimpleNamespace(id="clone-1", items=[SimpleNamespace(id="item-2")])
+        result = MagicMock()
+        result.scalars.return_value.first.return_value = saved
+        mock_db.execute.side_effect = [MagicMock(), result]
+
+        with patch.object(
+            service, "_get_compartment", new_callable=AsyncMock, return_value=source
+        ):
+            clone = await service.clone_compartment("compartment-1", "org-1")
+
+        added = [call.args[0] for call in mock_db.add.call_args_list]
+        assert clone is saved
+        assert added[0].name == "Airway bag (copy)"
+        assert added[0].sort_order == 4
+        assert added[1].compartment_id == added[0].id
+        assert added[1].inventory_item_id == "inventory-1"
+        assert added[1].name == "Portable suction"
+        mock_db.commit.assert_awaited_once()
+        mock_db.rollback.assert_not_awaited()
+
+    async def test_rolls_back_when_a_child_cannot_be_saved(self, service, mock_db):
+        source = self.source()
+        mock_db.commit.side_effect = RuntimeError("database rejected clone")
+
+        with patch.object(
+            service, "_get_compartment", new_callable=AsyncMock, return_value=source
+        ):
+            with pytest.raises(RuntimeError, match="database rejected clone"):
+                await service.clone_compartment("compartment-1", "org-1")
+
+        mock_db.rollback.assert_awaited_once()
+        mock_db.commit.assert_awaited_once()
+
+
 class TestUpdateItemCompartmentValidation:
     """update_item must validate a reassigned compartment_id in-org — moving an
     item to a foreign compartment transfers it (with the caller's content) into
