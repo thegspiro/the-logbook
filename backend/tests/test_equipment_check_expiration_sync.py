@@ -220,7 +220,10 @@ class TestTrendOutcomeBuckets:
 class TestCreateCheckItems:
     async def test_a_check_recount_becomes_the_on_truck_figure(self, service, mock_db):
         tmpl_item = _template_item(
-            expected_quantity=4, quantity_on_truck=4, restock_needed=False
+            check_type="count",
+            expected_quantity=4,
+            quantity_on_truck=4,
+            restock_needed=False,
         )
         items_data = [
             {
@@ -241,6 +244,7 @@ class TestCreateCheckItems:
 
     async def test_a_full_check_count_settles_a_standing_report(self, service, mock_db):
         tmpl_item = _template_item(
+            check_type="count",
             expected_quantity=4,
             quantity_on_truck=1,
             restock_needed=True,

@@ -371,10 +371,10 @@ class CheckItemResultSubmit(BaseModel):
     status: str = Field(
         ..., pattern=r"^(pass|fail|not_applicable|out_of_service|not_checked)$"
     )
-    quantity_found: Optional[int] = None
+    quantity_found: Optional[int] = Field(None, ge=0)
     required_quantity: Optional[int] = None
     critical_minimum_quantity: Optional[int] = None
-    level_reading: Optional[float] = None
+    level_reading: Optional[float] = Field(None, allow_inf_nan=False)
     level_unit: Optional[str] = Field(None, max_length=50)
     serial_number: Optional[str] = Field(None, max_length=100)
     lot_number: Optional[str] = Field(None, max_length=100)
