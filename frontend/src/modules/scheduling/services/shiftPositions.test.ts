@@ -33,10 +33,12 @@ describe('shift position normalization', () => {
     const shift = await schedulingService.getShift('shift-1');
 
     expect(shift.positions).toEqual([
-      { position: 'officer', required: true },
-      { position: 'driver', required: true },
+      { position: 'officer', required: true, allow_administrative_members: false },
+      { position: 'driver', required: true, allow_administrative_members: false },
     ]);
-    expect(shift.apparatus_positions).toEqual([{ position: 'officer', required: true }]);
+    expect(shift.apparatus_positions).toEqual([
+      { position: 'officer', required: true, allow_administrative_members: false },
+    ]);
   });
 
   it('preserves the required flag on structured seats', async () => {
@@ -44,8 +46,8 @@ describe('shift position normalization', () => {
       data: {
         id: 'shift-1',
         positions: [
-          { position: 'officer', required: true },
-          { position: 'firefighter', required: false },
+          { position: 'officer', required: true, allow_administrative_members: false },
+          { position: 'firefighter', required: false, allow_administrative_members: false },
         ],
       },
     });
@@ -53,8 +55,8 @@ describe('shift position normalization', () => {
     const shift = await schedulingService.getShift('shift-1');
 
     expect(shift.positions).toEqual([
-      { position: 'officer', required: true },
-      { position: 'firefighter', required: false },
+      { position: 'officer', required: true, allow_administrative_members: false },
+      { position: 'firefighter', required: false, allow_administrative_members: false },
     ]);
   });
 
@@ -72,7 +74,7 @@ describe('shift position normalization', () => {
 
     const shifts = await schedulingService.getWeekCalendar('2026-08-02');
 
-    expect(shifts[0]?.positions).toEqual([{ position: 'ems', required: true }]);
+    expect(shifts[0]?.positions).toEqual([{ position: 'ems', required: true, allow_administrative_members: false }]);
   });
 
   it('normalizes seats in the paginated shift list', async () => {
@@ -83,7 +85,9 @@ describe('shift position normalization', () => {
     const result = await schedulingService.getShifts();
 
     expect(result.total).toBe(1);
-    expect(result.shifts[0]?.positions).toEqual([{ position: 'ems', required: true }]);
+    expect(result.shifts[0]?.positions).toEqual([
+      { position: 'ems', required: true, allow_administrative_members: false },
+    ]);
   });
 
   it('survives a shift list body that is not an envelope', async () => {
@@ -100,8 +104,8 @@ describe('apparatus position normalization', () => {
     const apparatus = await schedulingService.getBasicApparatus();
 
     expect(apparatus[0]?.positions).toEqual([
-      { position: 'officer', required: true },
-      { position: 'driver', required: true },
+      { position: 'officer', required: true, allow_administrative_members: false },
+      { position: 'driver', required: true, allow_administrative_members: false },
     ]);
   });
 
@@ -116,6 +120,8 @@ describe('apparatus position normalization', () => {
     const resp = await schedulingService.getApparatusOptions();
 
     expect(resp.source).toBe('basic');
-    expect(resp.options[0]?.positions).toEqual([{ position: 'ems', required: true }]);
+    expect(resp.options[0]?.positions).toEqual([
+      { position: 'ems', required: true, allow_administrative_members: false },
+    ]);
   });
 });

@@ -70,8 +70,11 @@ export interface ResourceUnit {
   type: string;
   label: string;
   quantity: number;
-  positions: string[];
+  positions: Array<string | PositionEntry>;
 }
+
+export const resourcePositionName = (position: string | PositionEntry): string =>
+  typeof position === 'string' ? position : position.position;
 
 export const RESOURCE_TYPE_OPTIONS: {
   value: string;
@@ -365,6 +368,7 @@ export interface TemplateFormData {
 export interface PositionEntry {
   position: string;
   required: boolean;
+  allow_administrative_members?: boolean;
 }
 
 export interface PatternFormData {

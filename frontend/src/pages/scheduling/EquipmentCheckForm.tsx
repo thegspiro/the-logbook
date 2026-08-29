@@ -79,6 +79,12 @@ import type { SealState } from '../../modules/scheduling/components/SealPanel';
 import { useConfirm } from '../../contexts/ConfirmContext';
 import { useAuthStore } from '../../stores/authStore';
 import { useOverlaySurface } from '../../hooks/useOverlaySurface';
+import {
+  deleteEquipmentCheckDraft,
+  loadEquipmentCheckDraft,
+  saveEquipmentCheckDraft,
+  type EquipmentCheckDraftIdentity,
+} from '../../utils/equipmentCheckDrafts';
 // ============================================================================
 // Types
 // ============================================================================
@@ -296,7 +302,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
   shiftContext,
 }) => {
   const { confirm } = useConfirm();
-  const { checkPermission } = useAuthStore();
+  const { checkPermission, user } = useAuthStore();
   // Mirrors the endpoint, which admits check submitters: replacing expired
   // stock is the crew's job at the compartment, and every value the swap
   // stores comes from the inventory lot rather than from here, so a submitter
@@ -729,55 +735,83 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
   );
 
   // --------------------------------------------------------------------------
-  // Draft persistence — save progress to localStorage so it survives crashes
+  // Draft persistence — IndexedDB survives crashes without putting operational
+  // notes in browser string storage shared by every account on the device.
   // --------------------------------------------------------------------------
 
-  const draftKey = `equipment-check-draft-${shiftId || 'standalone'}-${template.id}`;
+  const draftIdentity = useMemo<EquipmentCheckDraftIdentity | null>(() => {
+    if (!user) return null;
+    return {
+      organizationId: user.organization_id,
+      userId: user.id,
+      shiftId: shiftId ?? 'standalone',
+      templateId: template.id,
+      // updatedAt is the API's revision token for this otherwise unversioned
+      // resource. A changed checklist must never inherit answers by item id.
+      templateRevision: template.updatedAt ?? template.createdAt ?? 'unversioned',
+    };
+  }, [shiftId, template.createdAt, template.id, template.updatedAt, user]);
+  const [draftReady, setDraftReady] = useState(false);
+  const draftSaveWarningShown = useRef(false);
 
   useEffect(() => {
-    if (previewMode) return;
-    try {
-      const saved = localStorage.getItem(draftKey);
-      if (!saved) return;
-      const parsed = JSON.parse(saved) as {
-        results: Record<string, ItemResult>;
-        overallNotes: string;
-        seals?: Record<string, SealState>;
-      };
-      if (parsed.results && Object.keys(parsed.results).length > 0) {
-        setResults(parsed.results);
-      }
-      // Restored together with the results, because confirming a seal writes
-      // passing statuses into them. Without this a reload would bring back
-      // those passes with no seal behind them, and the crew could submit a
-      // completed check whose audit record says nobody ever vouched for the
-      // contents. No older draft can carry that state: the seal shortcut and
-      // this line ship together, so a draft without `seals` has no
-      // seal-derived passes in it either.
-      if (parsed.seals && Object.keys(parsed.seals).length > 0) {
-        setSeals(parsed.seals);
-      }
-      if (parsed.overallNotes) {
-        setOverallNotes(parsed.overallNotes);
-      }
-    } catch {
-      // Corrupted draft — ignore
+    if (previewMode || !draftIdentity) {
+      setDraftReady(true);
+      return;
     }
-  }, [draftKey, previewMode]);
+    let cancelled = false;
+    void loadEquipmentCheckDraft<{
+      results: Record<string, ItemResult>;
+      overallNotes: string;
+      seals?: Record<string, SealState>;
+    }>(draftIdentity)
+      .then((draft) => {
+        if (cancelled || !draft) return;
+        const parsed = draft.contents;
+        if (parsed.results && Object.keys(parsed.results).length > 0) setResults(parsed.results);
+        // Restored together with the results, because confirming a seal writes
+        // passing statuses into them. Without this a reload would bring back
+        // those passes with no seal behind them, and the crew could submit a
+        // completed check whose audit record says nobody ever vouched for the
+        // contents. No older draft can carry that state: the seal shortcut and
+        // this line ship together, so a draft without `seals` has no
+        // seal-derived passes in it either.
+        if (parsed.seals && Object.keys(parsed.seals).length > 0) setSeals(parsed.seals);
+        if (parsed.overallNotes) setOverallNotes(parsed.overallNotes);
+        const completed = Object.values(parsed.results).filter((result) => result.status !== 'not_checked').length;
+        const minutes = Math.max(0, Math.floor((Date.now() - draft.updatedAt) / 60_000));
+        toast.success(
+          `Draft restored — saved by you ${minutes === 0 ? 'just now' : `${String(minutes)} minutes ago`}; ${String(completed)} of ${String(totalItems)} items completed`
+        );
+      })
+      .catch(() => toast.error('Draft recovery is unavailable; no prior answers were opened'))
+      .finally(() => {
+        if (!cancelled) setDraftReady(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [draftIdentity, previewMode, totalItems]);
 
   useEffect(() => {
-    if (previewMode) return;
+    if (previewMode || !draftIdentity || !draftReady) return;
     // Session termination removes this hint synchronously, before its slower
     // IndexedDB purge. Do not let a late API response recreate a sensitive
     // draft while logout/session-expiry cleanup is still running.
     if (!localStorage.getItem('has_session')) return;
     if (Object.keys(results).length === 0 && !overallNotes && Object.keys(seals).length === 0) return;
-    try {
-      localStorage.setItem(draftKey, JSON.stringify({ results, overallNotes, seals }));
-    } catch {
-      // Storage full — ignore
-    }
-  }, [results, overallNotes, seals, draftKey, previewMode]);
+    // Photo previews and File objects are deliberately excluded. Once a check
+    // is queued, the blob-capable submission queue owns durable photographs.
+    const durableResults = Object.fromEntries(
+      Object.entries(results).map(([id, { photoFiles: _photoFiles, photoUrls: _photoUrls, ...result }]) => [id, result])
+    );
+    void saveEquipmentCheckDraft(draftIdentity, { results: durableResults, overallNotes, seals }).catch(() => {
+      if (!draftSaveWarningShown.current) {
+        draftSaveWarningShown.current = true;
+        toast.error('Draft could not be saved on this device. You can continue, but keep this page open.');
+      }
+    });
+  }, [results, overallNotes, seals, draftIdentity, draftReady, previewMode]);
 
   // --------------------------------------------------------------------------
   // Pre-populate from last check for this apparatus
@@ -1337,11 +1371,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
         await enqueueCheck(shiftId, payload, itemsWithPhotos);
         const count = await getPendingCount();
         setPendingQueueCount(count);
-        try {
-          localStorage.removeItem(draftKey);
-        } catch {
-          /* ignore */
-        }
+        if (draftIdentity) await deleteEquipmentCheckDraft(draftIdentity);
         toast.success('Check saved offline — will sync when connected');
         onComplete?.();
         return;
@@ -1418,22 +1448,14 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
           totalPhotoCount,
           queueId: photoQueueId,
         });
-        try {
-          localStorage.removeItem(draftKey);
-        } catch {
-          /* ignore */
-        }
+        if (draftIdentity) await deleteEquipmentCheckDraft(draftIdentity);
         toast.error('Equipment check submitted, but evidence was saved for retry');
         return;
       }
 
       if (photoQueueId) await dequeueCheck(photoQueueId);
 
-      try {
-        localStorage.removeItem(draftKey);
-      } catch {
-        /* ignore */
-      }
+      if (draftIdentity) await deleteEquipmentCheckDraft(draftIdentity);
       setSubmissionOutcome({ status: 'complete', photoCount: totalPhotoCount });
       toast.success('Equipment check submitted successfully');
       onComplete?.();
@@ -1461,11 +1483,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
         }
         const count = await getPendingCount();
         setPendingQueueCount(count);
-        try {
-          localStorage.removeItem(draftKey);
-        } catch {
-          /* ignore */
-        }
+        if (draftIdentity) await deleteEquipmentCheckDraft(draftIdentity);
         toast.success('Connection lost — check queued for sync');
         onComplete?.();
       } catch {
