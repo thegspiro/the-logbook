@@ -240,6 +240,21 @@ class TestEventCRUD:
         org_id, user_id, _ = setup_org_and_users
         svc = EventService(db_session)
 
+        # The real attachment shape the upload endpoint writes, under this
+        # org's own subtree. The fixture used to carry an invented
+        # {"name", "url"} pair with no file_path — a shape nothing in the app
+        # writes and nothing reads (both the download endpoint and the
+        # frontend's EventAttachment type require file_path), and one the
+        # EV-17 org-scoping guard now refuses on the way in.
+        attachment = {
+            "id": "a1b2c3d4",
+            "file_name": "agenda.pdf",
+            "file_path": (
+                f"/app/uploads/event-attachments/{org_id}/"
+                f"11111111-1111-1111-1111-111111111111/a1b2c3d4.pdf"
+            ),
+        }
+
         original = await svc.create_event(
             event_data=_make_event_create(
                 title="Original Event",
@@ -261,7 +276,7 @@ class TestEventCRUD:
                     "reminders_sent": [24],
                     "validation_notification_sent": True,
                 },
-                attachments=[{"name": "agenda.pdf", "url": "/agenda.pdf"}],
+                attachments=[attachment],
             ),
             organization_id=uuid.UUID(org_id),
             created_by=uuid.UUID(user_id),
@@ -290,7 +305,7 @@ class TestEventCRUD:
         assert duplicate.guest_check_in_creates_prospect is True
         assert duplicate.custom_category == "Community"
         assert duplicate.custom_fields == {"dress_code": "uniform"}
-        assert duplicate.attachments == [{"name": "agenda.pdf", "url": "/agenda.pdf"}]
+        assert duplicate.attachments == [attachment]
         assert duplicate.is_cancelled is False
 
 

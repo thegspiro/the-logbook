@@ -92,6 +92,8 @@ from app.services.integration_services.notification_dispatch import (
 )
 from app.services.membership_pipeline_service import MembershipPipelineService
 from app.services.notifications_service import NotificationsService
+from app.utils.event_attachments import ATTACHMENT_UPLOAD_DIR as attachment_upload_dir
+from app.utils.event_attachments import is_path_in_org
 from app.utils.mime_validation import detect_mime_type
 
 router = APIRouter()
@@ -2435,7 +2437,10 @@ async def create_recurring_event(
 # Event Attachment Endpoints
 # ============================================
 
-ATTACHMENT_UPLOAD_DIR = "/app/uploads/event-attachments"
+# Re-exported from app.utils.event_attachments, which owns the constant so the
+# service layer can validate client-supplied attachment paths against it
+# without importing this endpoint module.
+ATTACHMENT_UPLOAD_DIR = attachment_upload_dir
 ALLOWED_EXTENSIONS = {
     ".pdf",
     ".doc",
@@ -2628,16 +2633,18 @@ async def download_event_attachment(
 
     file_path = attachment["file_path"]
 
-    # Security: Validate file_path is within the expected upload directory
-    # to prevent path traversal attacks if database data is compromised
+    # SEC (EV-17): confine the resolved path to *this org's own* attachment
+    # subtree, not the shared ATTACHMENT_UPLOAD_DIR root. Every org's uploads
+    # live under that root, so a root-level check still serves a tampered or
+    # injected file_path that points at another organization's subdirectory —
+    # and the generic event create/update payloads can carry attachment
+    # dictionaries. Same fix, and same reasoning, as DOC-24 in documents.py.
     resolved_path = os.path.realpath(file_path)
-    allowed_base = os.path.realpath(ATTACHMENT_UPLOAD_DIR)
-    if (
-        not resolved_path.startswith(allowed_base + os.sep)
-        and resolved_path != allowed_base
-    ):
+    if not is_path_in_org(file_path, current_user.organization_id):
         logger.warning(
-            f"Path traversal attempt blocked: {file_path} resolved to {resolved_path}"
+            f"Blocked out-of-org event attachment read for event {event_id}: "
+            f"{file_path} resolved to {resolved_path}, outside the upload "
+            f"subtree of org {current_user.organization_id}"
         )
         raise HTTPException(status_code=403, detail="Access denied")
 
@@ -2702,15 +2709,16 @@ async def delete_event_attachment(
         if a.get("id") != attachment_id
     )
     if not still_in_this_event and (others.scalar() or 0) == 0:
-        # Same containment guard as the download endpoint: never remove a
-        # file outside the upload tree, even if the stored path was tampered
-        # with. The metadata row is removed regardless.
+        # Same org-scoped containment guard as the download endpoint: never
+        # remove a file outside *this org's* upload subtree, even if the stored
+        # path was tampered with — a root-level check would let an injected
+        # path delete another tenant's file. The metadata row is removed
+        # regardless.
         resolved_path = os.path.realpath(file_path)
-        allowed_base = os.path.realpath(ATTACHMENT_UPLOAD_DIR)
         try:
-            if resolved_path.startswith(allowed_base + os.sep) and os.path.exists(
-                resolved_path
-            ):
+            if is_path_in_org(
+                file_path, current_user.organization_id
+            ) and os.path.exists(resolved_path):
                 os.remove(resolved_path)
         except OSError as e:
             logger.warning(f"Failed to remove attachment file {file_path}: {e}")

@@ -294,13 +294,36 @@ async def update_role(
     """
     Update a role
 
-    System roles can have their permissions updated, but name/slug cannot be changed.
+    System roles can have their permissions and description updated. The system
+    position identified by the immutable ``member`` slug may also have its display
+    name customized. Other system-position names cannot be changed, and no
+    position slug can be changed through this API.
 
     **Authentication required**
 
     **Permissions required:** positions.edit, positions.manage_permissions,
     positions.update, roles.edit, or roles.update
     """
+    existing_role = None
+    if role_update.name is not None or role_update.permissions is not None:
+        existing_role = ensure_found(
+            await role_service.get_role(
+                db, str(role_id), str(current_user.organization_id)
+            ),
+            "Role",
+        )
+
+    if (
+        role_update.name is not None
+        and existing_role is not None
+        and existing_role.is_system
+        and existing_role.slug != "member"
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot rename this system position",
+        )
+
     # Prevent privilege escalation: cannot raise a role's permissions above your
     # own (guards the org-wide "member" system role in particular).
     await _enforce_permission_grant_ceiling(
@@ -312,12 +335,7 @@ async def update_role(
     # the empty-list early-return above lets a non-`*` caller wipe/downgrade the
     # `*` System Owner role.
     if role_update.permissions is not None:
-        existing_role = ensure_found(
-            await role_service.get_role(
-                db, str(role_id), str(current_user.organization_id)
-            ),
-            "Role",
-        )
+        assert existing_role is not None
         await _enforce_role_edit_ceiling(
             current_user, existing_role.permissions, db, get_client_ip(request)
         )

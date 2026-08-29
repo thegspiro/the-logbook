@@ -659,7 +659,7 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
       },
       {
         path: '/facilities/settings',
-        label: 'Facilities settings',
+        label: 'Facility settings',
         permission: 'facilities.manage',
         module: 'facilities',
       },
