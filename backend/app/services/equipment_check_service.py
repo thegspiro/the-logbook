@@ -23,6 +23,7 @@ from app.models.apparatus import (
     CheckItemDeployedLot,
     CheckTemplateCompartment,
     CheckTemplateItem,
+    EquipmentCheckBulkDeleteRequest,
     EquipmentCheckBulkRequest,
     EquipmentCheckTemplate,
     TemplateChangeLog,
@@ -737,25 +738,32 @@ class EquipmentCheckService:
         user_id: str,
         user_name: str,
     ) -> Optional[tuple[List[str], bool]]:
-        """Validate and delete a compartment's item batch in one transaction."""
-        compartment = await self._get_compartment(compartment_id, organization_id)
-        if not compartment:
-            return None
-
-        normalized_ids = sorted(item_ids)
+        """Validate and delete an entire item batch in one transaction."""
+        if len(set(item_ids)) != len(item_ids):
+            raise ValueError("Item IDs must be unique")
         payload_hash = hashlib.sha256(
-            json.dumps(normalized_ids, separators=(",", ":")).encode()
+            json.dumps(item_ids, separators=(",", ":")).encode()
         ).hexdigest()
-        ledger_key = f"delete:{idempotency_key}"
         try:
-            if len(set(item_ids)) != len(item_ids):
-                raise ValueError("Item IDs must be unique")
+            compartment = await self._get_compartment(compartment_id, organization_id)
+            if not compartment:
+                return None
+            # Serialize retries on the parent before reading the ledger. The
+            # ledger read is also locking/current so a request that waited for
+            # an overlapping delete sees the winner under MySQL REPEATABLE READ.
+            await self.db.execute(
+                select(CheckTemplateCompartment)
+                .where(CheckTemplateCompartment.id == compartment_id)
+                .with_for_update()
+            )
             ledger_result = await self.db.execute(
-                select(EquipmentCheckBulkRequest).where(
-                    EquipmentCheckBulkRequest.organization_id == organization_id,
-                    EquipmentCheckBulkRequest.compartment_id == compartment_id,
-                    EquipmentCheckBulkRequest.idempotency_key == ledger_key,
+                select(EquipmentCheckBulkDeleteRequest)
+                .where(
+                    EquipmentCheckBulkDeleteRequest.organization_id == organization_id,
+                    EquipmentCheckBulkDeleteRequest.compartment_id == compartment_id,
+                    EquipmentCheckBulkDeleteRequest.idempotency_key == idempotency_key,
                 )
+                .with_for_update()
             )
             ledger = ledger_result.scalars().first()
             if ledger:
@@ -765,7 +773,7 @@ class EquipmentCheckService:
                     )
                 return list(ledger.item_ids), True
 
-            result = await self.db.execute(
+            items_result = await self.db.execute(
                 select(CheckTemplateItem)
                 .where(
                     CheckTemplateItem.compartment_id == compartment_id,
@@ -773,17 +781,17 @@ class EquipmentCheckService:
                 )
                 .with_for_update()
             )
-            items = result.scalars().all()
+            items = items_result.scalars().all()
             by_id = {str(item.id): item for item in items}
             if set(by_id) != set(item_ids):
-                raise ValueError("Every item must exist in the specified compartment")
+                raise ValueError("Every item must belong to the specified compartment")
 
             self.db.add(
-                EquipmentCheckBulkRequest(
+                EquipmentCheckBulkDeleteRequest(
                     id=generate_uuid(),
                     organization_id=organization_id,
                     compartment_id=compartment_id,
-                    idempotency_key=ledger_key,
+                    idempotency_key=idempotency_key,
                     payload_hash=payload_hash,
                     item_ids=item_ids,
                 )

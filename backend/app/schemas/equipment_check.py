@@ -119,11 +119,11 @@ class CheckTemplateItemBulkDelete(BaseModel):
     """Delete several items atomically, with retry protection."""
 
     item_ids: List[str] = Field(..., min_length=1, max_length=250)
-    idempotency_key: str = Field(..., min_length=8, max_length=193)
+    idempotency_key: str = Field(..., min_length=8, max_length=200)
 
 
 class CheckTemplateItemBulkDeleteResponse(BaseModel):
-    """Result of an atomic item deletion request."""
+    """Stable result returned both for an initial delete and a retry."""
 
     model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
 

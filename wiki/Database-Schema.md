@@ -526,9 +526,9 @@ line.
 
 ### New Columns
 
-| Table       | Column     | Type            | Migration       | Description                                                                                                                            |
-| ----------- | ---------- | --------------- | --------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| `positions` | `settings` | JSON (nullable) | `20260610_0002` | Per-position UI preferences; holds `label_presets` keyed by module (the label printer/size a role uses in each module, e.g. inventory) |
+| Table       | Column     | Type            | Migration       | Description                                                                                                                                                            |
+| ----------- | ---------- | --------------- | --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `positions` | `settings` | JSON (nullable) | `20260610_0002` | Per-position UI preferences; holds `label_presets` keyed by module (the network printer, label size, and barcode symbology a role uses in each module, e.g. inventory) |
 
 ---
 

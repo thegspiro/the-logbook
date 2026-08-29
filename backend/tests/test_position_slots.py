@@ -25,26 +25,46 @@ from app.utils.positions import (
 class TestFlatSeatLists:
     def test_converts_legacy_strings(self):
         assert normalize_stored_positions(["officer", "driver"]) == [
-            {"position": "officer", "required": True},
-            {"position": "driver", "required": True},
+            {
+                "position": "officer",
+                "required": True,
+                "allow_administrative_members": False,
+            },
+            {
+                "position": "driver",
+                "required": True,
+                "allow_administrative_members": False,
+            },
         ]
 
     def test_preserves_an_explicit_optional_seat(self):
         assert normalize_stored_positions(
-            [{"position": "firefighter", "required": False}]
-        ) == [{"position": "firefighter", "required": False}]
+            [
+                {
+                    "position": "firefighter",
+                    "required": False,
+                    "allow_administrative_members": False,
+                }
+            ]
+        ) == [
+            {
+                "position": "firefighter",
+                "required": False,
+                "allow_administrative_members": False,
+            }
+        ]
 
     @pytest.mark.parametrize("flag", [None, "yes", 1])
     def test_only_an_explicit_false_makes_a_seat_optional(self, flag):
         # The frontend reads `required !== false`; a missing or null flag on a
         # legacy row means the seat is required, not optional.
         assert normalize_stored_positions([{"position": "ems", "required": flag}]) == [
-            {"position": "ems", "required": True}
+            {"position": "ems", "required": True, "allow_administrative_members": False}
         ]
 
     def test_defaults_a_missing_flag_to_required(self):
         assert normalize_stored_positions([{"position": "ems"}]) == [
-            {"position": "ems", "required": True}
+            {"position": "ems", "required": True, "allow_administrative_members": False}
         ]
 
     def test_is_idempotent(self):
@@ -61,7 +81,11 @@ class TestFlatSeatLists:
 
     def test_trims_surrounding_whitespace(self):
         assert normalize_stored_positions([" officer "]) == [
-            {"position": "officer", "required": True}
+            {
+                "position": "officer",
+                "required": True,
+                "allow_administrative_members": False,
+            }
         ]
 
 
@@ -73,17 +97,44 @@ class TestCountedSeats:
         assert normalize_stored_positions(
             [{"position": "firefighter", "count": 3}]
         ) == [
-            {"position": "firefighter", "required": True},
-            {"position": "firefighter", "required": True},
-            {"position": "firefighter", "required": True},
+            {
+                "position": "firefighter",
+                "required": True,
+                "allow_administrative_members": False,
+            },
+            {
+                "position": "firefighter",
+                "required": True,
+                "allow_administrative_members": False,
+            },
+            {
+                "position": "firefighter",
+                "required": True,
+                "allow_administrative_members": False,
+            },
         ]
 
     def test_keeps_the_required_flag_on_every_expanded_seat(self):
         assert normalize_stored_positions(
-            [{"position": "ems", "count": 2, "required": False}]
+            [
+                {
+                    "position": "ems",
+                    "count": 2,
+                    "required": False,
+                    "allow_administrative_members": False,
+                }
+            ]
         ) == [
-            {"position": "ems", "required": False},
-            {"position": "ems", "required": False},
+            {
+                "position": "ems",
+                "required": False,
+                "allow_administrative_members": False,
+            },
+            {
+                "position": "ems",
+                "required": False,
+                "allow_administrative_members": False,
+            },
         ]
 
     def test_expanded_seats_do_not_share_a_dict(self):
@@ -94,7 +145,7 @@ class TestCountedSeats:
     @pytest.mark.parametrize("count", [None, 0, -1, "3", 1.5, True])
     def test_an_unusable_count_means_one_seat(self, count):
         assert normalize_stored_positions([{"position": "ems", "count": count}]) == [
-            {"position": "ems", "required": True}
+            {"position": "ems", "required": True, "allow_administrative_members": False}
         ]
 
     def test_caps_an_absurd_count(self):
@@ -150,8 +201,16 @@ class TestWritePathWiring:
         assert error is None
         added = db.add.call_args[0][0]
         assert added.positions == [
-            {"position": "officer", "required": True},
-            {"position": "driver", "required": True},
+            {
+                "position": "officer",
+                "required": True,
+                "allow_administrative_members": False,
+            },
+            {
+                "position": "driver",
+                "required": True,
+                "allow_administrative_members": False,
+            },
         ]
         assert record is added
 
@@ -182,11 +241,27 @@ class TestWritePathWiring:
         service.get_template_by_id = AsyncMock(return_value=template)
 
         _, error = await service.update_template(
-            uuid4(), uuid4(), {"positions": [{"position": "ems", "required": False}]}
+            uuid4(),
+            uuid4(),
+            {
+                "positions": [
+                    {
+                        "position": "ems",
+                        "required": False,
+                        "allow_administrative_members": False,
+                    }
+                ]
+            },
         )
 
         assert error is None
-        assert template.positions == [{"position": "ems", "required": False}]
+        assert template.positions == [
+            {
+                "position": "ems",
+                "required": False,
+                "allow_administrative_members": False,
+            }
+        ]
 
     async def test_create_shift_normalizes_a_legacy_seat_list(self):
         from uuid import uuid4
@@ -202,7 +277,7 @@ class TestWritePathWiring:
 
         assert error is None
         assert db.add.call_args[0][0].positions == [
-            {"position": "ems", "required": True}
+            {"position": "ems", "required": True, "allow_administrative_members": False}
         ]
 
     async def test_update_shift_normalizes_a_legacy_seat_list(self):
@@ -221,7 +296,9 @@ class TestWritePathWiring:
         _, error = await service.update_shift(uuid4(), uuid4(), {"positions": ["ems"]})
 
         assert error is None
-        assert shift.positions == [{"position": "ems", "required": True}]
+        assert shift.positions == [
+            {"position": "ems", "required": True, "allow_administrative_members": False}
+        ]
 
 
 class TestApparatusOptionSchema:
@@ -235,10 +312,22 @@ class TestApparatusOptionSchema:
             name="Engine 1",
             apparatus_type="engine",
             source="basic",
-            positions=[{"position": "driver", "required": True}],
+            positions=[
+                {
+                    "position": "driver",
+                    "required": True,
+                    "allow_administrative_members": False,
+                }
+            ],
         )
 
-        assert option.positions == [{"position": "driver", "required": True}]
+        assert [slot.model_dump() for slot in option.positions or []] == [
+            {
+                "position": "driver",
+                "required": True,
+                "allow_administrative_members": False,
+            }
+        ]
 
     def test_still_accepts_legacy_strings(self):
         from app.schemas.scheduling import ApparatusOption
@@ -311,14 +400,22 @@ class TestSeatNameCanonicalization:
     def test_every_emt_spelling_settles_on_ems(self, spelling):
         assert canonical_position(spelling) == "ems"
         assert normalize_stored_positions([spelling]) == [
-            {"position": "ems", "required": True}
+            {"position": "ems", "required": True, "allow_administrative_members": False}
         ]
 
     def test_the_ambulance_default_becomes_fillable(self):
         # ApparatusBasicPage's DEFAULT_POSITIONS_BY_TYPE['ambulance'].
         assert normalize_stored_positions(["driver", "ems"]) == [
-            {"position": "driver", "required": True},
-            {"position": "ems", "required": True},
+            {
+                "position": "driver",
+                "required": True,
+                "allow_administrative_members": False,
+            },
+            {
+                "position": "ems",
+                "required": True,
+                "allow_administrative_members": False,
+            },
         ]
 
     @pytest.mark.parametrize("seat", sorted(CANONICAL_POSITIONS))
@@ -340,8 +437,20 @@ class TestSeatNameCanonicalization:
         assert normalize_stored_positions(["  ", {"position": ""}]) == []
 
     def test_required_flag_survives_renaming(self):
-        assert normalize_stored_positions([{"position": "EMT", "required": False}]) == [
-            {"position": "ems", "required": False}
+        assert normalize_stored_positions(
+            [
+                {
+                    "position": "EMT",
+                    "required": False,
+                    "allow_administrative_members": False,
+                }
+            ]
+        ) == [
+            {
+                "position": "ems",
+                "required": False,
+                "allow_administrative_members": False,
+            }
         ]
 
 

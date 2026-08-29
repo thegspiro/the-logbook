@@ -593,37 +593,6 @@ async def add_items_bulk(
     )
 
 
-@router.post(
-    "/compartments/{compartment_id}/items/bulk-delete",
-    response_model=CheckTemplateItemBulkDeleteResponse,
-)
-async def delete_items_bulk(
-    compartment_id: str,
-    data: CheckTemplateItemBulkDelete,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("equipment_check.manage")),
-):
-    """Delete an item batch atomically; safe to retry with the same key."""
-    service = EquipmentCheckService(db)
-    try:
-        result = await service.delete_items_bulk(
-            compartment_id,
-            str(current_user.organization_id),
-            data.item_ids,
-            data.idempotency_key,
-            str(current_user.id),
-            _user_display_name(current_user),
-        )
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=safe_error_detail(exc))
-    if result is None:
-        raise HTTPException(status_code=404, detail="Compartment not found")
-    deleted_ids, replayed = result
-    return CheckTemplateItemBulkDeleteResponse(
-        deleted_item_ids=deleted_ids, replayed=replayed
-    )
-
-
 @router.put(
     "/items/{item_id}",
     response_model=CheckTemplateItemResponse,
@@ -706,6 +675,37 @@ async def delete_item(
             entity_name=item_name,
         )
         await db.commit()
+
+
+@router.post(
+    "/compartments/{compartment_id}/items/bulk-delete",
+    response_model=CheckTemplateItemBulkDeleteResponse,
+)
+async def delete_items_bulk(
+    compartment_id: str,
+    data: CheckTemplateItemBulkDelete,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("equipment_check.manage")),
+):
+    """Delete an org-scoped compartment's item batch atomically."""
+    service = EquipmentCheckService(db)
+    try:
+        result = await service.delete_items_bulk(
+            compartment_id,
+            str(current_user.organization_id),
+            data.item_ids,
+            data.idempotency_key,
+            str(current_user.id),
+            _user_display_name(current_user),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=safe_error_detail(exc))
+    if result is None:
+        raise HTTPException(status_code=404, detail="Compartment not found")
+    deleted_item_ids, replayed = result
+    return CheckTemplateItemBulkDeleteResponse(
+        deleted_item_ids=deleted_item_ids, replayed=replayed
+    )
 
 
 @router.put("/compartments/{compartment_id}/items/reorder", status_code=200)
