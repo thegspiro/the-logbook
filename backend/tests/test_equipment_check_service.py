@@ -48,7 +48,6 @@ class TestSubmissionObservationValidation:
             "expected_quantity": None,
             "critical_minimum_quantity": None,
             "min_level": None,
-            "max_level": None,
             "level_unit": None,
             "serial_number": None,
             "lot_number": None,
@@ -91,17 +90,13 @@ class TestSubmissionObservationValidation:
                 [item], {"item-1": self.template_item("level")}
             )
 
-    @pytest.mark.parametrize("reading", [49.9, 100.1])
-    def test_rejects_level_outside_configured_range(self, reading):
+    def test_rejects_level_below_configured_minimum(self):
+        reading = 49.9
         item = self.submission(level_reading=reading)
         with pytest.raises(ValueError, match="contradicts"):
             EquipmentCheckService._validate_and_snapshot_submission(
                 [item],
-                {
-                    "item-1": self.template_item(
-                        "level", min_level=50.0, max_level=100.0
-                    )
-                },
+                {"item-1": self.template_item("level", min_level=50.0)},
             )
 
     def test_irrelevant_observations_are_removed(self):

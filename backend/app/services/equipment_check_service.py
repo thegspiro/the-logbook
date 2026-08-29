@@ -1211,12 +1211,9 @@ class EquipmentCheckService:
                 raise ValueError("Level observations must be finite")
             item["level_reading"] = reading
             minimum = template_item.min_level
-            maximum = getattr(template_item, "max_level", None)
             if minimum is not None and reading < minimum:
                 observation_passes = False
-            elif maximum is not None and reading > maximum:
-                observation_passes = False
-            elif minimum is not None or maximum is not None:
+            elif minimum is not None:
                 observation_passes = True
         elif check_type == EXPIRY:
             expiration = (
