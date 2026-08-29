@@ -1564,6 +1564,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
 
       if (draftIdentity) await deleteEquipmentCheckDraft(draftIdentity);
       setSubmissionOutcome({ status: 'complete', photoCount: totalPhotoCount });
+
       toast.success('Equipment check submitted successfully');
       onComplete?.();
     } catch (err: unknown) {

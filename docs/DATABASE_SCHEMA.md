@@ -1664,7 +1664,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `check_timing` | VARCHAR(30) | no |  |  |  |
 | `template_type` | VARCHAR(30) | no |  | `equipment` |  |
 | `assigned_positions` | JSON | yes |  |  |  |
-| `is_active` | BOOL | no |  | `True` |  |
+| `is_active` | BOOL | no |  | `False` |  |
 | `sort_order` | INTEGER | no |  | `0` |  |
 | `content_revision` | INTEGER | no |  | `1` |  |
 | `created_at` | DATETIME | yes |  | `now()` |  |
