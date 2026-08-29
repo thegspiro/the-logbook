@@ -57,6 +57,9 @@ const UNCACHEABLE_PREFIXES = [
   '/training/programs/enrollments/', // per-member program enrollment & progress
   '/training/instructors/qualifications', // per-member instructor credentials
   '/training/compliance-matrix', // org-wide per-member compliance rollup (names + status)
+  '/training/competency-matrix', // org-wide per-member competency heat map (names + status) — same shape as compliance-matrix above
+  '/training/dashboard-summary', // dashboard widgets: per-member names on at-risk/needs-intervention lists
+  '/training/sessions/approve/', // approval-token roster: attendee names + emails (GET /sessions/approve/{token})
   '/training/certifications/expiring', // member cert-expiry list (names, numbers)
   '/training/expiring-certifications', // under-gated twin of the above (member certs)
   '/training/reports/compliance-forecast', // per-member compliance projection
