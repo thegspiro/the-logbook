@@ -11,7 +11,7 @@ from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Set
 from uuid import NAMESPACE_URL, uuid5
 
-from sqlalchemy import and_, func, or_, select
+from sqlalchemy import and_, func, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -484,6 +484,20 @@ class EquipmentCheckService:
         source = await self._get_compartment(compartment_id, organization_id)
         if not source:
             return None
+
+        # Make room in the same transaction as the clone. Committing the clone
+        # and repairing sibling positions in a second request can leave two
+        # rows at the same position when that second request fails.
+        await self.db.execute(
+            update(CheckTemplateCompartment)
+            .where(
+                CheckTemplateCompartment.template_id == source.template_id,
+                CheckTemplateCompartment.parent_compartment_id
+                == source.parent_compartment_id,
+                CheckTemplateCompartment.sort_order >= sort_order,
+            )
+            .values(sort_order=CheckTemplateCompartment.sort_order + 1)
+        )
 
         clone = CheckTemplateCompartment(
             id=generate_uuid(),

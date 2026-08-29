@@ -723,21 +723,8 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       return next;
     });
     setExpandedCompartments((prev) => new Set(prev).add(copy.clientKey));
-    if (comp.id && templateId) {
-      const orderedIds = [...compartments];
-      orderedIds.splice(idx + 1, 0, copy);
-      try {
-        await schedulingService.reorderCompartments(
-          templateId,
-          orderedIds.map((entry) => entry.id).filter((id): id is string => Boolean(id))
-        );
-      } catch (err: unknown) {
-        toast.error(getErrorMessage(err, 'Compartment was copied, but its order could not be saved'));
-        return;
-      }
-    }
     toast.success(comp.id ? `“${copy.name}” added` : 'Draft compartment duplicated');
-    markDirty();
+    if (!comp.id) markDirty();
   };
 
   // ---------------------------------------------------------------------------

@@ -10,7 +10,6 @@ const getTemplate = vi.fn();
 const addCheckItem = vi.fn();
 const reorderItems = vi.fn();
 const cloneCompartment = vi.fn();
-const reorderCompartments = vi.fn();
 
 vi.mock('@/modules/scheduling', () => ({
   schedulingService: {
@@ -19,7 +18,6 @@ vi.mock('@/modules/scheduling', () => ({
     addCheckItem: (...args: unknown[]) => addCheckItem(...args),
     reorderItems: (...args: unknown[]) => reorderItems(...args),
     cloneCompartment: (...args: unknown[]) => cloneCompartment(...args),
-    reorderCompartments: (...args: unknown[]) => reorderCompartments(...args),
     getCsvSampleUrl: vi.fn().mockReturnValue('/sample.csv'),
   },
 }));
@@ -95,7 +93,6 @@ describe('EquipmentCheckTemplateBuilder responsive actions', () => {
     vi.clearAllMocks();
     getTemplate.mockResolvedValue(template);
     reorderItems.mockResolvedValue(undefined);
-    reorderCompartments.mockResolvedValue(undefined);
   });
 
   it('persists a saved item duplicate with its configuration and server id', async () => {
@@ -181,7 +178,17 @@ describe('EquipmentCheckTemplateBuilder responsive actions', () => {
     await user.click(within(trigger.closest('details') as HTMLElement).getByRole('button', { name: 'Duplicate' }));
     expect(await screen.findByLabelText('Actions for Cab (copy)')).toBeInTheDocument();
     expect(cloneCompartment).toHaveBeenCalledWith('cab', 1);
-    expect(reorderCompartments).toHaveBeenCalledWith('template-1', ['cab', 'cab-copy', 'bag', 'section']);
+  });
+
+  it('leaves compartment state unchanged when the transactional clone fails', async () => {
+    const user = userEvent.setup();
+    cloneCompartment.mockRejectedValue(new Error('clone failed'));
+    renderBuilder();
+    const trigger = await screen.findByLabelText('Actions for Cab');
+    await user.click(trigger);
+    await user.click(within(trigger.closest('details') as HTMLElement).getByRole('button', { name: 'Duplicate' }));
+    await waitFor(() => expect(cloneCompartment).toHaveBeenCalledWith('cab', 1));
+    expect(screen.queryByLabelText('Actions for Cab (copy)')).not.toBeInTheDocument();
   });
 
   it('exposes every item action from the phone overflow without drag and drop', async () => {
