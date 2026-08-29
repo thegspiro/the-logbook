@@ -34,6 +34,56 @@ def service(mock_db):
     return EquipmentCheckService(mock_db)
 
 
+class TestCloneCompartment:
+    @staticmethod
+    def source():
+        item = SimpleNamespace(
+            equipment_id=None,
+            inventory_item_id="inventory-1",
+            name="Portable suction",
+            description="Charged",
+            sort_order=0,
+            check_type="function",
+            is_required=True,
+            required_quantity=None,
+            expected_quantity=None,
+            critical_minimum_quantity=None,
+            min_level=None,
+            level_unit=None,
+            serial_number="S-1",
+            lot_number=None,
+            image_url=None,
+            has_expiration=False,
+            expiration_date=None,
+            expiration_warning_days=30,
+        )
+        return SimpleNamespace(
+            template_id="template-1",
+            name="Cab",
+            description="Officer side",
+            image_url=None,
+            is_header=False,
+            container_type="compartment",
+            is_sealed=False,
+            parent_compartment_id=None,
+            items=[item],
+        )
+
+    async def test_rolls_back_the_whole_clone_when_commit_fails(self, service, mock_db):
+        mock_db.commit.side_effect = RuntimeError("database unavailable")
+        with patch.object(
+            service,
+            "_get_compartment",
+            new_callable=AsyncMock,
+            return_value=self.source(),
+        ):
+            with pytest.raises(RuntimeError, match="database unavailable"):
+                await service.clone_compartment("cab", "org-1", 1)
+
+        mock_db.rollback.assert_awaited_once()
+        assert mock_db.add.call_count == 2
+
+
 class TestUpdateTemplateApparatusValidation:
     async def test_foreign_apparatus_rejected(self, service, mock_db):
         template = MagicMock()
