@@ -61,6 +61,7 @@ const CatalogQuickAdd: React.FC<CatalogQuickAddProps> = ({
   const [highlightedIndex, setHighlightedIndex] = useState(-1);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const requestRef = useRef(0);
+  const submittingRef = useRef(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const listboxId = useId();
   const [anchor, setAnchor] = useState<{
@@ -112,6 +113,7 @@ const CatalogQuickAdd: React.FC<CatalogQuickAddProps> = ({
   }, []);
 
   const handleChange = (q: string) => {
+    submittingRef.current = false;
     onChange(q);
     setOpen(true);
     setResults([]);
@@ -143,9 +145,10 @@ const CatalogQuickAdd: React.FC<CatalogQuickAddProps> = ({
   /** Add exactly what was typed, with no catalog link. */
   const addAsFreeText = async () => {
     const name = value.trim();
-    if (!name) return;
-    await onAdd({ name });
+    if (!name || submittingRef.current) return;
+    submittingRef.current = true;
     reset();
+    await onAdd({ name });
   };
 
   /**
@@ -166,6 +169,9 @@ const CatalogQuickAdd: React.FC<CatalogQuickAddProps> = ({
   };
 
   const addLinked = async (result: CatalogResult) => {
+    if (submittingRef.current) return;
+    submittingRef.current = true;
+    reset();
     const hasExpiration = await hasDatedStock(result.id);
 
     await onAdd({
@@ -176,12 +182,13 @@ const CatalogQuickAdd: React.FC<CatalogQuickAddProps> = ({
       ...(result.trackingType === 'pool' ? { checkType: 'count' as const } : {}),
       ...(hasExpiration ? { hasExpiration: true } : {}),
     });
-    reset();
   };
 
   const createAndAdd = async () => {
     const name = value.trim();
-    if (!name) return;
+    if (!name || submittingRef.current) return;
+    submittingRef.current = true;
+    reset();
     setCreating(true);
     try {
       const created = await inventoryService.createItem({
@@ -193,8 +200,8 @@ const CatalogQuickAdd: React.FC<CatalogQuickAddProps> = ({
       });
       await onAdd({ name: created.name, inventoryItemId: created.id, checkType: 'count' });
       toast.success(`Added “${created.name}” to inventory`);
-      reset();
     } catch (err: unknown) {
+      submittingRef.current = false;
       toast.error(getErrorMessage(err, 'Failed to create the inventory item'));
     } finally {
       setCreating(false);
