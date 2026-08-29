@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**262 tables · 4445 columns · 844 foreign keys**
+**262 tables · 4446 columns · 844 foreign keys**
 
 ---
 
@@ -100,7 +100,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`driver_exceptions`](#driver_exceptions) | `DriverException` | 17 | A chief-approved, time-boxed exception to the EVOC driving requirement. |
 | [`equipment_check_bulk_delete_requests`](#equipment_check_bulk_delete_requests) | `EquipmentCheckBulkDeleteRequest` | 7 | Durable result ledger for retry-safe atomic template-item deletion. |
 | [`equipment_check_bulk_requests`](#equipment_check_bulk_requests) | `EquipmentCheckBulkRequest` | 7 | Durable idempotency ledger for atomic template-item batches. |
-| [`equipment_check_templates`](#equipment_check_templates) | `EquipmentCheckTemplate` | 14 | Master template for an equipment checklist. |
+| [`equipment_check_templates`](#equipment_check_templates) | `EquipmentCheckTemplate` | 15 | Master template for an equipment checklist. |
 | [`evoc_levels`](#evoc_levels) | `EvocLevel` | 13 | Organization-configurable EVOC (Emergency Vehicle Operator Course) levels. |
 | [`template_change_logs`](#template_change_logs) | `TemplateChangeLog` | 11 | Granular audit trail for equipment check template edits. |
 
@@ -1666,6 +1666,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `assigned_positions` | JSON | yes |  |  |  |
 | `is_active` | BOOL | no |  | `True` |  |
 | `sort_order` | INTEGER | no |  | `0` |  |
+| `content_revision` | INTEGER | no |  | `1` |  |
 | `created_at` | DATETIME | yes |  | `now()` |  |
 | `updated_at` | DATETIME | yes |  | `now()` |  |
 | `created_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
