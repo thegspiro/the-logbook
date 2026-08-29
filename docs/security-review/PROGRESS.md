@@ -16,7 +16,60 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-None.
+`claude/security-review-training-extended` — feature 18 (Training extended),
+pass 2. PR: [#2012](https://github.com/thegspiro/the-logbook/pull/2012).
+
+---
+
+### 2026-08-29 — Feature 18 (Training extended), pass 2 — 1 fixed (LOW/MED), 0 flagged
+
+Scoped to the full domain since pass 1's merge (`013fc341`, PR #1873): all
+twelve declared backend files (six endpoint files, six service files) plus
+`training_program_service.py` (the out-of-list file TRX-1's fix landed in)
+came back **byte-identical** (`git diff --stat`, not assumed). The only touch
+anywhere in `backend/app/models/training.py` since pass 1 is a comment-only
+docstring update to `Shift`/`ShiftTemplate.positions` from an unrelated
+scheduling PR — no training-extended model changed. No new migration touches
+a training-extended table (checked `alembic/versions/` directly, not scoped to
+source files, per the SCH-15 lesson).
+
+Independently re-verified all 10 pass-1 fixes (TRX-1 through TRX-10) by
+reading the current code, not re-citing the doc — all intact. Re-ran an AST
+route enumeration from scratch: 88/88 routes across the six files carry either
+`get_current_user` or `require_permission("training.manage")`, matching each
+file's route count exactly. Examined the `_confined_path`/
+`download_record_attachment` shared-upload-root containment design (superficially
+EV-17-shaped) and confirmed it is deliberate, not exploitable — the
+`attachments` schema field is `Optional[list[str]]` on every write path, which
+blocks the dict/`file_path` injection EV-17 depended on, and a stricter
+per-org confinement would break the documented submission→record attachment
+handoff.
+
+**TRX2-1** (LOW/MED, data exposure, fixed) — `GET
+/training/effectiveness/evaluations` returns per-member `user_id` alongside
+free-text evaluation comments/behavior/results notes but was missing from the
+frontend's `UNCACHEABLE_PREFIXES` cache-exclusion list, the same class TR2-1/
+TR2-3 (training-core pass 2) already closed for this module's other
+per-member endpoints. Fixed, with a guard test confirmed to fail pre-fix.
+Checked every other GET route in this feature against the prefix list; no
+other gap found (aggregate/config-only endpoints correctly left cacheable).
+
+Also established, for the first time, a frontend scope for this feature (pass
+1 was backend-only): 10 files / ~8,400 L actually consume a training-extended
+service export. Only `WaiverManagementPage.tsx` changed since pass 1 (+7/-1,
+an unrelated resilience fix, reviewed and clean); all 10 grep-swept clean for
+`window.confirm`/`alert`/`prompt`, `dangerouslySetInnerHTML`, banned
+`.toLocale*`, `date-fns`, and direct `fetch(`.
+
+Completion gate: flake8/black/isort clean (isort 8.0.1, CI's pin, already
+installed); `validate_migrations.py --strict` 393 revisions, single head;
+`pytest -k "training or cohort or syllabus or waiver or external or
+enhancement or submission or xapi"` 986 passed/1 pre-existing skip; full
+backend suite 9222 passed/22 pre-existing skips/0 failed; `tsc --noEmit` 0
+errors; `eslint .` 0 errors (10 pre-existing warnings, none in touched files);
+`vitest run apiCache.test.ts` 86 passed. Full write-up:
+`docs/security-review/TRX-18-training-extended.md` → **Pass 2**. Rotation row
+18 -> awaiting PR merge. Next: 19 skills testing, once this PR merges.
 
 ---
 
@@ -2119,7 +2172,7 @@ each row's prior PR is recorded in the Log, not repeated here.
 | 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                | ✅     |
 | 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                       | ✅     |
 | 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`                                                                                   | ✅     |
-| 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ⬜     |
+| 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ✅     |
 | 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3723 L)                                                                                                          | ⬜     |
 | 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ⬜     |
 | 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ⬜     |
