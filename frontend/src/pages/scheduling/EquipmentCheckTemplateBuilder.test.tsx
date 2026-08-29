@@ -7,11 +7,21 @@ import { ConfirmProvider } from '../../contexts/ConfirmContext';
 import EquipmentCheckTemplateBuilder from './EquipmentCheckTemplateBuilder';
 
 const getTemplate = vi.fn();
+const deleteCheckItemsBulk = vi.fn();
+const { toastSuccess, toastError } = vi.hoisted(() => ({
+  toastSuccess: vi.fn(),
+  toastError: vi.fn(),
+}));
+
+vi.mock('react-hot-toast', () => ({
+  default: { success: toastSuccess, error: toastError },
+}));
 
 vi.mock('@/modules/scheduling', () => ({
   schedulingService: {
     getApparatusOptions: vi.fn().mockResolvedValue({ options: [] }),
     getEquipmentCheckTemplate: (...args: unknown[]) => getTemplate(...args),
+    deleteCheckItemsBulk: (...args: unknown[]) => deleteCheckItemsBulk(...args),
     getCsvSampleUrl: vi.fn().mockReturnValue('/sample.csv'),
   },
 }));
@@ -97,7 +107,10 @@ function renderNewBuilder() {
 }
 
 describe('EquipmentCheckTemplateBuilder responsive actions', () => {
-  beforeEach(() => getTemplate.mockResolvedValue(template));
+  beforeEach(() => {
+    vi.clearAllMocks();
+    getTemplate.mockResolvedValue(template);
+  });
 
   it('exposes every item action from the phone overflow without drag and drop', async () => {
     const user = userEvent.setup();
@@ -130,6 +143,44 @@ describe('EquipmentCheckTemplateBuilder responsive actions', () => {
     expect(within(menu).getByRole('button', { name: 'Move up' })).toBeDisabled();
     expect(within(menu).getByRole('button', { name: 'Move down' })).toBeDisabled();
     expect(within(menu).getByRole('button', { name: 'Delete' })).toBeVisible();
+  });
+});
+
+describe('EquipmentCheckTemplateBuilder bulk item deletion', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    getTemplate.mockResolvedValue(template);
+  });
+
+  async function selectDeleteAndConfirm() {
+    const user = userEvent.setup();
+    renderBuilder();
+    await user.click(await screen.findByRole('button', { name: 'Select item' }));
+    await user.click(screen.getByRole('button', { name: 'Delete selected items' }));
+    await user.click(screen.getByRole('button', { name: 'Delete 1' }));
+  }
+
+  it('removes only IDs confirmed by a completely successful response', async () => {
+    deleteCheckItemsBulk.mockResolvedValue({ deletedItemIds: ['radio'], replayed: false });
+
+    await selectDeleteAndConfirm();
+
+    await vi.waitFor(() => expect(toastSuccess).toHaveBeenCalledWith('Deleted 1 item'));
+    expect(screen.queryByText('Radio')).not.toBeInTheDocument();
+    expect(deleteCheckItemsBulk).toHaveBeenCalledWith('cab', ['radio'], expect.any(String));
+    expect(toastError).not.toHaveBeenCalled();
+  });
+
+  it('retains the row and its selection after complete failure without a false success toast', async () => {
+    deleteCheckItemsBulk.mockRejectedValue(new Error('Delete unavailable'));
+
+    await selectDeleteAndConfirm();
+
+    expect(await screen.findByText('Radio')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Deselect item' })).toBeInTheDocument();
+    expect(screen.getByText('1 selected')).toBeInTheDocument();
+    expect(toastError).toHaveBeenCalledWith('Delete unavailable');
+    expect(toastSuccess).not.toHaveBeenCalled();
   });
 });
 
