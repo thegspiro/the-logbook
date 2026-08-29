@@ -16,9 +16,17 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-Feature 17 (Training core), pass 2 — branch `claude/security-review-training-core-pass2`, PR [#1981](https://github.com/thegspiro/the-logbook/pull/1981).
+None.
 
 ---
+
+### 2026-08-29 — Feature 17 (Training core), pass 2 ✅ merged — PR #1981
+
+Merged (`7522f0a1`). Codex reviewed the initial push and caught two real
+findings (TR2-3, TR2-4 below) in the same class as this pass's own TR2-1/
+TR2-2; both verified and addressed before merge. CI green on the final head
+(17/17 checks). No merge conflict (base was current `main`). Rotation row
+17 -> done. Next: 18 training (extended).
 
 ### 2026-08-29 — Feature 17 (Training core), pass 2 — 2 fixed (TR2-1, TR2-3), 2 flagged (TR2-2, TR2-4)
 
@@ -1852,7 +1860,7 @@ each row's prior PR is recorded in the Log, not repeated here.
 | 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | ✅     |
 | 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                | ✅     |
 | 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                       | ✅     |
-| 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`                                                                                   | ⏳     |
+| 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`                                                                                   | ✅     |
 | 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ⬜     |
 | 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3723 L)                                                                                                          | ⬜     |
 | 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ⬜     |

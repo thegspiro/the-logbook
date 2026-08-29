@@ -728,6 +728,86 @@ class EquipmentCheckService:
         await self.db.commit()
         return True
 
+    async def delete_items_bulk(
+        self,
+        compartment_id: str,
+        organization_id: str,
+        item_ids: List[str],
+        idempotency_key: str,
+        user_id: str,
+        user_name: str,
+    ) -> Optional[tuple[List[str], bool]]:
+        """Validate and delete a compartment's item batch in one transaction."""
+        compartment = await self._get_compartment(compartment_id, organization_id)
+        if not compartment:
+            return None
+
+        normalized_ids = sorted(item_ids)
+        payload_hash = hashlib.sha256(
+            json.dumps(normalized_ids, separators=(",", ":")).encode()
+        ).hexdigest()
+        ledger_key = f"delete:{idempotency_key}"
+        try:
+            if len(set(item_ids)) != len(item_ids):
+                raise ValueError("Item IDs must be unique")
+            ledger_result = await self.db.execute(
+                select(EquipmentCheckBulkRequest).where(
+                    EquipmentCheckBulkRequest.organization_id == organization_id,
+                    EquipmentCheckBulkRequest.compartment_id == compartment_id,
+                    EquipmentCheckBulkRequest.idempotency_key == ledger_key,
+                )
+            )
+            ledger = ledger_result.scalars().first()
+            if ledger:
+                if ledger.payload_hash != payload_hash:
+                    raise ValueError(
+                        "Idempotency key was already used with different items"
+                    )
+                return list(ledger.item_ids), True
+
+            result = await self.db.execute(
+                select(CheckTemplateItem)
+                .where(
+                    CheckTemplateItem.compartment_id == compartment_id,
+                    CheckTemplateItem.id.in_(item_ids),
+                )
+                .with_for_update()
+            )
+            items = result.scalars().all()
+            by_id = {str(item.id): item for item in items}
+            if set(by_id) != set(item_ids):
+                raise ValueError("Every item must exist in the specified compartment")
+
+            self.db.add(
+                EquipmentCheckBulkRequest(
+                    id=generate_uuid(),
+                    organization_id=organization_id,
+                    compartment_id=compartment_id,
+                    idempotency_key=ledger_key,
+                    payload_hash=payload_hash,
+                    item_ids=item_ids,
+                )
+            )
+            for item_id in item_ids:
+                item = by_id[item_id]
+                await self.log_template_change(
+                    organization_id=organization_id,
+                    template_id=str(compartment.template_id),
+                    user_id=user_id,
+                    user_name=user_name,
+                    action="delete",
+                    entity_type="item",
+                    entity_id=item_id,
+                    entity_name=item.name,
+                    changes={"bulk_idempotency_key": idempotency_key},
+                )
+                await self.db.delete(item)
+            await self.db.commit()
+            return item_ids, False
+        except Exception:
+            await self.db.rollback()
+            raise
+
     async def reorder_items(
         self,
         compartment_id: str,
