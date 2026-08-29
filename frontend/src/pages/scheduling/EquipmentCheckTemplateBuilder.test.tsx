@@ -1,61 +1,70 @@
-/* eslint-disable testing-library/no-node-access */
-import React from 'react';
+/* eslint-disable testing-library/no-node-access, @typescript-eslint/no-unsafe-return */
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ConfirmProvider } from '../../contexts/ConfirmContext';
 
-const { service, unsavedStates } = vi.hoisted(() => ({
-  service: {
-    getApparatusOptions: vi.fn(),
-    getEquipmentCheckTemplate: vi.fn(),
-    getCsvSampleUrl: vi.fn(),
-    addCheckItem: vi.fn(),
-    addCheckItemsBulk: vi.fn(),
-    deleteCheckItemsBulk: vi.fn(),
-    deleteCheckItem: vi.fn(),
-    reorderItems: vi.fn(),
-    reorderCompartments: vi.fn(),
-    updateCheckItem: vi.fn(),
-    updateEquipmentCheckTemplate: vi.fn(),
-    updateCompartment: vi.fn(),
-    addCompartment: vi.fn(),
-  },
-  unsavedStates: [] as boolean[],
+const {
+  getTemplate,
+  updateCheckItem,
+  addCheckItem,
+  reorderItems,
+  cloneCompartment,
+  addCheckItemsBulk,
+  deleteCheckItemsBulk,
+  deleteCheckItem,
+  updateEquipmentCheckTemplate,
+  toastSuccess,
+  toastError,
+} = vi.hoisted(() => ({
+  getTemplate: vi.fn(),
+  updateCheckItem: vi.fn(),
+  addCheckItem: vi.fn(),
+  reorderItems: vi.fn(),
+  cloneCompartment: vi.fn(),
+  addCheckItemsBulk: vi.fn(),
+  deleteCheckItemsBulk: vi.fn(),
+  deleteCheckItem: vi.fn(),
+  updateEquipmentCheckTemplate: vi.fn(),
+  toastSuccess: vi.fn(),
+  toastError: vi.fn(),
 }));
 
-vi.mock('@/modules/scheduling', () => ({ schedulingService: service }));
-vi.mock('@/hooks/useUnsavedChanges', () => ({
-  useUnsavedChanges: ({ hasChanges }: { hasChanges: boolean }) => unsavedStates.push(hasChanges),
-}));
-vi.mock('@/services/inventoryService', () => ({
-  inventoryService: { getItems: vi.fn().mockResolvedValue({ items: [] }) },
-}));
-vi.mock('@/stores/authStore', () => ({
-  useAuthStore: (selector: (state: { checkPermission: () => boolean }) => unknown) =>
-    selector({ checkPermission: () => false }),
+vi.mock('react-hot-toast', () => ({ default: { success: toastSuccess, error: toastError } }));
+
+vi.mock('@/modules/scheduling', () => ({
+  schedulingService: {
+    getApparatusOptions: vi.fn().mockResolvedValue({ options: [] }),
+    getEquipmentCheckTemplate: (...args: unknown[]) => getTemplate(...args),
+    updateCheckItem: (...args: unknown[]) => updateCheckItem(...args),
+    addCheckItem: (...args: unknown[]) => addCheckItem(...args),
+    reorderItems: (...args: unknown[]) => reorderItems(...args),
+    cloneCompartment: (...args: unknown[]) => cloneCompartment(...args),
+    addCheckItemsBulk: (...args: unknown[]) => addCheckItemsBulk(...args),
+    getCsvSampleUrl: vi.fn().mockReturnValue('/sample.csv'),
+    deleteCheckItemsBulk: (...args: unknown[]) => deleteCheckItemsBulk(...args),
+    deleteCheckItem: (...args: unknown[]) => deleteCheckItem(...args),
+    updateEquipmentCheckTemplate: (...args: unknown[]) => updateEquipmentCheckTemplate(...args),
+  },
 }));
 
 // Repository convention: service dependencies above are mocked before this import.
 import EquipmentCheckTemplateBuilder from './EquipmentCheckTemplateBuilder';
 
-const item = (id: string, name: string, sortOrder: number) => ({
-  id,
-  compartmentId: 'cab',
-  name,
-  sortOrder,
-  checkType: 'function' as const,
-  isRequired: true,
-  hasExpiration: false,
-  expirationWarningDays: 30,
-});
+vi.mock('@/stores/authStore', () => ({
+  useAuthStore: (selector?: (state: { checkPermission: () => boolean }) => unknown) => {
+    const state = { checkPermission: () => false };
+    return selector ? selector(state) : state;
+  },
+}));
+
 const template = {
   id: 'template-1',
   organizationId: 'org-1',
   name: 'Engine check',
-  checkTiming: 'start_of_shift' as const,
-  templateType: 'equipment' as const,
+  checkTiming: 'start_of_shift',
+  templateType: 'equipment',
   isActive: true,
   sortOrder: 0,
   compartments: [
@@ -65,9 +74,47 @@ const template = {
       name: 'Cab',
       sortOrder: 0,
       containerType: 'compartment',
-      items: [item('radio', 'Radio', 0), item('torch', 'Torch', 1)],
+      items: [
+        {
+          id: 'radio',
+          compartmentId: 'cab',
+          name: 'Radio',
+          sortOrder: 0,
+          checkType: 'function',
+          isRequired: true,
+          hasExpiration: false,
+          expirationWarningDays: 30,
+        },
+        {
+          id: 'flashlight',
+          compartmentId: 'cab',
+          name: 'Flashlight',
+          sortOrder: 1,
+          checkType: 'function',
+          isRequired: true,
+          hasExpiration: false,
+          expirationWarningDays: 30,
+        },
+      ],
     },
-    { id: 'body', templateId: 'template-1', name: 'Body', sortOrder: 1, containerType: 'compartment', items: [] },
+    {
+      id: 'bag',
+      templateId: 'template-1',
+      name: 'Medical bag',
+      sortOrder: 1,
+      containerType: 'bag',
+      parentCompartmentId: 'cab',
+      items: [],
+    },
+    {
+      id: 'section',
+      templateId: 'template-1',
+      name: 'Supplies',
+      sortOrder: 2,
+      containerType: 'compartment',
+      isHeader: true,
+      items: [],
+    },
   ],
 };
 
@@ -83,211 +130,438 @@ function renderBuilder() {
   );
 }
 
+function renderNewBuilder() {
+  return render(
+    <MemoryRouter initialEntries={['/templates/new']}>
+      <ConfirmProvider>
+        <Routes>
+          <Route path="/templates/new" element={<EquipmentCheckTemplateBuilder />} />
+        </Routes>
+      </ConfirmProvider>
+    </MemoryRouter>
+  );
+}
+
 async function confirm(label: string | RegExp) {
   const dialog = await screen.findByRole('dialog');
   await userEvent.click(within(dialog).getByRole('button', { name: label }));
 }
 
-async function save() {
+async function saveBuilder() {
   await userEvent.click(screen.getByRole('button', { name: 'Save' }));
   const warning = await screen.findByRole('heading', { name: 'Save with warnings?' }).catch(() => null);
   if (warning) await confirm('Save anyway');
 }
 
-function first(elements: HTMLElement[]): HTMLElement {
-  const element = elements[0];
-  if (!element) throw new Error('Expected at least one matching element');
-  return element;
-}
+describe('EquipmentCheckTemplateBuilder responsive actions', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    getTemplate.mockResolvedValue(structuredClone(template));
+    updateCheckItem.mockResolvedValue({});
+    reorderItems.mockResolvedValue(undefined);
+  });
 
-beforeEach(() => {
-  vi.clearAllMocks();
-  unsavedStates.length = 0;
-  service.getApparatusOptions.mockResolvedValue({ options: [] });
-  service.getCsvSampleUrl.mockReturnValue('/sample.csv');
-  service.getEquipmentCheckTemplate.mockResolvedValue(structuredClone(template));
-  service.deleteCheckItem.mockResolvedValue(undefined);
-  service.deleteCheckItemsBulk.mockResolvedValue({ deletedItemIds: ['radio', 'torch'], replayed: false });
-  service.reorderItems.mockResolvedValue(undefined);
-  service.reorderCompartments.mockResolvedValue(undefined);
-  service.updateCheckItem.mockResolvedValue(item('radio', 'Radio', 0));
-  service.updateEquipmentCheckTemplate.mockResolvedValue(template);
-  service.updateCompartment.mockResolvedValue(template.compartments[0]);
-  service.addCompartment.mockResolvedValue(template.compartments[0]);
+  it('persists a saved item duplicate with its configuration and server id', async () => {
+    const user = userEvent.setup();
+    addCheckItem.mockResolvedValue({ ...template.compartments[0]?.items[0], id: 'radio-copy', name: 'Radio (copy)' });
+    renderBuilder();
+    const trigger = await screen.findByLabelText('Actions for Radio');
+    await user.click(trigger);
+    await user.click(within(trigger.closest('details') as HTMLElement).getByRole('button', { name: 'Duplicate' }));
+    await waitFor(() => expect(addCheckItem).toHaveBeenCalled());
+    expect(addCheckItem).toHaveBeenCalledWith(
+      'cab',
+      expect.objectContaining({ name: 'Radio (copy)', sort_order: 1, check_type: 'function', is_required: true })
+    );
+    expect(reorderItems).toHaveBeenCalledWith('cab', ['radio', 'radio-copy', 'flashlight']);
+    expect(await screen.findByLabelText('Actions for Radio (copy)')).toBeInTheDocument();
+  });
+
+  it('allows the returned duplicate to be edited immediately without replacing it', async () => {
+    const user = userEvent.setup();
+    addCheckItem.mockResolvedValue({ ...template.compartments[0]?.items[0], id: 'radio-copy', name: 'Radio (copy)' });
+    renderBuilder();
+    const original = await screen.findByLabelText('Actions for Radio');
+    await user.click(original);
+    await user.click(within(original.closest('details') as HTMLElement).getByRole('button', { name: 'Duplicate' }));
+    const duplicate = await screen.findByLabelText('Actions for Radio (copy)');
+    await user.click(duplicate);
+    await user.click(within(duplicate.closest('details') as HTMLElement).getByRole('button', { name: 'Rename' }));
+    const input = await screen.findByDisplayValue('Radio (copy)');
+    await user.clear(input);
+    await user.type(input, 'Portable radio copy');
+    await user.keyboard('{Enter}');
+    expect(screen.getByLabelText('Actions for Portable radio copy')).toBeInTheDocument();
+    expect(screen.getByLabelText('Actions for Radio')).toBeInTheDocument();
+  });
+
+  it('retains a successful duplicate when the page is reloaded', async () => {
+    const persisted = {
+      ...template,
+      compartments: [
+        {
+          ...template.compartments[0],
+          items: [
+            template.compartments[0]?.items[0],
+            { ...template.compartments[0]?.items[0], id: 'radio-copy', name: 'Radio (copy)', sortOrder: 1 },
+          ],
+        },
+        ...template.compartments.slice(1),
+      ],
+    };
+    getTemplate.mockResolvedValue(persisted);
+    const view = renderBuilder();
+    expect(await screen.findByLabelText('Actions for Radio (copy)')).toBeInTheDocument();
+    view.unmount();
+    renderBuilder();
+    expect(await screen.findByLabelText('Actions for Radio (copy)')).toBeInTheDocument();
+    expect(getTemplate).toHaveBeenCalledTimes(2);
+  });
+
+  it('leaves item state unchanged when persistence fails', async () => {
+    const user = userEvent.setup();
+    addCheckItem.mockRejectedValue(new Error('clone failed'));
+    renderBuilder();
+    const trigger = await screen.findByLabelText('Actions for Radio');
+    await user.click(trigger);
+    await user.click(within(trigger.closest('details') as HTMLElement).getByRole('button', { name: 'Duplicate' }));
+    await waitFor(() => expect(addCheckItem).toHaveBeenCalled());
+    expect(screen.queryByLabelText('Actions for Radio (copy)')).not.toBeInTheDocument();
+    expect(reorderItems).not.toHaveBeenCalled();
+  });
+
+  it('clones a saved compartment with the returned child ids', async () => {
+    const user = userEvent.setup();
+    cloneCompartment.mockResolvedValue({
+      ...template.compartments[0],
+      id: 'cab-copy',
+      name: 'Cab (copy)',
+      items: [{ ...template.compartments[0]?.items[0], id: 'radio-copy' }],
+    });
+    renderBuilder();
+    const trigger = await screen.findByLabelText('Actions for Cab');
+    await user.click(trigger);
+    await user.click(within(trigger.closest('details') as HTMLElement).getByRole('button', { name: 'Duplicate' }));
+    expect(await screen.findByLabelText('Actions for Cab (copy)')).toBeInTheDocument();
+    expect(cloneCompartment).toHaveBeenCalledWith('cab', 1);
+  });
+
+  it('leaves compartment state unchanged when the transactional clone fails', async () => {
+    const user = userEvent.setup();
+    cloneCompartment.mockRejectedValue(new Error('clone failed'));
+    renderBuilder();
+    const trigger = await screen.findByLabelText('Actions for Cab');
+    await user.click(trigger);
+    await user.click(within(trigger.closest('details') as HTMLElement).getByRole('button', { name: 'Duplicate' }));
+    await waitFor(() => expect(cloneCompartment).toHaveBeenCalledWith('cab', 1));
+    expect(screen.queryByLabelText('Actions for Cab (copy)')).not.toBeInTheDocument();
+  });
+
+  it('exposes every item action from the phone overflow without drag and drop', async () => {
+    const user = userEvent.setup();
+    renderBuilder();
+    const trigger = await screen.findByLabelText('Actions for Radio');
+    expect(trigger.closest('details')).toHaveClass('sm:hidden');
+    await user.click(trigger);
+    const menu = trigger.closest('details') as HTMLElement;
+    expect(within(menu).getByRole('button', { name: 'Rename' })).toBeVisible();
+    expect(within(menu).getByRole('button', { name: 'Move up' })).toBeVisible();
+    expect(within(menu).getByRole('button', { name: 'Move down' })).toBeVisible();
+    expect(within(menu).getByRole('button', { name: 'Duplicate' })).toBeVisible();
+    expect(within(menu).getByLabelText(/current destination Cab/i)).toHaveTextContent('Cab / Medical bag');
+    expect(within(menu).getByRole('button', { name: 'Delete' })).toHaveClass('text-red-600');
+    await user.click(within(menu).getByRole('button', { name: 'Duplicate' }));
+    expect(menu).not.toHaveAttribute('open');
+  });
+
+  it('offers hierarchy-aware compartment movement and omits section headers', async () => {
+    const user = userEvent.setup();
+    renderBuilder();
+    const trigger = await screen.findByLabelText('Actions for Medical bag');
+    await user.click(trigger);
+    const menu = trigger.closest('details') as HTMLElement;
+    expect(within(menu).getByRole('button', { name: 'Rename' })).toBeVisible();
+    expect(within(menu).getByRole('button', { name: 'Duplicate' })).toBeVisible();
+    const destination = within(menu).getByLabelText(/current destination Cab/i);
+    expect(destination).toHaveTextContent('Cab (current)');
+    expect(destination).not.toHaveTextContent('Supplies');
+    expect(within(menu).getByRole('button', { name: 'Move up' })).toBeDisabled();
+    expect(within(menu).getByRole('button', { name: 'Move down' })).toBeDisabled();
+    expect(within(menu).getByRole('button', { name: 'Delete' })).toBeVisible();
+  });
 });
 
-describe('equipment-check item mutations', () => {
-  it('quick-adds with the exact payload and does not submit twice while pending', async () => {
-    let finish!: (value: ReturnType<typeof item>) => void;
-    service.addCheckItem.mockReturnValue(
-      new Promise((resolve) => {
-        finish = resolve;
-      })
+describe('EquipmentCheckTemplateBuilder movement persistence', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    getTemplate.mockResolvedValue({
+      ...template,
+      compartments: [
+        {
+          ...template.compartments[0],
+          items: [
+            template.compartments[0]?.items[0],
+            { ...template.compartments[0]?.items[0], id: 'mask', name: 'Oxygen mask', sortOrder: 1 },
+          ],
+        },
+        template.compartments[1],
+      ],
+    });
+    updateCheckItem.mockResolvedValue({});
+    reorderItems.mockResolvedValue([]);
+  });
+
+  const moveSelect = async (name: string) => {
+    const selects = await screen.findAllByLabelText(new RegExp(`Move ${name} to compartment`));
+    return selects[selects.length - 1] as HTMLSelectElement;
+  };
+
+  it('moves an item across compartments only after persistence succeeds', async () => {
+    const user = userEvent.setup();
+    renderBuilder();
+    await user.selectOptions(await moveSelect('Oxygen mask'), '1');
+    expect(updateCheckItem).toHaveBeenCalledWith('mask', { compartment_id: 'bag', sort_order: 0 });
+    expect(await screen.findByLabelText('Actions for Oxygen mask')).toBeInTheDocument();
+    expect(toastSuccess).toHaveBeenCalledWith('Moved "Oxygen mask" to Medical bag');
+  });
+
+  it('keeps a rejected item in its source and does not show a success toast', async () => {
+    updateCheckItem.mockRejectedValueOnce(new Error('offline'));
+    const user = userEvent.setup();
+    renderBuilder();
+    await user.selectOptions(await moveSelect('Oxygen mask'), '1');
+    expect(await screen.findByLabelText('Actions for Oxygen mask')).toBeInTheDocument();
+    expect(toastSuccess).not.toHaveBeenCalled();
+    expect(toastError).toHaveBeenCalledWith('Could not move “Oxygen mask.” Its original location was restored.');
+  });
+
+  it('restores the prior item order when reorder persistence is rejected', async () => {
+    reorderItems.mockRejectedValueOnce(new Error('offline'));
+    const user = userEvent.setup();
+    renderBuilder();
+    const maskActions = await screen.findByLabelText('Actions for Oxygen mask');
+    await user.click(maskActions);
+    await user.click(within(maskActions.closest('details') as HTMLElement).getByRole('button', { name: 'Move up' }));
+    expect(reorderItems).toHaveBeenCalledWith('cab', ['mask', 'radio']);
+    const names = screen
+      .getAllByLabelText(/Actions for (Radio|Oxygen mask)/)
+      .map((node) => node.getAttribute('aria-label'));
+    expect(names.indexOf('Actions for Radio')).toBeLessThan(names.indexOf('Actions for Oxygen mask'));
+    expect(toastError).toHaveBeenCalledWith('Could not reorder “Oxygen mask.” Its original order was restored.');
+  });
+
+  it('reconciles rapid successful moves by stable item identity', async () => {
+    const user = userEvent.setup();
+    renderBuilder();
+    const radio = await moveSelect('Radio');
+    const mask = await moveSelect('Oxygen mask');
+    await Promise.all([user.selectOptions(radio, '1'), user.selectOptions(mask, '1')]);
+    expect(updateCheckItem).toHaveBeenCalledTimes(2);
+    expect(await screen.findByLabelText('Actions for Radio')).toBeInTheDocument();
+    expect(await screen.findByLabelText('Actions for Oxygen mask')).toBeInTheDocument();
+  });
+});
+
+describe('EquipmentCheckTemplateBuilder quick add queue', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    getTemplate.mockResolvedValue(structuredClone(template));
+  });
+
+  const savedItem = (name: string, id: string) => ({
+    ...template.compartments[0]?.items[0],
+    id,
+    name,
+  });
+
+  it('shows several rapid additions immediately, keeps focus, and serializes a slow compartment', async () => {
+    const user = userEvent.setup();
+    let resolveFirst!: (value: unknown) => void;
+    addCheckItemsBulk
+      .mockImplementationOnce(() => new Promise((resolve) => (resolveFirst = resolve)))
+      .mockResolvedValueOnce({ items: [savedItem('Spare batteries', 'batteries')], createdCount: 1 });
+    renderBuilder();
+    const input = await screen.findAllByPlaceholderText(/search inventory/i).then((inputs) => inputs[0] as HTMLElement);
+
+    await user.type(input, 'Lantern{Enter}');
+    await user.type(input, 'Spare batteries{Enter}');
+
+    expect(screen.getByLabelText('Lantern Saving')).toBeVisible();
+    expect(screen.getByLabelText('Spare batteries Saving')).toBeVisible();
+    expect(input).toHaveFocus();
+    expect(addCheckItemsBulk).toHaveBeenCalledTimes(1);
+
+    resolveFirst({ items: [savedItem('Lantern', 'lantern')], createdCount: 1 });
+    await waitFor(() => expect(screen.queryByLabelText('Lantern Saving')).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByLabelText('Spare batteries Saving')).not.toBeInTheDocument());
+    expect(screen.getByText('Lantern')).toBeVisible();
+    expect(screen.getByText('Spare batteries')).toBeVisible();
+    expect(addCheckItemsBulk).toHaveBeenCalledTimes(2);
+  });
+
+  it('retains a failed row, retries with the same idempotency key, and keeps successful siblings', async () => {
+    const user = userEvent.setup();
+    addCheckItemsBulk
+      .mockRejectedValueOnce(new Error('response lost'))
+      .mockResolvedValueOnce({ items: [savedItem('Gloves', 'gloves')], createdCount: 1 })
+      .mockResolvedValueOnce({ items: [savedItem('Safety vest', 'vest')], createdCount: 0, replayed: true });
+    renderBuilder();
+    const input = (await screen.findAllByPlaceholderText(/search inventory/i))[0] as HTMLElement;
+    await user.type(input, 'Safety vest{Enter}');
+    await user.type(input, 'Gloves{Enter}');
+
+    const failed = await screen.findByLabelText('Safety vest Not saved');
+    await waitFor(() => expect(screen.queryByLabelText('Gloves Saving')).not.toBeInTheDocument());
+    expect(screen.getByText('Gloves')).toBeVisible();
+    const firstKey = String(addCheckItemsBulk.mock.calls[0]?.[2]);
+    await user.click(within(failed).getByRole('button', { name: 'Retry' }));
+    await waitFor(() => expect(screen.queryByLabelText('Safety vest Saving')).not.toBeInTheDocument());
+    expect(screen.getByText('Safety vest')).toBeVisible();
+    expect(addCheckItemsBulk.mock.calls[2]?.[2]).toBe(firstKey);
+  });
+
+  it('does not submit the same value again when Enter repeats', async () => {
+    const user = userEvent.setup();
+    addCheckItemsBulk.mockResolvedValue({ items: [savedItem('Lantern', 'lantern')], createdCount: 1 });
+    renderBuilder();
+    const input = (await screen.findAllByPlaceholderText(/search inventory/i))[0] as HTMLElement;
+    await user.type(input, 'Lantern{Enter}{Enter}');
+    expect(addCheckItemsBulk).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('EquipmentCheckTemplateBuilder bulk deletion', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    getTemplate.mockResolvedValue(structuredClone(template));
+  });
+
+  async function selectAndDelete() {
+    const user = userEvent.setup();
+    renderBuilder();
+    await screen.findByText('Radio');
+    await user.click(screen.getByTitle('Select all items'));
+    await user.click(screen.getByRole('button', { name: 'Delete selected items' }));
+    await user.click(screen.getByRole('button', { name: 'Delete 2' }));
+  }
+
+  it('removes only IDs confirmed by a completely successful response', async () => {
+    deleteCheckItemsBulk.mockResolvedValue({ deletedItemIds: ['radio', 'flashlight'], replayed: false });
+    await selectAndDelete();
+    await waitFor(() => expect(screen.queryByText('Radio')).not.toBeInTheDocument());
+    expect(screen.getAllByText(/No items yet/).length).toBeGreaterThan(0);
+    expect(deleteCheckItemsBulk).toHaveBeenCalledWith('cab', ['radio', 'flashlight'], expect.any(String));
+    expect(toastSuccess).toHaveBeenCalledWith('Deleted 2 items');
+    expect(toastError).not.toHaveBeenCalled();
+  });
+
+  it('retains visible selected rows and never shows success after failure', async () => {
+    deleteCheckItemsBulk.mockRejectedValue(new Error('Database unavailable'));
+    await selectAndDelete();
+    expect(await screen.findByText('Radio')).toBeVisible();
+    expect(screen.getByText('Flashlight')).toBeVisible();
+    expect(screen.getByText('2 selected')).toBeVisible();
+    expect(toastError).toHaveBeenCalled();
+    expect(toastSuccess).not.toHaveBeenCalled();
+  });
+
+  it('reuses the idempotency key when the same selected deletion is retried', async () => {
+    deleteCheckItemsBulk
+      .mockRejectedValueOnce(new Error('Response lost'))
+      .mockResolvedValueOnce({ deletedItemIds: ['radio', 'flashlight'], replayed: true });
+    const user = userEvent.setup();
+    renderBuilder();
+    await screen.findByText('Radio');
+    await user.click(screen.getByTitle('Select all items'));
+
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      await user.click(screen.getByRole('button', { name: 'Delete selected items' }));
+      await user.click(screen.getByRole('button', { name: 'Delete 2' }));
+      await waitFor(() => expect(deleteCheckItemsBulk).toHaveBeenCalledTimes(attempt + 1));
+    }
+
+    expect(deleteCheckItemsBulk.mock.calls[0]?.[2]).toBe(deleteCheckItemsBulk.mock.calls[1]?.[2]);
+    await waitFor(() => expect(screen.queryByText('Radio')).not.toBeInTheDocument());
+    expect(toastSuccess).toHaveBeenCalledWith('Deleted 2 items');
+  });
+});
+
+describe('EquipmentCheckTemplateBuilder remaining mutation regressions', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    getTemplate.mockResolvedValue(structuredClone(template));
+    deleteCheckItem.mockResolvedValue(undefined);
+    updateEquipmentCheckTemplate.mockImplementation((_id: string, payload: { is_active: boolean }) =>
+      Promise.resolve({ ...structuredClone(template), isActive: payload.is_active })
     );
-    renderBuilder();
-    const input = first(await screen.findAllByPlaceholderText(/Search inventory or type a new item name/i));
-    await userEvent.type(input, '  Nozzle  ');
-    fireEvent.keyDown(input, { key: 'Enter' });
-    fireEvent.keyDown(input, { key: 'Enter' });
-    expect(service.addCheckItem).toHaveBeenCalledTimes(1);
-    expect(service.addCheckItem).toHaveBeenCalledWith('cab', { name: 'Nozzle', sort_order: 2 });
-    finish(item('nozzle', 'Nozzle', 2));
-    expect(await screen.findByLabelText('Actions for Nozzle')).toBeVisible();
-    expect(unsavedStates).not.toContain(true);
   });
 
-  it('retains quick-add text after failure and permits a retry', async () => {
-    service.addCheckItem.mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce(item('nozzle', 'Nozzle', 2));
-    renderBuilder();
-    const input = first(await screen.findAllByPlaceholderText(/Search inventory or type a new item name/i));
-    await userEvent.type(input, 'Nozzle{enter}');
-    await waitFor(() => expect(service.addCheckItem).toHaveBeenCalledTimes(1));
-    expect(input).toHaveValue('Nozzle');
-    await userEvent.type(input, '{enter}');
-    expect(await screen.findByLabelText('Actions for Nozzle')).toBeVisible();
-    expect(service.addCheckItem).toHaveBeenNthCalledWith(2, 'cab', { name: 'Nozzle', sort_order: 2 });
-  });
-
-  it('bulk-pastes atomically and reuses the idempotency key on retry', async () => {
-    service.addCheckItemsBulk.mockRejectedValueOnce(new Error('timeout')).mockResolvedValueOnce({
-      items: [item('mask', 'Mask', 2), item('hood', 'Hood', 3)],
+  it('bulk-pastes atomically and reuses the idempotency key after a failed attempt', async () => {
+    const user = userEvent.setup();
+    addCheckItemsBulk.mockRejectedValueOnce(new Error('timeout')).mockResolvedValueOnce({
+      items: [
+        { ...template.compartments[0]?.items[0], id: 'mask', name: 'Mask', sortOrder: 2 },
+        { ...template.compartments[0]?.items[0], id: 'hood', name: 'Hood', sortOrder: 3 },
+      ],
       createdCount: 2,
     });
     renderBuilder();
-    await userEvent.click(first(await screen.findAllByTitle('Switch to bulk paste (one item per line)')));
+    await user.click((await screen.findAllByTitle('Switch to bulk paste (one item per line)'))[0] as HTMLElement);
     const paste = screen.getByPlaceholderText(/Paste item names here/i);
-    await userEvent.type(paste, 'Mask\nHood');
-    await userEvent.click(screen.getByRole('button', { name: 'Add All' }));
-    await waitFor(() => expect(service.addCheckItemsBulk).toHaveBeenCalledTimes(1));
+    await user.type(paste, 'Mask\nHood');
+    await user.click(screen.getByRole('button', { name: 'Add All' }));
+    await waitFor(() => expect(addCheckItemsBulk).toHaveBeenCalledTimes(1));
     expect(paste).toHaveValue('Mask\nHood');
-    await userEvent.click(screen.getByRole('button', { name: 'Add All' }));
+    await user.click(screen.getByRole('button', { name: 'Add All' }));
     expect(await screen.findByLabelText('Actions for Mask')).toBeVisible();
-    const [firstCall, secondCall] = service.addCheckItemsBulk.mock.calls;
-    expect(firstCall?.slice(0, 2)).toEqual(['cab', [{ name: 'Mask' }, { name: 'Hood' }]]);
-    expect(secondCall).toEqual(firstCall);
+    expect(addCheckItemsBulk.mock.calls[0]?.[2]).toBe(addCheckItemsBulk.mock.calls[1]?.[2]);
   });
 
-  it('retains an individually deleted row when the mutation fails', async () => {
-    service.deleteCheckItem.mockRejectedValueOnce(new Error('denied'));
+  it('retains an individually deleted row when persistence fails', async () => {
+    deleteCheckItem.mockRejectedValueOnce(new Error('denied'));
     renderBuilder();
     const actions = await screen.findByLabelText('Actions for Radio');
     await userEvent.click(actions);
     await userEvent.click(within(actions.closest('details') as HTMLElement).getByRole('button', { name: 'Delete' }));
     await confirm('Delete');
-    await waitFor(() => expect(service.deleteCheckItem).toHaveBeenCalledWith('radio'));
+    await waitFor(() => expect(deleteCheckItem).toHaveBeenCalledWith('radio'));
     expect(screen.getByLabelText('Actions for Radio')).toBeVisible();
   });
 
-  async function deleteAllItems() {
-    renderBuilder();
-    await userEvent.click(await screen.findByTitle('Select all items'));
-    await userEvent.click(screen.getByRole('button', { name: 'Delete selected items' }));
-    await confirm('Delete 2');
-    await waitFor(() => expect(service.deleteCheckItemsBulk).toHaveBeenCalledTimes(1));
-    expect(service.deleteCheckItemsBulk).toHaveBeenCalledWith('cab', ['radio', 'torch'], expect.any(String));
-  }
-
-  it('removes every row after successful bulk deletion', async () => {
-    await deleteAllItems();
-    await waitFor(() => expect(screen.queryByLabelText('Actions for Radio')).not.toBeInTheDocument());
-    expect(unsavedStates).not.toContain(true);
-  });
-
-  it('retains every row after failed bulk deletion', async () => {
-    service.deleteCheckItemsBulk.mockRejectedValueOnce(new Error('denied'));
-    await deleteAllItems();
-    expect(screen.getByLabelText('Actions for Radio')).toBeVisible();
-    expect(screen.getByLabelText('Actions for Torch')).toBeVisible();
-  });
-
-  it('persists a duplicated item in edit mode with its complete create payload', async () => {
-    service.addCheckItemsBulk.mockResolvedValue({ items: [item('copy', 'Radio (copy)', 1)], createdCount: 1 });
-    renderBuilder();
-    const actions = await screen.findByLabelText('Actions for Radio');
-    await userEvent.click(actions);
-    await userEvent.click(within(actions.closest('details') as HTMLElement).getByRole('button', { name: 'Duplicate' }));
-    await waitFor(() => expect(service.addCheckItemsBulk).toHaveBeenCalled());
-    expect(service.addCheckItemsBulk).toHaveBeenCalledWith(
-      'cab',
-      [
-        expect.objectContaining({
-          name: 'Radio (copy)',
-          sort_order: 1,
-          check_type: 'function',
-          is_required: true,
-          has_expiration: false,
-        }),
-      ],
-      expect.any(String)
-    );
-    expect(service.reorderItems).toHaveBeenCalledWith('cab', ['radio', 'copy', 'torch']);
-  });
-
-  it('rolls item order back when reorder persistence fails', async () => {
-    service.reorderItems.mockRejectedValueOnce(new Error('conflict'));
-    renderBuilder();
-    const actions = await screen.findByLabelText('Actions for Radio');
-    await userEvent.click(actions);
-    await userEvent.click(within(actions.closest('details') as HTMLElement).getByRole('button', { name: 'Move down' }));
-    await waitFor(() => expect(service.reorderItems).toHaveBeenCalledWith('cab', ['torch', 'radio']));
-    await waitFor(() => {
-      const names = screen
-        .getAllByLabelText(/Actions for (Radio|Torch)/)
-        .map((node) => node.getAttribute('aria-label'));
-      expect(names).toEqual(['Actions for Radio', 'Actions for Torch']);
-    });
-  });
-
-  it('rolls a cross-compartment movement back when persistence fails', async () => {
-    service.updateCheckItem.mockRejectedValueOnce(new Error('conflict'));
-    renderBuilder();
-    const actions = await screen.findByLabelText('Actions for Radio');
-    await userEvent.click(actions);
-    await userEvent.selectOptions(
-      within(actions.closest('details') as HTMLElement).getByLabelText(/current destination Cab/i),
-      '1'
-    );
-    await waitFor(() =>
-      expect(service.updateCheckItem).toHaveBeenCalledWith('radio', { compartment_id: 'body', sort_order: 0 })
-    );
-    expect(screen.getByLabelText('Actions for Radio')).toBeVisible();
-  });
-});
-
-describe('draft, publish, and unsaved state', () => {
-  it('sends inactive for a draft and active for a published template', async () => {
+  it('sends draft and publish state explicitly', async () => {
+    const user = userEvent.setup();
     renderBuilder();
     const active = await screen.findByRole('checkbox', { name: 'Active' });
-    await userEvent.click(active);
-    await save();
+    await user.click(active);
+    await saveBuilder();
     await waitFor(() =>
-      expect(service.updateEquipmentCheckTemplate).toHaveBeenLastCalledWith(
+      expect(updateEquipmentCheckTemplate).toHaveBeenLastCalledWith(
         'template-1',
         expect.objectContaining({ is_active: false })
       )
     );
-    await waitFor(() => expect(screen.getByRole('checkbox', { name: 'Active' })).toBeChecked());
-    await save();
+    await user.click(screen.getByRole('checkbox', { name: 'Active' }));
+    await saveBuilder();
     await waitFor(() =>
-      expect(service.updateEquipmentCheckTemplate).toHaveBeenLastCalledWith(
+      expect(updateEquipmentCheckTemplate).toHaveBeenLastCalledWith(
         'template-1',
         expect.objectContaining({ is_active: true })
       )
     );
   });
+});
 
-  it('only marks actual unsaved work for navigation prompting', async () => {
-    service.addCheckItem.mockResolvedValue(item('nozzle', 'Nozzle', 2));
-    renderBuilder();
-    const input = first(await screen.findAllByPlaceholderText(/Search inventory or type a new item name/i));
-    await userEvent.type(input, 'Nozzle{enter}');
-    await screen.findByLabelText('Actions for Nozzle');
-    expect(unsavedStates).not.toContain(true);
-    const name = screen.getByDisplayValue('Engine check');
-    await userEvent.clear(name);
-    await userEvent.type(name, 'Changed');
-    expect(unsavedStates).toContain(true);
-    await userEvent.click(screen.getByTitle('Go back'));
-    expect(await screen.findByRole('heading', { name: 'Leave without saving?' })).toBeVisible();
-  });
+describe('EquipmentCheckTemplateBuilder creation guidance', () => {
+  it('preserves preset test instructions and marks the review step ready', async () => {
+    renderNewBuilder();
+
+    fireEvent.change(screen.getByLabelText('Template Type'), { target: { value: 'vehicle' } });
+    fireEvent.click(screen.getByRole('button', { name: /use a vehicle layout/i }));
+    fireEvent.click(screen.getByRole('button', { name: /engine \/ pumper/i }));
+    fireEvent.click(screen.getByRole('button', { name: /preview/i }));
+
+    expect(screen.getAllByText('Switch it on and confirm it works.').length).toBeGreaterThan(0);
+    expect(screen.getByText('Review').closest('div')).toHaveTextContent(/items/);
+    expect(screen.getByText('Review').parentElement?.previousElementSibling).toHaveClass('bg-green-500');
+  }, 10_000);
 });
