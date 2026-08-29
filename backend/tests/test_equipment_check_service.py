@@ -83,6 +83,25 @@ class TestCloneCompartment:
         mock_db.rollback.assert_awaited_once()
         assert mock_db.add.call_count == 2
 
+    async def test_advances_template_revision_with_clone(self, service):
+        loaded = MagicMock()
+        loaded.scalars.return_value.first.return_value = MagicMock()
+        service.db.execute.return_value = loaded
+        with (
+            patch.object(
+                service,
+                "_get_compartment",
+                new_callable=AsyncMock,
+                return_value=self.source(),
+            ),
+            patch.object(
+                service, "_advance_content_revision", new_callable=AsyncMock
+            ) as advance,
+        ):
+            await service.clone_compartment("cab", "org-1", 1)
+
+        advance.assert_awaited_once_with("template-1")
+
 
 class TestUpdateTemplateApparatusValidation:
     async def test_foreign_apparatus_rejected(self, service, mock_db):
@@ -305,6 +324,9 @@ class TestBulkItemDeletion:
                 return_value=compartment,
             ),
             patch.object(service, "log_template_change", new_callable=AsyncMock),
+            patch.object(
+                service, "_advance_content_revision", new_callable=AsyncMock
+            ) as advance,
         ):
             deleted, replayed = await service.delete_items_bulk(
                 "comp-1",
@@ -317,6 +339,7 @@ class TestBulkItemDeletion:
         assert deleted == ["item-1", "item-2"]
         assert replayed is False
         assert mock_db.delete.await_count == 2
+        advance.assert_awaited_once_with("template-1")
         mock_db.commit.assert_awaited_once()
 
     async def test_wrong_parent_rolls_back_without_deleting(self, service, mock_db):
@@ -1198,7 +1221,9 @@ class TestSubmitCheckResumeOverride:
         assignment_result.scalars.return_value.first.return_value = MagicMock(
             position=None
         )
-        incomplete = MagicMock(id="chk-1", overall_status="incomplete")
+        incomplete = MagicMock(
+            id="chk-1", overall_status="incomplete", checked_by="member-1"
+        )
         existing_result = MagicMock()
         existing_result.scalars.return_value.first.return_value = incomplete
         mock_db.execute = AsyncMock(
@@ -1228,6 +1253,43 @@ class TestSubmitCheckResumeOverride:
                 allow_manage=False,
             )
         assert complete.await_args.kwargs["allow_any"] is False
+
+    async def test_owned_incomplete_resume_precedes_active_template_resolution(
+        self, service, mock_db
+    ):
+        shift = MagicMock(id="shift-1", shift_officer_id=None, apparatus_id=None)
+        shift_result = MagicMock()
+        shift_result.scalars.return_value.first.return_value = shift
+        assignment_result = MagicMock()
+        assignment_result.scalars.return_value.first.return_value = MagicMock(
+            position=None
+        )
+        incomplete = MagicMock(
+            id="chk-1", overall_status="incomplete", checked_by="member-1"
+        )
+        existing_result = MagicMock()
+        existing_result.scalars.return_value.first.return_value = incomplete
+        mock_db.execute = AsyncMock(
+            side_effect=[shift_result, assignment_result, existing_result]
+        )
+        with (
+            patch.object(service, "_resolve_templates", AsyncMock()) as resolve,
+            patch.object(
+                service,
+                "complete_incomplete_check",
+                AsyncMock(return_value=MagicMock()),
+            ) as complete,
+        ):
+            await service.submit_check(
+                shift_id="shift-1",
+                organization_id="org-1",
+                checked_by="member-1",
+                data={"template_id": "tmpl-1", "items": [{"status": "pass"}]},
+                allow_manage=False,
+            )
+
+        resolve.assert_not_awaited()
+        complete.assert_awaited_once()
 
     async def test_completed_idempotent_retry_precedes_template_validation(
         self, service, mock_db

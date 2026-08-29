@@ -640,6 +640,7 @@ class EquipmentCheckService:
                 )
             )
         try:
+            await self._advance_content_revision(str(source.template_id))
             await self.db.commit()
         except Exception:
             await self.db.rollback()
@@ -998,6 +999,7 @@ class EquipmentCheckService:
                     changes={"bulk_idempotency_key": idempotency_key},
                 )
                 await self.db.delete(item)
+            await self._advance_content_revision(str(compartment.template_id))
             await self.db.commit()
             return item_ids, False
         except Exception:
@@ -1612,6 +1614,40 @@ class EquipmentCheckService:
                 # counts that 400 toward the ceiling that discards the entry.
                 return await self.get_check(retry.id, organization_id)
 
+        existing_check = None
+        if template_id:
+            existing_result = await self.db.execute(
+                select(ShiftEquipmentCheck).where(
+                    ShiftEquipmentCheck.shift_id == shift_id,
+                    ShiftEquipmentCheck.template_id == template_id,
+                )
+            )
+            existing_check = existing_result.scalars().first()
+            if (
+                existing_check
+                and existing_check.overall_status == "incomplete"
+                and (
+                    allow_manage
+                    or str(existing_check.checked_by) == str(checked_by)
+                )
+            ):
+                # Structural edits deactivate a template, but must not strand
+                # the member who owns an already-started check behind active
+                # template resolution.
+                return await self.complete_incomplete_check(
+                    check_id=existing_check.id,
+                    organization_id=organization_id,
+                    checked_by=checked_by,
+                    data={
+                        "items": items_data,
+                        "seals": seals_data,
+                        "notes": data.get("notes"),
+                        "signature_data": data.get("signature_data"),
+                        "client_submission_id": client_submission_id,
+                    },
+                    allow_any=allow_manage,
+                )
+
         if template_id:
             position = getattr(assignment, "position", None)
             if hasattr(position, "value"):
@@ -1638,13 +1674,6 @@ class EquipmentCheckService:
 
         # Prevent duplicate submission for same shift+template
         if template_id:
-            existing_result = await self.db.execute(
-                select(ShiftEquipmentCheck).where(
-                    ShiftEquipmentCheck.shift_id == shift_id,
-                    ShiftEquipmentCheck.template_id == template_id,
-                )
-            )
-            existing_check = existing_result.scalars().first()
             if existing_check:
                 if existing_check.overall_status == "incomplete":
                     # Forward the manage override: a manager finishing another

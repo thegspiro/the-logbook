@@ -764,6 +764,10 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
   }, [shiftId, template.id, user]);
   const [draftReady, setDraftReady] = useState(false);
   const draftSaveWarningShown = useRef(false);
+  const legacyDraftRevisions = useMemo(
+    () => [template.updatedAt, template.createdAt].filter((revision): revision is string => Boolean(revision)),
+    [template.createdAt, template.updatedAt]
+  );
 
   const activeItemDefinitions = useMemo(
     () =>
@@ -818,7 +822,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
       contentRevision?: number;
       itemDefinitions?: Record<string, DraftItemDefinition>;
       sealDefinitions?: typeof activeSealDefinitions;
-    }>(draftIdentity)
+    }>(draftIdentity, Date.now(), legacyDraftRevisions)
       .then((draft) => {
         if (cancelled || !draft) return;
         const parsed = draft.contents;
@@ -886,7 +890,15 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [activeItemDefinitions, activeSealDefinitions, draftIdentity, previewMode, template.contentRevision, totalItems]);
+  }, [
+    activeItemDefinitions,
+    activeSealDefinitions,
+    draftIdentity,
+    legacyDraftRevisions,
+    previewMode,
+    template.contentRevision,
+    totalItems,
+  ]);
 
   useEffect(() => {
     if (previewMode || !draftIdentity || !draftReady) return;

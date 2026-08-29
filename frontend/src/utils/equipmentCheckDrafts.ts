@@ -66,7 +66,8 @@ export async function saveEquipmentCheckDraft<T>(
 
 export async function loadEquipmentCheckDraft<T>(
   identity: EquipmentCheckDraftIdentity,
-  now = Date.now()
+  now = Date.now(),
+  legacyTemplateRevisions: readonly string[] = []
 ): Promise<EquipmentCheckDraft<T> | null> {
   const db = await openOfflineDb();
   return new Promise((resolve, reject) => {
@@ -76,14 +77,35 @@ export async function loadEquipmentCheckDraft<T>(
     request.onsuccess = () => {
       const drafts = request.result as EquipmentCheckDraft<T>[];
       let match: EquipmentCheckDraft<T> | null = null;
+      let legacyMatch: EquipmentCheckDraft<T> | null = null;
       for (const draft of drafts) {
-        if (draft.expiresAt <= now || (sameChecklist(draft, identity) && draft.id !== draftId(identity))) {
+        if (draft.expiresAt <= now) {
           store.delete(draft.id);
         } else if (draft.id === draftId(identity)) {
           match = draft;
+        } else if (sameChecklist(draft, identity) && legacyTemplateRevisions.includes(draft.templateRevision)) {
+          if (!legacyMatch || draft.updatedAt > legacyMatch.updatedAt) legacyMatch = draft;
+        } else if (sameChecklist(draft, identity)) {
+          store.delete(draft.id);
         }
       }
-      resolve(match);
+      if (match || !legacyMatch) {
+        resolve(match);
+        return;
+      }
+
+      const legacy = legacyMatch;
+      const migrated: EquipmentCheckDraft<T> = {
+        ...legacy,
+        ...identity,
+        id: draftId(identity),
+      };
+      const write = store.put(migrated);
+      write.onerror = () => reject(write.error ?? new Error('Failed to migrate equipment-check draft'));
+      write.onsuccess = () => {
+        store.delete(legacy.id);
+        resolve(migrated);
+      };
     };
   });
 }

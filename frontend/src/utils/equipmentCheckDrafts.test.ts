@@ -36,6 +36,17 @@ describe('equipment-check drafts', () => {
     expect(draft).toMatchObject({ ...base, createdAt: 1_000, updatedAt: 1_000 });
   });
 
+  it('migrates a draft saved under the legacy template timestamp key', async () => {
+    const legacy = { ...base, templateRevision: '2026-08-28T12:00:00Z' };
+    await saveEquipmentCheckDraft(legacy, { answer: 'pass' }, 1_000);
+
+    const draft = await loadEquipmentCheckDraft<{ answer: string }>(base, 2_000, [legacy.templateRevision]);
+
+    expect(draft).toMatchObject({ ...base, createdAt: 1_000, contents: { answer: 'pass' } });
+    expect(await loadEquipmentCheckDraft(base, 2_000)).toMatchObject({ contents: { answer: 'pass' } });
+    expect(await clearAllEquipmentCheckDrafts()).toBe(1);
+  });
+
   it.each([
     ['account switching', { ...base, userId: 'user-b' }],
     ['organization switching', { ...base, organizationId: 'org-b' }],
