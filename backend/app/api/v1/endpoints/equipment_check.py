@@ -33,6 +33,8 @@ from app.schemas.equipment_check import (
     CheckTemplateCompartmentResponse,
     CheckTemplateCompartmentUpdate,
     CheckTemplateItemBulkCreate,
+    CheckTemplateItemBulkDelete,
+    CheckTemplateItemBulkDeleteResponse,
     CheckTemplateItemBulkResponse,
     CheckTemplateItemCreate,
     CheckTemplateItemResponse,
@@ -588,6 +590,37 @@ async def add_items_bulk(
     items, replayed = result
     return CheckTemplateItemBulkResponse(
         items=items, created_count=0 if replayed else len(items), replayed=replayed
+    )
+
+
+@router.post(
+    "/compartments/{compartment_id}/items/bulk-delete",
+    response_model=CheckTemplateItemBulkDeleteResponse,
+)
+async def delete_items_bulk(
+    compartment_id: str,
+    data: CheckTemplateItemBulkDelete,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("equipment_check.manage")),
+):
+    """Delete an item batch atomically; safe to retry with the same key."""
+    service = EquipmentCheckService(db)
+    try:
+        result = await service.delete_items_bulk(
+            compartment_id,
+            str(current_user.organization_id),
+            data.item_ids,
+            data.idempotency_key,
+            str(current_user.id),
+            _user_display_name(current_user),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=safe_error_detail(exc))
+    if result is None:
+        raise HTTPException(status_code=404, detail="Compartment not found")
+    deleted_ids, replayed = result
+    return CheckTemplateItemBulkDeleteResponse(
+        deleted_item_ids=deleted_ids, replayed=replayed
     )
 
 

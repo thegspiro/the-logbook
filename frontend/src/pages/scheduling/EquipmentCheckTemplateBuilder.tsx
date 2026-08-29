@@ -945,24 +945,23 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     )
       return;
 
-    const toDelete = [...selected].sort((a, b) => b - a);
-    const deletePromises: Promise<void>[] = [];
-    for (const itemIdx of toDelete) {
-      const item = comp.items[itemIdx];
-      if (item?.id) {
-        deletePromises.push(
-          schedulingService.deleteCheckItem(item.id).catch((err: unknown) => {
-            toast.error(getErrorMessage(err, `Failed to delete ${item.name || 'item'}`));
-          })
-        );
-      }
+    const itemIds = [...selected].map((itemIdx) => comp.items[itemIdx]?.id).filter((id): id is string => Boolean(id));
+    if (!comp.id || itemIds.length !== count) {
+      toast.error('Save all selected items before deleting them');
+      return;
     }
-    await Promise.all(deletePromises);
 
-    const remaining = comp.items.filter((_, i) => !selected.has(i));
-    updateCompartmentField(compartmentIdx, { items: remaining });
-    setSelectedItems((prev) => ({ ...prev, [key]: new Set<number>() }));
-    toast.success(`Deleted ${count} item${count !== 1 ? 's' : ''}`);
+    try {
+      const result = await schedulingService.deleteCheckItemsBulk(comp.id, itemIds, crypto.randomUUID());
+      const deletedIds = new Set(result.deletedItemIds);
+      const remaining = comp.items.filter((item) => !item.id || !deletedIds.has(item.id));
+      updateCompartmentField(compartmentIdx, { items: remaining });
+      setSelectedItems((prev) => ({ ...prev, [key]: new Set<number>() }));
+      const deletedCount = deletedIds.size;
+      toast.success(`Deleted ${deletedCount} item${deletedCount !== 1 ? 's' : ''}`);
+    } catch (err) {
+      toast.error(getErrorMessage(err, `Could not delete ${String(count)} items`));
+    }
   };
 
   // ---------------------------------------------------------------------------
