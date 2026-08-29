@@ -46,11 +46,16 @@ class TestGetPreset:
 
     async def test_returns_the_modules_preset(self):
         position = SimpleNamespace(
-            settings={"label_presets": {"inventory": {"preset": "rollo_4x6"}}}
+            settings={
+                "label_presets": {
+                    "inventory": {"preset": "rollo_4x6", "printer_id": "printer-2"}
+                }
+            }
         )
         svc, _ = _service("pos-1", position)
         r = await svc.get_preset(uuid4(), uuid4(), "inventory")
         assert r["preset"] == "rollo_4x6"
+        assert r["printer_id"] == "printer-2"
         assert r["module"] == "inventory"
 
     async def test_modules_are_isolated(self):
@@ -79,6 +84,17 @@ class TestSetPreset:
         assert position.settings["label_presets"]["apparatus"]["preset"] == "dymo_30334"
         assert r["module"] == "apparatus"
         db.flush.assert_awaited()
+
+    async def test_persists_printer_destination_with_the_module(self):
+        position = SimpleNamespace(settings=None)
+        svc, _ = _service("p", position)
+        r = await svc.set_preset(
+            uuid4(), uuid4(), "apparatus", "dymo_30334", printer_id="printer-2"
+        )
+        assert position.settings["label_presets"]["apparatus"]["printer_id"] == (
+            "printer-2"
+        )
+        assert r["printer_id"] == "printer-2"
 
     async def test_preserves_other_modules(self):
         position = SimpleNamespace(
