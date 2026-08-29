@@ -17,7 +17,7 @@ feature. The rotation cannot outrun its own review queue.
 ## Open PR
 
 `claude/security-review-training-extended` — feature 18 (Training extended),
-pass 2. PR: pending (opening this iteration).
+pass 2. PR: [#2012](https://github.com/thegspiro/the-logbook/pull/2012).
 
 ---
 

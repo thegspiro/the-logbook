@@ -314,7 +314,7 @@ No schema changes this iteration. No `SET NULL` nullability issues found.
 
 ## Pass 2 (2026-08-29)
 
-**Prefix:** `TRX2` · **PR:** #TBD (opened as part of this pass)
+**Prefix:** `TRX2` · **PR:** [#2012](https://github.com/thegspiro/the-logbook/pull/2012)
 
 **Scope check:** diffed the current tree against `013fc341` (the pass-1 merge
 commit for PR #1873) across all twelve pass-1 files (six endpoint files, six
