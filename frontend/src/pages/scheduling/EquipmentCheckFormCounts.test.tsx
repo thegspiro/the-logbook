@@ -168,11 +168,10 @@ describe('EquipmentCheckForm quantity seeding', () => {
     expect(screen.getByText('1 photo saved for retry')).toBeInTheDocument();
     expect(screen.getByText('Evidence will sync when connected.')).toBeInTheDocument();
     expect(screen.queryByText('1 photo attached')).not.toBeInTheDocument();
-    expect(mockEnqueueCheck).toHaveBeenCalledWith(
-      'shift-1',
-      expect.objectContaining({ client_submission_id: expect.any(String) }),
-      [{ itemId: 'ti-1', files: [expect.any(File)] }]
-    );
+    expect(screen.getByRole('button', { name: 'Submit Report' })).toBeDisabled();
+    expect(mockEnqueueCheck).toHaveBeenCalledWith('shift-1', expect.objectContaining({ template_id: 'tmpl-1' }), [
+      { itemId: 'ti-1', files: [expect.any(File)] },
+    ]);
     expect(mockMarkCheckSubmitted).toHaveBeenCalledWith('queued-check-1', 'check-1', {
       'ti-1': 'check-item-77',
     });
