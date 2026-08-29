@@ -25,12 +25,7 @@ import {
   Ruler,
 } from 'lucide-react';
 import { inventoryService } from '../../../services/api';
-import type {
-  UserInventoryResponse,
-  InventoryItem,
-  EquipmentRequestItem,
-  ReturnRequestItem,
-} from '../types';
+import type { UserInventoryResponse, InventoryItem, EquipmentRequestItem, ReturnRequestItem } from '../types';
 import { getConditionColor, REQUEST_STATUS_BADGES } from '../types';
 import { useAuthStore } from '../../../stores/authStore';
 import { useRanks } from '../../../hooks/useRanks';
