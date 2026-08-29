@@ -240,6 +240,7 @@ class LabelService:
             return {"preset": None, "position_id": position_id, "module": module}
         return {
             "preset": pref.get("preset"),
+            "printer_id": pref.get("printer_id"),
             "custom_width": pref.get("custom_width"),
             "custom_height": pref.get("custom_height"),
             # Absent on presets saved before symbology was a choice, which must
@@ -255,6 +256,7 @@ class LabelService:
         organization_id,
         module: str,
         preset: str,
+        printer_id: Optional[str] = None,
         custom_width: Optional[float] = None,
         custom_height: Optional[float] = None,
         symbology: str = SYMBOLOGY_CODE128,
@@ -286,6 +288,7 @@ class LabelService:
             presets = {}
         presets[module] = {
             "preset": preset,
+            "printer_id": printer_id,
             "custom_width": custom_width,
             "custom_height": custom_height,
             "symbology": symbology,

@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Direct label printing remembers the right destination and reports the result (2026-08-29)
+
+**Improved**
+
+- Each position now remembers its selected network printer independently for
+  each label-enabled module, falling back to the department default if that
+  printer is no longer available.
+- Direct-print actions name their physical destination, browser printing is
+  labelled separately, and a mismatched configured stock size must be resolved
+  before a network job can be sent.
+- Direct-print results remain on the page, including reported printer faults,
+  warnings, and the distinction between confirmed status and an unconfirmed
+  send.
+
 ### Two training-officer dashboards could briefly cache member data (2026-08-29)
 
 **Fixed**
