@@ -7,6 +7,7 @@ import { ConfirmProvider } from '../../contexts/ConfirmContext';
 import EquipmentCheckTemplateBuilder from './EquipmentCheckTemplateBuilder';
 
 const getTemplate = vi.fn();
+const addCheckItemsBulk = vi.fn();
 const deleteCheckItemsBulk = vi.fn();
 const toastSuccess = vi.fn();
 const toastError = vi.fn();
@@ -22,6 +23,7 @@ vi.mock('@/modules/scheduling', () => ({
   schedulingService: {
     getApparatusOptions: vi.fn().mockResolvedValue({ options: [] }),
     getEquipmentCheckTemplate: (...args: unknown[]) => getTemplate(...args),
+    addCheckItemsBulk: (...args: unknown[]) => addCheckItemsBulk(...args),
     getCsvSampleUrl: vi.fn().mockReturnValue('/sample.csv'),
     deleteCheckItemsBulk: (...args: unknown[]) => deleteCheckItemsBulk(...args),
   },
@@ -154,6 +156,74 @@ describe('EquipmentCheckTemplateBuilder responsive actions', () => {
     expect(within(menu).getByRole('button', { name: 'Move up' })).toBeDisabled();
     expect(within(menu).getByRole('button', { name: 'Move down' })).toBeDisabled();
     expect(within(menu).getByRole('button', { name: 'Delete' })).toBeVisible();
+  });
+});
+
+describe('EquipmentCheckTemplateBuilder quick add queue', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    getTemplate.mockResolvedValue(structuredClone(template));
+  });
+
+  const savedItem = (name: string, id: string) => ({
+    ...template.compartments[0]?.items[0],
+    id,
+    name,
+  });
+
+  it('shows several rapid additions immediately, keeps focus, and serializes a slow compartment', async () => {
+    const user = userEvent.setup();
+    let resolveFirst!: (value: unknown) => void;
+    addCheckItemsBulk
+      .mockImplementationOnce(() => new Promise((resolve) => (resolveFirst = resolve)))
+      .mockResolvedValueOnce({ items: [savedItem('Spare batteries', 'batteries')], createdCount: 1 });
+    renderBuilder();
+    const input = await screen.findAllByPlaceholderText(/search inventory/i).then((inputs) => inputs[0] as HTMLElement);
+
+    await user.type(input, 'Lantern{Enter}');
+    await user.type(input, 'Spare batteries{Enter}');
+
+    expect(screen.getByLabelText('Lantern Saving')).toBeVisible();
+    expect(screen.getByLabelText('Spare batteries Saving')).toBeVisible();
+    expect(input).toHaveFocus();
+    expect(addCheckItemsBulk).toHaveBeenCalledTimes(1);
+
+    resolveFirst({ items: [savedItem('Lantern', 'lantern')], createdCount: 1 });
+    await waitFor(() => expect(screen.queryByLabelText('Lantern Saving')).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByLabelText('Spare batteries Saving')).not.toBeInTheDocument());
+    expect(screen.getByText('Lantern')).toBeVisible();
+    expect(screen.getByText('Spare batteries')).toBeVisible();
+    expect(addCheckItemsBulk).toHaveBeenCalledTimes(2);
+  });
+
+  it('retains a failed row, retries with the same idempotency key, and keeps successful siblings', async () => {
+    const user = userEvent.setup();
+    addCheckItemsBulk
+      .mockRejectedValueOnce(new Error('response lost'))
+      .mockResolvedValueOnce({ items: [savedItem('Gloves', 'gloves')], createdCount: 1 })
+      .mockResolvedValueOnce({ items: [savedItem('Safety vest', 'vest')], createdCount: 0, replayed: true });
+    renderBuilder();
+    const input = (await screen.findAllByPlaceholderText(/search inventory/i))[0] as HTMLElement;
+    await user.type(input, 'Safety vest{Enter}');
+    await user.type(input, 'Gloves{Enter}');
+
+    const failed = await screen.findByLabelText('Safety vest Not saved');
+    await waitFor(() => expect(screen.queryByLabelText('Gloves Saving')).not.toBeInTheDocument());
+    expect(screen.getByText('Gloves')).toBeVisible();
+    const firstKey = String(addCheckItemsBulk.mock.calls[0]?.[2]);
+    await user.click(within(failed).getByRole('button', { name: 'Retry' }));
+    await waitFor(() => expect(screen.queryByLabelText('Safety vest Saving')).not.toBeInTheDocument());
+    expect(screen.getByText('Safety vest')).toBeVisible();
+    expect(addCheckItemsBulk.mock.calls[2]?.[2]).toBe(firstKey);
+  });
+
+  it('does not submit the same value again when Enter repeats', async () => {
+    const user = userEvent.setup();
+    addCheckItemsBulk.mockResolvedValue({ items: [savedItem('Lantern', 'lantern')], createdCount: 1 });
+    renderBuilder();
+    const input = (await screen.findAllByPlaceholderText(/search inventory/i))[0] as HTMLElement;
+    await user.type(input, 'Lantern{Enter}{Enter}');
+    expect(addCheckItemsBulk).toHaveBeenCalledTimes(1);
   });
 });
 
