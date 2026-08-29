@@ -42,6 +42,7 @@ from app.services.qualification_service import (
     positions_for_qualifications,
     qualification_label,
 )
+from app.utils.membership import MemberClass, effective_member_class, is_administrative
 
 # Mapping from training program target_position values to the shift
 # position they unlock upon completion.
@@ -208,11 +209,20 @@ class ShiftEligibilityService:
 
         ``get_position_roster`` already filters ``User.is_active`` and so gets
         this right; self-signup did not, which made the roster stricter than the
-        endpoint it exists to mirror. Fresh logins are blocked either way —
-        ``AuthService`` checks ``is_active`` — but a session opened before the
-        status change outlives it, because ``get_current_user`` does not
-        re-check and 239 endpoints depend on it rather than on
-        ``get_current_active_user``.
+        endpoint it exists to mirror.
+
+        This is not closing a stale-session gap: ``get_current_user`` calls
+        ``AuthService.get_user_from_token``, which reloads the user on every
+        request and returns ``None`` unless ``is_active`` holds, so a member's
+        own session is already rejected the request after their status
+        changes. The gap this closes is narrower and does not run through
+        that check at all — ``_validate_assignment_candidate``'s
+        ``enforce_position_eligibility`` branch loads the *candidate* by a
+        client-supplied ``user_id`` with no status filter, and that candidate
+        is not always the caller: an officer's own session is perfectly valid
+        while they assign a *different*, now-retired or suspended member to a
+        shift (``create_assignment`` with ``self_signup=False``). Without this
+        check, that target's inactive status was never consulted by anything.
 
         Absent status means "not a real User row" — a stub, or a caller passing
         a lighter object — and is left alone rather than guessed at. The gate is
@@ -260,11 +270,25 @@ class ShiftEligibilityService:
         if not self._account_is_active(user):
             return []
 
+        administrative = is_administrative(
+            getattr(user, "member_class", None),
+            getattr(user, "membership_type", None),
+        )
+        operational = (
+            effective_member_class(
+                getattr(user, "member_class", None),
+                getattr(user, "membership_type", None),
+            )
+            == MemberClass.OPERATIONAL
+        )
+
         # ----- Step 1: Check for open-to-all shift -----
         shift = None
         if shift_id:
             shift = await self._get_shift(shift_id, organization_id)
-            if shift and shift.open_to_all_members:
+            if shift and administrative:
+                return self._administrative_shift_positions(shift)
+            if shift and shift.open_to_all_members and operational:
                 return self._shift_position_list(shift)
 
         # ----- Step 2: Membership type gate -----
@@ -365,6 +389,13 @@ class ShiftEligibilityService:
         excluded = self.get_excluded_membership_types(org)
         member_type = getattr(user, "membership_type", None) or "active"
         blocked = member_type in excluded
+        administrative = is_administrative(
+            getattr(user, "member_class", None), member_type
+        )
+        operational = (
+            effective_member_class(getattr(user, "member_class", None), member_type)
+            == MemberClass.OPERATIONAL
+        )
 
         base: Set[str] = set()
         if not blocked:
@@ -400,7 +431,10 @@ class ShiftEligibilityService:
                 # missing key would read as "not answered yet".
                 answers[str(shift_id)] = []
                 continue
-            if shift.open_to_all_members:
+            if administrative:
+                answers[str(shift_id)] = self._administrative_shift_positions(shift)
+                continue
+            if shift.open_to_all_members and operational:
                 answers[str(shift_id)] = sorted(set(self._shift_position_list(shift)))
                 continue
             if blocked:
@@ -682,6 +716,18 @@ class ShiftEligibilityService:
                 if pos:
                     result.append(pos)
         return result
+
+    def _administrative_shift_positions(self, shift: Shift) -> List[str]:
+        """Return only positions explicitly opened to administrative members."""
+        return sorted(
+            [
+                str(entry.get("position"))
+                for entry in (shift.positions or [])
+                if isinstance(entry, dict)
+                and entry.get("position")
+                and entry.get("allow_administrative_members") is True
+            ]
+        )
 
     async def _get_slug_eligibility_map(
         self, organization_id: str

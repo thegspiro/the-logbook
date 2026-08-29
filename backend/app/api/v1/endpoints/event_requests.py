@@ -212,10 +212,34 @@ VALID_TRANSITIONS = {
 # ============================================
 
 
+async def _rate_limit_public_request(request: Request) -> None:
+    """Per-IP throttle for public event-request submission: 10 per window.
+
+    A **dependency**, not a call in the handler body, and declared ahead of
+    ``require_captcha`` on purpose (EV-18). FastAPI resolves every declared
+    dependency before it enters the handler, so while this check lived in the
+    body it ran *after* the CAPTCHA dependency — and ``require_captcha`` makes
+    an outbound provider request for every non-empty token. A single IP could
+    therefore burn unlimited provider verifications, connections and warning
+    logs without ever reaching a throttle. Dependencies run in declaration
+    order, so putting the cheap local check first is what actually enforces
+    "rate-limit the public surface before the expensive work". Mirrors
+    ``api/public/forms.py``'s ``_rate_limit_submit`` + ``require_captcha``
+    pairing, which had this right already.
+    """
+    client_ip = get_client_ip(request)
+    allowed, _count, _limit = await check_ip_rate_limit(client_ip, limit=10)
+    if not allowed:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many requests. Please try again later.",
+        )
+
+
 @router.post(
     "/public",
     status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(require_captcha)],
+    dependencies=[Depends(_rate_limit_public_request), Depends(require_captcha)],
 )
 async def submit_public_event_request(
     data: EventRequestCreate,
@@ -232,15 +256,8 @@ async def submit_public_event_request(
     spent. Creates an event request that enters the review pipeline and
     auto-assigns the default coordinator if configured.
     """
-    # Per-IP rate limit (uses the real client IP via X-Forwarded-For): this
-    # endpoint writes DB rows and sends email, so throttle abuse/amplification.
-    client_ip = get_client_ip(request)
-    allowed, _count, _limit = await check_ip_rate_limit(client_ip, limit=10)
-    if not allowed:
-        raise HTTPException(
-            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail="Too many requests. Please try again later.",
-        )
+    # The per-IP rate limit runs ahead of this handler, and ahead of the
+    # CAPTCHA dependency, as `_rate_limit_public_request` (see EV-18 there).
 
     result = await db.execute(
         select(Organization).where(
@@ -270,10 +287,25 @@ async def submit_public_event_request(
             "message": "Request submitted successfully",
         }
 
-    # Per-organization daily ceiling, checked only once the submission has
-    # passed authorization and the honeypot. Counting rejected traffic is what
-    # let anonymous submitters exhaust a department's allowance in the forms
-    # module and deny service to legitimate ones.
+    # The department's minimum notice, enforced rather than merely stored.
+    #
+    # This has to come *before* the daily cap (EV-19). `daily_cap_exceeded` is
+    # an atomic Redis INCR — asking the question spends an allowance slot — so
+    # any rejection that runs after it lets refused traffic burn the
+    # department's quota. Distributed callers posting too-soon dates could
+    # exhaust the whole day's ceiling with requests that were never going to be
+    # stored, denying the legitimate submitters the cap exists to protect. The
+    # contract is that the counter is spent only by a submission that would
+    # otherwise be accepted, so every rejection path belongs above it — the
+    # same ordering `FormsService.submit_public_form` already keeps.
+    lead_error = lead_time_error(
+        pipeline, data.date_flexibility, data.preferred_date_start
+    )
+    if lead_error:
+        raise HTTPException(status_code=400, detail=lead_error)
+
+    # Per-organization daily ceiling, reserved only once the submission has
+    # passed authorization, the honeypot and every business-rule rejection.
     if await daily_cap_exceeded(
         f"pub_event_request:{organization_id}",
         int(pipeline.get("public_daily_limit", 50)),
@@ -282,13 +314,6 @@ async def submit_public_event_request(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail="This department is not accepting further requests today.",
         )
-
-    # The department's minimum notice, enforced rather than merely stored.
-    lead_error = lead_time_error(
-        pipeline, data.date_flexibility, data.preferred_date_start
-    )
-    if lead_error:
-        raise HTTPException(status_code=400, detail=lead_error)
 
     event_request = EventRequest(
         organization_id=organization_id,

@@ -34,10 +34,11 @@ export const OFFLINE_DB_NAME = 'logbook-offline';
  * Bump this — never a per-module copy — when adding an object store to the
  * shared database, and create the new store in `upgradeOfflineDb` below.
  */
-export const OFFLINE_DB_VERSION = 2;
+export const OFFLINE_DB_VERSION = 3;
 
 export const STORE_PENDING_CHECKS = 'pendingChecks';
 export const STORE_PENDING_SHIFT_REPORTS = 'pendingShiftReports';
+export const STORE_EQUIPMENT_CHECK_DRAFTS = 'equipmentCheckDrafts';
 
 /**
  * Open an IndexedDB database with guaranteed settlement.
@@ -100,6 +101,9 @@ export function upgradeOfflineDb(db: IDBDatabase): void {
   }
   if (!db.objectStoreNames.contains(STORE_PENDING_SHIFT_REPORTS)) {
     db.createObjectStore(STORE_PENDING_SHIFT_REPORTS, { keyPath: 'id' });
+  }
+  if (!db.objectStoreNames.contains(STORE_EQUIPMENT_CHECK_DRAFTS)) {
+    db.createObjectStore(STORE_EQUIPMENT_CHECK_DRAFTS, { keyPath: 'id' });
   }
 }
 

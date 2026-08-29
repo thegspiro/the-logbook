@@ -68,13 +68,26 @@ Two related gaps:
   found" on mismatch; the hours-report join adds
   `User.organization_id == str(organization_id)`.
 
-### SCH-5 — MEDIUM (flagged) — Swap re-validation & self-approval on the accept path
+### SCH-5 — MEDIUM (flagged) — Swap re-validation & self-approval on the accept path — ✅ RESOLVED (security review SCH-15 pass 2, 2026-08-28)
 
 When a swap is _accepted_ by the counterparty (as opposed to manager approval),
 the target shift's current state (capacity, cancellation, finalization) is not
 re-validated at accept time, and the accept path's approver-identity check is
 looser than the manual-review path. Behavior-change — flagged rather than
 auto-applied. **Status:** flagged (M1/M2).
+
+**Resolved by a later redesign, confirmed rather than assumed:**
+`respond_to_swap_offer` (added 2026-08-24, `app/services/scheduling_service.py`)
+replaced the general swap-accept path with a narrower one-way-offer accept;
+every two-way exchange still goes exclusively through `review_swap_request`
+(manager review, which already re-validates and enforces separation of
+duties). The one-way accept path re-validates the target shift's live state
+before moving the seat (`_validate_assignment_candidate(require_mutable=True,
+reject_past=True, enforce_capacity=True)` — cancellation, finalization, and
+capacity all checked) and enforces a strict `target_user_id == responder_id`
+identity check. Covered by `tests/test_swap_offer_response.py` (17 tests,
+DB-free, all passing). See `docs/security-review/SCH-15-scheduling.md` → Pass
+2 for the full trace.
 
 ### SCH-6 — MEDIUM/LOW — `finalize_shift` manual_hours & apparatus FKs — ✅ FIXED (app-review B19)
 

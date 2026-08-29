@@ -11,6 +11,7 @@ honeypot, the valid-only daily cap, and the ordering between them. The human
 challenge is a route dependency and is covered by `test_captcha.py`.
 """
 
+from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -261,3 +262,138 @@ class TestRequestPipelineSettingsAreSettable:
 
         with pytest.raises(ValidationError):
             RequestPipelineUpdate.model_validate({"public_daily_limit": 0})
+
+
+class TestRejectedTrafficCannotSpendTheDailyCap:
+    """EV-19: every rejection path belongs above ``daily_cap_exceeded``.
+
+    ``daily_cap_exceeded`` is an atomic Redis ``INCR`` — *asking* the question
+    spends a slot. The lead-time check used to run after it, so a distributed
+    caller posting too-soon dates could exhaust a department's whole daily
+    allowance with requests that were never going to be stored, denying the
+    legitimate submitters the cap exists to protect.
+    """
+
+    @staticmethod
+    def _too_soon_payload():
+        return _payload(
+            date_flexibility="specific_dates",
+            preferred_date_start=datetime.now(timezone.utc) + timedelta(days=2),
+        )
+
+    @pytest.mark.asyncio
+    async def test_a_too_soon_date_is_refused_without_touching_the_counter(self):
+        org = _org(
+            {
+                "accept_public_requests": True,
+                "min_lead_time_days": 21,
+                "public_daily_limit": 5,
+            }
+        )
+
+        with (
+            patch(
+                "app.api.v1.endpoints.event_requests.check_ip_rate_limit",
+                AsyncMock(return_value=(True, 1, 10)),
+            ),
+            patch(
+                "app.api.v1.endpoints.event_requests.daily_cap_exceeded",
+                AsyncMock(return_value=False),
+            ) as cap,
+            pytest.raises(HTTPException) as exc,
+        ):
+            await submit_public_event_request(
+                data=self._too_soon_payload(),
+                request=_request(),
+                organization_id=ORG_ID,
+                db=_db(org),
+            )
+
+        assert exc.value.status_code == 400
+        cap.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_a_flood_of_too_soon_dates_leaves_the_cap_unspent(self):
+        """More attempts than the ceiling, and the counter is never consulted."""
+        limit = 3
+        org = _org(
+            {
+                "accept_public_requests": True,
+                "min_lead_time_days": 21,
+                "public_daily_limit": limit,
+            }
+        )
+
+        with (
+            patch(
+                "app.api.v1.endpoints.event_requests.check_ip_rate_limit",
+                AsyncMock(return_value=(True, 1, 10)),
+            ),
+            patch(
+                "app.api.v1.endpoints.event_requests.daily_cap_exceeded",
+                AsyncMock(return_value=False),
+            ) as cap,
+            patch(
+                "app.api.v1.endpoints.event_requests._send_request_notification",
+                AsyncMock(),
+            ),
+        ):
+            for _ in range(limit * 2):
+                with pytest.raises(HTTPException) as exc:
+                    await submit_public_event_request(
+                        data=self._too_soon_payload(),
+                        request=_request(),
+                        organization_id=ORG_ID,
+                        db=_db(org),
+                    )
+                assert exc.value.status_code == 400
+
+            cap.assert_not_awaited()
+
+            # …and the department is still open to a legitimate submitter.
+            db = _db(org)
+            await submit_public_event_request(
+                data=_payload(
+                    date_flexibility="specific_dates",
+                    preferred_date_start=(
+                        datetime.now(timezone.utc) + timedelta(days=60)
+                    ),
+                ),
+                request=_request(),
+                organization_id=ORG_ID,
+                db=db,
+            )
+
+        assert db.add.called
+        cap.assert_awaited_once_with(f"pub_event_request:{ORG_ID}", limit)
+
+
+class TestPublicSubmitControlOrdering:
+    """EV-18: the cheap per-IP limiter must run before the CAPTCHA dependency.
+
+    ``require_captcha`` makes an outbound provider request for every non-empty
+    token. While the IP limiter lived in the handler body it necessarily ran
+    *after* every declared dependency, so one IP could burn unlimited provider
+    verifications. FastAPI resolves route ``dependencies`` in declaration
+    order, which makes this list the enforcement order.
+    """
+
+    def test_the_ip_limiter_is_declared_before_require_captcha(self):
+        from app.api.v1.endpoints.event_requests import router
+
+        route = next(
+            r
+            for r in router.routes
+            if getattr(r, "path", None) == "/event-requests/public"
+            and "POST" in getattr(r, "methods", set())
+        )
+        names = [d.dependency.__name__ for d in route.dependencies]
+
+        assert "_rate_limit_public_request" in names, (
+            "the per-IP limiter must be a route dependency, not a call in the "
+            "handler body — a body call runs after every dependency"
+        )
+        assert "require_captcha" in names
+        assert names.index("_rate_limit_public_request") < names.index(
+            "require_captcha"
+        ), f"IP limiter must precede the CAPTCHA dependency, got {names}"

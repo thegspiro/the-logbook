@@ -202,7 +202,7 @@ logo `<img>` as literal text — unlike EV-2's notification path, which exempts 
 trusted pre-built logo. Left as-is (escaping is the safe direction; un-escaping it
 is a template-rendering behavior change outside this finding). Noted for future.
 
-### EV-5 — MEDIUM — Public request intake: no per-org opt-in + weaker anti-spam — 🚩 FLAGGED (feature + config)
+### EV-5 — MEDIUM — Public request intake: no per-org opt-in + weaker anti-spam — ✅ RESOLVED (2026-08-17)
 
 Any `active` org's request pipeline can be filled by anyone who supplies its
 `organization_id` (discoverable via the public calendar). The only gate is a
@@ -211,6 +211,14 @@ the forms module, no honeypot or per-org daily cap; each submission writes rows 
 fires assignee/requester emails (notification amplification). Needs a per-org
 opt-in setting + honeypot/daily-cap parity with forms — a feature, not a one-line
 fix. Recorded in `KNOWN_LIMITATIONS.md`.
+
+**Resolved 2026-08-17** (`KNOWN_LIMITATIONS.md`; this doc missed the update).
+Independently re-verified against the current code by security-review EV-16
+pass 2 (2026-08-28): `submit_public_event_request` now checks, in order, the
+per-IP rate limit, a per-org opt-in (default off, answering identically to
+"org not found"), a honeypot, and a per-org daily cap counted only after
+authorization. See `docs/security-review/EV-16-events-requests.md` for the
+full trace.
 
 ## Cleanup applied
 
@@ -234,7 +242,8 @@ compound) — the AP-2 pattern, Pitfall #10.
 
 ## Future development
 
-1. **EV-5** — per-org public-intake opt-in + honeypot/daily-cap parity with forms.
+1. ~~**EV-5** — per-org public-intake opt-in + honeypot/daily-cap parity with
+   forms.~~ ✅ Resolved 2026-08-17.
 2. **EV-7 logo** — exempt `organization_logo_img` from escaping in
    `send_template_email` (mirroring EV-2) if templates should render the logo.
 
