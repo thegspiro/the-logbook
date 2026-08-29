@@ -23,9 +23,11 @@ None.
 ### 2026-08-29 — Feature 18 (Training extended), pass 2 ✅ merged — PR #2012
 
 Merged (`988d5a73`). CI green on the final head (`e094e66e`); Codex hit its
-usage limit and produced no review. No merge conflict (base was current
-`main`). Confirmed on `origin/main` by ancestry check (merge commit at
-`origin/main` HEAD). Rotation row 18 -> done. Next: 19 skills testing.
+usage limit and produced no review. GitHub reported `mergeable_state: clean`
+and the merge completed with no conflict, despite 26 unrelated commits
+landing on `main` between this PR's base and its merge point. Confirmed on
+`origin/main` by ancestry check (merge commit at `origin/main` HEAD).
+Rotation row 18 -> done. Next: 19 skills testing.
 
 ### 2026-08-29 — Feature 18 (Training extended), pass 2 — 1 fixed (LOW/MED), 0 flagged
 
