@@ -161,6 +161,56 @@ class TestUpdateTemplateApparatusValidation:
         assert result is None
 
 
+class TestTemplatePublicationValidation:
+    @pytest.mark.parametrize(
+        ("compartments", "message"),
+        [
+            ([], "operational compartment"),
+            ([{"name": "Cab", "items": []}], "cannot be empty"),
+            (
+                [
+                    {
+                        "name": "Cab",
+                        "items": [{"name": "Oxygen", "check_type": "quantity"}],
+                    }
+                ],
+                "required or expected quantity",
+            ),
+            (
+                [{"name": "Cab", "items": [{"name": "Oxygen", "check_type": "level"}]}],
+                "minimum level",
+            ),
+        ],
+    )
+    def test_activation_rejects_blocking_configuration(
+        self, service, compartments, message
+    ):
+        with pytest.raises(ValueError, match=message):
+            service._validate_publishable_data({"name": "Daily check"}, compartments)
+
+    def test_complete_configuration_can_be_published(self, service):
+        service._validate_publishable_data(
+            {"name": "Daily check"},
+            [
+                {
+                    "name": "Cab",
+                    "items": [
+                        {
+                            "name": "Masks",
+                            "check_type": "quantity",
+                            "expected_quantity": 4,
+                        },
+                        {"name": "Oxygen", "check_type": "level", "min_level": 500},
+                    ],
+                }
+            ],
+        )
+
+    def test_submitter_visibility_excludes_drafts(self, service):
+        draft = SimpleNamespace(is_active=False, assigned_positions=None)
+        assert service._template_visible_to_submitter(draft, {"driver"}) is False
+
+
 class TestBulkItemCreation:
     """The batch validates first, orders deterministically, and is retry-safe."""
 

@@ -27,6 +27,7 @@ import { useTimezone } from '../../hooks/useTimezone';
 import { getErrorMessage } from '../../utils/errorHandling';
 import { useAuthStore } from '../../stores/authStore';
 import { lazyWithRetry } from '../../utils/lazyWithRetry';
+import { crewVisibleTemplates } from './equipmentCheckTemplates';
 
 import { useConfirm } from '../../contexts/ConfirmContext';
 import { useOverlaySurface } from '../../hooks/useOverlaySurface';
@@ -270,7 +271,7 @@ export const MyChecklistsPage: React.FC = () => {
     setTemplatesLoading(true);
     try {
       const templates = await schedulingService.getEquipmentCheckTemplates();
-      setAvailableTemplates(templates.filter((t) => t.isActive));
+      setAvailableTemplates(crewVisibleTemplates(templates));
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to load templates'));
     } finally {

@@ -328,7 +328,7 @@ function defaultTemplateForm(): TemplateFormState {
     assignedPositions: [],
     apparatusType: '',
     apparatusId: '',
-    isActive: true,
+    isActive: false,
   };
 }
 
@@ -1482,13 +1482,8 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
   // Save
   // ---------------------------------------------------------------------------
 
-  const handleSave = async () => {
-    if (!form.name.trim()) {
-      toast.error('Template name is required');
-      return;
-    }
-
-    // Validate compartments and items
+  const handleSave = async (publish: boolean) => {
+    // Drafts deliberately bypass readiness checks; publication never does.
     const warnings: string[] = [];
     for (const comp of compartments) {
       if (!comp.name.trim()) {
@@ -1497,6 +1492,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       }
     }
     for (const comp of compartments) {
+      if (comp.isHeader) continue;
       if (comp.items.length === 0) {
         warnings.push(`Compartment "${comp.name || 'Untitled'}" has no items.`);
         break;
@@ -1528,7 +1524,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
         }
       }
     }
-    if (warnings.length > 0) {
+    if (publish && warnings.length > 0) {
       const proceed = await confirm({
         title: 'Save with warnings?',
         message: `${warnings.join('\n\n')}\n\nYou can save anyway and fix these later.`,
@@ -1544,7 +1540,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       const compartmentPayloads: CheckTemplateCompartmentCreate[] = compartments
         .filter((c) => !c.id) // Only include unsaved compartments in create payload
         .map((c, idx) => ({
-          name: c.name || 'Untitled Compartment',
+          name: c.name,
           description: c.description.trim() || undefined,
           sort_order: idx,
           image_url: c.imageUrl.trim() || undefined,
@@ -1553,7 +1549,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           is_sealed: c.isSealed,
           parent_compartment_id: c.parentCompartmentId || undefined,
           items: c.items.map((item, itemIdx) => ({
-            name: item.name || 'Untitled Item',
+            name: item.name,
             description: item.description.trim() || undefined,
             sort_order: itemIdx,
             check_type: item.checkType,
@@ -1582,7 +1578,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           assigned_positions: form.assignedPositions.length > 0 ? form.assignedPositions : undefined,
           apparatus_type: form.apparatusType || undefined,
           apparatus_id: form.apparatusId || undefined,
-          is_active: form.isActive,
+          is_active: false,
         });
 
         // Save any new compartments that haven't been persisted yet
@@ -1596,7 +1592,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           if (comp.id) {
             updatePromises.push(
               schedulingService.updateCompartment(comp.id, {
-                name: comp.name || undefined,
+                name: comp.name,
                 description: comp.description.trim() || undefined,
                 image_url: comp.imageUrl.trim() || undefined,
                 is_header: comp.isHeader,
@@ -1610,7 +1606,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
               if (item.id) {
                 updatePromises.push(
                   schedulingService.updateCheckItem(item.id, {
-                    name: item.name || undefined,
+                    name: item.name,
                     description: item.description.trim() || undefined,
                     check_type: item.checkType,
                     is_required: item.isRequired,
@@ -1638,8 +1634,12 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
         }
         await Promise.all(updatePromises);
 
+        if (publish) {
+          await schedulingService.updateEquipmentCheckTemplate(templateId, { is_active: true });
+        }
+        setForm((current) => ({ ...current, isActive: publish }));
         setIsDirty(false);
-        toast.success('Template updated');
+        toast.success(publish ? 'Template published' : 'Draft saved');
       } else {
         const createPayload: EquipmentCheckTemplateCreate = {
           name: form.name.trim(),
@@ -1649,9 +1649,9 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           assigned_positions: form.assignedPositions.length > 0 ? form.assignedPositions : undefined,
           apparatus_type: form.apparatusType || undefined,
           apparatus_id: form.apparatusId || undefined,
-          is_active: form.isActive,
+          is_active: publish,
           compartments: compartments.map((c, idx) => ({
-            name: c.name || 'Untitled Compartment',
+            name: c.name,
             description: c.description.trim() || undefined,
             sort_order: idx,
             image_url: c.imageUrl.trim() || undefined,
@@ -1660,7 +1660,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             is_sealed: c.isSealed,
             parent_compartment_id: c.parentCompartmentId || undefined,
             items: c.items.map((item, itemIdx) => ({
-              name: item.name || 'Untitled Item',
+              name: item.name,
               description: item.description.trim() || undefined,
               sort_order: itemIdx,
               check_type: item.checkType,
@@ -1684,7 +1684,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
         };
         const created = await schedulingService.createEquipmentCheckTemplate(createPayload);
         setIsDirty(false);
-        toast.success('Template created');
+        toast.success(publish ? 'Template published' : 'Draft saved');
         // Navigate to edit mode so subsequent saves work as updates
         void navigate(`/scheduling/equipment-check-templates/${created.id}`, { replace: true });
         return;
@@ -3768,26 +3768,23 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           {form.apparatusType || 'apparatus'} units
         </p>
       </div>
-
-      {/* Active toggle */}
-      <div className="flex items-center gap-2">
-        <label className="text-theme-text-secondary flex items-center gap-2 text-sm">
-          <input
-            type="checkbox"
-            className={checkboxClass}
-            checked={form.isActive}
-            onChange={(e) => updateForm({ isActive: e.target.checked })}
-          />
-          Active
-        </label>
-        <span className="text-theme-text-muted text-[10px]">Inactive = hidden from shift checklists</span>
-      </div>
     </div>
   );
 
   const setupReady = Boolean(form.name.trim() && form.checkTiming && form.templateType);
   const structureReady = compartments.some((comp) => !comp.isHeader);
   const itemsReady = stats.totalItems > 0;
+  const blockingItems = compartments
+    .flatMap((comp) => comp.items)
+    .filter(
+      (item) =>
+        !item.name.trim() ||
+        (item.checkType === 'count' && !item.requiredQuantity && !item.expectedQuantity) ||
+        (item.checkType === 'level' && !item.minLevel)
+    ).length;
+  const locationsReady =
+    structureReady && compartments.every((comp) => comp.name.trim() && (comp.isHeader || comp.items.length > 0));
+  const publishReady = setupReady && locationsReady && blockingItems === 0;
 
   // ---------------------------------------------------------------------------
   // Main render
@@ -3908,12 +3905,20 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           </button>
           <button
             type="button"
-            onClick={() => void handleSave()}
+            onClick={() => void handleSave(false)}
             disabled={saving}
-            className="flex min-h-11 items-center gap-2 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:opacity-50 sm:min-h-10"
+            className="btn-secondary flex min-h-11 items-center gap-2 px-3 text-sm font-medium sm:min-h-10"
           >
             {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-            {saving ? 'Saving...' : 'Save'}
+            {saving ? 'Saving...' : 'Save draft'}
+          </button>
+          <button
+            type="button"
+            onClick={() => void handleSave(true)}
+            disabled={saving || !publishReady}
+            className="flex min-h-11 items-center gap-2 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50 sm:min-h-10"
+          >
+            <CheckCircle2 className="h-4 w-4" /> Publish
           </button>
         </div>
       </div>
@@ -3949,6 +3954,20 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             </span>
           </div>
         ))}
+      </div>
+
+      <div className="card mx-auto mb-5 max-w-7xl p-4" aria-label="Template readiness">
+        <h2 className="text-theme-text-primary mb-2 text-sm font-semibold">Template readiness</h2>
+        <div className="text-theme-text-secondary grid gap-1 text-sm sm:grid-cols-3">
+          <span>{setupReady ? '✓' : '!'} Setup</span>
+          <span>{locationsReady ? '✓' : '!'} Locations</span>
+          <span>{blockingItems === 0 ? '✓ Items configured' : `! ${blockingItems} items need configuration`}</span>
+        </div>
+        {!publishReady && (
+          <p className="text-theme-text-muted mt-2 text-xs">
+            Save this work as a draft. Publish becomes available after every blocking issue is fixed.
+          </p>
+        )}
       </div>
 
       {/* Sidebar + Main content */}

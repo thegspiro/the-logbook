@@ -276,6 +276,11 @@ export const EquipmentCheckTemplateList: React.FC = () => {
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <p className="text-theme-text-primary truncate text-sm font-medium">{template.name}</p>
+                    {!template.isActive && (
+                      <span className="rounded border border-slate-500/30 bg-slate-500/10 px-1.5 py-0.5 text-xs font-semibold text-slate-600 dark:text-slate-300">
+                        Draft
+                      </span>
+                    )}
                     {timing && (
                       <span
                         className={`rounded border px-1.5 py-0.5 text-xs font-medium sm:text-[10px] ${timing.color}`}
@@ -318,9 +323,10 @@ export const EquipmentCheckTemplateList: React.FC = () => {
                   <a
                     href={`/scheduling/equipment-check-templates/${template.id}`}
                     className="text-theme-text-muted flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md p-2 transition-colors hover:bg-violet-500/10 hover:text-violet-600 sm:min-h-0 sm:min-w-0 sm:p-1.5"
-                    aria-label={`Edit ${template.name}`}
+                    aria-label={template.isActive ? `Edit ${template.name}` : `Continue editing ${template.name}`}
                   >
                     <Pencil className="h-4 w-4 sm:h-3.5 sm:w-3.5" aria-hidden="true" />
+                    {!template.isActive && <span className="ml-1 hidden text-xs sm:inline">Continue editing</span>}
                   </a>
                   {/* Only appears when a receipt printer is registered. */}
                   <PrintDocumentButton

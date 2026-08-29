@@ -303,7 +303,8 @@ class EquipmentCheckTemplateCreate(BaseModel):
     check_timing: CheckTiming
     template_type: str = Field(default="equipment", max_length=30)
     assigned_positions: Optional[List[str]] = None
-    is_active: bool = True
+    # Creation is a draft operation unless the caller explicitly publishes.
+    is_active: bool = False
     sort_order: int = 0
     compartments: Optional[List[CheckTemplateCompartmentCreate]] = None
 
