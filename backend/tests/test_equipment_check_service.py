@@ -86,7 +86,7 @@ class TestCloneCompartment:
 
 class TestUpdateTemplateApparatusValidation:
     async def test_foreign_apparatus_rejected(self, service, mock_db):
-        template = MagicMock()
+        template = MagicMock(is_active=False)
         with (
             patch.object(
                 service, "get_template", new_callable=AsyncMock, return_value=template
@@ -105,7 +105,7 @@ class TestUpdateTemplateApparatusValidation:
         mock_db.commit.assert_not_awaited()
 
     async def test_in_org_apparatus_passes(self, service, mock_db):
-        template = MagicMock()
+        template = MagicMock(is_active=False)
         with (
             patch.object(
                 service, "get_template", new_callable=AsyncMock, return_value=template
@@ -123,7 +123,7 @@ class TestUpdateTemplateApparatusValidation:
         mock_db.commit.assert_awaited_once()
 
     async def test_no_apparatus_change_skips_validation(self, service, mock_db):
-        template = MagicMock()
+        template = MagicMock(is_active=False)
         with (
             patch.object(
                 service, "get_template", new_callable=AsyncMock, return_value=template
@@ -139,7 +139,7 @@ class TestUpdateTemplateApparatusValidation:
 
     async def test_clearing_apparatus_skips_validation(self, service, mock_db):
         # apparatus_id=None clears it (a generic template) — not a foreign-id case.
-        template = MagicMock()
+        template = MagicMock(is_active=False)
         with (
             patch.object(
                 service, "get_template", new_callable=AsyncMock, return_value=template
@@ -521,6 +521,14 @@ class TestTemplateContentRevision:
         result.scalars.return_value.first.return_value = value
         return result
 
+    async def test_revision_advance_atomically_unpublishes_template(
+        self, service, mock_db
+    ):
+        await service._advance_content_revision("tmpl-1")
+
+        statement = mock_db.execute.await_args.args[0]
+        assert statement.compile().params["is_active"] is False
+
     @pytest.mark.parametrize(
         ("method", "args", "getter", "entity"),
         [
@@ -674,6 +682,49 @@ class TestStandaloneTemplateVisibility:
 
         mock_db.add.assert_not_called()
         mock_db.commit.assert_not_awaited()
+
+
+class TestOperationalInventoryTemplateVisibility:
+    @staticmethod
+    def empty_rows():
+        result = MagicMock()
+        result.all.return_value = []
+        return result
+
+    @staticmethod
+    def assert_active_filter(statement):
+        sql = str(statement)
+        assert "equipment_check_templates.is_active IS true" in sql
+
+    async def test_supply_overview_excludes_draft_templates(self, service, mock_db):
+        mock_db.execute.return_value = self.empty_rows()
+        with patch(
+            "app.services.equipment_check_service.InventoryService.get_lots_for_items",
+            new_callable=AsyncMock,
+            return_value={},
+        ):
+            await service.get_supply_overview("org-1")
+
+        self.assert_active_filter(mock_db.execute.await_args_list[0].args[0])
+
+    async def test_apparatus_inventory_excludes_draft_templates(self, service, mock_db):
+        mock_db.scalar.return_value = MagicMock()
+        mock_db.execute.return_value = self.empty_rows()
+        with patch(
+            "app.services.equipment_check_service.InventoryService.get_lots_for_items",
+            new_callable=AsyncMock,
+            return_value={},
+        ):
+            await service.get_apparatus_inventory("apparatus-1", "org-1")
+
+        self.assert_active_filter(mock_db.execute.await_args_list[0].args[0])
+
+    async def test_item_deployments_exclude_draft_templates(self, service, mock_db):
+        mock_db.execute.return_value = self.empty_rows()
+
+        assert await service.get_item_deployments("inventory-1", "org-1") == []
+
+        self.assert_active_filter(mock_db.execute.await_args.args[0])
 
 
 class TestAuthoritativeCheckTiming:

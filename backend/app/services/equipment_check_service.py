@@ -66,11 +66,14 @@ class EquipmentCheckService:
     )
 
     async def _advance_content_revision(self, template_id: str) -> None:
-        """Atomically invalidate drafts made against older checklist content."""
+        """Atomically move edited content to draft and invalidate stale answers."""
         await self.db.execute(
             update(EquipmentCheckTemplate)
             .where(EquipmentCheckTemplate.id == template_id)
-            .values(content_revision=EquipmentCheckTemplate.content_revision + 1)
+            .values(
+                content_revision=EquipmentCheckTemplate.content_revision + 1,
+                is_active=False,
+            )
         )
 
     def __init__(self, db: AsyncSession):
@@ -133,6 +136,24 @@ class EquipmentCheckService:
     def _validate_publishable_data(template: Any, compartments: List[Any]) -> None:
         """Enforce only rules that make a crew checklist unusable."""
 
+        errors = EquipmentCheckService._publication_errors(template, compartments)
+        if errors:
+            display_errors = [
+                (
+                    f"{error} (cannot be empty)"
+                    if "has no checkable items" in error
+                    else error
+                )
+                for error in errors
+            ]
+            raise ValueError(
+                "Template cannot be activated: " + "; ".join(display_errors)
+            )
+
+    @staticmethod
+    def _publication_errors(template: Any, compartments: List[Any]) -> List[str]:
+        """Return every blocking issue so callers can fix activation in one pass."""
+
         def value(obj: Any, key: str, default: Any = None) -> Any:
             return (
                 obj.get(key, default)
@@ -140,43 +161,52 @@ class EquipmentCheckService:
                 else getattr(obj, key, default)
             )
 
+        errors: List[str] = []
         if not str(value(template, "name", "")).strip():
-            raise ValueError("Template name is required before publication")
+            errors.append("template name is required")
 
         operational = [c for c in compartments if not value(c, "is_header", False)]
         if not operational:
-            raise ValueError(
-                "At least one operational compartment is required before publication"
-            )
+            errors.append("at least one operational compartment is required")
 
         for compartment in compartments:
-            if not str(value(compartment, "name", "")).strip():
-                raise ValueError("Every compartment needs a name before publication")
+            label = str(value(compartment, "name", "")).strip()
+            if not label:
+                errors.append("every operational compartment needs a name")
             if value(compartment, "is_header", False):
                 continue
             items = list(value(compartment, "items", []) or [])
-            if not items:
-                raise ValueError(
-                    "Operational compartments cannot be empty before publication"
+            checkable = [
+                item
+                for item in items
+                if value(item, "check_type", "pass_fail") not in ("header", "text")
+            ]
+            if not checkable:
+                errors.append(
+                    f'operational compartment "{label or "Untitled"}" has no checkable items'
                 )
             for item in items:
-                if not str(value(item, "name", "")).strip():
-                    raise ValueError(
-                        "Every checklist item needs a name before publication"
-                    )
+                item_label = str(value(item, "name", "")).strip()
+                if not item_label:
+                    errors.append("every checklist item needs a name")
                 check_type = value(item, "check_type", "")
                 if (
                     check_type in ("count", "quantity")
                     and value(item, "required_quantity") is None
                     and value(item, "expected_quantity") is None
                 ):
-                    raise ValueError(
-                        "Count items need a required or expected quantity before publication"
+                    errors.append(
+                        f'count item "{item_label or "Untitled"}" needs an expected quantity '
+                        "(required or expected quantity)"
                     )
-                if check_type == "level" and value(item, "min_level") is None:
-                    raise ValueError(
-                        "Level items need a minimum level before publication"
+                if (
+                    check_type in ("level", "reading")
+                    and value(item, "min_level") is None
+                ):
+                    errors.append(
+                        f'level item "{item_label or "Untitled"}" needs a minimum level'
                     )
+        return list(dict.fromkeys(errors))
 
     async def get_template(
         self,
@@ -370,7 +400,7 @@ class EquipmentCheckService:
         if not template:
             return None
 
-        if data.get("is_active") and not template.is_active:
+        if data.get("is_active", template.is_active):
             projected = {"name": data.get("name", template.name)}
             self._validate_publishable_data(projected, template.compartments)
 
@@ -2512,6 +2542,7 @@ class EquipmentCheckService:
             )
             .where(
                 EquipmentCheckTemplate.organization_id == organization_id,
+                EquipmentCheckTemplate.is_active.is_(True),
                 # Two ways onto this worklist. A date the officer can see
                 # coming, and a crew's report that something was used or pulled
                 # — the second has no expiration to sort by and would otherwise
@@ -2685,6 +2716,7 @@ class EquipmentCheckService:
             .where(
                 EquipmentCheckTemplate.organization_id == organization_id,
                 EquipmentCheckTemplate.apparatus_id == apparatus_id,
+                EquipmentCheckTemplate.is_active.is_(True),
             )
             .order_by(
                 CheckTemplateCompartment.sort_order.asc(),
@@ -3391,6 +3423,7 @@ class EquipmentCheckService:
             .where(
                 CheckTemplateItem.inventory_item_id == inventory_item_id,
                 EquipmentCheckTemplate.organization_id == organization_id,
+                EquipmentCheckTemplate.is_active.is_(True),
             )
             .order_by(CheckTemplateItem.expiration_date.asc())
         )
