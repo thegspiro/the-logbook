@@ -44,6 +44,7 @@ from app.schemas.event import (
 from app.services.admin_hours_service import AdminHoursService
 from app.services.location_service import LocationService
 from app.services.notifications_service import NotificationsService
+from app.utils.event_attachments import validate_attachments_for_org
 
 DEFAULT_ALLOWED_RSVP_STATUSES = ["going", "not_going"]
 
@@ -124,6 +125,13 @@ class EventService:
         if event_data.requires_rsvp and event_data.rsvp_deadline:
             if event_data.rsvp_deadline >= event_data.start_datetime:
                 raise ValueError("RSVP deadline must be before event start")
+
+        # EV-17 / XC-1: `attachments` is a free-form JSON column that this
+        # generic payload can write, and its `file_path` is the exact string
+        # the download endpoint later serves. An unvalidated one lets a caller
+        # graft another organization's uploaded file onto an event in their
+        # own org and read it there.
+        validate_attachments_for_org(event_data.attachments, organization_id)
 
         # Check for location double-booking
         if event_data.location_id:
@@ -566,6 +574,13 @@ class EventService:
         # Update fields
         update_data = event_data.model_dump(exclude_unset=True)
 
+        # EV-17 / XC-1: same guard as create_event — a client-supplied
+        # attachment file_path must name a file under this org's own upload
+        # subtree before it is persisted. Checked against `update_data` so an
+        # unset field stays untouched and an explicit `[]` still clears.
+        if "attachments" in update_data:
+            validate_attachments_for_org(update_data["attachments"], organization_id)
+
         # A closed event still accepts descriptive edits — fixing a typo in the
         # title of last month's drill is housekeeping. What it refuses is a
         # change to the clock or the check-in rules the credited durations were
@@ -709,6 +724,11 @@ class EventService:
         future_events = result.scalars().all()
 
         update_data = event_data.model_dump(exclude_unset=True)
+
+        # EV-17 / XC-1: this path writes the same client-supplied attachment
+        # dictionaries as update_event, across every future occurrence.
+        if "attachments" in update_data:
+            validate_attachments_for_org(update_data["attachments"], organization_id)
 
         # A series-wide edit reaches finalized occurrences too. Descriptive
         # fields stay allowed here exactly as they do on the single-event path;
@@ -3341,6 +3361,14 @@ class EventService:
         recurrence_week_ordinal = event_data.pop("recurrence_week_ordinal", None)
         recurrence_month = event_data.pop("recurrence_month", None)
         recurrence_exceptions = event_data.pop("recurrence_exceptions", None)
+
+        # EV-17 / XC-1: RecurringEventCreate carries `attachments` too, and it
+        # is copied onto every generated occurrence — so an unvalidated foreign
+        # file_path would be planted across the whole series at once.
+        try:
+            validate_attachments_for_org(event_data.get("attachments"), organization_id)
+        except ValueError as exc:
+            return [], str(exc)
 
         # Rolling recurrence: auto-set end date to 12 months from start
         if rolling_recurrence and not recurrence_end_date:

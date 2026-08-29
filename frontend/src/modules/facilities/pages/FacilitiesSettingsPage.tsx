@@ -49,11 +49,7 @@ export default function FacilitiesSettingsPage() {
   return (
     <div className="space-y-6">
       <header className="flex items-start gap-3">
-        <button
-          className="btn-secondary p-2"
-          aria-label="Back to Facilities"
-          onClick={() => void navigate('/facilities')}
-        >
+        <button className="btn-icon" aria-label="Back to Facilities" onClick={() => void navigate('/facilities')}>
           <ArrowLeft className="h-4 w-4" />
         </button>
         <div>
@@ -119,7 +115,7 @@ function LookupEditor({
         </button>
       </div>
       <div className="overflow-x-auto">
-        <table className="w-full text-left text-sm">
+        <table className="rwd-table w-full text-left text-sm">
           <thead>
             <tr>
               <th className="p-3">Order</th>
@@ -140,24 +136,30 @@ function LookupEditor({
                     : undefined;
               return (
                 <tr className="border-theme-surface-border border-t" key={item.id}>
-                  <td className="p-3">{item.sortOrder ?? index + 1}</td>
-                  <td className="p-3 font-medium">{item.name}</td>
-                  <td className="p-3">{item.isActive === false ? 'Inactive' : 'Active'}</td>
-                  <td className="p-3">{item.isSystem ? 'System' : 'Organization'}</td>
-                  <td className="p-3">{used}</td>
-                  <td className="p-3">
+                  <td data-label="Order" className="p-3">
+                    {item.sortOrder ?? index + 1}
+                  </td>
+                  <td data-label="Name" className="p-3 font-medium">
+                    {item.name}
+                  </td>
+                  <td data-label="State" className="p-3">
+                    {item.isActive === false ? 'Inactive' : 'Active'}
+                  </td>
+                  <td data-label="Owner" className="p-3">
+                    {item.isSystem ? 'System' : 'Organization'}
+                  </td>
+                  <td data-label="Usage" className="p-3">
+                    {used}
+                  </td>
+                  <td data-label="" className="p-3">
                     <div className="flex justify-end gap-2">
-                      <button
-                        aria-label={`Edit ${item.name}`}
-                        className="btn-secondary p-2"
-                        onClick={() => onEdit(item)}
-                      >
+                      <button aria-label={`Edit ${item.name}`} className="btn-icon" onClick={() => onEdit(item)}>
                         <Pencil className="h-4 w-4" />
                       </button>
                       <button
                         aria-label={`Delete ${item.name}`}
                         title={reason}
-                        className="btn-secondary p-2 text-red-500 disabled:opacity-40"
+                        className="btn-icon text-red-500 disabled:opacity-40"
                         disabled={Boolean(reason)}
                         onClick={() => onDelete(item)}
                       >
@@ -220,7 +222,7 @@ function LookupDialog({
       aria-modal="true"
       aria-labelledby="lookup-title"
     >
-      <form className="card w-full max-w-md space-y-4 p-5" onSubmit={(event) => void submit(event)}>
+      <form className="card modal-panel-scroll w-full max-w-md space-y-4 p-5" onSubmit={(event) => void submit(event)}>
         <h2 id="lookup-title" className="text-lg font-semibold">
           {item ? 'Edit' : 'Add'} {definitions[kind].singular}
         </h2>

@@ -102,6 +102,7 @@ import { blankToNull } from '@/utils/formValues';
 export interface PositionSlot {
   position: string;
   required: boolean;
+  allow_administrative_members?: boolean;
 }
 
 /**
@@ -283,8 +284,8 @@ export interface SchedulingWidgetPreferences {
 /** Event template metadata stored in the positions field for event-category templates. */
 export interface EventTemplatePositions {
   event_type?: string;
-  resources?: Array<{ positions: string[]; quantity: number }>;
-  flat_positions?: string[];
+  resources?: Array<{ positions: Array<string | PositionSlot>; quantity: number }>;
+  flat_positions?: Array<string | PositionSlot>;
 }
 
 export interface ShiftTemplateRecord {
@@ -317,13 +318,17 @@ export function normalizePositions(positions: unknown[] | null | undefined): Pos
   if (!positions || !Array.isArray(positions)) return [];
   return positions.map((p) => {
     if (typeof p === 'string') {
-      return { position: p, required: true };
+      return { position: p, required: true, allow_administrative_members: false };
     }
     if (typeof p === 'object' && p !== null && 'position' in p) {
-      const slot = p as { position: string; required?: boolean };
-      return { position: slot.position, required: slot.required !== false };
+      const slot = p as { position: string; required?: boolean; allow_administrative_members?: boolean };
+      return {
+        position: slot.position,
+        required: slot.required !== false,
+        allow_administrative_members: slot.allow_administrative_members === true,
+      };
     }
-    return { position: String(p), required: true };
+    return { position: String(p), required: true, allow_administrative_members: false };
   });
 }
 
