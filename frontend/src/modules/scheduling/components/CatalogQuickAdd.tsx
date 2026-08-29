@@ -144,8 +144,13 @@ const CatalogQuickAdd: React.FC<CatalogQuickAddProps> = ({
   const addAsFreeText = async () => {
     const name = value.trim();
     if (!name) return;
-    await onAdd({ name });
-    reset();
+    try {
+      await onAdd({ name });
+      reset();
+    } catch {
+      // The owner reports the mutation error. Keeping the value here makes
+      // the same deliberate submission retryable instead of erasing it.
+    }
   };
 
   /**
@@ -168,15 +173,19 @@ const CatalogQuickAdd: React.FC<CatalogQuickAddProps> = ({
   const addLinked = async (result: CatalogResult) => {
     const hasExpiration = await hasDatedStock(result.id);
 
-    await onAdd({
-      // The catalog's name, not the typed one: two records that read
-      // differently are what made the link invisible in the first place.
-      name: result.name,
-      inventoryItemId: result.id,
-      ...(result.trackingType === 'pool' ? { checkType: 'count' as const } : {}),
-      ...(hasExpiration ? { hasExpiration: true } : {}),
-    });
-    reset();
+    try {
+      await onAdd({
+        // The catalog's name, not the typed one: two records that read
+        // differently are what made the link invisible in the first place.
+        name: result.name,
+        inventoryItemId: result.id,
+        ...(result.trackingType === 'pool' ? { checkType: 'count' as const } : {}),
+        ...(hasExpiration ? { hasExpiration: true } : {}),
+      });
+      reset();
+    } catch {
+      // Keep the catalog choice visible so the user can retry it.
+    }
   };
 
   const createAndAdd = async () => {

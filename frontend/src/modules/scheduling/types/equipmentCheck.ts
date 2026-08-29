@@ -283,6 +283,11 @@ export interface CheckTemplateItemBulkResult {
   replayed: boolean;
 }
 
+export interface CheckTemplateItemBulkDeleteResult {
+  deletedItemIds: string[];
+  replayed: boolean;
+}
+
 export interface CheckTemplateItemUpdate {
   name?: string | undefined;
   description?: string | undefined;
