@@ -63,6 +63,7 @@ const UNCACHEABLE_PREFIXES = [
   '/training/certifications/expiring', // member cert-expiry list (names, numbers)
   '/training/expiring-certifications', // under-gated twin of the above (member certs)
   '/training/reports/compliance-forecast', // per-member compliance projection
+  '/training/effectiveness/evaluations', // per-member evaluation: user_id + free-text comments/behavior/results notes (PII)
   '/training/records', // individual training records (scores, certs) — member PHI-adjacent
   '/training/skills-testing/tests', // per-member skills-test scores + evaluator notes (PHI)
   '/training/cohorts/', // cohort detail carries a resolved-name+email member roster (bare list is roster-free)

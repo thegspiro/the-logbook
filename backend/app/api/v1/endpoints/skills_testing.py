@@ -1066,11 +1066,11 @@ async def list_tests(
         query = query.where(or_(*grant_clauses))
 
     if not include_practice:
-        query = query.where(SkillTest.is_practice == False)  # noqa: E712
+        query = query.where(SkillTest.is_practice.is_(False))
 
     if pending_validation:
         query = query.where(
-            SkillTest.is_practice == False,  # noqa: E712
+            SkillTest.is_practice.is_(False),
             SkillTest.status == SkillTestStatus.COMPLETED.value,
             SkillTest.validated_at.is_(None),
         )
@@ -3273,7 +3273,7 @@ async def export_tests_csv(
         SkillTest.organization_id == current_user.organization_id
     )
     if not include_practice:
-        query = query.where(SkillTest.is_practice == False)  # noqa: E712
+        query = query.where(SkillTest.is_practice.is_(False))
     # Mirrors GET /tests exactly. The review queue is not expressible as a
     # status — it is a status *and* the absence of a validation — so without
     # this the Export button under "Needs Validation" quietly widened to every
@@ -3281,7 +3281,7 @@ async def export_tests_csv(
     # likely to be noticed and most likely to be handed to somebody.
     if pending_validation:
         query = query.where(
-            SkillTest.is_practice == False,  # noqa: E712
+            SkillTest.is_practice.is_(False),
             SkillTest.status == SkillTestStatus.COMPLETED.value,
             SkillTest.validated_at.is_(None),
         )
@@ -3552,7 +3552,7 @@ async def get_testing_summary(
     total_tests_result = await db.execute(
         select(func.count(SkillTest.id)).where(
             SkillTest.organization_id == org_id,
-            SkillTest.is_practice == False,  # noqa: E712
+            SkillTest.is_practice.is_(False),
             SkillTest.status != voided,
         )
     )
@@ -3565,7 +3565,7 @@ async def get_testing_summary(
         select(func.count(SkillTest.id)).where(
             SkillTest.organization_id == org_id,
             SkillTest.created_at >= month_start,
-            SkillTest.is_practice == False,  # noqa: E712
+            SkillTest.is_practice.is_(False),
             SkillTest.status != voided,
         )
     )
@@ -3580,7 +3580,7 @@ async def get_testing_summary(
             SkillTest.organization_id == org_id,
             SkillTest.status == "completed",
             SkillTest.validated_at.isnot(None),
-            SkillTest.is_practice == False,  # noqa: E712
+            SkillTest.is_practice.is_(False),
         )
     )
     completed_count = completed_tests_result.scalar() or 0
@@ -3593,7 +3593,7 @@ async def get_testing_summary(
                 SkillTest.status == "completed",
                 SkillTest.validated_at.isnot(None),
                 SkillTest.result == "pass",
-                SkillTest.is_practice == False,  # noqa: E712
+                SkillTest.is_practice.is_(False),
             )
         )
         passed_count = passed_tests_result.scalar() or 0
@@ -3606,7 +3606,7 @@ async def get_testing_summary(
             SkillTest.status == "completed",
             SkillTest.validated_at.isnot(None),
             SkillTest.overall_score.isnot(None),
-            SkillTest.is_practice == False,  # noqa: E712
+            SkillTest.is_practice.is_(False),
         )
     )
     avg_score_raw = avg_score_result.scalar()
@@ -3624,7 +3624,7 @@ async def get_testing_summary(
                 SkillTest.organization_id == org_id,
                 SkillTest.status == "completed",
                 SkillTest.validated_at.is_(None),
-                SkillTest.is_practice == False,  # noqa: E712
+                SkillTest.is_practice.is_(False),
             )
         )
         pending_validation_count = pending_validation_result.scalar() or 0

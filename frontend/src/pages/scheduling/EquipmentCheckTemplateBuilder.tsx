@@ -80,6 +80,7 @@ import type {
   EquipmentCheckTemplate,
   EquipmentCheckTemplateCreate,
   CheckTemplateCompartmentCreate,
+  CheckTemplateCompartment,
   CheckTemplateItemCreate,
   CheckTemplateItem,
   CheckType,
@@ -152,8 +153,9 @@ const MobileActionMenu: React.FC<{ label: string; children: React.ReactNode }> =
 // ============================================================================
 
 interface ItemFormState {
+  /** Stable identity used while an item moves between arrays. */
+  clientKey: string;
   id?: string;
-  clientKey?: string;
   saveStatus?: 'saving' | 'failed';
   name: string;
   description: string;
@@ -173,8 +175,12 @@ interface ItemFormState {
   imageUrl: string;
 }
 
+let nextItemKey = 0;
+const newItemKey = () => `local-item-${Date.now()}-${nextItemKey++}`;
+
 function emptyItem(): ItemFormState {
   return {
+    clientKey: newItemKey(),
     name: '',
     description: '',
     checkType: 'function',
@@ -204,6 +210,7 @@ function emptyItem(): ItemFormState {
  */
 function itemFormFromResponse(created: CheckTemplateItem): ItemFormState {
   return {
+    clientKey: newItemKey(),
     id: created.id,
     name: created.name,
     description: created.description ?? '',
@@ -221,6 +228,28 @@ function itemFormFromResponse(created: CheckTemplateItem): ItemFormState {
     expirationDate: created.expirationDate ?? '',
     expirationWarningDays: String(created.expirationWarningDays ?? 30),
     imageUrl: created.imageUrl ?? '',
+  };
+}
+
+function itemCreateFromForm(item: ItemFormState, sortOrder: number, name = item.name): CheckTemplateItemCreate {
+  return {
+    name,
+    description: item.description.trim() || undefined,
+    sort_order: sortOrder,
+    check_type: item.checkType,
+    is_required: item.isRequired,
+    required_quantity: item.requiredQuantity ? Number(item.requiredQuantity) : undefined,
+    expected_quantity: item.expectedQuantity ? Number(item.expectedQuantity) : undefined,
+    critical_minimum_quantity: item.criticalMinimumQuantity ? Number(item.criticalMinimumQuantity) : undefined,
+    min_level: item.minLevel ? Number(item.minLevel) : undefined,
+    level_unit: item.levelUnit.trim() || undefined,
+    serial_number: item.serialNumber.trim() || undefined,
+    lot_number: item.lotNumber.trim() || undefined,
+    inventory_item_id: item.inventoryItemId || undefined,
+    image_url: item.imageUrl.trim() || undefined,
+    has_expiration: item.hasExpiration,
+    expiration_date: item.expirationDate.trim() || undefined,
+    expiration_warning_days: item.expirationWarningDays ? Number(item.expirationWarningDays) : undefined,
   };
 }
 
@@ -257,6 +286,21 @@ function emptyCompartment(): CompartmentFormState {
     isSealed: false,
     parentCompartmentId: '',
     items: [],
+  };
+}
+
+function compartmentFormFromResponse(compartment: CheckTemplateCompartment): CompartmentFormState {
+  return {
+    clientKey: newCompartmentKey(),
+    id: compartment.id,
+    name: compartment.name,
+    description: compartment.description ?? '',
+    imageUrl: compartment.imageUrl ?? '',
+    isHeader: compartment.isHeader ?? false,
+    containerType: compartment.containerType ?? 'compartment',
+    isSealed: compartment.isSealed ?? false,
+    parentCompartmentId: compartment.parentCompartmentId ?? '',
+    items: compartment.items.map(itemFormFromResponse),
   };
 }
 
@@ -462,6 +506,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           isSealed: c.isSealed ?? false,
           parentCompartmentId: c.parentCompartmentId ?? '',
           items: (c.items ?? []).map((item) => ({
+            clientKey: newItemKey(),
             id: item.id,
             name: item.name,
             description: item.description ?? '',
@@ -658,11 +703,11 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     markDirty();
   };
 
-  const duplicateCompartment = (idx: number) => {
+  const duplicateCompartment = async (idx: number) => {
     const comp = compartments[idx];
     if (!comp) return;
 
-    const copy: CompartmentFormState = {
+    let copy: CompartmentFormState = {
       clientKey: newCompartmentKey(),
       name: `${comp.name} (copy)`,
       description: comp.description,
@@ -673,14 +718,22 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       parentCompartmentId: comp.parentCompartmentId,
       items: comp.items.map(({ id: _discardId, ...rest }) => ({ ...rest })),
     };
+    if (comp.id) {
+      try {
+        copy = compartmentFormFromResponse(await schedulingService.cloneCompartment(comp.id, idx + 1));
+      } catch (err: unknown) {
+        toast.error(getErrorMessage(err, 'Failed to duplicate compartment'));
+        return;
+      }
+    }
     setCompartments((prev) => {
       const next = [...prev];
       next.splice(idx + 1, 0, copy);
       return next;
     });
     setExpandedCompartments((prev) => new Set(prev).add(copy.clientKey));
-    toast.success('Compartment duplicated');
-    markDirty();
+    toast.success(comp.id ? `“${copy.name}” added` : 'Draft compartment duplicated');
+    if (!comp.id) markDirty();
   };
 
   // ---------------------------------------------------------------------------
@@ -701,6 +754,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
         };
         const created = await schedulingService.addCheckItem(comp.id, payload);
         const item: ItemFormState = {
+          clientKey: newItemKey(),
           id: created.id,
           name: created.name,
           description: created.description ?? '',
@@ -776,44 +830,81 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     updateCompartmentField(compartmentIdx, { items: updatedItems });
   };
 
-  const duplicateItem = (compartmentIdx: number, itemIdx: number) => {
+  const duplicateItem = async (compartmentIdx: number, itemIdx: number) => {
     const comp = compartments[compartmentIdx];
     if (!comp) return;
     const item = comp.items[itemIdx];
     if (!item) return;
 
-    const { id: _discardId, ...rest } = item;
-    const copy: ItemFormState = {
-      ...rest,
-      name: `${item.name} (copy)`,
-    };
+    let copy: ItemFormState;
+    if (comp.id && item.id) {
+      try {
+        const created = await schedulingService.addCheckItem(
+          comp.id,
+          itemCreateFromForm(item, itemIdx + 1, `${item.name} (copy)`)
+        );
+        copy = itemFormFromResponse(created);
+      } catch (err: unknown) {
+        toast.error(getErrorMessage(err, 'Failed to duplicate item'));
+        return;
+      }
+    } else {
+      const { id: _discardId, ...rest } = item;
+      copy = { ...rest, clientKey: newItemKey(), name: `${item.name} (copy)` };
+    }
     const updatedItems = [...comp.items];
     updatedItems.splice(itemIdx + 1, 0, copy);
-    updateCompartmentField(compartmentIdx, { items: updatedItems });
-    toast.success('Item duplicated');
+    setCompartments((prev) => {
+      const next = [...prev];
+      const current = next[compartmentIdx];
+      if (!current) return prev;
+      const items = [...current.items];
+      items.splice(itemIdx + 1, 0, copy);
+      next[compartmentIdx] = { ...current, items };
+      return next;
+    });
+    if (comp.id && item.id) {
+      try {
+        await schedulingService.reorderItems(
+          comp.id,
+          updatedItems.map((entry) => entry.id).filter((id): id is string => Boolean(id))
+        );
+      } catch (err: unknown) {
+        toast.error(getErrorMessage(err, 'Item was copied, but its order could not be saved'));
+        return;
+      }
+    }
+    toast.success(item.id ? `“${copy.name}” added` : 'Draft item duplicated');
   };
 
   // ---------------------------------------------------------------------------
   // Move item up/down within a compartment
   // ---------------------------------------------------------------------------
 
-  const moveItem = (compartmentIdx: number, itemIdx: number, direction: 'up' | 'down') => {
+  const moveItem = async (compartmentIdx: number, itemIdx: number, direction: 'up' | 'down') => {
     const comp = compartments[compartmentIdx];
     if (!comp) return;
+    const item = comp.items[itemIdx];
+    if (!item) return;
     const newIdx = direction === 'up' ? itemIdx - 1 : itemIdx + 1;
     if (newIdx < 0 || newIdx >= comp.items.length) return;
 
-    setCompartments((prev) => {
-      const next = [...prev];
-      const c = next[compartmentIdx];
-      if (!c) return prev;
-      const items = [...c.items];
-      const [moved] = items.splice(itemIdx, 1);
-      if (!moved) return prev;
-      items.splice(newIdx, 0, moved);
-      next[compartmentIdx] = { ...c, items };
-      return next;
-    });
+    const applyMove = () =>
+      setCompartments((prev) => {
+        const next = [...prev];
+        const currentCompIdx = next.findIndex((candidate) => candidate.clientKey === comp.clientKey);
+        const c = next[currentCompIdx];
+        if (!c) return prev;
+        const currentItemIdx = c.items.findIndex((candidate) => candidate.clientKey === item.clientKey);
+        const targetIdx = direction === 'up' ? currentItemIdx - 1 : currentItemIdx + 1;
+        if (currentItemIdx < 0 || targetIdx < 0 || targetIdx >= c.items.length) return prev;
+        const items = [...c.items];
+        const [moved] = items.splice(currentItemIdx, 1);
+        if (!moved) return prev;
+        items.splice(targetIdx, 0, moved);
+        next[currentCompIdx] = { ...c, items };
+        return next;
+      });
 
     if (isEditing && comp.id) {
       const reorderedItems = [...comp.items];
@@ -821,9 +912,16 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       if (movedItem) reorderedItems.splice(newIdx, 0, movedItem);
       const savedIds = reorderedItems.map((item) => item.id).filter((id): id is string => Boolean(id));
       if (savedIds.length > 0) {
-        void schedulingService.reorderItems(comp.id, savedIds).catch(() => toast.error('Failed to save item order'));
+        try {
+          await schedulingService.reorderItems(comp.id, savedIds);
+        } catch {
+          setExpandedItems((prev) => new Set(prev).add(item.id ?? item.clientKey));
+          toast.error(`Could not reorder “${item.name || 'item'}.” Its original order was restored.`);
+          return;
+        }
       }
     }
+    applyMove();
     markDirty();
   };
 
@@ -836,18 +934,6 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     const item = fromComp.items[itemIdx];
     if (!item) return;
 
-    setCompartments((prev) => {
-      const next = [...prev];
-      const src = next[fromCompIdx];
-      const dst = next[toCompIdx];
-      if (!src || !dst) return prev;
-      const srcItems = src.items.filter((_, i) => i !== itemIdx);
-      const dstItems = [...dst.items, item];
-      next[fromCompIdx] = { ...src, items: srcItems };
-      next[toCompIdx] = { ...dst, items: dstItems };
-      return next;
-    });
-
     if (isEditing && item.id && toComp.id) {
       try {
         await schedulingService.updateCheckItem(item.id, {
@@ -855,9 +941,29 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           sort_order: toComp.items.length,
         });
       } catch {
-        toast.error('Failed to move item on server');
+        const itemKey = item.id ?? item.clientKey;
+        setExpandedItems((prev) => new Set(prev).add(itemKey));
+        window.setTimeout(() => document.getElementById(`item-row-${itemKey}`)?.focus());
+        toast.error(`Could not move “${item.name || 'item'}.” Its original location was restored.`);
+        return;
       }
     }
+
+    setCompartments((prev) => {
+      const next = [...prev];
+      const currentSourceIdx = next.findIndex((candidate) => candidate.clientKey === fromComp.clientKey);
+      const currentDestinationIdx = next.findIndex((candidate) => candidate.clientKey === toComp.clientKey);
+      const src = next[currentSourceIdx];
+      const dst = next[currentDestinationIdx];
+      if (!src || !dst) return prev;
+      const currentItemIdx = src.items.findIndex((candidate) => candidate.clientKey === item.clientKey);
+      if (currentItemIdx < 0) return prev;
+      const srcItems = src.items.filter((candidate) => candidate.clientKey !== item.clientKey);
+      const dstItems = [...dst.items, item];
+      next[currentSourceIdx] = { ...src, items: srcItems };
+      next[currentDestinationIdx] = { ...dst, items: dstItems };
+      return next;
+    });
     markDirty();
     toast.success(`Moved "${item.name || 'item'}" to ${toComp.name || 'compartment'}`);
   };
@@ -866,31 +972,23 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
   // Move compartment up/down
   // ---------------------------------------------------------------------------
 
-  const pendingCompartmentOrderRef = useRef(false);
-
-  const moveCompartment = (idx: number, direction: 'up' | 'down') => {
+  const moveCompartment = async (idx: number, direction: 'up' | 'down') => {
     const id = compartments[idx]?.id;
     // Unsaved records have no stable identity and therefore cannot be safely
     // represented in the reorder API. Save the template before reordering.
     if (!id) return;
+    const reordered = moveCompartmentInTree(compartments, id, direction);
+    if (isEditing && templateId) {
+      try {
+        await schedulingService.reorderCompartments(templateId, orderedCompartmentIds(reordered));
+      } catch {
+        toast.error('Could not reorder compartment. Its original order was restored.');
+        return;
+      }
+    }
     setCompartments((prev) => moveCompartmentInTree(prev, id, direction));
-    pendingCompartmentOrderRef.current = true;
     markDirty();
   };
-
-  // Persistence deliberately follows the state update. This builds ordered_ids
-  // from the resulting canonical state, never from an event handler's stale
-  // `compartments` closure.
-  useEffect(() => {
-    if (!pendingCompartmentOrderRef.current || !isEditing || !templateId) return;
-    pendingCompartmentOrderRef.current = false;
-    const savedIds = orderedCompartmentIds(compartments);
-    if (savedIds.length > 0) {
-      void schedulingService
-        .reorderCompartments(templateId, savedIds)
-        .catch(() => toast.error('Failed to save compartment order'));
-    }
-  }, [compartments, isEditing, templateId]);
 
   // ---------------------------------------------------------------------------
   // Bulk selection helpers
@@ -2153,52 +2251,69 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     [compartments]
   );
 
-  const handleCompartmentDragEnd = (event: DragEndEvent) => {
+  const handleCompartmentDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event;
     if (!over || active.id === over.id) return;
     const activeId = String(active.id);
     const overId = String(over.id);
     // reorderCompartment rejects cross-parent drops. Dragging a parent moves
     // its subtree because the returned array is canonical depth-first order.
+    const reordered = reorderCompartment(compartments, activeId, overId);
+    if (isEditing && templateId) {
+      try {
+        await schedulingService.reorderCompartments(templateId, orderedCompartmentIds(reordered));
+      } catch {
+        toast.error('Could not reorder compartment. Its original order was restored.');
+        return;
+      }
+    }
     setCompartments((prev) => reorderCompartment(prev, activeId, overId));
-    pendingCompartmentOrderRef.current = true;
     markDirty();
   };
 
-  const handleItemDragEnd = (compIdx: number, event: DragEndEvent) => {
+  const handleItemDragEnd = async (compIdx: number, event: DragEndEvent) => {
     const { active, over } = event;
     if (!over || active.id === over.id) return;
 
     const comp = compartments[compIdx];
     if (!comp) return;
 
-    const itemIds = comp.items.map((item, i) => item.id ?? `item-${compIdx}-${i}`);
+    const itemIds = comp.items.map((item) => item.id ?? item.clientKey);
     const oldIndex = itemIds.indexOf(String(active.id));
     const newIndex = itemIds.indexOf(String(over.id));
     if (oldIndex === -1 || newIndex === -1) return;
 
-    setCompartments((prev) => {
-      const next = [...prev];
-      const c = next[compIdx];
-      if (!c) return prev;
-      const items = [...c.items];
-      const [moved] = items.splice(oldIndex, 1);
-      if (!moved) return prev;
-      items.splice(newIndex, 0, moved);
-      next[compIdx] = { ...c, items };
-      return next;
-    });
-
-    // Persist item order if compartment is saved
+    const reorderedItems = [...comp.items];
+    const [movedItem] = reorderedItems.splice(oldIndex, 1);
+    if (!movedItem) return;
+    reorderedItems.splice(newIndex, 0, movedItem);
     if (isEditing && comp.id) {
-      const reorderedItems = [...comp.items];
-      const [movedItem] = reorderedItems.splice(oldIndex, 1);
-      if (movedItem) reorderedItems.splice(newIndex, 0, movedItem);
       const savedIds = reorderedItems.map((item) => item.id).filter((id): id is string => Boolean(id));
       if (savedIds.length > 0) {
-        void schedulingService.reorderItems(comp.id, savedIds).catch(() => toast.error('Failed to save item order'));
+        try {
+          await schedulingService.reorderItems(comp.id, savedIds);
+        } catch {
+          setExpandedItems((prev) => new Set(prev).add(movedItem.id ?? movedItem.clientKey));
+          toast.error(`Could not reorder “${movedItem.name || 'item'}.” Its original order was restored.`);
+          return;
+        }
       }
     }
+    setCompartments((prev) => {
+      const next = [...prev];
+      const currentCompIdx = next.findIndex((candidate) => candidate.clientKey === comp.clientKey);
+      const c = next[currentCompIdx];
+      if (!c) return prev;
+      const currentOldIndex = c.items.findIndex((candidate) => (candidate.id ?? candidate.clientKey) === active.id);
+      const currentNewIndex = c.items.findIndex((candidate) => (candidate.id ?? candidate.clientKey) === over.id);
+      if (currentOldIndex < 0 || currentNewIndex < 0) return prev;
+      const items = [...c.items];
+      const [moved] = items.splice(currentOldIndex, 1);
+      if (!moved) return prev;
+      items.splice(currentNewIndex, 0, moved);
+      next[currentCompIdx] = { ...c, items };
+      return next;
+    });
   };
 
   // ---------------------------------------------------------------------------
@@ -2224,7 +2339,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     dragHandleProps?: Record<string, unknown>,
     totalItems?: number
   ) => {
-    const itemKey = item.id ?? item.clientKey ?? `item-${compIdx}-${itemIdx}`;
+    const itemKey = item.id ?? item.clientKey;
     const isItemExpanded = expandedItems.has(itemKey);
     const checkTypeLabel = CHECK_TYPES.find((ct) => ct.value === item.checkType)?.label ?? item.checkType;
     const compKey = getCompKey(compIdx);
@@ -2282,6 +2397,8 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     return (
       <div
         key={itemKey}
+        id={`item-row-${itemKey}`}
+        tabIndex={-1}
         className={`rounded-md border transition-colors ${
           isSelected
             ? 'border-blue-400 bg-blue-50/50 dark:border-blue-500 dark:bg-blue-900/10'
@@ -2394,7 +2511,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             {/* Move up/down buttons */}
             <button
               type="button"
-              onClick={() => moveItem(compIdx, itemIdx, 'up')}
+              onClick={() => void moveItem(compIdx, itemIdx, 'up')}
               disabled={itemIdx === 0}
               className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-secondary rounded p-1 transition-colors disabled:cursor-not-allowed disabled:opacity-30"
               aria-label={`Move ${item.name || 'item'} up`}
@@ -2403,7 +2520,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             </button>
             <button
               type="button"
-              onClick={() => moveItem(compIdx, itemIdx, 'down')}
+              onClick={() => void moveItem(compIdx, itemIdx, 'down')}
               disabled={itemIdx === itemCount - 1}
               className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-secondary rounded p-1 transition-colors disabled:cursor-not-allowed disabled:opacity-30"
               aria-label={`Move ${item.name || 'item'} down`}
@@ -2412,7 +2529,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             </button>
             <button
               type="button"
-              onClick={() => duplicateItem(compIdx, itemIdx)}
+              onClick={() => void duplicateItem(compIdx, itemIdx)}
               className="text-theme-text-muted rounded p-1 transition-colors hover:bg-blue-50 hover:text-blue-600 dark:hover:bg-blue-900/20"
               aria-label={`Duplicate ${item.name || 'item'}`}
             >
@@ -2472,7 +2589,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
               type="button"
               className={mobileMenuItemClass}
               disabled={itemIdx === 0}
-              onClick={() => moveItem(compIdx, itemIdx, 'up')}
+              onClick={() => void moveItem(compIdx, itemIdx, 'up')}
             >
               <ChevronUp className="h-4 w-4" aria-hidden="true" /> Move up
             </button>
@@ -2480,11 +2597,11 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
               type="button"
               className={mobileMenuItemClass}
               disabled={itemIdx === itemCount - 1}
-              onClick={() => moveItem(compIdx, itemIdx, 'down')}
+              onClick={() => void moveItem(compIdx, itemIdx, 'down')}
             >
               <ChevronDown className="h-4 w-4" aria-hidden="true" /> Move down
             </button>
-            <button type="button" className={mobileMenuItemClass} onClick={() => duplicateItem(compIdx, itemIdx)}>
+            <button type="button" className={mobileMenuItemClass} onClick={() => void duplicateItem(compIdx, itemIdx)}>
               <Copy className="h-4 w-4" aria-hidden="true" /> Duplicate
             </button>
             {compartments.filter(
@@ -2880,7 +2997,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             <div className="hidden flex-shrink-0 items-center gap-0.5 sm:flex">
               <button
                 type="button"
-                onClick={() => moveCompartment(idx, 'up')}
+                onClick={() => void moveCompartment(idx, 'up')}
                 disabled={!canMoveCompartment(compartments, comp.id, 'up')}
                 className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-secondary rounded p-1 transition-colors disabled:cursor-not-allowed disabled:opacity-30"
                 aria-label="Move section up"
@@ -2889,7 +3006,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
               </button>
               <button
                 type="button"
-                onClick={() => moveCompartment(idx, 'down')}
+                onClick={() => void moveCompartment(idx, 'down')}
                 disabled={!canMoveCompartment(compartments, comp.id, 'down')}
                 className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-secondary rounded p-1 transition-colors disabled:cursor-not-allowed disabled:opacity-30"
                 aria-label="Move section down"
@@ -2910,7 +3027,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                 type="button"
                 className={mobileMenuItemClass}
                 disabled={!canMoveCompartment(compartments, comp.id, 'up')}
-                onClick={() => moveCompartment(idx, 'up')}
+                onClick={() => void moveCompartment(idx, 'up')}
               >
                 <ChevronUp className="h-4 w-4" aria-hidden="true" /> Move up
               </button>
@@ -2918,7 +3035,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                 type="button"
                 className={mobileMenuItemClass}
                 disabled={!canMoveCompartment(compartments, comp.id, 'down')}
-                onClick={() => moveCompartment(idx, 'down')}
+                onClick={() => void moveCompartment(idx, 'down')}
               >
                 <ChevronDown className="h-4 w-4" aria-hidden="true" /> Move down
               </button>
@@ -3026,7 +3143,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           <div className="hidden flex-shrink-0 items-center gap-0.5 sm:flex">
             <button
               type="button"
-              onClick={() => moveCompartment(idx, 'up')}
+              onClick={() => void moveCompartment(idx, 'up')}
               disabled={!canMoveCompartment(compartments, comp.id, 'up')}
               className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-secondary rounded p-1 transition-colors disabled:cursor-not-allowed disabled:opacity-30"
               aria-label={`Move ${comp.name || 'compartment'} up`}
@@ -3035,7 +3152,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             </button>
             <button
               type="button"
-              onClick={() => moveCompartment(idx, 'down')}
+              onClick={() => void moveCompartment(idx, 'down')}
               disabled={!canMoveCompartment(compartments, comp.id, 'down')}
               className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-secondary rounded p-1 transition-colors disabled:cursor-not-allowed disabled:opacity-30"
               aria-label={`Move ${comp.name || 'compartment'} down`}
@@ -3044,7 +3161,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             </button>
             <button
               type="button"
-              onClick={() => duplicateCompartment(idx)}
+              onClick={() => void duplicateCompartment(idx)}
               className="text-theme-text-muted rounded p-1 transition-colors hover:bg-blue-50 hover:text-blue-600 dark:hover:bg-blue-900/20"
               aria-label={`Duplicate ${comp.name || 'compartment'}`}
             >
@@ -3075,7 +3192,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
               type="button"
               className={mobileMenuItemClass}
               disabled={!canMoveCompartment(compartments, comp.id, 'up')}
-              onClick={() => moveCompartment(idx, 'up')}
+              onClick={() => void moveCompartment(idx, 'up')}
             >
               <ChevronUp className="h-4 w-4" aria-hidden="true" /> Move up
             </button>
@@ -3083,11 +3200,11 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
               type="button"
               className={mobileMenuItemClass}
               disabled={!canMoveCompartment(compartments, comp.id, 'down')}
-              onClick={() => moveCompartment(idx, 'down')}
+              onClick={() => void moveCompartment(idx, 'down')}
             >
               <ChevronDown className="h-4 w-4" aria-hidden="true" /> Move down
             </button>
-            <button type="button" className={mobileMenuItemClass} onClick={() => duplicateCompartment(idx)}>
+            <button type="button" className={mobileMenuItemClass} onClick={() => void duplicateCompartment(idx)}>
               <Copy className="h-4 w-4" aria-hidden="true" /> Duplicate
             </button>
             <label className={`${mobileMenuItemClass} flex-col items-stretch gap-1`}>
@@ -3408,17 +3525,14 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
               <DndContext
                 sensors={sensors}
                 collisionDetection={closestCenter}
-                onDragEnd={(e: DragEndEvent) => handleItemDragEnd(idx, e)}
+                onDragEnd={(e: DragEndEvent) => void handleItemDragEnd(idx, e)}
               >
                 <SortableContext
-                  items={comp.items.map((item, i) => item.id ?? item.clientKey ?? `item-${idx}-${i}`)}
+                  items={comp.items.map((item) => item.id ?? item.clientKey)}
                   strategy={verticalListSortingStrategy}
                 >
                   {comp.items.map((item, itemIdx) => (
-                    <SortableItemWrapper
-                      key={item.id ?? item.clientKey ?? `item-${idx}-${itemIdx}`}
-                      id={item.id ?? item.clientKey ?? `item-${idx}-${itemIdx}`}
-                    >
+                    <SortableItemWrapper key={item.id ?? item.clientKey} id={item.id ?? item.clientKey}>
                       {({ listeners: itemListeners }) =>
                         renderItem(idx, itemIdx, item, itemListeners, comp.items.length)
                       }
@@ -4030,7 +4144,11 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             </div>
           )}
 
-          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleCompartmentDragEnd}>
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragEnd={(event) => void handleCompartmentDragEnd(event)}
+          >
             <SortableContext items={compartmentIds} strategy={verticalListSortingStrategy}>
               {orderedCompartments.map(({ comp, idx, depth }) => {
                 const id = compartmentKey(comp, idx);
@@ -4098,6 +4216,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                   Save failed
                 </span>
               )}
+              {!isEditing && <span className="text-theme-text-muted flex items-center gap-1 text-xs">Draft</span>}
               {stats.completeness < 100 && (
                 <span className="text-xs text-yellow-600 dark:text-yellow-400">{stats.completeness}% items named</span>
               )}

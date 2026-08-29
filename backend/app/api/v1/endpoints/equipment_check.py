@@ -29,6 +29,7 @@ from app.models.user import User
 from app.schemas.equipment_check import (
     ApparatusInventoryResponse,
     CheckLogResponse,
+    CheckTemplateCompartmentClone,
     CheckTemplateCompartmentCreate,
     CheckTemplateCompartmentResponse,
     CheckTemplateCompartmentUpdate,
@@ -493,6 +494,26 @@ async def delete_compartment(
             entity_name=comp_name,
         )
         await db.commit()
+
+
+@router.post(
+    "/compartments/{compartment_id}/clone",
+    response_model=CheckTemplateCompartmentResponse,
+    status_code=201,
+)
+async def clone_compartment(
+    compartment_id: str,
+    data: CheckTemplateCompartmentClone,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("equipment_check.manage")),
+):
+    """Atomically clone a compartment and its complete item graph."""
+    compartment = await EquipmentCheckService(db).clone_compartment(
+        compartment_id, str(current_user.organization_id), data.sort_order
+    )
+    if not compartment:
+        raise HTTPException(status_code=404, detail="Compartment not found")
+    return compartment
 
 
 @router.put("/templates/{template_id}/compartments/reorder", status_code=200)

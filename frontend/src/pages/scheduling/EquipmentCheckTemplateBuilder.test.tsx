@@ -4,36 +4,59 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ConfirmProvider } from '../../contexts/ConfirmContext';
-import EquipmentCheckTemplateBuilder from './EquipmentCheckTemplateBuilder';
 
-const getTemplate = vi.fn();
-const createTemplate = vi.fn();
-const updateTemplate = vi.fn();
-const addCheckItemsBulk = vi.fn();
-const deleteCheckItemsBulk = vi.fn();
-const toastSuccess = vi.fn();
-const toastError = vi.fn();
-
-vi.mock('react-hot-toast', () => ({
-  default: {
-    success: (...args: unknown[]) => toastSuccess(...args),
-    error: (...args: unknown[]) => toastError(...args),
-  },
+const {
+  getTemplate,
+  updateCheckItem,
+  addCheckItem,
+  reorderItems,
+  cloneCompartment,
+  updateCompartment,
+  addCheckItemsBulk,
+  deleteCheckItemsBulk,
+  deleteCheckItem,
+  createEquipmentCheckTemplate,
+  updateEquipmentCheckTemplate,
+  toastSuccess,
+  toastError,
+} = vi.hoisted(() => ({
+  getTemplate: vi.fn(),
+  updateCheckItem: vi.fn(),
+  addCheckItem: vi.fn(),
+  reorderItems: vi.fn(),
+  cloneCompartment: vi.fn(),
+  updateCompartment: vi.fn(),
+  addCheckItemsBulk: vi.fn(),
+  deleteCheckItemsBulk: vi.fn(),
+  deleteCheckItem: vi.fn(),
+  createEquipmentCheckTemplate: vi.fn(),
+  updateEquipmentCheckTemplate: vi.fn(),
+  toastSuccess: vi.fn(),
+  toastError: vi.fn(),
 }));
+
+vi.mock('react-hot-toast', () => ({ default: { success: toastSuccess, error: toastError } }));
 
 vi.mock('@/modules/scheduling', () => ({
   schedulingService: {
     getApparatusOptions: vi.fn().mockResolvedValue({ options: [] }),
     getEquipmentCheckTemplate: (...args: unknown[]) => getTemplate(...args),
-    createEquipmentCheckTemplate: (...args: unknown[]) => createTemplate(...args),
-    updateEquipmentCheckTemplate: (...args: unknown[]) => updateTemplate(...args),
-    updateCompartment: vi.fn().mockResolvedValue({}),
-    updateCheckItem: vi.fn().mockResolvedValue({}),
+    updateCheckItem: (...args: unknown[]) => updateCheckItem(...args),
+    addCheckItem: (...args: unknown[]) => addCheckItem(...args),
+    reorderItems: (...args: unknown[]) => reorderItems(...args),
+    cloneCompartment: (...args: unknown[]) => cloneCompartment(...args),
+    updateCompartment: (...args: unknown[]) => updateCompartment(...args),
     addCheckItemsBulk: (...args: unknown[]) => addCheckItemsBulk(...args),
     getCsvSampleUrl: vi.fn().mockReturnValue('/sample.csv'),
     deleteCheckItemsBulk: (...args: unknown[]) => deleteCheckItemsBulk(...args),
+    deleteCheckItem: (...args: unknown[]) => deleteCheckItem(...args),
+    createEquipmentCheckTemplate: (...args: unknown[]) => createEquipmentCheckTemplate(...args),
+    updateEquipmentCheckTemplate: (...args: unknown[]) => updateEquipmentCheckTemplate(...args),
   },
 }));
+
+// Repository convention: service dependencies above are mocked before this import.
+import EquipmentCheckTemplateBuilder from './EquipmentCheckTemplateBuilder';
 
 vi.mock('@/stores/authStore', () => ({
   useAuthStore: (selector?: (state: { checkPermission: () => boolean }) => unknown) => {
@@ -125,19 +148,27 @@ function renderNewBuilder() {
   );
 }
 
+async function confirm(label: string | RegExp) {
+  const dialog = await screen.findByRole('dialog');
+  await userEvent.click(within(dialog).getByRole('button', { name: label }));
+}
+
 describe('EquipmentCheckTemplateBuilder responsive actions', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     getTemplate.mockResolvedValue(structuredClone(template));
-    createTemplate.mockResolvedValue({ ...template, id: 'draft-1', isActive: false });
-    updateTemplate.mockResolvedValue(template);
+    updateCheckItem.mockResolvedValue({});
+    reorderItems.mockResolvedValue(undefined);
+    updateCompartment.mockResolvedValue({});
+    createEquipmentCheckTemplate.mockResolvedValue({ ...template, id: 'draft-1', isActive: false });
+    updateEquipmentCheckTemplate.mockResolvedValue(template);
   });
 
   it('saves an incomplete new template as an inactive draft', async () => {
     const user = userEvent.setup();
     renderNewBuilder();
     await user.click(screen.getByRole('button', { name: 'Save draft' }));
-    expect(createTemplate).toHaveBeenCalledWith(
+    expect(createEquipmentCheckTemplate).toHaveBeenCalledWith(
       expect.objectContaining({ name: '', is_active: false, compartments: [] })
     );
   });
@@ -159,7 +190,105 @@ describe('EquipmentCheckTemplateBuilder responsive actions', () => {
     const publish = await screen.findByRole('button', { name: 'Publish' });
     await waitFor(() => expect(publish).toBeEnabled());
     await user.click(publish);
-    await waitFor(() => expect(updateTemplate).toHaveBeenLastCalledWith('template-1', { is_active: true }));
+    await waitFor(() =>
+      expect(updateEquipmentCheckTemplate).toHaveBeenLastCalledWith('template-1', { is_active: true })
+    );
+  });
+
+  it('persists a saved item duplicate with its configuration and server id', async () => {
+    const user = userEvent.setup();
+    addCheckItem.mockResolvedValue({ ...template.compartments[0]?.items[0], id: 'radio-copy', name: 'Radio (copy)' });
+    renderBuilder();
+    const trigger = await screen.findByLabelText('Actions for Radio');
+    await user.click(trigger);
+    await user.click(within(trigger.closest('details') as HTMLElement).getByRole('button', { name: 'Duplicate' }));
+    await waitFor(() => expect(addCheckItem).toHaveBeenCalled());
+    expect(addCheckItem).toHaveBeenCalledWith(
+      'cab',
+      expect.objectContaining({ name: 'Radio (copy)', sort_order: 1, check_type: 'function', is_required: true })
+    );
+    expect(reorderItems).toHaveBeenCalledWith('cab', ['radio', 'radio-copy', 'flashlight']);
+    expect(await screen.findByLabelText('Actions for Radio (copy)')).toBeInTheDocument();
+  });
+
+  it('allows the returned duplicate to be edited immediately without replacing it', async () => {
+    const user = userEvent.setup();
+    addCheckItem.mockResolvedValue({ ...template.compartments[0]?.items[0], id: 'radio-copy', name: 'Radio (copy)' });
+    renderBuilder();
+    const original = await screen.findByLabelText('Actions for Radio');
+    await user.click(original);
+    await user.click(within(original.closest('details') as HTMLElement).getByRole('button', { name: 'Duplicate' }));
+    const duplicate = await screen.findByLabelText('Actions for Radio (copy)');
+    await user.click(duplicate);
+    await user.click(within(duplicate.closest('details') as HTMLElement).getByRole('button', { name: 'Rename' }));
+    const input = await screen.findByDisplayValue('Radio (copy)');
+    await user.clear(input);
+    await user.type(input, 'Portable radio copy');
+    await user.keyboard('{Enter}');
+    expect(screen.getByLabelText('Actions for Portable radio copy')).toBeInTheDocument();
+    expect(screen.getByLabelText('Actions for Radio')).toBeInTheDocument();
+  });
+
+  it('retains a successful duplicate when the page is reloaded', async () => {
+    const persisted = {
+      ...template,
+      compartments: [
+        {
+          ...template.compartments[0],
+          items: [
+            template.compartments[0]?.items[0],
+            { ...template.compartments[0]?.items[0], id: 'radio-copy', name: 'Radio (copy)', sortOrder: 1 },
+          ],
+        },
+        ...template.compartments.slice(1),
+      ],
+    };
+    getTemplate.mockResolvedValue(persisted);
+    const view = renderBuilder();
+    expect(await screen.findByLabelText('Actions for Radio (copy)')).toBeInTheDocument();
+    view.unmount();
+    renderBuilder();
+    expect(await screen.findByLabelText('Actions for Radio (copy)')).toBeInTheDocument();
+    expect(getTemplate).toHaveBeenCalledTimes(2);
+  });
+
+  it('leaves item state unchanged when persistence fails', async () => {
+    const user = userEvent.setup();
+    addCheckItem.mockRejectedValue(new Error('clone failed'));
+    renderBuilder();
+    const trigger = await screen.findByLabelText('Actions for Radio');
+    await user.click(trigger);
+    await user.click(within(trigger.closest('details') as HTMLElement).getByRole('button', { name: 'Duplicate' }));
+    await waitFor(() => expect(addCheckItem).toHaveBeenCalled());
+    expect(screen.queryByLabelText('Actions for Radio (copy)')).not.toBeInTheDocument();
+    expect(reorderItems).not.toHaveBeenCalled();
+  });
+
+  it('clones a saved compartment with the returned child ids', async () => {
+    const user = userEvent.setup();
+    cloneCompartment.mockResolvedValue({
+      ...template.compartments[0],
+      id: 'cab-copy',
+      name: 'Cab (copy)',
+      items: [{ ...template.compartments[0]?.items[0], id: 'radio-copy' }],
+    });
+    renderBuilder();
+    const trigger = await screen.findByLabelText('Actions for Cab');
+    await user.click(trigger);
+    await user.click(within(trigger.closest('details') as HTMLElement).getByRole('button', { name: 'Duplicate' }));
+    expect(await screen.findByLabelText('Actions for Cab (copy)')).toBeInTheDocument();
+    expect(cloneCompartment).toHaveBeenCalledWith('cab', 1);
+  });
+
+  it('leaves compartment state unchanged when the transactional clone fails', async () => {
+    const user = userEvent.setup();
+    cloneCompartment.mockRejectedValue(new Error('clone failed'));
+    renderBuilder();
+    const trigger = await screen.findByLabelText('Actions for Cab');
+    await user.click(trigger);
+    await user.click(within(trigger.closest('details') as HTMLElement).getByRole('button', { name: 'Duplicate' }));
+    await waitFor(() => expect(cloneCompartment).toHaveBeenCalledWith('cab', 1));
+    expect(screen.queryByLabelText('Actions for Cab (copy)')).not.toBeInTheDocument();
   });
 
   it('exposes every item action from the phone overflow without drag and drop', async () => {
@@ -193,6 +322,77 @@ describe('EquipmentCheckTemplateBuilder responsive actions', () => {
     expect(within(menu).getByRole('button', { name: 'Move up' })).toBeDisabled();
     expect(within(menu).getByRole('button', { name: 'Move down' })).toBeDisabled();
     expect(within(menu).getByRole('button', { name: 'Delete' })).toBeVisible();
+  });
+});
+
+describe('EquipmentCheckTemplateBuilder movement persistence', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    getTemplate.mockResolvedValue({
+      ...template,
+      compartments: [
+        {
+          ...template.compartments[0],
+          items: [
+            template.compartments[0]?.items[0],
+            { ...template.compartments[0]?.items[0], id: 'mask', name: 'Oxygen mask', sortOrder: 1 },
+          ],
+        },
+        template.compartments[1],
+      ],
+    });
+    updateCheckItem.mockResolvedValue({});
+    reorderItems.mockResolvedValue([]);
+  });
+
+  const moveSelect = async (name: string) => {
+    const selects = await screen.findAllByLabelText(new RegExp(`Move ${name} to compartment`));
+    return selects[selects.length - 1] as HTMLSelectElement;
+  };
+
+  it('moves an item across compartments only after persistence succeeds', async () => {
+    const user = userEvent.setup();
+    renderBuilder();
+    await user.selectOptions(await moveSelect('Oxygen mask'), '1');
+    expect(updateCheckItem).toHaveBeenCalledWith('mask', { compartment_id: 'bag', sort_order: 0 });
+    expect(await screen.findByLabelText('Actions for Oxygen mask')).toBeInTheDocument();
+    expect(toastSuccess).toHaveBeenCalledWith('Moved "Oxygen mask" to Medical bag');
+  });
+
+  it('keeps a rejected item in its source and does not show a success toast', async () => {
+    updateCheckItem.mockRejectedValueOnce(new Error('offline'));
+    const user = userEvent.setup();
+    renderBuilder();
+    await user.selectOptions(await moveSelect('Oxygen mask'), '1');
+    expect(await screen.findByLabelText('Actions for Oxygen mask')).toBeInTheDocument();
+    expect(toastSuccess).not.toHaveBeenCalled();
+    expect(toastError).toHaveBeenCalledWith('Could not move “Oxygen mask.” Its original location was restored.');
+  });
+
+  it('restores the prior item order when reorder persistence is rejected', async () => {
+    reorderItems.mockRejectedValueOnce(new Error('offline'));
+    const user = userEvent.setup();
+    renderBuilder();
+    const maskActions = await screen.findByLabelText('Actions for Oxygen mask');
+    await user.click(maskActions);
+    await user.click(within(maskActions.closest('details') as HTMLElement).getByRole('button', { name: 'Move up' }));
+    expect(reorderItems).toHaveBeenCalledWith('cab', ['mask', 'radio']);
+    const names = screen
+      .getAllByLabelText(/Actions for (Radio|Oxygen mask)/)
+      .map((node) => node.getAttribute('aria-label'));
+    expect(names.indexOf('Actions for Radio')).toBeLessThan(names.indexOf('Actions for Oxygen mask'));
+    expect(toastError).toHaveBeenCalledWith('Could not reorder “Oxygen mask.” Its original order was restored.');
+  });
+
+  it('reconciles rapid successful moves by stable item identity', async () => {
+    const user = userEvent.setup();
+    renderBuilder();
+    const radio = await moveSelect('Radio');
+    const mask = await moveSelect('Oxygen mask');
+    await Promise.all([user.selectOptions(radio, '1'), user.selectOptions(mask, '1')]);
+    expect(updateCheckItem).toHaveBeenCalledTimes(2);
+    expect(await screen.findByLabelText('Actions for Radio')).toBeInTheDocument();
+    expect(await screen.findByLabelText('Actions for Oxygen mask')).toBeInTheDocument();
   });
 });
 
@@ -297,6 +497,90 @@ describe('EquipmentCheckTemplateBuilder bulk deletion', () => {
     expect(screen.getByText('2 selected')).toBeVisible();
     expect(toastError).toHaveBeenCalled();
     expect(toastSuccess).not.toHaveBeenCalled();
+  });
+
+  it('reuses the idempotency key when the same selected deletion is retried', async () => {
+    deleteCheckItemsBulk
+      .mockRejectedValueOnce(new Error('Response lost'))
+      .mockResolvedValueOnce({ deletedItemIds: ['radio', 'flashlight'], replayed: true });
+    const user = userEvent.setup();
+    renderBuilder();
+    await screen.findByText('Radio');
+    await user.click(screen.getByTitle('Select all items'));
+
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      await user.click(screen.getByRole('button', { name: 'Delete selected items' }));
+      await user.click(screen.getByRole('button', { name: 'Delete 2' }));
+      await waitFor(() => expect(deleteCheckItemsBulk).toHaveBeenCalledTimes(attempt + 1));
+    }
+
+    expect(deleteCheckItemsBulk.mock.calls[0]?.[2]).toBe(deleteCheckItemsBulk.mock.calls[1]?.[2]);
+    await waitFor(() => expect(screen.queryByText('Radio')).not.toBeInTheDocument());
+    expect(toastSuccess).toHaveBeenCalledWith('Deleted 2 items');
+  });
+});
+
+describe('EquipmentCheckTemplateBuilder remaining mutation regressions', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    getTemplate.mockResolvedValue(structuredClone(template));
+    deleteCheckItem.mockResolvedValue(undefined);
+    updateEquipmentCheckTemplate.mockImplementation((_id: string, payload: { is_active: boolean }) =>
+      Promise.resolve({ ...structuredClone(template), isActive: payload.is_active })
+    );
+  });
+
+  it('bulk-pastes atomically and reuses the idempotency key after a failed attempt', async () => {
+    const user = userEvent.setup();
+    addCheckItemsBulk.mockRejectedValueOnce(new Error('timeout')).mockResolvedValueOnce({
+      items: [
+        { ...template.compartments[0]?.items[0], id: 'mask', name: 'Mask', sortOrder: 2 },
+        { ...template.compartments[0]?.items[0], id: 'hood', name: 'Hood', sortOrder: 3 },
+      ],
+      createdCount: 2,
+    });
+    renderBuilder();
+    await user.click((await screen.findAllByTitle('Switch to bulk paste (one item per line)'))[0] as HTMLElement);
+    const paste = screen.getByPlaceholderText(/Paste item names here/i);
+    await user.type(paste, 'Mask\nHood');
+    await user.click(screen.getByRole('button', { name: 'Add All' }));
+    await waitFor(() => expect(addCheckItemsBulk).toHaveBeenCalledTimes(1));
+    expect(paste).toHaveValue('Mask\nHood');
+    await user.click(screen.getByRole('button', { name: 'Add All' }));
+    expect(await screen.findByLabelText('Actions for Mask')).toBeVisible();
+    expect(addCheckItemsBulk.mock.calls[0]?.[2]).toBe(addCheckItemsBulk.mock.calls[1]?.[2]);
+  });
+
+  it('retains an individually deleted row when persistence fails', async () => {
+    deleteCheckItem.mockRejectedValueOnce(new Error('denied'));
+    renderBuilder();
+    const actions = await screen.findByLabelText('Actions for Radio');
+    await userEvent.click(actions);
+    await userEvent.click(within(actions.closest('details') as HTMLElement).getByRole('button', { name: 'Delete' }));
+    await confirm('Delete');
+    await waitFor(() => expect(deleteCheckItem).toHaveBeenCalledWith('radio'));
+    expect(screen.getByLabelText('Actions for Radio')).toBeVisible();
+  });
+
+  it('sends draft and publish state explicitly', async () => {
+    const user = userEvent.setup();
+    getTemplate.mockResolvedValue({
+      ...template,
+      isActive: false,
+      compartments: template.compartments.filter((compartment) => compartment.id !== 'bag'),
+    });
+    renderBuilder();
+    await user.click(await screen.findByRole('button', { name: 'Save draft' }));
+    await waitFor(() =>
+      expect(updateEquipmentCheckTemplate).toHaveBeenLastCalledWith(
+        'template-1',
+        expect.objectContaining({ is_active: false })
+      )
+    );
+    await user.click(screen.getByRole('button', { name: 'Publish' }));
+    await waitFor(() =>
+      expect(updateEquipmentCheckTemplate).toHaveBeenLastCalledWith('template-1', { is_active: true })
+    );
   });
 });
 
