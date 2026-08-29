@@ -115,6 +115,22 @@ class CheckTemplateItemBulkResponse(BaseModel):
     replayed: bool = False
 
 
+class CheckTemplateItemBulkDelete(BaseModel):
+    """Delete several items atomically, with retry protection."""
+
+    item_ids: List[str] = Field(..., min_length=1, max_length=250)
+    idempotency_key: str = Field(..., min_length=8, max_length=200)
+
+
+class CheckTemplateItemBulkDeleteResponse(BaseModel):
+    """Stable result returned both for an initial delete and a retry."""
+
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
+
+    deleted_item_ids: List[str]
+    replayed: bool = False
+
+
 class CheckTemplateItemUpdate(BaseModel):
     """Schema for updating a check template item."""
 
