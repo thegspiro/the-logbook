@@ -18,7 +18,7 @@ from unittest.mock import AsyncMock
 from uuid import uuid4
 
 from app.api.v1.endpoints.scheduling import router
-from app.models.training import SwapRequestStatus
+from app.models.training import ShiftStatus, SwapRequestStatus
 from app.services.scheduling_service import SchedulingService
 
 ORG = uuid4()
@@ -137,6 +137,14 @@ class TestAcceptance:
         assert kwargs["exclude_assignment_ids"] == {"a1"}
         assert kwargs["enforce_capacity"] is True
         assert kwargs["enforce_position_eligibility"] is True
+        # require_mutable/reject_past are what make this recheck mean
+        # anything: without them a cancelled, finalized, or past-dated shift
+        # would accept the seat move anyway. A mocked
+        # _validate_assignment_candidate can't fail on its own logic, so the
+        # call's arguments are the only thing that can catch either one being
+        # dropped.
+        assert kwargs["require_mutable"] is True
+        assert kwargs["reject_past"] is True
 
     async def test_an_ineligible_accepter_is_refused_and_the_seat_stays_put(self):
         offer, shift = _offer(), _shift()
@@ -299,3 +307,47 @@ class TestTheValidationIsRecheckedAtAcceptance:
     def test_the_acceptance_path_runs_that_validation(self):
         source = inspect.getsource(SchedulingService.respond_to_swap_offer)
         assert "_validate_assignment_candidate" in source
+
+    # The two tests below run the real `_validate_assignment_candidate` —
+    # every other test in this file mocks it out, which proves
+    # `respond_to_swap_offer` *calls* the helper but not that the helper's
+    # own cancelled/finalized rejection is what still runs underneath.
+    # `require_mutable`'s checks execute before any further DB access
+    # (`scheduling_service.py`'s `_validate_assignment_candidate`), so no
+    # further query stubbing is needed to reach them.
+
+    async def test_a_cancelled_shift_is_rejected_at_acceptance(self):
+        offer, shift = _offer(), _shift()
+        shift.status = ShiftStatus.CANCELLED
+        assignment = SimpleNamespace(
+            id="a1", user_id=str(OFFERER), position="firefighter", is_training=False
+        )
+        service = SchedulingService(_Session(offer, shift, assignment))
+        service._notify_offer_answered = AsyncMock()
+
+        result, error = await service.respond_to_swap_offer(
+            "sw1", ORG, TARGET, accept=True
+        )
+
+        assert result is None
+        assert error == "Shift was cancelled"
+        assert assignment.user_id == str(OFFERER)
+        assert offer.status == SwapRequestStatus.PENDING
+
+    async def test_a_finalized_shift_is_rejected_at_acceptance(self):
+        offer, shift = _offer(), _shift()
+        shift.is_finalized = True
+        assignment = SimpleNamespace(
+            id="a1", user_id=str(OFFERER), position="firefighter", is_training=False
+        )
+        service = SchedulingService(_Session(offer, shift, assignment))
+        service._notify_offer_answered = AsyncMock()
+
+        result, error = await service.respond_to_swap_offer(
+            "sw1", ORG, TARGET, accept=True
+        )
+
+        assert result is None
+        assert error == "Shift was finalized"
+        assert assignment.user_id == str(OFFERER)
+        assert offer.status == SwapRequestStatus.PENDING
