@@ -887,6 +887,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
   // ---------------------------------------------------------------------------
 
   const pendingCompartmentOrderRef = useRef<CompartmentFormState[] | null>(null);
+  const compartmentOrderVersionRef = useRef(0);
 
   const moveCompartment = (idx: number, direction: 'up' | 'down') => {
     const id = compartments[idx]?.id;
@@ -895,6 +896,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     if (!id) return;
     setCompartments((prev) => {
       pendingCompartmentOrderRef.current = prev;
+      compartmentOrderVersionRef.current += 1;
       return moveCompartmentInTree(prev, id, direction);
     });
   };
@@ -905,11 +907,12 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
   useEffect(() => {
     if (!pendingCompartmentOrderRef.current || !isEditing || !templateId) return;
     const previous = pendingCompartmentOrderRef.current;
+    const requestVersion = compartmentOrderVersionRef.current;
     pendingCompartmentOrderRef.current = null;
     const savedIds = orderedCompartmentIds(compartments);
     if (savedIds.length > 0) {
       void schedulingService.reorderCompartments(templateId, savedIds).catch(() => {
-        setCompartments(previous);
+        if (compartmentOrderVersionRef.current === requestVersion) setCompartments(previous);
         toast.error('Failed to save compartment order');
       });
     }
@@ -952,6 +955,8 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     return selectedItems[key]?.size ?? 0;
   };
 
+  const bulkDeleteIdempotencyKeys = useRef<Record<string, { key: string; payload: string }>>({});
+
   const deleteSelectedItems = async (compartmentIdx: number) => {
     const comp = compartments[compartmentIdx];
     if (!comp) return;
@@ -970,26 +975,33 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     )
       return;
 
-    const toDelete = [...selected].sort((a, b) => b - a);
-    const deletePromises: Promise<void>[] = [];
-    for (const itemIdx of toDelete) {
-      const item = comp.items[itemIdx];
-      if (item?.id) {
-        deletePromises.push(schedulingService.deleteCheckItem(item.id));
-      }
-    }
-    try {
-      await Promise.all(deletePromises);
-    } catch (err: unknown) {
-      toast.error(getErrorMessage(err, 'Failed to delete selected items'));
+    const itemIds = [...selected].map((itemIdx) => comp.items[itemIdx]?.id).filter((id): id is string => Boolean(id));
+    if (!comp.id || itemIds.length !== count) {
+      toast.error('Selected items must be saved before they can be deleted');
       return;
     }
 
-    const remaining = comp.items.filter((_, i) => !selected.has(i));
-    const hasUnsavedSelection = [...selected].some((itemIdx) => !comp.items[itemIdx]?.id);
-    updateCompartmentField(compartmentIdx, { items: remaining }, hasUnsavedSelection);
-    setSelectedItems((prev) => ({ ...prev, [key]: new Set<number>() }));
-    toast.success(`Deleted ${count} item${count !== 1 ? 's' : ''}`);
+    try {
+      const payload = JSON.stringify(itemIds);
+      const previousRequest = bulkDeleteIdempotencyKeys.current[key];
+      const idempotencyKey = previousRequest?.payload === payload ? previousRequest.key : crypto.randomUUID();
+      bulkDeleteIdempotencyKeys.current[key] = { key: idempotencyKey, payload };
+      const result = await schedulingService.deleteCheckItemsBulk(comp.id, itemIds, idempotencyKey);
+      const deletedIds = new Set(result.deletedItemIds);
+      updateCompartmentField(
+        compartmentIdx,
+        {
+          items: comp.items.filter((item) => !item.id || !deletedIds.has(item.id)),
+        },
+        false
+      );
+      setSelectedItems((prev) => ({ ...prev, [key]: new Set<number>() }));
+      delete bulkDeleteIdempotencyKeys.current[key];
+      const deletedCount = deletedIds.size;
+      toast.success(`Deleted ${deletedCount} item${deletedCount !== 1 ? 's' : ''}`);
+    } catch (err) {
+      toast.error(getErrorMessage(err, `Could not delete ${count} item${count !== 1 ? 's' : ''}`));
+    }
   };
 
   // ---------------------------------------------------------------------------
@@ -1001,17 +1013,19 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
   const [bulkPasteValues, setBulkPasteValues] = useState<Record<string, string>>({});
   const [showEquipmentPresets, setShowEquipmentPresets] = useState<Record<string, boolean>>({});
   const [bulkItemPending, setBulkItemPending] = useState<Record<string, boolean>>({});
+  const [quickItemPending, setQuickItemPending] = useState<Record<string, boolean>>({});
   const quickAddPending = useRef(new Set<string>());
   const bulkIdempotencyKeys = useRef<Record<string, { key: string; payload: string }>>({});
 
   const handleQuickAdd = async (compartmentIdx: number, payload: CatalogAddPayload) => {
     const comp = compartments[compartmentIdx];
-    if (!comp) return;
+    if (!comp) return false;
     const key = getCompKey(compartmentIdx);
     const name = payload.name.trim();
-    if (!name) return;
-    if (quickAddPending.current.has(key)) return;
+    if (!name) return false;
+    if (quickAddPending.current.has(key)) return false;
     quickAddPending.current.add(key);
+    setQuickItemPending((prev) => ({ ...prev, [key]: true }));
 
     try {
       if (comp.id) {
@@ -1047,10 +1061,13 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
         });
       }
       setQuickAddValues((prev) => ({ ...prev, [key]: '' }));
+      return true;
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to add item'));
+      return false;
     } finally {
       quickAddPending.current.delete(key);
+      setQuickItemPending((prev) => ({ ...prev, [key]: false }));
     }
   };
 
@@ -2133,6 +2150,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     // its subtree because the returned array is canonical depth-first order.
     setCompartments((prev) => {
       pendingCompartmentOrderRef.current = prev;
+      compartmentOrderVersionRef.current += 1;
       return reorderCompartment(prev, activeId, overId);
     });
   };
@@ -3428,6 +3446,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                         onChange={(v) => setQuickAddValues((prev) => ({ ...prev, [compKey]: v }))}
                         onAdd={(payload) => handleQuickAdd(idx, payload)}
                         canCreateInventory={canManageInventory}
+                        disabled={quickItemPending[compKey] ?? false}
                       />
                     )}
                   </div>

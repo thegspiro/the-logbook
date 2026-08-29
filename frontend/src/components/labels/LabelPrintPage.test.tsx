@@ -137,7 +137,7 @@ describe('LabelPrintPage', () => {
     it('offers no printer button when the organization has none', async () => {
       renderPage('?ids=a1');
       await screen.findAllByText('Engine 5');
-      expect(screen.queryByRole('button', { name: /Printer$/ })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /Print to/ })).not.toBeInTheDocument();
     });
 
     it('sends the labels to the default printer', async () => {
@@ -147,7 +147,7 @@ describe('LabelPrintPage', () => {
       renderPage('?ids=a1');
       await screen.findAllByText('Engine 5');
 
-      const button = await screen.findByRole('button', { name: /Printer$/ });
+      const button = await screen.findByRole('button', { name: 'Print to Quartermaster Zebra' });
       await user.click(button);
 
       await waitFor(() => expect(mockPrint).toHaveBeenCalledTimes(1));
@@ -168,7 +168,7 @@ describe('LabelPrintPage', () => {
       renderPage('?ids=a1');
       await screen.findAllByText('Engine 5');
 
-      const button = await screen.findByRole('button', { name: /Printer$/ });
+      const button = await screen.findByRole('button', { name: 'Print to Quartermaster Zebra' });
       await waitFor(() => expect(button).toBeDisabled());
     });
 
@@ -189,10 +189,42 @@ describe('LabelPrintPage', () => {
       renderPage('?ids=a1');
       await screen.findAllByText('Engine 5');
 
-      await user.click(await screen.findByRole('button', { name: /Printer$/ }));
+      await user.click(await screen.findByRole('button', { name: 'Print to Quartermaster Zebra' }));
 
       await waitFor(() => expect(vi.mocked(toast.error)).toHaveBeenCalled());
       expect(vi.mocked(toast.error).mock.calls[0]?.[0]).toContain('Out of labels');
+      expect(screen.getByText('Printer fault: Out of labels')).toBeInTheDocument();
+    });
+
+    it('restores and persists the role’s printer destination', async () => {
+      const stationTwo = { ...zebra, id: 'p2', name: 'Station 2 Zebra', location: 'Station 2', is_default: false };
+      mockListPrinters.mockResolvedValue([zebra, stationTwo]);
+      mockGetPreset.mockResolvedValue({ preset: 'zebra_2x1', printer_id: 'p2' });
+      const user = userEvent.setup();
+      renderPage('?ids=a1');
+
+      await user.click(await screen.findByRole('button', { name: 'Print to Station 2 Zebra' }));
+      await waitFor(() => expect(mockPrint).toHaveBeenCalledTimes(1));
+      expect(mockPrint.mock.calls[0]?.[2]).toMatchObject({ printer_id: 'p2' });
+
+      await user.click(screen.getByRole('button', { name: /Settings/ }));
+      await user.selectOptions(screen.getByLabelText('Label Printer'), 'p1');
+      await waitFor(() =>
+        expect(mockSetPreset).toHaveBeenCalledWith('apparatus', expect.objectContaining({ printer_id: 'p1' }))
+      );
+    });
+
+    it('blocks direct printing until selected stock matches the printer', async () => {
+      mockListPrinters.mockResolvedValue([zebra]);
+      mockGetPreset.mockResolvedValue({ preset: 'rollo_4x6' });
+      const user = userEvent.setup();
+      renderPage('?ids=a1');
+
+      const button = await screen.findByRole('button', { name: 'Print to Quartermaster Zebra' });
+      expect(button).toBeDisabled();
+      await user.click(screen.getByRole('button', { name: /Settings/ }));
+      await user.click(screen.getByRole('button', { name: 'Match printer' }));
+      await waitFor(() => expect(button).toBeEnabled());
     });
 
     it('keeps working when the printer list cannot be loaded', async () => {

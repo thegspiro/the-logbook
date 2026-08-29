@@ -13,6 +13,7 @@ const { service, unsavedStates } = vi.hoisted(() => ({
     getCsvSampleUrl: vi.fn(),
     addCheckItem: vi.fn(),
     addCheckItemsBulk: vi.fn(),
+    deleteCheckItemsBulk: vi.fn(),
     deleteCheckItem: vi.fn(),
     reorderItems: vi.fn(),
     reorderCompartments: vi.fn(),
@@ -33,17 +34,24 @@ vi.mock('@/modules/scheduling/components/CatalogQuickAdd', () => ({
     value,
     onChange,
     onAdd,
+    disabled,
   }: {
     value: string;
     onChange: (value: string) => void;
-    onAdd: (value: { name: string }) => Promise<void>;
+    onAdd: (value: { name: string }) => Promise<boolean>;
+    disabled: boolean;
   }) => (
     <input
       aria-label="Quick add item"
       value={value}
+      disabled={disabled}
       onChange={(event) => onChange(event.target.value)}
       onKeyDown={(event) => {
-        if (event.key === 'Enter') void onAdd({ name: value });
+        if (event.key === 'Enter') {
+          void onAdd({ name: value }).then((added) => {
+            if (added) onChange('');
+          });
+        }
       }}
     />
   ),
@@ -123,6 +131,7 @@ beforeEach(() => {
   service.getCsvSampleUrl.mockReturnValue('/sample.csv');
   service.getEquipmentCheckTemplate.mockResolvedValue(structuredClone(template));
   service.deleteCheckItem.mockResolvedValue(undefined);
+  service.deleteCheckItemsBulk.mockResolvedValue({ deletedItemIds: ['radio', 'torch'], replayed: false });
   service.reorderItems.mockResolvedValue(undefined);
   service.reorderCompartments.mockResolvedValue(undefined);
   service.updateCheckItem.mockResolvedValue(item('radio', 'Radio', 0));
@@ -198,9 +207,8 @@ describe('equipment-check item mutations', () => {
     await userEvent.click(await screen.findByTitle('Select all items'));
     await userEvent.click(screen.getByRole('button', { name: 'Delete selected items' }));
     await confirm('Delete 2');
-    await waitFor(() => expect(service.deleteCheckItem).toHaveBeenCalledTimes(2));
-    expect(service.deleteCheckItem).toHaveBeenCalledWith('radio');
-    expect(service.deleteCheckItem).toHaveBeenCalledWith('torch');
+    await waitFor(() => expect(service.deleteCheckItemsBulk).toHaveBeenCalledTimes(1));
+    expect(service.deleteCheckItemsBulk).toHaveBeenCalledWith('cab', ['radio', 'torch'], expect.any(String));
   }
 
   it('removes every row after successful bulk deletion', async () => {
@@ -210,7 +218,7 @@ describe('equipment-check item mutations', () => {
   });
 
   it('retains every row after failed bulk deletion', async () => {
-    service.deleteCheckItem.mockRejectedValueOnce(new Error('denied'));
+    service.deleteCheckItemsBulk.mockRejectedValueOnce(new Error('denied'));
     await deleteAllItems();
     expect(screen.getByLabelText('Actions for Radio')).toBeVisible();
     expect(screen.getByLabelText('Actions for Torch')).toBeVisible();
