@@ -1,5 +1,5 @@
 /* eslint-disable testing-library/no-node-access, @typescript-eslint/no-unsafe-return */
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -7,11 +7,17 @@ import { ConfirmProvider } from '../../contexts/ConfirmContext';
 import EquipmentCheckTemplateBuilder from './EquipmentCheckTemplateBuilder';
 
 const getTemplate = vi.fn();
+const createTemplate = vi.fn();
+const updateTemplate = vi.fn();
 
 vi.mock('@/modules/scheduling', () => ({
   schedulingService: {
     getApparatusOptions: vi.fn().mockResolvedValue({ options: [] }),
     getEquipmentCheckTemplate: (...args: unknown[]) => getTemplate(...args),
+    createEquipmentCheckTemplate: (...args: unknown[]) => createTemplate(...args),
+    updateEquipmentCheckTemplate: (...args: unknown[]) => updateTemplate(...args),
+    updateCompartment: vi.fn().mockResolvedValue({}),
+    updateCheckItem: vi.fn().mockResolvedValue({}),
     getCsvSampleUrl: vi.fn().mockReturnValue('/sample.csv'),
   },
 }));
@@ -82,8 +88,53 @@ function renderBuilder() {
   );
 }
 
+function renderNewBuilder() {
+  return render(
+    <MemoryRouter initialEntries={['/templates/new']}>
+      <ConfirmProvider>
+        <Routes>
+          <Route path="/templates/new" element={<EquipmentCheckTemplateBuilder />} />
+        </Routes>
+      </ConfirmProvider>
+    </MemoryRouter>
+  );
+}
+
 describe('EquipmentCheckTemplateBuilder responsive actions', () => {
-  beforeEach(() => getTemplate.mockResolvedValue(template));
+  beforeEach(() => {
+    getTemplate.mockResolvedValue(template);
+    createTemplate.mockResolvedValue({ ...template, id: 'draft-1', isActive: false });
+    updateTemplate.mockResolvedValue(template);
+  });
+
+  it('saves an incomplete new template as an inactive draft', async () => {
+    const user = userEvent.setup();
+    renderNewBuilder();
+    await user.click(screen.getByRole('button', { name: 'Save draft' }));
+    expect(createTemplate).toHaveBeenCalledWith(
+      expect.objectContaining({ name: '', is_active: false, compartments: [] })
+    );
+  });
+
+  it('does not allow an invalid template to be published', () => {
+    renderNewBuilder();
+    expect(screen.getByRole('button', { name: 'Publish' })).toBeDisabled();
+    expect(screen.getByLabelText('Template readiness')).toHaveTextContent('! Setup');
+  });
+
+  it('publishes after blocking issues are fixed', async () => {
+    const user = userEvent.setup();
+    getTemplate.mockResolvedValue({
+      ...template,
+      isActive: false,
+      compartments: template.compartments.filter((compartment) => compartment.id !== 'bag'),
+    });
+    renderBuilder();
+    const publish = await screen.findByRole('button', { name: 'Publish' });
+    await waitFor(() => expect(publish).toBeEnabled());
+    await user.click(publish);
+    await waitFor(() => expect(updateTemplate).toHaveBeenLastCalledWith('template-1', { is_active: true }));
+  });
 
   it('exposes every item action from the phone overflow without drag and drop', async () => {
     const user = userEvent.setup();

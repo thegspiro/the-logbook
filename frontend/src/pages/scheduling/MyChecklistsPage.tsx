@@ -38,6 +38,10 @@ const EquipmentCheckForm = lazyWithRetry(() => import('./EquipmentCheckForm'));
 
 type ActiveChecklist = ActiveChecklistRecord;
 
+export function crewVisibleTemplates(templates: EquipmentCheckTemplate[]): EquipmentCheckTemplate[] {
+  return templates.filter((template) => template.isActive);
+}
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -270,7 +274,7 @@ export const MyChecklistsPage: React.FC = () => {
     setTemplatesLoading(true);
     try {
       const templates = await schedulingService.getEquipmentCheckTemplates();
-      setAvailableTemplates(templates.filter((t) => t.isActive));
+      setAvailableTemplates(crewVisibleTemplates(templates));
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to load templates'));
     } finally {
