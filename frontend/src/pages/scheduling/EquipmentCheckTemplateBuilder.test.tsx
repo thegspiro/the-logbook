@@ -4,7 +4,6 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ConfirmProvider } from '../../contexts/ConfirmContext';
-import EquipmentCheckTemplateBuilder from './EquipmentCheckTemplateBuilder';
 
 const {
   getTemplate,
@@ -14,6 +13,8 @@ const {
   cloneCompartment,
   addCheckItemsBulk,
   deleteCheckItemsBulk,
+  deleteCheckItem,
+  updateEquipmentCheckTemplate,
   toastSuccess,
   toastError,
 } = vi.hoisted(() => ({
@@ -24,6 +25,8 @@ const {
   cloneCompartment: vi.fn(),
   addCheckItemsBulk: vi.fn(),
   deleteCheckItemsBulk: vi.fn(),
+  deleteCheckItem: vi.fn(),
+  updateEquipmentCheckTemplate: vi.fn(),
   toastSuccess: vi.fn(),
   toastError: vi.fn(),
 }));
@@ -41,8 +44,13 @@ vi.mock('@/modules/scheduling', () => ({
     addCheckItemsBulk: (...args: unknown[]) => addCheckItemsBulk(...args),
     getCsvSampleUrl: vi.fn().mockReturnValue('/sample.csv'),
     deleteCheckItemsBulk: (...args: unknown[]) => deleteCheckItemsBulk(...args),
+    deleteCheckItem: (...args: unknown[]) => deleteCheckItem(...args),
+    updateEquipmentCheckTemplate: (...args: unknown[]) => updateEquipmentCheckTemplate(...args),
   },
 }));
+
+// Repository convention: service dependencies above are mocked before this import.
+import EquipmentCheckTemplateBuilder from './EquipmentCheckTemplateBuilder';
 
 vi.mock('@/stores/authStore', () => ({
   useAuthStore: (selector?: (state: { checkPermission: () => boolean }) => unknown) => {
@@ -132,6 +140,17 @@ function renderNewBuilder() {
       </ConfirmProvider>
     </MemoryRouter>
   );
+}
+
+async function confirm(label: string | RegExp) {
+  const dialog = await screen.findByRole('dialog');
+  await userEvent.click(within(dialog).getByRole('button', { name: label }));
+}
+
+async function saveBuilder() {
+  await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+  const warning = await screen.findByRole('heading', { name: 'Save with warnings?' }).catch(() => null);
+  if (warning) await confirm('Save anyway');
 }
 
 describe('EquipmentCheckTemplateBuilder responsive actions', () => {
@@ -464,6 +483,71 @@ describe('EquipmentCheckTemplateBuilder bulk deletion', () => {
     expect(deleteCheckItemsBulk.mock.calls[0]?.[2]).toBe(deleteCheckItemsBulk.mock.calls[1]?.[2]);
     await waitFor(() => expect(screen.queryByText('Radio')).not.toBeInTheDocument());
     expect(toastSuccess).toHaveBeenCalledWith('Deleted 2 items');
+  });
+});
+
+describe('EquipmentCheckTemplateBuilder remaining mutation regressions', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    getTemplate.mockResolvedValue(structuredClone(template));
+    deleteCheckItem.mockResolvedValue(undefined);
+    updateEquipmentCheckTemplate.mockImplementation((_id: string, payload: { is_active: boolean }) =>
+      Promise.resolve({ ...structuredClone(template), isActive: payload.is_active })
+    );
+  });
+
+  it('bulk-pastes atomically and reuses the idempotency key after a failed attempt', async () => {
+    const user = userEvent.setup();
+    addCheckItemsBulk.mockRejectedValueOnce(new Error('timeout')).mockResolvedValueOnce({
+      items: [
+        { ...template.compartments[0]?.items[0], id: 'mask', name: 'Mask', sortOrder: 2 },
+        { ...template.compartments[0]?.items[0], id: 'hood', name: 'Hood', sortOrder: 3 },
+      ],
+      createdCount: 2,
+    });
+    renderBuilder();
+    await user.click((await screen.findAllByTitle('Switch to bulk paste (one item per line)'))[0] as HTMLElement);
+    const paste = screen.getByPlaceholderText(/Paste item names here/i);
+    await user.type(paste, 'Mask\nHood');
+    await user.click(screen.getByRole('button', { name: 'Add All' }));
+    await waitFor(() => expect(addCheckItemsBulk).toHaveBeenCalledTimes(1));
+    expect(paste).toHaveValue('Mask\nHood');
+    await user.click(screen.getByRole('button', { name: 'Add All' }));
+    expect(await screen.findByLabelText('Actions for Mask')).toBeVisible();
+    expect(addCheckItemsBulk.mock.calls[0]?.[2]).toBe(addCheckItemsBulk.mock.calls[1]?.[2]);
+  });
+
+  it('retains an individually deleted row when persistence fails', async () => {
+    deleteCheckItem.mockRejectedValueOnce(new Error('denied'));
+    renderBuilder();
+    const actions = await screen.findByLabelText('Actions for Radio');
+    await userEvent.click(actions);
+    await userEvent.click(within(actions.closest('details') as HTMLElement).getByRole('button', { name: 'Delete' }));
+    await confirm('Delete');
+    await waitFor(() => expect(deleteCheckItem).toHaveBeenCalledWith('radio'));
+    expect(screen.getByLabelText('Actions for Radio')).toBeVisible();
+  });
+
+  it('sends draft and publish state explicitly', async () => {
+    const user = userEvent.setup();
+    renderBuilder();
+    const active = await screen.findByRole('checkbox', { name: 'Active' });
+    await user.click(active);
+    await saveBuilder();
+    await waitFor(() =>
+      expect(updateEquipmentCheckTemplate).toHaveBeenLastCalledWith(
+        'template-1',
+        expect.objectContaining({ is_active: false })
+      )
+    );
+    await user.click(screen.getByRole('checkbox', { name: 'Active' }));
+    await saveBuilder();
+    await waitFor(() =>
+      expect(updateEquipmentCheckTemplate).toHaveBeenLastCalledWith(
+        'template-1',
+        expect.objectContaining({ is_active: true })
+      )
+    );
   });
 });
 
