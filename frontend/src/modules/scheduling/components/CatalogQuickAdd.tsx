@@ -202,6 +202,7 @@ const CatalogQuickAdd: React.FC<CatalogQuickAddProps> = ({
       toast.success(`Added “${created.name}” to inventory`);
     } catch (err: unknown) {
       submittingRef.current = false;
+      onChange(name);
       toast.error(getErrorMessage(err, 'Failed to create the inventory item'));
     } finally {
       setCreating(false);

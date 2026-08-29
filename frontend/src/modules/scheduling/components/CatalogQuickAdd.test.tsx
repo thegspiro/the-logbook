@@ -247,6 +247,19 @@ describe('CatalogQuickAdd', () => {
     });
   });
 
+  it('restores the typed name when inventory creation fails', async () => {
+    const user = userEvent.setup();
+    mockGetItems.mockResolvedValue({ items: [], total: 0, skip: 0, limit: 6 });
+    mockCreateItem.mockRejectedValue(new Error('network'));
+    renderWith();
+
+    await typeName(user, 'Burn Sheet');
+    await user.click(await screen.findByText(/Create .Burn Sheet. in inventory/));
+
+    await waitFor(() => expect(screen.getByRole('combobox')).toHaveValue('Burn Sheet'));
+    expect(onAdd).not.toHaveBeenCalled();
+  });
+
   it('hides the create option from someone who cannot write to the catalog', async () => {
     const user = userEvent.setup();
     mockGetItems.mockResolvedValue({ items: [], total: 0, skip: 0, limit: 6 });

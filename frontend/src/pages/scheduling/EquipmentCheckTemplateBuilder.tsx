@@ -1013,7 +1013,17 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     markDirty();
   };
 
-  const runQuickAdd = (job: QuickAddJob) => {
+  const appendItemsToCompartment = (compartmentKey: string, items: ItemFormState[]) => {
+    setCompartments((previous) =>
+      previous.map((compartment, index) =>
+        (compartment.id ?? `comp-${index}`) === compartmentKey
+          ? { ...compartment, items: [...compartment.items, ...items] }
+          : compartment
+      )
+    );
+  };
+
+  const runQuickAdd = (job: QuickAddJob, isRetry = false) => {
     quickAddJobs.current[job.clientKey] = job;
     replaceQuickAddItem(job.compartmentKey, job.clientKey, {
       ...emptyItem(),
@@ -1030,7 +1040,21 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
         const result = await schedulingService.addCheckItemsBulk(job.compartmentId, [job.payload], job.idempotencyKey);
         const created = result.items[0];
         if (!created) throw new Error('The server did not return the saved item');
-        replaceQuickAddItem(job.compartmentKey, job.clientKey, itemFormFromResponse(created));
+        const savedItem = itemFormFromResponse(created);
+        if (isRetry && !result.replayed) {
+          setCompartments((previous) =>
+            previous.map((compartment, index) =>
+              (compartment.id ?? `comp-${index}`) === job.compartmentKey
+                ? {
+                    ...compartment,
+                    items: [...compartment.items.filter((item) => item.clientKey !== job.clientKey), savedItem],
+                  }
+                : compartment
+            )
+          );
+        } else {
+          replaceQuickAddItem(job.compartmentKey, job.clientKey, savedItem);
+        }
         delete quickAddJobs.current[job.clientKey];
       } catch (err: unknown) {
         replaceQuickAddItem(job.compartmentKey, job.clientKey, {
@@ -1127,7 +1151,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
         const result = await schedulingService.addCheckItemsBulk(comp.id, payload, idempotencyKey);
         delete bulkIdempotencyKeys.current[requestKey];
         const newItems = result.items.map(itemFormFromResponse);
-        updateCompartmentField(compartmentIdx, { items: [...comp.items, ...newItems] });
+        appendItemsToCompartment(key, newItems);
         toast.success(`Added ${result.createdCount} item${result.createdCount !== 1 ? 's' : ''}`);
       } catch (err: unknown) {
         toast.error(getErrorMessage(err, 'Failed to add items'));
@@ -1176,7 +1200,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
         const result = await schedulingService.addCheckItemsBulk(comp.id, items, idempotencyKey);
         delete bulkIdempotencyKeys.current[requestKey];
         const newItems = result.items.map(itemFormFromResponse);
-        updateCompartmentField(compartmentIdx, { items: [...comp.items, ...newItems] });
+        appendItemsToCompartment(key, newItems);
         toast.success(`Added ${preset.label} (${result.createdCount} items)`);
       } catch (err: unknown) {
         toast.error(getErrorMessage(err, 'Failed to add preset items'));
@@ -1378,6 +1402,10 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
   // ---------------------------------------------------------------------------
 
   const handleSave = async () => {
+    if (compartments.some((compartment) => compartment.items.some((item) => item.saveStatus))) {
+      toast.error('Retry or remove unsaved items before saving the template');
+      return;
+    }
     if (!form.name.trim()) {
       toast.error('Template name is required');
       return;
@@ -2248,17 +2276,17 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             <div className="flex items-center gap-1">
               <button
                 type="button"
-                className="rounded px-2 py-1 text-xs font-medium text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-900/20"
+                className="mobile-touch-target rounded px-2 py-1 text-xs font-medium text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-900/20"
                 onClick={() => {
                   const job = quickAddJobs.current[item.clientKey ?? ''];
-                  if (job) runQuickAdd(job);
+                  if (job) runQuickAdd(job, true);
                 }}
               >
                 Retry
               </button>
               <button
                 type="button"
-                className="rounded px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20"
+                className="mobile-touch-target rounded px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20"
                 onClick={() => {
                   delete quickAddJobs.current[item.clientKey ?? ''];
                   replaceQuickAddItem(compKey, item.clientKey ?? '', null);
@@ -3788,7 +3816,12 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           <button
             type="button"
             onClick={() => void handleSave()}
-            disabled={saving}
+            disabled={saving || compartments.some((compartment) => compartment.items.some((item) => item.saveStatus))}
+            title={
+              compartments.some((compartment) => compartment.items.some((item) => item.saveStatus))
+                ? 'Retry or remove unsaved items before saving'
+                : undefined
+            }
             className="flex min-h-11 items-center gap-2 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:opacity-50 sm:min-h-10"
           >
             {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}

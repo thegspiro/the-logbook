@@ -150,8 +150,13 @@ describe('EquipmentCheckTemplateBuilder quick add queue', () => {
     name,
   });
 
+  const submitName = (input: HTMLElement, name: string) => {
+    input.focus();
+    fireEvent.change(input, { target: { value: name } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+  };
+
   it('shows several rapid additions immediately, keeps focus, and serializes a slow compartment', async () => {
-    const user = userEvent.setup();
     let resolveFirst!: (value: unknown) => void;
     addCheckItemsBulk
       .mockImplementationOnce(() => new Promise((resolve) => (resolveFirst = resolve)))
@@ -159,13 +164,13 @@ describe('EquipmentCheckTemplateBuilder quick add queue', () => {
     renderBuilder();
     const input = await screen.findAllByPlaceholderText(/search inventory/i).then((inputs) => inputs[0] as HTMLElement);
 
-    await user.type(input, 'Flashlight{Enter}');
-    await user.type(input, 'Spare batteries{Enter}');
+    submitName(input, 'Flashlight');
+    submitName(input, 'Spare batteries');
 
     expect(screen.getByLabelText('Flashlight Saving')).toBeVisible();
     expect(screen.getByLabelText('Spare batteries Saving')).toBeVisible();
     expect(input).toHaveFocus();
-    expect(addCheckItemsBulk).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(addCheckItemsBulk).toHaveBeenCalledTimes(1));
 
     resolveFirst({ items: [savedItem('Flashlight', 'flashlight')], createdCount: 1 });
     await waitFor(() => expect(screen.queryByLabelText('Flashlight Saving')).not.toBeInTheDocument());
@@ -183,26 +188,56 @@ describe('EquipmentCheckTemplateBuilder quick add queue', () => {
       .mockResolvedValueOnce({ items: [savedItem('Safety vest', 'vest')], createdCount: 0, replayed: true });
     renderBuilder();
     const input = (await screen.findAllByPlaceholderText(/search inventory/i))[0] as HTMLElement;
-    await user.type(input, 'Safety vest{Enter}');
-    await user.type(input, 'Gloves{Enter}');
+    submitName(input, 'Safety vest');
+    submitName(input, 'Gloves');
 
     const failed = await screen.findByLabelText('Safety vest Not saved');
     await waitFor(() => expect(screen.queryByLabelText('Gloves Saving')).not.toBeInTheDocument());
     expect(screen.getByText('Gloves')).toBeVisible();
     const firstKey = String(addCheckItemsBulk.mock.calls[0]?.[2]);
     await user.click(within(failed).getByRole('button', { name: 'Retry' }));
-    await waitFor(() => expect(screen.queryByLabelText('Safety vest Saving')).not.toBeInTheDocument());
+    await waitFor(() => {
+      expect(addCheckItemsBulk).toHaveBeenCalledTimes(3);
+      expect(screen.queryByLabelText('Safety vest Not saved')).not.toBeInTheDocument();
+    });
     expect(screen.getByText('Safety vest')).toBeVisible();
     expect(addCheckItemsBulk.mock.calls[2]?.[2]).toBe(firstKey);
   });
 
   it('does not submit the same value again when Enter repeats', async () => {
-    const user = userEvent.setup();
     addCheckItemsBulk.mockResolvedValue({ items: [savedItem('Flashlight', 'flashlight')], createdCount: 1 });
     renderBuilder();
     const input = (await screen.findAllByPlaceholderText(/search inventory/i))[0] as HTMLElement;
-    await user.type(input, 'Flashlight{Enter}{Enter}');
-    expect(addCheckItemsBulk).toHaveBeenCalledTimes(1);
+    submitName(input, 'Flashlight');
+    fireEvent.keyDown(input, { key: 'Enter' });
+    await waitFor(() => expect(addCheckItemsBulk).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(screen.queryByLabelText('Flashlight Saving')).not.toBeInTheDocument());
+  });
+
+  it('moves a newly created retry behind siblings to match persisted order', async () => {
+    const user = userEvent.setup();
+    addCheckItemsBulk
+      .mockRejectedValueOnce(new Error('not created'))
+      .mockResolvedValueOnce({ items: [savedItem('Gloves', 'gloves')], createdCount: 1, replayed: false })
+      .mockResolvedValueOnce({ items: [savedItem('Safety vest', 'vest')], createdCount: 1, replayed: false });
+    renderBuilder();
+    const input = (await screen.findAllByPlaceholderText(/search inventory/i))[0] as HTMLElement;
+    submitName(input, 'Safety vest');
+    submitName(input, 'Gloves');
+
+    const failed = await screen.findByLabelText('Safety vest Not saved');
+    expect(within(failed).getByRole('button', { name: 'Retry' })).toHaveClass('mobile-touch-target');
+    expect(within(failed).getByRole('button', { name: 'Remove' })).toHaveClass('mobile-touch-target');
+    expect(screen.getByRole('button', { name: /^Save$/ })).toBeDisabled();
+    await user.click(within(failed).getByRole('button', { name: 'Retry' }));
+    await waitFor(() => {
+      expect(addCheckItemsBulk).toHaveBeenCalledTimes(3);
+      expect(screen.queryByLabelText('Safety vest Not saved')).not.toBeInTheDocument();
+    });
+
+    const gloves = screen.getByText('Gloves');
+    const vest = screen.getByText('Safety vest');
+    expect(gloves.compareDocumentPosition(vest) & Node.DOCUMENT_POSITION_FOLLOWING).not.toBe(0);
   });
 });
 
