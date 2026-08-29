@@ -16,7 +16,35 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-None.
+Feature 17 (Training core), pass 2 — branch `claude/security-review-training-core-pass2`, PR pending.
+
+---
+
+### 2026-08-29 — Feature 17 (Training core), pass 2 — 1 fix (TR2-1 LOW/MED), 1 flagged (TR2-2 LOW)
+
+Re-verified all three pass-1 fixes (TR-11/TR-12/TR-13) and the route-auth
+coverage / baseline-grant / KNOWN_LIMITATIONS claims still hold — the six
+scoped files were byte-for-byte unchanged since PR #1851's merge except one
+unrelated 7-line spillover fix from the feature-18 pass. Independently
+re-enumerated all 91 routes across the three endpoint files (AST walk): no
+route without an auth dependency.
+
+New this pass: **TR2-1** (LOW/MED, data exposure) — `GET
+/training/competency-matrix` and `GET /training/dashboard-summary` both
+return per-member names alongside compliance/competency status but were
+missing from the frontend's `UNCACHEABLE_PREFIXES` cache-exclusion list,
+unlike the identically-shaped `/training/compliance-matrix`. Fixed, with a
+guard test. **TR2-2** (LOW, abuse resistance) — `GET /training/records` has
+no `skip`/`limit`, unlike the rest of the codebase's per-record list
+endpoints; flagged (needs a paired frontend pagination UI, not a
+backend-only drive-by) and mirrored into `docs/KNOWN_LIMITATIONS.md`.
+
+Completion gate: flake8/black/isort clean (no Python touched);
+`validate_migrations.py --strict` 389 revisions, single head; `pytest -k
+training` 821 passed; full suite 9200 passed, 22 skipped (pre-existing);
+`tsc --noEmit` 0 errors; `eslint .` 0 errors (10 pre-existing warnings, none
+in touched files); `vitest run apiCache.test.ts` 84 passed. Full write-up:
+`docs/security-review/TR-17-training-core.md` → **Pass 2**.
 
 ---
 
@@ -1811,7 +1839,7 @@ each row's prior PR is recorded in the Log, not repeated here.
 | 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | ✅     |
 | 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                | ✅     |
 | 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                       | ✅     |
-| 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`                                                                                   | ⬜     |
+| 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`                                                                                   | ⏳     |
 | 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ⬜     |
 | 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3723 L)                                                                                                          | ⬜     |
 | 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ⬜     |

@@ -2243,6 +2243,32 @@ rotation's process reserves for a flagged item rather than a drive-by
 fix inside an unrelated finding. (Security review TR-17 residual,
 `docs/security-review/TR-17-training-core.md`.)
 
+## Training — `GET /training/records` Has No Pagination (2026-08-29)
+
+Unlike the rest of the codebase's per-record list endpoints (e.g.
+`events.py`'s `list_events`, which takes `skip`/`limit` with a hard cap),
+`list_records` in `training.py` returns every matching `TrainingRecord` row
+with no `skip`/`limit`/page bound — an officer with `training.manage` can
+trigger a single unbounded read across the whole org's training-record
+history, which only grows over a department's lifetime.
+
+Not a tenant-isolation issue (the query is correctly org- and, for
+non-officers, self-scoped) and not currently exploitable beyond a large,
+slow response — but it is the "no `all()` over an org-wide table" abuse-
+resistance gap the review checklist calls out, and the module's own other
+list endpoints (courses/categories/requirements) are naturally small
+configuration tables where this doesn't apply, which is likely why it went
+unnoticed.
+
+Not fixed: `trainingServices.ts`'s `listRecords()` returns a bare array that
+callers (`MyTrainingPage`, admin record tables) consume as the complete
+set to build client-side stats and tables with no pagination UI. Adding a
+server-side cap would silently truncate a large org's data for those
+callers rather than degrade gracefully, so it needs a paired frontend
+change (a `Pagination` UI or a "load more" affordance) rather than a
+backend-only drive-by fix. (Security review TR-17 pass 2,
+`docs/security-review/TR-17-training-core.md`.)
+
 ## RPT2-29-2 — Saved Report Scheduling Is Stored and API-Writable, but Nothing Reads It (2026-08-27)
 
 `POST /reports/saved` and `PATCH /reports/saved/{id}` fully accept and

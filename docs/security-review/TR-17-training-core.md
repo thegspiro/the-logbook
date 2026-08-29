@@ -324,7 +324,7 @@ No schema changes this iteration. No `SET NULL` nullability issues found.
   `/expiring-certifications` defense-in-depth enrichment scoping).
 - `test_training_records_course_scoping.py` — 3 tests (TR-13).
 
-## Completion gate
+## Completion gate (pass 1)
 
 | Check                                                     | Result                                                           |
 | --------------------------------------------------------- | ---------------------------------------------------------------- |
@@ -335,3 +335,154 @@ No schema changes this iteration. No `SET NULL` nullability issues found.
 | `pytest tests/ -k "training"`                             | ✅ 792 passed, 1 skipped (pre-existing optional-dependency skip) |
 | `pytest tests/` (full backend suite)                      | ✅ 8663 passed, 22 skipped (pre-existing Docker/no-MySQL skips)  |
 | `tsc --noEmit` / `eslint .`                               | n/a — no frontend file changed this iteration                    |
+
+---
+
+## Pass 2 (2026-08-29)
+
+**Prefix:** `TR2` · **PR:** see `docs/security-review/PROGRESS.md` → Open PR
+
+**Scope check:** compared the current tree against `a9b232db` (the pass-1
+merge commit for PR #1851) across all six pass-1 files. Five are byte-for-byte
+unchanged; `training_program_service.py` gained exactly one unrelated
+7-line change — an org-scope fix to `bulk_enroll_members`'s batch `User`
+lookup for prerequisite-failure error strings, landed by the **feature 18**
+("training extended") pass as part of **TRX-1** (`docs/security-review/
+TRX-18-training-extended.md`), not by this feature. No file grew meaningfully
+in this feature's own scope, so this pass is re-verification plus a fresh
+sweep of checklist dimensions pass 1 covered more lightly (data exposure,
+abuse resistance), not a first-read of grown files.
+
+### Re-verification of pass-1 fixes and claims
+
+- **TR-11, TR-12, TR-13 — all three confirmed present and unchanged** in the
+  current code: `_resolve_or_create_requirement`'s `assert_all_in_org` call
+  (`training_program_service.py:5141`), the `organization_id` filters on both
+  `User` lookups in `training_service.py` (`get_all_requirements_progress`
+  line 951, `generate_training_report`'s tier-exemption block line 198), and
+  the `course_id` org-validation on all three write paths in `training.py`
+  (lines 599, 847, 2403 — comments mark the checks) all read exactly as pass 1
+  left them.
+- **Route auth coverage re-enumerated independently** (AST walk, not a
+  re-read of pass 1's prose): 36 routes in `training.py`, 46 in
+  `training_programs.py` (pass 1 didn't give an exact count for this file),
+  9 in `training_sessions.py` — 91 total, every one carrying `Depends(get_db)`
+  plus either `get_current_user` or `require_permission(...)`. No route
+  without an auth dependency. The five self-scoped PHI routes
+  (`/stats/user/{id}`, `/compliance-summary/{id}`, `/reports/user/{id}`,
+  `/requirements/progress/{id}`, `/category-hours/{id}`) all still call
+  `_require_self_or_training_officer` in the handler body (5 call sites
+  grepped, matching the 5 routes).
+- **Baseline-grant check (Pitfall #23):** `DEFAULT_POSITIONS["member"]`
+  carries `TRAINING_VIEW` only — `training.manage`/`training.view_all` are
+  not seeded to the baseline position. No broadly-seeded grant opens a write
+  route.
+- **KNOWN_LIMITATIONS.md mirrors re-checked:** both pass-1 flagged items
+  (bulk/historical-import enum validation gap; `enroll_member`'s
+  duplicate-active-enrollment race) are present and still accurately
+  describe the current code — neither has been fixed or has regressed
+  further.
+- **CSV surface re-checked:** `training.py`'s only `csv` usage is
+  `csv.DictReader` (import parsing, two sites) — no `csv.writer`/
+  `SafeCsvWriter` concern in this feature's scope; `export_program` emits
+  JSON, not CSV.
+- **`# noqa: E712`/`E711` sites re-examined, not a finding:** 12 sites across
+  `training.py`/`training_sessions.py` plus 2 in `training_program_service.py`
+  still carry these suppressions (the app-review pass-3 sweep only touched
+  _services_, not these). Checked `backend/.flake8`: `E712`/`E711` are
+  globally ignored project-wide ("required by SQLAlchemy filters"), so these
+  `# noqa` comments are inert, not a live suppression of a real flake8
+  finding — not the CLAUDE.md Pitfall #10 violation it first looked like.
+
+### Findings (pass 2)
+
+#### TR2-1 — LOW/MED (data exposure) — Two per-member training endpoints missing from `UNCACHEABLE_PREFIXES` — ✅ FIXED
+
+**What:** `GET /training/competency-matrix` and `GET /training/dashboard-summary`
+both return per-member `member_name` fields alongside compliance/competency
+status — the identical shape to `/training/compliance-matrix`, which the
+frontend cache already excludes — but neither was in
+`frontend/src/utils/apiCache.ts`'s `UNCACHEABLE_PREFIXES` list. Both are
+`training.manage`-gated GETs, so an officer's browser could hold another
+member's name + compliance/competency status in its 90-second stale-cache
+window past the point a permission change or record update should have
+invalidated it — a smaller version of the same data-exposure class
+`UNCACHEABLE_PREFIXES` exists to close for every other named PII response in
+the module (`/training/compliance-matrix`, `/training/certifications/expiring`,
+etc.).
+
+**Where:** `frontend/src/utils/apiCache.ts` — `UNCACHEABLE_PREFIXES` array
+(both endpoints backed by `app/api/v1/endpoints/training.py`'s
+`get_competency_matrix`, which delegates to `CompetencyMatrixService.
+get_competency_matrix` — see its docstring's `members: [{"name": ...}]`
+shape — and `get_training_dashboard_summary`, whose own docstring states
+"Member names are only returned from this `training.manage` endpoint").
+
+**Failure scenario:** a training officer opens the (currently backend-only,
+not yet wired to any frontend page — confirmed via `grep -rn
+"competency-matrix" frontend/src`) competency heat map, or the training
+dashboard's at-risk widget. The response — including every listed member's
+name — sits in the in-memory cache for up to 90 seconds. A second read within
+that window (including one issued after the officer's `training.manage`
+grant was revoked, if the revocation itself doesn't force a page reload)
+serves the stale cached payload rather than a fresh, permission-rechecked
+one — the exact risk the HIPAA Section 164.312 comment atop the constant
+exists to prevent.
+
+**Impact:** LOW/MED. Same-org only (not cross-tenant), requires
+`training.manage` to reach either endpoint in the first place, and
+`competency-matrix` has no current frontend caller — but `dashboard-summary`
+does (`trainingServices.ts`), and the pattern is identical to entries already
+judged worth excluding elsewhere in the same file.
+
+**Fix:** added both paths to `UNCACHEABLE_PREFIXES`, matching the existing
+`/training/compliance-matrix` entry's comment style. Guard test: a new
+`it()` in `apiCache.test.ts` (`'returns false for the org-wide per-member
+training heat maps and dashboard'`) asserting `isCacheable(...)` is `false`
+for `/training/competency-matrix`, `/training/compliance-matrix` (existing
+behavior, pinned), and `/training/dashboard-summary`.
+
+#### TR2-2 — LOW (abuse resistance) — `GET /training/records` has no pagination — 🚩 FLAGGED
+
+See `docs/KNOWN_LIMITATIONS.md` → "Training — `GET /training/records` Has No
+Pagination". `list_records` (`training.py`) returns every matching
+`TrainingRecord` row for the org with no `skip`/`limit`, unlike the rest of
+the codebase's per-record list endpoints (`events.py`'s `list_events` takes
+`skip`/`limit` with a hard cap of 500). The query is correctly org- and
+self-scoped (no isolation defect), so this is an abuse-resistance /
+resource-bounding gap, not a data leak: a `training.manage` officer (or a
+long-tenured member reading their own history) can trigger a single
+unbounded read that only grows across a department's lifetime.
+
+**Not fixed:** `trainingServices.ts`'s `listRecords()` returns a bare array
+consumed by `MyTrainingPage` and admin record tables as the complete set,
+with no pagination UI. A backend-only cap would silently truncate a large
+org's data rather than degrade gracefully — needs a paired frontend change,
+which is a product/UX decision outside this pass's fix criteria.
+
+### Verified good ✅ (pass 2, not previously stated this way)
+
+- **`list_courses`/`list_categories`/`list_requirements`/`get_training_programs`
+  are not part of the TR2-2 abuse-resistance gap.** These list configuration
+  data (courses, categories, requirements, programs) that is naturally
+  bounded by department size (tens, not tens-of-thousands, of rows) — the
+  absence of pagination on these is not equivalent to the `TrainingRecord`
+  case, which grows per-member per-training-event indefinitely.
+- **`create_records_bulk` is already abuse-bounded** — `BulkTrainingRecordCreate.
+records` is `Field(..., min_length=1, max_length=500)` in `schemas/
+training.py`, so the one write path that could otherwise fan out an
+  unbounded insert is capped.
+
+## Completion gate (pass 2)
+
+| Check                                                      | Result                                                                   |
+| ---------------------------------------------------------- | ------------------------------------------------------------------------ |
+| `flake8 app/ tests/ alembic/`                              | ✅ 0 violations (no Python files changed this pass)                      |
+| `black --check app/ tests/ alembic/`                       | ✅ 1326 files unchanged                                                  |
+| `isort --check-only app/ tests/ alembic/`                  | ✅ clean (`isort==8.0.1`, CI's pin, installed for this run)              |
+| `python3 scripts/validate_migrations.py --strict`          | ✅ 389 revisions, single head `e5f6a7b8c9d0`                             |
+| `pytest tests/ -q -k "training"`                           | ✅ 821 passed, 1 skipped (pre-existing optional-dependency skip)         |
+| `pytest tests/ -q` (full backend suite)                    | ✅ 9200 passed, 22 skipped (pre-existing Docker/no-MySQL/optional skips) |
+| `cd frontend && npx tsc --noEmit`                          | ✅ 0 errors                                                              |
+| `cd frontend && npx eslint .`                              | ✅ 0 errors, 10 pre-existing warnings (none in touched files)            |
+| `cd frontend && npx vitest run src/utils/apiCache.test.ts` | ✅ 84 passed (3 new assertions for TR2-1)                                |
