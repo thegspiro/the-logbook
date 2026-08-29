@@ -564,12 +564,27 @@ class TestAuthoritativeCheckTiming:
             check_timing="end_of_shift"
         )
         mock_db.execute.side_effect = [check_result, template_result]
+        template_item = SimpleNamespace(
+            id="item-1",
+            name="SCBA",
+            _check_compartment_name="Cab",
+            check_type="function",
+            required_quantity=None,
+            expected_quantity=None,
+            critical_minimum_quantity=None,
+            min_level=None,
+            level_unit=None,
+            serial_number=None,
+            lot_number=None,
+            has_expiration=False,
+            expiration_date=None,
+        )
 
         with (
             patch.object(
                 service,
                 "_load_checkable_template_items",
-                AsyncMock(return_value={"item-1": MagicMock()}),
+                AsyncMock(return_value={"item-1": template_item}),
             ),
             patch.object(service, "get_check", AsyncMock(return_value=check)),
             patch.object(service, "_resolve_expiration", return_value=None),
@@ -580,13 +595,22 @@ class TestAuthoritativeCheckTiming:
                 "user-1",
                 {
                     "client_submission_id": "completion-1",
-                    "items": [{"template_item_id": "item-1", "status": "pass"}],
+                    "items": [
+                        {
+                            "template_item_id": "item-1",
+                            "status": "pass",
+                            "quantity_found": 4,
+                            "level_reading": 75,
+                        }
+                    ],
                 },
             )
 
         assert check.check_timing == "end_of_shift"
         assert check.overall_status == "pass"
         assert check.client_submission_id == "completion-1"
+        assert item.quantity_found is None
+        assert item.level_reading is None
 
 
 class TestShiftCheckCompletionStatus:
