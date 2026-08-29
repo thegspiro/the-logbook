@@ -16,10 +16,16 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-`claude/security-review-training-extended` — feature 18 (Training extended),
-pass 2. PR: [#2012](https://github.com/thegspiro/the-logbook/pull/2012).
+None.
 
 ---
+
+### 2026-08-29 — Feature 18 (Training extended), pass 2 ✅ merged — PR #2012
+
+Merged (`988d5a73`). CI green on the final head (`e094e66e`); Codex hit its
+usage limit and produced no review. No merge conflict (base was current
+`main`). Confirmed on `origin/main` by ancestry check (merge commit at
+`origin/main` HEAD). Rotation row 18 -> done. Next: 19 skills testing.
 
 ### 2026-08-29 — Feature 18 (Training extended), pass 2 — 1 fixed (LOW/MED), 0 flagged
 
