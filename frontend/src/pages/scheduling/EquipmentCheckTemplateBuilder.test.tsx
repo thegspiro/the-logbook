@@ -6,26 +6,35 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ConfirmProvider } from '../../contexts/ConfirmContext';
 import EquipmentCheckTemplateBuilder from './EquipmentCheckTemplateBuilder';
 
-const getTemplate = vi.fn();
-const addCheckItem = vi.fn();
-const reorderItems = vi.fn();
-const cloneCompartment = vi.fn();
-const addCheckItemsBulk = vi.fn();
-const deleteCheckItemsBulk = vi.fn();
-const toastSuccess = vi.fn();
-const toastError = vi.fn();
-
-vi.mock('react-hot-toast', () => ({
-  default: {
-    success: (...args: unknown[]) => toastSuccess(...args),
-    error: (...args: unknown[]) => toastError(...args),
-  },
+const {
+  getTemplate,
+  updateCheckItem,
+  addCheckItem,
+  reorderItems,
+  cloneCompartment,
+  addCheckItemsBulk,
+  deleteCheckItemsBulk,
+  toastSuccess,
+  toastError,
+} = vi.hoisted(() => ({
+  getTemplate: vi.fn(),
+  updateCheckItem: vi.fn(),
+  addCheckItem: vi.fn(),
+  reorderItems: vi.fn(),
+  cloneCompartment: vi.fn(),
+  addCheckItemsBulk: vi.fn(),
+  deleteCheckItemsBulk: vi.fn(),
+  toastSuccess: vi.fn(),
+  toastError: vi.fn(),
 }));
+
+vi.mock('react-hot-toast', () => ({ default: { success: toastSuccess, error: toastError } }));
 
 vi.mock('@/modules/scheduling', () => ({
   schedulingService: {
     getApparatusOptions: vi.fn().mockResolvedValue({ options: [] }),
     getEquipmentCheckTemplate: (...args: unknown[]) => getTemplate(...args),
+    updateCheckItem: (...args: unknown[]) => updateCheckItem(...args),
     addCheckItem: (...args: unknown[]) => addCheckItem(...args),
     reorderItems: (...args: unknown[]) => reorderItems(...args),
     cloneCompartment: (...args: unknown[]) => cloneCompartment(...args),
@@ -129,6 +138,7 @@ describe('EquipmentCheckTemplateBuilder responsive actions', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     getTemplate.mockResolvedValue(structuredClone(template));
+    updateCheckItem.mockResolvedValue({});
     reorderItems.mockResolvedValue(undefined);
   });
 
@@ -259,6 +269,77 @@ describe('EquipmentCheckTemplateBuilder responsive actions', () => {
     expect(within(menu).getByRole('button', { name: 'Move up' })).toBeDisabled();
     expect(within(menu).getByRole('button', { name: 'Move down' })).toBeDisabled();
     expect(within(menu).getByRole('button', { name: 'Delete' })).toBeVisible();
+  });
+});
+
+describe('EquipmentCheckTemplateBuilder movement persistence', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    getTemplate.mockResolvedValue({
+      ...template,
+      compartments: [
+        {
+          ...template.compartments[0],
+          items: [
+            template.compartments[0]?.items[0],
+            { ...template.compartments[0]?.items[0], id: 'mask', name: 'Oxygen mask', sortOrder: 1 },
+          ],
+        },
+        template.compartments[1],
+      ],
+    });
+    updateCheckItem.mockResolvedValue({});
+    reorderItems.mockResolvedValue([]);
+  });
+
+  const moveSelect = async (name: string) => {
+    const selects = await screen.findAllByLabelText(new RegExp(`Move ${name} to compartment`));
+    return selects[selects.length - 1] as HTMLSelectElement;
+  };
+
+  it('moves an item across compartments only after persistence succeeds', async () => {
+    const user = userEvent.setup();
+    renderBuilder();
+    await user.selectOptions(await moveSelect('Oxygen mask'), '1');
+    expect(updateCheckItem).toHaveBeenCalledWith('mask', { compartment_id: 'bag', sort_order: 0 });
+    expect(await screen.findByLabelText('Actions for Oxygen mask')).toBeInTheDocument();
+    expect(toastSuccess).toHaveBeenCalledWith('Moved "Oxygen mask" to Medical bag');
+  });
+
+  it('keeps a rejected item in its source and does not show a success toast', async () => {
+    updateCheckItem.mockRejectedValueOnce(new Error('offline'));
+    const user = userEvent.setup();
+    renderBuilder();
+    await user.selectOptions(await moveSelect('Oxygen mask'), '1');
+    expect(await screen.findByLabelText('Actions for Oxygen mask')).toBeInTheDocument();
+    expect(toastSuccess).not.toHaveBeenCalled();
+    expect(toastError).toHaveBeenCalledWith('Could not move “Oxygen mask.” Its original location was restored.');
+  });
+
+  it('restores the prior item order when reorder persistence is rejected', async () => {
+    reorderItems.mockRejectedValueOnce(new Error('offline'));
+    const user = userEvent.setup();
+    renderBuilder();
+    const maskActions = await screen.findByLabelText('Actions for Oxygen mask');
+    await user.click(maskActions);
+    await user.click(within(maskActions.closest('details') as HTMLElement).getByRole('button', { name: 'Move up' }));
+    expect(reorderItems).toHaveBeenCalledWith('cab', ['mask', 'radio']);
+    const names = screen
+      .getAllByLabelText(/Actions for (Radio|Oxygen mask)/)
+      .map((node) => node.getAttribute('aria-label'));
+    expect(names.indexOf('Actions for Radio')).toBeLessThan(names.indexOf('Actions for Oxygen mask'));
+    expect(toastError).toHaveBeenCalledWith('Could not reorder “Oxygen mask.” Its original order was restored.');
+  });
+
+  it('reconciles rapid successful moves by stable item identity', async () => {
+    const user = userEvent.setup();
+    renderBuilder();
+    const radio = await moveSelect('Radio');
+    const mask = await moveSelect('Oxygen mask');
+    await Promise.all([user.selectOptions(radio, '1'), user.selectOptions(mask, '1')]);
+    expect(updateCheckItem).toHaveBeenCalledTimes(2);
+    expect(await screen.findByLabelText('Actions for Radio')).toBeInTheDocument();
+    expect(await screen.findByLabelText('Actions for Oxygen mask')).toBeInTheDocument();
   });
 });
 
