@@ -41,7 +41,7 @@ interface CatalogResult {
 interface CatalogQuickAddProps {
   value: string;
   onChange: (value: string) => void;
-  onAdd: (payload: CatalogAddPayload) => void | Promise<void>;
+  onAdd: (payload: CatalogAddPayload) => boolean | void | Promise<boolean | void>;
   /** Whether the viewer may write to the catalog (inventory.manage). */
   canCreateInventory: boolean;
   disabled?: boolean;
@@ -144,13 +144,8 @@ const CatalogQuickAdd: React.FC<CatalogQuickAddProps> = ({
   const addAsFreeText = async () => {
     const name = value.trim();
     if (!name) return;
-    try {
-      await onAdd({ name });
-      reset();
-    } catch {
-      // The owner reports the mutation error. Keeping the value here makes
-      // the same deliberate submission retryable instead of erasing it.
-    }
+
+    if ((await onAdd({ name })) !== false) reset();
   };
 
   /**
@@ -173,19 +168,15 @@ const CatalogQuickAdd: React.FC<CatalogQuickAddProps> = ({
   const addLinked = async (result: CatalogResult) => {
     const hasExpiration = await hasDatedStock(result.id);
 
-    try {
-      await onAdd({
-        // The catalog's name, not the typed one: two records that read
-        // differently are what made the link invisible in the first place.
-        name: result.name,
-        inventoryItemId: result.id,
-        ...(result.trackingType === 'pool' ? { checkType: 'count' as const } : {}),
-        ...(hasExpiration ? { hasExpiration: true } : {}),
-      });
-      reset();
-    } catch {
-      // Keep the catalog choice visible so the user can retry it.
-    }
+    const added = await onAdd({
+      // The catalog's name, not the typed one: two records that read
+      // differently are what made the link invisible in the first place.
+      name: result.name,
+      inventoryItemId: result.id,
+      ...(result.trackingType === 'pool' ? { checkType: 'count' as const } : {}),
+      ...(hasExpiration ? { hasExpiration: true } : {}),
+    });
+    if (added !== false) reset();
   };
 
   const createAndAdd = async () => {
@@ -200,7 +191,8 @@ const CatalogQuickAdd: React.FC<CatalogQuickAddProps> = ({
         tracking_type: 'pool',
         quantity: 0,
       });
-      await onAdd({ name: created.name, inventoryItemId: created.id, checkType: 'count' });
+      const added = await onAdd({ name: created.name, inventoryItemId: created.id, checkType: 'count' });
+      if (!added) return;
       toast.success(`Added “${created.name}” to inventory`);
       reset();
     } catch (err: unknown) {

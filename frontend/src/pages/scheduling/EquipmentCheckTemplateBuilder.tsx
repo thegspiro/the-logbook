@@ -933,6 +933,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
   // ---------------------------------------------------------------------------
 
   const pendingCompartmentOrderRef = useRef<{ previous: CompartmentFormState[]; version: number } | null>(null);
+
   const compartmentOrderVersionRef = useRef(0);
 
   const moveCompartment = (idx: number, direction: 'up' | 'down') => {
@@ -942,6 +943,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     if (!id) return;
     setCompartments((prev) => {
       pendingCompartmentOrderRef.current = { previous: prev, version: ++compartmentOrderVersionRef.current };
+
       return moveCompartmentInTree(prev, id, direction);
     });
   };
@@ -951,12 +953,15 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
   // `compartments` closure.
   useEffect(() => {
     if (!pendingCompartmentOrderRef.current || !isEditing || !templateId) return;
+
     const { previous, version } = pendingCompartmentOrderRef.current;
+
     pendingCompartmentOrderRef.current = null;
     const savedIds = orderedCompartmentIds(compartments);
     if (savedIds.length > 0) {
       void schedulingService.reorderCompartments(templateId, savedIds).catch(() => {
         if (version === compartmentOrderVersionRef.current) setCompartments(previous);
+
         toast.error('Failed to save compartment order');
       });
     }
@@ -1034,7 +1039,9 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       const deletedIds = new Set(result.deletedItemIds);
       updateCompartmentField(
         compartmentIdx,
+
         { items: comp.items.filter((item) => !item.id || !deletedIds.has(item.id)) },
+
         false
       );
       setSelectedItems((prev) => ({ ...prev, [key]: new Set<number>() }));
@@ -1056,15 +1063,21 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
   const [showEquipmentPresets, setShowEquipmentPresets] = useState<Record<string, boolean>>({});
   const [bulkItemPending, setBulkItemPending] = useState<Record<string, boolean>>({});
   const [quickItemPending, setQuickItemPending] = useState<Record<string, boolean>>({});
+
+  const quickAddPending = useRef(new Set<string>());
+
   const bulkIdempotencyKeys = useRef<Record<string, { key: string; payload: string }>>({});
 
   const handleQuickAdd = async (compartmentIdx: number, payload: CatalogAddPayload) => {
     const comp = compartments[compartmentIdx];
-    if (!comp) return;
+    if (!comp) return false;
     const key = getCompKey(compartmentIdx);
     const name = payload.name.trim();
-    if (!name) return;
-    if (quickItemPending[key]) return;
+
+    if (!name) return false;
+    if (quickAddPending.current.has(key)) return false;
+    quickAddPending.current.add(key);
+
     setQuickItemPending((prev) => ({ ...prev, [key]: true }));
 
     try {
@@ -1101,10 +1114,14 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
         });
       }
       setQuickAddValues((prev) => ({ ...prev, [key]: '' }));
+
+      return true;
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to add item'));
-      throw err;
+      return false;
     } finally {
+      quickAddPending.current.delete(key);
+
       setQuickItemPending((prev) => ({ ...prev, [key]: false }));
     }
   };
@@ -1535,6 +1552,32 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                       : undefined,
                   })
                 );
+              } else {
+                updatePromises.push(
+                  schedulingService.addCheckItem(comp.id, {
+                    name: item.name || 'Untitled Item',
+                    description: item.description.trim() || undefined,
+                    sort_order: comp.items.indexOf(item),
+                    check_type: item.checkType,
+                    is_required: item.isRequired,
+                    required_quantity: item.requiredQuantity ? Number(item.requiredQuantity) : undefined,
+                    expected_quantity: item.expectedQuantity ? Number(item.expectedQuantity) : undefined,
+                    critical_minimum_quantity: item.criticalMinimumQuantity
+                      ? Number(item.criticalMinimumQuantity)
+                      : undefined,
+                    min_level: item.minLevel ? Number(item.minLevel) : undefined,
+                    level_unit: item.levelUnit.trim() || undefined,
+                    serial_number: item.serialNumber.trim() || undefined,
+                    lot_number: item.lotNumber.trim() || undefined,
+                    inventory_item_id: item.inventoryItemId || undefined,
+                    image_url: item.imageUrl.trim() || undefined,
+                    has_expiration: item.hasExpiration,
+                    expiration_date: item.expirationDate.trim() || undefined,
+                    expiration_warning_days: item.expirationWarningDays
+                      ? Number(item.expirationWarningDays)
+                      : undefined,
+                  })
+                );
               }
             }
           }
@@ -1659,7 +1702,6 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       items: comp.items.map((item) => ({
         ...emptyItem(),
         name: item.name,
-        description: item.description ?? '',
         checkType: item.checkType,
       })),
     }));
@@ -2163,6 +2205,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     // its subtree because the returned array is canonical depth-first order.
     setCompartments((prev) => {
       pendingCompartmentOrderRef.current = { previous: prev, version: ++compartmentOrderVersionRef.current };
+
       return reorderCompartment(prev, activeId, overId);
     });
   };
@@ -3539,11 +3582,8 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
 
       {/* Template Type */}
       <div>
-        <label className={labelClass} htmlFor="equipment-check-template-type">
-          Template Type
-        </label>
+        <label className={labelClass}>Template Type</label>
         <select
-          id="equipment-check-template-type"
           className={selectClass}
           value={form.templateType}
           onChange={(e) => updateForm({ templateType: e.target.value as TemplateType })}
@@ -3784,7 +3824,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             number: 3,
             label: 'Review',
             detail: itemsReady ? `${stats.totalItems} items` : 'Preview checklist',
-            ready: itemsReady,
+            ready: false,
           },
         ].map((step, index) => (
           <div
