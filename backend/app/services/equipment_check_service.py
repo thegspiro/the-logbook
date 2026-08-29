@@ -748,12 +748,22 @@ class EquipmentCheckService:
             compartment = await self._get_compartment(compartment_id, organization_id)
             if not compartment:
                 return None
+            # Serialize retries on the parent before reading the ledger. The
+            # ledger read is also locking/current so a request that waited for
+            # an overlapping delete sees the winner under MySQL REPEATABLE READ.
+            await self.db.execute(
+                select(CheckTemplateCompartment)
+                .where(CheckTemplateCompartment.id == compartment_id)
+                .with_for_update()
+            )
             ledger_result = await self.db.execute(
-                select(EquipmentCheckBulkDeleteRequest).where(
+                select(EquipmentCheckBulkDeleteRequest)
+                .where(
                     EquipmentCheckBulkDeleteRequest.organization_id == organization_id,
                     EquipmentCheckBulkDeleteRequest.compartment_id == compartment_id,
                     EquipmentCheckBulkDeleteRequest.idempotency_key == idempotency_key,
                 )
+                .with_for_update()
             )
             ledger = ledger_result.scalars().first()
             if ledger:
@@ -763,11 +773,6 @@ class EquipmentCheckService:
                     )
                 return list(ledger.item_ids), True
 
-            await self.db.execute(
-                select(CheckTemplateCompartment)
-                .where(CheckTemplateCompartment.id == compartment_id)
-                .with_for_update()
-            )
             items_result = await self.db.execute(
                 select(CheckTemplateItem)
                 .where(

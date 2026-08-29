@@ -298,6 +298,26 @@ describe('EquipmentCheckTemplateBuilder bulk deletion', () => {
     expect(toastError).toHaveBeenCalled();
     expect(toastSuccess).not.toHaveBeenCalled();
   });
+
+  it('reuses the idempotency key when the same selected deletion is retried', async () => {
+    deleteCheckItemsBulk
+      .mockRejectedValueOnce(new Error('Response lost'))
+      .mockResolvedValueOnce({ deletedItemIds: ['radio', 'flashlight'], replayed: true });
+    const user = userEvent.setup();
+    renderBuilder();
+    await screen.findByText('Radio');
+    await user.click(screen.getByTitle('Select all items'));
+
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      await user.click(screen.getByRole('button', { name: 'Delete selected items' }));
+      await user.click(screen.getByRole('button', { name: 'Delete 2' }));
+      await waitFor(() => expect(deleteCheckItemsBulk).toHaveBeenCalledTimes(attempt + 1));
+    }
+
+    expect(deleteCheckItemsBulk.mock.calls[0]?.[2]).toBe(deleteCheckItemsBulk.mock.calls[1]?.[2]);
+    await waitFor(() => expect(screen.queryByText('Radio')).not.toBeInTheDocument());
+    expect(toastSuccess).toHaveBeenCalledWith('Deleted 2 items');
+  });
 });
 
 describe('EquipmentCheckTemplateBuilder creation guidance', () => {
