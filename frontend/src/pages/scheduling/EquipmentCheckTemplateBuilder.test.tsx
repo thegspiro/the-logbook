@@ -13,6 +13,7 @@ const { service, unsavedStates } = vi.hoisted(() => ({
     getCsvSampleUrl: vi.fn(),
     addCheckItem: vi.fn(),
     addCheckItemsBulk: vi.fn(),
+    deleteCheckItemsBulk: vi.fn(),
     deleteCheckItem: vi.fn(),
     reorderItems: vi.fn(),
     reorderCompartments: vi.fn(),
@@ -28,25 +29,8 @@ vi.mock('@/modules/scheduling', () => ({ schedulingService: service }));
 vi.mock('@/hooks/useUnsavedChanges', () => ({
   useUnsavedChanges: ({ hasChanges }: { hasChanges: boolean }) => unsavedStates.push(hasChanges),
 }));
-vi.mock('@/modules/scheduling/components/CatalogQuickAdd', () => ({
-  default: ({
-    value,
-    onChange,
-    onAdd,
-  }: {
-    value: string;
-    onChange: (value: string) => void;
-    onAdd: (value: { name: string }) => Promise<void>;
-  }) => (
-    <input
-      aria-label="Quick add item"
-      value={value}
-      onChange={(event) => onChange(event.target.value)}
-      onKeyDown={(event) => {
-        if (event.key === 'Enter') void onAdd({ name: value });
-      }}
-    />
-  ),
+vi.mock('@/services/inventoryService', () => ({
+  inventoryService: { getItems: vi.fn().mockResolvedValue({ items: [] }) },
 }));
 vi.mock('@/stores/authStore', () => ({
   useAuthStore: (selector: (state: { checkPermission: () => boolean }) => unknown) =>
@@ -123,6 +107,7 @@ beforeEach(() => {
   service.getCsvSampleUrl.mockReturnValue('/sample.csv');
   service.getEquipmentCheckTemplate.mockResolvedValue(structuredClone(template));
   service.deleteCheckItem.mockResolvedValue(undefined);
+  service.deleteCheckItemsBulk.mockResolvedValue({ deletedItemIds: ['radio', 'torch'], replayed: false });
   service.reorderItems.mockResolvedValue(undefined);
   service.reorderCompartments.mockResolvedValue(undefined);
   service.updateCheckItem.mockResolvedValue(item('radio', 'Radio', 0));
@@ -140,7 +125,7 @@ describe('equipment-check item mutations', () => {
       })
     );
     renderBuilder();
-    const input = first(await screen.findAllByLabelText('Quick add item'));
+    const input = first(await screen.findAllByPlaceholderText(/Search inventory or type a new item name/i));
     await userEvent.type(input, '  Nozzle  ');
     fireEvent.keyDown(input, { key: 'Enter' });
     fireEvent.keyDown(input, { key: 'Enter' });
@@ -154,7 +139,7 @@ describe('equipment-check item mutations', () => {
   it('retains quick-add text after failure and permits a retry', async () => {
     service.addCheckItem.mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce(item('nozzle', 'Nozzle', 2));
     renderBuilder();
-    const input = first(await screen.findAllByLabelText('Quick add item'));
+    const input = first(await screen.findAllByPlaceholderText(/Search inventory or type a new item name/i));
     await userEvent.type(input, 'Nozzle{enter}');
     await waitFor(() => expect(service.addCheckItem).toHaveBeenCalledTimes(1));
     expect(input).toHaveValue('Nozzle');
@@ -198,9 +183,8 @@ describe('equipment-check item mutations', () => {
     await userEvent.click(await screen.findByTitle('Select all items'));
     await userEvent.click(screen.getByRole('button', { name: 'Delete selected items' }));
     await confirm('Delete 2');
-    await waitFor(() => expect(service.deleteCheckItem).toHaveBeenCalledTimes(2));
-    expect(service.deleteCheckItem).toHaveBeenCalledWith('radio');
-    expect(service.deleteCheckItem).toHaveBeenCalledWith('torch');
+    await waitFor(() => expect(service.deleteCheckItemsBulk).toHaveBeenCalledTimes(1));
+    expect(service.deleteCheckItemsBulk).toHaveBeenCalledWith('cab', ['radio', 'torch'], expect.any(String));
   }
 
   it('removes every row after successful bulk deletion', async () => {
@@ -210,30 +194,33 @@ describe('equipment-check item mutations', () => {
   });
 
   it('retains every row after failed bulk deletion', async () => {
-    service.deleteCheckItem.mockRejectedValueOnce(new Error('denied'));
+    service.deleteCheckItemsBulk.mockRejectedValueOnce(new Error('denied'));
     await deleteAllItems();
     expect(screen.getByLabelText('Actions for Radio')).toBeVisible();
     expect(screen.getByLabelText('Actions for Torch')).toBeVisible();
   });
 
   it('persists a duplicated item in edit mode with its complete create payload', async () => {
-    service.addCheckItem.mockResolvedValue(item('copy', 'Radio (copy)', 1));
+    service.addCheckItemsBulk.mockResolvedValue({ items: [item('copy', 'Radio (copy)', 1)], createdCount: 1 });
     renderBuilder();
     const actions = await screen.findByLabelText('Actions for Radio');
     await userEvent.click(actions);
     await userEvent.click(within(actions.closest('details') as HTMLElement).getByRole('button', { name: 'Duplicate' }));
-    await save();
-    await waitFor(() => expect(service.addCheckItem).toHaveBeenCalled());
-    expect(service.addCheckItem).toHaveBeenCalledWith(
+    await waitFor(() => expect(service.addCheckItemsBulk).toHaveBeenCalled());
+    expect(service.addCheckItemsBulk).toHaveBeenCalledWith(
       'cab',
-      expect.objectContaining({
-        name: 'Radio (copy)',
-        sort_order: 1,
-        check_type: 'function',
-        is_required: true,
-        has_expiration: false,
-      })
+      [
+        expect.objectContaining({
+          name: 'Radio (copy)',
+          sort_order: 1,
+          check_type: 'function',
+          is_required: true,
+          has_expiration: false,
+        }),
+      ],
+      expect.any(String)
     );
+    expect(service.reorderItems).toHaveBeenCalledWith('cab', ['radio', 'copy', 'torch']);
   });
 
   it('rolls item order back when reorder persistence fails', async () => {
@@ -292,7 +279,7 @@ describe('draft, publish, and unsaved state', () => {
   it('only marks actual unsaved work for navigation prompting', async () => {
     service.addCheckItem.mockResolvedValue(item('nozzle', 'Nozzle', 2));
     renderBuilder();
-    const input = first(await screen.findAllByLabelText('Quick add item'));
+    const input = first(await screen.findAllByPlaceholderText(/Search inventory or type a new item name/i));
     await userEvent.type(input, 'Nozzle{enter}');
     await screen.findByLabelText('Actions for Nozzle');
     expect(unsavedStates).not.toContain(true);

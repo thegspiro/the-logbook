@@ -61,6 +61,7 @@ from app.utils.apparatus_ref import (
     resolve_apparatus_ref,
 )
 from app.utils.hours import hours_from_minutes
+from app.utils.membership import is_administrative
 from app.utils.org_timezone import resolve_scheduling_timezone
 from app.utils.positions import normalize_stored_positions
 
@@ -340,6 +341,10 @@ class SchedulingService:
                         {
                             "position": p["position"],
                             "required": p.get("required", True),
+                            "allow_administrative_members": p.get(
+                                "allow_administrative_members"
+                            )
+                            is True,
                         }
                     )
                 # Skip unrecognised entries silently
@@ -356,8 +361,26 @@ class SchedulingService:
                     qty = r.get("quantity", 1) if isinstance(r, dict) else 1
                     pos_list = r.get("positions", []) if isinstance(r, dict) else []
                     for _ in range(qty):
-                        for name in pos_list:
-                            result.append({"position": name, "required": True})
+                        for entry in pos_list:
+                            if isinstance(entry, dict):
+                                result.append(
+                                    {
+                                        "position": entry.get("position", ""),
+                                        "required": entry.get("required") is not False,
+                                        "allow_administrative_members": entry.get(
+                                            "allow_administrative_members"
+                                        )
+                                        is True,
+                                    }
+                                )
+                            else:
+                                result.append(
+                                    {
+                                        "position": entry,
+                                        "required": True,
+                                        "allow_administrative_members": False,
+                                    }
+                                )
                 return result
         return []
 
@@ -850,6 +873,38 @@ class SchedulingService:
         shifts = result.scalars().all()
 
         return shifts, total
+
+    async def get_member_visible_shifts(
+        self,
+        user: User,
+        organization_id: UUID,
+        start_date: Optional[date] = None,
+        end_date: Optional[date] = None,
+        skip: int = 0,
+        limit: int = 100,
+    ) -> Tuple[List[Shift], int]:
+        """Filter by signup eligibility before counting and paginating."""
+        query = select(Shift).where(Shift.organization_id == str(organization_id))
+        if start_date:
+            query = query.where(Shift.shift_date >= start_date)
+        if end_date:
+            query = query.where(Shift.shift_date <= end_date)
+        query = query.order_by(Shift.shift_date.asc(), Shift.start_time.asc())
+        candidates = list((await self.db.execute(query)).scalars().all())
+        if not candidates:
+            return [], 0
+
+        from app.services.shift_eligibility_service import ShiftEligibilityService
+
+        eligibility = await ShiftEligibilityService(
+            self.db
+        ).get_eligible_positions_bulk(
+            user,
+            str(organization_id),
+            [str(shift.id) for shift in candidates],
+        )
+        visible = [shift for shift in candidates if eligibility.get(str(shift.id), [])]
+        return visible[skip : skip + limit], len(visible)
 
     async def filter_shifts_with_open_positions(
         self,
@@ -2917,6 +2972,15 @@ class SchedulingService:
 
         position_value = getattr(position, "value", position)
         slots = self.normalize_positions(shift.positions)
+        candidate = None
+        if enforce_position_eligibility:
+            user_result = await self.db.execute(
+                select(User).where(
+                    User.id == str(user_id),
+                    User.organization_id == str(organization_id),
+                )
+            )
+            candidate = user_result.scalar_one_or_none()
 
         # Headcount cap for a shift with no named seats. Without this a member
         # can keep claiming a shift the calendar already shows as full: the UI
@@ -2974,20 +3038,50 @@ class SchedulingService:
             if occupied >= len(matching_slots):
                 return "Position was filled after this request was submitted"
 
+            if candidate and is_administrative(
+                getattr(candidate, "member_class", None),
+                getattr(candidate, "membership_type", None),
+            ):
+                administrative_capacity = sum(
+                    slot.get("allow_administrative_members") is True
+                    for slot in matching_slots
+                )
+                administrative_occupied_query = (
+                    select(func.count())
+                    .select_from(ShiftAssignment)
+                    .join(User, User.id == ShiftAssignment.user_id)
+                    .where(
+                        ShiftAssignment.shift_id == str(shift.id),
+                        ShiftAssignment.organization_id == str(organization_id),
+                        ShiftAssignment.position == position_value,
+                        active,
+                        or_(
+                            User.member_class == "administrative",
+                            and_(
+                                User.member_class.is_(None),
+                                User.membership_type == "administrative",
+                            ),
+                        ),
+                    )
+                    .with_for_update()
+                )
+                if excluded:
+                    administrative_occupied_query = administrative_occupied_query.where(
+                        ShiftAssignment.id.notin_(excluded)
+                    )
+                administrative_occupied = (
+                    await self.db.execute(administrative_occupied_query)
+                ).scalar() or 0
+                if administrative_occupied >= administrative_capacity:
+                    return "Administrative access seats were already filled"
+
         if enforce_position_eligibility:
             from app.services.shift_eligibility_service import (
                 ShiftEligibilityService,
             )
 
-            user_result = await self.db.execute(
-                select(User).where(
-                    User.id == str(user_id),
-                    User.organization_id == str(organization_id),
-                )
-            )
-            user = user_result.scalar_one_or_none()
             eligible = await ShiftEligibilityService(self.db).get_eligible_positions(
-                user, str(organization_id), str(shift.id)
+                candidate, str(organization_id), str(shift.id)
             )
             if not eligible:
                 return "Member is no longer eligible for this shift"
