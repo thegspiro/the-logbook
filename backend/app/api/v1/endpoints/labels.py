@@ -66,6 +66,7 @@ def _authorize_module(current_user: User, module: str) -> None:
 
 class LabelPresetBody(BaseModel):
     preset: str = Field(min_length=1, max_length=50)
+    printer_id: Optional[str] = Field(None, min_length=1, max_length=36)
     custom_width: Optional[float] = Field(None, ge=0.5, le=8)
     custom_height: Optional[float] = Field(None, ge=0.5, le=11)
     symbology: str = Field(SYMBOLOGY_CODE128, max_length=20)
@@ -136,11 +137,19 @@ async def set_label_preset(
     """Save the label-printer preset for the caller's position in *module*."""
     _authorize_module(current_user, module)
     try:
+        if data.printer_id is not None:
+            # A remembered destination is a client-supplied foreign key. Check
+            # it against the caller's organization before putting it in the
+            # position JSON, just as the eventual print path does.
+            await LabelPrinterService(db).get_printer(
+                data.printer_id, current_user.organization_id
+            )
         result = await LabelService(db).set_preset(
             user_id=UUID(current_user.id),
             organization_id=current_user.organization_id,
             module=module,
             preset=data.preset,
+            printer_id=data.printer_id,
             custom_width=data.custom_width,
             custom_height=data.custom_height,
             symbology=data.symbology,

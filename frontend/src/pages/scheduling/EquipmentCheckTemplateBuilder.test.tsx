@@ -8,6 +8,16 @@ import EquipmentCheckTemplateBuilder from './EquipmentCheckTemplateBuilder';
 
 const getTemplate = vi.fn();
 const addCheckItemsBulk = vi.fn();
+const deleteCheckItemsBulk = vi.fn();
+const toastSuccess = vi.fn();
+const toastError = vi.fn();
+
+vi.mock('react-hot-toast', () => ({
+  default: {
+    success: (...args: unknown[]) => toastSuccess(...args),
+    error: (...args: unknown[]) => toastError(...args),
+  },
+}));
 
 vi.mock('@/modules/scheduling', () => ({
   schedulingService: {
@@ -15,6 +25,7 @@ vi.mock('@/modules/scheduling', () => ({
     getEquipmentCheckTemplate: (...args: unknown[]) => getTemplate(...args),
     addCheckItemsBulk: (...args: unknown[]) => addCheckItemsBulk(...args),
     getCsvSampleUrl: vi.fn().mockReturnValue('/sample.csv'),
+    deleteCheckItemsBulk: (...args: unknown[]) => deleteCheckItemsBulk(...args),
   },
 }));
 
@@ -46,6 +57,16 @@ const template = {
           compartmentId: 'cab',
           name: 'Radio',
           sortOrder: 0,
+          checkType: 'function',
+          isRequired: true,
+          hasExpiration: false,
+          expirationWarningDays: 30,
+        },
+        {
+          id: 'flashlight',
+          compartmentId: 'cab',
+          name: 'Flashlight',
+          sortOrder: 1,
           checkType: 'function',
           isRequired: true,
           hasExpiration: false,
@@ -100,8 +121,8 @@ function renderNewBuilder() {
 
 describe('EquipmentCheckTemplateBuilder responsive actions', () => {
   beforeEach(() => {
-    getTemplate.mockResolvedValue(template);
-    addCheckItemsBulk.mockReset();
+    vi.clearAllMocks();
+    getTemplate.mockResolvedValue(structuredClone(template));
   });
 
   it('exposes every item action from the phone overflow without drag and drop', async () => {
@@ -140,8 +161,8 @@ describe('EquipmentCheckTemplateBuilder responsive actions', () => {
 
 describe('EquipmentCheckTemplateBuilder quick add queue', () => {
   beforeEach(() => {
-    getTemplate.mockResolvedValue(template);
-    addCheckItemsBulk.mockReset();
+    vi.clearAllMocks();
+    getTemplate.mockResolvedValue(structuredClone(template));
   });
 
   const savedItem = (name: string, id: string) => ({
@@ -159,18 +180,18 @@ describe('EquipmentCheckTemplateBuilder quick add queue', () => {
     renderBuilder();
     const input = await screen.findAllByPlaceholderText(/search inventory/i).then((inputs) => inputs[0] as HTMLElement);
 
-    await user.type(input, 'Flashlight{Enter}');
+    await user.type(input, 'Lantern{Enter}');
     await user.type(input, 'Spare batteries{Enter}');
 
-    expect(screen.getByLabelText('Flashlight Saving')).toBeVisible();
+    expect(screen.getByLabelText('Lantern Saving')).toBeVisible();
     expect(screen.getByLabelText('Spare batteries Saving')).toBeVisible();
     expect(input).toHaveFocus();
     expect(addCheckItemsBulk).toHaveBeenCalledTimes(1);
 
-    resolveFirst({ items: [savedItem('Flashlight', 'flashlight')], createdCount: 1 });
-    await waitFor(() => expect(screen.queryByLabelText('Flashlight Saving')).not.toBeInTheDocument());
+    resolveFirst({ items: [savedItem('Lantern', 'lantern')], createdCount: 1 });
+    await waitFor(() => expect(screen.queryByLabelText('Lantern Saving')).not.toBeInTheDocument());
     await waitFor(() => expect(screen.queryByLabelText('Spare batteries Saving')).not.toBeInTheDocument());
-    expect(screen.getByText('Flashlight')).toBeVisible();
+    expect(screen.getByText('Lantern')).toBeVisible();
     expect(screen.getByText('Spare batteries')).toBeVisible();
     expect(addCheckItemsBulk).toHaveBeenCalledTimes(2);
   });
@@ -198,11 +219,47 @@ describe('EquipmentCheckTemplateBuilder quick add queue', () => {
 
   it('does not submit the same value again when Enter repeats', async () => {
     const user = userEvent.setup();
-    addCheckItemsBulk.mockResolvedValue({ items: [savedItem('Flashlight', 'flashlight')], createdCount: 1 });
+    addCheckItemsBulk.mockResolvedValue({ items: [savedItem('Lantern', 'lantern')], createdCount: 1 });
     renderBuilder();
     const input = (await screen.findAllByPlaceholderText(/search inventory/i))[0] as HTMLElement;
-    await user.type(input, 'Flashlight{Enter}{Enter}');
+    await user.type(input, 'Lantern{Enter}{Enter}');
     expect(addCheckItemsBulk).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('EquipmentCheckTemplateBuilder bulk deletion', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    getTemplate.mockResolvedValue(structuredClone(template));
+  });
+
+  async function selectAndDelete() {
+    const user = userEvent.setup();
+    renderBuilder();
+    await screen.findByText('Radio');
+    await user.click(screen.getByTitle('Select all items'));
+    await user.click(screen.getByRole('button', { name: 'Delete selected items' }));
+    await user.click(screen.getByRole('button', { name: 'Delete 2' }));
+  }
+
+  it('removes only IDs confirmed by a completely successful response', async () => {
+    deleteCheckItemsBulk.mockResolvedValue({ deletedItemIds: ['radio', 'flashlight'], replayed: false });
+    await selectAndDelete();
+    await waitFor(() => expect(screen.queryByText('Radio')).not.toBeInTheDocument());
+    expect(screen.getAllByText(/No items yet/).length).toBeGreaterThan(0);
+    expect(deleteCheckItemsBulk).toHaveBeenCalledWith('cab', ['radio', 'flashlight'], expect.any(String));
+    expect(toastSuccess).toHaveBeenCalledWith('Deleted 2 items');
+    expect(toastError).not.toHaveBeenCalled();
+  });
+
+  it('retains visible selected rows and never shows success after failure', async () => {
+    deleteCheckItemsBulk.mockRejectedValue(new Error('Database unavailable'));
+    await selectAndDelete();
+    expect(await screen.findByText('Radio')).toBeVisible();
+    expect(screen.getByText('Flashlight')).toBeVisible();
+    expect(screen.getByText('2 selected')).toBeVisible();
+    expect(toastError).toHaveBeenCalled();
+    expect(toastSuccess).not.toHaveBeenCalled();
   });
 });
 

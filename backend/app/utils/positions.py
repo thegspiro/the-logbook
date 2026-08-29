@@ -68,7 +68,7 @@ def canonical_position(name: str) -> str:
 
 
 def normalize_stored_positions(positions: Any) -> Any:
-    """Return a seat list as ``[{"position": str, "required": bool}]``.
+    """Return a seat list in the canonical structured form.
 
     Anything that is not a list is returned untouched — an event template
     stores its resource metadata in this same column, and flattening that into
@@ -90,7 +90,13 @@ def normalize_stored_positions(positions: Any) -> Any:
         if isinstance(entry, str):
             name = canonical_position(entry)
             if name:
-                slots.append({"position": name, "required": True})
+                slots.append(
+                    {
+                        "position": name,
+                        "required": True,
+                        "allow_administrative_members": False,
+                    }
+                )
         elif isinstance(entry, dict):
             name = canonical_position(str(entry.get("position") or ""))
             if name:
@@ -100,6 +106,10 @@ def normalize_stored_positions(positions: Any) -> Any:
                 slot = {
                     "position": name,
                     "required": entry.get("required") is not False,
+                    "allow_administrative_members": entry.get(
+                        "allow_administrative_members"
+                    )
+                    is True,
                 }
                 for _ in range(_seat_count(entry.get("count"))):
                     slots.append(dict(slot))
