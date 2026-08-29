@@ -85,7 +85,10 @@ export const PositionListEditor: React.FC<PositionListEditorProps> = (props) => 
 
     const handleAdd = () => {
       const fallback = availablePositions[0]?.value ?? 'firefighter';
-      onChangeStructured([...positions, { position: defaultNewPosition ?? fallback, required: true }]);
+      onChangeStructured([
+        ...positions,
+        { position: defaultNewPosition ?? fallback, required: true, allow_administrative_members: false },
+      ]);
     };
 
     return (
@@ -114,6 +117,19 @@ export const PositionListEditor: React.FC<PositionListEditorProps> = (props) => 
                   className="border-theme-input-border rounded text-violet-600 focus:ring-violet-500"
                 />
                 Req
+              </label>
+              <label className="text-theme-text-secondary flex cursor-pointer items-center gap-1 text-xs whitespace-nowrap select-none">
+                <input
+                  type="checkbox"
+                  checked={slot.allow_administrative_members}
+                  onChange={() => {
+                    const updated = [...positions];
+                    updated[i] = { ...slot, allow_administrative_members: !slot.allow_administrative_members };
+                    onChangeStructured(updated);
+                  }}
+                  className="border-theme-input-border rounded text-violet-600 focus:ring-violet-500"
+                />
+                Administrative
               </label>
               <button onClick={() => handleRemove(i)} className="rounded-sm p-1 text-red-500 hover:bg-red-500/10">
                 <X className="h-3.5 w-3.5" />
