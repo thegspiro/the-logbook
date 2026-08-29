@@ -168,7 +168,177 @@ class TestBulkItemCreation:
                 )
         mock_db.add.assert_not_called()
         mock_db.commit.assert_not_awaited()
+
+
+class TestBulkItemDeletion:
+    """A delete batch is parent-scoped, atomic, and retry-safe."""
+
+    @staticmethod
+    def result(items):
+        result = MagicMock()
+        result.scalars.return_value.first.return_value = None
+        result.scalars.return_value.all.return_value = items
+        return result
+
+    async def test_deletes_complete_validated_batch_in_one_commit(
+        self, service, mock_db
+    ):
+        compartment = SimpleNamespace(template_id="template-1")
+        items = [
+            SimpleNamespace(id="item-1", name="Radio"),
+            SimpleNamespace(id="item-2", name="Light"),
+        ]
+        mock_db.execute.side_effect = [
+            self.result([]),
+            self.result([]),
+            self.result(items),
+        ]
+        with (
+            patch.object(
+                service,
+                "_get_compartment",
+                new_callable=AsyncMock,
+                return_value=compartment,
+            ),
+            patch.object(service, "log_template_change", new_callable=AsyncMock),
+        ):
+            deleted, replayed = await service.delete_items_bulk(
+                "comp-1",
+                "org-1",
+                ["item-1", "item-2"],
+                "request-123",
+                "user-1",
+                "Tester",
+            )
+        assert deleted == ["item-1", "item-2"]
+        assert replayed is False
+        assert mock_db.delete.await_count == 2
+        mock_db.commit.assert_awaited_once()
+
+    async def test_wrong_parent_rolls_back_without_deleting(self, service, mock_db):
+        mock_db.execute.side_effect = [
+            self.result([]),
+            self.result([]),
+            self.result([SimpleNamespace(id="item-1", name="Radio")]),
+        ]
+        with patch.object(
+            service,
+            "_get_compartment",
+            new_callable=AsyncMock,
+            return_value=SimpleNamespace(template_id="template-1"),
+        ):
+            with pytest.raises(ValueError, match="specified compartment"):
+                await service.delete_items_bulk(
+                    "comp-1",
+                    "org-1",
+                    ["item-1", "foreign-item"],
+                    "request-123",
+                    "user-1",
+                    "Tester",
+                )
+        mock_db.delete.assert_not_awaited()
+        mock_db.commit.assert_not_awaited()
         mock_db.rollback.assert_awaited_once()
+
+    async def test_delete_failure_rolls_back_entire_batch(self, service, mock_db):
+        items = [
+            SimpleNamespace(id="item-1", name="Radio"),
+            SimpleNamespace(id="item-2", name="Light"),
+        ]
+        mock_db.execute.side_effect = [
+            self.result([]),
+            self.result([]),
+            self.result(items),
+        ]
+        mock_db.delete.side_effect = [None, RuntimeError("database failure")]
+        with (
+            patch.object(
+                service,
+                "_get_compartment",
+                new_callable=AsyncMock,
+                return_value=SimpleNamespace(template_id="template-1"),
+            ),
+            patch.object(service, "log_template_change", new_callable=AsyncMock),
+        ):
+            with pytest.raises(RuntimeError, match="database failure"):
+                await service.delete_items_bulk(
+                    "comp-1",
+                    "org-1",
+                    ["item-1", "item-2"],
+                    "request-123",
+                    "user-1",
+                    "Tester",
+                )
+        mock_db.commit.assert_not_awaited()
+        mock_db.rollback.assert_awaited_once()
+
+    async def test_retry_returns_confirmed_ids_without_deleting(self, service, mock_db):
+        item_ids = ["item-1", "item-2"]
+        payload_hash = (
+            __import__("hashlib")
+            .sha256(__import__("json").dumps(item_ids, separators=(",", ":")).encode())
+            .hexdigest()
+        )
+        ledger = SimpleNamespace(payload_hash=payload_hash, item_ids=item_ids)
+        result = MagicMock()
+        result.scalars.return_value.first.return_value = ledger
+        mock_db.execute.return_value = result
+        with patch.object(
+            service,
+            "_get_compartment",
+            new_callable=AsyncMock,
+            return_value=SimpleNamespace(template_id="template-1"),
+        ):
+            deleted, replayed = await service.delete_items_bulk(
+                "comp-1",
+                "org-1",
+                item_ids,
+                "request-123",
+                "user-1",
+                "Tester",
+            )
+        assert deleted == item_ids
+        assert replayed is True
+        mock_db.delete.assert_not_awaited()
+        mock_db.commit.assert_not_awaited()
+
+    async def test_locks_parent_before_current_ledger_read(self, service, mock_db):
+        item_ids = ["item-1"]
+        payload_hash = (
+            __import__("hashlib")
+            .sha256(__import__("json").dumps(item_ids, separators=(",", ":")).encode())
+            .hexdigest()
+        )
+        ledger = SimpleNamespace(payload_hash=payload_hash, item_ids=item_ids)
+        parent_result = self.result([])
+        ledger_result = MagicMock()
+        ledger_result.scalars.return_value.first.return_value = ledger
+        mock_db.execute.side_effect = [parent_result, ledger_result]
+        with patch.object(
+            service,
+            "_get_compartment",
+            new_callable=AsyncMock,
+            return_value=SimpleNamespace(template_id="template-1"),
+        ):
+            deleted, replayed = await service.delete_items_bulk(
+                "comp-1",
+                "org-1",
+                item_ids,
+                "request-123",
+                "user-1",
+                "Tester",
+            )
+
+        assert deleted == item_ids
+        assert replayed is True
+        parent_statement = mock_db.execute.await_args_list[0].args[0]
+        ledger_statement = mock_db.execute.await_args_list[1].args[0]
+        assert parent_statement._for_update_arg is not None
+        assert ledger_statement._for_update_arg is not None
+
+
+class TestBulkItemCreationFailures(TestBulkItemCreation):
+    """Additional creation failure and replay cases."""
 
     async def test_flush_failure_rolls_back_complete_batch(self, service, mock_db):
         mock_db.execute.return_value = self.empty_result()
@@ -235,128 +405,6 @@ class TestBulkItemCreation:
         assert items == original
         assert replayed is True
         mock_db.add.assert_not_called()
-        mock_db.commit.assert_not_awaited()
-
-
-class TestBulkItemDeletion:
-    """Bulk deletion is parent-scoped, atomic, and retry-safe."""
-
-    @staticmethod
-    def result(rows):
-        result = MagicMock()
-        result.scalars.return_value.first.return_value = rows[0] if rows else None
-        result.scalars.return_value.all.return_value = rows
-        return result
-
-    async def test_deletes_complete_batch_and_commits_once(self, service, mock_db):
-        compartment = SimpleNamespace(template_id="template-1")
-        first = SimpleNamespace(id="item-1", name="Radio")
-        second = SimpleNamespace(id="item-2", name="Light")
-        mock_db.execute.side_effect = [self.result([]), self.result([first, second])]
-        with (
-            patch.object(
-                service,
-                "_get_compartment",
-                new_callable=AsyncMock,
-                return_value=compartment,
-            ),
-            patch.object(service, "log_template_change", new_callable=AsyncMock),
-        ):
-            deleted, replayed = await service.delete_items_bulk(
-                "comp-1",
-                "org-1",
-                ["item-1", "item-2"],
-                "request-123",
-                "user-1",
-                "Tester",
-            )
-        assert deleted == ["item-1", "item-2"]
-        assert replayed is False
-        assert mock_db.delete.await_count == 2
-        mock_db.commit.assert_awaited_once()
-
-    async def test_wrong_parent_rolls_back_without_deleting(self, service, mock_db):
-        mock_db.execute.side_effect = [
-            self.result([]),
-            self.result([SimpleNamespace(id="item-1", name="Radio")]),
-        ]
-        with patch.object(
-            service,
-            "_get_compartment",
-            new_callable=AsyncMock,
-            return_value=SimpleNamespace(template_id="template-1"),
-        ):
-            with pytest.raises(ValueError, match="specified compartment"):
-                await service.delete_items_bulk(
-                    "comp-1",
-                    "org-1",
-                    ["item-1", "foreign-item"],
-                    "request-123",
-                    "user-1",
-                    "Tester",
-                )
-        mock_db.delete.assert_not_awaited()
-        mock_db.commit.assert_not_awaited()
-        mock_db.rollback.assert_awaited_once()
-
-    async def test_delete_failure_rolls_back_entire_batch(self, service, mock_db):
-        first = SimpleNamespace(id="item-1", name="Radio")
-        second = SimpleNamespace(id="item-2", name="Light")
-        mock_db.execute.side_effect = [self.result([]), self.result([first, second])]
-        mock_db.delete.side_effect = [None, RuntimeError("database failure")]
-        with (
-            patch.object(
-                service,
-                "_get_compartment",
-                new_callable=AsyncMock,
-                return_value=SimpleNamespace(template_id="template-1"),
-            ),
-            patch.object(service, "log_template_change", new_callable=AsyncMock),
-        ):
-            with pytest.raises(RuntimeError, match="database failure"):
-                await service.delete_items_bulk(
-                    "comp-1",
-                    "org-1",
-                    ["item-1", "item-2"],
-                    "request-123",
-                    "user-1",
-                    "Tester",
-                )
-        mock_db.commit.assert_not_awaited()
-        mock_db.rollback.assert_awaited_once()
-
-    async def test_retry_returns_confirmed_ids_without_deleting_again(
-        self, service, mock_db
-    ):
-        item_ids = ["item-1", "item-2"]
-        payload_hash = (
-            __import__("hashlib")
-            .sha256(
-                __import__("json")
-                .dumps(sorted(item_ids), separators=(",", ":"))
-                .encode()
-            )
-            .hexdigest()
-        )
-        ledger = SimpleNamespace(payload_hash=payload_hash, item_ids=item_ids)
-        mock_db.execute.return_value = self.result([ledger])
-        with patch.object(
-            service,
-            "_get_compartment",
-            new_callable=AsyncMock,
-            return_value=SimpleNamespace(template_id="template-1"),
-        ):
-            deleted, replayed = await service.delete_items_bulk(
-                "comp-1",
-                "org-1",
-                item_ids,
-                "request-123",
-                "user-1",
-                "Tester",
-            )
-        assert deleted == item_ids
-        assert replayed is True
-        mock_db.delete.assert_not_awaited()
         mock_db.commit.assert_not_awaited()
 
 
