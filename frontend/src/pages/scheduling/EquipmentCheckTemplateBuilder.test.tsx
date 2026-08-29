@@ -8,6 +8,8 @@ import EquipmentCheckTemplateBuilder from './EquipmentCheckTemplateBuilder';
 
 const {
   getTemplate,
+  createTemplate,
+  updateTemplate,
   updateCheckItem,
   addCheckItem,
   reorderItems,
@@ -18,6 +20,8 @@ const {
   toastError,
 } = vi.hoisted(() => ({
   getTemplate: vi.fn(),
+  createTemplate: vi.fn(),
+  updateTemplate: vi.fn(),
   updateCheckItem: vi.fn(),
   addCheckItem: vi.fn(),
   reorderItems: vi.fn(),
@@ -34,6 +38,9 @@ vi.mock('@/modules/scheduling', () => ({
   schedulingService: {
     getApparatusOptions: vi.fn().mockResolvedValue({ options: [] }),
     getEquipmentCheckTemplate: (...args: unknown[]) => getTemplate(...args),
+    createEquipmentCheckTemplate: (...args: unknown[]) => createTemplate(...args),
+    updateEquipmentCheckTemplate: (...args: unknown[]) => updateTemplate(...args),
+    updateCompartment: vi.fn().mockResolvedValue({}),
     updateCheckItem: (...args: unknown[]) => updateCheckItem(...args),
     addCheckItem: (...args: unknown[]) => addCheckItem(...args),
     reorderItems: (...args: unknown[]) => reorderItems(...args),
@@ -468,6 +475,44 @@ describe('EquipmentCheckTemplateBuilder bulk deletion', () => {
 });
 
 describe('EquipmentCheckTemplateBuilder creation guidance', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    createTemplate.mockResolvedValue({ id: 'draft-1' });
+    updateTemplate.mockResolvedValue(template);
+  });
+
+  it('saves an incomplete new template as an inactive draft', async () => {
+    const user = userEvent.setup();
+    renderNewBuilder();
+
+    await user.click(screen.getByRole('button', { name: 'Save draft' }));
+
+    expect(createTemplate).toHaveBeenCalledWith(expect.objectContaining({ name: '', is_active: false }));
+  });
+
+  it('blocks publication until the template is consumable', () => {
+    renderNewBuilder();
+
+    expect(screen.getByRole('button', { name: 'Publish' })).toBeDisabled();
+    expect(screen.getByText('Template name is required.')).toBeInTheDocument();
+  });
+
+  it('publishes after the blocking structure issues are fixed', async () => {
+    const user = userEvent.setup();
+    getTemplate.mockResolvedValue({
+      ...structuredClone(template),
+      isActive: false,
+      compartments: [structuredClone(template.compartments[0])],
+    });
+    renderBuilder();
+
+    const publish = await screen.findByRole('button', { name: 'Publish' });
+    await waitFor(() => expect(publish).toBeEnabled());
+    await user.click(publish);
+
+    await waitFor(() => expect(updateTemplate).toHaveBeenLastCalledWith('template-1', { is_active: true }));
+  });
+
   it('preserves preset test instructions and marks the review step ready', async () => {
     renderNewBuilder();
 
