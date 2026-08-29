@@ -16,7 +16,7 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-[#TBD](https://github.com/thegspiro/the-logbook/pull/TBD) — Feature 19
+[#2017](https://github.com/thegspiro/the-logbook/pull/2017) — Feature 19
 (Skills testing), pass 2. Branch `claude/security-review-skills-testing`.
 
 ---
