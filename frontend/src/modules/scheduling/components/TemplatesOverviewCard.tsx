@@ -65,6 +65,7 @@ export const TemplatesOverviewCard: React.FC<TemplatesOverviewCardProps> = ({ te
                         >
                           {slot.position}
                           {!slot.required && ' (opt)'}
+                          {slot.allow_administrative_members && ' (administrative)'}
                         </span>
                       ))}
                     </div>
