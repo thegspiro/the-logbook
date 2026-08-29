@@ -520,16 +520,23 @@ async def list_shifts(
             status_code=400, detail="Invalid date format. Use YYYY-MM-DD."
         )
 
-    shifts, total = await service.get_shifts(
-        current_user.organization_id,
-        start_date=start,
-        end_date=end,
-        skip=pagination.skip,
-        limit=pagination.limit,
-    )
-    shifts = await _member_visible_shifts(service, current_user, shifts)
-    if not user_has_permission(current_user, "scheduling.manage"):
-        total = len(shifts)
+    if user_has_permission(current_user, "scheduling.manage"):
+        shifts, total = await service.get_shifts(
+            current_user.organization_id,
+            start_date=start,
+            end_date=end,
+            skip=pagination.skip,
+            limit=pagination.limit,
+        )
+    else:
+        shifts, total = await service.get_member_visible_shifts(
+            current_user,
+            current_user.organization_id,
+            start_date=start,
+            end_date=end,
+            skip=pagination.skip,
+            limit=pagination.limit,
+        )
 
     enriched = await _enrich_shifts(service, current_user.organization_id, shifts)
     return {

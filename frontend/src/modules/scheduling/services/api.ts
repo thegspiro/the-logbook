@@ -284,8 +284,8 @@ export interface SchedulingWidgetPreferences {
 /** Event template metadata stored in the positions field for event-category templates. */
 export interface EventTemplatePositions {
   event_type?: string;
-  resources?: Array<{ positions: string[]; quantity: number }>;
-  flat_positions?: string[];
+  resources?: Array<{ positions: Array<string | PositionSlot>; quantity: number }>;
+  flat_positions?: Array<string | PositionSlot>;
 }
 
 export interface ShiftTemplateRecord {

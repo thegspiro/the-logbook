@@ -251,13 +251,16 @@ class RoleManagementService:
         """
         Update a role.
 
-        System roles can only have their permissions and description updated.
+        System roles can only have their permissions and description updated,
+        except that the baseline ``member`` position's display name may also be
+        customized. Position slugs are never updated by this method.
 
         Args:
             role_id: Role ID to update
             organization_id: Organization ID
             updated_by: User ID making the update
-            name: New name (ignored for system roles)
+            name: New display name (only the ``member`` system position and
+                custom positions may be renamed)
             description: New description
             permissions: New permissions list
             priority: New priority (ignored for system roles)
@@ -274,8 +277,15 @@ class RoleManagementService:
 
         changes = {}
 
-        # System roles: only allow description and permissions updates
+        # System roles: only the member position's display label is customizable.
+        # Its stable slug remains the identifier used for baseline assignment and
+        # permission resolution.
         if role.is_system:
+            if name is not None:
+                if role.slug != "member":
+                    raise ValueError("Cannot rename this system position")
+                changes["name"] = {"old": role.name, "new": name}
+                role.name = name
             if description is not None:
                 changes["description"] = {"old": role.description, "new": description}
                 role.description = description
