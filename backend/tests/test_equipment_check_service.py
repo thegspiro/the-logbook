@@ -86,7 +86,7 @@ class TestCloneCompartment:
 
 class TestUpdateTemplateApparatusValidation:
     async def test_foreign_apparatus_rejected(self, service, mock_db):
-        template = MagicMock()
+        template = MagicMock(is_active=False)
         with (
             patch.object(
                 service, "get_template", new_callable=AsyncMock, return_value=template
@@ -105,7 +105,7 @@ class TestUpdateTemplateApparatusValidation:
         mock_db.commit.assert_not_awaited()
 
     async def test_in_org_apparatus_passes(self, service, mock_db):
-        template = MagicMock()
+        template = MagicMock(is_active=False)
         with (
             patch.object(
                 service, "get_template", new_callable=AsyncMock, return_value=template
@@ -123,7 +123,7 @@ class TestUpdateTemplateApparatusValidation:
         mock_db.commit.assert_awaited_once()
 
     async def test_no_apparatus_change_skips_validation(self, service, mock_db):
-        template = MagicMock()
+        template = MagicMock(is_active=False)
         with (
             patch.object(
                 service, "get_template", new_callable=AsyncMock, return_value=template
@@ -139,7 +139,7 @@ class TestUpdateTemplateApparatusValidation:
 
     async def test_clearing_apparatus_skips_validation(self, service, mock_db):
         # apparatus_id=None clears it (a generic template) — not a foreign-id case.
-        template = MagicMock()
+        template = MagicMock(is_active=False)
         with (
             patch.object(
                 service, "get_template", new_callable=AsyncMock, return_value=template
