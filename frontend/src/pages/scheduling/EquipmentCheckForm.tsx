@@ -343,6 +343,13 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
   const [syncStatus, setSyncStatus] = useState<SyncStatus>('idle');
   const [pendingQueueCount, setPendingQueueCount] = useState(0);
   const syncingRef = useRef(false);
+  const [submissionOutcome, setSubmissionOutcome] = useState<
+    | { status: 'complete'; photoCount: number }
+    | { status: 'evidence_pending'; photoCount: number; totalPhotoCount: number; queueId: string }
+    | { status: 'evidence_failed'; message: string }
+    | { status: 'failed'; message: string }
+    | null
+  >(null);
 
   // --------------------------------------------------------------------------
   // Resolve sub-compartments: merge children inline under their parent
@@ -414,6 +421,11 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
           }
 
           await dequeueCheck(entry.id);
+          setSubmissionOutcome((outcome) =>
+            outcome?.status === 'evidence_pending' && outcome.queueId === entry.id
+              ? { status: 'complete', photoCount: outcome.totalPhotoCount }
+              : outcome
+          );
         } catch (error) {
           // Never delete the device's only copy after a transport failure or a
           // retryable server response. Only explicit, permanent 4xx rejections
@@ -422,6 +434,11 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
             const updated = await markRetry(entry.id);
             if (updated && updated.retries >= CHECK_QUEUE_MAX_RETRIES) {
               await dequeueCheck(entry.id);
+              setSubmissionOutcome((outcome) =>
+                outcome?.status === 'evidence_pending' && outcome.queueId === entry.id
+                  ? { status: 'evidence_failed', message: 'The retained evidence was rejected and has been discarded.' }
+                  : outcome
+              );
               discarded++;
               continue;
             }
@@ -448,6 +465,14 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
       syncingRef.current = false;
     }
   }, []);
+
+  // An online 5xx does not produce an `online` event, so schedule another
+  // attempt while this form is displaying retained evidence.
+  useEffect(() => {
+    if (submissionOutcome?.status !== 'evidence_pending' || !isOnline) return;
+    const retry = window.setTimeout(() => void syncPendingChecks(), 30_000);
+    return () => window.clearTimeout(retry);
+  }, [isOnline, submissionOutcome, syncPendingChecks]);
 
   // Auto-sync when coming online
   useEffect(() => {
@@ -1290,6 +1315,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
     }
 
     const clientSubmissionId = crypto.randomUUID();
+    setSubmissionOutcome(null);
     setSubmitting(true);
     const { items, itemsWithPhotos } = buildSubmissionItems();
     // Named apart from the `seals` state it is built from: shadowing it here
@@ -1339,24 +1365,76 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
         checkResult = await schedulingService.submitStandaloneCheck(payload);
       }
 
-      // Upload photos to check items in parallel after submission
-      if (itemsWithPhotos.length > 0 && checkResult.items) {
-        await Promise.all(
-          itemsWithPhotos.map(({ itemId, files }) => {
-            const checkItem = checkResult.items?.find((ci) => ci.templateItemId === itemId);
-            if (!checkItem) return Promise.resolve();
-            return schedulingService.uploadCheckItemPhotos(checkResult.id, checkItem.id, files).catch(() => {
-              toast.error(`Failed to upload photos for ${checkItem.itemName}`);
-            });
-          })
-        );
+      const submittedItemIds = Object.fromEntries(
+        (checkResult.items ?? [])
+          .filter((item) => item.templateItemId)
+          .map((item) => [item.templateItemId as string, item.id])
+      );
+      const totalPhotoCount = itemsWithPhotos.reduce((count, item) => count + item.files.length, 0);
+      let photoQueueId: string | null = null;
+
+      // Keep the device's durable copy until every append-only photo upload is
+      // checkpointed. Once the check ID is stored this entry can only retry
+      // evidence; it must never create the already-accepted check again.
+      if (itemsWithPhotos.length > 0) {
+        // A standalone entry never reaches the check-submission branch in the
+        // drain because the accepted ID is checkpointed immediately below.
+        try {
+          photoQueueId = await enqueueCheck(shiftId ?? '', basePayload, itemsWithPhotos);
+          await markCheckSubmitted(photoQueueId, checkResult.id, submittedItemIds);
+        } catch {
+          // The check already exists. Continue the direct uploads, but never
+          // describe a later failure as a failed check submission or invite a
+          // second check submission when IndexedDB cannot retain the files.
+          photoQueueId = null;
+        }
       }
+
+      let outstandingPhotoCount = totalPhotoCount;
+      try {
+        for (const { itemId, files } of itemsWithPhotos) {
+          const checkItemId = submittedItemIds[itemId];
+          if (!checkItemId) {
+            throw new Error(`Submitted check item not found for template item ${itemId}`);
+          }
+          await schedulingService.uploadCheckItemPhotos(checkResult.id, checkItemId, files);
+          outstandingPhotoCount -= files.length;
+          if (photoQueueId) await markPhotosUploaded(photoQueueId, itemId);
+        }
+      } catch {
+        if (!photoQueueId) {
+          setSubmissionOutcome({
+            status: 'evidence_failed',
+            message: 'Photo upload failed and this device could not retain the evidence for retry.',
+          });
+          toast.error('Equipment check submitted, but evidence could not be retained');
+          return;
+        }
+        const count = await getPendingCount();
+        setPendingQueueCount(count);
+        setSubmissionOutcome({
+          status: 'evidence_pending',
+          photoCount: outstandingPhotoCount,
+          totalPhotoCount,
+          queueId: photoQueueId,
+        });
+        try {
+          localStorage.removeItem(draftKey);
+        } catch {
+          /* ignore */
+        }
+        toast.error('Equipment check submitted, but evidence was saved for retry');
+        return;
+      }
+
+      if (photoQueueId) await dequeueCheck(photoQueueId);
 
       try {
         localStorage.removeItem(draftKey);
       } catch {
         /* ignore */
       }
+      setSubmissionOutcome({ status: 'complete', photoCount: totalPhotoCount });
       toast.success('Equipment check submitted successfully');
       onComplete?.();
     } catch (err: unknown) {
@@ -1367,13 +1445,16 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
       // was told it was safely queued and the draft was deleted underneath
       // them. Surface the rejection and keep the draft so it can be corrected.
       if (!isNetworkError(err)) {
-        toast.error(getErrorMessage(err, 'Failed to submit equipment check'));
+        const message = getErrorMessage(err, 'Failed to submit equipment check');
+        setSubmissionOutcome({ status: 'failed', message });
+        toast.error(message);
         return;
       }
       try {
         if (shiftId) {
           await enqueueCheck(shiftId, basePayload, itemsWithPhotos);
         } else {
+          setSubmissionOutcome({ status: 'failed', message: 'Failed to submit check. Please try again.' });
           toast.error('Failed to submit check. Please try again.');
           setSubmitting(false);
           return;
@@ -1388,6 +1469,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
         toast.success('Connection lost — check queued for sync');
         onComplete?.();
       } catch {
+        setSubmissionOutcome({ status: 'failed', message: 'Failed to submit equipment check' });
         toast.error('Failed to submit equipment check');
       }
     } finally {
@@ -2183,7 +2265,12 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
               <button
                 type="button"
                 onClick={() => void handleSubmit()}
-                disabled={submitting || !allRequiredChecked}
+                disabled={
+                  submitting ||
+                  !allRequiredChecked ||
+                  submissionOutcome?.status === 'evidence_pending' ||
+                  submissionOutcome?.status === 'evidence_failed'
+                }
                 className="flex min-h-[52px] w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-3.5 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {submitting ? (
@@ -2218,6 +2305,66 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
 
   return (
     <div className="mx-auto max-w-lg space-y-4 px-3 pb-12">
+      {submissionOutcome && !previewMode && (
+        <div
+          role="status"
+          className={`space-y-2 rounded-lg border px-3 py-3 text-sm ${
+            submissionOutcome.status === 'failed' || submissionOutcome.status === 'evidence_failed'
+              ? 'border-red-500/30 bg-red-500/10 text-red-800 dark:text-red-300'
+              : submissionOutcome.status === 'evidence_pending'
+                ? 'border-amber-500/30 bg-amber-500/10 text-amber-900 dark:text-amber-200'
+                : 'border-green-500/30 bg-green-500/10 text-green-800 dark:text-green-300'
+          }`}
+        >
+          {submissionOutcome.status === 'failed' ? (
+            <>
+              <p className="flex items-center gap-2 font-medium">
+                <XCircle className="h-4 w-4" aria-hidden="true" /> Check submission failed
+              </p>
+              <p>{submissionOutcome.message}</p>
+            </>
+          ) : submissionOutcome.status === 'evidence_failed' ? (
+            <>
+              <p className="flex items-center gap-2 font-medium">
+                <CheckCircle className="h-4 w-4" aria-hidden="true" /> Equipment check submitted
+              </p>
+              <p className="flex items-center gap-2">
+                <XCircle className="h-4 w-4" aria-hidden="true" /> {submissionOutcome.message}
+              </p>
+            </>
+          ) : (
+            <>
+              <p className="flex items-center gap-2 font-medium">
+                <CheckCircle className="h-4 w-4" aria-hidden="true" /> Equipment check submitted
+              </p>
+              {submissionOutcome.status === 'complete' ? (
+                <p className="flex items-center gap-2">
+                  <CheckCircle className="h-4 w-4" aria-hidden="true" /> {submissionOutcome.photoCount}{' '}
+                  {submissionOutcome.photoCount === 1 ? 'photo' : 'photos'} attached
+                </p>
+              ) : (
+                <>
+                  <p className="flex items-center gap-2 font-medium">
+                    <RefreshCw className="h-4 w-4" aria-hidden="true" /> {submissionOutcome.photoCount}{' '}
+                    {submissionOutcome.photoCount === 1 ? 'photo' : 'photos'} saved for retry
+                  </p>
+                  <p>Evidence will sync when connected.</p>
+                  <div className="text-right">
+                    <button
+                      type="button"
+                      onClick={() => void syncPendingChecks()}
+                      disabled={syncStatus === 'syncing'}
+                      className="font-medium text-amber-800 hover:underline disabled:opacity-50 dark:text-amber-200"
+                    >
+                      Retry now
+                    </button>
+                  </div>
+                </>
+              )}
+            </>
+          )}
+        </div>
+      )}
       {/* Offline banner */}
       {!isOnline && !previewMode && (
         <div className="flex items-center gap-2 rounded-lg border border-yellow-500/30 bg-yellow-500/10 px-3 py-2 text-sm text-yellow-800 dark:text-yellow-300">
