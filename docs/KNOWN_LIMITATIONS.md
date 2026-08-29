@@ -2243,6 +2243,58 @@ rotation's process reserves for a flagged item rather than a drive-by
 fix inside an unrelated finding. (Security review TR-17 residual,
 `docs/security-review/TR-17-training-core.md`.)
 
+## Training — `GET /training/records` Has No Pagination (2026-08-29)
+
+Unlike the rest of the codebase's per-record list endpoints (e.g.
+`events.py`'s `list_events`, which takes `skip`/`limit` with a hard cap),
+`list_records` in `training.py` returns every matching `TrainingRecord` row
+with no `skip`/`limit`/page bound — an officer with `training.manage` can
+trigger a single unbounded read across the whole org's training-record
+history, which only grows over a department's lifetime.
+
+Not a tenant-isolation issue (the query is correctly org- and, for
+non-officers, self-scoped) and not currently exploitable beyond a large,
+slow response — but it is the "no `all()` over an org-wide table" abuse-
+resistance gap the review checklist calls out, and the module's own other
+list endpoints (courses/categories/requirements) are naturally small
+configuration tables where this doesn't apply, which is likely why it went
+unnoticed.
+
+Not fixed: `trainingServices.ts`'s `listRecords()` returns a bare array that
+callers (`MyTrainingPage`, admin record tables) consume as the complete
+set to build client-side stats and tables with no pagination UI. Adding a
+server-side cap would silently truncate a large org's data for those
+callers rather than degrade gracefully, so it needs a paired frontend
+change (a `Pagination` UI or a "load more" affordance) rather than a
+backend-only drive-by fix. (Security review TR-17 pass 2,
+`docs/security-review/TR-17-training-core.md`.)
+
+## Training — Dashboard Summary Is an Unbounded Per-Request Scan (2026-08-29)
+
+`get_training_dashboard_summary` (`app/api/v1/endpoints/training.py`) loads
+every active `User`, every active `TrainingRequirement`, and every
+`TrainingRecord` belonging to those users for the org, with no date bound or
+row limit, then evaluates each member's applicable requirements in Python.
+Until this pass, the endpoint's 30s-fresh/90s-stale frontend cache absorbed
+repeated dashboard mounts within that window. TR2-1/TR2-3 (this pass)
+correctly excluded it from that cache — the response carries per-member
+names, so caching it risked serving stale PII past a permission or record
+change — but removing the cache means every dashboard mount or manual
+refresh now re-runs this unbounded scan directly against the database.
+
+Not fixed: closing this needs the query itself bounded (e.g. limiting
+`TrainingRecord` rows to what each requirement's own lookback/
+recertification window actually needs, via the same logic
+`training_compliance.py`'s `get_requirement_date_window` already applies) or
+reworked into a set-based/aggregate evaluation instead of loading every row
+into Python. Either is a service-level query redesign entangled with
+`evaluate_member_requirement`'s per-requirement date-window correctness, not
+a safe drive-by alongside a cache-exclusion security fix. Same abuse-
+resistance class as the `GET /training/records` limitation above; this one
+is now more pressing since a cache-based mitigation was correctly removed
+out from under it. (Security review TR-17 pass 2,
+`docs/security-review/TR-17-training-core.md`.)
+
 ## RPT2-29-2 — Saved Report Scheduling Is Stored and API-Writable, but Nothing Reads It (2026-08-27)
 
 `POST /reports/saved` and `PATCH /reports/saved/{id}` fully accept and

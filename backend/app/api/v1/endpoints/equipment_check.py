@@ -33,6 +33,8 @@ from app.schemas.equipment_check import (
     CheckTemplateCompartmentResponse,
     CheckTemplateCompartmentUpdate,
     CheckTemplateItemBulkCreate,
+    CheckTemplateItemBulkDelete,
+    CheckTemplateItemBulkDeleteResponse,
     CheckTemplateItemBulkResponse,
     CheckTemplateItemCreate,
     CheckTemplateItemResponse,
@@ -675,6 +677,37 @@ async def delete_item(
         await db.commit()
 
 
+@router.post(
+    "/compartments/{compartment_id}/items/bulk-delete",
+    response_model=CheckTemplateItemBulkDeleteResponse,
+)
+async def delete_items_bulk(
+    compartment_id: str,
+    data: CheckTemplateItemBulkDelete,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("equipment_check.manage")),
+):
+    """Delete an org-scoped compartment's item batch atomically."""
+    service = EquipmentCheckService(db)
+    try:
+        result = await service.delete_items_bulk(
+            compartment_id,
+            str(current_user.organization_id),
+            data.item_ids,
+            data.idempotency_key,
+            str(current_user.id),
+            _user_display_name(current_user),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=safe_error_detail(exc))
+    if result is None:
+        raise HTTPException(status_code=404, detail="Compartment not found")
+    deleted_item_ids, replayed = result
+    return CheckTemplateItemBulkDeleteResponse(
+        deleted_item_ids=deleted_item_ids, replayed=replayed
+    )
+
+
 @router.put("/compartments/{compartment_id}/items/reorder", status_code=200)
 async def reorder_items(
     compartment_id: str,
@@ -1116,15 +1149,7 @@ async def upload_check_item_photos(
     if not check_item:
         raise HTTPException(status_code=404, detail="Check item not found")
 
-    existing_urls: list = check_item.photo_urls or []
-    if len(existing_urls) + len(files) > MAX_PHOTOS_PER_ITEM:
-        raise HTTPException(
-            status_code=400,
-            detail=(
-                f"Item already has {len(existing_urls)} photo(s); "
-                f"maximum is {MAX_PHOTOS_PER_ITEM}"
-            ),
-        )
+    existing_urls: list[str] = check_item.photo_urls or []
 
     # Detect magic library availability once
     try:
@@ -1180,7 +1205,20 @@ async def upload_check_item_photos(
             ) from exc
         encoded = base64.b64encode(optimized).decode()
         data_uri = f"data:image/webp;base64,{encoded}"
-        new_urls.append(data_uri)
+        # Retrying after the server committed but its response was lost must
+        # not append the same evidence twice. Optimization is deterministic,
+        # so the stored data URI is also the content fingerprint.
+        if data_uri not in existing_urls and data_uri not in new_urls:
+            new_urls.append(data_uri)
+
+    if len(existing_urls) + len(new_urls) > MAX_PHOTOS_PER_ITEM:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Item already has {len(existing_urls)} photo(s); "
+                f"maximum is {MAX_PHOTOS_PER_ITEM}"
+            ),
+        )
 
     # Shallow copy suffices — strings are immutable
     updated_urls = list(existing_urls) + new_urls
