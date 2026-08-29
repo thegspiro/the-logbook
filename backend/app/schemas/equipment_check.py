@@ -342,6 +342,7 @@ class EquipmentCheckTemplateResponse(UTCResponseBase):
     assigned_positions: Optional[List[str]] = None
     is_active: bool
     sort_order: int
+    content_revision: int
     compartments: List[CheckTemplateCompartmentResponse] = []
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None

@@ -2117,6 +2117,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       ...(form.apparatusId ? { apparatusId: form.apparatusId } : {}),
       isActive: form.isActive,
       sortOrder: 0,
+      contentRevision: 0,
       compartments: compartments.map((c, cIdx) => ({
         id: c.id ?? `preview-comp-${cIdx}`,
         templateId: templateId ?? 'preview',

@@ -2162,6 +2162,7 @@ class EquipmentCheckTemplate(Base):
     assigned_positions = Column(JSON, nullable=True)  # e.g. ["officer","driver"]
     is_active = Column(Boolean, default=True, nullable=False)
     sort_order = Column(Integer, default=0, nullable=False)
+    content_revision = Column(Integer, default=1, server_default="1", nullable=False)
 
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(

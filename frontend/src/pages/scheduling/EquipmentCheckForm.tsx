@@ -120,6 +120,23 @@ interface ItemResult {
   notes?: string | undefined;
 }
 
+interface DraftItemDefinition {
+  name: string;
+  compartmentId: string;
+  checkType: CheckType;
+  requiredQuantity?: number | undefined;
+  expectedQuantity?: number | undefined;
+  criticalMinimumQuantity?: number | undefined;
+  minLevel?: number | undefined;
+  levelUnit?: string | undefined;
+  hasExpiration: boolean;
+}
+
+interface DraftRevisionNotice {
+  restored: number;
+  changed: string[];
+}
+
 /** How many short items the par warning names before it starts summarizing. */
 const SHORTFALL_PREVIEW_LIMIT = 6;
 
@@ -343,6 +360,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
   // the last count has not been opened, so its contents cannot have changed.
   const [seals, setSeals] = useState<Record<string, SealState>>({});
   const [lastSeals, setLastSeals] = useState<Record<string, LastSealRecord>>({});
+  const [revisionNotice, setRevisionNotice] = useState<DraftRevisionNotice | null>(null);
   const photoInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
   const isOnline = useOnlineStatus();
@@ -739,13 +757,53 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
       userId: user.id,
       shiftId: shiftId ?? 'standalone',
       templateId: template.id,
-      // updatedAt is the API's revision token for this otherwise unversioned
-      // resource. A changed checklist must never inherit answers by item id.
-      templateRevision: template.updatedAt ?? template.createdAt ?? 'unversioned',
+      // Draft reconciliation handles content changes item by item. Keeping this
+      // identity stable lets a new revision find the preceding revision's draft.
+      templateRevision: 'content-revision',
     };
-  }, [shiftId, template.createdAt, template.id, template.updatedAt, user]);
+  }, [shiftId, template.id, user]);
   const [draftReady, setDraftReady] = useState(false);
   const draftSaveWarningShown = useRef(false);
+
+  const activeItemDefinitions = useMemo(
+    () =>
+      Object.fromEntries(
+        compartments.flatMap((compartment) =>
+          compartment.items.map((item) => [
+            item.id,
+            {
+              name: item.name,
+              compartmentId: compartment.id,
+              checkType: item.checkType,
+              requiredQuantity: item.requiredQuantity,
+              expectedQuantity: item.expectedQuantity,
+              criticalMinimumQuantity: item.criticalMinimumQuantity,
+              minLevel: item.minLevel,
+              levelUnit: item.levelUnit,
+              hasExpiration: item.hasExpiration,
+            } satisfies DraftItemDefinition,
+          ])
+        )
+      ),
+    [compartments]
+  );
+  const activeSealDefinitions = useMemo(
+    () =>
+      Object.fromEntries(
+        compartments.map((compartment) => [
+          compartment.id,
+          {
+            name: compartment.name,
+            isSealed: Boolean(compartment.isSealed),
+            clearableItemIds: compartment.items
+              .filter((item) => !item.hasExpiration && (item.checkType === 'function' || item.checkType === 'count'))
+              .map((item) => item.id)
+              .sort(),
+          },
+        ])
+      ),
+    [compartments]
+  );
 
   useEffect(() => {
     if (previewMode || !draftIdentity) {
@@ -757,21 +815,65 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
       results: Record<string, ItemResult>;
       overallNotes: string;
       seals?: Record<string, SealState>;
+      contentRevision?: number;
+      itemDefinitions?: Record<string, DraftItemDefinition>;
+      sealDefinitions?: typeof activeSealDefinitions;
     }>(draftIdentity)
       .then((draft) => {
         if (cancelled || !draft) return;
         const parsed = draft.contents;
-        if (parsed.results && Object.keys(parsed.results).length > 0) setResults(parsed.results);
-        // Restored together with the results, because confirming a seal writes
-        // passing statuses into them. Without this a reload would bring back
-        // those passes with no seal behind them, and the crew could submit a
-        // completed check whose audit record says nobody ever vouched for the
-        // contents. No older draft can carry that state: the seal shortcut and
-        // this line ship together, so a draft without `seals` has no
-        // seal-derived passes in it either.
-        if (parsed.seals && Object.keys(parsed.seals).length > 0) setSeals(parsed.seals);
+        const revisionsMatch = parsed.contentRevision === template.contentRevision;
+        const restoredResults: Record<string, ItemResult> = {};
+        const restoredSeals: Record<string, SealState> = {};
+        const changed: string[] = [];
+        if (revisionsMatch) {
+          Object.assign(restoredResults, parsed.results);
+          Object.assign(restoredSeals, parsed.seals);
+        } else {
+          for (const [itemId, result] of Object.entries(parsed.results ?? {})) {
+            const savedDefinition = parsed.itemDefinitions?.[itemId];
+            const activeDefinition = activeItemDefinitions[itemId];
+            const savedSeal = savedDefinition ? parsed.seals?.[savedDefinition.compartmentId] : undefined;
+            const sealWasClearing = Boolean(savedSeal?.confirmed && savedSeal.intact && savedSeal.cleared);
+            const sealCompatible =
+              !sealWasClearing ||
+              (activeSealDefinitions[savedDefinition?.compartmentId ?? '']?.isSealed === true &&
+                JSON.stringify(parsed.sealDefinitions?.[savedDefinition?.compartmentId ?? '']) ===
+                  JSON.stringify(activeSealDefinitions[savedDefinition?.compartmentId ?? '']));
+            if (
+              savedDefinition &&
+              activeDefinition &&
+              JSON.stringify(savedDefinition) === JSON.stringify(activeDefinition) &&
+              sealCompatible
+            ) {
+              restoredResults[itemId] = result;
+            } else {
+              const name = savedDefinition?.name ?? activeDefinition?.name ?? 'Removed checklist item';
+              const reason = !activeDefinition
+                ? 'removed from checklist'
+                : savedDefinition?.checkType !== activeDefinition.checkType
+                  ? `${CHECK_TYPE_LABELS[savedDefinition?.checkType ?? 'function']} → ${CHECK_TYPE_LABELS[activeDefinition.checkType]}`
+                  : !sealCompatible
+                    ? 'seal requirement changed'
+                    : 'requirements changed';
+              changed.push(`${name}: ${reason}`);
+            }
+          }
+          for (const [compartmentId, seal] of Object.entries(parsed.seals ?? {})) {
+            if (
+              activeSealDefinitions[compartmentId]?.isSealed === true &&
+              JSON.stringify(parsed.sealDefinitions?.[compartmentId]) ===
+                JSON.stringify(activeSealDefinitions[compartmentId])
+            ) {
+              restoredSeals[compartmentId] = seal;
+            }
+          }
+          setRevisionNotice({ restored: Object.keys(restoredResults).length, changed });
+        }
+        setResults(restoredResults);
+        if (Object.keys(restoredSeals).length > 0) setSeals(restoredSeals);
         if (parsed.overallNotes) setOverallNotes(parsed.overallNotes);
-        const completed = Object.values(parsed.results).filter((result) => result.status !== 'not_checked').length;
+        const completed = Object.values(restoredResults).filter((result) => result.status !== 'not_checked').length;
         const minutes = Math.max(0, Math.floor((Date.now() - draft.updatedAt) / 60_000));
         toast.success(
           `Draft restored — saved by you ${minutes === 0 ? 'just now' : `${String(minutes)} minutes ago`}; ${String(completed)} of ${String(totalItems)} items completed`
@@ -784,27 +886,39 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
     return () => {
       cancelled = true;
     };
-  }, [draftIdentity, previewMode, totalItems]);
+  }, [activeItemDefinitions, activeSealDefinitions, draftIdentity, previewMode, template.contentRevision, totalItems]);
 
   useEffect(() => {
     if (previewMode || !draftIdentity || !draftReady) return;
-    // Session termination removes this hint synchronously, before its slower
-    // IndexedDB purge. Do not let a late API response recreate a sensitive
-    // draft while logout/session-expiry cleanup is still running.
     if (!localStorage.getItem('has_session')) return;
     if (Object.keys(results).length === 0 && !overallNotes && Object.keys(seals).length === 0) return;
-    // Photo previews and File objects are deliberately excluded. Once a check
-    // is queued, the blob-capable submission queue owns durable photographs.
     const durableResults = Object.fromEntries(
       Object.entries(results).map(([id, { photoFiles: _photoFiles, photoUrls: _photoUrls, ...result }]) => [id, result])
     );
-    void saveEquipmentCheckDraft(draftIdentity, { results: durableResults, overallNotes, seals }).catch(() => {
+    void saveEquipmentCheckDraft(draftIdentity, {
+      results: durableResults,
+      overallNotes,
+      seals,
+      contentRevision: template.contentRevision,
+      itemDefinitions: activeItemDefinitions,
+      sealDefinitions: activeSealDefinitions,
+    }).catch(() => {
       if (!draftSaveWarningShown.current) {
         draftSaveWarningShown.current = true;
         toast.error('Draft could not be saved on this device. You can continue, but keep this page open.');
       }
     });
-  }, [results, overallNotes, seals, draftIdentity, draftReady, previewMode]);
+  }, [
+    activeItemDefinitions,
+    activeSealDefinitions,
+    draftIdentity,
+    draftReady,
+    overallNotes,
+    previewMode,
+    results,
+    seals,
+    template.contentRevision,
+  ]);
 
   // --------------------------------------------------------------------------
   // Pre-populate from last check for this apparatus
@@ -2316,6 +2430,38 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
 
   return (
     <div className="mx-auto max-w-lg space-y-4 px-3 pb-12">
+      {revisionNotice && (
+        <section
+          className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-4 text-sm text-amber-950 dark:text-amber-100"
+          aria-label="Checklist updated"
+        >
+          <div className="flex items-start gap-3">
+            <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
+            <div className="min-w-0 flex-1 space-y-2">
+              <h2 className="font-bold">Checklist updated</h2>
+              <p>{revisionNotice.restored} unchanged answers were restored.</p>
+              <p>{revisionNotice.changed.length} changed items must be checked again.</p>
+              {revisionNotice.changed.length > 0 && (
+                <div>
+                  <p className="font-semibold">Changed</p>
+                  <ul className="mt-1 list-disc space-y-1 pl-5">
+                    {revisionNotice.changed.map((change) => (
+                      <li key={change}>{change}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+              <button
+                type="button"
+                onClick={() => setRevisionNotice(null)}
+                className="font-semibold underline underline-offset-2"
+              >
+                Review changes
+              </button>
+            </div>
+          </div>
+        </section>
+      )}
       {submissionOutcome && !previewMode && (
         <div
           role="status"
