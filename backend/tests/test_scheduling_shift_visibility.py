@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 from app.api.v1.endpoints import scheduling
+from app.services.scheduling_service import SchedulingService
 
 
 @pytest.fixture
@@ -42,6 +43,52 @@ async def test_scheduling_manager_retains_complete_schedule(monkeypatch, shifts)
 
     assert await scheduling._member_visible_shifts(service, user, shifts) == shifts
     bulk.assert_not_awaited()
+
+
+async def test_member_pagination_happens_after_visibility_filter(monkeypatch, shifts):
+    result = SimpleNamespace(scalars=lambda: SimpleNamespace(all=lambda: shifts))
+    db = SimpleNamespace(execute=AsyncMock(return_value=result))
+    bulk = AsyncMock(return_value={"ordinary": [], "admin": ["support"]})
+    monkeypatch.setattr(
+        scheduling.ShiftEligibilityService,
+        "get_eligible_positions_bulk",
+        bulk,
+    )
+    # SchedulingService imports the same class locally on this path.
+    service = SchedulingService(db)
+    user = SimpleNamespace(id="member", organization_id="org")
+
+    page, total = await service.get_member_visible_shifts(user, "org", skip=0, limit=1)
+
+    assert page == [shifts[1]]
+    assert total == 1
+
+
+def test_event_resource_seats_preserve_administrative_access():
+    slots = SchedulingService.normalize_positions(
+        {
+            "resources": [
+                {
+                    "quantity": 1,
+                    "positions": [
+                        {
+                            "position": "support",
+                            "required": True,
+                            "allow_administrative_members": True,
+                        }
+                    ],
+                }
+            ]
+        }
+    )
+
+    assert slots == [
+        {
+            "position": "support",
+            "required": True,
+            "allow_administrative_members": True,
+        }
+    ]
 
 
 @pytest.mark.parametrize(
