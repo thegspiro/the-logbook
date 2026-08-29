@@ -162,6 +162,59 @@ describe('EquipmentCheckTemplateBuilder responsive actions', () => {
     updateCompartment.mockResolvedValue({});
     createEquipmentCheckTemplate.mockResolvedValue({ ...template, id: 'draft-1', isActive: false });
     updateEquipmentCheckTemplate.mockResolvedValue(template);
+    vi.mocked(window.matchMedia).mockImplementation((query: string) => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    }));
+  });
+
+  it('renders a 375px summary row and exposes selection only after Select items', async () => {
+    const user = userEvent.setup();
+    renderBuilder();
+
+    const radioSummary = await screen.findByRole('button', { name: 'Expand Radio' });
+    expect(radioSummary).toHaveClass('min-h-[44px]');
+    expect(within(radioSummary).getByText('Function · Required')).toBeVisible();
+    expect(screen.queryByRole('button', { name: 'Select Radio' })).not.toBeInTheDocument();
+    expect(screen.getAllByLabelText('Actions for Radio')).toHaveLength(1);
+
+    await user.click(screen.getByRole('button', { name: 'Select items' }));
+    expect(screen.getByRole('button', { name: 'Done' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Select Radio' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Radio selection checkbox' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Expand Radio' })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Select Radio' }));
+    expect(screen.getByRole('button', { name: 'Deselect Radio' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Done' }));
+    expect(screen.queryByRole('button', { name: 'Select Radio' })).not.toBeInTheDocument();
+  });
+
+  it('retains bulk selection, drag handles, badges, and dense actions at 1024px', async () => {
+    vi.mocked(window.matchMedia).mockImplementation((query: string) => ({
+      matches: query === '(min-width: 640px)',
+      media: query,
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    }));
+    renderBuilder();
+
+    await screen.findByRole('button', { name: 'Expand Radio' });
+    expect(screen.getByRole('button', { name: 'Radio selection checkbox' })).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: 'Drag to reorder' })).not.toHaveLength(0);
+    expect(screen.getAllByText('Function')).not.toHaveLength(0);
+    expect(screen.getByRole('button', { name: 'Move Radio down' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Select items' })).not.toBeInTheDocument();
   });
 
   it('saves an incomplete new template as an inactive draft', async () => {

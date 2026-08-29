@@ -110,6 +110,7 @@ import {
   EQUIPMENT_PRESETS,
 } from './equipmentCheckPresets';
 import { useOverlaySurface } from '../../hooks/useOverlaySurface';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
 
 const inputClass = 'form-input';
 
@@ -438,6 +439,8 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     return !window.matchMedia('(max-width: 1023px)').matches;
   });
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
+  const isLaptop = useMediaQuery('(min-width: 640px)');
+  const [mobileSelectionLocations, setMobileSelectionLocations] = useState<Set<string>>(new Set());
 
   // Bulk selection: per-compartment set of selected item indices
   const [selectedItems, setSelectedItems] = useState<Record<string, Set<number>>>({});
@@ -1042,6 +1045,17 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
   const deselectAllItems = (compartmentIdx: number) => {
     const key = getCompKey(compartmentIdx);
     setSelectedItems((prev) => ({ ...prev, [key]: new Set<number>() }));
+  };
+
+  const setMobileSelectionMode = (compartmentIdx: number, active: boolean) => {
+    const key = getCompKey(compartmentIdx);
+    setMobileSelectionLocations((previous) => {
+      const next = new Set(previous);
+      if (active) next.add(key);
+      else next.delete(key);
+      return next;
+    });
+    if (!active) deselectAllItems(compartmentIdx);
   };
 
   const getSelectedCount = (compartmentIdx: number): number => {
@@ -2382,6 +2396,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     const checkTypeLabel = CHECK_TYPES.find((ct) => ct.value === item.checkType)?.label ?? item.checkType;
     const compKey = getCompKey(compIdx);
     const isSelected = selectedItems[compKey]?.has(itemIdx) ?? false;
+    const isMobileSelectionMode = !isLaptop && mobileSelectionLocations.has(compKey);
     const isInlineEditing = inlineEditKey === itemKey;
     const itemCount = totalItems ?? compartments[compIdx]?.items.length ?? 0;
 
@@ -2446,26 +2461,22 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
         }`}
       >
         {/* Compact row — always visible */}
-        <div
-          className="group/item hover:bg-theme-surface-secondary/50 flex cursor-pointer flex-wrap items-center gap-1.5 px-2 py-2 transition-colors sm:flex-nowrap sm:px-3"
-          onClick={() => toggleItemExpanded(itemKey)}
-        >
+        <div className="group/item hover:bg-theme-surface-secondary/50 flex items-center gap-1.5 px-2 transition-colors sm:px-3 sm:py-2">
           {/* Bulk selection checkbox */}
-          <button
-            type="button"
-            className="flex min-h-[44px] min-w-[44px] flex-shrink-0 items-center justify-center sm:min-h-0 sm:min-w-0 sm:p-0.5"
-            onClick={(e) => {
-              e.stopPropagation();
-              toggleItemSelection(compIdx, itemIdx);
-            }}
-            aria-label={isSelected ? 'Deselect item' : 'Select item'}
-          >
-            {isSelected ? (
-              <CheckSquare className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-            ) : (
-              <Square className="text-theme-text-muted hover:text-theme-text-secondary h-4 w-4" />
-            )}
-          </button>
+          {(isLaptop || isMobileSelectionMode) && (
+            <button
+              type="button"
+              className="flex min-h-[44px] min-w-[44px] flex-shrink-0 items-center justify-center sm:min-h-0 sm:min-w-0 sm:p-0.5"
+              onClick={() => toggleItemSelection(compIdx, itemIdx)}
+              aria-label={`${item.name.trim() || 'Item'} selection checkbox`}
+            >
+              {isSelected ? (
+                <CheckSquare className="h-4 w-4 text-blue-600 dark:text-blue-400" aria-hidden="true" />
+              ) : (
+                <Square className="text-theme-text-muted hover:text-theme-text-secondary h-4 w-4" aria-hidden="true" />
+              )}
+            </button>
+          )}
 
           <button
             type="button"
@@ -2477,20 +2488,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             <GripVertical className="h-4 w-4" />
           </button>
 
-          <button
-            type="button"
-            className="text-theme-text-muted hover:text-theme-text-primary flex min-h-[44px] min-w-[44px] flex-shrink-0 items-center justify-center sm:min-h-0 sm:min-w-0 sm:p-0.5"
-            onClick={(e) => {
-              e.stopPropagation();
-              toggleItemExpanded(itemKey);
-            }}
-            aria-expanded={isItemExpanded}
-            aria-label={`${isItemExpanded ? 'Collapse' : 'Expand'} ${item.name.trim() || 'item'}`}
-          >
-            {isItemExpanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
-          </button>
-
-          {isHeader && <Type className="text-theme-text-muted h-3.5 w-3.5 flex-shrink-0" />}
+          {isHeader && <Type className="text-theme-text-muted hidden h-3.5 w-3.5 flex-shrink-0 sm:block" />}
 
           {/* Inline editable name */}
           {isInlineEditing ? (
@@ -2510,13 +2508,45 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
               autoFocus
             />
           ) : (
-            <span
-              className={`flex-1 truncate text-sm ${isHeader ? 'text-theme-text-primary font-bold' : item.name.trim() ? 'text-theme-text-primary font-medium' : 'text-theme-text-muted italic'}`}
+            <button
+              type="button"
+              className={`min-h-[44px] min-w-0 flex-1 py-2 text-left text-sm sm:flex sm:min-h-0 sm:items-center sm:gap-1.5 sm:py-0 ${isHeader ? 'text-theme-text-primary font-bold' : item.name.trim() ? 'text-theme-text-primary font-medium' : 'text-theme-text-muted italic'}`}
               onDoubleClick={(e) => startInlineEdit(itemKey, item.name, e)}
-              title="Double-click to rename"
+              onClick={() =>
+                isMobileSelectionMode ? toggleItemSelection(compIdx, itemIdx) : toggleItemExpanded(itemKey)
+              }
+              aria-expanded={isMobileSelectionMode ? undefined : isItemExpanded}
+              aria-label={
+                isMobileSelectionMode
+                  ? `${isSelected ? 'Deselect' : 'Select'} ${item.name.trim() || 'item'}`
+                  : `${isItemExpanded ? 'Collapse' : 'Expand'} ${item.name.trim() || 'item'}`
+              }
             >
-              {item.name.trim() || (isHeader ? 'Untitled Header' : 'Untitled Item')}
-            </span>
+              <span className="block truncate">
+                {item.name.trim() || (isHeader ? 'Untitled Header' : 'Untitled Item')}
+              </span>
+              <span className="text-theme-text-muted mt-0.5 block truncate text-xs font-normal sm:hidden">
+                {checkTypeLabel}
+                {item.checkType === 'count' && item.expectedQuantity ? ` · Par ${item.expectedQuantity}` : ''}
+                {item.checkType === 'level' && item.minLevel
+                  ? ` · Minimum ${item.minLevel}${item.levelUnit ? ` ${item.levelUnit}` : ''}`
+                  : ''}
+                {item.isRequired ? ' · Required' : ''}
+                {item.hasExpiration ? ' · Expiration tracked' : ''}
+              </span>
+              {!isMobileSelectionMode &&
+                (isItemExpanded ? (
+                  <ChevronDown
+                    className="text-theme-text-muted hidden h-3.5 w-3.5 shrink-0 sm:block"
+                    aria-hidden="true"
+                  />
+                ) : (
+                  <ChevronRight
+                    className="text-theme-text-muted hidden h-3.5 w-3.5 shrink-0 sm:block"
+                    aria-hidden="true"
+                  />
+                ))}
+            </button>
           )}
 
           <button
@@ -3412,7 +3442,20 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             <div className="space-y-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
-                  <h4 className="text-theme-text-primary text-sm font-semibold">Items to check</h4>
+                  <div className="flex min-h-[44px] items-center gap-3">
+                    <h4 className="text-theme-text-primary text-sm font-semibold">
+                      {mobileSelectionLocations.has(getCompKey(idx)) ? 'Select items' : 'Items to check'}
+                    </h4>
+                    {comp.items.length > 0 && !isLaptop && (
+                      <button
+                        type="button"
+                        className="ml-auto min-h-[44px] px-2 text-sm font-medium text-blue-600 sm:hidden dark:text-blue-400"
+                        onClick={() => setMobileSelectionMode(idx, !mobileSelectionLocations.has(getCompKey(idx)))}
+                      >
+                        {mobileSelectionLocations.has(getCompKey(idx)) ? 'Done' : 'Select items'}
+                      </button>
+                    )}
+                  </div>
                   <p className="text-theme-text-muted text-xs">Add equipment or a plain-language task for the crew.</p>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
@@ -3427,7 +3470,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                   )}
                   {/* Bulk selection controls */}
                   {comp.items.length > 0 && (
-                    <div className="flex flex-wrap items-center gap-1">
+                    <div className="hidden flex-wrap items-center gap-1 sm:flex">
                       {getSelectedCount(idx) > 0 ? (
                         <>
                           <span className="mr-1 text-xs font-medium text-blue-600 dark:text-blue-400">
