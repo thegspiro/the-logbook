@@ -19,6 +19,7 @@ export type Symbology = (typeof Symbology)[keyof typeof Symbology];
 
 export interface LabelPresetResponse {
   preset: string | null;
+  printer_id?: string | null;
   custom_width?: number | null;
   custom_height?: number | null;
   symbology?: Symbology | null;
@@ -57,7 +58,7 @@ export const labelService = {
 
   async setPreset(
     module: string,
-    data: { preset: string; custom_width?: number; custom_height?: number; symbology?: Symbology }
+    data: { preset: string; printer_id?: string; custom_width?: number; custom_height?: number; symbology?: Symbology }
   ): Promise<LabelPresetResponse> {
     const res = await api.put<LabelPresetResponse>(`/label-preset/${module}`, data);
     return res.data;
