@@ -7,15 +7,16 @@ import { ConfirmProvider } from '../../contexts/ConfirmContext';
 import EquipmentCheckTemplateBuilder from './EquipmentCheckTemplateBuilder';
 
 const getTemplate = vi.fn();
+const deleteCheckItemsBulk = vi.fn();
 const updateCheckItem = vi.fn();
 const reorderItems = vi.fn();
-const successToast = vi.fn();
-const errorToast = vi.fn();
+const toastSuccess = vi.fn();
+const toastError = vi.fn();
 
 vi.mock('react-hot-toast', () => ({
   default: {
-    success: (...args: unknown[]) => successToast(...args),
-    error: (...args: unknown[]) => errorToast(...args),
+    success: (...args: unknown[]) => toastSuccess(...args),
+    error: (...args: unknown[]) => toastError(...args),
   },
 }));
 
@@ -24,6 +25,7 @@ vi.mock('@/modules/scheduling', () => ({
     getApparatusOptions: vi.fn().mockResolvedValue({ options: [] }),
     getEquipmentCheckTemplate: (...args: unknown[]) => getTemplate(...args),
     getCsvSampleUrl: vi.fn().mockReturnValue('/sample.csv'),
+    deleteCheckItemsBulk: (...args: unknown[]) => deleteCheckItemsBulk(...args),
     updateCheckItem: (...args: unknown[]) => updateCheckItem(...args),
     reorderItems: (...args: unknown[]) => reorderItems(...args),
   },
@@ -53,19 +55,19 @@ const template = {
       containerType: 'compartment',
       items: [
         {
-          id: 'oxygen-mask',
+          id: 'radio',
           compartmentId: 'cab',
-          name: 'Oxygen mask',
+          name: 'Radio',
           sortOrder: 0,
-          checkType: 'quantity',
+          checkType: 'function',
           isRequired: true,
           hasExpiration: false,
           expirationWarningDays: 30,
         },
         {
-          id: 'radio',
+          id: 'flashlight',
           compartmentId: 'cab',
-          name: 'Radio',
+          name: 'Flashlight',
           sortOrder: 1,
           checkType: 'function',
           isRequired: true,
@@ -73,14 +75,6 @@ const template = {
           expirationWarningDays: 30,
         },
       ],
-    },
-    {
-      id: 'rear',
-      templateId: 'template-1',
-      name: 'Rear shelf',
-      sortOrder: 2,
-      containerType: 'compartment',
-      items: [],
     },
     {
       id: 'bag',
@@ -98,6 +92,14 @@ const template = {
       sortOrder: 2,
       containerType: 'compartment',
       isHeader: true,
+      items: [],
+    },
+    {
+      id: 'rear',
+      templateId: 'template-1',
+      name: 'Rear shelf',
+      sortOrder: 3,
+      containerType: 'compartment',
       items: [],
     },
   ],
@@ -129,11 +131,8 @@ function renderNewBuilder() {
 
 describe('EquipmentCheckTemplateBuilder responsive actions', () => {
   beforeEach(() => {
-    getTemplate.mockResolvedValue(template);
-    updateCheckItem.mockReset().mockResolvedValue(undefined);
-    reorderItems.mockReset().mockResolvedValue(undefined);
-    successToast.mockReset();
-    errorToast.mockReset();
+    vi.clearAllMocks();
+    getTemplate.mockResolvedValue(structuredClone(template));
   });
 
   it('exposes every item action from the phone overflow without drag and drop', async () => {
@@ -172,25 +171,23 @@ describe('EquipmentCheckTemplateBuilder responsive actions', () => {
 
 describe('EquipmentCheckTemplateBuilder movement persistence', () => {
   beforeEach(() => {
-    getTemplate.mockResolvedValue(template);
-    updateCheckItem.mockReset().mockResolvedValue(undefined);
-    reorderItems.mockReset().mockResolvedValue(undefined);
-    successToast.mockReset();
-    errorToast.mockReset();
+    vi.clearAllMocks();
+    getTemplate.mockResolvedValue(structuredClone(template));
+    updateCheckItem.mockResolvedValue(undefined);
+    reorderItems.mockResolvedValue(undefined);
   });
 
   it('moves an item across compartments only after persistence succeeds', async () => {
     const user = userEvent.setup();
     renderBuilder();
-    const move = await screen.findByLabelText('Move Oxygen mask to another compartment');
-    await user.selectOptions(move, '2');
+    await user.selectOptions(await screen.findByLabelText('Move Radio to another compartment'), '1');
 
     await waitFor(() =>
-      expect(updateCheckItem).toHaveBeenCalledWith('oxygen-mask', expect.objectContaining({ compartment_id: 'bag' }))
+      expect(updateCheckItem).toHaveBeenCalledWith('radio', expect.objectContaining({ compartment_id: 'bag' }))
     );
-    expect(successToast).toHaveBeenCalledWith('Moved "Oxygen mask" to Medical bag');
+    expect(toastSuccess).toHaveBeenCalledWith('Moved "Radio" to Medical bag');
     expect(
-      screen.getByLabelText(/Move Oxygen mask to compartment; current destination Cab \/ Medical bag/)
+      screen.getByLabelText(/Move Radio to compartment; current destination Cab \/ Medical bag/)
     ).toBeInTheDocument();
   });
 
@@ -198,24 +195,24 @@ describe('EquipmentCheckTemplateBuilder movement persistence', () => {
     updateCheckItem.mockRejectedValueOnce(new Error('network unavailable'));
     const user = userEvent.setup();
     renderBuilder();
-    await user.selectOptions(await screen.findByLabelText('Move Oxygen mask to another compartment'), '2');
+    await user.selectOptions(await screen.findByLabelText('Move Radio to another compartment'), '1');
 
-    await waitFor(() => expect(errorToast).toHaveBeenCalled());
-    expect(successToast).not.toHaveBeenCalled();
-    expect(errorToast).toHaveBeenCalledWith('Could not move “Oxygen mask.” Its original location was restored.');
-    expect(screen.getByLabelText('Collapse Oxygen mask')).toBeInTheDocument();
-    expect(screen.getByLabelText(/Move Oxygen mask to compartment; current destination Cab$/)).toBeInTheDocument();
+    await waitFor(() => expect(toastError).toHaveBeenCalled());
+    expect(toastSuccess).not.toHaveBeenCalled();
+    expect(toastError).toHaveBeenCalledWith('Could not move “Radio.” Its original location was restored.');
+    expect(screen.getByLabelText('Collapse Radio')).toBeInTheDocument();
+    expect(screen.getByLabelText(/Move Radio to compartment; current destination Cab$/)).toBeInTheDocument();
   });
 
   it('keeps the prior item order when reorder persistence is rejected', async () => {
     reorderItems.mockRejectedValueOnce(new Error('network unavailable'));
     const user = userEvent.setup();
     renderBuilder();
-    await user.click(await screen.findByLabelText('Move Oxygen mask down'));
+    await user.click(await screen.findByLabelText('Move Radio down'));
 
-    await waitFor(() => expect(errorToast).toHaveBeenCalled());
-    const names = screen.getAllByText(/^(Oxygen mask|Radio)$/).map((node) => node.textContent);
-    expect(names.slice(0, 2)).toEqual(['Oxygen mask', 'Radio']);
+    await waitFor(() => expect(toastError).toHaveBeenCalled());
+    const names = screen.getAllByText(/^(Radio|Flashlight)$/).map((node) => node.textContent);
+    expect(names.slice(0, 2)).toEqual(['Radio', 'Flashlight']);
   });
 
   it('serializes rapid moves and reconciles each one by stable item id', async () => {
@@ -225,17 +222,51 @@ describe('EquipmentCheckTemplateBuilder movement persistence', () => {
       .mockResolvedValueOnce(undefined);
     const user = userEvent.setup();
     renderBuilder();
-    const move = await screen.findByLabelText('Move Oxygen mask to another compartment');
-    await user.selectOptions(move, '2');
+    const move = await screen.findByLabelText('Move Radio to another compartment');
     await user.selectOptions(move, '1');
+    await user.selectOptions(move, '3');
     expect(updateCheckItem).toHaveBeenCalledTimes(1);
 
     resolveFirst?.();
     await waitFor(() => expect(updateCheckItem).toHaveBeenCalledTimes(2));
     expect(updateCheckItem.mock.calls[1]?.[1]).toEqual(expect.objectContaining({ compartment_id: 'rear' }));
-    expect(
-      screen.getByLabelText(/Move Oxygen mask to compartment; current destination Rear shelf/)
-    ).toBeInTheDocument();
+    expect(screen.getByLabelText(/Move Radio to compartment; current destination Rear shelf/)).toBeInTheDocument();
+  });
+});
+
+describe('EquipmentCheckTemplateBuilder bulk deletion', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    getTemplate.mockResolvedValue(structuredClone(template));
+  });
+
+  async function selectAndDelete() {
+    const user = userEvent.setup();
+    renderBuilder();
+    await screen.findByText('Radio');
+    await user.click(screen.getByTitle('Select all items'));
+    await user.click(screen.getByRole('button', { name: 'Delete selected items' }));
+    await user.click(screen.getByRole('button', { name: 'Delete 2' }));
+  }
+
+  it('removes only IDs confirmed by a completely successful response', async () => {
+    deleteCheckItemsBulk.mockResolvedValue({ deletedItemIds: ['radio', 'flashlight'], replayed: false });
+    await selectAndDelete();
+    await waitFor(() => expect(screen.queryByText('Radio')).not.toBeInTheDocument());
+    expect(screen.getAllByText(/No items yet/).length).toBeGreaterThan(0);
+    expect(deleteCheckItemsBulk).toHaveBeenCalledWith('cab', ['radio', 'flashlight'], expect.any(String));
+    expect(toastSuccess).toHaveBeenCalledWith('Deleted 2 items');
+    expect(toastError).not.toHaveBeenCalled();
+  });
+
+  it('retains visible selected rows and never shows success after failure', async () => {
+    deleteCheckItemsBulk.mockRejectedValue(new Error('Database unavailable'));
+    await selectAndDelete();
+    expect(await screen.findByText('Radio')).toBeVisible();
+    expect(screen.getByText('Flashlight')).toBeVisible();
+    expect(screen.getByText('2 selected')).toBeVisible();
+    expect(toastError).toHaveBeenCalled();
+    expect(toastSuccess).not.toHaveBeenCalled();
   });
 });
 
