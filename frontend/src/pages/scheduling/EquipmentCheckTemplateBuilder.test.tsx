@@ -179,7 +179,7 @@ describe('EquipmentCheckTemplateBuilder responsive actions', () => {
     expect(screen.getByLabelText('Template readiness')).toHaveTextContent('! Setup');
   });
 
-  it('publishes after blocking issues are fixed', async () => {
+  it('publishes after the blocking structure issues are fixed', async () => {
     const user = userEvent.setup();
     getTemplate.mockResolvedValue({
       ...template,
