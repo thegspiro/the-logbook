@@ -374,6 +374,23 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
   // State
   const [form, setForm] = useState<TemplateFormState>(defaultTemplateForm);
   const [compartments, setCompartments] = useState<CompartmentFormState[]>([]);
+  const compartmentsRef = useRef<CompartmentFormState[]>([]);
+  const movementQueueRef = useRef<Promise<void>>(Promise.resolve());
+
+  useEffect(() => {
+    compartmentsRef.current = compartments;
+  }, [compartments]);
+
+  const commitCompartments = useCallback((next: CompartmentFormState[]) => {
+    compartmentsRef.current = next;
+    setCompartments(next);
+  }, []);
+
+  const enqueueMovement = useCallback((operation: () => Promise<void>) => {
+    const queued = movementQueueRef.current.then(operation, operation);
+    movementQueueRef.current = queued.catch(() => undefined);
+    return queued;
+  }, []);
   // Two guards, not one: adding a compartment and adding a section header are
   // separate buttons, and a shared flag would gray out one because the other
   // is mid-flight.
@@ -798,31 +815,41 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
   const moveItem = (compartmentIdx: number, itemIdx: number, direction: 'up' | 'down') => {
     const comp = compartments[compartmentIdx];
     if (!comp) return;
-    const newIdx = direction === 'up' ? itemIdx - 1 : itemIdx + 1;
-    if (newIdx < 0 || newIdx >= comp.items.length) return;
+    const item = comp.items[itemIdx];
+    if (!item) return;
 
-    setCompartments((prev) => {
-      const next = [...prev];
-      const c = next[compartmentIdx];
-      if (!c) return prev;
-      const items = [...c.items];
-      const [moved] = items.splice(itemIdx, 1);
-      if (!moved) return prev;
-      items.splice(newIdx, 0, moved);
-      next[compartmentIdx] = { ...c, items };
-      return next;
-    });
+    void enqueueMovement(async () => {
+      const current = compartmentsRef.current;
+      const currentCompIdx = comp.id ? current.findIndex((candidate) => candidate.id === comp.id) : compartmentIdx;
+      const currentComp = current[currentCompIdx];
+      if (!currentComp) return;
+      const currentItemIdx = item.id
+        ? currentComp.items.findIndex((candidate) => candidate.id === item.id)
+        : currentComp.items.indexOf(item);
+      const newIdx = direction === 'up' ? currentItemIdx - 1 : currentItemIdx + 1;
+      if (currentItemIdx === -1 || newIdx < 0 || newIdx >= currentComp.items.length) return;
+      const reorderedItems = [...currentComp.items];
+      const [moved] = reorderedItems.splice(currentItemIdx, 1);
+      if (!moved) return;
+      reorderedItems.splice(newIdx, 0, moved);
 
-    if (isEditing && comp.id) {
-      const reorderedItems = [...comp.items];
-      const [movedItem] = reorderedItems.splice(itemIdx, 1);
-      if (movedItem) reorderedItems.splice(newIdx, 0, movedItem);
-      const savedIds = reorderedItems.map((item) => item.id).filter((id): id is string => Boolean(id));
-      if (savedIds.length > 0) {
-        void schedulingService.reorderItems(comp.id, savedIds).catch(() => toast.error('Failed to save item order'));
+      if (isEditing && currentComp.id) {
+        const savedIds = reorderedItems.map((candidate) => candidate.id).filter((id): id is string => Boolean(id));
+        try {
+          await schedulingService.reorderItems(currentComp.id, savedIds);
+        } catch {
+          const itemId = item.id;
+          if (itemId) setExpandedItems((previous) => new Set(previous).add(itemId));
+          toast.error(`Could not reorder “${item.name || 'item'}.” Its original order was restored.`);
+          return;
+        }
       }
-    }
-    markDirty();
+
+      const next = [...current];
+      next[currentCompIdx] = { ...currentComp, items: reorderedItems };
+      commitCompartments(next);
+      markDirty();
+    });
   };
 
   const moveItemToCompartment = async (fromCompIdx: number, itemIdx: number, toCompIdx: number) => {
@@ -834,61 +861,73 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     const item = fromComp.items[itemIdx];
     if (!item) return;
 
-    setCompartments((prev) => {
-      const next = [...prev];
-      const src = next[fromCompIdx];
-      const dst = next[toCompIdx];
-      if (!src || !dst) return prev;
-      const srcItems = src.items.filter((_, i) => i !== itemIdx);
-      const dstItems = [...dst.items, item];
-      next[fromCompIdx] = { ...src, items: srcItems };
-      next[toCompIdx] = { ...dst, items: dstItems };
-      return next;
-    });
+    await enqueueMovement(async () => {
+      const current = compartmentsRef.current;
+      const sourceIdx = item.id
+        ? current.findIndex((candidate) => candidate.items.some((candidateItem) => candidateItem.id === item.id))
+        : current.findIndex((candidate) => candidate.items.includes(item));
+      const destinationIdx = toComp.id
+        ? current.findIndex((candidate) => candidate.id === toComp.id)
+        : current.findIndex((candidate) => candidate.clientKey === toComp.clientKey);
+      const source = current[sourceIdx];
+      const destination = current[destinationIdx];
+      if (!source || !destination || sourceIdx === destinationIdx) return;
+      const sourceItemIdx = item.id
+        ? source.items.findIndex((candidate) => candidate.id === item.id)
+        : source.items.indexOf(item);
+      if (sourceItemIdx === -1) return;
 
-    if (isEditing && item.id && toComp.id) {
-      try {
-        await schedulingService.updateCheckItem(item.id, {
-          compartment_id: toComp.id,
-          sort_order: toComp.items.length,
-        });
-      } catch {
-        toast.error('Failed to move item on server');
+      if (isEditing && item.id && destination.id) {
+        const itemId = item.id;
+        try {
+          await schedulingService.updateCheckItem(itemId, {
+            compartment_id: destination.id,
+            sort_order: destination.items.length,
+          });
+        } catch {
+          setExpandedItems((previous) => new Set(previous).add(itemId));
+          toast.error(`Could not move “${item.name || 'item'}.” Its original location was restored.`);
+          return;
+        }
       }
-    }
-    markDirty();
-    toast.success(`Moved "${item.name || 'item'}" to ${toComp.name || 'compartment'}`);
+
+      const next = [...current];
+      next[sourceIdx] = {
+        ...source,
+        items: source.items.filter((candidate) => (item.id ? candidate.id !== item.id : candidate !== item)),
+      };
+      next[destinationIdx] = { ...destination, items: [...destination.items, item] };
+      commitCompartments(next);
+      markDirty();
+      toast.success(`Moved "${item.name || 'item'}" to ${destination.name || 'compartment'}`);
+    });
   };
 
   // ---------------------------------------------------------------------------
   // Move compartment up/down
   // ---------------------------------------------------------------------------
 
-  const pendingCompartmentOrderRef = useRef(false);
-
   const moveCompartment = (idx: number, direction: 'up' | 'down') => {
     const id = compartments[idx]?.id;
     // Unsaved records have no stable identity and therefore cannot be safely
     // represented in the reorder API. Save the template before reordering.
     if (!id) return;
-    setCompartments((prev) => moveCompartmentInTree(prev, id, direction));
-    pendingCompartmentOrderRef.current = true;
-    markDirty();
+    void enqueueMovement(async () => {
+      const current = compartmentsRef.current;
+      const reordered = moveCompartmentInTree(current, id, direction);
+      if (reordered === current) return;
+      if (isEditing && templateId) {
+        try {
+          await schedulingService.reorderCompartments(templateId, orderedCompartmentIds(reordered));
+        } catch {
+          toast.error('Could not reorder compartments. The original order was restored.');
+          return;
+        }
+      }
+      commitCompartments(reordered);
+      markDirty();
+    });
   };
-
-  // Persistence deliberately follows the state update. This builds ordered_ids
-  // from the resulting canonical state, never from an event handler's stale
-  // `compartments` closure.
-  useEffect(() => {
-    if (!pendingCompartmentOrderRef.current || !isEditing || !templateId) return;
-    pendingCompartmentOrderRef.current = false;
-    const savedIds = orderedCompartmentIds(compartments);
-    if (savedIds.length > 0) {
-      void schedulingService
-        .reorderCompartments(templateId, savedIds)
-        .catch(() => toast.error('Failed to save compartment order'));
-    }
-  }, [compartments, isEditing, templateId]);
 
   // ---------------------------------------------------------------------------
   // Bulk selection helpers
@@ -2069,11 +2108,19 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     if (!over || active.id === over.id) return;
     const activeId = String(active.id);
     const overId = String(over.id);
-    // reorderCompartment rejects cross-parent drops. Dragging a parent moves
-    // its subtree because the returned array is canonical depth-first order.
-    setCompartments((prev) => reorderCompartment(prev, activeId, overId));
-    pendingCompartmentOrderRef.current = true;
-    markDirty();
+    void enqueueMovement(async () => {
+      const reordered = reorderCompartment(compartmentsRef.current, activeId, overId);
+      if (isEditing && templateId) {
+        try {
+          await schedulingService.reorderCompartments(templateId, orderedCompartmentIds(reordered));
+        } catch {
+          toast.error('Could not reorder compartments. The original order was restored.');
+          return;
+        }
+      }
+      commitCompartments(reordered);
+      markDirty();
+    });
   };
 
   const handleItemDragEnd = (compIdx: number, event: DragEndEvent) => {
@@ -2088,28 +2135,38 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     const newIndex = itemIds.indexOf(String(over.id));
     if (oldIndex === -1 || newIndex === -1) return;
 
-    setCompartments((prev) => {
-      const next = [...prev];
-      const c = next[compIdx];
-      if (!c) return prev;
-      const items = [...c.items];
-      const [moved] = items.splice(oldIndex, 1);
-      if (!moved) return prev;
-      items.splice(newIndex, 0, moved);
-      next[compIdx] = { ...c, items };
-      return next;
-    });
-
-    // Persist item order if compartment is saved
-    if (isEditing && comp.id) {
-      const reorderedItems = [...comp.items];
-      const [movedItem] = reorderedItems.splice(oldIndex, 1);
-      if (movedItem) reorderedItems.splice(newIndex, 0, movedItem);
-      const savedIds = reorderedItems.map((item) => item.id).filter((id): id is string => Boolean(id));
-      if (savedIds.length > 0) {
-        void schedulingService.reorderItems(comp.id, savedIds).catch(() => toast.error('Failed to save item order'));
+    const activeItemId = comp.items[oldIndex]?.id;
+    const overItemId = comp.items[newIndex]?.id;
+    if (!activeItemId || !overItemId) return;
+    void enqueueMovement(async () => {
+      const current = compartmentsRef.current;
+      const currentCompIdx = current.findIndex((candidate) => candidate.id === comp.id);
+      const currentComp = current[currentCompIdx];
+      if (!currentComp) return;
+      const currentOldIndex = currentComp.items.findIndex((item) => item.id === activeItemId);
+      const currentNewIndex = currentComp.items.findIndex((item) => item.id === overItemId);
+      if (currentOldIndex === -1 || currentNewIndex === -1) return;
+      const reorderedItems = [...currentComp.items];
+      const [moved] = reorderedItems.splice(currentOldIndex, 1);
+      if (!moved) return;
+      reorderedItems.splice(currentNewIndex, 0, moved);
+      if (isEditing && currentComp.id) {
+        try {
+          await schedulingService.reorderItems(
+            currentComp.id,
+            reorderedItems.map((item) => item.id).filter((id): id is string => Boolean(id))
+          );
+        } catch {
+          setExpandedItems((previous) => new Set(previous).add(activeItemId));
+          toast.error('Could not reorder items. The original order was restored.');
+          return;
+        }
       }
-    }
+      const next = [...current];
+      next[currentCompIdx] = { ...currentComp, items: reorderedItems };
+      commitCompartments(next);
+      markDirty();
+    });
   };
 
   // ---------------------------------------------------------------------------

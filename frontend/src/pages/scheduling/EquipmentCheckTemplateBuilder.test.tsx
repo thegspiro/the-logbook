@@ -1,5 +1,5 @@
 /* eslint-disable testing-library/no-node-access, @typescript-eslint/no-unsafe-return */
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -7,12 +7,25 @@ import { ConfirmProvider } from '../../contexts/ConfirmContext';
 import EquipmentCheckTemplateBuilder from './EquipmentCheckTemplateBuilder';
 
 const getTemplate = vi.fn();
+const updateCheckItem = vi.fn();
+const reorderItems = vi.fn();
+const successToast = vi.fn();
+const errorToast = vi.fn();
+
+vi.mock('react-hot-toast', () => ({
+  default: {
+    success: (...args: unknown[]) => successToast(...args),
+    error: (...args: unknown[]) => errorToast(...args),
+  },
+}));
 
 vi.mock('@/modules/scheduling', () => ({
   schedulingService: {
     getApparatusOptions: vi.fn().mockResolvedValue({ options: [] }),
     getEquipmentCheckTemplate: (...args: unknown[]) => getTemplate(...args),
     getCsvSampleUrl: vi.fn().mockReturnValue('/sample.csv'),
+    updateCheckItem: (...args: unknown[]) => updateCheckItem(...args),
+    reorderItems: (...args: unknown[]) => reorderItems(...args),
   },
 }));
 
@@ -40,16 +53,34 @@ const template = {
       containerType: 'compartment',
       items: [
         {
+          id: 'oxygen-mask',
+          compartmentId: 'cab',
+          name: 'Oxygen mask',
+          sortOrder: 0,
+          checkType: 'quantity',
+          isRequired: true,
+          hasExpiration: false,
+          expirationWarningDays: 30,
+        },
+        {
           id: 'radio',
           compartmentId: 'cab',
           name: 'Radio',
-          sortOrder: 0,
+          sortOrder: 1,
           checkType: 'function',
           isRequired: true,
           hasExpiration: false,
           expirationWarningDays: 30,
         },
       ],
+    },
+    {
+      id: 'rear',
+      templateId: 'template-1',
+      name: 'Rear shelf',
+      sortOrder: 2,
+      containerType: 'compartment',
+      items: [],
     },
     {
       id: 'bag',
@@ -97,7 +128,13 @@ function renderNewBuilder() {
 }
 
 describe('EquipmentCheckTemplateBuilder responsive actions', () => {
-  beforeEach(() => getTemplate.mockResolvedValue(template));
+  beforeEach(() => {
+    getTemplate.mockResolvedValue(template);
+    updateCheckItem.mockReset().mockResolvedValue(undefined);
+    reorderItems.mockReset().mockResolvedValue(undefined);
+    successToast.mockReset();
+    errorToast.mockReset();
+  });
 
   it('exposes every item action from the phone overflow without drag and drop', async () => {
     const user = userEvent.setup();
@@ -130,6 +167,75 @@ describe('EquipmentCheckTemplateBuilder responsive actions', () => {
     expect(within(menu).getByRole('button', { name: 'Move up' })).toBeDisabled();
     expect(within(menu).getByRole('button', { name: 'Move down' })).toBeDisabled();
     expect(within(menu).getByRole('button', { name: 'Delete' })).toBeVisible();
+  });
+});
+
+describe('EquipmentCheckTemplateBuilder movement persistence', () => {
+  beforeEach(() => {
+    getTemplate.mockResolvedValue(template);
+    updateCheckItem.mockReset().mockResolvedValue(undefined);
+    reorderItems.mockReset().mockResolvedValue(undefined);
+    successToast.mockReset();
+    errorToast.mockReset();
+  });
+
+  it('moves an item across compartments only after persistence succeeds', async () => {
+    const user = userEvent.setup();
+    renderBuilder();
+    const move = await screen.findByLabelText('Move Oxygen mask to another compartment');
+    await user.selectOptions(move, '2');
+
+    await waitFor(() =>
+      expect(updateCheckItem).toHaveBeenCalledWith('oxygen-mask', expect.objectContaining({ compartment_id: 'bag' }))
+    );
+    expect(successToast).toHaveBeenCalledWith('Moved "Oxygen mask" to Medical bag');
+    expect(
+      screen.getByLabelText(/Move Oxygen mask to compartment; current destination Cab \/ Medical bag/)
+    ).toBeInTheDocument();
+  });
+
+  it('keeps a rejected move at its source, expanded, and does not show success', async () => {
+    updateCheckItem.mockRejectedValueOnce(new Error('network unavailable'));
+    const user = userEvent.setup();
+    renderBuilder();
+    await user.selectOptions(await screen.findByLabelText('Move Oxygen mask to another compartment'), '2');
+
+    await waitFor(() => expect(errorToast).toHaveBeenCalled());
+    expect(successToast).not.toHaveBeenCalled();
+    expect(errorToast).toHaveBeenCalledWith('Could not move “Oxygen mask.” Its original location was restored.');
+    expect(screen.getByLabelText('Collapse Oxygen mask')).toBeInTheDocument();
+    expect(screen.getByLabelText(/Move Oxygen mask to compartment; current destination Cab$/)).toBeInTheDocument();
+  });
+
+  it('keeps the prior item order when reorder persistence is rejected', async () => {
+    reorderItems.mockRejectedValueOnce(new Error('network unavailable'));
+    const user = userEvent.setup();
+    renderBuilder();
+    await user.click(await screen.findByLabelText('Move Oxygen mask down'));
+
+    await waitFor(() => expect(errorToast).toHaveBeenCalled());
+    const names = screen.getAllByText(/^(Oxygen mask|Radio)$/).map((node) => node.textContent);
+    expect(names.slice(0, 2)).toEqual(['Oxygen mask', 'Radio']);
+  });
+
+  it('serializes rapid moves and reconciles each one by stable item id', async () => {
+    let resolveFirst: (() => void) | undefined;
+    updateCheckItem
+      .mockImplementationOnce(() => new Promise<void>((resolve) => (resolveFirst = resolve)))
+      .mockResolvedValueOnce(undefined);
+    const user = userEvent.setup();
+    renderBuilder();
+    const move = await screen.findByLabelText('Move Oxygen mask to another compartment');
+    await user.selectOptions(move, '2');
+    await user.selectOptions(move, '1');
+    expect(updateCheckItem).toHaveBeenCalledTimes(1);
+
+    resolveFirst?.();
+    await waitFor(() => expect(updateCheckItem).toHaveBeenCalledTimes(2));
+    expect(updateCheckItem.mock.calls[1]?.[1]).toEqual(expect.objectContaining({ compartment_id: 'rear' }));
+    expect(
+      screen.getByLabelText(/Move Oxygen mask to compartment; current destination Rear shelf/)
+    ).toBeInTheDocument();
   });
 });
 
