@@ -65,6 +65,14 @@ class EquipmentCheckService:
         }
     )
 
+    async def _advance_content_revision(self, template_id: str) -> None:
+        """Atomically invalidate drafts made against older checklist content."""
+        await self.db.execute(
+            update(EquipmentCheckTemplate)
+            .where(EquipmentCheckTemplate.id == template_id)
+            .values(content_revision=EquipmentCheckTemplate.content_revision + 1)
+        )
+
     def __init__(self, db: AsyncSession):
         self.db = db
 
@@ -103,6 +111,8 @@ class EquipmentCheckService:
     ) -> EquipmentCheckTemplate:
         """Create a new equipment check template with nested compartments."""
         compartments_data = data.pop("compartments", None) or []
+        if data.get("is_active"):
+            self._validate_publishable_data(data, compartments_data)
 
         template = EquipmentCheckTemplate(
             id=generate_uuid(),
@@ -118,6 +128,55 @@ class EquipmentCheckService:
 
         await self.db.commit()
         return await self.get_template(template.id, organization_id)
+
+    @staticmethod
+    def _validate_publishable_data(template: Any, compartments: List[Any]) -> None:
+        """Enforce only rules that make a crew checklist unusable."""
+
+        def value(obj: Any, key: str, default: Any = None) -> Any:
+            return (
+                obj.get(key, default)
+                if isinstance(obj, dict)
+                else getattr(obj, key, default)
+            )
+
+        if not str(value(template, "name", "")).strip():
+            raise ValueError("Template name is required before publication")
+
+        operational = [c for c in compartments if not value(c, "is_header", False)]
+        if not operational:
+            raise ValueError(
+                "At least one operational compartment is required before publication"
+            )
+
+        for compartment in compartments:
+            if not str(value(compartment, "name", "")).strip():
+                raise ValueError("Every compartment needs a name before publication")
+            if value(compartment, "is_header", False):
+                continue
+            items = list(value(compartment, "items", []) or [])
+            if not items:
+                raise ValueError(
+                    "Operational compartments cannot be empty before publication"
+                )
+            for item in items:
+                if not str(value(item, "name", "")).strip():
+                    raise ValueError(
+                        "Every checklist item needs a name before publication"
+                    )
+                check_type = value(item, "check_type", "")
+                if (
+                    check_type in ("count", "quantity")
+                    and value(item, "required_quantity") is None
+                    and value(item, "expected_quantity") is None
+                ):
+                    raise ValueError(
+                        "Count items need a required or expected quantity before publication"
+                    )
+                if check_type == "level" and value(item, "min_level") is None:
+                    raise ValueError(
+                        "Level items need a minimum level before publication"
+                    )
 
     async def get_template(
         self,
@@ -311,6 +370,10 @@ class EquipmentCheckService:
         if not template:
             return None
 
+        if data.get("is_active") and not template.is_active:
+            projected = {"name": data.get("name", template.name)}
+            self._validate_publishable_data(projected, template.compartments)
+
         # XC-1: create_template/clone_template validate the apparatus is in-org,
         # but this generic setattr loop did not — and the template's apparatus_id
         # is resolved to an apparatus *name* in the checklist/supply listings, so
@@ -376,7 +439,8 @@ class EquipmentCheckService:
             check_timing=source.check_timing,
             template_type=source.template_type,
             assigned_positions=source.assigned_positions,
-            is_active=source.is_active,
+            # A clone is a new work-in-progress and must be reviewed before use.
+            is_active=False,
             sort_order=source.sort_order,
             created_by=created_by,
         )
@@ -426,6 +490,7 @@ class EquipmentCheckService:
         for item_data in items_data:
             self._create_item(compartment.id, item_data)
 
+        await self._advance_content_revision(template_id)
         await self.db.commit()
 
         # Re-fetch with eager-loaded relationships to avoid MissingGreenlet
@@ -458,6 +523,7 @@ class EquipmentCheckService:
             if key not in self.PROTECTED_FIELDS and hasattr(compartment, key):
                 setattr(compartment, key, value)
 
+        await self._advance_content_revision(str(compartment.template_id))
         await self.db.commit()
 
         # Re-fetch with eager-loaded relationships to avoid MissingGreenlet
@@ -476,7 +542,9 @@ class EquipmentCheckService:
         if not compartment:
             return False
 
+        template_id = str(compartment.template_id)
         await self.db.delete(compartment)
+        await self._advance_content_revision(template_id)
         await self.db.commit()
         return True
 
@@ -571,6 +639,7 @@ class EquipmentCheckService:
                     comp.sort_order = idx
                     break
 
+        await self._advance_content_revision(template_id)
         await self.db.commit()
         return True
 
@@ -617,6 +686,7 @@ class EquipmentCheckService:
             **data,
         )
         self.db.add(item)
+        await self._advance_content_revision(str(compartment.template_id))
         await self.db.commit()
         await self.db.refresh(item)
         return item
@@ -725,6 +795,7 @@ class EquipmentCheckService:
                     entity_name=item.name,
                     changes={"bulk_idempotency_key": idempotency_key},
                 )
+            await self._advance_content_revision(str(compartment.template_id))
             await self.db.commit()
             return created, False
         except IntegrityError:
@@ -770,16 +841,20 @@ class EquipmentCheckService:
         if not item:
             return None
 
+        original_template_id = str(item.compartment.template_id)
         # XC-1 (cross-org write): compartment_id is client-supplied and the
         # generic setattr loop would move the item under it. A foreign
         # compartment_id would transfer this item — with the caller's content —
         # into another org's checklist (the item is org-scoped only via
         # compartment -> template, so it leaves this org entirely). Validate the
         # target compartment is in-org before re-parenting.
-        if data.get("compartment_id") and not await self._get_compartment(
-            data["compartment_id"], organization_id
-        ):
-            raise ValueError("Invalid compartment")
+        target_compartment = None
+        if data.get("compartment_id"):
+            target_compartment = await self._get_compartment(
+                data["compartment_id"], organization_id
+            )
+            if not target_compartment:
+                raise ValueError("Invalid compartment")
 
         # EC2-3/EC2-4: a reassigned inventory_item_id/equipment_id must be in-org
         # (inventory_item_id is name-projected in get_my_checklists).
@@ -791,6 +866,11 @@ class EquipmentCheckService:
         # of a flush-time IntegrityError.
         apply_updates(item, data, skip=self.PROTECTED_FIELDS)
 
+        await self._advance_content_revision(original_template_id)
+        if target_compartment:
+            target_template_id = str(target_compartment.template_id)
+            if target_template_id != original_template_id:
+                await self._advance_content_revision(target_template_id)
         await self.db.commit()
         await self.db.refresh(item)
         return item
@@ -801,7 +881,9 @@ class EquipmentCheckService:
         if not item:
             return False
 
+        template_id = str(item.compartment.template_id)
         await self.db.delete(item)
+        await self._advance_content_revision(template_id)
         await self.db.commit()
         return True
 
@@ -909,6 +991,7 @@ class EquipmentCheckService:
                     item.sort_order = idx
                     break
 
+        await self._advance_content_revision(str(compartment.template_id))
         await self.db.commit()
         return True
 
@@ -4092,6 +4175,7 @@ class EquipmentCheckService:
                 CheckTemplateItem.id == item_id,
                 EquipmentCheckTemplate.organization_id == organization_id,
             )
+            .options(selectinload(CheckTemplateItem.compartment))
         )
         return result.scalars().first()
 

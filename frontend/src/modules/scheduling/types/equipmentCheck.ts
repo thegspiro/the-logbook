@@ -376,6 +376,7 @@ export interface EquipmentCheckTemplate {
   assignedPositions?: string[];
   isActive: boolean;
   sortOrder: number;
+  contentRevision: number;
   compartments: CheckTemplateCompartment[];
   createdAt?: string;
   updatedAt?: string;
