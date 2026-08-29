@@ -109,12 +109,12 @@ class TestBulkEligibility:
         answers = await service.get_eligible_positions_bulk(USER, ORG, ["s1"])
         assert answers["s1"] == ["driver", "officer"]
 
-    async def test_open_to_all_bypasses_the_member_checks(self):
+    async def test_open_to_all_does_not_bypass_non_operational_class(self):
         shifts = [_shift("s1", positions=[{"position": "ems"}], open_to_all=True)]
         service = _service(shifts, excluded=["social"])
         blocked = SimpleNamespace(id=USER.id, rank="ff", membership_type="social")
         answers = await service.get_eligible_positions_bulk(blocked, ORG, ["s1"])
-        assert answers["s1"] == ["ems"]
+        assert answers["s1"] == []
 
     async def test_an_excluded_membership_type_gets_nothing(self):
         service = _service([_shift("s1")], rank=["driver"], excluded=["social"])
