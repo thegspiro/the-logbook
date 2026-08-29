@@ -177,7 +177,7 @@ class TestShiftSeatCapacity:
     def test_both_seat_counts_are_locking_reads(self):
         _assert_every_count_locks(
             scheduling_service.SchedulingService._validate_assignment_candidate,
-            expected=2,
+            expected=3,
         )
 
 

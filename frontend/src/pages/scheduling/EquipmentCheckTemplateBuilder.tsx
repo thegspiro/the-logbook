@@ -80,6 +80,7 @@ import type {
   EquipmentCheckTemplate,
   EquipmentCheckTemplateCreate,
   CheckTemplateCompartmentCreate,
+  CheckTemplateCompartment,
   CheckTemplateItemCreate,
   CheckTemplateItem,
   CheckType,
@@ -153,6 +154,8 @@ const MobileActionMenu: React.FC<{ label: string; children: React.ReactNode }> =
 
 interface ItemFormState {
   id?: string;
+  clientKey?: string;
+  saveStatus?: 'saving' | 'failed';
   name: string;
   description: string;
   checkType: CheckType;
@@ -222,6 +225,28 @@ function itemFormFromResponse(created: CheckTemplateItem): ItemFormState {
   };
 }
 
+function itemCreateFromForm(item: ItemFormState, sortOrder: number, name = item.name): CheckTemplateItemCreate {
+  return {
+    name,
+    description: item.description.trim() || undefined,
+    sort_order: sortOrder,
+    check_type: item.checkType,
+    is_required: item.isRequired,
+    required_quantity: item.requiredQuantity ? Number(item.requiredQuantity) : undefined,
+    expected_quantity: item.expectedQuantity ? Number(item.expectedQuantity) : undefined,
+    critical_minimum_quantity: item.criticalMinimumQuantity ? Number(item.criticalMinimumQuantity) : undefined,
+    min_level: item.minLevel ? Number(item.minLevel) : undefined,
+    level_unit: item.levelUnit.trim() || undefined,
+    serial_number: item.serialNumber.trim() || undefined,
+    lot_number: item.lotNumber.trim() || undefined,
+    inventory_item_id: item.inventoryItemId || undefined,
+    image_url: item.imageUrl.trim() || undefined,
+    has_expiration: item.hasExpiration,
+    expiration_date: item.expirationDate.trim() || undefined,
+    expiration_warning_days: item.expirationWarningDays ? Number(item.expirationWarningDays) : undefined,
+  };
+}
+
 // ============================================================================
 // Compartment Form State
 // ============================================================================
@@ -255,6 +280,21 @@ function emptyCompartment(): CompartmentFormState {
     isSealed: false,
     parentCompartmentId: '',
     items: [],
+  };
+}
+
+function compartmentFormFromResponse(compartment: CheckTemplateCompartment): CompartmentFormState {
+  return {
+    clientKey: newCompartmentKey(),
+    id: compartment.id,
+    name: compartment.name,
+    description: compartment.description ?? '',
+    imageUrl: compartment.imageUrl ?? '',
+    isHeader: compartment.isHeader ?? false,
+    containerType: compartment.containerType ?? 'compartment',
+    isSealed: compartment.isSealed ?? false,
+    parentCompartmentId: compartment.parentCompartmentId ?? '',
+    items: compartment.items.map(itemFormFromResponse),
   };
 }
 
@@ -660,7 +700,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     const comp = compartments[idx];
     if (!comp) return;
 
-    const localCopy: CompartmentFormState = {
+    let copy: CompartmentFormState = {
       clientKey: newCompartmentKey(),
       name: `${comp.name} (copy)`,
       description: comp.description,
@@ -671,22 +711,9 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       parentCompartmentId: comp.parentCompartmentId,
       items: comp.items.map(({ id: _discardId, ...rest }) => ({ ...rest })),
     };
-    let copy = localCopy;
     if (comp.id) {
       try {
-        const created = await schedulingService.cloneCompartment(comp.id);
-        copy = {
-          clientKey: newCompartmentKey(),
-          id: created.id,
-          name: created.name,
-          description: created.description ?? '',
-          imageUrl: created.imageUrl ?? '',
-          isHeader: created.isHeader ?? false,
-          containerType: created.containerType ?? 'compartment',
-          isSealed: created.isSealed ?? false,
-          parentCompartmentId: created.parentCompartmentId ?? '',
-          items: created.items.map(itemFormFromResponse),
-        };
+        copy = compartmentFormFromResponse(await schedulingService.cloneCompartment(comp.id, idx + 1));
       } catch (err: unknown) {
         toast.error(getErrorMessage(err, 'Failed to duplicate compartment'));
         return;
@@ -698,7 +725,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       return next;
     });
     setExpandedCompartments((prev) => new Set(prev).add(copy.clientKey));
-    toast.success(comp.id ? `“${copy.name}” added` : 'Compartment duplicated as draft');
+    toast.success(comp.id ? `“${copy.name}” added` : 'Draft compartment duplicated');
     if (!comp.id) markDirty();
   };
 
@@ -801,49 +828,45 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     const item = comp.items[itemIdx];
     if (!item) return;
 
-    const { id: _discardId, ...rest } = item;
-    const copy: ItemFormState = {
-      ...rest,
-      name: `${item.name} (copy)`,
-    };
+    let copy: ItemFormState;
     if (comp.id && item.id) {
       try {
-        const created = await schedulingService.addCheckItem(comp.id, {
-          name: copy.name,
-          description: copy.description || undefined,
-          sort_order: itemIdx + 1,
-          check_type: copy.checkType,
-          is_required: copy.isRequired,
-          required_quantity: copy.requiredQuantity ? Number(copy.requiredQuantity) : undefined,
-          expected_quantity: copy.expectedQuantity ? Number(copy.expectedQuantity) : undefined,
-          critical_minimum_quantity: copy.criticalMinimumQuantity ? Number(copy.criticalMinimumQuantity) : undefined,
-          min_level: copy.minLevel ? Number(copy.minLevel) : undefined,
-          level_unit: copy.levelUnit || undefined,
-          serial_number: copy.serialNumber || undefined,
-          lot_number: copy.lotNumber || undefined,
-          inventory_item_id: copy.inventoryItemId || undefined,
-          has_expiration: copy.hasExpiration,
-          expiration_date: copy.expirationDate || undefined,
-          expiration_warning_days: copy.expirationWarningDays ? Number(copy.expirationWarningDays) : undefined,
-          image_url: copy.imageUrl || undefined,
-        });
-        const savedCopy = itemFormFromResponse(created);
-        const updatedItems = [...comp.items];
-        updatedItems.splice(itemIdx + 1, 0, savedCopy);
-        updateCompartmentField(compartmentIdx, { items: updatedItems });
-        const savedIds = updatedItems.map((entry) => entry.id).filter((id): id is string => Boolean(id));
-        if (itemIdx + 1 < comp.items.length) await schedulingService.reorderItems(comp.id, savedIds);
-        toast.success(`“${savedCopy.name}” added`);
-        return;
+        const created = await schedulingService.addCheckItem(
+          comp.id,
+          itemCreateFromForm(item, itemIdx + 1, `${item.name} (copy)`)
+        );
+        copy = itemFormFromResponse(created);
       } catch (err: unknown) {
         toast.error(getErrorMessage(err, 'Failed to duplicate item'));
         return;
       }
+    } else {
+      const { id: _discardId, ...rest } = item;
+      copy = { ...rest, name: `${item.name} (copy)` };
     }
     const updatedItems = [...comp.items];
     updatedItems.splice(itemIdx + 1, 0, copy);
-    updateCompartmentField(compartmentIdx, { items: updatedItems });
-    toast.success('Item duplicated as draft');
+    setCompartments((prev) => {
+      const next = [...prev];
+      const current = next[compartmentIdx];
+      if (!current) return prev;
+      const items = [...current.items];
+      items.splice(itemIdx + 1, 0, copy);
+      next[compartmentIdx] = { ...current, items };
+      return next;
+    });
+    if (comp.id && item.id) {
+      try {
+        await schedulingService.reorderItems(
+          comp.id,
+          updatedItems.map((entry) => entry.id).filter((id): id is string => Boolean(id))
+        );
+      } catch (err: unknown) {
+        toast.error(getErrorMessage(err, 'Item was copied, but its order could not be saved'));
+        return;
+      }
+    }
+    toast.success(item.id ? `“${copy.name}” added` : 'Draft item duplicated');
   };
 
   // ---------------------------------------------------------------------------
@@ -982,6 +1005,8 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     return selectedItems[key]?.size ?? 0;
   };
 
+  const bulkDeleteIdempotencyKeys = useRef<Record<string, { key: string; payload: string }>>({});
+
   const deleteSelectedItems = async (compartmentIdx: number) => {
     const comp = compartments[compartmentIdx];
     if (!comp) return;
@@ -1000,24 +1025,29 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     )
       return;
 
-    const toDelete = [...selected].sort((a, b) => b - a);
-    const deletePromises: Promise<void>[] = [];
-    for (const itemIdx of toDelete) {
-      const item = comp.items[itemIdx];
-      if (item?.id) {
-        deletePromises.push(
-          schedulingService.deleteCheckItem(item.id).catch((err: unknown) => {
-            toast.error(getErrorMessage(err, `Failed to delete ${item.name || 'item'}`));
-          })
-        );
-      }
+    const itemIds = [...selected].map((itemIdx) => comp.items[itemIdx]?.id).filter((id): id is string => Boolean(id));
+    if (!comp.id || itemIds.length !== count) {
+      toast.error('Selected items must be saved before they can be deleted');
+      return;
     }
-    await Promise.all(deletePromises);
 
-    const remaining = comp.items.filter((_, i) => !selected.has(i));
-    updateCompartmentField(compartmentIdx, { items: remaining });
-    setSelectedItems((prev) => ({ ...prev, [key]: new Set<number>() }));
-    toast.success(`Deleted ${count} item${count !== 1 ? 's' : ''}`);
+    try {
+      const payload = JSON.stringify(itemIds);
+      const previousRequest = bulkDeleteIdempotencyKeys.current[key];
+      const idempotencyKey = previousRequest?.payload === payload ? previousRequest.key : crypto.randomUUID();
+      bulkDeleteIdempotencyKeys.current[key] = { key: idempotencyKey, payload };
+      const result = await schedulingService.deleteCheckItemsBulk(comp.id, itemIds, idempotencyKey);
+      const deletedIds = new Set(result.deletedItemIds);
+      updateCompartmentField(compartmentIdx, {
+        items: comp.items.filter((item) => !item.id || !deletedIds.has(item.id)),
+      });
+      setSelectedItems((prev) => ({ ...prev, [key]: new Set<number>() }));
+      delete bulkDeleteIdempotencyKeys.current[key];
+      const deletedCount = deletedIds.size;
+      toast.success(`Deleted ${deletedCount} item${deletedCount !== 1 ? 's' : ''}`);
+    } catch (err) {
+      toast.error(getErrorMessage(err, `Could not delete ${count} item${count !== 1 ? 's' : ''}`));
+    }
   };
 
   // ---------------------------------------------------------------------------
@@ -1030,33 +1060,114 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
   const [showEquipmentPresets, setShowEquipmentPresets] = useState<Record<string, boolean>>({});
   const [bulkItemPending, setBulkItemPending] = useState<Record<string, boolean>>({});
   const bulkIdempotencyKeys = useRef<Record<string, { key: string; payload: string }>>({});
+  const quickAddQueues = useRef<Record<string, Promise<void>>>({});
+  const quickAddJobs = useRef<Record<string, QuickAddJob>>({});
 
-  const handleQuickAdd = async (compartmentIdx: number, payload: CatalogAddPayload) => {
+  interface QuickAddJob {
+    clientKey: string;
+    compartmentId: string;
+    compartmentKey: string;
+    payload: CheckTemplateItemCreate;
+    idempotencyKey: string;
+  }
+
+  const replaceQuickAddItem = (compartmentKey: string, clientKey: string, replacement: ItemFormState | null) => {
+    setCompartments((previous) =>
+      previous.map((compartment, index) => {
+        if ((compartment.id ?? `comp-${index}`) !== compartmentKey) return compartment;
+        return {
+          ...compartment,
+          items: replacement
+            ? compartment.items.map((item) => (item.clientKey === clientKey ? replacement : item))
+            : compartment.items.filter((item) => item.clientKey !== clientKey),
+        };
+      })
+    );
+  };
+
+  const appendQuickAddItem = (compartmentKey: string, item: ItemFormState) => {
+    setCompartments((previous) =>
+      previous.map((compartment, index) =>
+        (compartment.id ?? `comp-${index}`) === compartmentKey
+          ? { ...compartment, items: [...compartment.items, item] }
+          : compartment
+      )
+    );
+    markDirty();
+  };
+
+  const runQuickAdd = (job: QuickAddJob) => {
+    quickAddJobs.current[job.clientKey] = job;
+    replaceQuickAddItem(job.compartmentKey, job.clientKey, {
+      ...emptyItem(),
+      name: job.payload.name,
+      ...(job.payload.inventory_item_id ? { inventoryItemId: job.payload.inventory_item_id } : {}),
+      ...(job.payload.check_type ? { checkType: job.payload.check_type as CheckType } : {}),
+      ...(job.payload.has_expiration ? { hasExpiration: true } : {}),
+      clientKey: job.clientKey,
+      saveStatus: 'saving',
+    });
+    const previous = quickAddQueues.current[job.compartmentKey] ?? Promise.resolve();
+    const request = previous.then(async () => {
+      try {
+        const result = await schedulingService.addCheckItemsBulk(job.compartmentId, [job.payload], job.idempotencyKey);
+        const created = result.items[0];
+        if (!created) throw new Error('The server did not return the saved item');
+        replaceQuickAddItem(job.compartmentKey, job.clientKey, itemFormFromResponse(created));
+        delete quickAddJobs.current[job.clientKey];
+      } catch (err: unknown) {
+        replaceQuickAddItem(job.compartmentKey, job.clientKey, {
+          ...emptyItem(),
+          name: job.payload.name,
+          ...(job.payload.inventory_item_id ? { inventoryItemId: job.payload.inventory_item_id } : {}),
+          ...(job.payload.check_type ? { checkType: job.payload.check_type as CheckType } : {}),
+          ...(job.payload.has_expiration ? { hasExpiration: true } : {}),
+          clientKey: job.clientKey,
+          saveStatus: 'failed',
+        });
+        toast.error(getErrorMessage(err, `Failed to add ${job.payload.name}`));
+      }
+    });
+    quickAddQueues.current[job.compartmentKey] = request;
+  };
+
+  const handleQuickAdd = (compartmentIdx: number, payload: CatalogAddPayload) => {
     const comp = compartments[compartmentIdx];
     if (!comp) return;
     const key = getCompKey(compartmentIdx);
     const name = payload.name.trim();
     if (!name) return;
 
+    setQuickAddValues((prev) => ({ ...prev, [key]: '' }));
+
     if (comp.id) {
-      try {
-        const createPayload: CheckTemplateItemCreate = {
-          name,
-          sort_order: comp.items.length,
-          // The catalog link travels with the item on the way in. Adding it
-          // afterwards is the step that never happened.
-          ...(payload.inventoryItemId ? { inventory_item_id: payload.inventoryItemId } : {}),
-          ...(payload.checkType ? { check_type: payload.checkType } : {}),
-          ...(payload.hasExpiration ? { has_expiration: true } : {}),
-        };
-        const created = await schedulingService.addCheckItem(comp.id, createPayload);
-        updateCompartmentField(compartmentIdx, {
-          items: [...comp.items, itemFormFromResponse(created)],
-        });
-      } catch (err: unknown) {
-        toast.error(getErrorMessage(err, 'Failed to add item'));
-        return;
-      }
+      const createPayload: CheckTemplateItemCreate = {
+        name,
+        sort_order: comp.items.length,
+        // The catalog link travels with the item on the way in. Adding it
+        // afterwards is the step that never happened.
+        ...(payload.inventoryItemId ? { inventory_item_id: payload.inventoryItemId } : {}),
+        ...(payload.checkType ? { check_type: payload.checkType } : {}),
+        ...(payload.hasExpiration ? { has_expiration: true } : {}),
+      };
+      const clientKey = crypto.randomUUID();
+      const job: QuickAddJob = {
+        clientKey,
+        compartmentId: comp.id,
+        compartmentKey: key,
+        payload: createPayload,
+        idempotencyKey: crypto.randomUUID(),
+      };
+      appendQuickAddItem(key, {
+        ...emptyItem(),
+        name,
+        ...(payload.inventoryItemId ? { inventoryItemId: payload.inventoryItemId } : {}),
+        ...(payload.checkType ? { checkType: payload.checkType } : {}),
+        ...(payload.hasExpiration ? { hasExpiration: true } : {}),
+        clientKey,
+        saveStatus: 'saving',
+      });
+      runQuickAdd(job);
     } else {
       updateCompartmentField(compartmentIdx, {
         items: [
@@ -1071,7 +1182,6 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
         ],
       });
     }
-    setQuickAddValues((prev) => ({ ...prev, [key]: '' }));
   };
 
   const handleBulkPaste = async (compartmentIdx: number) => {
@@ -2190,7 +2300,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     dragHandleProps?: Record<string, unknown>,
     totalItems?: number
   ) => {
-    const itemKey = item.id ?? `item-${compIdx}-${itemIdx}`;
+    const itemKey = item.id ?? item.clientKey ?? `item-${compIdx}-${itemIdx}`;
     const isItemExpanded = expandedItems.has(itemKey);
     const checkTypeLabel = CHECK_TYPES.find((ct) => ct.value === item.checkType)?.label ?? item.checkType;
     const compKey = getCompKey(compIdx);
@@ -2199,6 +2309,51 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     const itemCount = totalItems ?? compartments[compIdx]?.items.length ?? 0;
 
     const isHeader = item.checkType === 'header';
+
+    if (item.saveStatus) {
+      return (
+        <div
+          className="border-theme-surface-border bg-theme-surface flex min-h-12 items-center gap-3 rounded-md border px-3 py-2"
+          aria-label={`${item.name} ${item.saveStatus === 'saving' ? 'Saving' : 'Not saved'}`}
+        >
+          {item.saveStatus === 'saving' ? (
+            <Loader2 className="h-4 w-4 shrink-0 animate-spin text-blue-500" aria-hidden="true" />
+          ) : (
+            <AlertTriangle className="h-4 w-4 shrink-0 text-red-500" aria-hidden="true" />
+          )}
+          <span className="text-theme-text-primary min-w-0 flex-1 truncate text-sm font-medium">{item.name}</span>
+          <span
+            className={`text-xs ${item.saveStatus === 'failed' ? 'text-red-600 dark:text-red-400' : 'text-theme-text-muted'}`}
+          >
+            {item.saveStatus === 'saving' ? 'Saving…' : 'Not saved'}
+          </span>
+          {item.saveStatus === 'failed' && item.clientKey && (
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                className="rounded px-2 py-1 text-xs font-medium text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-900/20"
+                onClick={() => {
+                  const job = quickAddJobs.current[item.clientKey ?? ''];
+                  if (job) runQuickAdd(job);
+                }}
+              >
+                Retry
+              </button>
+              <button
+                type="button"
+                className="rounded px-2 py-1 text-xs font-medium text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20"
+                onClick={() => {
+                  delete quickAddJobs.current[item.clientKey ?? ''];
+                  replaceQuickAddItem(compKey, item.clientKey ?? '', null);
+                }}
+              >
+                Remove
+              </button>
+            </div>
+          )}
+        </div>
+      );
+    }
 
     return (
       <div
@@ -2333,7 +2488,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             </button>
             <button
               type="button"
-              onClick={() => duplicateItem(compIdx, itemIdx)}
+              onClick={() => void duplicateItem(compIdx, itemIdx)}
               className="text-theme-text-muted rounded p-1 transition-colors hover:bg-blue-50 hover:text-blue-600 dark:hover:bg-blue-900/20"
               aria-label={`Duplicate ${item.name || 'item'}`}
             >
@@ -2405,7 +2560,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             >
               <ChevronDown className="h-4 w-4" aria-hidden="true" /> Move down
             </button>
-            <button type="button" className={mobileMenuItemClass} onClick={() => duplicateItem(compIdx, itemIdx)}>
+            <button type="button" className={mobileMenuItemClass} onClick={() => void duplicateItem(compIdx, itemIdx)}>
               <Copy className="h-4 w-4" aria-hidden="true" /> Duplicate
             </button>
             {compartments.filter(
@@ -2965,7 +3120,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             </button>
             <button
               type="button"
-              onClick={() => duplicateCompartment(idx)}
+              onClick={() => void duplicateCompartment(idx)}
               className="text-theme-text-muted rounded p-1 transition-colors hover:bg-blue-50 hover:text-blue-600 dark:hover:bg-blue-900/20"
               aria-label={`Duplicate ${comp.name || 'compartment'}`}
             >
@@ -3008,7 +3163,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             >
               <ChevronDown className="h-4 w-4" aria-hidden="true" /> Move down
             </button>
-            <button type="button" className={mobileMenuItemClass} onClick={() => duplicateCompartment(idx)}>
+            <button type="button" className={mobileMenuItemClass} onClick={() => void duplicateCompartment(idx)}>
               <Copy className="h-4 w-4" aria-hidden="true" /> Duplicate
             </button>
             <label className={`${mobileMenuItemClass} flex-col items-stretch gap-1`}>
@@ -3332,13 +3487,13 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                 onDragEnd={(e: DragEndEvent) => handleItemDragEnd(idx, e)}
               >
                 <SortableContext
-                  items={comp.items.map((item, i) => item.id ?? `item-${idx}-${i}`)}
+                  items={comp.items.map((item, i) => item.id ?? item.clientKey ?? `item-${idx}-${i}`)}
                   strategy={verticalListSortingStrategy}
                 >
                   {comp.items.map((item, itemIdx) => (
                     <SortableItemWrapper
-                      key={item.id ?? `item-${idx}-${itemIdx}`}
-                      id={item.id ?? `item-${idx}-${itemIdx}`}
+                      key={item.id ?? item.clientKey ?? `item-${idx}-${itemIdx}`}
+                      id={item.id ?? item.clientKey ?? `item-${idx}-${itemIdx}`}
                     >
                       {({ listeners: itemListeners }) =>
                         renderItem(idx, itemIdx, item, itemListeners, comp.items.length)
@@ -4000,9 +4155,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                   Save failed
                 </span>
               )}
-              {!isEditing && autoSaveStatus === 'idle' && (
-                <span className="text-theme-text-secondary text-xs">Draft</span>
-              )}
+              {!isEditing && <span className="text-theme-text-muted flex items-center gap-1 text-xs">Draft</span>}
               {stats.completeness < 100 && (
                 <span className="text-xs text-yellow-600 dark:text-yellow-400">{stats.completeness}% items named</span>
               )}

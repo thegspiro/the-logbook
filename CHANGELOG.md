@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### A training-effectiveness evaluation list could briefly cache member feedback (2026-08-29)
+
+**Fixed**
+
+- `GET /training/effectiveness/evaluations` — a member's own submitted
+  Kirkpatrick-model evaluation (or, for officers, every member's) carrying a
+  `user_id` alongside free-text comments, behavior observations, and results
+  notes — could be held in the browser's short-lived response cache for up
+  to 90 seconds, the same PII-caching gap already closed on the training
+  module's other per-member endpoints.
+
+### Direct label printing remembers the right destination and reports the result (2026-08-29)
+
+**Improved**
+
+- Each position now remembers its selected network printer independently for
+  each label-enabled module, falling back to the department default if that
+  printer is no longer available.
+- Direct-print actions name their physical destination, browser printing is
+  labelled separately, and a mismatched configured stock size must be resolved
+  before a network job can be sent.
+- Direct-print results remain on the page, including reported printer faults,
+  warnings, and the distinction between confirmed status and an unconfirmed
+  send.
+
 ### Two training-officer dashboards could briefly cache member data (2026-08-29)
 
 **Fixed**

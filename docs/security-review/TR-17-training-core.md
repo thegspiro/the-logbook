@@ -340,7 +340,7 @@ No schema changes this iteration. No `SET NULL` nullability issues found.
 
 ## Pass 2 (2026-08-29)
 
-**Prefix:** `TR2` · **PR:** see `docs/security-review/PROGRESS.md` → Open PR
+**Prefix:** `TR2` · **PR:** [#1981](https://github.com/thegspiro/the-logbook/pull/1981)
 
 **Scope check:** compared the current tree against `a9b232db` (the pass-1
 merge commit for PR #1851) across all six pass-1 files. Five are byte-for-byte
