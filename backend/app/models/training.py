@@ -2925,8 +2925,9 @@ class Shift(Base):
     color = Column(String(7))  # Hex color from shift template, e.g. "#4f46e5"
 
     # Staffing (from template)
-    # Canonical form: [{"position": "officer", "required": True}, ...] — one
-    # entry per seat. See app/utils/positions.py.
+    # Canonical form includes position, required, and the opt-in
+    # allow_administrative_members flag — one entry per seat. See
+    # app/utils/positions.py.
     positions = Column(JSON)
     min_staffing = Column(Integer)
 
@@ -3190,8 +3191,9 @@ class ShiftTemplate(Base):
     color = Column(String(7))  # Hex color for calendar display
 
     # Staffing
-    # Canonical form: [{"position": "officer", "required": True}, ...] — see
-    # app/utils/positions.py. Event-category templates instead store event
+    # Canonical form includes position, required, and the opt-in
+    # allow_administrative_members flag — see app/utils/positions.py.
+    # Event-category templates instead store event
     # metadata here ({"event_type", "resources", "flat_positions"}).
     positions = Column(JSON)
     min_staffing = Column(Integer, default=1)
