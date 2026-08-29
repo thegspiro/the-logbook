@@ -203,10 +203,8 @@ describe('EquipmentCheckTemplateBuilder responsive actions', () => {
     await user.click(trigger);
     await user.click(within(trigger.closest('details') as HTMLElement).getByRole('button', { name: 'Duplicate' }));
     await waitFor(() => expect(addCheckItem).toHaveBeenCalled());
-    expect(updateEquipmentCheckTemplate).toHaveBeenCalledWith('template-1', { is_active: false });
-    expect(updateEquipmentCheckTemplate.mock.invocationCallOrder[0]).toBeLessThan(
-      addCheckItem.mock.invocationCallOrder[0]
-    );
+    expect(updateEquipmentCheckTemplate).not.toHaveBeenCalled();
+    expect(screen.getByLabelText('Template status')).toHaveTextContent('Draft');
     expect(addCheckItem).toHaveBeenCalledWith(
       'cab',
       expect.objectContaining({ name: 'Radio (copy)', sort_order: 1, check_type: 'function', is_required: true })

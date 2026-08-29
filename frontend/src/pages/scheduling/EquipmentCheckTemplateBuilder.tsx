@@ -453,9 +453,9 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
 
   // Auto-save debounce timer for item edits
   const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const autoSavePromiseRef = useRef<Promise<void> | null>(null);
   const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const autoSaveFadeRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const draftTransitionRef = useRef<Promise<void> | null>(null);
 
   // Apparatus options for the dropdown
   const [apparatusOptions, setApparatusOptions] = useState<
@@ -566,18 +566,15 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     markDirty();
   };
 
-  const ensureDraftBeforeStructureEdit = useCallback(async () => {
-    if (!form.isActive || !templateId) return;
-    draftTransitionRef.current ??= schedulingService
-      .updateEquipmentCheckTemplate(templateId, { is_active: false })
-      .then(() => {
-        setForm((current) => ({ ...current, isActive: false }));
-      })
-      .finally(() => {
-        draftTransitionRef.current = null;
-      });
-    await draftTransitionRef.current;
-  }, [form.isActive, templateId]);
+  const ensureDraftBeforeStructureEdit = useCallback((): Promise<void> => {
+    if (!form.isActive || !templateId) return Promise.resolve();
+    // The structural endpoint performs the database transition atomically with
+    // its mutation. Reflect that contract immediately so navigation warns that
+    // the edited checklist must be reviewed and published again.
+    setForm((current) => ({ ...current, isActive: false }));
+    markDirty();
+    return Promise.resolve();
+  }, [form.isActive, markDirty, templateId]);
 
   const togglePosition = (pos: string) => {
     setForm((prev) => {
@@ -1452,7 +1449,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       }
       setAutoSaveStatus('saving');
       autoSaveTimerRef.current = setTimeout(() => {
-        void ensureDraftBeforeStructureEdit()
+        autoSavePromiseRef.current = ensureDraftBeforeStructureEdit()
           .then(() => schedulingService.updateCheckItem(itemId, patch))
           .then(() => {
             setAutoSaveStatus('saved');
@@ -1461,6 +1458,9 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           .catch(() => {
             setAutoSaveStatus('error');
             autoSaveFadeRef.current = setTimeout(() => setAutoSaveStatus('idle'), 4000);
+          })
+          .finally(() => {
+            autoSavePromiseRef.current = null;
           });
       }, 1500);
     },
@@ -1512,6 +1512,11 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
   // ---------------------------------------------------------------------------
 
   const handleSave = async (publish: boolean) => {
+    if (autoSaveTimerRef.current) {
+      clearTimeout(autoSaveTimerRef.current);
+      autoSaveTimerRef.current = null;
+    }
+    if (autoSavePromiseRef.current) await autoSavePromiseRef.current;
     // Drafts deliberately bypass readiness checks; publication never does.
     const warnings: string[] = [];
     for (const comp of compartments) {
@@ -3839,6 +3844,16 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           <h1 className="text-theme-text-primary truncate text-2xl font-bold">
             {isEditing ? `Edit: ${form.name || 'Template'}` : 'New Equipment Check Template'}
           </h1>
+          <span
+            aria-label="Template status"
+            className={`rounded-full px-2 py-1 text-xs font-semibold ${
+              form.isActive
+                ? 'bg-green-500/10 text-green-700 dark:text-green-400'
+                : 'bg-amber-500/10 text-amber-700 dark:text-amber-400'
+            }`}
+          >
+            {form.isActive ? 'Published' : 'Draft'}
+          </span>
         </div>
         <div className="flex flex-shrink-0 flex-wrap items-center gap-2">
           <details className="relative">

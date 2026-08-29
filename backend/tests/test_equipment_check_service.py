@@ -521,6 +521,14 @@ class TestTemplateContentRevision:
         result.scalars.return_value.first.return_value = value
         return result
 
+    async def test_revision_advance_atomically_unpublishes_template(
+        self, service, mock_db
+    ):
+        await service._advance_content_revision("tmpl-1")
+
+        statement = mock_db.execute.await_args.args[0]
+        assert statement.compile().params["is_active"] is False
+
     @pytest.mark.parametrize(
         ("method", "args", "getter", "entity"),
         [
