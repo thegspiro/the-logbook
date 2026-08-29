@@ -656,11 +656,11 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     markDirty();
   };
 
-  const duplicateCompartment = (idx: number) => {
+  const duplicateCompartment = async (idx: number) => {
     const comp = compartments[idx];
     if (!comp) return;
 
-    const copy: CompartmentFormState = {
+    const localCopy: CompartmentFormState = {
       clientKey: newCompartmentKey(),
       name: `${comp.name} (copy)`,
       description: comp.description,
@@ -671,14 +671,35 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       parentCompartmentId: comp.parentCompartmentId,
       items: comp.items.map(({ id: _discardId, ...rest }) => ({ ...rest })),
     };
+    let copy = localCopy;
+    if (comp.id) {
+      try {
+        const created = await schedulingService.cloneCompartment(comp.id);
+        copy = {
+          clientKey: newCompartmentKey(),
+          id: created.id,
+          name: created.name,
+          description: created.description ?? '',
+          imageUrl: created.imageUrl ?? '',
+          isHeader: created.isHeader ?? false,
+          containerType: created.containerType ?? 'compartment',
+          isSealed: created.isSealed ?? false,
+          parentCompartmentId: created.parentCompartmentId ?? '',
+          items: created.items.map(itemFormFromResponse),
+        };
+      } catch (err: unknown) {
+        toast.error(getErrorMessage(err, 'Failed to duplicate compartment'));
+        return;
+      }
+    }
     setCompartments((prev) => {
       const next = [...prev];
       next.splice(idx + 1, 0, copy);
       return next;
     });
     setExpandedCompartments((prev) => new Set(prev).add(copy.clientKey));
-    toast.success('Compartment duplicated');
-    markDirty();
+    toast.success(comp.id ? `“${copy.name}” added` : 'Compartment duplicated as draft');
+    if (!comp.id) markDirty();
   };
 
   // ---------------------------------------------------------------------------
@@ -774,7 +795,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     updateCompartmentField(compartmentIdx, { items: updatedItems });
   };
 
-  const duplicateItem = (compartmentIdx: number, itemIdx: number) => {
+  const duplicateItem = async (compartmentIdx: number, itemIdx: number) => {
     const comp = compartments[compartmentIdx];
     if (!comp) return;
     const item = comp.items[itemIdx];
@@ -785,10 +806,44 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       ...rest,
       name: `${item.name} (copy)`,
     };
+    if (comp.id && item.id) {
+      try {
+        const created = await schedulingService.addCheckItem(comp.id, {
+          name: copy.name,
+          description: copy.description || undefined,
+          sort_order: itemIdx + 1,
+          check_type: copy.checkType,
+          is_required: copy.isRequired,
+          required_quantity: copy.requiredQuantity ? Number(copy.requiredQuantity) : undefined,
+          expected_quantity: copy.expectedQuantity ? Number(copy.expectedQuantity) : undefined,
+          critical_minimum_quantity: copy.criticalMinimumQuantity ? Number(copy.criticalMinimumQuantity) : undefined,
+          min_level: copy.minLevel ? Number(copy.minLevel) : undefined,
+          level_unit: copy.levelUnit || undefined,
+          serial_number: copy.serialNumber || undefined,
+          lot_number: copy.lotNumber || undefined,
+          inventory_item_id: copy.inventoryItemId || undefined,
+          has_expiration: copy.hasExpiration,
+          expiration_date: copy.expirationDate || undefined,
+          expiration_warning_days: copy.expirationWarningDays ? Number(copy.expirationWarningDays) : undefined,
+          image_url: copy.imageUrl || undefined,
+        });
+        const savedCopy = itemFormFromResponse(created);
+        const updatedItems = [...comp.items];
+        updatedItems.splice(itemIdx + 1, 0, savedCopy);
+        updateCompartmentField(compartmentIdx, { items: updatedItems });
+        const savedIds = updatedItems.map((entry) => entry.id).filter((id): id is string => Boolean(id));
+        if (itemIdx + 1 < comp.items.length) await schedulingService.reorderItems(comp.id, savedIds);
+        toast.success(`“${savedCopy.name}” added`);
+        return;
+      } catch (err: unknown) {
+        toast.error(getErrorMessage(err, 'Failed to duplicate item'));
+        return;
+      }
+    }
     const updatedItems = [...comp.items];
     updatedItems.splice(itemIdx + 1, 0, copy);
     updateCompartmentField(compartmentIdx, { items: updatedItems });
-    toast.success('Item duplicated');
+    toast.success('Item duplicated as draft');
   };
 
   // ---------------------------------------------------------------------------
@@ -3944,6 +3999,9 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                   <AlertTriangle className="h-3 w-3" />
                   Save failed
                 </span>
+              )}
+              {!isEditing && autoSaveStatus === 'idle' && (
+                <span className="text-theme-text-secondary text-xs">Draft</span>
               )}
               {stats.completeness < 100 && (
                 <span className="text-xs text-yellow-600 dark:text-yellow-400">{stats.completeness}% items named</span>

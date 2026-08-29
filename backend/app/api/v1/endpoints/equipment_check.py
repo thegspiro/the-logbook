@@ -420,6 +420,26 @@ async def add_compartment(
     return compartment
 
 
+@router.post(
+    "/compartments/{compartment_id}/clone",
+    response_model=CheckTemplateCompartmentResponse,
+    status_code=201,
+)
+async def clone_compartment(
+    compartment_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("equipment_check.manage")),
+):
+    """Clone a saved compartment and its children atomically."""
+    service = EquipmentCheckService(db)
+    compartment = await service.clone_compartment(
+        compartment_id, str(current_user.organization_id)
+    )
+    if not compartment:
+        raise HTTPException(status_code=404, detail="Compartment not found")
+    return compartment
+
+
 @router.put(
     "/compartments/{compartment_id}",
     response_model=CheckTemplateCompartmentResponse,
