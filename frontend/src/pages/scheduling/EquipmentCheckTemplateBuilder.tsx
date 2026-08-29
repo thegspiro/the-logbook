@@ -455,6 +455,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
   const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const autoSaveFadeRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const draftTransitionRef = useRef<Promise<void> | null>(null);
 
   // Apparatus options for the dropdown
   const [apparatusOptions, setApparatusOptions] = useState<
@@ -565,6 +566,19 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     markDirty();
   };
 
+  const ensureDraftBeforeStructureEdit = useCallback(async () => {
+    if (!form.isActive || !templateId) return;
+    draftTransitionRef.current ??= schedulingService
+      .updateEquipmentCheckTemplate(templateId, { is_active: false })
+      .then(() => {
+        setForm((current) => ({ ...current, isActive: false }));
+      })
+      .finally(() => {
+        draftTransitionRef.current = null;
+      });
+    await draftTransitionRef.current;
+  }, [form.isActive, templateId]);
+
   const togglePosition = (pos: string) => {
     setForm((prev) => {
       const current = prev.assignedPositions;
@@ -607,6 +621,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           container_type: 'compartment',
           ...(parentCompartmentId ? { parent_compartment_id: parentCompartmentId } : {}),
         };
+        await ensureDraftBeforeStructureEdit();
         const created = await schedulingService.addCompartment(templateId, payload);
         const comp: CompartmentFormState = {
           clientKey: newCompartmentKey(),
@@ -646,6 +661,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           sort_order: compartments.length,
           is_header: true,
         };
+        await ensureDraftBeforeStructureEdit();
         const created = await schedulingService.addCompartment(templateId, payload);
         const comp: CompartmentFormState = {
           clientKey: newCompartmentKey(),
@@ -692,6 +708,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
 
     if (comp.id) {
       try {
+        await ensureDraftBeforeStructureEdit();
         await schedulingService.deleteCompartment(comp.id);
         toast.success('Compartment deleted');
       } catch (err: unknown) {
@@ -720,6 +737,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     };
     if (comp.id) {
       try {
+        await ensureDraftBeforeStructureEdit();
         copy = compartmentFormFromResponse(await schedulingService.cloneCompartment(comp.id, idx + 1));
       } catch (err: unknown) {
         toast.error(getErrorMessage(err, 'Failed to duplicate compartment'));
@@ -752,6 +770,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           check_type: 'header',
           is_required: false,
         };
+        await ensureDraftBeforeStructureEdit();
         const created = await schedulingService.addCheckItem(comp.id, payload);
         const item: ItemFormState = {
           clientKey: newItemKey(),
@@ -818,6 +837,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
 
     if (item.id) {
       try {
+        await ensureDraftBeforeStructureEdit();
         await schedulingService.deleteCheckItem(item.id);
         toast.success('Item deleted');
       } catch (err: unknown) {
@@ -839,6 +859,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     let copy: ItemFormState;
     if (comp.id && item.id) {
       try {
+        await ensureDraftBeforeStructureEdit();
         const created = await schedulingService.addCheckItem(
           comp.id,
           itemCreateFromForm(item, itemIdx + 1, `${item.name} (copy)`)
@@ -865,6 +886,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     });
     if (comp.id && item.id) {
       try {
+        await ensureDraftBeforeStructureEdit();
         await schedulingService.reorderItems(
           comp.id,
           updatedItems.map((entry) => entry.id).filter((id): id is string => Boolean(id))
@@ -913,6 +935,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       const savedIds = reorderedItems.map((item) => item.id).filter((id): id is string => Boolean(id));
       if (savedIds.length > 0) {
         try {
+          await ensureDraftBeforeStructureEdit();
           await schedulingService.reorderItems(comp.id, savedIds);
         } catch {
           setExpandedItems((prev) => new Set(prev).add(item.id ?? item.clientKey));
@@ -936,6 +959,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
 
     if (isEditing && item.id && toComp.id) {
       try {
+        await ensureDraftBeforeStructureEdit();
         await schedulingService.updateCheckItem(item.id, {
           compartment_id: toComp.id,
           sort_order: toComp.items.length,
@@ -980,6 +1004,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     const reordered = moveCompartmentInTree(compartments, id, direction);
     if (isEditing && templateId) {
       try {
+        await ensureDraftBeforeStructureEdit();
         await schedulingService.reorderCompartments(templateId, orderedCompartmentIds(reordered));
       } catch {
         toast.error('Could not reorder compartment. Its original order was restored.');
@@ -1058,6 +1083,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       const previousRequest = bulkDeleteIdempotencyKeys.current[key];
       const idempotencyKey = previousRequest?.payload === payload ? previousRequest.key : crypto.randomUUID();
       bulkDeleteIdempotencyKeys.current[key] = { key: idempotencyKey, payload };
+      await ensureDraftBeforeStructureEdit();
       const result = await schedulingService.deleteCheckItemsBulk(comp.id, itemIds, idempotencyKey);
       const deletedIds = new Set(result.deletedItemIds);
       updateCompartmentField(compartmentIdx, {
@@ -1132,6 +1158,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     const previous = quickAddQueues.current[job.compartmentKey] ?? Promise.resolve();
     const request = previous.then(async () => {
       try {
+        await ensureDraftBeforeStructureEdit();
         const result = await schedulingService.addCheckItemsBulk(job.compartmentId, [job.payload], job.idempotencyKey);
         const created = result.items[0];
         if (!created) throw new Error('The server did not return the saved item');
@@ -1229,6 +1256,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
         const idempotencyKey =
           previousRequest?.payload === payloadFingerprint ? previousRequest.key : crypto.randomUUID();
         bulkIdempotencyKeys.current[requestKey] = { key: idempotencyKey, payload: payloadFingerprint };
+        await ensureDraftBeforeStructureEdit();
         const result = await schedulingService.addCheckItemsBulk(comp.id, payload, idempotencyKey);
         delete bulkIdempotencyKeys.current[requestKey];
         const newItems = result.items.map(itemFormFromResponse);
@@ -1278,6 +1306,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
         const idempotencyKey =
           previousRequest?.payload === payloadFingerprint ? previousRequest.key : crypto.randomUUID();
         bulkIdempotencyKeys.current[requestKey] = { key: idempotencyKey, payload: payloadFingerprint };
+        await ensureDraftBeforeStructureEdit();
         const result = await schedulingService.addCheckItemsBulk(comp.id, items, idempotencyKey);
         delete bulkIdempotencyKeys.current[requestKey];
         const newItems = result.items.map(itemFormFromResponse);
@@ -1413,9 +1442,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
 
   const scheduleAutoSaveItem = useCallback(
     (itemId: string, patch: Record<string, unknown>) => {
-      // Published templates remain stable for crews. Changes stay local until
-      // Save draft explicitly deactivates the template before persisting them.
-      if (!isEditing || !itemId || form.isActive) return;
+      if (!isEditing || !itemId) return;
 
       if (autoSaveTimerRef.current) {
         clearTimeout(autoSaveTimerRef.current);
@@ -1425,8 +1452,8 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       }
       setAutoSaveStatus('saving');
       autoSaveTimerRef.current = setTimeout(() => {
-        void schedulingService
-          .updateCheckItem(itemId, patch)
+        void ensureDraftBeforeStructureEdit()
+          .then(() => schedulingService.updateCheckItem(itemId, patch))
           .then(() => {
             setAutoSaveStatus('saved');
             autoSaveFadeRef.current = setTimeout(() => setAutoSaveStatus('idle'), 2000);
@@ -1437,7 +1464,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           });
       }, 1500);
     },
-    [form.isActive, isEditing]
+    [ensureDraftBeforeStructureEdit, isEditing]
   );
 
   // Enhanced updateItemField that triggers auto-save for persisted items
@@ -1484,39 +1511,31 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
   // Save
   // ---------------------------------------------------------------------------
 
-  const publicationErrors = (() => {
-    const errors: string[] = [];
-    if (!form.name.trim()) errors.push('Template name is required.');
-    const operational = compartments.filter((comp) => !comp.isHeader);
-    if (operational.length === 0) errors.push('Add at least one operational compartment.');
-    for (const comp of operational) {
-      if (!comp.name.trim()) errors.push('Every operational compartment needs a name.');
-      const checkableItems = comp.items.filter((item) => item.checkType !== 'header' && item.checkType !== 'text');
-      if (checkableItems.length === 0) {
-        errors.push(`Compartment "${comp.name || 'Untitled'}" needs at least one checkable item.`);
-      }
-      for (const item of comp.items) {
-        if (!item.name.trim()) errors.push('Every checklist item needs a name.');
-        if (item.checkType === 'count' && item.requiredQuantity === '' && item.expectedQuantity === '') {
-          errors.push(`Count item "${item.name || 'Untitled'}" needs an expected quantity.`);
-        }
-        if (item.checkType === 'level' && item.minLevel === '') {
-          errors.push(`Level item "${item.name || 'Untitled'}" needs a minimum level.`);
-        }
-      }
-    }
-    return [...new Set(errors)];
-  })();
-
-  const handleSave = async (publish = false) => {
-    if (publish && publicationErrors.length > 0) return;
-
-    // Non-blocking warnings may be overridden for both drafts and publication.
+  const handleSave = async (publish: boolean) => {
+    // Drafts deliberately bypass readiness checks; publication never does.
     const warnings: string[] = [];
     for (const comp of compartments) {
+      if (!comp.name.trim()) {
+        warnings.push('One or more compartments have no name.');
+        break;
+      }
+    }
+    for (const comp of compartments) {
+      if (comp.isHeader) continue;
+      if (comp.items.length === 0) {
+        warnings.push(`Compartment "${comp.name || 'Untitled'}" has no items.`);
+        break;
+      }
       for (const item of comp.items) {
+        if (!item.name.trim()) {
+          warnings.push(`One or more items in "${comp.name || 'Untitled'}" have no name.`);
+          break;
+        }
         if (item.hasExpiration && !item.expirationDate.trim()) {
           warnings.push(`"${item.name || 'Untitled'}" has expiration enabled but no date set.`);
+        }
+        if (item.checkType === 'count' && !item.requiredQuantity && !item.expectedQuantity) {
+          warnings.push(`"${item.name || 'Untitled'}" is a quantity check but has no expected quantity.`);
         }
         if (
           item.checkType === 'count' &&
@@ -1526,12 +1545,15 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
         ) {
           warnings.push(`"${item.name || 'Untitled'}" has critical minimum >= expected quantity.`);
         }
+        if (item.checkType === 'level' && !item.minLevel) {
+          warnings.push(`"${item.name || 'Untitled'}" is a level check but has no minimum level set.`);
+        }
         if (item.checkType === 'expiry' && !item.serialNumber && !item.lotNumber) {
           warnings.push(`"${item.name || 'Untitled'}" is a date/lot check but has no serial or lot number.`);
         }
       }
     }
-    if (warnings.length > 0) {
+    if (publish && warnings.length > 0) {
       const proceed = await confirm({
         title: 'Save with warnings?',
         message: `${warnings.join('\n\n')}\n\nYou can save anyway and fix these later.`,
@@ -1590,6 +1612,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
 
         // Save any new compartments that haven't been persisted yet
         for (const payload of compartmentPayloads) {
+          await ensureDraftBeforeStructureEdit();
           await schedulingService.addCompartment(templateId, payload);
         }
 
@@ -1644,7 +1667,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
         if (publish) {
           await schedulingService.updateEquipmentCheckTemplate(templateId, { is_active: true });
         }
-
+        setForm((current) => ({ ...current, isActive: publish }));
         setIsDirty(false);
         toast.success(publish ? 'Template published' : 'Draft saved');
       } else {
@@ -2124,6 +2147,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       ...(form.apparatusId ? { apparatusId: form.apparatusId } : {}),
       isActive: form.isActive,
       sortOrder: 0,
+      contentRevision: 0,
       compartments: compartments.map((c, cIdx) => ({
         id: c.id ?? `preview-comp-${cIdx}`,
         templateId: templateId ?? 'preview',
@@ -2268,6 +2292,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     const reordered = reorderCompartment(compartments, activeId, overId);
     if (isEditing && templateId) {
       try {
+        await ensureDraftBeforeStructureEdit();
         await schedulingService.reorderCompartments(templateId, orderedCompartmentIds(reordered));
       } catch {
         toast.error('Could not reorder compartment. Its original order was restored.');
@@ -2298,6 +2323,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       const savedIds = reorderedItems.map((item) => item.id).filter((id): id is string => Boolean(id));
       if (savedIds.length > 0) {
         try {
+          await ensureDraftBeforeStructureEdit();
           await schedulingService.reorderItems(comp.id, savedIds);
         } catch {
           setExpandedItems((prev) => new Set(prev).add(movedItem.id ?? movedItem.clientKey));
@@ -3641,11 +3667,10 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     <div className="space-y-4">
       {/* Name */}
       <div>
-        <label className={labelClass} htmlFor="equipment-check-template-name">
+        <label className={labelClass}>
           Name <span className="text-red-500">*</span>
         </label>
         <input
-          id="equipment-check-template-name"
           type="text"
           className={inputClass}
           placeholder="e.g. Engine Daily Check"
@@ -3776,16 +3801,23 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           {form.apparatusType || 'apparatus'} units
         </p>
       </div>
-
-      <p className="text-theme-text-muted text-xs">
-        Status: <strong>{form.isActive ? 'Published' : 'Draft'}</strong>. Drafts are hidden from shift checklists.
-      </p>
     </div>
   );
 
   const setupReady = Boolean(form.name.trim() && form.checkTiming && form.templateType);
   const structureReady = compartments.some((comp) => !comp.isHeader);
   const itemsReady = stats.totalItems > 0;
+  const blockingItems = compartments
+    .flatMap((comp) => comp.items)
+    .filter(
+      (item) =>
+        !item.name.trim() ||
+        (item.checkType === 'count' && !item.requiredQuantity && !item.expectedQuantity) ||
+        (item.checkType === 'level' && !item.minLevel)
+    ).length;
+  const locationsReady =
+    structureReady && compartments.every((comp) => comp.name.trim() && (comp.isHeader || comp.items.length > 0));
+  const publishReady = setupReady && locationsReady && blockingItems === 0;
 
   // ---------------------------------------------------------------------------
   // Main render
@@ -3906,9 +3938,9 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           </button>
           <button
             type="button"
-            onClick={() => void handleSave()}
+            onClick={() => void handleSave(false)}
             disabled={saving}
-            className="btn-secondary flex min-h-11 items-center gap-2 px-3 py-2 text-sm font-medium sm:min-h-10"
+            className="btn-secondary flex min-h-11 items-center gap-2 px-3 text-sm font-medium sm:min-h-10"
           >
             {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
             {saving ? 'Saving...' : 'Save draft'}
@@ -3916,29 +3948,13 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           <button
             type="button"
             onClick={() => void handleSave(true)}
-            disabled={saving || publicationErrors.length > 0}
-            title={publicationErrors.join(' ')}
+            disabled={saving || !publishReady}
             className="flex min-h-11 items-center gap-2 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50 sm:min-h-10"
           >
-            Publish
+            <CheckCircle2 className="h-4 w-4" /> Publish
           </button>
         </div>
       </div>
-
-      <section className="card mx-auto mb-5 max-w-7xl p-4" aria-labelledby="template-readiness-heading">
-        <h2 id="template-readiness-heading" className="text-theme-text-primary text-sm font-semibold">
-          Template readiness
-        </h2>
-        <p className="mt-2 text-sm text-green-700 dark:text-green-400">{setupReady ? '✓' : '○'} Setup</p>
-        <p className="text-sm text-green-700 dark:text-green-400">{structureReady ? '✓' : '○'} Locations</p>
-        {publicationErrors.length > 0 && (
-          <ul className="mt-2 list-inside list-disc text-sm text-amber-700 dark:text-amber-400">
-            {publicationErrors.map((error) => (
-              <li key={error}>{error}</li>
-            ))}
-          </ul>
-        )}
-      </section>
 
       <div className="mx-auto mb-5 grid max-w-7xl grid-cols-3 overflow-hidden rounded-xl border border-blue-500/15 bg-blue-500/5">
         {[
@@ -3971,6 +3987,20 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             </span>
           </div>
         ))}
+      </div>
+
+      <div className="card mx-auto mb-5 max-w-7xl p-4" aria-label="Template readiness">
+        <h2 className="text-theme-text-primary mb-2 text-sm font-semibold">Template readiness</h2>
+        <div className="text-theme-text-secondary grid gap-1 text-sm sm:grid-cols-3">
+          <span>{setupReady ? '✓' : '!'} Setup</span>
+          <span>{locationsReady ? '✓' : '!'} Locations</span>
+          <span>{blockingItems === 0 ? '✓ Items configured' : `! ${blockingItems} items need configuration`}</span>
+        </div>
+        {!publishReady && (
+          <p className="text-theme-text-muted mt-2 text-xs">
+            Save this work as a draft. Publish becomes available after every blocking issue is fixed.
+          </p>
+        )}
       </div>
 
       {/* Sidebar + Main content */}
