@@ -951,6 +951,8 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     return selectedItems[key]?.size ?? 0;
   };
 
+  const bulkDeleteIdempotencyKeys = useRef<Record<string, { key: string; payload: string }>>({});
+
   const deleteSelectedItems = async (compartmentIdx: number) => {
     const comp = compartments[compartmentIdx];
     if (!comp) return;
@@ -969,24 +971,29 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     )
       return;
 
-    const toDelete = [...selected].sort((a, b) => b - a);
-    const deletePromises: Promise<void>[] = [];
-    for (const itemIdx of toDelete) {
-      const item = comp.items[itemIdx];
-      if (item?.id) {
-        deletePromises.push(
-          schedulingService.deleteCheckItem(item.id).catch((err: unknown) => {
-            toast.error(getErrorMessage(err, `Failed to delete ${item.name || 'item'}`));
-          })
-        );
-      }
+    const itemIds = [...selected].map((itemIdx) => comp.items[itemIdx]?.id).filter((id): id is string => Boolean(id));
+    if (!comp.id || itemIds.length !== count) {
+      toast.error('Selected items must be saved before they can be deleted');
+      return;
     }
-    await Promise.all(deletePromises);
 
-    const remaining = comp.items.filter((_, i) => !selected.has(i));
-    updateCompartmentField(compartmentIdx, { items: remaining });
-    setSelectedItems((prev) => ({ ...prev, [key]: new Set<number>() }));
-    toast.success(`Deleted ${count} item${count !== 1 ? 's' : ''}`);
+    try {
+      const payload = JSON.stringify(itemIds);
+      const previousRequest = bulkDeleteIdempotencyKeys.current[key];
+      const idempotencyKey = previousRequest?.payload === payload ? previousRequest.key : crypto.randomUUID();
+      bulkDeleteIdempotencyKeys.current[key] = { key: idempotencyKey, payload };
+      const result = await schedulingService.deleteCheckItemsBulk(comp.id, itemIds, idempotencyKey);
+      const deletedIds = new Set(result.deletedItemIds);
+      updateCompartmentField(compartmentIdx, {
+        items: comp.items.filter((item) => !item.id || !deletedIds.has(item.id)),
+      });
+      setSelectedItems((prev) => ({ ...prev, [key]: new Set<number>() }));
+      delete bulkDeleteIdempotencyKeys.current[key];
+      const deletedCount = deletedIds.size;
+      toast.success(`Deleted ${deletedCount} item${deletedCount !== 1 ? 's' : ''}`);
+    } catch (err) {
+      toast.error(getErrorMessage(err, `Could not delete ${count} item${count !== 1 ? 's' : ''}`));
+    }
   };
 
   // ---------------------------------------------------------------------------

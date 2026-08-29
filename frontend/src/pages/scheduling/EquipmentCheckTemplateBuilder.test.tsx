@@ -1,18 +1,21 @@
 /* eslint-disable testing-library/no-node-access, @typescript-eslint/no-unsafe-return */
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ConfirmProvider } from '../../contexts/ConfirmContext';
 import EquipmentCheckTemplateBuilder from './EquipmentCheckTemplateBuilder';
 
-const { getTemplate, updateCheckItem, reorderItems, toastSuccess, toastError } = vi.hoisted(() => ({
-  getTemplate: vi.fn(),
-  updateCheckItem: vi.fn(),
-  reorderItems: vi.fn(),
-  toastSuccess: vi.fn(),
-  toastError: vi.fn(),
-}));
+const { getTemplate, updateCheckItem, reorderItems, deleteCheckItemsBulk, toastSuccess, toastError } = vi.hoisted(
+  () => ({
+    getTemplate: vi.fn(),
+    updateCheckItem: vi.fn(),
+    reorderItems: vi.fn(),
+    deleteCheckItemsBulk: vi.fn(),
+    toastSuccess: vi.fn(),
+    toastError: vi.fn(),
+  })
+);
 
 vi.mock('react-hot-toast', () => ({ default: { success: toastSuccess, error: toastError } }));
 
@@ -23,6 +26,7 @@ vi.mock('@/modules/scheduling', () => ({
     updateCheckItem: (...args: unknown[]) => updateCheckItem(...args),
     reorderItems: (...args: unknown[]) => reorderItems(...args),
     getCsvSampleUrl: vi.fn().mockReturnValue('/sample.csv'),
+    deleteCheckItemsBulk: (...args: unknown[]) => deleteCheckItemsBulk(...args),
   },
 }));
 
@@ -54,6 +58,16 @@ const template = {
           compartmentId: 'cab',
           name: 'Radio',
           sortOrder: 0,
+          checkType: 'function',
+          isRequired: true,
+          hasExpiration: false,
+          expirationWarningDays: 30,
+        },
+        {
+          id: 'flashlight',
+          compartmentId: 'cab',
+          name: 'Flashlight',
+          sortOrder: 1,
           checkType: 'function',
           isRequired: true,
           hasExpiration: false,
@@ -109,7 +123,7 @@ function renderNewBuilder() {
 describe('EquipmentCheckTemplateBuilder responsive actions', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    getTemplate.mockResolvedValue(template);
+    getTemplate.mockResolvedValue(structuredClone(template));
     updateCheckItem.mockResolvedValue({});
     reorderItems.mockResolvedValue([]);
   });
@@ -216,6 +230,42 @@ describe('EquipmentCheckTemplateBuilder movement persistence', () => {
     expect(updateCheckItem).toHaveBeenCalledTimes(2);
     expect(await screen.findByLabelText('Actions for Radio')).toBeInTheDocument();
     expect(await screen.findByLabelText('Actions for Oxygen mask')).toBeInTheDocument();
+  });
+});
+
+describe('EquipmentCheckTemplateBuilder bulk deletion', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    getTemplate.mockResolvedValue(structuredClone(template));
+  });
+
+  async function selectAndDelete() {
+    const user = userEvent.setup();
+    renderBuilder();
+    await screen.findByText('Radio');
+    await user.click(screen.getByTitle('Select all items'));
+    await user.click(screen.getByRole('button', { name: 'Delete selected items' }));
+    await user.click(screen.getByRole('button', { name: 'Delete 2' }));
+  }
+
+  it('removes only IDs confirmed by a completely successful response', async () => {
+    deleteCheckItemsBulk.mockResolvedValue({ deletedItemIds: ['radio', 'flashlight'], replayed: false });
+    await selectAndDelete();
+    await waitFor(() => expect(screen.queryByText('Radio')).not.toBeInTheDocument());
+    expect(screen.getAllByText(/No items yet/).length).toBeGreaterThan(0);
+    expect(deleteCheckItemsBulk).toHaveBeenCalledWith('cab', ['radio', 'flashlight'], expect.any(String));
+    expect(toastSuccess).toHaveBeenCalledWith('Deleted 2 items');
+    expect(toastError).not.toHaveBeenCalled();
+  });
+
+  it('retains visible selected rows and never shows success after failure', async () => {
+    deleteCheckItemsBulk.mockRejectedValue(new Error('Database unavailable'));
+    await selectAndDelete();
+    expect(await screen.findByText('Radio')).toBeVisible();
+    expect(screen.getByText('Flashlight')).toBeVisible();
+    expect(screen.getByText('2 selected')).toBeVisible();
+    expect(toastError).toHaveBeenCalled();
+    expect(toastSuccess).not.toHaveBeenCalled();
   });
 });
 

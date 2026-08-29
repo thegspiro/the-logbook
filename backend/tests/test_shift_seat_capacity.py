@@ -17,6 +17,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 from uuid import uuid4
 
+from app.models.user import User
 from app.services.scheduling_service import SchedulingService
 
 ORG = uuid4()
@@ -133,8 +134,14 @@ class TestUnnamedSeatShiftEligibility:
         original_execute = session.execute
 
         async def execute(statement):
-            if session.calls == 5:  # eligibility loads the active member
-                session.calls += 1
+            # Match the candidate-model query rather than a query number. The
+            # validation sequence can gain an independent safety check (for
+            # example approved time off) without turning this eligibility
+            # regression test into a broken session stub.
+            if any(
+                description.get("expr") is User
+                for description in statement.column_descriptions
+            ):
                 return SimpleNamespace(
                     scalar_one_or_none=lambda: SimpleNamespace(id=str(USER))
                 )
