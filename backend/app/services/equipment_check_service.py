@@ -11,7 +11,7 @@ from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Set
 from uuid import NAMESPACE_URL, uuid5
 
-from sqlalchemy import and_, func, or_, select
+from sqlalchemy import and_, func, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -478,6 +478,80 @@ class EquipmentCheckService:
         await self.db.commit()
         return True
 
+    async def clone_compartment(
+        self, compartment_id: str, organization_id: str, sort_order: int
+    ) -> Optional[CheckTemplateCompartment]:
+        """Clone a saved compartment and all of its items in one transaction."""
+        source = await self._get_compartment(compartment_id, organization_id)
+        if not source:
+            return None
+
+        # Make room in the same transaction as the clone. Committing the clone
+        # and repairing sibling positions in a second request can leave two
+        # rows at the same position when that second request fails.
+        await self.db.execute(
+            update(CheckTemplateCompartment)
+            .where(
+                CheckTemplateCompartment.template_id == source.template_id,
+                CheckTemplateCompartment.parent_compartment_id
+                == source.parent_compartment_id,
+                CheckTemplateCompartment.sort_order >= sort_order,
+            )
+            .values(sort_order=CheckTemplateCompartment.sort_order + 1)
+        )
+
+        clone = CheckTemplateCompartment(
+            id=generate_uuid(),
+            template_id=source.template_id,
+            name=f"{source.name} (copy)",
+            description=source.description,
+            sort_order=sort_order,
+            image_url=source.image_url,
+            is_header=source.is_header,
+            container_type=source.container_type,
+            is_sealed=source.is_sealed,
+            parent_compartment_id=source.parent_compartment_id,
+        )
+        self.db.add(clone)
+        await self.db.flush()
+        for item in source.items:
+            self.db.add(
+                CheckTemplateItem(
+                    id=generate_uuid(),
+                    compartment_id=clone.id,
+                    equipment_id=item.equipment_id,
+                    inventory_item_id=item.inventory_item_id,
+                    name=item.name,
+                    description=item.description,
+                    sort_order=item.sort_order,
+                    check_type=item.check_type,
+                    is_required=item.is_required,
+                    required_quantity=item.required_quantity,
+                    expected_quantity=item.expected_quantity,
+                    critical_minimum_quantity=item.critical_minimum_quantity,
+                    min_level=item.min_level,
+                    level_unit=item.level_unit,
+                    serial_number=item.serial_number,
+                    lot_number=item.lot_number,
+                    image_url=item.image_url,
+                    has_expiration=item.has_expiration,
+                    expiration_date=item.expiration_date,
+                    expiration_warning_days=item.expiration_warning_days,
+                )
+            )
+        try:
+            await self.db.commit()
+        except Exception:
+            await self.db.rollback()
+            raise
+
+        result = await self.db.execute(
+            select(CheckTemplateCompartment)
+            .options(selectinload(CheckTemplateCompartment.items))
+            .where(CheckTemplateCompartment.id == clone.id)
+        )
+        return result.scalars().first()
+
     async def reorder_compartments(
         self,
         template_id: str,
@@ -748,12 +822,22 @@ class EquipmentCheckService:
             compartment = await self._get_compartment(compartment_id, organization_id)
             if not compartment:
                 return None
+            # Serialize retries on the parent before reading the ledger. The
+            # ledger read is also locking/current so a request that waited for
+            # an overlapping delete sees the winner under MySQL REPEATABLE READ.
+            await self.db.execute(
+                select(CheckTemplateCompartment)
+                .where(CheckTemplateCompartment.id == compartment_id)
+                .with_for_update()
+            )
             ledger_result = await self.db.execute(
-                select(EquipmentCheckBulkDeleteRequest).where(
+                select(EquipmentCheckBulkDeleteRequest)
+                .where(
                     EquipmentCheckBulkDeleteRequest.organization_id == organization_id,
                     EquipmentCheckBulkDeleteRequest.compartment_id == compartment_id,
                     EquipmentCheckBulkDeleteRequest.idempotency_key == idempotency_key,
                 )
+                .with_for_update()
             )
             ledger = ledger_result.scalars().first()
             if ledger:
@@ -763,11 +847,6 @@ class EquipmentCheckService:
                     )
                 return list(ledger.item_ids), True
 
-            await self.db.execute(
-                select(CheckTemplateCompartment)
-                .where(CheckTemplateCompartment.id == compartment_id)
-                .with_for_update()
-            )
             items_result = await self.db.execute(
                 select(CheckTemplateItem)
                 .where(

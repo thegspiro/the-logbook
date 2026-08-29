@@ -1157,6 +1157,12 @@ export const schedulingService = {
   async deleteCompartment(compartmentId: string): Promise<void> {
     await api.delete(`/equipment-checks/compartments/${compartmentId}`);
   },
+  async cloneCompartment(compartmentId: string, sortOrder: number): Promise<CheckTemplateCompartment> {
+    const response = await api.post<CheckTemplateCompartment>(`/equipment-checks/compartments/${compartmentId}/clone`, {
+      sort_order: sortOrder,
+    });
+    return response.data;
+  },
   async reorderCompartments(templateId: string, orderedIds: string[]): Promise<void> {
     await api.put(`/equipment-checks/templates/${templateId}/compartments/reorder`, { ordered_ids: orderedIds });
   },
