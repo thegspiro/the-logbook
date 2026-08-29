@@ -122,10 +122,26 @@ class TestCreateShiftApparatusScoping:
 
         assert err is None
         assert shift.positions == [
-            {"position": "officer", "required": True},
-            {"position": "driver", "required": True},
-            {"position": "firefighter", "required": True},
-            {"position": "firefighter", "required": True},
+            {
+                "position": "officer",
+                "required": True,
+                "allow_administrative_members": False,
+            },
+            {
+                "position": "driver",
+                "required": True,
+                "allow_administrative_members": False,
+            },
+            {
+                "position": "firefighter",
+                "required": True,
+                "allow_administrative_members": False,
+            },
+            {
+                "position": "firefighter",
+                "required": True,
+                "allow_administrative_members": False,
+            },
         ]
         assert shift.min_staffing == 3
 
@@ -188,8 +204,16 @@ class TestUpdateShiftApparatusScoping:
 
         assert err is None
         assert shift.positions == [
-            {"position": "officer", "required": True},
-            {"position": "driver", "required": True},
+            {
+                "position": "officer",
+                "required": True,
+                "allow_administrative_members": False,
+            },
+            {
+                "position": "driver",
+                "required": True,
+                "allow_administrative_members": False,
+            },
         ]
         assert shift.min_staffing == 2
 

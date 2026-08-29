@@ -144,15 +144,81 @@ class TestGetEligiblePositions:
         )
         assert out == []
 
-    async def test_open_to_all_bypasses_membership_and_rank(self):
-        # An excluded member still sees all positions on an open-to-all shift.
+    async def test_administrative_member_only_receives_explicit_seats(self):
+        shift = _shift(
+            [
+                {"position": "firefighter", "required": True},
+                {
+                    "position": "support",
+                    "required": False,
+                    "allow_administrative_members": True,
+                },
+            ],
+            open_to_all=True,
+        )
+        service = ShiftEligibilityService(_db([_one(_org()), _one(shift)]))
+
+        out = await service.get_eligible_positions(
+            _user(rank="chief", membership_type="administrative"),
+            "org-1",
+            shift_id="sh1",
+        )
+
+        assert out == ["support"]
+
+    async def test_administrative_override_does_not_reactivate_account(self):
+        shift = _shift([{"position": "support", "allow_administrative_members": True}])
+        user = _user(rank=None, membership_type="administrative")
+        user.status = "inactive"
+        service = ShiftEligibilityService(_db([_one(_org()), _one(shift)]))
+
+        assert await service.get_eligible_positions(user, "org-1", "sh1") == []
+
+    async def test_legacy_structured_seat_is_not_administrative(self):
+        shift = _shift([{"position": "support", "required": True}])
+        service = ShiftEligibilityService(_db([_one(_org()), _one(shift)]))
+
+        assert (
+            await service.get_eligible_positions(
+                _user(rank=None, membership_type="administrative"), "org-1", "sh1"
+            )
+            == []
+        )
+
+    async def test_open_to_all_bypasses_rank_for_operational_member(self):
         org = _org()
         shift = _shift(["driver", "officer"], open_to_all=True)
         db = _db([_one(org), _one(shift)])
         out = await ShiftEligibilityService(db).get_eligible_positions(
-            _user(membership_type="retired"), "org-1", shift_id="sh1"
+            _user(rank=None, membership_type="active"), "org-1", shift_id="sh1"
         )
         assert out == ["driver", "officer"]
+
+    async def test_open_to_all_does_not_admit_social_member(self):
+        org = _org()
+        shift = _shift(["driver", "officer"], open_to_all=True)
+        db = _db([_one(org), _one(shift)])
+
+        out = await ShiftEligibilityService(db).get_eligible_positions(
+            _user(rank=None, membership_type="honorary"), "org-1", shift_id="sh1"
+        )
+
+        assert out == []
+
+    async def test_administrative_positions_preserve_repeated_opted_in_seats(self):
+        shift = _shift(
+            [
+                {"position": "firefighter", "allow_administrative_members": True},
+                {"position": "firefighter", "allow_administrative_members": True},
+            ]
+        )
+        service = ShiftEligibilityService(_db([_one(_org()), _one(shift)]))
+
+        out = await service.get_eligible_positions(
+            _user(rank=None, membership_type="administrative"), "org-1", "sh1"
+        )
+
+        assert out == ["firefighter", "firefighter"]
 
     async def test_excluded_membership_returns_empty(self):
         out = await ShiftEligibilityService(_db([_one(_org())])).get_eligible_positions(

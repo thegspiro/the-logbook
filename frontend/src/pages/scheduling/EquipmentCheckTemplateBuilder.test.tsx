@@ -9,6 +9,16 @@ import EquipmentCheckTemplateBuilder from './EquipmentCheckTemplateBuilder';
 const getTemplate = vi.fn();
 const createTemplate = vi.fn();
 const updateTemplate = vi.fn();
+const deleteCheckItemsBulk = vi.fn();
+const toastSuccess = vi.fn();
+const toastError = vi.fn();
+
+vi.mock('react-hot-toast', () => ({
+  default: {
+    success: (...args: unknown[]) => toastSuccess(...args),
+    error: (...args: unknown[]) => toastError(...args),
+  },
+}));
 
 vi.mock('@/modules/scheduling', () => ({
   schedulingService: {
@@ -19,6 +29,7 @@ vi.mock('@/modules/scheduling', () => ({
     updateCompartment: vi.fn().mockResolvedValue({}),
     updateCheckItem: vi.fn().mockResolvedValue({}),
     getCsvSampleUrl: vi.fn().mockReturnValue('/sample.csv'),
+    deleteCheckItemsBulk: (...args: unknown[]) => deleteCheckItemsBulk(...args),
   },
 }));
 
@@ -50,6 +61,16 @@ const template = {
           compartmentId: 'cab',
           name: 'Radio',
           sortOrder: 0,
+          checkType: 'function',
+          isRequired: true,
+          hasExpiration: false,
+          expirationWarningDays: 30,
+        },
+        {
+          id: 'flashlight',
+          compartmentId: 'cab',
+          name: 'Flashlight',
+          sortOrder: 1,
           checkType: 'function',
           isRequired: true,
           hasExpiration: false,
@@ -104,7 +125,8 @@ function renderNewBuilder() {
 
 describe('EquipmentCheckTemplateBuilder responsive actions', () => {
   beforeEach(() => {
-    getTemplate.mockResolvedValue(template);
+    vi.clearAllMocks();
+    getTemplate.mockResolvedValue(structuredClone(template));
     createTemplate.mockResolvedValue({ ...template, id: 'draft-1', isActive: false });
     updateTemplate.mockResolvedValue(template);
   });
@@ -169,6 +191,42 @@ describe('EquipmentCheckTemplateBuilder responsive actions', () => {
     expect(within(menu).getByRole('button', { name: 'Move up' })).toBeDisabled();
     expect(within(menu).getByRole('button', { name: 'Move down' })).toBeDisabled();
     expect(within(menu).getByRole('button', { name: 'Delete' })).toBeVisible();
+  });
+});
+
+describe('EquipmentCheckTemplateBuilder bulk deletion', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    getTemplate.mockResolvedValue(structuredClone(template));
+  });
+
+  async function selectAndDelete() {
+    const user = userEvent.setup();
+    renderBuilder();
+    await screen.findByText('Radio');
+    await user.click(screen.getByTitle('Select all items'));
+    await user.click(screen.getByRole('button', { name: 'Delete selected items' }));
+    await user.click(screen.getByRole('button', { name: 'Delete 2' }));
+  }
+
+  it('removes only IDs confirmed by a completely successful response', async () => {
+    deleteCheckItemsBulk.mockResolvedValue({ deletedItemIds: ['radio', 'flashlight'], replayed: false });
+    await selectAndDelete();
+    await waitFor(() => expect(screen.queryByText('Radio')).not.toBeInTheDocument());
+    expect(screen.getAllByText(/No items yet/).length).toBeGreaterThan(0);
+    expect(deleteCheckItemsBulk).toHaveBeenCalledWith('cab', ['radio', 'flashlight'], expect.any(String));
+    expect(toastSuccess).toHaveBeenCalledWith('Deleted 2 items');
+    expect(toastError).not.toHaveBeenCalled();
+  });
+
+  it('retains visible selected rows and never shows success after failure', async () => {
+    deleteCheckItemsBulk.mockRejectedValue(new Error('Database unavailable'));
+    await selectAndDelete();
+    expect(await screen.findByText('Radio')).toBeVisible();
+    expect(screen.getByText('Flashlight')).toBeVisible();
+    expect(screen.getByText('2 selected')).toBeVisible();
+    expect(toastError).toHaveBeenCalled();
+    expect(toastSuccess).not.toHaveBeenCalled();
   });
 });
 

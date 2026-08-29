@@ -32,6 +32,7 @@ class PositionSlot(BaseModel):
 
     position: str
     required: bool = True
+    allow_administrative_members: bool = False
 
 
 # ============================================
@@ -49,7 +50,7 @@ class ShiftCreate(BaseModel):
     station_id: Optional[str] = None
     shift_officer_id: Optional[str] = None
     color: Optional[str] = None
-    positions: Optional[List[Any]] = None
+    positions: Optional[List[PositionSlot | str]] = None
     min_staffing: Optional[int] = None
     notes: Optional[str] = None
     activities: Optional[Any] = None
@@ -71,7 +72,7 @@ class ShiftUpdate(BaseModel):
     station_id: Optional[str] = None
     shift_officer_id: Optional[str] = None
     color: Optional[str] = None
-    positions: Optional[List[Any]] = None
+    positions: Optional[List[PositionSlot | str]] = None
     min_staffing: Optional[int] = None
     notes: Optional[str] = None
     activities: Optional[Any] = None
@@ -140,8 +141,8 @@ class ShiftResponse(UTCResponseBase):
     # "+ Add" appended a blank task row on an engine and a ladder alike.
     apparatus_type: Optional[str] = None
     platoon: Optional[str] = None
-    positions: Optional[List[Any]] = None
-    apparatus_positions: Optional[List[Any]] = None
+    positions: Optional[List[PositionSlot | str]] = None
+    apparatus_positions: Optional[List[PositionSlot | str]] = None
     min_staffing: Optional[int] = None
     station_id: Optional[str] = None
     shift_officer_id: Optional[UUID] = None
@@ -1268,11 +1269,7 @@ class ApparatusOption(BaseModel):
     unit_number: Optional[str] = None
     apparatus_type: str
     source: str  # "apparatus", "basic", or "default"
-    # Seat lists are stored as {"position", "required"} slots (see
-    # app/utils/positions.py). Declared List[Any] like every other positions
-    # field in this module: a List[str] here rejected the canonical shape and
-    # 500'd the endpoint for any org whose apparatus had seats.
-    positions: Optional[List[Any]] = None
+    positions: Optional[List[PositionSlot | str]] = None
     min_staffing: Optional[int] = None
 
 
@@ -1290,7 +1287,7 @@ class BasicApparatusCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=100)
     apparatus_type: str = Field(default="engine", max_length=50)
     min_staffing: Optional[int] = Field(default=1, ge=1, le=50)
-    positions: Optional[List[Any]] = None
+    positions: Optional[List[PositionSlot | str]] = None
 
 
 class BasicApparatusUpdate(BaseModel):
@@ -1300,7 +1297,7 @@ class BasicApparatusUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=100)
     apparatus_type: Optional[str] = Field(None, max_length=50)
     min_staffing: Optional[int] = Field(None, ge=1, le=50)
-    positions: Optional[List[Any]] = None
+    positions: Optional[List[PositionSlot | str]] = None
 
 
 class BasicApparatusResponse(UTCResponseBase):
@@ -1312,7 +1309,7 @@ class BasicApparatusResponse(UTCResponseBase):
     name: str
     apparatus_type: str
     min_staffing: Optional[int] = None
-    positions: Optional[List[Any]] = None
+    positions: Optional[List[PositionSlot | str]] = None
     is_active: bool = True
     created_at: datetime
     updated_at: datetime
