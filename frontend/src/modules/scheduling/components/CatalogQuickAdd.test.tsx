@@ -94,6 +94,22 @@ describe('CatalogQuickAdd', () => {
     });
   });
 
+  it('submits free text only once when Enter repeats before the parent settles', async () => {
+    const user = userEvent.setup();
+    const pending = deferred<void>();
+    onAdd.mockReturnValueOnce(pending.promise);
+    mockGetItems.mockResolvedValue({ items: [], total: 0, skip: 0, limit: 6 });
+    renderWith();
+
+    await typeName(user, 'Check tire pressure');
+    await user.keyboard('{Enter}{Enter}');
+
+    expect(onAdd).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole('combobox')).toHaveValue('');
+    expect(screen.getByRole('combobox')).toHaveFocus();
+    pending.resolve();
+  });
+
   it('links the catalog item when one is picked from the list', async () => {
     const user = userEvent.setup();
     renderWith();
