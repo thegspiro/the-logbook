@@ -3,6 +3,7 @@
  *
  * Protected routes (require auth + AppLayout):
  *   /facilities              — Dashboard with summary cards and alerts
+ *   /facilities/settings     — Manager-only lookup configuration
  *   /facilities/:id          — Full-page facility detail with sidebar nav
  *   /facilities/maintenance  — Cross-facility maintenance records
  *   /facilities/inspections  — Cross-facility inspections
