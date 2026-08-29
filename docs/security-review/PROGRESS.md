@@ -16,7 +16,7 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-Feature 17 (Training core), pass 2 — branch `claude/security-review-training-core-pass2`, PR pending.
+Feature 17 (Training core), pass 2 — branch `claude/security-review-training-core-pass2`, PR [#1981](https://github.com/thegspiro/the-logbook/pull/1981).
 
 ---
 
