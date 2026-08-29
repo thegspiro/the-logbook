@@ -132,6 +132,9 @@ class TestBulkItemCreation:
                 return_value=MagicMock(),
             ),
             patch.object(service, "_validate_item_fks", new_callable=AsyncMock),
+            patch.object(
+                service, "_advance_content_revision", new_callable=AsyncMock
+            ) as advance,
         ):
             created, replayed = await service.add_items_bulk(
                 "comp-1",
@@ -144,6 +147,7 @@ class TestBulkItemCreation:
         assert [item.name for item in created] == ["A", "B"]
         assert [item.sort_order for item in created] == [8, 9]
         assert replayed is False
+        advance.assert_awaited_once()
         mock_db.commit.assert_awaited_once()
 
     async def test_invalid_foreign_key_writes_nothing(self, service, mock_db):
@@ -236,6 +240,95 @@ class TestBulkItemCreation:
         assert replayed is True
         mock_db.add.assert_not_called()
         mock_db.commit.assert_not_awaited()
+
+
+class TestTemplateContentRevision:
+    """Every compartment/item content mutation invalidates older drafts."""
+
+    @staticmethod
+    def result_with(value):
+        result = MagicMock()
+        result.scalars.return_value.first.return_value = value
+        return result
+
+    @pytest.mark.parametrize(
+        ("method", "args", "getter", "entity"),
+        [
+            (
+                "update_compartment",
+                ("comp-1", "org-1", {"name": "New"}),
+                "_get_compartment",
+                "compartment",
+            ),
+            (
+                "delete_compartment",
+                ("comp-1", "org-1"),
+                "_get_compartment",
+                "compartment",
+            ),
+            (
+                "reorder_compartments",
+                ("tmpl-1", "org-1", ["comp-1"]),
+                "get_template",
+                "template",
+            ),
+            (
+                "add_item",
+                ("comp-1", "org-1", {"name": "Mask"}),
+                "_get_compartment",
+                "compartment",
+            ),
+            ("update_item", ("item-1", "org-1", {"name": "New"}), "_get_item", "item"),
+            ("delete_item", ("item-1", "org-1"), "_get_item", "item"),
+            (
+                "reorder_items",
+                ("comp-1", "org-1", ["item-1"]),
+                "_get_compartment",
+                "compartment",
+            ),
+        ],
+    )
+    async def test_mutation_advances_revision(
+        self, service, mock_db, method, args, getter, entity
+    ):
+        compartment = SimpleNamespace(id="comp-1", template_id="tmpl-1", items=[])
+        item = SimpleNamespace(
+            id="item-1",
+            name="Old",
+            compartment_id="comp-1",
+            compartment=compartment,
+        )
+        template = SimpleNamespace(id="tmpl-1", compartments=[compartment])
+        returned = {"compartment": compartment, "item": item, "template": template}[
+            entity
+        ]
+        mock_db.execute.return_value = self.result_with(compartment)
+        with (
+            patch.object(
+                service, getter, new_callable=AsyncMock, return_value=returned
+            ),
+            patch.object(service, "_validate_item_fks", new_callable=AsyncMock),
+            patch.object(
+                service, "_advance_content_revision", new_callable=AsyncMock
+            ) as advance,
+        ):
+            await getattr(service, method)(*args)
+        advance.assert_awaited_once_with("tmpl-1")
+
+    async def test_add_compartment_advances_revision(self, service, mock_db):
+        template = SimpleNamespace(id="tmpl-1")
+        created = SimpleNamespace(id="comp-1")
+        mock_db.execute.return_value = self.result_with(created)
+        with (
+            patch.object(
+                service, "get_template", new_callable=AsyncMock, return_value=template
+            ),
+            patch.object(
+                service, "_advance_content_revision", new_callable=AsyncMock
+            ) as advance,
+        ):
+            await service.add_compartment("tmpl-1", "org-1", {"name": "Cab"})
+        advance.assert_awaited_once_with("tmpl-1")
 
 
 class TestSubmitterTemplateVisibility:
