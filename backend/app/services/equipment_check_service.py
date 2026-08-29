@@ -11,7 +11,7 @@ from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Set
 from uuid import NAMESPACE_URL, uuid5
 
-from sqlalchemy import and_, func, or_, select
+from sqlalchemy import and_, func, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -23,6 +23,7 @@ from app.models.apparatus import (
     CheckItemDeployedLot,
     CheckTemplateCompartment,
     CheckTemplateItem,
+    EquipmentCheckBulkDeleteRequest,
     EquipmentCheckBulkRequest,
     EquipmentCheckTemplate,
     TemplateChangeLog,
@@ -477,6 +478,80 @@ class EquipmentCheckService:
         await self.db.commit()
         return True
 
+    async def clone_compartment(
+        self, compartment_id: str, organization_id: str, sort_order: int
+    ) -> Optional[CheckTemplateCompartment]:
+        """Clone a saved compartment and all of its items in one transaction."""
+        source = await self._get_compartment(compartment_id, organization_id)
+        if not source:
+            return None
+
+        # Make room in the same transaction as the clone. Committing the clone
+        # and repairing sibling positions in a second request can leave two
+        # rows at the same position when that second request fails.
+        await self.db.execute(
+            update(CheckTemplateCompartment)
+            .where(
+                CheckTemplateCompartment.template_id == source.template_id,
+                CheckTemplateCompartment.parent_compartment_id
+                == source.parent_compartment_id,
+                CheckTemplateCompartment.sort_order >= sort_order,
+            )
+            .values(sort_order=CheckTemplateCompartment.sort_order + 1)
+        )
+
+        clone = CheckTemplateCompartment(
+            id=generate_uuid(),
+            template_id=source.template_id,
+            name=f"{source.name} (copy)",
+            description=source.description,
+            sort_order=sort_order,
+            image_url=source.image_url,
+            is_header=source.is_header,
+            container_type=source.container_type,
+            is_sealed=source.is_sealed,
+            parent_compartment_id=source.parent_compartment_id,
+        )
+        self.db.add(clone)
+        await self.db.flush()
+        for item in source.items:
+            self.db.add(
+                CheckTemplateItem(
+                    id=generate_uuid(),
+                    compartment_id=clone.id,
+                    equipment_id=item.equipment_id,
+                    inventory_item_id=item.inventory_item_id,
+                    name=item.name,
+                    description=item.description,
+                    sort_order=item.sort_order,
+                    check_type=item.check_type,
+                    is_required=item.is_required,
+                    required_quantity=item.required_quantity,
+                    expected_quantity=item.expected_quantity,
+                    critical_minimum_quantity=item.critical_minimum_quantity,
+                    min_level=item.min_level,
+                    level_unit=item.level_unit,
+                    serial_number=item.serial_number,
+                    lot_number=item.lot_number,
+                    image_url=item.image_url,
+                    has_expiration=item.has_expiration,
+                    expiration_date=item.expiration_date,
+                    expiration_warning_days=item.expiration_warning_days,
+                )
+            )
+        try:
+            await self.db.commit()
+        except Exception:
+            await self.db.rollback()
+            raise
+
+        result = await self.db.execute(
+            select(CheckTemplateCompartment)
+            .options(selectinload(CheckTemplateCompartment.items))
+            .where(CheckTemplateCompartment.id == clone.id)
+        )
+        return result.scalars().first()
+
     async def reorder_compartments(
         self,
         template_id: str,
@@ -727,6 +802,88 @@ class EquipmentCheckService:
         await self.db.delete(item)
         await self.db.commit()
         return True
+
+    async def delete_items_bulk(
+        self,
+        compartment_id: str,
+        organization_id: str,
+        item_ids: List[str],
+        idempotency_key: str,
+        user_id: str,
+        user_name: str,
+    ) -> Optional[tuple[List[str], bool]]:
+        """Validate and delete an entire item batch in one transaction."""
+        if len(set(item_ids)) != len(item_ids):
+            raise ValueError("Item IDs must be unique")
+        payload_hash = hashlib.sha256(
+            json.dumps(item_ids, separators=(",", ":")).encode()
+        ).hexdigest()
+        try:
+            compartment = await self._get_compartment(compartment_id, organization_id)
+            if not compartment:
+                return None
+            ledger_result = await self.db.execute(
+                select(EquipmentCheckBulkDeleteRequest).where(
+                    EquipmentCheckBulkDeleteRequest.organization_id == organization_id,
+                    EquipmentCheckBulkDeleteRequest.compartment_id == compartment_id,
+                    EquipmentCheckBulkDeleteRequest.idempotency_key == idempotency_key,
+                )
+            )
+            ledger = ledger_result.scalars().first()
+            if ledger:
+                if ledger.payload_hash != payload_hash:
+                    raise ValueError(
+                        "Idempotency key was already used with different items"
+                    )
+                return list(ledger.item_ids), True
+
+            await self.db.execute(
+                select(CheckTemplateCompartment)
+                .where(CheckTemplateCompartment.id == compartment_id)
+                .with_for_update()
+            )
+            items_result = await self.db.execute(
+                select(CheckTemplateItem)
+                .where(
+                    CheckTemplateItem.compartment_id == compartment_id,
+                    CheckTemplateItem.id.in_(item_ids),
+                )
+                .with_for_update()
+            )
+            items = items_result.scalars().all()
+            by_id = {str(item.id): item for item in items}
+            if set(by_id) != set(item_ids):
+                raise ValueError("Every item must belong to the specified compartment")
+
+            self.db.add(
+                EquipmentCheckBulkDeleteRequest(
+                    id=generate_uuid(),
+                    organization_id=organization_id,
+                    compartment_id=compartment_id,
+                    idempotency_key=idempotency_key,
+                    payload_hash=payload_hash,
+                    item_ids=item_ids,
+                )
+            )
+            for item_id in item_ids:
+                item = by_id[item_id]
+                await self.log_template_change(
+                    organization_id=organization_id,
+                    template_id=str(compartment.template_id),
+                    user_id=user_id,
+                    user_name=user_name,
+                    action="delete",
+                    entity_type="item",
+                    entity_id=item_id,
+                    entity_name=item.name,
+                    changes={"bulk_idempotency_key": idempotency_key},
+                )
+                await self.db.delete(item)
+            await self.db.commit()
+            return item_ids, False
+        except Exception:
+            await self.db.rollback()
+            raise
 
     async def reorder_items(
         self,

@@ -1,5 +1,5 @@
 /* eslint-disable testing-library/no-node-access, @typescript-eslint/no-unsafe-return */
-import { render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -7,18 +7,37 @@ import { ConfirmProvider } from '../../contexts/ConfirmContext';
 import EquipmentCheckTemplateBuilder from './EquipmentCheckTemplateBuilder';
 
 const getTemplate = vi.fn();
+const addCheckItem = vi.fn();
+const reorderItems = vi.fn();
+const cloneCompartment = vi.fn();
+const deleteCheckItemsBulk = vi.fn();
+const toastSuccess = vi.fn();
+const toastError = vi.fn();
+
+vi.mock('react-hot-toast', () => ({
+  default: {
+    success: (...args: unknown[]) => toastSuccess(...args),
+    error: (...args: unknown[]) => toastError(...args),
+  },
+}));
 
 vi.mock('@/modules/scheduling', () => ({
   schedulingService: {
     getApparatusOptions: vi.fn().mockResolvedValue({ options: [] }),
     getEquipmentCheckTemplate: (...args: unknown[]) => getTemplate(...args),
+    addCheckItem: (...args: unknown[]) => addCheckItem(...args),
+    reorderItems: (...args: unknown[]) => reorderItems(...args),
+    cloneCompartment: (...args: unknown[]) => cloneCompartment(...args),
     getCsvSampleUrl: vi.fn().mockReturnValue('/sample.csv'),
+    deleteCheckItemsBulk: (...args: unknown[]) => deleteCheckItemsBulk(...args),
   },
 }));
 
 vi.mock('@/stores/authStore', () => ({
-  useAuthStore: (selector: (state: { checkPermission: () => boolean }) => unknown) =>
-    selector({ checkPermission: () => false }),
+  useAuthStore: (selector?: (state: { checkPermission: () => boolean }) => unknown) => {
+    const state = { checkPermission: () => false };
+    return selector ? selector(state) : state;
+  },
 }));
 
 const template = {
@@ -42,6 +61,16 @@ const template = {
           compartmentId: 'cab',
           name: 'Radio',
           sortOrder: 0,
+          checkType: 'function',
+          isRequired: true,
+          hasExpiration: false,
+          expirationWarningDays: 30,
+        },
+        {
+          id: 'flashlight',
+          compartmentId: 'cab',
+          name: 'Flashlight',
+          sortOrder: 1,
           checkType: 'function',
           isRequired: true,
           hasExpiration: false,
@@ -82,8 +111,120 @@ function renderBuilder() {
   );
 }
 
+function renderNewBuilder() {
+  return render(
+    <MemoryRouter initialEntries={['/templates/new']}>
+      <ConfirmProvider>
+        <Routes>
+          <Route path="/templates/new" element={<EquipmentCheckTemplateBuilder />} />
+        </Routes>
+      </ConfirmProvider>
+    </MemoryRouter>
+  );
+}
+
 describe('EquipmentCheckTemplateBuilder responsive actions', () => {
-  beforeEach(() => getTemplate.mockResolvedValue(template));
+  beforeEach(() => {
+    vi.clearAllMocks();
+    getTemplate.mockResolvedValue(structuredClone(template));
+    reorderItems.mockResolvedValue(undefined);
+  });
+
+  it('persists a saved item duplicate with its configuration and server id', async () => {
+    const user = userEvent.setup();
+    addCheckItem.mockResolvedValue({ ...template.compartments[0]?.items[0], id: 'radio-copy', name: 'Radio (copy)' });
+    renderBuilder();
+    const trigger = await screen.findByLabelText('Actions for Radio');
+    await user.click(trigger);
+    await user.click(within(trigger.closest('details') as HTMLElement).getByRole('button', { name: 'Duplicate' }));
+    await waitFor(() => expect(addCheckItem).toHaveBeenCalled());
+    expect(addCheckItem).toHaveBeenCalledWith(
+      'cab',
+      expect.objectContaining({ name: 'Radio (copy)', sort_order: 1, check_type: 'function', is_required: true })
+    );
+    expect(reorderItems).toHaveBeenCalledWith('cab', ['radio', 'radio-copy', 'flashlight']);
+    expect(await screen.findByLabelText('Actions for Radio (copy)')).toBeInTheDocument();
+  });
+
+  it('allows the returned duplicate to be edited immediately without replacing it', async () => {
+    const user = userEvent.setup();
+    addCheckItem.mockResolvedValue({ ...template.compartments[0]?.items[0], id: 'radio-copy', name: 'Radio (copy)' });
+    renderBuilder();
+    const original = await screen.findByLabelText('Actions for Radio');
+    await user.click(original);
+    await user.click(within(original.closest('details') as HTMLElement).getByRole('button', { name: 'Duplicate' }));
+    const duplicate = await screen.findByLabelText('Actions for Radio (copy)');
+    await user.click(duplicate);
+    await user.click(within(duplicate.closest('details') as HTMLElement).getByRole('button', { name: 'Rename' }));
+    const input = await screen.findByDisplayValue('Radio (copy)');
+    await user.clear(input);
+    await user.type(input, 'Portable radio copy');
+    await user.keyboard('{Enter}');
+    expect(screen.getByLabelText('Actions for Portable radio copy')).toBeInTheDocument();
+    expect(screen.getByLabelText('Actions for Radio')).toBeInTheDocument();
+  });
+
+  it('retains a successful duplicate when the page is reloaded', async () => {
+    const persisted = {
+      ...template,
+      compartments: [
+        {
+          ...template.compartments[0],
+          items: [
+            template.compartments[0]?.items[0],
+            { ...template.compartments[0]?.items[0], id: 'radio-copy', name: 'Radio (copy)', sortOrder: 1 },
+          ],
+        },
+        ...template.compartments.slice(1),
+      ],
+    };
+    getTemplate.mockResolvedValue(persisted);
+    const view = renderBuilder();
+    expect(await screen.findByLabelText('Actions for Radio (copy)')).toBeInTheDocument();
+    view.unmount();
+    renderBuilder();
+    expect(await screen.findByLabelText('Actions for Radio (copy)')).toBeInTheDocument();
+    expect(getTemplate).toHaveBeenCalledTimes(2);
+  });
+
+  it('leaves item state unchanged when persistence fails', async () => {
+    const user = userEvent.setup();
+    addCheckItem.mockRejectedValue(new Error('clone failed'));
+    renderBuilder();
+    const trigger = await screen.findByLabelText('Actions for Radio');
+    await user.click(trigger);
+    await user.click(within(trigger.closest('details') as HTMLElement).getByRole('button', { name: 'Duplicate' }));
+    await waitFor(() => expect(addCheckItem).toHaveBeenCalled());
+    expect(screen.queryByLabelText('Actions for Radio (copy)')).not.toBeInTheDocument();
+    expect(reorderItems).not.toHaveBeenCalled();
+  });
+
+  it('clones a saved compartment with the returned child ids', async () => {
+    const user = userEvent.setup();
+    cloneCompartment.mockResolvedValue({
+      ...template.compartments[0],
+      id: 'cab-copy',
+      name: 'Cab (copy)',
+      items: [{ ...template.compartments[0]?.items[0], id: 'radio-copy' }],
+    });
+    renderBuilder();
+    const trigger = await screen.findByLabelText('Actions for Cab');
+    await user.click(trigger);
+    await user.click(within(trigger.closest('details') as HTMLElement).getByRole('button', { name: 'Duplicate' }));
+    expect(await screen.findByLabelText('Actions for Cab (copy)')).toBeInTheDocument();
+    expect(cloneCompartment).toHaveBeenCalledWith('cab', 1);
+  });
+
+  it('leaves compartment state unchanged when the transactional clone fails', async () => {
+    const user = userEvent.setup();
+    cloneCompartment.mockRejectedValue(new Error('clone failed'));
+    renderBuilder();
+    const trigger = await screen.findByLabelText('Actions for Cab');
+    await user.click(trigger);
+    await user.click(within(trigger.closest('details') as HTMLElement).getByRole('button', { name: 'Duplicate' }));
+    await waitFor(() => expect(cloneCompartment).toHaveBeenCalledWith('cab', 1));
+    expect(screen.queryByLabelText('Actions for Cab (copy)')).not.toBeInTheDocument();
+  });
 
   it('exposes every item action from the phone overflow without drag and drop', async () => {
     const user = userEvent.setup();
@@ -117,4 +258,55 @@ describe('EquipmentCheckTemplateBuilder responsive actions', () => {
     expect(within(menu).getByRole('button', { name: 'Move down' })).toBeDisabled();
     expect(within(menu).getByRole('button', { name: 'Delete' })).toBeVisible();
   });
+});
+
+describe('EquipmentCheckTemplateBuilder bulk deletion', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    getTemplate.mockResolvedValue(structuredClone(template));
+  });
+
+  async function selectAndDelete() {
+    const user = userEvent.setup();
+    renderBuilder();
+    await screen.findByText('Radio');
+    await user.click(screen.getByTitle('Select all items'));
+    await user.click(screen.getByRole('button', { name: 'Delete selected items' }));
+    await user.click(screen.getByRole('button', { name: 'Delete 2' }));
+  }
+
+  it('removes only IDs confirmed by a completely successful response', async () => {
+    deleteCheckItemsBulk.mockResolvedValue({ deletedItemIds: ['radio', 'flashlight'], replayed: false });
+    await selectAndDelete();
+    await waitFor(() => expect(screen.queryByText('Radio')).not.toBeInTheDocument());
+    expect(screen.getAllByText(/No items yet/).length).toBeGreaterThan(0);
+    expect(deleteCheckItemsBulk).toHaveBeenCalledWith('cab', ['radio', 'flashlight'], expect.any(String));
+    expect(toastSuccess).toHaveBeenCalledWith('Deleted 2 items');
+    expect(toastError).not.toHaveBeenCalled();
+  });
+
+  it('retains visible selected rows and never shows success after failure', async () => {
+    deleteCheckItemsBulk.mockRejectedValue(new Error('Database unavailable'));
+    await selectAndDelete();
+    expect(await screen.findByText('Radio')).toBeVisible();
+    expect(screen.getByText('Flashlight')).toBeVisible();
+    expect(screen.getByText('2 selected')).toBeVisible();
+    expect(toastError).toHaveBeenCalled();
+    expect(toastSuccess).not.toHaveBeenCalled();
+  });
+});
+
+describe('EquipmentCheckTemplateBuilder creation guidance', () => {
+  it('preserves preset test instructions and marks the review step ready', async () => {
+    renderNewBuilder();
+
+    fireEvent.change(screen.getByLabelText('Template Type'), { target: { value: 'vehicle' } });
+    fireEvent.click(screen.getByRole('button', { name: /use a vehicle layout/i }));
+    fireEvent.click(screen.getByRole('button', { name: /engine \/ pumper/i }));
+    fireEvent.click(screen.getByRole('button', { name: /preview/i }));
+
+    expect(screen.getAllByText('Switch it on and confirm it works.').length).toBeGreaterThan(0);
+    expect(screen.getByText('Review').closest('div')).toHaveTextContent(/items/);
+    expect(screen.getByText('Review').parentElement?.previousElementSibling).toHaveClass('bg-green-500');
+  }, 10_000);
 });

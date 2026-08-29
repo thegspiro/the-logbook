@@ -449,6 +449,53 @@ async def _enrich_shifts(
     return enriched
 
 
+async def _member_visible_shifts(
+    service: SchedulingService, current_user: User, shifts: list
+) -> list:
+    """Apply signup eligibility to member-facing schedule results."""
+    if user_has_permission(current_user, "scheduling.manage") or not shifts:
+        return shifts
+    eligible = await ShiftEligibilityService(service.db).get_eligible_positions_bulk(
+        current_user,
+        str(current_user.organization_id),
+        [str(shift.id) for shift in shifts],
+    )
+    return [shift for shift in shifts if eligible.get(str(shift.id))]
+
+
+async def _ensure_member_can_view_shift(
+    service: SchedulingService, current_user: User, shift
+) -> None:
+    """Prevent direct detail URLs from bypassing member list visibility."""
+    if user_has_permission(current_user, "scheduling.manage") or _is_shift_officer(
+        shift, current_user
+    ):
+        return
+    assignment = await service.db.execute(
+        select(ShiftAssignment.id).where(
+            ShiftAssignment.shift_id == str(shift.id),
+            ShiftAssignment.organization_id == str(current_user.organization_id),
+            ShiftAssignment.user_id == str(current_user.id),
+            ShiftAssignment.assignment_status.in_(
+                [
+                    AssignmentStatus.ASSIGNED,
+                    AssignmentStatus.CONFIRMED,
+                    AssignmentStatus.PENDING,
+                ]
+            ),
+        )
+    )
+    if assignment.scalar_one_or_none() is not None:
+        return
+    eligible = await ShiftEligibilityService(service.db).get_eligible_positions(
+        current_user, str(current_user.organization_id), str(shift.id)
+    )
+    if not eligible:
+        raise HTTPException(
+            status_code=403, detail="You are not eligible to view this shift"
+        )
+
+
 # ============================================
 # Shift Endpoints
 # ============================================
@@ -473,13 +520,23 @@ async def list_shifts(
             status_code=400, detail="Invalid date format. Use YYYY-MM-DD."
         )
 
-    shifts, total = await service.get_shifts(
-        current_user.organization_id,
-        start_date=start,
-        end_date=end,
-        skip=pagination.skip,
-        limit=pagination.limit,
-    )
+    if user_has_permission(current_user, "scheduling.manage"):
+        shifts, total = await service.get_shifts(
+            current_user.organization_id,
+            start_date=start,
+            end_date=end,
+            skip=pagination.skip,
+            limit=pagination.limit,
+        )
+    else:
+        shifts, total = await service.get_member_visible_shifts(
+            current_user,
+            current_user.organization_id,
+            start_date=start,
+            end_date=end,
+            skip=pagination.skip,
+            limit=pagination.limit,
+        )
 
     enriched = await _enrich_shifts(service, current_user.organization_id, shifts)
     return {
@@ -573,6 +630,7 @@ async def get_open_shifts(
         apparatus_id=apparatus_id,
         exclude_user_id=str(current_user.id),
     )
+    shifts_list = await _member_visible_shifts(service, current_user, shifts_list)
 
     return await _enrich_shifts(service, current_user.organization_id, shifts_list)
 
@@ -589,6 +647,7 @@ async def get_shift(
         await service.get_shift_by_id(shift_id, current_user.organization_id),
         "Shift",
     )
+    await _ensure_member_can_view_shift(service, current_user, shift)
 
     attendance_records = await service.get_shift_attendance(
         shift_id, current_user.organization_id
@@ -1242,6 +1301,7 @@ async def get_week_calendar(
             status_code=400, detail="Invalid date format. Use YYYY-MM-DD."
         )
     shifts = await service.get_week_shifts(current_user.organization_id, start)
+    shifts = await _member_visible_shifts(service, current_user, shifts)
     return await _enrich_shifts(service, current_user.organization_id, shifts)
 
 
@@ -1258,6 +1318,7 @@ async def get_month_calendar(
     y = year or today.year
     m = month or today.month
     shifts = await service.get_month_shifts(current_user.organization_id, y, m)
+    shifts = await _member_visible_shifts(service, current_user, shifts)
     return await _enrich_shifts(service, current_user.organization_id, shifts)
 
 
