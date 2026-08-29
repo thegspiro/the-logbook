@@ -165,7 +165,11 @@ describe('EquipmentCheckForm quantity seeding', () => {
 
     it('omits unavailable optional context without placeholder text or separators', () => {
       renderWithRouter(
-        <EquipmentCheckForm shiftId="shift-1" template={template() as never} shiftContext={{ apparatusName: 'Engine 4' }} />
+        <EquipmentCheckForm
+          shiftId="shift-1"
+          template={template() as never}
+          shiftContext={{ apparatusName: 'Engine 4' }}
+        />
       );
 
       const context = screen.getByRole('group', { name: 'Checklist context' });
