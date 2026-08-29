@@ -86,7 +86,7 @@ class TestCloneCompartment:
 
 class TestUpdateTemplateApparatusValidation:
     async def test_foreign_apparatus_rejected(self, service, mock_db):
-        template = MagicMock()
+        template = MagicMock(is_active=False)
         with (
             patch.object(
                 service, "get_template", new_callable=AsyncMock, return_value=template
@@ -105,7 +105,7 @@ class TestUpdateTemplateApparatusValidation:
         mock_db.commit.assert_not_awaited()
 
     async def test_in_org_apparatus_passes(self, service, mock_db):
-        template = MagicMock()
+        template = MagicMock(is_active=False)
         with (
             patch.object(
                 service, "get_template", new_callable=AsyncMock, return_value=template
@@ -123,7 +123,7 @@ class TestUpdateTemplateApparatusValidation:
         mock_db.commit.assert_awaited_once()
 
     async def test_no_apparatus_change_skips_validation(self, service, mock_db):
-        template = MagicMock()
+        template = MagicMock(is_active=False)
         with (
             patch.object(
                 service, "get_template", new_callable=AsyncMock, return_value=template
@@ -139,7 +139,7 @@ class TestUpdateTemplateApparatusValidation:
 
     async def test_clearing_apparatus_skips_validation(self, service, mock_db):
         # apparatus_id=None clears it (a generic template) — not a foreign-id case.
-        template = MagicMock()
+        template = MagicMock(is_active=False)
         with (
             patch.object(
                 service, "get_template", new_callable=AsyncMock, return_value=template
@@ -159,6 +159,56 @@ class TestUpdateTemplateApparatusValidation:
         ):
             result = await service.update_template("tmpl-x", "org-1", {"name": "X"})
         assert result is None
+
+
+class TestTemplatePublicationValidation:
+    @pytest.mark.parametrize(
+        ("compartments", "message"),
+        [
+            ([], "operational compartment"),
+            ([{"name": "Cab", "items": []}], "cannot be empty"),
+            (
+                [
+                    {
+                        "name": "Cab",
+                        "items": [{"name": "Oxygen", "check_type": "quantity"}],
+                    }
+                ],
+                "required or expected quantity",
+            ),
+            (
+                [{"name": "Cab", "items": [{"name": "Oxygen", "check_type": "level"}]}],
+                "minimum level",
+            ),
+        ],
+    )
+    def test_activation_rejects_blocking_configuration(
+        self, service, compartments, message
+    ):
+        with pytest.raises(ValueError, match=message):
+            service._validate_publishable_data({"name": "Daily check"}, compartments)
+
+    def test_complete_configuration_can_be_published(self, service):
+        service._validate_publishable_data(
+            {"name": "Daily check"},
+            [
+                {
+                    "name": "Cab",
+                    "items": [
+                        {
+                            "name": "Masks",
+                            "check_type": "quantity",
+                            "expected_quantity": 4,
+                        },
+                        {"name": "Oxygen", "check_type": "level", "min_level": 500},
+                    ],
+                }
+            ],
+        )
+
+    def test_submitter_visibility_excludes_drafts(self, service):
+        draft = SimpleNamespace(is_active=False, assigned_positions=None)
+        assert service._template_visible_to_submitter(draft, {"driver"}) is False
 
 
 class TestBulkItemCreation:
@@ -182,6 +232,9 @@ class TestBulkItemCreation:
                 return_value=MagicMock(),
             ),
             patch.object(service, "_validate_item_fks", new_callable=AsyncMock),
+            patch.object(
+                service, "_advance_content_revision", new_callable=AsyncMock
+            ) as advance,
         ):
             created, replayed = await service.add_items_bulk(
                 "comp-1",
@@ -194,6 +247,7 @@ class TestBulkItemCreation:
         assert [item.name for item in created] == ["A", "B"]
         assert [item.sort_order for item in created] == [8, 9]
         assert replayed is False
+        advance.assert_awaited_once()
         mock_db.commit.assert_awaited_once()
 
     async def test_invalid_foreign_key_writes_nothing(self, service, mock_db):
@@ -458,6 +512,103 @@ class TestBulkItemCreationFailures(TestBulkItemCreation):
         mock_db.commit.assert_not_awaited()
 
 
+class TestTemplateContentRevision:
+    """Every compartment/item content mutation invalidates older drafts."""
+
+    @staticmethod
+    def result_with(value):
+        result = MagicMock()
+        result.scalars.return_value.first.return_value = value
+        return result
+
+    async def test_revision_advance_atomically_unpublishes_template(
+        self, service, mock_db
+    ):
+        await service._advance_content_revision("tmpl-1")
+
+        statement = mock_db.execute.await_args.args[0]
+        assert statement.compile().params["is_active"] is False
+
+    @pytest.mark.parametrize(
+        ("method", "args", "getter", "entity"),
+        [
+            (
+                "update_compartment",
+                ("comp-1", "org-1", {"name": "New"}),
+                "_get_compartment",
+                "compartment",
+            ),
+            (
+                "delete_compartment",
+                ("comp-1", "org-1"),
+                "_get_compartment",
+                "compartment",
+            ),
+            (
+                "reorder_compartments",
+                ("tmpl-1", "org-1", ["comp-1"]),
+                "get_template",
+                "template",
+            ),
+            (
+                "add_item",
+                ("comp-1", "org-1", {"name": "Mask"}),
+                "_get_compartment",
+                "compartment",
+            ),
+            ("update_item", ("item-1", "org-1", {"name": "New"}), "_get_item", "item"),
+            ("delete_item", ("item-1", "org-1"), "_get_item", "item"),
+            (
+                "reorder_items",
+                ("comp-1", "org-1", ["item-1"]),
+                "_get_compartment",
+                "compartment",
+            ),
+        ],
+    )
+    async def test_mutation_advances_revision(
+        self, service, mock_db, method, args, getter, entity
+    ):
+        compartment = SimpleNamespace(id="comp-1", template_id="tmpl-1", items=[])
+        item = SimpleNamespace(
+            id="item-1",
+            name="Old",
+            compartment_id="comp-1",
+            compartment=compartment,
+        )
+        template = SimpleNamespace(id="tmpl-1", compartments=[compartment])
+        returned = {"compartment": compartment, "item": item, "template": template}[
+            entity
+        ]
+        mock_db.execute.return_value = self.result_with(compartment)
+        with (
+            patch.object(
+                service, getter, new_callable=AsyncMock, return_value=returned
+            ),
+            patch.object(service, "_validate_item_fks", new_callable=AsyncMock),
+            patch.object(
+                service, "_advance_content_revision", new_callable=AsyncMock
+            ) as advance,
+        ):
+            await getattr(service, method)(*args)
+        advance.assert_awaited_once_with("tmpl-1")
+
+    async def test_add_compartment_advances_revision(self, service, mock_db):
+        template = SimpleNamespace(id="tmpl-1")
+        created = SimpleNamespace(id="comp-1")
+        mock_db.execute.return_value = self.result_with(created)
+        with (
+            patch.object(
+                service, "get_template", new_callable=AsyncMock, return_value=template
+            ),
+            patch.object(
+                service, "_advance_content_revision", new_callable=AsyncMock
+            ) as advance,
+        ):
+            await service.add_compartment("tmpl-1", "org-1", {"name": "Cab"})
+        advance.assert_awaited_once_with("tmpl-1")
+
+
 class TestSubmitterTemplateVisibility:
     @staticmethod
     def template(*, active=True, positions=None):
@@ -531,6 +682,49 @@ class TestStandaloneTemplateVisibility:
 
         mock_db.add.assert_not_called()
         mock_db.commit.assert_not_awaited()
+
+
+class TestOperationalInventoryTemplateVisibility:
+    @staticmethod
+    def empty_rows():
+        result = MagicMock()
+        result.all.return_value = []
+        return result
+
+    @staticmethod
+    def assert_active_filter(statement):
+        sql = str(statement)
+        assert "equipment_check_templates.is_active IS true" in sql
+
+    async def test_supply_overview_excludes_draft_templates(self, service, mock_db):
+        mock_db.execute.return_value = self.empty_rows()
+        with patch(
+            "app.services.equipment_check_service.InventoryService.get_lots_for_items",
+            new_callable=AsyncMock,
+            return_value={},
+        ):
+            await service.get_supply_overview("org-1")
+
+        self.assert_active_filter(mock_db.execute.await_args_list[0].args[0])
+
+    async def test_apparatus_inventory_excludes_draft_templates(self, service, mock_db):
+        mock_db.scalar.return_value = MagicMock()
+        mock_db.execute.return_value = self.empty_rows()
+        with patch(
+            "app.services.equipment_check_service.InventoryService.get_lots_for_items",
+            new_callable=AsyncMock,
+            return_value={},
+        ):
+            await service.get_apparatus_inventory("apparatus-1", "org-1")
+
+        self.assert_active_filter(mock_db.execute.await_args_list[0].args[0])
+
+    async def test_item_deployments_exclude_draft_templates(self, service, mock_db):
+        mock_db.execute.return_value = self.empty_rows()
+
+        assert await service.get_item_deployments("inventory-1", "org-1") == []
+
+        self.assert_active_filter(mock_db.execute.await_args.args[0])
 
 
 class TestAuthoritativeCheckTiming:

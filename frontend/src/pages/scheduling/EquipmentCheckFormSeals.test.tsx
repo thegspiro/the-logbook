@@ -214,7 +214,7 @@ describe('EquipmentCheckForm tamper seals', () => {
         userId: 'user-1',
         shiftId: 'shift-1',
         templateId: 'tmpl-1',
-        templateRevision: 'unversioned',
+        templateRevision: 'content-revision',
       });
       expect(draft?.contents.seals['bag-1']).toMatchObject({ sealNumber: 'M2-40817', cleared: true });
     });
