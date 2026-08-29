@@ -82,6 +82,24 @@ class TestSubmissionObservationValidation:
         with pytest.raises(ValueError, match="finite number"):
             CheckItemResultSubmit(**base, level_reading=math.inf)
 
+    def test_schema_rejects_fractional_count(self):
+        with pytest.raises(ValueError, match="valid integer"):
+            CheckItemResultSubmit(
+                template_item_id="item-1",
+                compartment_name="Medical",
+                item_name="Oxygen cylinder",
+                status="pass",
+                quantity_found=1.5,
+            )
+
+    @pytest.mark.parametrize("quantity", [-1, 1.5, True])
+    def test_service_rejects_invalid_count_without_schema_boundary(self, quantity):
+        item = self.submission(quantity_found=quantity)
+        with pytest.raises(ValueError, match="integers|non-negative"):
+            EquipmentCheckService._validate_and_snapshot_submission(
+                [item], {"item-1": self.template_item("count")}
+            )
+
     @pytest.mark.parametrize("reading", [math.inf, -math.inf, math.nan])
     def test_service_rejects_non_finite_level(self, reading):
         item = self.submission(level_reading=reading)
@@ -106,6 +124,23 @@ class TestSubmissionObservationValidation:
         )
         assert item["quantity_found"] is None
         assert item["level_reading"] is None
+
+    @pytest.mark.parametrize(
+        ("check_type", "irrelevant_field", "relevant_field"),
+        [
+            ("count", "level_reading", "quantity_found"),
+            ("level", "quantity_found", "level_reading"),
+        ],
+    )
+    def test_only_the_template_observation_shape_survives(
+        self, check_type, irrelevant_field, relevant_field
+    ):
+        item = self.submission(quantity_found=2, level_reading=75)
+        EquipmentCheckService._validate_and_snapshot_submission(
+            [item], {"item-1": self.template_item(check_type)}
+        )
+        assert item[irrelevant_field] is None
+        assert item[relevant_field] is not None
 
     async def test_snapshot_and_inventory_receive_same_count(self, service):
         template_item = self.template_item(
