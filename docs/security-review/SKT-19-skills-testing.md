@@ -1,6 +1,7 @@
-# Security Review — Skills Testing
+# Security Review 19 — Skills Testing
 
-**Prefix:** `SKT` · **Iteration:** 19 · **Reviewed:** 2026-08-26 · **PR:** TBD
+**Prefix:** `SKT` · **Iteration:** 19 · **Reviewed:** 2026-08-26 (pass 1) ·
+**PR:** [#1901](https://github.com/thegspiro/the-logbook/pull/1901) (pass 1)
 
 **Backend:** `app/api/v1/endpoints/skills_testing.py` (29 routes, 3,723 L — grown
 2.6x from 1,412 L at the last module-audit pass), `app/services/skills_testing_service.py`
@@ -277,3 +278,218 @@ n/a — no model or migration changes this iteration.
 | `python3 scripts/validate_migrations.py --strict` | PASSED (no migrations touched) |
 | backend tests, skills-testing scope (`-k skill`)  | 391 passed, 1 skipped          |
 | backend tests, full suite                         | 8816 passed, 22 skipped        |
+
+---
+
+## Pass 2 (2026-08-29)
+
+**Prefix:** `SKT2` · **PR:** TBD
+
+**Scope check:** diffed the current tree against `7a772a67` (the pass-1 merge
+commit for PR #1901) across the full backend surface — endpoint file, service
+file, schema file, model file, and the skill-sheet-library data module.
+**All five are byte-for-byte unchanged.** No new migration touches a
+skills-testing table (`git diff --stat` against `alembic/versions/` directly,
+not scoped to source files — the SCH-15 lesson). Given zero backend diff going
+in, this pass is re-verification of the four pass-1 fixes plus dimensions
+pass 1's write-up did not explicitly enumerate (frontend, cache exclusions),
+not a first-read of grown files — the file is 3,777 L now vs. the 3,723 L pass
+1 recorded, a difference fully accounted for by this pass's own fix (SKT2-1)
+plus intervening blank-line/docstring drift already present at the merge
+commit, not by any change between passes.
+
+### Re-verification of pass-1 fixes
+
+Re-read the current code directly for each (not re-cited from the doc):
+
+- **SKT-1** — `update_template` still routes through `apply_updates` inside a
+  `try/except ValueError` (`skills_testing.py:678`); `test_skill_template_update_guard.py`
+  still asserts an explicit null against `name`/`sections`/
+  `score_pass_fail_criteria` is rejected.
+- **SKT-2** — `void_test` still calls `assert_different_person(current_user.id,
+test.candidate_id, action="void", ...)` immediately after the "already
+  voided" guard and before any mutation (`skills_testing.py:2687`).
+- **SKT-3** — `return_test_for_correction` still calls the identical guard
+  before the status mutation begins (`skills_testing.py:2856`).
+- **SKT-4** — both halves of the Pitfall #27 fix are intact:
+  `lock_attempt_capacity` still locks `TrainingRequirement` with
+  `.with_for_update()` (`skills_testing_service.py:605-611`), the `spent` count
+  in `assert_attempts_remaining` still carries `.with_for_update(of=SkillTest)`
+  (`skills_testing_service.py:715`), and `validate_test` still acquires the
+  capacity lock via a non-locking peek at `requirement_id`
+  (`skills_testing.py:1991-2000`) **before** `_lock_test_for_transition` locks
+  the specific test row — the lock-ordering fix from Codex's review on PR #1901
+  is still the code path taken, not reverted back to locking
+  `RequirementProgress`.
+
+**Route auth coverage re-enumerated independently** (a fresh AST walk over the
+endpoint file, not a re-read of pass 1's prose): 29/29 routes still carry
+either `Depends(get_current_user)` or a `Depends(require_permission(...))`
+alongside `Depends(get_db)`, matching pass 1's inventory route-for-route (same
+29 paths, same methods, same gate per route — diffed the walk's output against
+the table in this doc's Route inventory section above). No `require_permission`
+call in this feature uses an OR-gate on more than the single
+`"training.view"`/`"training.manage"` pair already in that table (only
+`search_candidates` uses an OR at all), so CLAUDE.md Pitfall #23's
+broadly-seeded-grant shape does not newly apply.
+
+**Org-scoping swept mechanically, not spot-checked.** Every `select(SkillTest)`,
+`select(SkillTemplate)`, and `select(SkillTestViewer)` call site in the endpoint
+file was extracted and checked for an `organization_id` filter in the
+surrounding statement: every one either filters directly, or resolves through
+a `test`/`template` row already fetched org-scoped earlier in the same function
+(e.g. `select(SkillTemplate).where(SkillTemplate.id == test.template_id)` after
+`test` was already loaded with an `organization_id` filter) — the "resolves
+through an already-org-scoped parent" pattern the checklist allows. No by-id
+query reachable from a client-supplied id skips the filter.
+
+**Read the surface pass 1 named as new-but-not-individually-verified**
+(`complete_test`, `cancel_test`, `delete_test`, `discard_practice_test`,
+`bulk_validate_tests`, `release_test_results`, the three `/viewers` routes,
+`email_test_results`, `export_tests_csv`) line by line this pass, not
+sampled:
+
+- **`bulk_validate_tests`** delegates to `validate_test` per id with no
+  reimplementation, exactly as its docstring claims — confirmed by reading
+  both functions side by side. `SkillTestBulkValidateRequest.test_ids` is
+  `Field(..., min_length=1, max_length=50)` (`schemas/skills_testing.py:357`),
+  so a single bulk-validate call cannot become an unbounded loop of
+  side-effecting writes (dimension 6).
+- **`add_test_viewer`** re-confirmed to validate `viewer_data.user_id` in-org
+  before storing (Pitfall #14c, quoted in-code) and to refuse naming the
+  candidate as their own viewer.
+- **`export_tests_csv`** re-confirmed org-scoped, `SafeCsvWriter`-only (no bare
+  `csv.writer`), and writes an audit event recording the exported row count —
+  the CSV route this pass expected to need the most scrutiny turned out to
+  already be the most carefully built one in the file.
+- **`email_test_results`** re-confirmed every interpolated value
+  (`template_name`, `candidate_name`, `examiner_name`) is `html.escape`d before
+  entering the HTML body, and that the emailed scorecard is redacted through
+  the same `resolve_result_view`/`redact_test_for_view` pipeline the API
+  response uses — an officer cannot use "email results" to hand a candidate a
+  scorecard the disclosure policy would otherwise withhold from them.
+- **`discard_practice_test`** confirmed to check `is_practice` before checking
+  identity — an officer, examiner, or candidate may discard only a _practice_
+  test they are party to; an official test always 400s here regardless of who
+  is calling, so there is no path from this route to deleting an official
+  record.
+
+No new backend finding in any of these.
+
+### SKT2-1 — NIT — `is_practice == False` with a repo-wide-redundant `# noqa: E712` — ✅ FIXED
+
+**What:** ten call sites compared `SkillTest.is_practice` against the Python
+literal `False` and suppressed the resulting lint code inline:
+`SkillTest.is_practice == False,  # noqa: E712`. `backend/setup.cfg` already
+disables `E712`/`E711` for the whole project ("required by SQLAlchemy
+filters"), so flake8 was never going to flag these lines — the ten `# noqa`
+comments were dead weight, not a suppression doing any work. Not a
+vulnerability: SQLAlchemy compiles `Column == False` to the same boolean
+comparison as `Column.is_(False)` for a non-nullable-relevant boolean column,
+so there was no behavioral defect underneath.
+
+**Where:** `app/api/v1/endpoints/skills_testing.py` — `list_tests` (2 sites),
+`export_tests_csv` (2 sites), `get_testing_summary` (6 sites).
+
+**Why it's in scope for a security pass:** this exact class — `== True`/
+`== False` on a SQLAlchemy boolean filter — was already the subject of a
+dedicated finding in this feature's own audit lineage: **CS2-1**
+(`docs/app-review/compliance-skills.md`, pass 3) swept and fixed the identical
+pattern in `compliance_officer_service.py` and `skills_testing_service.py`,
+converting both to `.is_(...)`. That sweep evidently covered the _service_
+file but not the _endpoint_ file's own six-months-newer `list_tests`/
+`export_tests_csv`/`get_testing_summary` additions, which carried the
+pre-CS2-1 style forward with a `# noqa` that (per the flake8 config) was never
+load-bearing to begin with. Left as-is, the inconsistency invites a future
+`# noqa: E712` to be copy-pasted onto a genuinely-suppressed violation
+elsewhere, on the reasoning "this file already does it" — CLAUDE.md's own
+stance on `# noqa` is that it should be reserved for a "documented,
+unavoidable reason," and ten copies of an unnecessary one is the opposite of
+that.
+
+**Fix:** all ten converted to `.is_(False)`, matching CS2-1's precedent and
+`skills_testing_service.py`'s own current style; the ten now-redundant `# noqa:
+E712` comments removed. Verified `black --check` and `flake8` both still pass
+on the file (no reformatting needed — the replacement is same-width), and the
+full skills-testing test scope (392 tests) still passes unchanged. No guard
+test added: this mirrors CS2-1, which was disposed of as a same-pass cleanup
+with no dedicated regression test, and `E712` cannot regress into a real
+flake8 failure while `setup.cfg`'s ignore line stands, so a guard test here
+would assert against config that already exists for an unrelated, documented
+reason (SQLAlchemy filter ergonomics) rather than against this fix.
+
+### Frontend scope — established for the first time this pass
+
+Pass 1 was backend-only (endpoint + service, per its own scope note above).
+Traced every frontend file that imports `skillsTestingService`,
+`skillsTestingStore`, or a `skillsTesting`-typed export: 16 files, ~9,000 L
+(`types/skillsTesting.ts`, `stores/skillsTestingStore.ts`,
+`components/training/{SkillSheetLibraryModal,SkillTestOfficerActions,MySkillTestsList}.tsx`,
+`utils/{skillTemplateSections,skillTestTallies}.ts`,
+`pages/training/{SkillTestScorecardPrintPage,SkillSheetPrintPage}.tsx`,
+`pages/{SkillsTestingTestRecordsTab,ActiveSkillTestPage,StartSkillTestPage,
+SkillTemplateBuilderPage,SkillsTestingTemplatesTab,MySkillTestResultPage,
+SkillsTestingPage}.tsx`).
+
+- **`skillsTestingService`** (`services/trainingServices.ts:1382`) calls every
+  skills-testing endpoint through the shared `api` client
+  (`services/apiClient.ts`) — `withCredentials: true`, the CSRF
+  double-submit interceptor, and the stale-while-revalidate GET cache all
+  apply. Not a bespoke per-module axios instance, so CLAUDE.md Pitfall #7
+  (module axios missing auth config) does not apply here.
+- **Cache exclusions checked against the live route table, not assumed.** The
+  full-detail PHI-adjacent surface (`/tests`, `/tests/{id}`, and everything
+  nested under it — viewers, complete, validate, void, return, cancel,
+  discard) is covered by the existing `'/training/skills-testing/tests'`
+  prefix entry in `UNCACHEABLE_PREFIXES` (`utils/apiCache.ts:68`, present
+  since before this rotation began), because the cache check is a
+  `url.startsWith(prefix)` test and every one of those paths starts with that
+  string. `GET /candidates` (name + id only, capped at 15 results, requires a
+  2+ character fragment — deliberately minimal-PII by the endpoint's own
+  design, see `skills_testing.py:915-934`) and `GET /templates`/`GET /library`
+  (no member data) were checked and are correctly left cacheable. `GET
+/summary` returns org-wide aggregates only (`SkillTestingSummaryResponse`
+  has no per-member field) and is correctly left cacheable. **No cache-exclusion
+  gap found** — unlike TR2-1/TRX2-1 in this feature's sibling training passes,
+  this endpoint's PII surface was already fully covered before this pass.
+- **Standard grep sweep, all 16 files: zero hits** for
+  `window.confirm`/`window.alert`/`window.prompt` (the two comment mentions
+  found are explanatory prose about _not_ using them, not the pattern
+  itself), `dangerouslySetInnerHTML`, banned `.toLocale*`/`date-fns`/
+  `new Date().toISOString().slice(0,10)`, direct `fetch(`, and
+  `localStorage`/`sessionStorage` (no client-side persistence of test
+  results, scores, or PII outside the shared `apiCache` machinery already
+  covered above).
+- **Confirmation dialogs** on every destructive action found
+  (`SkillsTestingTemplatesTab.tsx`, `SkillsTestingTestRecordsTab.tsx`,
+  `ActiveSkillTestPage.tsx`, `SkillTemplateBuilderPage.tsx`) render the `ux`
+  library's `ConfirmDialog` component rather than `window.confirm` — consistent
+  with Pitfall #16's ban on the suppressible native dialog. These four render
+  `<ConfirmDialog>` directly rather than through the `useConfirm()` hook
+  (53 files elsewhere in the codebase use the hook; 26, including these four,
+  render the component directly) — a pre-existing, codebase-wide split that
+  predates this feature and is not specific to it, so it is noted here rather
+  than fixed: a targeted swap in one feature's four files would not close the
+  other 22 sites, and CLAUDE.md's Pitfall #16 does not itself ban the direct
+  form. Left for a dedicated frontend-shared pass (feature 34) to decide
+  whether to standardize on one form codebase-wide.
+
+No frontend finding this pass.
+
+## Corrections to prior write-ups
+
+None — pass 1's four findings and the "Verified good" claims are unchanged and
+re-confirmed above; nothing in this pass contradicts anything pass 1 recorded.
+
+## Completion gate (pass 2)
+
+| Check                                             | Result                                                                   |
+| ------------------------------------------------- | ------------------------------------------------------------------------ |
+| `flake8 app/ tests/ alembic/`                     | ✅ 0 violations                                                          |
+| `black --check app/ tests/ alembic/`              | ✅ 1331 files unchanged                                                  |
+| `isort --check-only app/ tests/ alembic/`         | ✅ clean (`isort==8.0.1`, CI's pin, already installed)                   |
+| `python3 scripts/validate_migrations.py --strict` | ✅ 393 revisions, single head `a0af87c3904a`                             |
+| `pytest tests/ -q -k "skill"`                     | ✅ 392 passed, 1 skipped (pre-existing optional-dependency skip)         |
+| `pytest tests/ -q` (full backend suite)           | ✅ 9225 passed, 22 skipped (pre-existing Docker/no-MySQL/optional skips) |
+| `cd frontend && npm run typecheck`                | ✅ 0 errors                                                              |
+| `cd frontend && npx eslint .`                     | ✅ 0 errors, 10 pre-existing warnings (none in skills-testing files)     |

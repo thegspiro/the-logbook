@@ -215,7 +215,7 @@ export default function FacilitiesDashboard() {
                 </button>
               </div>
               <div className="p-4">
-                {!stats?.overdueMaintenanceRecords.length ? (
+                {!stats?.overdueMaintenanceRecords?.length ? (
                   <div className="py-8 text-center">
                     <CheckCircle2 className="mx-auto mb-2 h-8 w-8 text-emerald-500" />
                     <p className="text-theme-text-muted text-sm">No overdue maintenance items</p>
@@ -264,7 +264,7 @@ export default function FacilitiesDashboard() {
                 </button>
               </div>
               <div className="p-4">
-                {!stats?.upcomingInspections.length ? (
+                {!stats?.upcomingInspections?.length ? (
                   <div className="py-8 text-center">
                     <ClipboardCheck className="text-theme-text-muted mx-auto mb-2 h-8 w-8" />
                     <p className="text-theme-text-muted text-sm">No inspections in the next 30 days</p>

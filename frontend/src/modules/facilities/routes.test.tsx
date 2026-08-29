@@ -50,8 +50,8 @@ describe('getFacilitiesRoutes', () => {
         <Routes>{getFacilitiesRoutes()}</Routes>
       </MemoryRouter>
     );
-    if (allowed) expect(await screen.findByText('Facility Settings')).toBeInTheDocument();
-    else expect(await screen.findByText('Access Denied')).toBeInTheDocument();
+    const expectedPage = allowed ? 'Facility Settings' : 'Access Denied';
+    expect(await screen.findByText(expectedPage)).toBeInTheDocument();
     expect(capturedPermissions).toContain('facilities.manage');
   });
 
