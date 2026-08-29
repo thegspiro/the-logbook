@@ -1175,6 +1175,13 @@ export const schedulingService = {
   async deleteCheckItem(itemId: string): Promise<void> {
     await api.delete(`/equipment-checks/items/${itemId}`);
   },
+  async deleteCheckItemsBulk(compartmentId: string, itemIds: string[], idempotencyKey: string) {
+    const response = await api.post<import('../types/equipmentCheck').CheckTemplateItemBulkDeleteResult>(
+      `/equipment-checks/compartments/${compartmentId}/items/bulk-delete`,
+      { item_ids: itemIds, idempotency_key: idempotencyKey }
+    );
+    return response.data;
+  },
   async reorderItems(compartmentId: string, orderedIds: string[]): Promise<void> {
     await api.put(`/equipment-checks/compartments/${compartmentId}/items/reorder`, { ordered_ids: orderedIds });
   },
