@@ -676,6 +676,49 @@ class TestStandaloneTemplateVisibility:
         mock_db.commit.assert_not_awaited()
 
 
+class TestOperationalInventoryTemplateVisibility:
+    @staticmethod
+    def empty_rows():
+        result = MagicMock()
+        result.all.return_value = []
+        return result
+
+    @staticmethod
+    def assert_active_filter(statement):
+        sql = str(statement)
+        assert "equipment_check_templates.is_active IS true" in sql
+
+    async def test_supply_overview_excludes_draft_templates(self, service, mock_db):
+        mock_db.execute.return_value = self.empty_rows()
+        with patch(
+            "app.services.equipment_check_service.InventoryService.get_lots_for_items",
+            new_callable=AsyncMock,
+            return_value={},
+        ):
+            await service.get_supply_overview("org-1")
+
+        self.assert_active_filter(mock_db.execute.await_args_list[0].args[0])
+
+    async def test_apparatus_inventory_excludes_draft_templates(self, service, mock_db):
+        mock_db.scalar.return_value = MagicMock()
+        mock_db.execute.return_value = self.empty_rows()
+        with patch(
+            "app.services.equipment_check_service.InventoryService.get_lots_for_items",
+            new_callable=AsyncMock,
+            return_value={},
+        ):
+            await service.get_apparatus_inventory("apparatus-1", "org-1")
+
+        self.assert_active_filter(mock_db.execute.await_args_list[0].args[0])
+
+    async def test_item_deployments_exclude_draft_templates(self, service, mock_db):
+        mock_db.execute.return_value = self.empty_rows()
+
+        assert await service.get_item_deployments("inventory-1", "org-1") == []
+
+        self.assert_active_filter(mock_db.execute.await_args.args[0])
+
+
 class TestAuthoritativeCheckTiming:
     """Stored timing comes from the selected template, never the request."""
 

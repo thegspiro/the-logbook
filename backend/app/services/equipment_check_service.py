@@ -2512,6 +2512,7 @@ class EquipmentCheckService:
             )
             .where(
                 EquipmentCheckTemplate.organization_id == organization_id,
+                EquipmentCheckTemplate.is_active.is_(True),
                 # Two ways onto this worklist. A date the officer can see
                 # coming, and a crew's report that something was used or pulled
                 # — the second has no expiration to sort by and would otherwise
@@ -2685,6 +2686,7 @@ class EquipmentCheckService:
             .where(
                 EquipmentCheckTemplate.organization_id == organization_id,
                 EquipmentCheckTemplate.apparatus_id == apparatus_id,
+                EquipmentCheckTemplate.is_active.is_(True),
             )
             .order_by(
                 CheckTemplateCompartment.sort_order.asc(),
@@ -3391,6 +3393,7 @@ class EquipmentCheckService:
             .where(
                 CheckTemplateItem.inventory_item_id == inventory_item_id,
                 EquipmentCheckTemplate.organization_id == organization_id,
+                EquipmentCheckTemplate.is_active.is_(True),
             )
             .order_by(CheckTemplateItem.expiration_date.asc())
         )
