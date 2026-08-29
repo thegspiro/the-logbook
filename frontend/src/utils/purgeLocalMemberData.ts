@@ -25,9 +25,10 @@ import { clearAllDrafts } from './shiftReportDrafts';
 import { clearAllQueuedChecks } from './offlineQueue';
 import { clearAllQueuedReports } from './shiftReportOfflineQueue';
 import { clearAllGenericQueued } from './genericOfflineQueue';
+import { clearAllEquipmentCheckDrafts } from './equipmentCheckDrafts';
 
 export interface PurgeResult {
-  /** Shift-report and equipment-check drafts removed from localStorage. */
+  /** Shift-report and equipment-check drafts removed from device storage. */
   drafts: number;
   /** Unsent equipment checks discarded from IndexedDB. */
   queuedChecks: number;
@@ -84,6 +85,12 @@ export async function purgeLocalMemberData(): Promise<PurgeResult> {
     result.drafts = clearAllDrafts();
   } catch {
     // localStorage can throw in private-browsing modes; keep going.
+  }
+
+  try {
+    result.drafts += await bounded(clearAllEquipmentCheckDrafts(), 0);
+  } catch {
+    // IndexedDB may be unavailable; keep going with the remaining stores.
   }
 
   try {

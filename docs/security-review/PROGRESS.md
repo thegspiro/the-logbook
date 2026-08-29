@@ -20,6 +20,442 @@ None.
 
 ---
 
+### 2026-08-29 — Feature 19 (Skills testing), pass 2 ✅ merged — PR #2017
+
+Merged (`793bbebb`). Codex's review completed with no findings (no review
+threads opened) — the earlier usage-limit comment on the first run was
+superseded by a second, completed run triggered by the follow-up commit. CI
+green on the final head; no merge conflict (base was current `main`).
+Confirmed on `origin/main` by ancestry check (`git log origin/main --oneline`
+shows the merge commit at HEAD, directly above `30ae2c97`). Rotation row 19
+-> done. Next: 20 compliance.
+
+### 2026-08-29 — Feature 19 (Skills testing), pass 2 — 1 fixed (NIT), 0 flagged
+
+Scoped to the full backend surface since pass 1's merge (`7a772a67`, PR
+#1901): the endpoint file, service file, schema file, model file, and the
+skill-sheet-library data module all came back **byte-identical**
+(`git diff --stat`, not assumed). No new migration touches a skills-testing
+table.
+
+Independently re-verified all four pass-1 fixes (SKT-1 through SKT-4) by
+reading the current code, not re-citing the doc — all intact, including both
+halves of SKT-4's Pitfall #27 capacity lock and the lock-ordering fix Codex's
+review added on PR #1901. Re-ran an AST route enumeration from scratch: 29/29
+routes carry either `get_current_user` or `require_permission`, matching pass
+1's inventory route-for-route. Swept every `select(SkillTest)`/
+`select(SkillTemplate)`/`select(SkillTestViewer)` call site mechanically for
+an `organization_id` filter (direct, or via an already-org-scoped parent row)
+— no gap. Read the surface pass 1 named but did not individually verify
+(`complete_test`, `cancel_test`, `bulk_validate_tests`, `release_test_results`,
+the `/viewers` routes, `email_test_results`, `export_tests_csv`) line by line
+this pass; no new backend finding.
+
+**SKT2-1** (NIT, fixed) — ten `SkillTest.is_practice == False  # noqa: E712`
+sites in the endpoint file (the same class **CS2-1** had already swept in the
+_service_ file and in `compliance_officer_service.py`, but evidently missed in
+the endpoint file's own later additions). `backend/setup.cfg` disables
+E712/E711 project-wide, so the `# noqa` comments were dead weight, not a live
+suppression — not a vulnerability, but ten unnecessary `# noqa`s is the
+opposite of CLAUDE.md's "documented, unavoidable reason" bar. Converted all
+ten to `.is_(False)`, matching CS2-1's precedent; no guard test added (mirrors
+how CS2-1 itself was disposed of, and E712 cannot regress into a real flake8
+failure while the ignore line stands).
+
+Also established, for the first time, a frontend scope for this feature (pass
+1 was backend-only): 16 files / ~9,000 L actually import a skills-testing
+service, store, or type export. All 16 grep-swept clean for
+`window.confirm`/`alert`/`prompt`, `dangerouslySetInnerHTML`, banned
+`.toLocale*`, `date-fns`, and direct `fetch(`. Checked the full skills-testing
+route surface against `UNCACHEABLE_PREFIXES` directly rather than assuming:
+unlike this feature's sibling training passes (TR2-1/TRX2-1), **no
+cache-exclusion gap found** — the existing `/training/skills-testing/tests`
+prefix entry already covers every PII-bearing route via `startsWith`, and the
+one PII-adjacent route it doesn't syntactically cover (`GET /candidates`) is a
+capped, minimal-PII name lookup by the endpoint's own design, not a listing.
+`skillsTestingService` routes through the shared `api` client
+(`withCredentials`, CSRF interceptor) rather than a bespoke module axios
+instance.
+
+Completion gate: flake8/black/isort clean (isort 8.0.1, CI's pin, already
+installed); `validate_migrations.py --strict` 393 revisions, single head;
+`pytest -k skill` 392 passed/1 pre-existing skip; full backend suite 9225
+passed/22 pre-existing skips/0 failed; `tsc --noEmit`/`npm run typecheck` 0
+errors; `eslint .` 0 errors (10 pre-existing warnings, none in touched files).
+Full write-up: `docs/security-review/SKT-19-skills-testing.md` → **Pass 2**.
+Rotation row 19 -> awaiting PR merge. Next: 20 compliance, once this PR
+merges.
+
+---
+
+### 2026-08-29 — Feature 18 (Training extended), pass 2 ✅ merged — PR #2012
+
+Merged (`988d5a73`). CI green on the final head (`e094e66e`); Codex hit its
+usage limit and produced no review. GitHub reported `mergeable_state: clean`
+and the merge completed with no conflict, despite 26 unrelated commits
+landing on `main` between this PR's base and its merge point. Confirmed on
+`origin/main` by ancestry check (merge commit at `origin/main` HEAD).
+Rotation row 18 -> done. Next: 19 skills testing.
+
+### 2026-08-29 — Feature 18 (Training extended), pass 2 — 1 fixed (LOW/MED), 0 flagged
+
+Scoped to the full domain since pass 1's merge (`013fc341`, PR #1873): all
+twelve declared backend files (six endpoint files, six service files) plus
+`training_program_service.py` (the out-of-list file TRX-1's fix landed in)
+came back **byte-identical** (`git diff --stat`, not assumed). The only touch
+anywhere in `backend/app/models/training.py` since pass 1 is a comment-only
+docstring update to `Shift`/`ShiftTemplate.positions` from an unrelated
+scheduling PR — no training-extended model changed. No new migration touches
+a training-extended table (checked `alembic/versions/` directly, not scoped to
+source files, per the SCH-15 lesson).
+
+Independently re-verified all 10 pass-1 fixes (TRX-1 through TRX-10) by
+reading the current code, not re-citing the doc — all intact. Re-ran an AST
+route enumeration from scratch: 88/88 routes across the six files carry either
+`get_current_user` or `require_permission("training.manage")`, matching each
+file's route count exactly. Examined the `_confined_path`/
+`download_record_attachment` shared-upload-root containment design (superficially
+EV-17-shaped) and confirmed it is deliberate, not exploitable — the
+`attachments` schema field is `Optional[list[str]]` on every write path, which
+blocks the dict/`file_path` injection EV-17 depended on, and a stricter
+per-org confinement would break the documented submission→record attachment
+handoff.
+
+**TRX2-1** (LOW/MED, data exposure, fixed) — `GET
+/training/effectiveness/evaluations` returns per-member `user_id` alongside
+free-text evaluation comments/behavior/results notes but was missing from the
+frontend's `UNCACHEABLE_PREFIXES` cache-exclusion list, the same class TR2-1/
+TR2-3 (training-core pass 2) already closed for this module's other
+per-member endpoints. Fixed, with a guard test confirmed to fail pre-fix.
+Checked every other GET route in this feature against the prefix list; no
+other gap found (aggregate/config-only endpoints correctly left cacheable).
+
+Also established, for the first time, a frontend scope for this feature (pass
+1 was backend-only): 10 files / ~8,400 L actually consume a training-extended
+service export. Only `WaiverManagementPage.tsx` changed since pass 1 (+7/-1,
+an unrelated resilience fix, reviewed and clean); all 10 grep-swept clean for
+`window.confirm`/`alert`/`prompt`, `dangerouslySetInnerHTML`, banned
+`.toLocale*`, `date-fns`, and direct `fetch(`.
+
+Completion gate: flake8/black/isort clean (isort 8.0.1, CI's pin, already
+installed); `validate_migrations.py --strict` 393 revisions, single head;
+`pytest -k "training or cohort or syllabus or waiver or external or
+enhancement or submission or xapi"` 986 passed/1 pre-existing skip; full
+backend suite 9222 passed/22 pre-existing skips/0 failed; `tsc --noEmit` 0
+errors; `eslint .` 0 errors (10 pre-existing warnings, none in touched files);
+`vitest run apiCache.test.ts` 86 passed. Full write-up:
+`docs/security-review/TRX-18-training-extended.md` → **Pass 2**. Rotation row
+18 -> awaiting PR merge. Next: 19 skills testing, once this PR merges.
+
+---
+
+### 2026-08-29 — Feature 17 (Training core), pass 2 ✅ merged — PR #1981
+
+Merged (`7522f0a1`). Codex reviewed the initial push and caught two real
+findings (TR2-3, TR2-4 below) in the same class as this pass's own TR2-1/
+TR2-2; both verified and addressed before merge. CI green on the final head
+(17/17 checks). No merge conflict (base was current `main`). Rotation row
+17 -> done. Next: 18 training (extended).
+
+### 2026-08-29 — Feature 17 (Training core), pass 2 — 2 fixed (TR2-1, TR2-3), 2 flagged (TR2-2, TR2-4)
+
+Re-verified all three pass-1 fixes (TR-11/TR-12/TR-13) and the route-auth
+coverage / baseline-grant / KNOWN_LIMITATIONS claims still hold — the six
+scoped files were byte-for-byte unchanged since PR #1851's merge except one
+unrelated 7-line spillover fix from the feature-18 pass. Independently
+re-enumerated all 91 routes across the three endpoint files (AST walk): no
+route without an auth dependency.
+
+New this pass: **TR2-1** (LOW/MED, data exposure, fixed) — `GET
+/training/competency-matrix` and `GET /training/dashboard-summary` both
+return per-member names alongside compliance/competency status but were
+missing from the frontend's `UNCACHEABLE_PREFIXES` cache-exclusion list,
+unlike the identically-shaped `/training/compliance-matrix`. Fixed, with a
+guard test. **TR2-2** (LOW, abuse resistance, flagged) — `GET
+/training/records` has no `skip`/`limit`, unlike the rest of the codebase's
+per-record list endpoints; needs a paired frontend pagination UI, mirrored
+into `docs/KNOWN_LIMITATIONS.md`.
+
+Codex's review of the PR caught two more in the same vein, both verified and
+addressed: **TR2-3** (LOW/MED, data exposure, fixed) — the training-session
+approval roster (`GET /training/sessions/approve/{token}`, attendee names +
+emails) had the identical missing-cache-exclusion gap as TR2-1; added to
+`UNCACHEABLE_PREFIXES` with a guard test. **TR2-4** (LOW, abuse resistance,
+flagged) — `get_training_dashboard_summary` scans every active member's full
+training history with no date bound on every call; TR2-1's fix correctly
+removes that endpoint's cache (it carries per-member PII), which means the
+unbounded scan it was masking now runs on every dashboard mount. Needs a
+query-level bound tied to `training_compliance.py`'s per-requirement
+date-window logic — a service redesign, not a drive-by fix alongside a
+cache-exclusion security patch — mirrored into `docs/KNOWN_LIMITATIONS.md`.
+
+Completion gate (final): flake8/black/isort clean (no Python touched);
+`validate_migrations.py --strict` 389 revisions, single head; `pytest -k
+training` 821 passed; full suite 9200 passed, 22 skipped (pre-existing);
+`tsc --noEmit` 0 errors; `eslint .` 0 errors (10 pre-existing warnings, none
+in touched files); `vitest run apiCache.test.ts` 85 passed. Full write-up:
+`docs/security-review/TR-17-training-core.md` → **Pass 2**.
+
+---
+
+### 2026-08-28 — Feature 16 (Events & requests), pass 2 ✅ merged — PR #1973
+
+Merged (`7e27b765`). Codex had hit its usage limit and could not review this
+PR directly, so the fix-commit history (5 comments raised against the
+original draft on a prior Codex pass over this same branch, all independently
+re-verified real and addressed — see below) stood as the review record. CI
+green on the final head (17/17 checks); the one E2E failure surfaced mid-PR
+(`mobile-route-integrity.spec.ts`) was traced to the pre-existing, unrelated
+`main` bug tracked on #1971/fixed by #1972, which had already merged into
+`main` by the time this PR's base was updated — confirmed clean on the final
+run. No merge conflict (base was current `main`). Confirmed on `origin/main`
+by ancestry check (`git log origin/main --oneline` shows the merge commit at
+HEAD). Rotation row 16 -> done. Next: 17 training (core).
+
+### 2026-08-28 — Feature 16 (Events & requests), pass 2 — 3 fixes (EV-17 HIGH, EV-18/EV-19 MED), 3 scope corrections, 2 stale-doc corrections
+
+> **Revised after Codex review of PR #1973.** This entry originally read "no
+> findings, 1 frontend scope correction, 1 doc-completeness correction."
+> Codex raised **five P2 comments against that draft and all five were
+> confirmed real** on independent re-reading of the current code; none was
+> dismissed. Three were defects (**EV-17**, a HIGH cross-tenant attachment
+> read; **EV-18** and **EV-19**, MED ordering defects on the public intake
+> endpoint), two were scope gaps (a basename-only frontend discovery command
+> that missed `pages/events-settings/`; `api/public/portal.py`, a changed
+> public `Event` consumer outside the enumerated backend scope). All three
+> defects are fixed with guard tests in this PR; both scope gaps are closed
+> and the affected files reviewed. The summary below is the corrected one.
+> Detail per finding in `EV-16-events-requests.md` → **Findings (pass 2)**.
+>
+> **EV-17 (HIGH, ✅ fixed)** — `EventCreate`/`EventUpdate`/
+> `RecurringEventCreate` accept an unconstrained
+> `attachments: List[Dict[str, str]]`, all four service write paths persisted
+> it verbatim, and `download_event_attachment` confined the stored
+> `file_path` only to the **shared** `/app/uploads/event-attachments` root,
+> not to the caller's own org subdirectory. An `events.manage` holder who
+> obtained another tenant's stored path could attach it to an event in their
+> own org and download that tenant's file. Same defect, same shape, as
+> **DOC-24** (P1) already fixed in the documents module. Closed at both ends
+> via the new `app/utils/event_attachments.py`: `validate_attachments_for_org`
+> on every write path (400 on a foreign path), and org-scoped containment on
+> download **and** delete. Guard test
+> `tests/test_event_attachment_org_scoping.py`, 12 cases.
+>
+> **EV-18 (MED, ✅ fixed)** — the per-IP limiter was a call in the handler
+> body while `require_captcha` was a route `Depends`, so FastAPI necessarily
+> ran the CAPTCHA dependency first and one IP could drive unbounded outbound
+> provider verifications. Now
+> `dependencies=[Depends(_rate_limit_public_request), Depends(require_captcha)]`,
+> matching `api/public/forms.py`'s existing pairing. Guard test asserts the
+> declaration order on the live `APIRoute`.
+>
+> **EV-19 (MED, ✅ fixed)** — `daily_cap_exceeded` is an atomic Redis `INCR`,
+> so consulting it spends a slot; the `min_lead_time_days` rejection ran
+> after it, letting distributed callers exhaust a department's whole daily
+> allowance with too-soon dates that were never going to be stored. Lead-time
+> validation moved above the counter, restoring the "valid-only cap" contract
+> `forms_service.py` already documents. Guard test asserts a flood of
+> rejected submissions leaves the counter untouched and a valid one still
+> succeeds.
+>
+> **Frontend scope (✅ corrected)** — `find -iname "*event*"` matches
+> basenames, so it enumerated `pages/events-settings/` the directory and none
+> of its nine files, including `PipelineSection.tsx` (the EV-5 opt-in UI this
+> pass claimed to have re-verified). Rebuilt two ways that agree — `-ipath`
+> recursion (70) plus an import-graph closure from the route entry points
+> (+4 events-exclusive generically-named files) — for a true surface of
+> **74**, not 54. None of the 20 newly-found files changed since pass 1, so
+> the changed set and its conclusions are unaffected; `PipelineSection.tsx`
+> read in full (purely presentational, enforcement is server-side) and all 74
+> re-swept clean.
+>
+> **Backend scope (✅ corrected)** — `api/public/portal.py` (+35/-5) changed
+> in range and gates `GET /public/v1/events`. Reviewed: the change _adds_ a
+> module-enablement gate, both refusals return an identical 503 (no oracle),
+> and there is no client-supplied org id anywhere on the path. Clean, no
+> finding.
+
+Scoped to the full domain since pass 1's merge (`c68a9bef`, PR #1848 —
+single merge, no Codex follow-up to re-scope against). All four declared
+backend files plus the models/schemas came back **byte-identical** except
+`event_service.py` (+17/-6, `git diff --stat`, not assumed), which is
+feature 21's own already-applied, already-verified cross-org fix
+(`3024a941`, admin-hours) threading `organization_id` through this file's
+three call sites into `AdminHoursService.delete_event_attendance_entries` —
+read all three call sites directly and confirmed the value is always the
+already-org-validated caller org, not attacker-influenceable. No migration
+since pass 1 touches an events/event-request table (`git diff --stat`
+against `alembic/versions/` directly, not scoped to source files — the
+exact gap Codex found in SCH-15 pass 2 — then grepped each of the 18 new
+files for "event" by content and confirmed none is this feature's).
+
+**Frontend scope correction, found before Codex could catch it this time**
+(the SCH-15/EC-14 lesson): pass 1 scoped its frontend check to
+`modules/events/` — a two-file route-registration barrel — and never
+mentioned that the real ~20,650-line, 54-file events frontend lives
+entirely outside it, in `pages/Event*.tsx`, `components/event-detail/`,
+`components/events/`, `services/eventServices.ts`, and three more shared
+files. Swept the real surface this pass: only 2 of 54 files changed since
+pass 1 (`EventForm.tsx`, a display-only label tweak; `eventServices.ts`,
+entirely unrelated INV-11 inventory type additions that happen to live in
+this shared file) — both read in full, neither security-relevant. The
+other 52 were grep-swept (`window.confirm`/`alert`/`prompt`,
+`dangerouslySetInnerHTML`, banned `.toLocale*`, `date-fns` import, direct
+`fetch(`) — all clean, noted as partial-scope rather than assumed
+line-by-line read, matching how EC-14/SCH-15 disposed of their own large
+unchanged frontend surfaces.
+
+Re-verified every pass-1 "Verified good" mechanism by reading the current
+code rather than re-citing the doc: fresh AST route enumeration (55/55 +
+23/23, unchanged), both halves of the Pitfall #27 RSVP-capacity lock,
+EV-11's `template_id` org-check, JSON-column mutation discipline on every
+write site, the `get_check_in_monitoring_stats` string-comparison claim,
+the 256-bit status-token claim, the `exclude_unset`-only update-payload
+discipline, the six frontend cache-exclusion entries, and all 12
+`SET NULL` FKs' `nullable=True`. Also verified, for the first time in this
+rotation's own docs, **EV-5** (public-intake per-org opt-in + honeypot +
+daily cap) — resolved 2026-08-17, before pass 1 ran, but pass 1's doc never
+mentioned or verified it: read `submit_public_event_request` in full and
+confirmed all four controls present — though **not** correctly ordered, as
+this sentence originally claimed: see EV-18 and EV-19 above, both raised by
+Codex against this very claim and both fixed. The controls are all there
+(opt-in, indistinguishable from "org not found" → honeypot, before any
+write → daily cap); their sequence was the defect. One doc-completeness
+correction (NIT): pass 1's permission-tier summary omitted
+`GET /{event_id}/folder`'s `require_permission("events.view")` gate — not a
+defect (`events.view` is a baseline member grant, more restrictive than the
+bare-authentication routes beside it, and the endpoint returns only folder
+metadata + a document count), just missing from the enumeration. No new
+security findings; no regression in any pass-1 fix. Full detail in
+`EV-16-events-requests.md` → Pass 2. Completion gate: flake8/black/isort
+clean (isort 8.0.1, CI's pin, already installed), migrations 389
+revisions/single head, `pytest -k "events or event_request or portal or
+attachment"` 285 passed/1 pre-existing skip, `pytest -k "event"` (broader
+net — most test files are singular `test_event_*`) 589 passed/1 pre-existing
+skip, full backend suite **9196 passed/22 pre-existing skips/0 failed**
+(9181 at PR #1968's post-merge baseline, plus the 15 new guard cases added
+for EV-17/EV-18/EV-19), `tsc`/`eslint` clean (10 pre-existing warnings,
+same set as SEC-00/AP-13/EC-14/SCH-15 pass 2). Rotation row 16 -> awaiting
+PR merge. Next: 17 training core, once this PR and the bookkeeping PR
+#1971 both merge.
+
+### 2026-08-28 — Feature 15 (Scheduling), pass 2 ✅ merged — PR #1968
+
+Merged (`a28d39e6`). All three Codex P2 review threads (migration scope gap,
+weak guard test, overstated `_account_is_active` claim) were independently
+re-verified as real and addressed within the PR, replied to, and resolved
+before merge; CI green on the final head (17/17 checks). Confirmed on
+`origin/main` by ancestry check (`git log origin/main --oneline` shows the
+merge commit at HEAD, directly above #1967's merge commit `80c87d91`).
+Rotation row 15 -> done. Next: 16 events & requests.
+
+### 2026-08-28 — Feature 15 (Scheduling), pass 2 — 1 test fix, 2 stale-doc corrections, 0 flagged
+
+Scoped to the full domain since pass 1's **final** merge (`5d19cefa`, PR
+#1847 — the Codex-follow-up merge, not the earlier `c92f0438`/#1846 that
+preceded it). `git diff --stat` against the seven declared/adjacent backend
+files found real churn in three (`scheduling.py` +20/-20,
+`scheduling_service.py` +6/-1, `scheduling_module_config_service.py`
++70/-0), none touching auth/permission/tenant-scoping code paths.
+**Correction (Codex follow-up on this PR):** "no new migration on a
+scheduling table" was false — that `git diff --stat` was scoped to source
+files and never included `alembic/versions/`, so it could not have found one.
+`20260826_1400_e2c8f5a71d40_canonicalize_paramedic_seat.py` does touch
+`shifts.positions`/`shift_templates.positions`; reviewed in full against
+`CHECKLIST.md` dimension 7 (guards `create_all`-only tables, idempotent,
+correctly scoped, irreversible for a stated reason, follows its
+already-reviewed same-day sibling migration exactly) and recorded as
+reviewed-clean in `SCH-15-scheduling.md`, not just re-asserted good. A grep for other backend files referencing
+`ShiftCall`/`ShiftSwapRequest`/`ShiftAssignment`/`StandingShiftClaim`/
+`SchedulingService` changed since pass 1 (per the EC-14 lesson) found
+`shift_eligibility_service.py` (+90/-43) carrying a real, already-applied
+security fix from a different feature's PR (Codex-authored, `a72fed15`):
+member-held RBAC positions no longer grant _operational_ shift-position
+eligibility (closing a role-manager self-escalation path), verified by
+reading the current code rather than trusting the commit message.
+`scheduled_tasks.py`'s CRON2-31 changes to the two scheduling cron tasks were
+also traced and confirmed org-scoped throughout, matching EC-14 pass 2's
+verification of this same file's equipment-check task.
+
+**Frontend scope correction, found before Codex could catch it this time:**
+pass 1 (and every prior scheduling audit) scoped the frontend to
+`modules/scheduling/` (56 files) only. `pages/scheduling/` — 81 files, ~34,000
+lines, holding the actual shift board, my-shifts/open-shifts tabs, swap/
+time-off UI, platoons, and position roster — was never mentioned in any prior
+scheduling doc. Swept this pass: only one file changed since pass 1
+(`PositionRosterPage.tsx`, read in full — clean, uses the approved date
+utilities and plain JSX text interpolation); the other 80 were checked with
+the same targeted `window.confirm`/`dangerouslySetInnerHTML`/banned-`.toLocale*`/
+direct-`fetch()` greps EC-14 used for its equipment-check pages in this same
+directory (all clean), noted as partial-scope rather than assumed fully
+reviewed.
+
+**SCH-11 (NIT, docs-only, fixed):** SCH-5 ("swap accept-path skips
+re-validation + a looser approver-identity check than manager review") had
+been carried as **Open** in `KNOWN_LIMITATIONS.md` (two rows), `docs/
+module-audit/scheduling.md`, and `docs/app-review/scheduling.md` since
+2026-08-06 — but `respond_to_swap_offer`, added 2026-08-24 (two days _before_
+SCH-15 pass 1, not new this pass), already resolves it: it replaced the
+general swap-accept path with a narrower one-way-offer accept, re-validates
+the target shift's live state (capacity/cancellation/finalization) before
+moving the seat, and enforces a strict identity check on the responder; every
+two-way exchange is confined to the already-hardened manager-review path.
+Pass 1 had actually read this method (noted in "Verified good" as
+"SCH-5-adjacent," reviewed for capacity locking) but never connected it to
+closing SCH-5. All four documents corrected to ✅ Resolved, each citing
+`scheduling_service.py`'s exact validation calls and (originally)
+`tests/test_swap_offer_response.py` (17 tests, re-run and confirmed passing).
+**Correction (Codex follow-up):** the cited test for the
+cancelled/finalized-shift half was weak —
+`test_the_acceptance_path_runs_that_validation` only greps the calling
+method's source for the helper's name, and every one of the 17 tests mocks
+`_validate_assignment_candidate`
+outright, so none could fail if `require_mutable=True` were dropped or the
+helper's own check broke. Fixed, not just reworded: strengthened the existing
+kwargs assertion to check `require_mutable`/`reject_past` explicitly, and
+added two real (unmocked) tests that reject acceptance against a cancelled
+and a finalized shift respectively. 19 tests now pass; confirmed the new
+ones fail without the fix by temporarily reverting `require_mutable=True`.
+
+Route/permission enumeration re-run from scratch (AST walk, not a diff):
+96/96 routes (92+3+1, unchanged from pass 1) carry a recognized auth
+dependency. SCH-9's fix and SCH-10's flag both re-verified intact at their
+current lines (SCH-10's KNOWN_LIMITATIONS entry was already kept current by
+the training-extended pass, TRX-18 — no correction needed here). A new
+`ShiftPosition.PARAMEDIC` enum member (landed via an adjacent qualifications
+feature) needs no migration: confirmed `shift_assignments`/
+`standing_shift_claims` are both in `enum_normalization.py`'s
+`_TARGET_COLUMNS`, which widens the live MySQL `ENUM(...)` DDL to the current
+Python enum on every startup, unconditionally.
+
+**Correction (Codex follow-up):** the `_account_is_active` gate
+(`shift_eligibility_service.py`) was written up as closing a "stale session"
+gap — a retired/suspended member's own valid session outliving their status
+change. That's not accurate: `get_current_user` calls
+`AuthService.get_user_from_token`, which reloads the user and enforces
+`is_active` fresh on every single request, so no such window exists on that
+path. The real gap is narrower — `_validate_assignment_candidate`'s
+`enforce_position_eligibility` branch loads a client-supplied candidate
+`user_id` with no status filter at all, and that candidate is a _third
+party_ when an officer assigns someone else to a shift
+(`create_assignment(self_signup=False)`) — a path that never goes through
+`get_current_user` for the target member, so their inactive status was never
+consulted before this fix. Corrected in `SCH-15-scheduling.md` and in the
+misleading docstring the code itself carried (same inaccurate claim, fixed at
+its source).
+
+Full detail in
+`SCH-15-scheduling.md` → Pass 2. Completion gate (post-follow-up):
+flake8/black/isort clean (isort already installed), migrations 389
+revisions/single head, scoped tests 716 passed/1 skipped, full backend suite
+9181 passed/22 skipped/0 failed (+2 over the pre-follow-up baseline of 9179 —
+the two new swap-offer guard tests), `tsc`/`eslint` clean (10 pre-existing
+warnings, same set as
+SEC-00/AP-13/EC-14 pass 2). Rotation row 15 -> awaiting PR merge. Next: 16
+events & requests, once this PR merges.
+
+---
+
 ### 2026-08-28 — Feature 16 (Events & requests), pass 2 ✅ merged — PR #1973
 
 Merged (`7e27b765`). Codex had hit its usage limit and could not review this
@@ -1811,9 +2247,9 @@ each row's prior PR is recorded in the Log, not repeated here.
 | 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | ✅     |
 | 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                | ✅     |
 | 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                       | ✅     |
-| 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`                                                                                   | ⬜     |
-| 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ⬜     |
-| 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3723 L)                                                                                                          | ⬜     |
+| 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`                                                                                   | ✅     |
+| 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ✅     |
+| 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3723 L)                                                                                                          | ✅     |
 | 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ⬜     |
 | 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ⬜     |
 | 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ⬜     |

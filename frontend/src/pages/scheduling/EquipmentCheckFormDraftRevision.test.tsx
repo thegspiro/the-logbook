@@ -2,6 +2,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { screen } from '@testing-library/react';
 import { renderWithRouter } from '../../test/utils';
 
+const { loadEquipmentCheckDraft } = vi.hoisted(() => ({ loadEquipmentCheckDraft: vi.fn() }));
+
 vi.mock('../../modules/scheduling/services/api', () => ({
   schedulingService: {
     getLastCheckResults: vi.fn().mockResolvedValue({}),
@@ -15,6 +17,17 @@ vi.mock('../../utils/offlineQueue', () => ({
   listPendingChecks: vi.fn().mockResolvedValue([]),
   pendingCount: vi.fn().mockResolvedValue(0),
   CHECK_QUEUE_MAX_RETRIES: 5,
+}));
+vi.mock('../../utils/equipmentCheckDrafts', () => ({
+  loadEquipmentCheckDraft,
+  saveEquipmentCheckDraft: vi.fn().mockResolvedValue(undefined),
+  deleteEquipmentCheckDraft: vi.fn().mockResolvedValue(undefined),
+}));
+vi.mock('../../stores/authStore', () => ({
+  useAuthStore: () => ({
+    user: { id: 'user-1', organization_id: 'org-1' },
+    checkPermission: () => true,
+  }),
 }));
 
 import EquipmentCheckForm from './EquipmentCheckForm';
@@ -69,23 +82,24 @@ function saveDraft(
     sealDefinition?: Record<string, unknown>;
   } = {}
 ) {
-  localStorage.setItem(
-    'equipment-check-draft-shift-1-tmpl-1',
-    JSON.stringify({
+  loadEquipmentCheckDraft.mockResolvedValue({
+    updatedAt: Date.now(),
+    contents: {
       contentRevision: 1,
       results: { 'item-1': { status: 'pass' } },
       overallNotes: '',
       itemDefinitions: { 'item-1': options.definition ?? definition() },
       seals: options.seals ?? {},
       sealDefinitions: options.sealDefinition ? { 'comp-1': options.sealDefinition } : {},
-    })
-  );
+    },
+  });
 }
 
 describe('equipment-check draft revision reconciliation', () => {
   beforeEach(() => {
     localStorage.clear();
     localStorage.setItem('has_session', '1');
+    loadEquipmentCheckDraft.mockReset();
   });
 
   it('requires confirmation after the check type changes', async () => {
