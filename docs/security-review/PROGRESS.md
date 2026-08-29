@@ -20,6 +20,55 @@ None.
 
 ---
 
+### 2026-08-29 — Feature 17 (Training core), pass 2 ✅ merged — PR #1981
+
+Merged (`7522f0a1`). Codex reviewed the initial push and caught two real
+findings (TR2-3, TR2-4 below) in the same class as this pass's own TR2-1/
+TR2-2; both verified and addressed before merge. CI green on the final head
+(17/17 checks). No merge conflict (base was current `main`). Rotation row
+17 -> done. Next: 18 training (extended).
+
+### 2026-08-29 — Feature 17 (Training core), pass 2 — 2 fixed (TR2-1, TR2-3), 2 flagged (TR2-2, TR2-4)
+
+Re-verified all three pass-1 fixes (TR-11/TR-12/TR-13) and the route-auth
+coverage / baseline-grant / KNOWN_LIMITATIONS claims still hold — the six
+scoped files were byte-for-byte unchanged since PR #1851's merge except one
+unrelated 7-line spillover fix from the feature-18 pass. Independently
+re-enumerated all 91 routes across the three endpoint files (AST walk): no
+route without an auth dependency.
+
+New this pass: **TR2-1** (LOW/MED, data exposure, fixed) — `GET
+/training/competency-matrix` and `GET /training/dashboard-summary` both
+return per-member names alongside compliance/competency status but were
+missing from the frontend's `UNCACHEABLE_PREFIXES` cache-exclusion list,
+unlike the identically-shaped `/training/compliance-matrix`. Fixed, with a
+guard test. **TR2-2** (LOW, abuse resistance, flagged) — `GET
+/training/records` has no `skip`/`limit`, unlike the rest of the codebase's
+per-record list endpoints; needs a paired frontend pagination UI, mirrored
+into `docs/KNOWN_LIMITATIONS.md`.
+
+Codex's review of the PR caught two more in the same vein, both verified and
+addressed: **TR2-3** (LOW/MED, data exposure, fixed) — the training-session
+approval roster (`GET /training/sessions/approve/{token}`, attendee names +
+emails) had the identical missing-cache-exclusion gap as TR2-1; added to
+`UNCACHEABLE_PREFIXES` with a guard test. **TR2-4** (LOW, abuse resistance,
+flagged) — `get_training_dashboard_summary` scans every active member's full
+training history with no date bound on every call; TR2-1's fix correctly
+removes that endpoint's cache (it carries per-member PII), which means the
+unbounded scan it was masking now runs on every dashboard mount. Needs a
+query-level bound tied to `training_compliance.py`'s per-requirement
+date-window logic — a service redesign, not a drive-by fix alongside a
+cache-exclusion security patch — mirrored into `docs/KNOWN_LIMITATIONS.md`.
+
+Completion gate (final): flake8/black/isort clean (no Python touched);
+`validate_migrations.py --strict` 389 revisions, single head; `pytest -k
+training` 821 passed; full suite 9200 passed, 22 skipped (pre-existing);
+`tsc --noEmit` 0 errors; `eslint .` 0 errors (10 pre-existing warnings, none
+in touched files); `vitest run apiCache.test.ts` 85 passed. Full write-up:
+`docs/security-review/TR-17-training-core.md` → **Pass 2**.
+
+---
+
 ### 2026-08-28 — Feature 16 (Events & requests), pass 2 ✅ merged — PR #1973
 
 Merged (`7e27b765`). Codex had hit its usage limit and could not review this
@@ -1811,7 +1860,7 @@ each row's prior PR is recorded in the Log, not repeated here.
 | 14  | Equipment check & shifts  | EC     | `equipment_check.py`, `shift_completion.py`                                                                                                     | ✅     |
 | 15  | Scheduling                | SCH    | `scheduling.py`, `scheduling_module_config.py`, `calcom_sync.py`                                                                                | ✅     |
 | 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                       | ✅     |
-| 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`                                                                                   | ⬜     |
+| 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`                                                                                   | ✅     |
 | 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ⬜     |
 | 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3723 L)                                                                                                          | ⬜     |
 | 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ⬜     |

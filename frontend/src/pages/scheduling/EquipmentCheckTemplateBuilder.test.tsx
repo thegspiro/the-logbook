@@ -1,5 +1,5 @@
 /* eslint-disable testing-library/no-node-access, @typescript-eslint/no-unsafe-return */
-import { render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -27,8 +27,10 @@ vi.mock('@/modules/scheduling', () => ({
 }));
 
 vi.mock('@/stores/authStore', () => ({
-  useAuthStore: (selector: (state: { checkPermission: () => boolean }) => unknown) =>
-    selector({ checkPermission: () => false }),
+  useAuthStore: (selector?: (state: { checkPermission: () => boolean }) => unknown) => {
+    const state = { checkPermission: () => false };
+    return selector ? selector(state) : state;
+  },
 }));
 
 const template = {
@@ -86,6 +88,18 @@ function renderBuilder() {
       <ConfirmProvider>
         <Routes>
           <Route path="/templates/:templateId" element={<EquipmentCheckTemplateBuilder />} />
+        </Routes>
+      </ConfirmProvider>
+    </MemoryRouter>
+  );
+}
+
+function renderNewBuilder() {
+  return render(
+    <MemoryRouter initialEntries={['/templates/new']}>
+      <ConfirmProvider>
+        <Routes>
+          <Route path="/templates/new" element={<EquipmentCheckTemplateBuilder />} />
         </Routes>
       </ConfirmProvider>
     </MemoryRouter>
@@ -203,4 +217,19 @@ describe('EquipmentCheckTemplateBuilder movement persistence', () => {
     expect(await screen.findByLabelText('Actions for Radio')).toBeInTheDocument();
     expect(await screen.findByLabelText('Actions for Oxygen mask')).toBeInTheDocument();
   });
+});
+
+describe('EquipmentCheckTemplateBuilder creation guidance', () => {
+  it('preserves preset test instructions and marks the review step ready', async () => {
+    renderNewBuilder();
+
+    fireEvent.change(screen.getByLabelText('Template Type'), { target: { value: 'vehicle' } });
+    fireEvent.click(screen.getByRole('button', { name: /use a vehicle layout/i }));
+    fireEvent.click(screen.getByRole('button', { name: /engine \/ pumper/i }));
+    fireEvent.click(screen.getByRole('button', { name: /preview/i }));
+
+    expect(screen.getAllByText('Switch it on and confirm it works.').length).toBeGreaterThan(0);
+    expect(screen.getByText('Review').closest('div')).toHaveTextContent(/items/);
+    expect(screen.getByText('Review').parentElement?.previousElementSibling).toHaveClass('bg-green-500');
+  }, 10_000);
 });

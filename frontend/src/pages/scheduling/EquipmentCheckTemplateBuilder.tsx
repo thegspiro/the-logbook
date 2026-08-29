@@ -1593,6 +1593,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       items: comp.items.map((item) => ({
         ...emptyItem(),
         name: item.name,
+        description: item.description ?? '',
         checkType: item.checkType,
       })),
     }));
@@ -3477,8 +3478,11 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
 
       {/* Template Type */}
       <div>
-        <label className={labelClass}>Template Type</label>
+        <label className={labelClass} htmlFor="equipment-check-template-type">
+          Template Type
+        </label>
         <select
+          id="equipment-check-template-type"
           className={selectClass}
           value={form.templateType}
           onChange={(e) => updateForm({ templateType: e.target.value as TemplateType })}
@@ -3719,7 +3723,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             number: 3,
             label: 'Review',
             detail: itemsReady ? `${stats.totalItems} items` : 'Preview checklist',
-            ready: false,
+            ready: itemsReady,
           },
         ].map((step, index) => (
           <div
