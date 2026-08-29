@@ -912,12 +912,22 @@ const ImportMembers: React.FC = () => {
     toast.success('Error report downloaded!');
   };
 
-  const downloadTemplate = () => {
-    const exampleRow = TEMPLATE_HEADERS.map((h) => TEMPLATE_EXAMPLE[h]);
+  const downloadTemplate = async () => {
+    try {
+      const roles = await roleService.getRoles();
+      const memberPositionName = roles.find((role) => role.slug === 'member')?.name;
+      if (!memberPositionName) {
+        toast.error('The regular-member system position is not configured, so a valid template cannot be created.');
+        return;
+      }
+      const example = { ...TEMPLATE_EXAMPLE, role: memberPositionName };
+      const exampleRow = TEMPLATE_HEADERS.map((h) => example[h]);
 
-    downloadCsv(buildCsv([TEMPLATE_HEADERS, exampleRow]), 'member-import-template.csv');
-
-    toast.success('Template downloaded!');
+      downloadCsv(buildCsv([TEMPLATE_HEADERS, exampleRow]), 'member-import-template.csv');
+      toast.success('Template downloaded!');
+    } catch (_error) {
+      toast.error('Could not load the regular-member role name, so the template was not created.');
+    }
   };
 
   const renderIssues = (issues: RowIssue[]) => (
@@ -983,7 +993,12 @@ const ImportMembers: React.FC = () => {
           </ol>
 
           <div className="border-theme-alert-info-border mt-4 border-t pt-4">
-            <button onClick={downloadTemplate} className="btn-info flex items-center space-x-2">
+            <button
+              onClick={() => {
+                void downloadTemplate();
+              }}
+              className="btn-info flex items-center space-x-2"
+            >
               <Download className="h-4 w-4" />
               <span>Download CSV Template</span>
             </button>

@@ -6,7 +6,7 @@ in the positions column. The transformation is irreversible but remains readable
 by older application versions.
 
 Revision ID: b8d5f0c24a69
-Revises: b7c3e91d84af
+Revises: e5f6a7b8c9d0
 Create Date: 2026-08-28 12:00:00
 """
 
@@ -17,7 +17,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision = "b8d5f0c24a69"
-down_revision = "b7c3e91d84af"
+down_revision = "e5f6a7b8c9d0"
 branch_labels = None
 depends_on = None
 

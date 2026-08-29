@@ -99,6 +99,7 @@ const mockMember = {
   full_name: 'John Doe',
   membership_number: 'FD-0042',
   rank: 'firefighter',
+  membership_type: 'active',
   station: 'Station 1',
   status: 'active',
   photo_url: null,
@@ -206,6 +207,23 @@ describe('MemberIdCardPage', () => {
         expect(screen.getByText('Rank')).toBeInTheDocument();
         expect(screen.getByText('Firefighter')).toBeInTheDocument();
       });
+    });
+
+    it('should display administrative member class instead of a rank', async () => {
+      const administrativeMember = {
+        ...mockMember,
+        rank: undefined,
+        membership_type: 'administrative',
+      };
+      vi.mocked(userService.getUserWithRoles).mockResolvedValue(administrativeMember as never);
+
+      renderWithRouter(<MemberIdCardPage />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Member Class')).toBeInTheDocument();
+        expect(screen.getByText('Administrative')).toBeInTheDocument();
+      });
+      expect(screen.queryByText('Rank')).not.toBeInTheDocument();
     });
 
     it('should display station', async () => {

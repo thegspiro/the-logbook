@@ -361,8 +361,26 @@ class SchedulingService:
                     qty = r.get("quantity", 1) if isinstance(r, dict) else 1
                     pos_list = r.get("positions", []) if isinstance(r, dict) else []
                     for _ in range(qty):
-                        for name in pos_list:
-                            result.append({"position": name, "required": True})
+                        for entry in pos_list:
+                            if isinstance(entry, dict):
+                                result.append(
+                                    {
+                                        "position": entry.get("position", ""),
+                                        "required": entry.get("required") is not False,
+                                        "allow_administrative_members": entry.get(
+                                            "allow_administrative_members"
+                                        )
+                                        is True,
+                                    }
+                                )
+                            else:
+                                result.append(
+                                    {
+                                        "position": entry,
+                                        "required": True,
+                                        "allow_administrative_members": False,
+                                    }
+                                )
                 return result
         return []
 
@@ -855,6 +873,38 @@ class SchedulingService:
         shifts = result.scalars().all()
 
         return shifts, total
+
+    async def get_member_visible_shifts(
+        self,
+        user: User,
+        organization_id: UUID,
+        start_date: Optional[date] = None,
+        end_date: Optional[date] = None,
+        skip: int = 0,
+        limit: int = 100,
+    ) -> Tuple[List[Shift], int]:
+        """Filter by signup eligibility before counting and paginating."""
+        query = select(Shift).where(Shift.organization_id == str(organization_id))
+        if start_date:
+            query = query.where(Shift.shift_date >= start_date)
+        if end_date:
+            query = query.where(Shift.shift_date <= end_date)
+        query = query.order_by(Shift.shift_date.asc(), Shift.start_time.asc())
+        candidates = list((await self.db.execute(query)).scalars().all())
+        if not candidates:
+            return [], 0
+
+        from app.services.shift_eligibility_service import ShiftEligibilityService
+
+        eligibility = await ShiftEligibilityService(
+            self.db
+        ).get_eligible_positions_bulk(
+            user,
+            str(organization_id),
+            [str(shift.id) for shift in candidates],
+        )
+        visible = [shift for shift in candidates if eligibility.get(str(shift.id), [])]
+        return visible[skip : skip + limit], len(visible)
 
     async def filter_shifts_with_open_positions(
         self,
