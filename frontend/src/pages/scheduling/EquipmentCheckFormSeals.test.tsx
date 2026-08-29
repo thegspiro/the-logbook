@@ -9,11 +9,13 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { IDBFactory } from 'fake-indexeddb';
 import { renderWithRouter } from '../../test/utils';
 
 const mockGetLastCheckResults = vi.fn();
 const mockGetLastCheckSeals = vi.fn();
 const mockSubmitCheck = vi.fn();
+const authenticatedUser = { id: 'user-1', organization_id: 'org-1' };
 
 vi.mock('../../modules/scheduling/services/api', () => ({
   schedulingService: {
@@ -34,6 +36,12 @@ vi.mock('../../services/inventoryService', () => ({
 
 vi.mock('../../hooks/useTimezone', () => ({ useTimezone: () => 'UTC' }));
 vi.mock('../../hooks/useOnlineStatus', () => ({ useOnlineStatus: () => true }));
+vi.mock('../../stores/authStore', () => ({
+  useAuthStore: () => ({
+    checkPermission: () => true,
+    user: authenticatedUser,
+  }),
+}));
 vi.mock('../../utils/offlineQueue', () => ({
   enqueueCheck: vi.fn().mockResolvedValue('queued'),
   listPendingChecks: vi.fn().mockResolvedValue([]),
@@ -48,6 +56,7 @@ vi.mock('react-hot-toast', () => ({
 }));
 
 import EquipmentCheckForm from './EquipmentCheckForm';
+import { loadEquipmentCheckDraft } from '../../utils/equipmentCheckDrafts';
 
 /**
  * A sealed drug bag carrying three of a required six — the case that matters.
@@ -98,6 +107,7 @@ const submittedItem = () => {
 
 describe('EquipmentCheckForm tamper seals', () => {
   beforeEach(() => {
+    globalThis.indexedDB = new IDBFactory();
     vi.clearAllMocks();
     localStorage.clear();
     // The draft writer refuses to persist without a live session, so that a
@@ -196,13 +206,17 @@ describe('EquipmentCheckForm tamper seals', () => {
 
     await user.click(await screen.findByRole('button', { name: /Seal intact — clear 1 check/ }));
 
-    await waitFor(() => {
-      const draft = localStorage.getItem('equipment-check-draft-shift-1-tmpl-1');
-      expect(draft).not.toBeNull();
-      const parsed = JSON.parse(draft as string) as {
+    await waitFor(async () => {
+      const draft = await loadEquipmentCheckDraft<{
         seals: Record<string, { sealNumber: string; cleared: boolean }>;
-      };
-      expect(parsed.seals['bag-1']).toMatchObject({ sealNumber: 'M2-40817', cleared: true });
+      }>({
+        organizationId: 'org-1',
+        userId: 'user-1',
+        shiftId: 'shift-1',
+        templateId: 'tmpl-1',
+        templateRevision: 'unversioned',
+      });
+      expect(draft?.contents.seals['bag-1']).toMatchObject({ sealNumber: 'M2-40817', cleared: true });
     });
   });
 

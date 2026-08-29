@@ -61,9 +61,8 @@ const CatalogQuickAdd: React.FC<CatalogQuickAddProps> = ({
   const [highlightedIndex, setHighlightedIndex] = useState(-1);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const requestRef = useRef(0);
-  const containerRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
   const submittingRef = useRef(false);
+  const containerRef = useRef<HTMLDivElement>(null);
   const listboxId = useId();
   const [anchor, setAnchor] = useState<{
     top: number;
@@ -149,7 +148,6 @@ const CatalogQuickAdd: React.FC<CatalogQuickAddProps> = ({
     if (!name || submittingRef.current) return;
     submittingRef.current = true;
     reset();
-    inputRef.current?.focus();
     await onAdd({ name });
   };
 
@@ -171,6 +169,9 @@ const CatalogQuickAdd: React.FC<CatalogQuickAddProps> = ({
   };
 
   const addLinked = async (result: CatalogResult) => {
+    if (submittingRef.current) return;
+    submittingRef.current = true;
+    reset();
     const hasExpiration = await hasDatedStock(result.id);
 
     await onAdd({
@@ -181,12 +182,13 @@ const CatalogQuickAdd: React.FC<CatalogQuickAddProps> = ({
       ...(result.trackingType === 'pool' ? { checkType: 'count' as const } : {}),
       ...(hasExpiration ? { hasExpiration: true } : {}),
     });
-    reset();
   };
 
   const createAndAdd = async () => {
     const name = value.trim();
-    if (!name) return;
+    if (!name || submittingRef.current) return;
+    submittingRef.current = true;
+    reset();
     setCreating(true);
     try {
       const created = await inventoryService.createItem({
@@ -198,8 +200,8 @@ const CatalogQuickAdd: React.FC<CatalogQuickAddProps> = ({
       });
       await onAdd({ name: created.name, inventoryItemId: created.id, checkType: 'count' });
       toast.success(`Added “${created.name}” to inventory`);
-      reset();
     } catch (err: unknown) {
+      submittingRef.current = false;
       toast.error(getErrorMessage(err, 'Failed to create the inventory item'));
     } finally {
       setCreating(false);
@@ -264,7 +266,6 @@ const CatalogQuickAdd: React.FC<CatalogQuickAddProps> = ({
         <div className="card focus-within:ring-theme-focus-ring flex min-w-0 flex-1 items-center gap-2 px-3 py-2 focus-within:ring-2">
           <Search className="text-theme-text-muted h-4 w-4 shrink-0" />
           <input
-            ref={inputRef}
             type="text"
             autoCapitalize="none"
             autoCorrect="off"

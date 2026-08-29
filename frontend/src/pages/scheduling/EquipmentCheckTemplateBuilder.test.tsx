@@ -1,5 +1,5 @@
 /* eslint-disable testing-library/no-node-access, @typescript-eslint/no-unsafe-return */
-import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -8,6 +8,16 @@ import EquipmentCheckTemplateBuilder from './EquipmentCheckTemplateBuilder';
 
 const getTemplate = vi.fn();
 const addCheckItemsBulk = vi.fn();
+const deleteCheckItemsBulk = vi.fn();
+const toastSuccess = vi.fn();
+const toastError = vi.fn();
+
+vi.mock('react-hot-toast', () => ({
+  default: {
+    success: (...args: unknown[]) => toastSuccess(...args),
+    error: (...args: unknown[]) => toastError(...args),
+  },
+}));
 
 vi.mock('@/modules/scheduling', () => ({
   schedulingService: {
@@ -15,41 +25,15 @@ vi.mock('@/modules/scheduling', () => ({
     getEquipmentCheckTemplate: (...args: unknown[]) => getTemplate(...args),
     addCheckItemsBulk: (...args: unknown[]) => addCheckItemsBulk(...args),
     getCsvSampleUrl: vi.fn().mockReturnValue('/sample.csv'),
+    deleteCheckItemsBulk: (...args: unknown[]) => deleteCheckItemsBulk(...args),
   },
 }));
 
 vi.mock('@/stores/authStore', () => ({
-  useAuthStore: (selector: (state: { checkPermission: () => boolean }) => unknown) =>
-    selector({ checkPermission: () => false }),
-}));
-
-// The catalog search owns a separate test suite. Keeping it out of this large
-// builder fixture avoids mounting its layout/search machinery once for every
-// compartment when these tests only exercise the builder's delivery queue.
-vi.mock('@/modules/scheduling/components/CatalogQuickAdd', () => ({
-  default: ({
-    value,
-    onChange,
-    onAdd,
-  }: {
-    value: string;
-    onChange: (value: string) => void;
-    onAdd: (payload: { name: string }) => void | Promise<void>;
-  }) => (
-    <input
-      placeholder="Search inventory or type a new item name…"
-      value={value}
-      onChange={(event) => onChange(event.target.value)}
-      onKeyDown={(event) => {
-        if (event.key !== 'Enter') return;
-        event.preventDefault();
-        const name = value.trim();
-        if (!name) return;
-        onChange('');
-        void onAdd({ name });
-      }}
-    />
-  ),
+  useAuthStore: (selector?: (state: { checkPermission: () => boolean }) => unknown) => {
+    const state = { checkPermission: () => false };
+    return selector ? selector(state) : state;
+  },
 }));
 
 const template = {
@@ -73,6 +57,16 @@ const template = {
           compartmentId: 'cab',
           name: 'Radio',
           sortOrder: 0,
+          checkType: 'function',
+          isRequired: true,
+          hasExpiration: false,
+          expirationWarningDays: 30,
+        },
+        {
+          id: 'flashlight',
+          compartmentId: 'cab',
+          name: 'Flashlight',
+          sortOrder: 1,
           checkType: 'function',
           isRequired: true,
           hasExpiration: false,
@@ -113,16 +107,22 @@ function renderBuilder() {
   );
 }
 
-function submitQuickAdd(input: HTMLInputElement, name: string) {
-  input.focus();
-  fireEvent.change(input, { target: { value: name } });
-  fireEvent.keyDown(input, { key: 'Enter' });
+function renderNewBuilder() {
+  return render(
+    <MemoryRouter initialEntries={['/templates/new']}>
+      <ConfirmProvider>
+        <Routes>
+          <Route path="/templates/new" element={<EquipmentCheckTemplateBuilder />} />
+        </Routes>
+      </ConfirmProvider>
+    </MemoryRouter>
+  );
 }
 
 describe('EquipmentCheckTemplateBuilder responsive actions', () => {
   beforeEach(() => {
-    getTemplate.mockResolvedValue(template);
-    addCheckItemsBulk.mockReset();
+    vi.clearAllMocks();
+    getTemplate.mockResolvedValue(structuredClone(template));
   });
 
   it('exposes every item action from the phone overflow without drag and drop', async () => {
@@ -157,71 +157,123 @@ describe('EquipmentCheckTemplateBuilder responsive actions', () => {
     expect(within(menu).getByRole('button', { name: 'Move down' })).toBeDisabled();
     expect(within(menu).getByRole('button', { name: 'Delete' })).toBeVisible();
   });
+});
 
-  it('shows rapid additions immediately, keeps focus, and serializes them per compartment', async () => {
-    let finishFirst: ((value: unknown) => void) | undefined;
-    addCheckItemsBulk
-      .mockImplementationOnce(
-        () =>
-          new Promise((resolve) => {
-            finishFirst = resolve;
-          })
-      )
-      .mockResolvedValueOnce({
-        items: [{ ...template.compartments[0]?.items[0], id: 'batteries', name: 'Spare batteries' }],
-      });
-    renderBuilder();
-    const input = (
-      await screen.findAllByPlaceholderText(/Search inventory or type a new item name/)
-    )[0] as HTMLInputElement;
-
-    submitQuickAdd(input, 'Flashlight');
-    submitQuickAdd(input, 'Spare batteries');
-
-    expect(screen.getByText('Flashlight')).toBeVisible();
-    expect(screen.getByText('Spare batteries')).toBeVisible();
-    expect(screen.getAllByText('Saving…')).toHaveLength(2);
-    expect(input).toHaveFocus();
-    expect(input).toHaveValue('');
-    await waitFor(() => expect(addCheckItemsBulk).toHaveBeenCalledTimes(1));
-
-    await act(async () => {
-      finishFirst?.({ items: [{ ...template.compartments[0]?.items[0], id: 'flashlight', name: 'Flashlight' }] });
-    });
-    expect(await screen.findByLabelText('Expand Flashlight')).toBeVisible();
-    await waitFor(() => expect(addCheckItemsBulk).toHaveBeenCalledTimes(2));
+describe('EquipmentCheckTemplateBuilder quick add queue', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    getTemplate.mockResolvedValue(structuredClone(template));
   });
 
-  it('retains a failed sibling and retries it with the same idempotency key', async () => {
+  const savedItem = (name: string, id: string) => ({
+    ...template.compartments[0]?.items[0],
+    id,
+    name,
+  });
+
+  it('shows several rapid additions immediately, keeps focus, and serializes a slow compartment', async () => {
+    const user = userEvent.setup();
+    let resolveFirst!: (value: unknown) => void;
+    addCheckItemsBulk
+      .mockImplementationOnce(() => new Promise((resolve) => (resolveFirst = resolve)))
+      .mockResolvedValueOnce({ items: [savedItem('Spare batteries', 'batteries')], createdCount: 1 });
+    renderBuilder();
+    const input = await screen.findAllByPlaceholderText(/search inventory/i).then((inputs) => inputs[0] as HTMLElement);
+
+    await user.type(input, 'Lantern{Enter}');
+    await user.type(input, 'Spare batteries{Enter}');
+
+    expect(screen.getByLabelText('Lantern Saving')).toBeVisible();
+    expect(screen.getByLabelText('Spare batteries Saving')).toBeVisible();
+    expect(input).toHaveFocus();
+    expect(addCheckItemsBulk).toHaveBeenCalledTimes(1);
+
+    resolveFirst({ items: [savedItem('Lantern', 'lantern')], createdCount: 1 });
+    await waitFor(() => expect(screen.queryByLabelText('Lantern Saving')).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByLabelText('Spare batteries Saving')).not.toBeInTheDocument());
+    expect(screen.getByText('Lantern')).toBeVisible();
+    expect(screen.getByText('Spare batteries')).toBeVisible();
+    expect(addCheckItemsBulk).toHaveBeenCalledTimes(2);
+  });
+
+  it('retains a failed row, retries with the same idempotency key, and keeps successful siblings', async () => {
     const user = userEvent.setup();
     addCheckItemsBulk
       .mockRejectedValueOnce(new Error('response lost'))
-      .mockResolvedValueOnce({ items: [{ ...template.compartments[0]?.items[0], id: 'vest', name: 'Safety vest' }] });
+      .mockResolvedValueOnce({ items: [savedItem('Gloves', 'gloves')], createdCount: 1 })
+      .mockResolvedValueOnce({ items: [savedItem('Safety vest', 'vest')], createdCount: 0, replayed: true });
     renderBuilder();
-    const input = (
-      await screen.findAllByPlaceholderText(/Search inventory or type a new item name/)
-    )[0] as HTMLInputElement;
-    submitQuickAdd(input, 'Safety vest');
+    const input = (await screen.findAllByPlaceholderText(/search inventory/i))[0] as HTMLElement;
+    await user.type(input, 'Safety vest{Enter}');
+    await user.type(input, 'Gloves{Enter}');
 
-    expect(await screen.findByText('Not saved')).toBeVisible();
-    const firstKey = addCheckItemsBulk.mock.calls[0]?.[2];
-    await user.click(screen.getByRole('button', { name: 'Retry' }));
-    expect(await screen.findByLabelText('Expand Safety vest')).toBeVisible();
-    expect(addCheckItemsBulk.mock.calls[1]?.[2]).toBe(firstKey);
-    expect(screen.getByText('Radio')).toBeVisible();
+    const failed = await screen.findByLabelText('Safety vest Not saved');
+    await waitFor(() => expect(screen.queryByLabelText('Gloves Saving')).not.toBeInTheDocument());
+    expect(screen.getByText('Gloves')).toBeVisible();
+    const firstKey = String(addCheckItemsBulk.mock.calls[0]?.[2]);
+    await user.click(within(failed).getByRole('button', { name: 'Retry' }));
+    await waitFor(() => expect(screen.queryByLabelText('Safety vest Saving')).not.toBeInTheDocument());
+    expect(screen.getByText('Safety vest')).toBeVisible();
+    expect(addCheckItemsBulk.mock.calls[2]?.[2]).toBe(firstKey);
   });
 
-  it('ignores repeated Enter events after clearing the submitted value', async () => {
-    addCheckItemsBulk.mockResolvedValue({
-      items: [{ ...template.compartments[0]?.items[0], id: 'light', name: 'Light' }],
-    });
+  it('does not submit the same value again when Enter repeats', async () => {
+    const user = userEvent.setup();
+    addCheckItemsBulk.mockResolvedValue({ items: [savedItem('Lantern', 'lantern')], createdCount: 1 });
     renderBuilder();
-    const input = (
-      await screen.findAllByPlaceholderText(/Search inventory or type a new item name/)
-    )[0] as HTMLInputElement;
-    submitQuickAdd(input, 'Light');
-    fireEvent.keyDown(input, { key: 'Enter' });
-    expect(await screen.findByLabelText('Expand Light')).toBeVisible();
+    const input = (await screen.findAllByPlaceholderText(/search inventory/i))[0] as HTMLElement;
+    await user.type(input, 'Lantern{Enter}{Enter}');
     expect(addCheckItemsBulk).toHaveBeenCalledTimes(1);
   });
+});
+
+describe('EquipmentCheckTemplateBuilder bulk deletion', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    getTemplate.mockResolvedValue(structuredClone(template));
+  });
+
+  async function selectAndDelete() {
+    const user = userEvent.setup();
+    renderBuilder();
+    await screen.findByText('Radio');
+    await user.click(screen.getByTitle('Select all items'));
+    await user.click(screen.getByRole('button', { name: 'Delete selected items' }));
+    await user.click(screen.getByRole('button', { name: 'Delete 2' }));
+  }
+
+  it('removes only IDs confirmed by a completely successful response', async () => {
+    deleteCheckItemsBulk.mockResolvedValue({ deletedItemIds: ['radio', 'flashlight'], replayed: false });
+    await selectAndDelete();
+    await waitFor(() => expect(screen.queryByText('Radio')).not.toBeInTheDocument());
+    expect(screen.getAllByText(/No items yet/).length).toBeGreaterThan(0);
+    expect(deleteCheckItemsBulk).toHaveBeenCalledWith('cab', ['radio', 'flashlight'], expect.any(String));
+    expect(toastSuccess).toHaveBeenCalledWith('Deleted 2 items');
+    expect(toastError).not.toHaveBeenCalled();
+  });
+
+  it('retains visible selected rows and never shows success after failure', async () => {
+    deleteCheckItemsBulk.mockRejectedValue(new Error('Database unavailable'));
+    await selectAndDelete();
+    expect(await screen.findByText('Radio')).toBeVisible();
+    expect(screen.getByText('Flashlight')).toBeVisible();
+    expect(screen.getByText('2 selected')).toBeVisible();
+    expect(toastError).toHaveBeenCalled();
+    expect(toastSuccess).not.toHaveBeenCalled();
+  });
+});
+
+describe('EquipmentCheckTemplateBuilder creation guidance', () => {
+  it('preserves preset test instructions and marks the review step ready', async () => {
+    renderNewBuilder();
+
+    fireEvent.change(screen.getByLabelText('Template Type'), { target: { value: 'vehicle' } });
+    fireEvent.click(screen.getByRole('button', { name: /use a vehicle layout/i }));
+    fireEvent.click(screen.getByRole('button', { name: /engine \/ pumper/i }));
+    fireEvent.click(screen.getByRole('button', { name: /preview/i }));
+
+    expect(screen.getAllByText('Switch it on and confirm it works.').length).toBeGreaterThan(0);
+    expect(screen.getByText('Review').closest('div')).toHaveTextContent(/items/);
+    expect(screen.getByText('Review').parentElement?.previousElementSibling).toHaveClass('bg-green-500');
+  }, 10_000);
 });
