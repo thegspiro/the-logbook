@@ -142,6 +142,58 @@ describe('EquipmentCheckForm quantity seeding', () => {
     });
   });
 
+  describe('sticky checklist identification', () => {
+    it('keeps fixed safety metadata beside a truncated apparatus name at phone width', () => {
+      Object.defineProperty(window, 'innerWidth', { configurable: true, value: 320 });
+      const apparatusName = 'Engine 4 With An Exceptionally Long Reserve Apparatus Name';
+
+      renderWithRouter(
+        <EquipmentCheckForm
+          shiftId="shift-1"
+          template={{ ...template(), name: 'Daily Apparatus Check With A Very Long Template Name' } as never}
+          shiftContext={{ apparatusName, shiftDate: '2026-08-28', checkTiming: 'start_of_shift' }}
+        />
+      );
+
+      const context = screen.getByRole('group', { name: 'Checklist context' });
+      expect(within(context).getByTitle(apparatusName)).toHaveClass('min-w-0', 'truncate');
+      expect(within(context).getByText('Fri, Aug 28, 2026')).toHaveClass('shrink-0');
+      expect(within(context).getByText('Start of shift')).toHaveClass('shrink-0');
+      expect(screen.getByText('0/1')).toHaveClass('shrink-0');
+      expect(screen.getByRole('heading')).toHaveClass('min-w-0', 'truncate');
+    });
+
+    it('omits unavailable optional context without placeholder text or separators', () => {
+      renderWithRouter(
+        <EquipmentCheckForm shiftId="shift-1" template={template() as never} shiftContext={{ apparatusName: 'Engine 4' }} />
+      );
+
+      const context = screen.getByRole('group', { name: 'Checklist context' });
+      expect(context).toHaveTextContent('Engine 4');
+      expect(context).not.toHaveTextContent('·');
+      expect(context).not.toHaveTextContent(/undefined|invalid|N\/A/i);
+      expect(screen.queryByText(/Start of shift|End of shift/)).not.toBeInTheDocument();
+    });
+
+    it.each([
+      ['start_of_shift', 'Start of shift'],
+      ['end_of_shift', 'End of shift'],
+    ])('renders the %s timing in the single metadata row', (checkTiming, label) => {
+      renderWithRouter(
+        <EquipmentCheckForm
+          shiftId="shift-1"
+          template={template() as never}
+          shiftContext={{ apparatusName: 'Engine 4', shiftDate: '2026-08-28', checkTiming }}
+        />
+      );
+
+      const context = screen.getByRole('group', { name: 'Checklist context' });
+      expect(within(context).getByText(label)).toBeInTheDocument();
+      expect(screen.getAllByText(label)).toHaveLength(1);
+      expect(within(context).getByText('Fri, Aug 28, 2026')).toBeInTheDocument();
+    });
+  });
+
   const render = (itemOverrides = {}) =>
     renderWithRouter(<EquipmentCheckForm shiftId="shift-1" template={template(itemOverrides) as never} />);
 

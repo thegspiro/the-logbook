@@ -477,21 +477,14 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
 
   const totalItems = checkableItems.length;
 
-  /**
-   * "Brush 5 · Sat, Aug 16" beside a timing badge — whichever of the three we
-   * know. The timing is a badge rather than more grey text because the
-   * end-of-shift checklist was otherwise indistinguishable from the
-   * start-of-shift one: same layout, same buttons, same Submit, only the
-   * template name differing. The colours match the cards these are opened from.
-   */
-  const shiftContextLine = [
-    shiftContext?.apparatusName,
-    shiftContext?.shiftDate
-      ? formatCalendarDate(shiftContext.shiftDate, { weekday: 'short', month: 'short', day: 'numeric' })
-      : undefined,
-  ]
-    .filter(Boolean)
-    .join(' · ');
+  const shiftDateLabel = shiftContext?.shiftDate
+    ? formatCalendarDate(shiftContext.shiftDate, {
+        weekday: 'short',
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+      })
+    : null;
   const timingLabel =
     shiftContext?.checkTiming === 'start_of_shift'
       ? 'Start of shift'
@@ -2266,40 +2259,40 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
                 <ArrowLeft className="h-5 w-5" aria-hidden="true" />
               </button>
             )}
-            <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-2">
-                <h1 className="text-theme-text-primary truncate text-lg font-bold">{template.name}</h1>
-                {timingLabel && (
-                  <span
-                    className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold ${
-                      shiftContext?.checkTiming === 'start_of_shift'
-                        ? 'border-blue-500/20 bg-blue-500/10 text-blue-700 dark:text-blue-400'
-                        : 'border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-400'
-                    }`}
-                  >
-                    {timingLabel}
-                  </span>
-                )}
-              </div>
-              {shiftContextLine && <p className="text-theme-text-muted truncate text-xs">{shiftContextLine}</p>}
-            </div>
+            <h1 className="text-theme-text-primary min-w-0 truncate text-lg font-bold" title={template.name}>
+              {template.name}
+            </h1>
           </div>
           <span className="text-theme-text-secondary shrink-0 text-sm font-medium">
             {checkedItems}/{totalItems}
           </span>
         </div>
 
-        {shiftContext && (
-          <p className="text-theme-text-muted pl-11 text-xs">
-            {shiftContext.apparatusName} ·{' '}
-            {formatCalendarDate(shiftContext.shiftDate, {
-              weekday: 'short',
-              month: 'short',
-              day: 'numeric',
-              year: 'numeric',
-            })}{' '}
-            · {shiftContext.checkTiming === 'start_of_shift' ? 'Start of shift' : 'End of shift'}
-          </p>
+        {(shiftContext?.apparatusName || shiftDateLabel || timingLabel) && (
+          <div
+            className={`text-theme-text-muted flex min-w-0 items-center gap-1.5 text-xs ${onBack ? 'pl-11' : ''}`}
+            role="group"
+            aria-label="Checklist context"
+          >
+            {shiftContext?.apparatusName && (
+              <span className="min-w-0 truncate" title={shiftContext.apparatusName}>
+                {shiftContext.apparatusName}
+              </span>
+            )}
+            {shiftContext?.apparatusName && shiftDateLabel && <span aria-hidden="true">·</span>}
+            {shiftDateLabel && <span className="shrink-0">{shiftDateLabel}</span>}
+            {timingLabel && (
+              <span
+                className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold ${
+                  shiftContext?.checkTiming === 'start_of_shift'
+                    ? 'border-blue-500/20 bg-blue-500/10 text-blue-700 dark:text-blue-400'
+                    : 'border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-400'
+                }`}
+              >
+                {timingLabel}
+              </span>
+            )}
+          </div>
         )}
 
         {/* Progress bar */}
