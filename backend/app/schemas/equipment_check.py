@@ -218,6 +218,12 @@ class CheckTemplateCompartmentUpdate(BaseModel):
     parent_compartment_id: Optional[str] = None
 
 
+class CheckTemplateCompartmentClone(BaseModel):
+    """Position at which to insert a cloned saved compartment."""
+
+    sort_order: int = Field(..., ge=0)
+
+
 class CheckTemplateCompartmentResponse(UTCResponseBase):
     """Response schema for a compartment with nested items."""
 

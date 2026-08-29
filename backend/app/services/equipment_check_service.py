@@ -477,6 +477,66 @@ class EquipmentCheckService:
         await self.db.commit()
         return True
 
+    async def clone_compartment(
+        self, compartment_id: str, organization_id: str, sort_order: int
+    ) -> Optional[CheckTemplateCompartment]:
+        """Clone a saved compartment and all of its items in one transaction."""
+        source = await self._get_compartment(compartment_id, organization_id)
+        if not source:
+            return None
+
+        clone = CheckTemplateCompartment(
+            id=generate_uuid(),
+            template_id=source.template_id,
+            name=f"{source.name} (copy)",
+            description=source.description,
+            sort_order=sort_order,
+            image_url=source.image_url,
+            is_header=source.is_header,
+            container_type=source.container_type,
+            is_sealed=source.is_sealed,
+            parent_compartment_id=source.parent_compartment_id,
+        )
+        self.db.add(clone)
+        await self.db.flush()
+        for item in source.items:
+            self.db.add(
+                CheckTemplateItem(
+                    id=generate_uuid(),
+                    compartment_id=clone.id,
+                    equipment_id=item.equipment_id,
+                    inventory_item_id=item.inventory_item_id,
+                    name=item.name,
+                    description=item.description,
+                    sort_order=item.sort_order,
+                    check_type=item.check_type,
+                    is_required=item.is_required,
+                    required_quantity=item.required_quantity,
+                    expected_quantity=item.expected_quantity,
+                    critical_minimum_quantity=item.critical_minimum_quantity,
+                    min_level=item.min_level,
+                    level_unit=item.level_unit,
+                    serial_number=item.serial_number,
+                    lot_number=item.lot_number,
+                    image_url=item.image_url,
+                    has_expiration=item.has_expiration,
+                    expiration_date=item.expiration_date,
+                    expiration_warning_days=item.expiration_warning_days,
+                )
+            )
+        try:
+            await self.db.commit()
+        except Exception:
+            await self.db.rollback()
+            raise
+
+        result = await self.db.execute(
+            select(CheckTemplateCompartment)
+            .options(selectinload(CheckTemplateCompartment.items))
+            .where(CheckTemplateCompartment.id == clone.id)
+        )
+        return result.scalars().first()
+
     async def reorder_compartments(
         self,
         template_id: str,
