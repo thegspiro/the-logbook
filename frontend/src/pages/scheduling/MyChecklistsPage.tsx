@@ -27,6 +27,7 @@ import { useTimezone } from '../../hooks/useTimezone';
 import { getErrorMessage } from '../../utils/errorHandling';
 import { useAuthStore } from '../../stores/authStore';
 import { lazyWithRetry } from '../../utils/lazyWithRetry';
+import { crewVisibleTemplates } from './equipmentCheckTemplates';
 
 import { useConfirm } from '../../contexts/ConfirmContext';
 import { useOverlaySurface } from '../../hooks/useOverlaySurface';
@@ -37,10 +38,6 @@ const EquipmentCheckForm = lazyWithRetry(() => import('./EquipmentCheckForm'));
 // ---------------------------------------------------------------------------
 
 type ActiveChecklist = ActiveChecklistRecord;
-
-export function crewVisibleTemplates(templates: EquipmentCheckTemplate[]): EquipmentCheckTemplate[] {
-  return templates.filter((template) => template.isActive);
-}
 
 // ---------------------------------------------------------------------------
 // Helpers

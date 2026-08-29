@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { EquipmentCheckTemplate } from '../../modules/scheduling/types/equipmentCheck';
-import { crewVisibleTemplates } from './MyChecklistsPage';
+import { crewVisibleTemplates } from './equipmentCheckTemplates';
 
 describe('crewVisibleTemplates', () => {
   it('never offers drafts as crew shift checks', () => {
