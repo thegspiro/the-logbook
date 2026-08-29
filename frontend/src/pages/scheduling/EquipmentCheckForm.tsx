@@ -1644,51 +1644,56 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
     const effectiveStatus = getEffectiveStatus(item, result, today);
 
     /**
-     * Pass or Fail with nothing between forced a crew to file a legitimately
-     * absent tool as a fault — and the compliance report then counted it as
-     * one. "Not on truck" is the third honest answer: it counts as answered,
-     * never as failed, and reads as itself on the report.
+     * A normal check starts with the quick Pass/Fail decision. Once the crew
+     * finds a problem, these choices let them classify that finding accurately
+     * without crowding every passing item with exceptional actions. "Not on
+     * truck" counts as answered but not failed; "Out of service" is a failure.
      *
      * It is not offered for an expired item: the department's own record says
      * the unit aboard is out of date, and that verdict is the server's to make
      * (see `_compute_check_status`), not something an answer here can retire.
      */
-    const notApplicableButton = isExpired ? null : (
-      <button
-        type="button"
-        data-action="not_applicable"
-        onClick={() => updateResultAndAdvance(item.id, { status: 'not_applicable' })}
-        className={`flex min-h-[48px] shrink-0 items-center justify-center gap-1.5 rounded-lg px-3 py-3 text-sm font-medium transition-colors ${
-          effectiveStatus === 'not_applicable'
-            ? 'bg-theme-text-muted text-white'
-            : 'border-theme-surface-border text-theme-text-muted hover:border-theme-text-muted hover:text-theme-text-secondary border'
-        }`}
-        title="Not on the truck, or does not apply to this apparatus"
-      >
-        <MinusCircle className="h-4 w-4" aria-hidden="true" />
-        Not on truck
-      </button>
-    );
+    const showFailureOptions =
+      effectiveStatus === 'fail' || effectiveStatus === 'not_applicable' || effectiveStatus === 'out_of_service';
+
+    const notApplicableButton =
+      isExpired || !showFailureOptions ? null : (
+        <button
+          type="button"
+          data-action="not_applicable"
+          onClick={() => updateResultAndAdvance(item.id, { status: 'not_applicable' })}
+          className={`flex min-h-[48px] shrink-0 items-center justify-center gap-1.5 rounded-lg px-3 py-3 text-sm font-medium transition-colors ${
+            effectiveStatus === 'not_applicable'
+              ? 'bg-theme-text-muted text-white'
+              : 'border-theme-surface-border text-theme-text-muted hover:border-theme-text-muted hover:text-theme-text-secondary border'
+          }`}
+          title="Not on the truck, or does not apply to this apparatus"
+        >
+          <MinusCircle className="h-4 w-4" aria-hidden="true" />
+          Not on truck
+        </button>
+      );
 
     // Counts as answered but also as a failure: the item was looked at and
     // found unusable. Withheld for an expired item for the same reason as
     // "Not on truck" — the server force-fails those on its own record.
-    const outOfServiceButton = isExpired ? null : (
-      <button
-        type="button"
-        data-action="out_of_service"
-        onClick={() => updateResultAndAdvance(item.id, { status: 'out_of_service' })}
-        className={`flex min-h-[48px] shrink-0 items-center justify-center gap-1.5 rounded-lg px-3 py-3 text-sm font-medium transition-colors ${
-          effectiveStatus === 'out_of_service'
-            ? 'bg-amber-600 text-white'
-            : 'border-theme-surface-border text-theme-text-muted border hover:border-amber-600 hover:text-amber-700'
-        }`}
-        title="On the truck but unusable — counts as a failed item"
-      >
-        <AlertTriangle className="h-4 w-4" aria-hidden="true" />
-        Out of service
-      </button>
-    );
+    const outOfServiceButton =
+      isExpired || !showFailureOptions ? null : (
+        <button
+          type="button"
+          data-action="out_of_service"
+          onClick={() => updateResultAndAdvance(item.id, { status: 'out_of_service' })}
+          className={`flex min-h-[48px] shrink-0 items-center justify-center gap-1.5 rounded-lg px-3 py-3 text-sm font-medium transition-colors ${
+            effectiveStatus === 'out_of_service'
+              ? 'bg-amber-600 text-white'
+              : 'border-theme-surface-border text-theme-text-muted border hover:border-amber-600 hover:text-amber-700'
+          }`}
+          title="On the truck but unusable — counts as a failed item"
+        >
+          <AlertTriangle className="h-4 w-4" aria-hidden="true" />
+          Out of service
+        </button>
+      );
 
     const passFailButtons = (
       <div className="grid grid-cols-2 gap-2">

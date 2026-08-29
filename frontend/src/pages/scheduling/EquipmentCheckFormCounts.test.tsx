@@ -210,6 +210,24 @@ describe('EquipmentCheckForm quantity seeding', () => {
     await user.click(screen.getByRole('button', { name: 'Submit Report' }));
   };
 
+  it('reveals exceptional Pass/Fail outcomes only after a failure is selected', async () => {
+    const user = userEvent.setup();
+    render({ name: 'Portable light', checkType: 'function' });
+
+    expect(await screen.findByRole('button', { name: 'Pass' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Fail' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Not on truck' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Out of service' })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Fail' }));
+
+    expect(screen.getByRole('button', { name: 'Not on truck' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Out of service' })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Out of service' }));
+    expect(screen.getByRole('button', { name: 'Out of service' })).toHaveClass('bg-amber-600');
+  });
+
   it('retains a failed online photo upload without claiming unconditional success', async () => {
     mockSubmitCheck.mockResolvedValue({
       id: 'check-1',
