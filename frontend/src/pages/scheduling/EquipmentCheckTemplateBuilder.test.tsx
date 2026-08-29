@@ -652,4 +652,15 @@ describe('EquipmentCheckTemplateBuilder creation guidance', () => {
     expect(screen.getByText('Review').closest('div')).toHaveTextContent(/items/);
     expect(screen.getByText('Review').parentElement?.previousElementSibling).toHaveClass('bg-green-500');
   }, 10_000);
+
+  it('uses the opaque themed page canvas for the checklist preview', async () => {
+    renderBuilder();
+
+    fireEvent.click(await screen.findByRole('button', { name: /preview/i }));
+
+    const preview = screen.getByLabelText('Mobile checklist preview');
+    expect(preview).toHaveClass('bg-theme-bg', 'text-theme-text-primary');
+    expect(within(preview).getAllByText('Engine check').length).toBeGreaterThan(0);
+    expect(preview.querySelectorAll('.bg-theme-bg').length).toBeGreaterThanOrEqual(3);
+  });
 });

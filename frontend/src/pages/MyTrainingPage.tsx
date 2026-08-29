@@ -6,7 +6,7 @@
  * Officers/admins always see everything.
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import {
   GraduationCap,
@@ -548,11 +548,7 @@ const MyTrainingPage: React.FC = () => {
   });
   const [rangeEnd, setRangeEnd] = useState(() => getTodayLocalDate(tz));
 
-  useEffect(() => {
-    void loadData();
-  }, [canConfigure]);
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
@@ -578,7 +574,11 @@ const MyTrainingPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [canConfigure]);
+
+  useEffect(() => {
+    void loadData();
+  }, [loadData]);
 
   const handleConfigSave = async (updates: Partial<TMConfig>) => {
     const updated = await trainingModuleConfigService.updateConfig(updates);

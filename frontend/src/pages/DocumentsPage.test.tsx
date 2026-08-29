@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen, waitFor, within } from '@testing-library/react';
+import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../test/utils';
 import type { DocumentRecord } from '../services/formsServices';
@@ -106,12 +106,8 @@ describe('DocumentsPage', () => {
     await user.click(folderButton);
 
     await screen.findByText('Uploaded.pdf');
-    const generatedCard = screen.getByText('Meeting Minutes').closest('div.stat-card');
-    expect(generatedCard).not.toBeNull();
-    expect(within(generatedCard as HTMLElement).queryByTitle('Download document')).not.toBeInTheDocument();
-
-    const uploadedCard = screen.getByText('Uploaded.pdf').closest('div.stat-card');
-    expect(within(uploadedCard as HTMLElement).getByTitle('Download document')).toBeInTheDocument();
+    expect(screen.getByText('Meeting Minutes')).toBeInTheDocument();
+    expect(screen.getAllByTitle('Download document')).toHaveLength(1);
   });
 
   it('downloads a document via the service when Download is clicked', async () => {

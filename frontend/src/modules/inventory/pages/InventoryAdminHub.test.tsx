@@ -343,9 +343,7 @@ describe('InventoryAdminHub', () => {
       total: 1,
     });
     renderWithRouter(<InventoryAdminHub />);
-    const queue = (await screen.findByText('Needs attention', { selector: '#inventory-needs-attention' })).closest(
-      'section'
-    )!;
+    const queue = await screen.findByRole('region', { name: 'Needs attention' });
     const rows = within(queue).getAllByRole('listitem');
     expect(rows[0]).toHaveTextContent('Maintenance due or overdue');
     expect(rows[1]).toHaveTextContent('Overdue temporary loan');

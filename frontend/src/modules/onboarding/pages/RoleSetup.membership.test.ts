@@ -68,7 +68,7 @@ describe('a session started before the change does not re-create them', () => {
   it.each(STANDING_SLUGS)('lists %s as retired', (slug) => {
     const set = SOURCE.slice(
       SOURCE.indexOf('const RETIRED_STANDING_SLUGS'),
-      SOURCE.indexOf('const buildPositionTemplates')
+      SOURCE.indexOf('const BuildPositionTemplates')
     );
     expect(set).toContain(`'${slug}'`);
   });

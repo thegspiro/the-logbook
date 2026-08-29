@@ -4507,14 +4507,17 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             </button>
 
             {/* Phone frame */}
-            <div className="bg-theme-surface relative w-[375px] max-w-[90vw] overflow-hidden rounded-[2.5rem] border-[6px] border-gray-800 shadow-2xl dark:border-gray-600">
+            <div
+              className="bg-theme-bg text-theme-text-primary relative w-[375px] max-w-[90vw] overflow-hidden rounded-[2.5rem] border-[6px] border-gray-800 shadow-2xl dark:border-gray-600"
+              aria-label="Mobile checklist preview"
+            >
               {/* Phone notch */}
               <div className="relative flex h-7 items-end justify-center bg-gray-800 dark:bg-gray-600">
                 <div className="h-5 w-28 rounded-b-2xl bg-gray-800 dark:bg-gray-600" />
               </div>
 
               {/* Phone status bar */}
-              <div className="bg-theme-surface text-theme-text-muted flex items-center justify-between px-6 py-1 text-[10px]">
+              <div className="bg-theme-bg text-theme-text-muted flex items-center justify-between px-6 py-1 text-[10px]">
                 <span>9:41</span>
                 <div className="flex items-center gap-1">
                   <span>5G</span>
@@ -4525,7 +4528,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
               </div>
 
               {/* Scrollable content area */}
-              <div className="bg-theme-surface overflow-y-auto" style={{ height: 'min(70vh, 640px)' }}>
+              <div className="bg-theme-bg overflow-y-auto" style={{ height: 'min(70vh, 640px)' }}>
                 <div className="px-1 pb-4">
                   <div className="mx-3 mt-2 mb-3 rounded-lg border border-blue-500/20 bg-blue-500/5 px-3 py-2">
                     <p className="text-[10px] text-blue-700 dark:text-blue-400">
@@ -4537,7 +4540,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
               </div>
 
               {/* Phone home indicator bar */}
-              <div className="bg-theme-surface flex justify-center py-2">
+              <div className="bg-theme-bg flex justify-center py-2">
                 <div className="h-1 w-32 rounded-full bg-gray-800/30 dark:bg-gray-400/30" />
               </div>
             </div>
