@@ -16,10 +16,19 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-[#2017](https://github.com/thegspiro/the-logbook/pull/2017) — Feature 19
-(Skills testing), pass 2. Branch `claude/security-review-skills-testing`.
+None.
 
 ---
+
+### 2026-08-29 — Feature 19 (Skills testing), pass 2 ✅ merged — PR #2017
+
+Merged (`793bbebb`). Codex's review completed with no findings (no review
+threads opened) — the earlier usage-limit comment on the first run was
+superseded by a second, completed run triggered by the follow-up commit. CI
+green on the final head; no merge conflict (base was current `main`).
+Confirmed on `origin/main` by ancestry check (`git log origin/main --oneline`
+shows the merge commit at HEAD, directly above `30ae2c97`). Rotation row 19
+-> done. Next: 20 compliance.
 
 ### 2026-08-29 — Feature 19 (Skills testing), pass 2 — 1 fixed (NIT), 0 flagged
 
@@ -2240,7 +2249,7 @@ each row's prior PR is recorded in the Log, not repeated here.
 | 16  | Events & requests         | EV     | `events.py`, `event_requests.py` (public submission path)                                                                                       | ✅     |
 | 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`                                                                                   | ✅     |
 | 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ✅     |
-| 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3723 L)                                                                                                          | ⏳     |
+| 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3723 L)                                                                                                          | ✅     |
 | 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ⬜     |
 | 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ⬜     |
 | 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ⬜     |
