@@ -16,7 +16,8 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-None.
+[#2065](https://github.com/thegspiro/the-logbook/pull/2065) —
+`claude/security-review-admin-hours-pass2` — Feature 21 (Admin hours), pass 2.
 
 ---
 
