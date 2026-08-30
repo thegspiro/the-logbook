@@ -1,6 +1,8 @@
 # Security Review — Admin Hours
 
-**Prefix:** `AH` · **Iteration:** 21 · **Reviewed:** 2026-08-26/27 · **PR:** TBD
+**Prefix:** `AH` · **Iteration:** 21 · **Reviewed:** 2026-08-26/27 (pass 1), 2026-08-30 (pass 2) · **PR:** [#1903](https://github.com/thegspiro/the-logbook/pull/1903) (pass 1)
+
+## Pass 1 (2026-08-26/27)
 
 **Backend:** `app/api/v1/endpoints/admin_hours.py` (1,052 L, 27 endpoints),
 `app/services/admin_hours_service.py` (1,780 L), model `app/models/admin_hours.py`,
@@ -285,3 +287,213 @@ All in `tests/test_admin_hours_service.py` unless noted:
 | `python3 scripts/validate_migrations.py --strict`  | PASSED (no migrations)  |
 | backend tests, scope (`-k "admin_hours or event"`) | 604 passed, 1 skipped   |
 | backend tests, full suite                          | 8846 passed, 22 skipped |
+
+---
+
+## Pass 2 (2026-08-30)
+
+**Backend:** `app/api/v1/endpoints/admin_hours.py`, `app/services/admin_hours_service.py`,
+`app/models/admin_hours.py`, `app/schemas/admin_hours.py`.
+**Frontend:** established for the first time this pass — `modules/admin-hours/`
+(services, store, pages, components, types), plus every outside consumer:
+`components/member-profile/AdminHoursSection.tsx`,
+`modules/reports/components/renderers/AdminHoursRenderer.tsx`,
+`pages/events-settings/HourTrackingSection.tsx` (event-hour-mapping config,
+reachable only through `eventHourMappingService`, not the module's own pages).
+**Migrations:** none since pass 1.
+
+### Scope since pass 1's merge (`598a8063`, PR #1903)
+
+`git diff --stat 598a8063..HEAD` against the four backend files: only
+`admin_hours_service.py` changed (+24/-7), and the diff is a pre-existing-bug
+fix unrelated to this rotation — `get_user_hours_compliance`'s `User` fetch
+gained `.options(selectinload(UserModel.positions))`, because a lazy load of
+`positions` inside an async session raises `MissingGreenlet` rather than
+running the query. It only ever surfaced when an officer looked up _someone
+else's_ compliance (checking your own returns the already-loaded
+`current_user` object, whose `positions` the auth dependency had already
+populated) — not a security regression, and the AH-7 org-scoping fix it sits
+inside is unchanged (still filters `UserModel.organization_id ==
+organization_id`, confirmed by reading the current diff, not assumed from the
+commit message).
+
+`event_service.py` also changed (+28/-0) but is EV-17's fix (feature 16, PR
+#1973) threading an org-scoped attachment-path validator through the same
+call sites this module's own AH-14 fix touched last pass — read directly and
+confirmed unrelated to admin hours' own invariants.
+
+No migration touches an admin-hours table since pass 1 (`git log --oneline
+598a8063..HEAD -- backend/alembic/versions` has no admin_hours-referencing
+file; confirmed by grepping the changed migration files' content directly,
+not by filename).
+
+### Re-verification of pass-1 fixes (AH-7 through AH-14)
+
+Read the current `admin_hours_service.py` and `admin_hours.py` directly
+(not re-cited from the pass-1 doc) and confirmed every fix is intact at its
+current line:
+
+- **AH-7** (`get_user_hours_compliance`) — `UserModel.organization_id ==
+organization_id` still present on the target-user fetch (now alongside the
+  unrelated eager-load addition above).
+- **AH-8** (`clock_out`) — still filters
+  `AdminHoursEntry.organization_id == str(organization_id)`.
+- **AH-9** (`update_category`) — still routes through
+  `apply_updates(category, kwargs, skip={"organization_id", "id"})`.
+- **AH-10** (`clock_in`) — the `User`-row lock (`select(User.id).where(User.id
+== user_id).with_for_update()`) followed by the locking active-session read
+  (`_get_active_session(..., for_update=True)`) are both still present, in
+  order.
+- **AH-11** (event-hour-mapping percentage locking) — `create_event_hour_mapping`
+  still locks the sum query with `.with_for_update(of=EventHourMapping)`;
+  `update_event_hour_mapping` still locks the **complete** source set
+  (target row included, ordered by `id`) per the Codex-caught deadlock fix,
+  not the narrower excluding-the-target version.
+- **AH-12** (`edit_pending_entry`) — future-time rejection, the 24h cap, and
+  the overlap check (`exclude_entry_id=entry_id`) are all still present.
+- **AH-13** (`_parse_optional_date`) — all four endpoints
+  (`list_my_entries`, `list_all_entries`, `export_entries`, `get_summary`)
+  still route through it.
+- **AH-14** (`source_rsvp_id`-keyed queries) — `credit_event_attendance`'s
+  stale-cleanup and idempotency-check queries, and
+  `delete_event_attendance_entries`, all still filter `organization_id`.
+
+Re-ran an AST route enumeration from scratch (not a diff against pass 1's
+count): **27/27** routes, matching pass 1 exactly. Every route carries either
+`Depends(get_current_user)` or
+`Depends(require_permission("admin_hours.manage"))` — no ungated route, and
+the permission string is uniform across every mutating/admin-view route (no
+mix of `.view`/`.manage` to check for the XC-2 pattern). Self-scoped routes
+(`/active`, `/entries/my`, `/summary`, `/compliance/{user_id}`) all filter on
+the caller's own id server-side, independent of any client-supplied
+`user_id` query param — re-read `get_summary`'s and
+`get_user_hours_compliance`'s permission-membership checks
+(`current_user.positions`/`.permissions`) directly rather than trusting the
+pass-1 description.
+
+Also independently re-read every `select(...)` call site in
+`admin_hours_service.py` (not a diff — a fresh mechanical sweep, ~60 sites)
+for a missing `organization_id` filter: none found. The two by-id `User`
+fetches with no visible org filter (`admin_force_clock_out`'s and
+`edit_pending_entry`'s `select(User).where(User.id == entry.user_id)`, used
+only to build a display name) resolve `entry.user_id` from an
+already-org-scoped `AdminHoursEntry` fetched two lines above in the same
+function — the checklist's "resolves through an already-org-scoped parent"
+exception, not a gap.
+
+### Frontend scope — established for the first time this pass
+
+Pass 1 was explicitly backend-only. Traced every file importing an
+admin-hours service, store, or type export: the 21-file `modules/admin-hours/`
+module (services/api.ts, the Zustand store, 5 pages, 9 components, 2 type/
+util files) plus 3 outside consumers that reach in through the module's own
+service exports rather than duplicating them.
+
+`services/api.ts` — every method routes through `createApiClient()`
+(`withCredentials: true`, the CSRF double-submit header on state-changing
+methods, and the shared 401-refresh-and-retry interceptor), matching Pitfall
+#7's requirement, **with one exception below (AH21-1)**.
+
+Swept the full 21-file module plus the 3 outside consumers for:
+`window.confirm`/`alert`/`prompt` (0 hits — destructive actions
+(deactivate-category) go through `useConfirm()`; approve/reject/bulk-approve
+use inline confirmation UI, not a blocking dialog, which is not this
+pitfall's concern), `dangerouslySetInnerHTML` (0 hits), banned
+`.toLocale*`/`date-fns` (0 hits — `formatDate`, `formatForDateTimeInput`,
+`localToUTC` with `useTimezone()` used throughout
+`PendingReviewTab.tsx`/`AllEntriesTab.tsx`), and direct `fetch(` (**1 hit,
+AH21-1 below**). `apiCache.ts`'s `UNCACHEABLE_PREFIXES` already carries a
+full-prefix `/admin-hours/` entry covering all 27 routes (present since
+before this pass; verified, not assumed).
+
+Checked the two update-payload forms against CLAUDE.md Pitfall #1's
+create-vs-update semantics: `CategoriesTab.tsx`'s `handleUpdate` sends every
+field the form owns on every save, with `description: formData.description
+|| null` correctly sending an explicit `null` to clear (not omitting the
+key) — matching the update-payload rule even though it doesn't call the
+shared `blankToNull` helper by name. `HourTrackingSection.tsx`'s event-hour-
+mapping form only creates and deletes mappings (no edit UI reaches
+`eventHourMappingService.update`, which is otherwise unused from the
+frontend) so the update-payload rule has no live call site to check there.
+
+### AH21-1 — LOW — CSV export bypassed the shared auth client — ✅ FIXED
+
+**What:** `AllEntriesTab.tsx`'s `handleExportCSV` built a plain URL
+(`adminHoursEntryService.getExportUrl(...)`) and called the browser's global
+`fetch()` directly with a manually-set `credentials: 'include'`, instead of
+going through the module's shared axios client
+(`services/api.ts`, `createApiClient()`). Functionally it worked — cookies
+were sent, and the export is a GET so no CSRF header was needed — but it
+bypassed the 401-refresh-and-retry interceptor and the shared error-reporting
+integration every other request in this module (and the rest of the app)
+gets. Every comparable export elsewhere in the codebase
+(`modules/reports/services/api.ts`'s `reportExportService.exportReport`,
+`modules/storefront/services/api.ts`) goes through the shared client with
+`responseType: 'blob'`; this was the one outlier (confirmed by grepping the
+whole frontend for `credentials: 'include'` — 3 hits total, the other two are
+`onboarding/services/api-client.ts` and `services/errorReporting.ts`, both of
+which run _before_ a session/CSRF context exists, which this export does
+not).
+
+**Where:** `frontend/src/modules/admin-hours/components/AllEntriesTab.tsx`
+(`handleExportCSV`), `frontend/src/modules/admin-hours/services/api.ts`
+(`adminHoursEntryService.getExportUrl`).
+
+**Failure scenario:** an officer's session is on the edge of expiry (the
+access-token cookie has lapsed but the refresh cookie hasn't) when they click
+Export CSV. Every other request in the app would transparently refresh the
+session and retry; this one got a bare 401 from the raw `fetch()`, which the
+code correctly surfaced as a generic "Failed to export CSV" toast rather than
+crashing — but the export failed where an equivalent list-entries fetch on
+the same page, one click earlier, would have silently refreshed and
+succeeded. Not a data-exposure or tenant-isolation defect (the export is
+still correctly permission-gated and org-scoped server-side, unaffected by
+this), but a real, user-visible robustness gap this rotation's own
+established pattern (module axios instances must carry the same auth
+handling, Pitfall #7) exists to prevent.
+
+**Fix:** replaced `getExportUrl` (URL-builder, paired with a raw `fetch()`)
+with `adminHoursEntryService.exportCsv(...)`, an async method on the
+existing service that issues the request through the shared `api` client
+with `responseType: 'blob'` — the same pattern
+`reportExportService.exportReport` already uses. `AllEntriesTab.tsx` now
+awaits the Blob directly instead of hand-rolling the fetch/credentials/
+error-check sequence. No behavior change from the user's perspective (same
+filename, same trigger); the difference is only that a 401 mid-export now
+gets the same transparent refresh-and-retry as every other request.
+
+**Guard test:**
+`frontend/src/modules/admin-hours/moduleFetchIntegrity.test.ts` — walks
+every non-test `.ts`/`.tsx` file under the module and fails on a bare
+`fetch(` call, naming the file and line. Verified to fail on reintroduction
+by temporarily reinserting a `fetch()` call in `AllEntriesTab.tsx` (failed,
+naming the exact line) and confirmed clean after reverting.
+
+### Confirmed still open — unchanged from pass 1
+
+Re-read both items from pass 1's "Confirmed still open" section against the
+current code: the per-org SoD toggle (AH-4 refinement) and
+`credit_event_attendance`'s resync-can-grow-a-decided-entry gap are both
+still present, both still deliberate per the code's own docstrings, and
+neither is touched by anything that changed since pass 1. No new open items
+in this class this pass.
+
+## Completion gate (pass 2)
+
+| Check                                                               | Result                                                    |
+| ------------------------------------------------------------------- | --------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                       | clean (0 violations)                                      |
+| `black --check app/ tests/ alembic/`                                | clean (1335 files unchanged)                              |
+| `isort --check-only app/ tests/ alembic/`                           | clean (isort 8.0.1, already installed)                    |
+| `python3 scripts/validate_migrations.py --strict`                   | PASSED — 394 revisions, single head                       |
+| backend tests, scope (`-k "admin_hours"`)                           | 67 passed, 1 skipped                                      |
+| `npx tsc --noEmit` (frontend)                                       | 0 errors                                                  |
+| `npx eslint .` (frontend)                                           | 0 errors, 8 pre-existing warnings (none in touched files) |
+| `npx vitest run` (admin-hours module, 5 files)                      | 67 passed                                                 |
+| `npx vitest run` (adjacent: compliance-adminHours + member-profile) | 7 passed                                                  |
+
+No backend files were modified this pass (only the pre-existing eager-load
+fix from an unrelated commit landed in scope, reviewed above) — the backend
+gate re-confirms nothing regressed, not that new backend code was checked.
+Two frontend files modified (`AllEntriesTab.tsx`, `services/api.ts`) plus one
+new guard test.

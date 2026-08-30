@@ -20,6 +20,75 @@ None.
 
 ---
 
+### 2026-08-30 — Feature 21 (Admin hours), pass 2 — 1 fixed (LOW), 0 flagged (new); 0 regressions in pass-1 fixes
+
+No security-review PR was open, so the rotation continued directly to
+feature 21 per the pass-2 order. Scoped to the full surface since pass 1's
+merge (`598a8063`, PR #1903): of the four backend files, only
+`admin_hours_service.py` changed (+24/-7), and it's an unrelated
+pre-existing-bug fix (an eager-load for `positions` on `get_user_hours_
+compliance`'s cross-user fetch, fixing a `MissingGreenlet` crash — the AH-7
+org-scoping filter it sits inside is untouched). `event_service.py`'s change
+is EV-17's already-reviewed fix (feature 16). No migration touches an
+admin-hours table since pass 1.
+
+Independently re-verified all 8 pass-1 fixes (AH-7 through AH-14) by reading
+the current code, not re-citing the doc — all intact, including AH-11's
+Codex-caught deadlock fix (locks the complete source set, target row
+included) and AH-10's two-part locking (User-row lock + locking active-
+session read). Re-ran an AST route enumeration from scratch: 27/27 routes,
+matching pass 1 exactly, all carrying `get_current_user` or
+`require_permission("admin_hours.manage")`. Freshly swept every `select(...)`
+call site in the service (~60 sites) for a missing org filter — none found;
+the two by-id `User` lookups with no visible org filter resolve through an
+already-org-scoped `AdminHoursEntry` fetched two lines above, the checklist's
+named exception.
+
+**Frontend scope established for the first time this pass** (pass 1 was
+backend-only): the 21-file `modules/admin-hours/` module plus 3 outside
+consumers (`AdminHoursSection.tsx`, `AdminHoursRenderer.tsx`,
+`HourTrackingSection.tsx`). Swept for `window.confirm`/`alert`/`prompt` (0 —
+destructive actions go through `useConfirm()`), `dangerouslySetInnerHTML` (0),
+banned `.toLocale*`/`date-fns` (0 — `formatDate`/`formatForDateTimeInput`/
+`localToUTC` + `useTimezone()` used throughout), and direct `fetch(` (1 hit —
+**AH21-1**, below). Confirmed `/admin-hours/` is already a full-prefix
+`UNCACHEABLE_PREFIXES` entry. Checked the category-edit form against Pitfall
+#1's create-vs-update semantics: `handleUpdate` sends every field the form
+owns on every save with an explicit `null` (not an omitted key) to clear the
+description field — correct, even without calling the shared `blankToNull`
+helper by name.
+
+**AH21-1 (LOW, robustness, FIXED):** `AllEntriesTab.tsx`'s CSV export used a
+hand-rolled `fetch()` with manually-set `credentials: 'include'` instead of
+the module's shared axios client — the only such call site in the module,
+and one of only 3 in the whole frontend (the other two run before a session
+exists). It worked (cookies were sent, GET needs no CSRF header) but
+bypassed the 401-refresh-and-retry interceptor and error-reporting
+integration every other request gets, unlike every comparable export
+elsewhere in the codebase (`reportExportService.exportReport`, storefront),
+which route through the shared client with `responseType: 'blob'`. Fixed by
+replacing the URL-builder + raw-fetch pair with an
+`adminHoursEntryService.exportCsv(...)` method on the existing service,
+matching the established pattern. Guard test added
+(`modules/admin-hours/moduleFetchIntegrity.test.ts`, source-walks the module
+for a reintroduced `fetch(` call), confirmed to fail on reintroduction.
+
+Both items pass 1 flagged as open product decisions (the per-org SoD toggle;
+`credit_event_attendance`'s resync-can-grow-a-decided-entry gap) re-read
+against the current code — unchanged, still deliberate per their own
+docstrings.
+
+Full local completion gate green: flake8/black/isort clean (isort 8.0.1,
+already installed), migrations validated (394 revisions, single head),
+`pytest -k admin_hours` 67 passed/1 pre-existing skip, `tsc --noEmit` 0
+errors, `eslint .` 0 errors (8 pre-existing warnings, none in touched files),
+`vitest run` 67 passed (admin-hours module) + 7 passed (adjacent compliance/
+member-profile suites). Findings doc:
+`docs/security-review/AH-21-admin-hours.md` → Pass 2. Next: 22 grants &
+fundraising, once this PR merges.
+
+---
+
 ### 2026-08-30 — Feature 20 (Compliance), pass 2 ✅ merged — PR #2059
 
 Merged (`9e212c13`). Codex posted 4 review comments on the first version of
@@ -2370,7 +2439,7 @@ each row's prior PR is recorded in the Log, not repeated here.
 | 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ✅     |
 | 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3723 L)                                                                                                          | ✅     |
 | 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ✅     |
-| 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ⬜     |
+| 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ✅     |
 | 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ⬜     |
 | 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ⬜     |
 | 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ⬜     |
