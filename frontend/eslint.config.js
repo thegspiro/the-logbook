@@ -36,12 +36,21 @@ import globals from 'globals';
  *     `no-restricted-globals` resolves scope, so it fires only when the name
  *     is genuinely the browser global and stays silent on the local binding.
  */
+const DIALOG_MESSAGE =
+  'A suppressed confirm/alert/prompt is indistinguishable from Cancel. Use useConfirm() from @/contexts/ConfirmContext, or PromptDialog from @/components/ux. See CLAUDE.md pitfall #16.';
+
+// MemberExpression rather than CallExpression: banning the *reference* also
+// covers `window.alert.bind(window)`, where the dialog is never the callee of
+// a call node. The second selector is the computed form, `window['confirm']`,
+// whose property is a Literal carrying `value` and no `name`.
 const noBlockingBrowserDialogs = [
   {
-    selector:
-      'CallExpression[callee.object.name=/^(window|globalThis|self)$/][callee.property.name=/^(confirm|alert|prompt)$/]',
-    message:
-      'A suppressed confirm/alert/prompt is indistinguishable from Cancel. Use useConfirm() from @/contexts/ConfirmContext, or PromptDialog from @/components/ux. See CLAUDE.md pitfall #16.',
+    selector: 'MemberExpression[object.name=/^(window|globalThis|self)$/][property.name=/^(confirm|alert|prompt)$/]',
+    message: DIALOG_MESSAGE,
+  },
+  {
+    selector: 'MemberExpression[object.name=/^(window|globalThis|self)$/][property.value=/^(confirm|alert|prompt)$/]',
+    message: DIALOG_MESSAGE,
   },
 ];
 
