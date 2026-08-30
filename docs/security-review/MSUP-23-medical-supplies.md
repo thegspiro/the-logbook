@@ -413,11 +413,11 @@ pass after.
 
 ### Completion gate — MSUP-6 tend fix (same day)
 
-| Check                                                 | Result                              |
-| ----------------------------------------------------- | ----------------------------------- |
-| `flake8` (changed files)                              | clean                               |
-| `black --check` (changed files)                       | clean                               |
-| `isort --check-only` (changed files)                  | clean                               |
-| new guard test, verified fail-before/pass-after       | confirmed                           |
-| backend tests, scope (`medical_supplies`/`inventory`) | 577 passed, 1 pre-existing skip     |
-| backend tests, full suite                             | see PR — full-suite run in progress |
+| Check                                                 | Result                             |
+| ----------------------------------------------------- | ---------------------------------- |
+| `flake8` (changed files)                              | clean                              |
+| `black --check` (changed files)                       | clean                              |
+| `isort --check-only` (changed files)                  | clean                              |
+| new guard test, verified fail-before/pass-after       | confirmed                          |
+| backend tests, scope (`medical_supplies`/`inventory`) | 577 passed, 1 pre-existing skip    |
+| backend tests, full suite                             | 9273 passed, 22 pre-existing skips |
