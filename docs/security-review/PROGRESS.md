@@ -16,11 +16,34 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-[#2073](https://github.com/thegspiro/the-logbook/pull/2073) —
-`claude/security-review-grants-fundraising-pass2-tend2` — Feature 22
-(Grants & fundraising), pass 2, round-5 tend continuation.
+None. Feature 22 (Grants & fundraising), pass 2, is fully merged — see log
+entry below. Next: feature 23, Medical supplies.
 
 ---
+
+### 2026-08-30 — Feature 22 (Grants & fundraising), pass 2 ✅ fully merged — PR #2073 (round-5 tend); duplicate PR #2072 closed
+
+**Two concurrent sessions independently tended the same round-5 findings
+(GF-30/GF-27a, then GF-31/GF-32/GF-33) after PR #2070 merged mid-review,**
+each cherry-picking the orphaned post-merge commits onto its own fresh
+branch per CLAUDE.md Pitfall #24: this session opened PR #2072
+(`claude/security-review-grants-fundraising-pass2-r5`), another opened PR
+#2073 (`claude/security-review-grants-fundraising-pass2-tend2`), off the
+same `main` base (`71c1563b`). Both independently found and applied
+identical fixes for GF-32 (a stale out-of-order response overwriting the
+current filter) and GF-34 (a failed refetch leaving the previous filter's
+rows on screen). Both also raised GF-31's 100-row fetch cap to 1,000
+rather than closing it — that residual gap is GF-33 in the doc below,
+**flagged, not fixed**: an org with more than 1,000 applications in one
+status still silently truncates, recorded in `KNOWN_LIMITATIONS.md` rather
+than claimed as resolved. PR #2073
+reached a superset state first (it also included a fixture-typing nit from
+Codex, fixed in `b513ce2e`) and was merged (`d7a0c456`); PR #2072 was
+closed as a duplicate rather than merged, per the standing "never reuse or
+re-open a closed PR" rule — no unique fix was lost, since everything in
+#2072 is present in #2073's merged diff. All review threads on #2073 were
+resolved before merge; nothing outstanding. Rotation row 22 → ✅. Next: 23
+medical supplies.
 
 ### 2026-08-30 — Feature 22 (Grants & fundraising), pass 2 ✅ merged — PR #2070; round-5 tend continues in PR #2073
 
@@ -2783,7 +2806,7 @@ each row's prior PR is recorded in the Log, not repeated here.
 | 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3723 L)                                                                                                          | ✅     |
 | 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ✅     |
 | 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ✅     |
-| 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ⏳     |
+| 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ✅     |
 | 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ⬜     |
 | 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ⬜     |
 | 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ⬜     |
