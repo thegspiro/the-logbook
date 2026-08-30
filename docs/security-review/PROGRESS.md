@@ -107,15 +107,23 @@ subscribed. Next: 24 meetings & minutes, once merged.
 
 ### 2026-08-30 — Feature 23 (Medical supplies), pass 2 — 1 fixed, 0 flagged
 
-No code changes to `medical_supplies.py` or the `InventoryService` methods
-it calls since pass 1 (PR #1905, 2026-08-26) — a fresh re-verification
-rather than a diff review. Re-read all 14 endpoints directly (pass 1's
-"15" was a miscount) and re-checked every pass-1 claim against the current
-code rather than trusting the summary forward: domain pinning, the MSUP-1
-`apply_updates` fix, XC-1 FK validation on create/update, and LIKE-escaping
-on the shared search — all confirmed still correct.
+This session's pass 2 review began independently and concurrently with the
+session that opened PR #2075 (log entry above), from the same pass-1
+baseline (PR #1905, 2026-08-26) — at the time this review started, neither
+`medical_supplies.py` nor the `InventoryService` methods it calls had
+changed since pass 1, so it began as a fresh re-verification rather than a
+diff review. PR #2075 has since merged with its own additional fixes
+(MSUP-2/MSUP-3, MSUP-4 flagged); this entry covers only the audit-trail
+gap this session found independently, not a re-review of #2075's changes
+— see MSUP-5 below (renumbered from this session's own draft "MSUP-2" in
+the findings doc to avoid colliding with #2075's already-claimed MSUP-2).
+Re-read all 14 endpoints directly (pass 1's "15" was a miscount) and
+re-checked every pass-1 claim against the current code rather than
+trusting the summary forward: domain pinning, the MSUP-1 `apply_updates`
+fix, XC-1 FK validation on create/update, and LIKE-escaping on the shared
+search — all confirmed still correct.
 
-**MSUP-2 (new, LOW-MED, fixed)** — `update_medical_category` and
+**MSUP-5 (new, LOW-MED, fixed)** — `update_medical_category` and
 `update_medical_item` were the only writes on this router with no audit
 trail: this file's own create routes audit, and `inventory.py`'s general
 `update_category`/`update_item` audit their updates too, so the
@@ -130,7 +138,20 @@ a medical-specific asymmetry. New guard tests (fail before/pass after) in
 clean, migrations validated (no schema change), 577/578 scoped tests
 (1 pre-existing skip), 9273/9295 full backend suite (22 pre-existing
 skips). Findings doc: `docs/security-review/MSUP-23-medical-supplies.md`
-→ "Pass 2" section. PR #2076 opened and subscribed. Next: 24 meetings &
+→ "Pass 2" section. PR #2076 opened and subscribed.
+
+**Tend pass (same day):** after PR #2076 was rebased onto #2075's merged
+`main` to resolve the merge conflict between the two concurrent sessions'
+work, Codex reviewed the merge commit and caught a real bug in the MSUP-5
+fix itself: **MSUP-6 (new, LOW, fixed)** — `InventoryService.update_category`
+renames a `"metadata"` key to the DB column name `"extra_data"` inside the
+same dict `update_medical_category` passed it, in place, so the audit
+event's `fields_updated` reported `extra_data` instead of what the caller
+actually changed. Fixed by snapshotting `fields_updated` before the service
+call; `update_medical_item` checked for the same shape and isn't affected
+(`update_item` renames no keys). New guard test (fails before/passes
+after). Full gate re-run green (577 scoped, 9273 full backend suite). Both
+Codex threads on this PR addressed and resolved. Next: 24 meetings &
 minutes, once #2076 merges.
 
 ### 2026-08-30 — Feature 22 (Grants & fundraising), pass 2 ✅ fully merged — PR #2073 (round-5 tend); duplicate PR #2072 closed
