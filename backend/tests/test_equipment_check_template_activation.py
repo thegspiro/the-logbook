@@ -1,5 +1,5 @@
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -49,6 +49,23 @@ async def test_activation_rejects_incomplete_blocking_configuration():
     assert "every checklist item needs a name" in detail
     assert "needs an expected quantity" in detail
     assert "needs a minimum level" in detail
+    db.commit.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_nested_create_rejects_invalid_publication_before_writing():
+    db = SimpleNamespace(add=MagicMock(), flush=AsyncMock(), commit=AsyncMock())
+    service = EquipmentCheckService(db)
+
+    with pytest.raises(ValueError, match="at least one operational compartment"):
+        await service.create_template(
+            "org-1",
+            "user-1",
+            {"name": "Unfinished", "is_active": True, "compartments": []},
+        )
+
+    db.add.assert_not_called()
+    db.flush.assert_not_awaited()
     db.commit.assert_not_awaited()
 
 
