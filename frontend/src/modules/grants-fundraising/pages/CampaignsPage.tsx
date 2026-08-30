@@ -14,6 +14,7 @@ import { CAMPAIGN_STATUS_COLORS } from '../types';
 import { formatDate } from '../../../utils/dateFormatting';
 import { formatCurrencyWhole } from '@/utils/currencyFormatting';
 import { useTimezone } from '../../../hooks/useTimezone';
+import { useAuthStore } from '../../../stores/authStore';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -85,6 +86,10 @@ const selectClass = 'form-input px-3 text-sm focus:border-red-500 focus:ring-red
 
 const CampaignsPage: React.FC = () => {
   const tz = useTimezone();
+  // Route is gated at fundraising.view; create_campaign requires
+  // fundraising.manage. Hide the create affordance for view-only viewers
+  // rather than let the submit 403.
+  const canManage = useAuthStore((s) => s.checkPermission)('fundraising.manage');
   const [campaigns, setCampaigns] = useState<FundraisingCampaign[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -181,26 +186,28 @@ const CampaignsPage: React.FC = () => {
             Manage fundraising campaigns and track progress toward goals
           </p>
         </div>
-        <button
-          onClick={() => setShowCreateForm((prev) => !prev)}
-          className="inline-flex items-center gap-2 rounded-lg bg-red-800 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-900"
-        >
-          {showCreateForm ? (
-            <>
-              <X className="h-4 w-4" />
-              Cancel
-            </>
-          ) : (
-            <>
-              <Plus className="h-4 w-4" />
-              New Campaign
-            </>
-          )}
-        </button>
+        {canManage && (
+          <button
+            onClick={() => setShowCreateForm((prev) => !prev)}
+            className="inline-flex items-center gap-2 rounded-lg bg-red-800 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-900"
+          >
+            {showCreateForm ? (
+              <>
+                <X className="h-4 w-4" />
+                Cancel
+              </>
+            ) : (
+              <>
+                <Plus className="h-4 w-4" />
+                New Campaign
+              </>
+            )}
+          </button>
+        )}
       </div>
 
       {/* Inline Create Form */}
-      {showCreateForm && (
+      {canManage && showCreateForm && (
         <form onSubmit={(e) => void handleCreateSubmit(e)} className="card space-y-4 p-5">
           <h2 className="text-theme-text-primary text-lg font-semibold">Create New Campaign</h2>
 

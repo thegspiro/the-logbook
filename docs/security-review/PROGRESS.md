@@ -16,7 +16,138 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-None.
+[#2069](https://github.com/thegspiro/the-logbook/pull/2069) —
+`claude/security-review-grants-fundraising-pass2` — Feature 22 (Grants &
+fundraising), pass 2.
+
+---
+
+### 2026-08-30 — Feature 22 (Grants & fundraising), pass 2 — 0 fixed, 0 new findings; re-verification only
+
+No security-review PR was open (PR #2065/feature 21 admin-hours pass 2 had
+already merged as `991c04d2`; its own record-only follow-up PR #2067 was
+still open at the time this iteration started, but per this rotation's
+established convention a record-only PR does not block the next feature —
+confirmed via `mcp__github__list_pull_requests`, not assumed from a stale
+local `Open PR` row, which this iteration also corrects above and in the Log
+below). Continued directly to feature 22 per the pass-2 order.
+
+Scoped to the full backend surface since pass 1's merge (`520978c4`, PR
+#1904): all five declared/adjacent files (`grants.py`, `grant_service.py`,
+`fundraising_service.py`, `grant.py`, `schemas/grant.py`) came back
+**byte-identical** (`git diff --stat`, not assumed) — zero backend drift, so
+this pass independently re-verified all of GF-1 through GF-18 by reading the
+current code directly rather than re-citing the pass-1 doc. Re-ran a route
+enumeration from scratch: 45/45 routes in `grants.py` carry
+`require_permission("fundraising.view"/"fundraising.manage")`, matching pass
+1 exactly; neither permission string is in the `member`/`firefighter`
+baseline grant set. Every by-id query in both services re-swept mechanically
+for a missing `organization_id` filter — no gap. Re-checked GF-13's
+ORM-cascade-vs-FK-`ondelete` class against every other relationship in the
+model file: `FundraisingCampaign.donations`/`.pledges`/
+`.fundraising_events` have the same mismatch on paper, but `delete_campaign`
+is a soft delete and no code path hard-deletes a campaign, donor, or pledge —
+confirmed by grep, not assumed, so the class exists nowhere reachable beyond
+the one instance GF-13 already fixed.
+
+**Frontend scope established for the first time** (pass 1 was backend-only):
+the real module is `frontend/src/modules/grants-fundraising/`, ~6,900 lines
+across 14 files. Full reads of `services/api.ts`, `routes.tsx`,
+`store/grantsStore.ts`, `GrantApplicationFormPage.tsx`, `DonationsPage.tsx`,
+and `GrantDetailPage.tsx` (the module's largest file); the remaining four
+pages swept by targeted grep rather than read line-by-line (noted as
+partial-scope). Confirmed: `createApiClient()` auth wiring present (Pitfall
+#7); all 9 frontend routes gate on `fundraising.view`/`.manage` matching the
+backend; `/grants` is in `apiCache.ts`'s `UNCACHEABLE_PREFIXES` (though moot
+in practice — this module's axios instance never consults that cache at
+all, since only the separate global instance wires it); zero hits for
+`window.confirm`/`alert`/`prompt`, `dangerouslySetInnerHTML`, banned
+`.toLocale*`, `date-fns`, `localStorage`, or direct `fetch(`; every form's
+`|| null` payload construction is correct on **both** create and update
+paths (the backend accepts an explicit `null` as equivalent-to-omitted on
+create and as the intentional clear signal on update, so there is no
+create/update asymmetry to fix here, unlike the general Pitfall #1 shape);
+external links (`receiptUrl`, `applicationUrl`) are gated behind
+`isSafeExternalUrl()` in addition to the backend's own
+`validate_external_http_url` write-time validator. No new frontend findings.
+Zero `*.test.ts(x)` files exist for this module — noted, not filed as a
+security finding.
+
+**GF-19/GF-20 (NIT, doc-accuracy, fixed):** pass 1's doc overstated a
+`SafeCsvWriter`-based export that does not exist in this module (no CSV
+export exists at all — confirmed by grep, not assumed) and named a
+`delete_donation` method that was never built (`Donation` has no delete
+path). Both corrected in `GF-22-grants-fundraising.md`'s Pass 1 section.
+
+GF-7/GF-8/GF-9 re-confirmed unchanged and still flagged as product
+decisions, per every prior pass. GF-9 was missing from `KNOWN_LIMITATIONS.md`
+(GF-7/GF-8 were already there) — added this pass.
+
+Full local completion gate green: flake8/black/isort clean; migrations
+validated (394 revisions, single head); 307/307 grant+fundraising-scoped and
+9268/9268 full backend suite pass (22 pre-existing skips, 0 failed); `tsc
+--noEmit`/`npm run typecheck` 0 errors; `eslint .` 0 errors (8 pre-existing
+warnings, none in touched files — no frontend files were touched, since no
+frontend fix was needed). Findings doc: `docs/security-review/GF-22-grants-fundraising.md`
+→ **Pass 2**. PR #2069 opened and subscribed. Rotation row 22 → ⏳ (awaiting
+merge). Next: 23 medical supplies, once this PR merges.
+
+**Tend pass (same day):** Codex posted 6 review comments on PR #2069, all
+independently verified against the actual code and addressed. Two were real,
+previously-undetected bugs, not just doc gaps: **GF-24 (MED)** — three
+report/list query sites (`get_grant_report`, `get_fundraising_report`,
+`list_donations`) filtered a `DateTime` column with `<= end_date` against a
+bare date, which MySQL coerces to that day's midnight — silently dropping
+every record created later the same day, understating totals whenever
+"today" falls inside the range (the common case, not an edge case). Fixed
+with an explicit UTC end-of-day boundary, matching `reports_service.py`'s
+existing pattern; new real-DB test added (fails before/passes after).
+**GF-26 (MED)** — `donations_by_method` amounts serialize as JSON strings
+(Pydantic's default `Decimal` behavior), but `GrantsReportsPage.tsx` typed
+them as numbers and summed with `+`, silently string-concatenating instead
+of adding (`0 + "10.10" + "20.20"` → `"010.1020.20"`, which then made every
+percentage render `0.0%`). Fixed at the frontend boundary with `Number(...)`,
+matching `DonationsPage.tsx`'s existing convention; new test added (the
+module's first, fails before/passes after). **GF-23 (real UX bug, not a
+security hole — backend enforcement was already correct)** — no page in the
+module checked the caller's permission before rendering a mutation control,
+so a `fundraising.view`-only user saw Edit/Add/Record/Mark-Complete buttons
+that would 403 on click. Fixed 4 files (`CampaignsPage`, `DonorsPage`,
+`GrantDetailPage`, `GrantsDashboardPage`) with the app's established
+`checkPermission('fundraising.manage')` pattern; two lower-severity
+variants and one unrelated dead-route bug flagged, not fixed. **GF-21/GF-22
+(doc-only)** — the backend scope statement omitted `dashboard_widget_service.py`
+(verified clean: org-scoped, permission-gated) and the frontend page
+inventory omitted `GrantsDashboardPage.tsx` (verified clean); both corrected.
+**GF-25 (doc-only)** — `KNOWN_LIMITATIONS.md`'s GF-7 row still described a
+duplicate-compliance-task bug this same doc's own GF-14 re-verification
+had already confirmed fixed; corrected to keep only the still-open
+state-machine/overspend items. Full completion gate re-run green (backend
+full suite 9271/9271, frontend full vitest 5498/5498, tsc/eslint clean).
+CI re-verified on the follow-up commit; merge conflict against `main`
+(from PR #2067's concurrent merge touching the same `Open PR` section)
+resolved by this check-in.
+
+**Tend pass, round 2 (same day):** Codex posted 2 more review comments on
+the round-1 commit. **GF-24a (new, LOW-MED, cross-cutting, FLAGGED not
+fixed)** — GF-24's fix hard-codes the report date-range boundary as UTC,
+but a non-UTC organization's "June 15" report should mean June 15 in the
+department's own timezone. Confirmed real, but not a regression and not
+unique to this PR: `reports_service.py` has the identical hard-coded-UTC
+boundary at 5 other call sites, and GF-24's fix matched that established
+(if imperfect) pattern rather than inventing a one-off — it's strictly
+better than the bug it replaced (silently dropping the entire end date, in
+every timezone) for every organization regardless of timezone. Doing the
+org-timezone conversion correctly needs a coordinated fix across every
+report date-range filter in the app, not a 3-line patch scoped to this
+PR's own files — `org_timezone.py`'s `resolve_scheduling_timezone` isn't a
+drop-in answer either, since its own docstring ties its fallback
+specifically to scheduling's historical behavior. Flagged in the findings
+doc (GF-24a) and mirrored into `KNOWN_LIMITATIONS.md` as a new cross-cutting
+item. **The other comment (stale PROGRESS.md entry) was about this doc's
+own pre-round-1-fix state and was already resolved by round 1's check-in
+above** — replied confirming no further action needed. Local gate: docs-only
+change, no code touched, so no re-run needed beyond the markdown itself.
 
 ---
 
@@ -2505,7 +2636,7 @@ each row's prior PR is recorded in the Log, not repeated here.
 | 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3723 L)                                                                                                          | ✅     |
 | 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ✅     |
 | 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ✅     |
-| 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ⬜     |
+| 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ⏳     |
 | 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ⬜     |
 | 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ⬜     |
 | 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ⬜     |

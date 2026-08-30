@@ -5,7 +5,7 @@ Business logic for fundraising campaigns, donors, donations, pledges,
 and fundraising events. Provides dashboard aggregation and reporting.
 """
 
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
 from sqlalchemy import func, select
@@ -212,9 +212,20 @@ class FundraisingService:
         if donor_id:
             query = query.where(Donation.donor_id == donor_id)
         if start_date:
-            query = query.where(Donation.donation_date >= start_date)
+            query = query.where(
+                Donation.donation_date
+                >= datetime.combine(
+                    start_date, datetime.min.time(), tzinfo=timezone.utc
+                )
+            )
         if end_date:
-            query = query.where(Donation.donation_date <= end_date)
+            # donation_date is DateTime; a bare date compares as that date's
+            # midnight, silently excluding donations recorded later the same
+            # day. Match reports_service.py's end-of-day boundary pattern.
+            query = query.where(
+                Donation.donation_date
+                <= datetime.combine(end_date, datetime.max.time(), tzinfo=timezone.utc)
+            )
         query = query.order_by(Donation.donation_date.desc())
         result = await self.db.execute(query)
         return list(result.scalars().all())
@@ -696,9 +707,20 @@ class FundraisingService:
             Donation.payment_status == PaymentStatus.COMPLETED.value,
         )
         if start_date:
-            query = query.where(Donation.donation_date >= start_date)
+            query = query.where(
+                Donation.donation_date
+                >= datetime.combine(
+                    start_date, datetime.min.time(), tzinfo=timezone.utc
+                )
+            )
         if end_date:
-            query = query.where(Donation.donation_date <= end_date)
+            # donation_date is DateTime; a bare date compares as that date's
+            # midnight, silently excluding donations recorded later the same
+            # day. Match reports_service.py's end-of-day boundary pattern.
+            query = query.where(
+                Donation.donation_date
+                <= datetime.combine(end_date, datetime.max.time(), tzinfo=timezone.utc)
+            )
         result = await self.db.execute(query)
         donations = list(result.scalars().all())
 

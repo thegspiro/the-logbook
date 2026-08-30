@@ -185,7 +185,12 @@ const GrantsReportsPage: React.FC = () => {
     ? Object.entries(fundraisingReport.donationsByMethod)
     : [];
 
-  const donationsByMethodTotal = donationsByMethod.reduce((sum, [, v]) => sum + v, 0);
+  // Money fields serialize as JSON strings (backend `Decimal`, see
+  // currencyFormatting.ts's `Money` doc comment). `+` on two strings
+  // concatenates instead of adding, so this must coerce explicitly rather
+  // than rely on the declared `number` type — matching the same guard
+  // DonationsPage.tsx already uses for its own donation-amount total.
+  const donationsByMethodTotal = donationsByMethod.reduce((sum, [, v]) => sum + Number(v), 0);
 
   const monthlyTotals = fundraisingReport?.monthlyTotals ?? [];
 
@@ -402,7 +407,7 @@ const GrantsReportsPage: React.FC = () => {
                   <h3 className="text-theme-text-primary mb-4 font-semibold">Donations by Payment Method</h3>
                   <ul className="divide-theme-surface-border divide-y">
                     {donationsByMethod.map(([method, amount]) => {
-                      const pct = donationsByMethodTotal > 0 ? (amount / donationsByMethodTotal) * 100 : 0;
+                      const pct = donationsByMethodTotal > 0 ? (Number(amount) / donationsByMethodTotal) * 100 : 0;
 
                       return (
                         <li key={method} className="flex items-center justify-between py-2.5">
