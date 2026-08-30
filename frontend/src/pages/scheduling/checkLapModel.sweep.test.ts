@@ -34,17 +34,22 @@ const stop = (id: string, items: CheckItemSpec[], over: Partial<LapStop> = {}): 
 
 describe('bulkClaim', () => {
   it('names the number of items it speaks for, and what it claims about them', () => {
-    expect(bulkClaim([count('a', 2), count('b', 4), count('c', 1), count('d', 6)])).toBe('All 4 counts at par');
-    expect(bulkClaim([fn('a'), fn('b'), fn('c'), fn('d'), fn('e'), fn('f')])).toBe('All 6 work');
-    expect(bulkClaim([expiry('a')])).toBe('All 1 date in date');
-    expect(bulkClaim([count('a', 2), fn('b')])).toBe('All 2 good');
+    expect(bulkClaim([count('a', 2), count('b', 4), count('c', 1), count('d', 6)])?.label).toBe('All 4 counts at par');
+    expect(bulkClaim([fn('a'), fn('b'), fn('c'), fn('d'), fn('e'), fn('f')])?.label).toBe('All 6 work');
+    expect(bulkClaim([count('a', 2), fn('b')])?.label).toBe('All 2 good');
   });
 
-  it('counts only what a bulk claim can actually cover', () => {
-    // The gauge is excluded, so the button does not claim to have read it —
-    // and a stop of nothing but gauges has no claim to make at all.
-    expect(bulkClaim([count('a', 2), level('g')])).toBe('All 1 count at par');
+  it('covers only what somebody can claim from where they are standing', () => {
+    // A gauge is a number nobody has looked at; a printed date is read off the
+    // vial in your hand. Neither can be claimed for a whole cabinet, so neither
+    // is in the count — and the label cannot disagree with the set it answers,
+    // because they come back together.
+    const mixed = bulkClaim([count('a', 2), count('b', 4), count('c', 1), count('d', 6), expiry('e'), level('g')]);
+    expect(mixed?.label).toBe('All 4 counts at par');
+    expect(mixed?.items.map((i) => i.id)).toEqual(['a', 'b', 'c', 'd']);
+
     expect(bulkClaim([level('g'), level('h')])).toBeNull();
+    expect(bulkClaim([expiry('e')])).toBeNull();
   });
 });
 

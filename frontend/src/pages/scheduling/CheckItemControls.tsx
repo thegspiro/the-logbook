@@ -14,6 +14,7 @@
  * control being added by accident inside a 2,000-line render.
  */
 
+import { countAnswer, expiryAnswer, levelAnswer } from './checkAnswers';
 import { AlertTriangle, Camera, Check, Minus, Plus, X } from 'lucide-react';
 import React from 'react';
 
@@ -103,15 +104,7 @@ export const LevelControl: React.FC<ControlProps> = ({ item, answer, onChange, d
           value={reading ?? ''}
           disabled={disabled}
           onChange={(e) => {
-            const raw = e.target.value;
-            // An emptied box is "not read yet", not zero. Coercing it to 0
-            // would report an empty cylinder and open a swap task for a gauge
-            // nobody has looked at.
-            const next = raw === '' ? undefined : Number(raw);
-            onChange({
-              levelReading: next,
-              status: next === undefined ? 'not_checked' : threshold !== null && next < threshold ? 'fail' : 'pass',
-            });
+            onChange(levelAnswer(item, e.target.value));
           }}
           className={`form-input w-28 ${TOUCH} ${isShort ? 'border-red-500' : ''}`}
           placeholder="—"
@@ -267,16 +260,7 @@ export const CountControl: React.FC<ControlProps> = ({ item, answer, onChange, d
   const atPar = par !== null && found === par;
   const isShort = par !== null && found !== undefined && found < par;
 
-  const set = (value: number) => {
-    const next = Math.max(0, value);
-    onChange({
-      quantityFound: next,
-      // Counting is answering. Short of par does not fail the item; it raises
-      // a restock line, which is a different queue with a different urgency.
-      status: 'pass',
-      restockNeeded: par !== null && next < par,
-    });
-  };
+  const set = (value: number) => onChange(countAnswer(item, value));
 
   return (
     <div className="flex flex-col gap-2">
@@ -395,15 +379,7 @@ export const ExpiryControl: React.FC<ControlProps> = ({ item, answer, onChange, 
         data-action="confirm-expiry"
         data-testid={`expiry-confirm-${item.id}`}
         disabled={disabled}
-        onClick={() =>
-          onChange({
-            expiryConfirmed: true,
-            // An expired unit is a failure whatever the crew confirms — the
-            // department's own record says the thing aboard is out of date,
-            // and confirming that you read it does not make it usable.
-            status: expired ? 'fail' : 'pass',
-          })
-        }
+        onClick={() => onChange(expiryAnswer(item, today))}
         className={`${TOUCH} flex w-fit items-center justify-center gap-2 rounded-lg px-4 py-3 text-sm font-semibold transition-colors ${
           confirmed
             ? 'bg-green-600 text-white'

@@ -30,7 +30,6 @@ import { CheckType, normalizeCheckType } from '@/modules/scheduling/types/equipm
 import {
   answerableItems,
   bulkClaim,
-  bulkConfirmable,
   stopAnswered,
   stopMapState,
   stopRestocks,
@@ -254,14 +253,14 @@ export const CheckSweep: React.FC<CheckSweepProps> = ({
           </p>
         </div>
 
-        {claim && bulkConfirmable(items).length > 0 && !stopSwept(stop, answers) && (
+        {claim && !stopSwept(stop, answers) && (
           <button
             type="button"
             disabled={disabled}
             onClick={() => onBulkClaim(stop)}
             className="min-h-14 rounded-lg border border-green-700 bg-green-50 text-[17px] font-bold text-green-800 transition-colors hover:bg-green-100 disabled:pointer-events-none disabled:opacity-50 dark:bg-green-950/30 dark:text-green-400"
           >
-            ✓ {claim}
+            ✓ {claim.label}
           </button>
         )}
 
@@ -294,7 +293,13 @@ export const CheckSweep: React.FC<CheckSweepProps> = ({
           type="button"
           disabled={disabled || blockedByGauges}
           onClick={() => (isLast ? onFinish() : onStopIndexChange(index + 1))}
-          className="btn-primary flex min-h-14 flex-1 items-center justify-center gap-2 text-[17px] font-bold"
+          className={`flex min-h-14 flex-1 items-center justify-center gap-2 rounded-lg px-4 text-[17px] font-bold ${
+            blockedByGauges
+              ? // Grey, not a dimmed primary: a faded red still reads as the
+                // action to take, and this one cannot be taken yet.
+                'text-theme-text-muted bg-theme-surface-secondary border-theme-surface-border cursor-not-allowed border'
+              : 'btn-primary'
+          }`}
         >
           {blockedByGauges && <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden="true" />}
           <span className="truncate">{primaryLabel}</span>

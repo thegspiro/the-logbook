@@ -168,18 +168,31 @@ export function bulkLabel(items: CheckItemSpec[]): string {
  * "All good" over a gauge, because a gauge is not bulk-confirmable at all and
  * the count here excludes it.
  */
-export function bulkClaim(items: CheckItemSpec[]): string | null {
-  const confirmable = bulkConfirmable(items);
-  if (confirmable.length === 0) return null;
-  const n = confirmable.length;
-  const types = new Set(confirmable.map((i) => normalizeCheckType(i.checkType)));
-  if (types.size === 1) {
-    const only = [...types][0];
-    if (only === CheckType.COUNT) return `All ${n} count${n === 1 ? '' : 's'} at par`;
-    if (only === CheckType.FUNCTION) return `All ${n} work`;
-    if (only === CheckType.EXPIRY) return `All ${n} date${n === 1 ? '' : 's'} in date`;
-  }
-  return `All ${n} good`;
+export interface BulkClaim {
+  /** Exactly the items the button answers. */
+  items: CheckItemSpec[];
+  label: string;
+}
+
+export function bulkClaim(items: CheckItemSpec[]): BulkClaim | null {
+  // A printed date is excluded on top of `bulkConfirmable`'s exclusion of
+  // gauges, and for the same reason one step softer: it is read off the object
+  // in your hand, so claiming it for a whole cabinet is inventing a reading —
+  // just cheaper to get away with. `bulkConfirmable` itself is left alone
+  // because it is the lap's reviewed rule; this is the sweep's claim, and the
+  // handoff's own cabinet screen puts "All 4 counts at par" over four counts
+  // and one date, with the date still holding its own Confirm.
+  const claimable = bulkConfirmable(items).filter((i) => normalizeCheckType(i.checkType) !== CheckType.EXPIRY);
+  if (claimable.length === 0) return null;
+  const n = claimable.length;
+  const types = new Set(claimable.map((i) => normalizeCheckType(i.checkType)));
+  const label =
+    types.size === 1
+      ? [...types][0] === CheckType.COUNT
+        ? `All ${n} count${n === 1 ? '' : 's'} at par`
+        : `All ${n} work`
+      : `All ${n} good`;
+  return { items: claimable, label };
 }
 
 /**
