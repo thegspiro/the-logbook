@@ -22,14 +22,33 @@ import globals from 'globals';
  * call sites and then regressed anyway: `FacilitiesSettingsPage` reintroduced
  * `window.confirm` on 2026-08-27 and nothing caught it, since — unlike the
  * repo's other documented invariants — this one had no automated enforcement.
+ *
+ * It takes two rules, because the dialogs are reachable by two shapes of
+ * expression and a selector that matches one is blind to the other:
+ *
+ *   - `no-restricted-syntax` covers the qualified forms — `window.confirm`,
+ *     and equally `globalThis.confirm` and `self.confirm`, which are the same
+ *     function under different global aliases.
+ *   - `no-restricted-globals` covers the bare form, `confirm(...)`. A syntax
+ *     selector must NOT be used for this one: the correct pattern destructures
+ *     a local binding of the same name (`const { confirm } = useConfirm()`),
+ *     so a bare-identifier selector would flag all 58 legitimate call sites.
+ *     `no-restricted-globals` resolves scope, so it fires only when the name
+ *     is genuinely the browser global and stays silent on the local binding.
  */
 const noBlockingBrowserDialogs = [
   {
-    selector: "CallExpression[callee.object.name='window'][callee.property.name=/^(confirm|alert|prompt)$/]",
+    selector:
+      'CallExpression[callee.object.name=/^(window|globalThis|self)$/][callee.property.name=/^(confirm|alert|prompt)$/]',
     message:
-      'A suppressed window.confirm/alert/prompt is indistinguishable from Cancel. Use useConfirm() from @/contexts/ConfirmContext, or PromptDialog from @/components/ux. See CLAUDE.md pitfall #16.',
+      'A suppressed confirm/alert/prompt is indistinguishable from Cancel. Use useConfirm() from @/contexts/ConfirmContext, or PromptDialog from @/components/ux. See CLAUDE.md pitfall #16.',
   },
 ];
+
+const blockingDialogGlobals = ['confirm', 'alert', 'prompt'].map((name) => ({
+  name,
+  message: `A suppressed ${name}() is indistinguishable from Cancel. Use useConfirm() from @/contexts/ConfirmContext, or PromptDialog from @/components/ux. See CLAUDE.md pitfall #16.`,
+}));
 
 export default tseslint.config(
   // Global ignores (replaces ignorePatterns)
@@ -150,6 +169,7 @@ export default tseslint.config(
         },
         ...noBlockingBrowserDialogs,
       ],
+      'no-restricted-globals': ['error', ...blockingDialogGlobals],
       'no-restricted-imports': [
         'error',
         {

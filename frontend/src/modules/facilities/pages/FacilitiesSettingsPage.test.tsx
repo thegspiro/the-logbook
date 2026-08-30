@@ -63,4 +63,19 @@ describe('FacilitiesSettingsPage', () => {
     expect(mocks.deleteType).not.toHaveBeenCalled();
     expect(mocks.getTypes).toHaveBeenCalledTimes(1);
   });
+  it('names the facility form when confirming a facility-type deletion', async () => {
+    renderPage();
+    await userEvent.click(await screen.findByRole('button', { name: 'Delete Annex' }));
+    expect(
+      await screen.findByText(/will no longer be offered when creating or editing a facility/)
+    ).toBeInTheDocument();
+  });
+  it('names the maintenance record, not the facility, when confirming a maintenance-type deletion', async () => {
+    mocks.getMaintenanceTypes.mockResolvedValue([
+      { id: 'mt', name: 'Annual Service', isActive: true, isSystem: false, sortOrder: 1, usageCount: 0 },
+    ]);
+    renderPage();
+    await userEvent.click(await screen.findByRole('button', { name: 'Delete Annual Service' }));
+    expect(await screen.findByText(/will no longer be offered when logging a maintenance record/)).toBeInTheDocument();
+  });
 });

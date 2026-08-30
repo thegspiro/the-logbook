@@ -8,10 +8,18 @@ import { getErrorMessage } from '../../../utils/errorHandling';
 import type { FacilityStatus, FacilityType, MaintenanceType } from '../types';
 type Lookup = FacilityType | FacilityStatus | MaintenanceType;
 type Kind = 'types' | 'statuses' | 'maintenance';
-const definitions: Record<Kind, { title: string; singular: string }> = {
-  types: { title: 'Facility Types', singular: 'facility type' },
-  statuses: { title: 'Facility Statuses', singular: 'facility status' },
-  maintenance: { title: 'Maintenance Types', singular: 'maintenance type' },
+const definitions: Record<Kind, { title: string; singular: string; offeredOn: string }> = {
+  types: { title: 'Facility Types', singular: 'facility type', offeredOn: 'when creating or editing a facility' },
+  statuses: {
+    title: 'Facility Statuses',
+    singular: 'facility status',
+    offeredOn: 'when creating or editing a facility',
+  },
+  maintenance: {
+    title: 'Maintenance Types',
+    singular: 'maintenance type',
+    offeredOn: 'when logging a maintenance record',
+  },
 };
 export default function FacilitiesSettingsPage() {
   const navigate = useNavigate(),
@@ -40,7 +48,7 @@ export default function FacilitiesSettingsPage() {
     if (
       !(await confirm({
         title: `Delete this ${definitions[kind].singular}?`,
-        message: `“${item.name}” will no longer be offered when creating or editing facilities.`,
+        message: `“${item.name}” will no longer be offered ${definitions[kind].offeredOn}.`,
         confirmLabel: 'Delete',
         cancelLabel: 'Keep it',
         variant: 'danger',
