@@ -14,7 +14,7 @@
  * instead of the full year.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, waitFor } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router';
 import type { GrantReport, FundraisingReport } from '../types';
 
@@ -74,23 +74,21 @@ describe('GrantsReportsPage — default date range at a year boundary', () => {
   });
 
   it("defaults to the organization's full current year, not a single day", async () => {
-    const { container } = render(
+    render(
       <MemoryRouter>
         <GrantsReportsPage />
       </MemoryRouter>
     );
 
-    // The two date inputs carry no accessible label in the markup today,
-    // so this queries them positionally (start, then end) rather than by
-    // role/label — a pre-existing gap, not something this fix changes.
+    const startInput = await screen.findByLabelText<HTMLInputElement>('Start date');
+    const endInput = screen.getByLabelText<HTMLInputElement>('End date');
+
+    // The organization's own "today" is still 2026-12-31, so its current
+    // year starts 2026-01-01. Before the fix, `start` came out as
+    // 2026-12-31 too (the same as `end`).
     await waitFor(() => {
-      const dateInputs = container.querySelectorAll<HTMLInputElement>('input[type="date"]');
-      expect(dateInputs).toHaveLength(2);
-      // The organization's own "today" is still 2026-12-31, so its current
-      // year starts 2026-01-01. Before the fix, `start` came out as
-      // 2026-12-31 too (the same as `end`).
-      expect(dateInputs[0]?.value).toBe('2026-01-01');
-      expect(dateInputs[1]?.value).toBe('2026-12-31');
+      expect(startInput.value).toBe('2026-01-01');
+      expect(endInput.value).toBe('2026-12-31');
     });
   });
 });

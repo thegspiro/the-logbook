@@ -228,12 +228,19 @@ const GrantsReportsPage: React.FC = () => {
           <span className="text-theme-text-secondary text-sm font-medium">Date Range</span>
           <input
             type="date"
+            aria-label="Start date"
             value={startDate}
             onChange={(e) => setStartDate(e.target.value)}
             className="form-input-sm"
           />
           <span className="text-theme-text-secondary text-sm">to</span>
-          <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="form-input-sm" />
+          <input
+            type="date"
+            aria-label="End date"
+            value={endDate}
+            onChange={(e) => setEndDate(e.target.value)}
+            className="form-input-sm"
+          />
         </div>
       </div>
 
