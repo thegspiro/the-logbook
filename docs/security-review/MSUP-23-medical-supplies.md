@@ -232,6 +232,24 @@ Guard tests: `test_low_stock_comes_from_the_uncapped_domain_scoped_scan`,
 `test_total_items_does_not_depend_on_the_low_stock_scan`. No
 `KNOWN_LIMITATIONS.md` entry needed — there is no residual cap to record.
 
+**Round 3 (efficiency, not fixed — convergence stop):** Codex's third
+comment on this same finding asks for a bare `COUNT(*)`/aggregate query in
+place of `get_low_stock_items_for_alerts`, since that method still
+materializes every candidate `InventoryItem` row (select-in-loading
+category, joining lot totals) to produce a number the endpoint only
+`len()`s. True, and a real optimization for a department with thousands of
+reorder-tracked items — but this is the third round on one finding, and
+rounds 1→2 fixed a genuine correctness bug (an undercount) while round 2→3
+asks for a pure performance rewrite of already-correct, already-shared,
+already-tested logic. Building a bespoke aggregate would mean
+re-deriving `get_low_stock_items_for_alerts`'s on-hand rule (lots vs.
+`quantity`, expired lots excluded) a second time in raw SQL — a duplicate
+implementation to maintain in lockstep, for a dashboard load, not a
+latency-critical path. Per this rotation's own precedent for a
+finding that stops converging (GF-22 pass 2, GF-27→GF-27a — "not chasing a
+further variant"), this is the stopping point: not fixed, noted here as a
+possible future optimization, not a correctness or security concern.
+
 ### Correction — this doc's first draft mischaracterized baseline medical-supply visibility
 
 The first commit on this PR claimed "a rank-and-file member does not get
