@@ -212,6 +212,11 @@ describe('EquipmentCheckTemplateBuilder responsive actions', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Select Radio' }));
     expect(screen.getByRole('button', { name: 'Deselect Radio' })).toBeInTheDocument();
+    const actionBar = screen.getByLabelText('Checklist action bar');
+    expect(actionBar).toHaveClass('action-bar-safe');
+    expect(within(actionBar).getByText('1 selected')).toBeInTheDocument();
+    expect(within(actionBar).getByLabelText('Move selected items')).toBeInTheDocument();
+    expect(within(actionBar).getByRole('button', { name: 'Delete' })).toBeEnabled();
     fireEvent.click(screen.getByRole('button', { name: 'Done' }));
     expect(screen.queryByRole('button', { name: 'Select Radio' })).not.toBeInTheDocument();
   }, 10_000);
@@ -239,27 +244,42 @@ describe('EquipmentCheckTemplateBuilder responsive actions', () => {
     expect(screen.getByRole('button', { name: 'Edit Flashlight' }).closest('[id="item-row-flashlight"]')).toHaveFocus();
   });
 
-  it('opens a full-height progressive item editor and reviews adjacent items on phones', async () => {
+  it('opens a focused mobile add flow from the location header and keeps a safe-area action visible', async () => {
     const user = userEvent.setup();
     renderBuilder();
 
-    const radioRow = await screen.findByRole('button', { name: 'Edit Radio' });
-    await user.click(radioRow);
+    await user.click(await screen.findByRole('button', { name: 'Add item to Cab' }));
 
-    const editor = screen.getByRole('dialog', { name: 'Radio' });
-    expect(within(editor).getByText('Cab')).toBeVisible();
-    expect(within(editor).getByText('Item 1/2')).toBeVisible();
-    expect(within(editor).getByText('Essentials')).toBeVisible();
-    expect(within(editor).getByText('Inventory and expiration')).toBeVisible();
-    expect(within(editor).getByText('Optional details')).toBeVisible();
-    expect(within(editor).queryByLabelText('Expected Qty')).not.toBeInTheDocument();
-    expect(editor.firstElementChild).toHaveClass('h-[100dvh]');
+    const input = screen.getByPlaceholderText('Add or search items…');
+    expect(input).toHaveFocus();
+    expect(screen.getByText(/Choose a result to link inventory/)).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Add several' })).toBeVisible();
+    expect(screen.getByTestId('mobile-add-action-cab')).toHaveClass('pb-[max(0.75rem,env(safe-area-inset-bottom))]');
+  });
 
-    await user.click(within(editor).getByRole('button', { name: 'Next' }));
-    expect(screen.getByRole('dialog', { name: 'Flashlight' })).toHaveTextContent('Item 2/2');
-    await user.click(screen.getByRole('button', { name: 'Done' }));
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Edit Flashlight' }).closest('[id="item-row-flashlight"]')).toHaveFocus();
+  it('adds plain text to an empty mobile location and retains focus for rapid entry', async () => {
+    const user = userEvent.setup();
+    getTemplate.mockResolvedValue({
+      ...structuredClone(template),
+      compartments: [{ ...structuredClone(template.compartments[0]), items: [] }],
+    });
+    addCheckItemsBulk.mockResolvedValue({
+      items: [{ ...template.compartments[0]?.items[0], id: 'task-1', name: 'Clean windshield' }],
+      createdCount: 1,
+    });
+    renderBuilder();
+
+    await user.click(await screen.findByRole('button', { name: 'Add item to Cab' }));
+    const input = screen.getByPlaceholderText('Add or search items…');
+    await user.type(input, 'Clean windshield{Enter}');
+
+    expect(addCheckItemsBulk).toHaveBeenCalledWith(
+      'cab',
+      [expect.objectContaining({ name: 'Clean windshield' })],
+      expect.any(String)
+    );
+    await waitFor(() => expect(screen.getByText('Clean windshield')).toBeVisible());
+    expect(input).toHaveFocus();
   });
 
   it('retains bulk selection, drag handles, badges, and dense actions at 1024px', async () => {
@@ -690,6 +710,16 @@ describe('EquipmentCheckTemplateBuilder bulk deletion', () => {
     expect(toastSuccess).not.toHaveBeenCalled();
   });
 
+  it('removes only confirmed IDs and retains an unconfirmed row selected', async () => {
+    deleteCheckItemsBulk.mockResolvedValue({ deletedItemIds: ['radio'], replayed: false });
+    await selectAndDelete();
+    await waitFor(() => expect(screen.queryByText('Radio')).not.toBeInTheDocument());
+    expect(screen.getByText('Flashlight')).toBeVisible();
+    expect(screen.getByText('1 selected')).toBeVisible();
+    expect(toastError).toHaveBeenCalledWith('1 item was deleted; 1 could not be deleted');
+    expect(toastSuccess).not.toHaveBeenCalled();
+  });
+
   it('reuses the idempotency key when the same selected deletion is retried', async () => {
     deleteCheckItemsBulk
       .mockRejectedValueOnce(new Error('Response lost'))
@@ -828,7 +858,26 @@ describe('EquipmentCheckTemplateBuilder creation guidance', () => {
     fireEvent.click(screen.getByRole('button', { name: /preview/i }));
 
     expect(screen.getAllByText('Switch it on and confirm it works.').length).toBeGreaterThan(0);
-    expect(screen.getByText('Review').closest('div')).toHaveTextContent(/items/);
-    expect(screen.getByText('Review').parentElement?.previousElementSibling).toHaveClass('bg-green-500');
+    const reviewStep = screen.getAllByText('Review').find((node) => node.tagName === 'SPAN');
+    expect(reviewStep?.closest('div')).toHaveTextContent(/items/);
+    expect(reviewStep?.parentElement?.previousElementSibling).toHaveClass('bg-green-500');
   }, 20_000);
+
+  it('uses the opaque themed page canvas for the checklist preview', async () => {
+    // renderBuilder always mounts at /templates/template-1, so the preview has
+    // nothing to draw until getTemplate resolves. This describe has no
+    // beforeEach, so without a local mock the test only passes on the value a
+    // preceding block happened to leave behind — and fails under any focused
+    // run. The sibling test above does not need one: it drives the preset
+    // creation flow and never reads the loaded template.
+    getTemplate.mockResolvedValue(structuredClone(template));
+    renderBuilder();
+
+    fireEvent.click(await screen.findByRole('button', { name: /preview/i }));
+
+    const preview = screen.getByLabelText('Mobile checklist preview');
+    expect(preview).toHaveClass('bg-theme-bg', 'text-theme-text-primary');
+    expect(within(preview).getAllByText('Engine check').length).toBeGreaterThan(0);
+    expect(preview.querySelectorAll('.bg-theme-bg').length).toBeGreaterThanOrEqual(3);
+  });
 });
