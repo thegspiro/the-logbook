@@ -39,6 +39,7 @@ describe('equipment-check drafts', () => {
   it.each([
     ['account switching', { ...base, userId: 'user-b' }],
     ['organization switching', { ...base, organizationId: 'org-b' }],
+    ['template revision switching', { ...base, templateRevision: 'revision-b' }],
   ])('purges rather than exposes a draft after %s', async (_name, otherIdentity) => {
     await saveEquipmentCheckDraft(base, { privateAnswer: 'failed' }, 1_000);
 
