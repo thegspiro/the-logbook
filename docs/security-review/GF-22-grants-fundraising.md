@@ -1110,3 +1110,54 @@ PR #2069:** fixed GF-23 (frontend, 4 files), GF-24 (backend, 2 service files
   was already clean) and `KNOWN_LIMITATIONS.md` for GF-25 (docs only). No
   backend schema or migration change. Numbers above are from a re-run after
   the tend pass, superseding the original pass-2 numbers.
+
+#### GF-33 — round 8: one fixed, one flagged
+
+**What:** Codex review, round 8, on GF-32's own fix (`b43120b8`). Two
+findings, both on `GrantApplicationsPage.tsx`'s status-filtering code —
+the fourth straight round to find something there, which is itself the
+reason for the fix-vs-flag split below.
+
+1. **Stale rows survive a failed refetch (fixed).** GF-31 removed the
+   client-side `matchesStatus` predicate on the theory that every row the
+   store holds already matches the current filter, since the fetch itself
+   is now filtered. That holds only when the fetch _succeeds_. On failure,
+   `fetchApplications`'s catch block left the previous `applications`
+   array in place while clearing `isLoading` — so switching from one
+   nonempty status to another, where the new request fails, rendered the
+   _previous_ status's rows underneath the error banner with nothing
+   marking them as stale or mismatched. **Fix:** the catch block now also
+   sets `applications: []`. Scoped to this one action only — the other
+   `fetch*` actions in this store retain their existing failure behavior,
+   which was never flagged and is out of scope here.
+
+2. **The `limit: 1000` fetch is still a cap, not full pagination
+   (flagged, not fixed).** GF-32's fix moved the ceiling from the
+   server's 100-row default to 1000 — Codex correctly points out that is
+   still a cap, and `GrantApplicationsPage.tsx` has no pagination UI, so
+   an org with more than 1000 applications in a single status would still
+   lose data with no indication. This is the point where the finding
+   stops being a mechanical patch: implementing real pagination here means
+   either (a) building pagination UI for a page whose two views (pipeline
+   kanban, sortable table) were both designed to show a full unpaginated
+   set, or (b) looping the fetch across `skip`/`limit` pages until
+   exhausted, which turns one request into an unbounded number for a
+   large org and needs its own loading-state design (a spinner for "page
+   3 of 7" is a different UX than the current single fetch). Both are
+   real feature work, not a follow-up patch — and this is the fourth
+   consecutive round (GF-31 → GF-32 → GF-32's own pagination half → this)
+   finding something in the same fetch call. Flagged rather than chased
+   into a fifth variant; mirrored into `docs/KNOWN_LIMITATIONS.md` (GF-32a).
+   Realistically low-severity in this app's actual context — a single fire
+   department accumulating over 1,000 grant applications _in one pipeline
+   status_ is not a scenario any department using this software is near.
+
+**Where:** `frontend/src/modules/grants-fundraising/store/grantsStore.ts`
+(fix), `frontend/src/modules/grants-fundraising/pages/GrantApplicationsPage.tsx`
+(flagged item, unchanged).
+
+**Guard test added:** `grantsStore.applicationsRace.test.ts` gained a
+second case — seeds `applications` with a stale row, rejects the next
+`fetchApplications` call, and asserts the store ends with an empty array
+and a set error. Verified to fail against the pre-fix store (the stale
+row survives) and pass after.

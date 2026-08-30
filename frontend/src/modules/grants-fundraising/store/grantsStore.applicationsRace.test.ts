@@ -57,4 +57,14 @@ describe('grantsStore.fetchApplications — stale response sequencing', () => {
     await firstCall;
     expect(getState().applications).toEqual([{ id: 'active-1' }]);
   });
+
+  it('clears applications when a status-filtered refetch fails, instead of leaving the previous status on screen', async () => {
+    useGrantsStore.setState({ applications: [{ id: 'researching-1' }] as never, isLoading: false, error: null });
+    mockListApplications.mockRejectedValueOnce(new Error('network error'));
+
+    await getState().fetchApplications({ status: 'active' });
+
+    expect(getState().applications).toEqual([]);
+    expect(getState().error).toBeTypeOf('string');
+  });
 });

@@ -48,6 +48,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the previous filter finished loading) could momentarily show applications
   from the filter you'd already changed away from. The list now always
   reflects the filter you currently have selected.
+- If reloading the grant applications list after switching status filters
+  failed (for example, a dropped connection), the previous status's
+  applications stayed on screen underneath the error message instead of
+  clearing. The list now clears when a reload fails, so what you see never
+  mismatches the filter you've selected.
 
 ### Admin hours CSV export now recovers from an expired session (2026-08-30)
 

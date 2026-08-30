@@ -124,7 +124,14 @@ export const useGrantsStore = create<GrantsState>((set) => ({
       set({ applications, isLoading: false });
     } catch (error) {
       if (requestId !== applicationsRequestSeq) return;
+      // Clear rather than leave the previous filter's rows on screen: with
+      // the status filter now applied server-side, a stale row here no
+      // longer just means "slightly out of date" the way an unfiltered
+      // list's stale row would — it can belong to a status the user is no
+      // longer viewing, and would render under the current filter with no
+      // indication it doesn't actually match.
       set({
+        applications: [],
         error: handleStoreError(error, 'Failed to fetch grant applications'),
         isLoading: false,
       });

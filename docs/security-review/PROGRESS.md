@@ -95,6 +95,25 @@ assertions in the existing status-filter test; both verified fail
 before/pass after. Full gate green (tsc/eslint 0 errors — 8 baseline
 warnings unchanged, 5 files/8 tests passing in the module).
 
+**PR #2072 tend, round 8:** Codex found two more issues on GF-32's own
+fix — the fourth straight round on this same fetch call. **GF-33 (new,
+part fixed / part flagged):** (1) removing the client-side status
+predicate meant a _failed_ status refetch left the previous status's
+rows on screen underneath the error banner, since the store's catch
+block never cleared `applications`; fixed — it now does. (2) the
+`limit: 1000` fetch from GF-32 is still a cap, not real pagination, so a
+department with >1000 applications in one status would still lose rows;
+this one is flagged, not fixed — closing it needs either a pagination UI
+(the page's two views were both built to show a full unpaginated set) or
+an unbounded fetch-until-exhausted loop with its own loading-state
+design, and this is now the 4th consecutive round finding something in
+this exact fetch call. Recorded as the stopping point (GF-32a in
+`KNOWN_LIMITATIONS.md`), with the real-world severity noted as low — no
+department is near 1,000 applications in a single pipeline status.
+Guard test extended (`grantsStore.applicationsRace.test.ts`, 2nd case);
+fails before/passes after. Full gate green (tsc/eslint 0 errors, 8
+baseline warnings, module tests 5 files/9 tests passing).
+
 ### 2026-08-30 — Feature 22 (Grants & fundraising), pass 2 — 0 fixed, 0 new findings; re-verification only
 
 No security-review PR was open (PR #2065/feature 21 admin-hours pass 2 had
