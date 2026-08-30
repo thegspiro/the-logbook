@@ -129,7 +129,7 @@ export const MyChecklistsPage: React.FC = () => {
   const { confirm } = useConfirm();
   const timezone = useTimezone();
   const { checkPermission } = useAuthStore();
-  const canManage = checkPermission('scheduling.manage') || checkPermission('equipment_check.manage');
+  const canManage = checkPermission('scheduling.manage') || checkPermission('inventory.check_manage');
 
   const [searchParams] = useSearchParams();
   const highlightShiftId = searchParams.get('shift') || undefined;

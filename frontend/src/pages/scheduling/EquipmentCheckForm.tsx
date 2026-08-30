@@ -325,8 +325,8 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
   // stores comes from the inventory lot rather than from here, so a submitter
   // can move real stock without being able to invent a lot number or a date.
   const canSwapStock =
-    checkPermission('equipment_check.submit') ||
-    checkPermission('equipment_check.manage') ||
+    checkPermission('inventory.check_submit') ||
+    checkPermission('inventory.check_manage') ||
     checkPermission('inventory.manage');
   const tz = useTimezone();
   // Calendar day in the org's timezone — the reference every expiry check in

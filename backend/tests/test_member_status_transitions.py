@@ -95,10 +95,10 @@ class TestMemberBaselinePermissions:
         member position must carry submit or members lose the check flow
         (migration 20260801_0010 backfills existing orgs)."""
         member = DEFAULT_POSITIONS["member"]
-        assert "equipment_check.submit" in member["permissions"]
+        assert "inventory.check_submit" in member["permissions"]
         # view stays leadership-only: it also opens compliance/failure
         # reports, which are not baseline member material.
-        assert "equipment_check.view" not in member["permissions"]
+        assert "inventory.check_view" not in member["permissions"]
 
 
 @pytest.mark.asyncio

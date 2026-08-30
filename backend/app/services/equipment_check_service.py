@@ -1959,7 +1959,7 @@ class EquipmentCheckService:
         """Complete remaining items on an incomplete check.
 
         Only the member who originally performed the check may complete it,
-        unless ``allow_any`` is set (caller holds equipment_check.manage). This
+        unless ``allow_any`` is set (caller holds inventory.check_manage). This
         prevents an IDOR where any member could overwrite another member's
         safety-critical equipment check by supplying its id.
         """

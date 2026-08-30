@@ -2421,7 +2421,7 @@ class TemplateChangeLog(Base):
 
     Records every add/update/delete action on templates, compartments,
     and items so leadership can review who changed what and when.
-    Visible only to users with equipment_check.manage permission.
+    Visible only to users with inventory.check_manage permission.
     """
 
     __tablename__ = "template_change_logs"

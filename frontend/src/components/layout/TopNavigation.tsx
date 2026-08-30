@@ -178,7 +178,7 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
               {
                 label: 'Apparatus Inventory',
                 path: '/scheduling/apparatus-inventory',
-                anyPermission: ['equipment_check.submit', 'equipment_check.view', 'inventory.view'],
+                anyPermission: ['inventory.check_submit', 'inventory.check_view', 'inventory.view'],
               },
             ]
           : []),

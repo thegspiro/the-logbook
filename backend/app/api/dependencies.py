@@ -15,7 +15,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.error_codes import CodedHTTPException, ErrorCode
-from app.core.permissions import get_rank_default_permissions, permission_matches
+from app.core.permissions import (
+    expand_legacy_permissions,
+    get_rank_default_permissions,
+    permission_matches,
+)
 from app.models.user import Organization, User
 from app.services.auth_service import AuthService
 from app.utils.db_retry import is_transient_db_error
@@ -54,6 +58,7 @@ def _collect_user_permissions(user: User) -> set:
     Aggregate all permissions for *user* by combining:
     1. Permissions from every assigned **position**.
     2. Default permissions from the user's operational **rank**.
+    3. The current name of any retired permission string found in either.
     """
     perms: set = set()
 
@@ -66,7 +71,11 @@ def _collect_user_permissions(user: User) -> set:
     if user.rank:
         perms.update(get_rank_default_permissions(user.rank))
 
-    return perms
+    # A stored row may predate a permission rename (see
+    # LEGACY_PERMISSION_ALIASES). Expanding here rather than at each call site
+    # is what keeps the compatibility in one place: every check in the app
+    # resolves through this function.
+    return expand_legacy_permissions(perms)
 
 
 # Paths a user with must_change_password=True may still reach, so they can

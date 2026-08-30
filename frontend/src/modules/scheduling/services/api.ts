@@ -1289,7 +1289,7 @@ export const schedulingService = {
    * Expected-vs-actual check history.
    *
    * The server decides the scope from the caller's permissions — a member
-   * without `equipment_check.view` gets only their own checks and no grid —
+   * without `inventory.check_view` gets only their own checks and no grid —
    * so there is no client-side flag to get wrong here.
    */
   async getCheckLog(params?: { dates?: number; apparatus_id?: string }): Promise<CheckLogResponse> {

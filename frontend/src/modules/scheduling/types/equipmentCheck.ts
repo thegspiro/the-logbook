@@ -1019,7 +1019,7 @@ export interface CheckLogSummary {
 export interface CheckLogResponse {
   windowDates: number;
   dates: string[];
-  /** `own` when the caller lacks equipment_check.view; the grid is withheld. */
+  /** `own` when the caller lacks inventory.check_view; the grid is withheld. */
   scope: 'fleet' | 'own';
   rows: CheckLogRow[];
   entries: CheckLogEntry[];

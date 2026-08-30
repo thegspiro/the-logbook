@@ -70,7 +70,7 @@ const ApparatusInventoryPage: React.FC<ApparatusInventoryPageProps> = ({ apparat
   // Swapping stock and withdrawing a restock report are manage-gated on the
   // server (they rewrite the supply record); offering them to a submit-only
   // member would end every tap in a 403.
-  const canManageStock = checkPermission('equipment_check.manage') || checkPermission('inventory.manage');
+  const canManageStock = checkPermission('inventory.check_manage') || checkPermission('inventory.manage');
   const [searchParams, setSearchParams] = useSearchParams();
   const embedded = apparatusId !== undefined;
   const selectedId = apparatusId ?? searchParams.get('apparatus') ?? '';

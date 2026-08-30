@@ -32,7 +32,7 @@ vi.mock('../../modules/apparatus/services/api', () => ({
 
 vi.mock('../../hooks/useTimezone', () => ({ useTimezone: () => 'UTC' }));
 
-// The page gates Undo/Swap on equipment_check.manage / inventory.manage.
+// The page gates Undo/Swap on inventory.check_manage / inventory.manage.
 // Default to a manager so the action flows stay exercised; individual tests
 // flip the mock to a member view. (vi.clearAllMocks clears calls, not this
 // creation-time implementation.)

@@ -2,7 +2,7 @@
  * The Equipment Checks tab body.
  *
  * Two audiences, one tab. Someone who can see other people's checks
- * (`equipment_check.view` — officers, the inventory manager) opens onto the
+ * (`inventory.check_view` — officers, the inventory manager) opens onto the
  * fleet board, because their question is about the trucks. Everyone else opens
  * onto their own checklists, because theirs is about their own work — and
  * because the fleet endpoint would 403 them.
@@ -22,7 +22,7 @@ const FleetBoardPage = lazyWithRetry(() => import('./FleetBoardPage'));
 
 export const EquipmentChecksTab: React.FC = () => {
   const { checkPermission } = useAuthStore();
-  const canViewFleet = checkPermission('equipment_check.view') || checkPermission('scheduling.manage');
+  const canViewFleet = checkPermission('inventory.check_view') || checkPermission('scheduling.manage');
   const [showingMine, setShowingMine] = useState(false);
 
   if (!canViewFleet) {

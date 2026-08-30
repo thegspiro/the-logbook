@@ -470,7 +470,7 @@ OPERATIONS_SECTION_PERMISSIONS: dict[str, tuple[str, ...]] = {
         "meetings.manage",
         "minutes.manage",
         "scheduling.manage",
-        "equipment_check.manage",
+        "inventory.check_manage",
         "notifications.manage",
     ),
     "membership_health": ("members.manage",),
@@ -634,7 +634,7 @@ async def get_operations_dashboard(
             )
         )
     if "scheduling" in enabled and user_has_permission(
-        current_user, "equipment_check.manage"
+        current_user, "inventory.check_manage"
     ):
         count, oldest = await _count_and_oldest(
             db,

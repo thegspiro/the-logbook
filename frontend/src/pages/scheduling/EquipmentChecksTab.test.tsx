@@ -22,7 +22,7 @@ describe('EquipmentChecksTab', () => {
   });
 
   it('opens the fleet board for someone who can see other members checks', async () => {
-    mockCheckPermission.mockImplementation((p: string) => p === 'equipment_check.view');
+    mockCheckPermission.mockImplementation((p: string) => p === 'inventory.check_view');
     renderWithRouter(<EquipmentChecksTab />);
     expect(await screen.findByText('Fleet board view')).toBeInTheDocument();
   });
@@ -34,7 +34,7 @@ describe('EquipmentChecksTab', () => {
   });
 
   it('opens a plain member onto their own checklists', () => {
-    // Not a preference — the fleet endpoint is behind equipment_check.view and
+    // Not a preference — the fleet endpoint is behind inventory.check_view and
     // would 403 them, so the board would render an error, not a page.
     mockCheckPermission.mockReturnValue(false);
     renderWithRouter(<EquipmentChecksTab />);

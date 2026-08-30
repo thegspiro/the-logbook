@@ -161,7 +161,7 @@ export const getSchedulingRoutes = () => {
             <ProtectedRoute
               requiredModule="scheduling"
               moduleLabel="Scheduling"
-              requiredAnyPermission={['scheduling.manage', 'equipment_check.view', 'inventory.manage']}
+              requiredAnyPermission={['scheduling.manage', 'inventory.check_view', 'inventory.manage']}
             >
               <SupplyExpiringPage />
             </ProtectedRoute>
@@ -177,7 +177,7 @@ export const getSchedulingRoutes = () => {
             <ProtectedRoute
               requiredModule="scheduling"
               moduleLabel="Scheduling"
-              requiredAnyPermission={['equipment_check.submit', 'equipment_check.view', 'inventory.view']}
+              requiredAnyPermission={['inventory.check_submit', 'inventory.check_view', 'inventory.view']}
             >
               <ApparatusInventoryPage />
             </ProtectedRoute>
@@ -194,7 +194,7 @@ export const getSchedulingRoutes = () => {
             <ProtectedRoute
               requiredModule="scheduling"
               moduleLabel="Scheduling"
-              requiredAnyPermission={['equipment_check.view', 'scheduling.manage']}
+              requiredAnyPermission={['inventory.check_view', 'scheduling.manage']}
             >
               <FleetBoardPage />
             </ProtectedRoute>
@@ -206,12 +206,12 @@ export const getSchedulingRoutes = () => {
         element={
           <Suspense fallback={null}>
             {/* Crew-level: the server narrows a member without
-                equipment_check.view to their own checks rather than 403ing,
+                inventory.check_view to their own checks rather than 403ing,
                 so the route opens for anyone who can submit one. */}
             <ProtectedRoute
               requiredModule="scheduling"
               moduleLabel="Scheduling"
-              requiredAnyPermission={['equipment_check.submit', 'equipment_check.view', 'scheduling.manage']}
+              requiredAnyPermission={['inventory.check_submit', 'inventory.check_view', 'scheduling.manage']}
             >
               <CheckLogPage />
             </ProtectedRoute>
@@ -225,7 +225,7 @@ export const getSchedulingRoutes = () => {
             <ProtectedRoute
               requiredModule="scheduling"
               moduleLabel="Scheduling"
-              requiredAnyPermission={['equipment_check.view', 'scheduling.manage']}
+              requiredAnyPermission={['inventory.check_view', 'scheduling.manage']}
             >
               <ApparatusDetailPage />
             </ProtectedRoute>

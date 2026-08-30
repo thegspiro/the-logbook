@@ -287,7 +287,7 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
                 label: 'Apparatus Inventory',
                 path: '/scheduling/apparatus-inventory',
                 icon: Truck,
-                anyPermission: ['equipment_check.submit', 'equipment_check.view', 'inventory.view'],
+                anyPermission: ['inventory.check_submit', 'inventory.check_view', 'inventory.view'],
               },
             ]
           : []),

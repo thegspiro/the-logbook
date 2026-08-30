@@ -173,7 +173,7 @@ class EquipmentReadinessService:
         """Expected-vs-actual checks over the most recent ``dates`` duty days.
 
         ``only_user_id`` narrows the log to checks that member performed —
-        the shape a member without ``equipment_check.view`` gets. It filters
+        the shape a member without ``inventory.check_view`` gets. It filters
         the *log entries*; the grid is suppressed for that scope because a
         matrix of one member's checks would read as fleet coverage.
         """

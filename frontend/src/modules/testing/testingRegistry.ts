@@ -392,31 +392,31 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
       {
         path: '/scheduling/equipment',
         label: 'Fleet board',
-        anyPermission: ['equipment_check.view', 'scheduling.manage'],
+        anyPermission: ['inventory.check_view', 'scheduling.manage'],
         module: 'scheduling',
       },
       {
         path: '/scheduling/equipment/:apparatusId',
         label: 'Apparatus check detail',
-        anyPermission: ['equipment_check.view', 'scheduling.manage'],
+        anyPermission: ['inventory.check_view', 'scheduling.manage'],
         module: 'scheduling',
       },
       {
         path: '/scheduling/equipment/checks',
         label: 'Check log',
-        anyPermission: ['equipment_check.submit', 'equipment_check.view', 'scheduling.manage'],
+        anyPermission: ['inventory.check_submit', 'inventory.check_view', 'scheduling.manage'],
         module: 'scheduling',
       },
       {
         path: '/scheduling/apparatus-inventory',
         label: 'Apparatus inventory',
-        anyPermission: ['equipment_check.submit', 'equipment_check.view', 'inventory.view'],
+        anyPermission: ['inventory.check_submit', 'inventory.check_view', 'inventory.view'],
         module: 'scheduling',
       },
       {
         path: '/scheduling/supply/expiring',
         label: 'Expiring supplies',
-        anyPermission: ['scheduling.manage', 'equipment_check.view', 'inventory.manage'],
+        anyPermission: ['scheduling.manage', 'inventory.check_view', 'inventory.manage'],
         module: 'scheduling',
       },
       {

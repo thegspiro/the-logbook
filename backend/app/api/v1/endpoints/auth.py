@@ -34,7 +34,10 @@ from app.core.captcha import require_captcha
 from app.core.config import settings
 from app.core.database import database_manager, get_db
 from app.core.error_codes import CodedHTTPException, ErrorCode
-from app.core.permissions import get_rank_default_permissions
+from app.core.permissions import (
+    expand_legacy_permissions,
+    get_rank_default_permissions,
+)
 from app.core.security import create_mfa_pending_token, decode_token
 from app.core.security_middleware import (
     get_client_ip,
@@ -164,6 +167,12 @@ async def _build_current_user_dict(user: User, db: AsyncSession) -> dict:
         all_permissions.update(pos.permissions or [])
     if user.rank:
         all_permissions.update(get_rank_default_permissions(user.rank))
+    # Serve canonical names. The frontend's checkPermission compares this list
+    # literally, with no matcher behind it, so a stored pre-rename string would
+    # hide a screen the backend would have allowed (see
+    # LEGACY_PERMISSION_ALIASES). Expanding here is what keeps the alias a
+    # backend concern rather than something the client has to know about too.
+    all_permissions = expand_legacy_permissions(all_permissions)
 
     # HIPAA password age check
     password_expired = False

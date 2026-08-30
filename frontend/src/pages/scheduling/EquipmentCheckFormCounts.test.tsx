@@ -762,7 +762,7 @@ describe('EquipmentCheckForm quantity seeding', () => {
     // stock on the shelf and nothing to do but find an officer.
     it('is reachable by a crew member who can only submit checks', async () => {
       const user = userEvent.setup();
-      mockCheckPermission.mockImplementation((p: unknown) => p === 'equipment_check.submit');
+      mockCheckPermission.mockImplementation((p: unknown) => p === 'inventory.check_submit');
       mockSwapItemLot.mockResolvedValue(freshResult);
       await openSwapDialog(user);
 
@@ -773,7 +773,7 @@ describe('EquipmentCheckForm quantity seeding', () => {
     });
 
     it('stays out of reach for a member who can only read checks', async () => {
-      mockCheckPermission.mockImplementation((p: unknown) => p === 'equipment_check.view');
+      mockCheckPermission.mockImplementation((p: unknown) => p === 'inventory.check_view');
       render(expiredItem);
 
       expect(await screen.findByRole('button', { name: /^Swap$/ })).toBeDisabled();

@@ -67,7 +67,7 @@ const lateness = (days: number | null): { label: string; overdue: boolean } => {
 export const FleetBoardPage: React.FC<FleetBoardPageProps> = ({ onOpenMyChecks }) => {
   const tz = useTimezone();
   const { checkPermission } = useAuthStore();
-  const canManage = checkPermission('scheduling.manage') || checkPermission('equipment_check.manage');
+  const canManage = checkPermission('scheduling.manage') || checkPermission('inventory.check_manage');
 
   const [fleet, setFleet] = useState<FleetReadinessResponse | null>(null);
   const [mine, setMine] = useState<ActiveChecklistRecord[]>([]);
