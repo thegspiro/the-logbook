@@ -19,6 +19,14 @@ vi.mock('../services/api', () => ({
 }));
 
 const mockClearTempAccessToken = vi.fn();
+// Returns a real PurgeResult shape: logout reads `unsyncedDiscarded` off it to
+// decide whether to tell the member work was discarded.
+const emptyPurge = { drafts: 0, queuedChecks: 0, queuedReports: 0, queuedGeneric: 0, unsyncedDiscarded: 0 };
+const mockPurgeLocalMemberData = vi.fn(() => Promise.resolve({ ...emptyPurge }));
+
+vi.mock('../utils/purgeLocalMemberData', () => ({
+  purgeLocalMemberData: (...args: unknown[]) => mockPurgeLocalMemberData(...args) as unknown,
+}));
 
 vi.mock('../services/apiClient', () => ({
   markLoginComplete: (...args: unknown[]) => mockMarkLoginComplete(...args) as unknown,
@@ -405,17 +413,34 @@ describe('authStore', () => {
       expect(getState().isAuthenticated).toBe(true);
     });
 
-    it('clears session when getCurrentUser fails', async () => {
+    it('clears the session and purges device data when the server rejects it', async () => {
       localStorage.setItem('has_session', '1');
-      mockGetCurrentUser.mockRejectedValue(new Error('Unauthorized'));
+      mockGetCurrentUser.mockRejectedValue({ response: { status: 401 }, isAxiosError: true });
 
       await act(async () => {
         await getState().loadUser();
       });
 
       expect(localStorage.getItem('has_session')).toBeNull();
+      expect(mockPurgeLocalMemberData).toHaveBeenCalled();
       expect(getState().isAuthenticated).toBe(false);
       expect(getState().user).toBeNull();
+    });
+
+    // A dead spot or a restarting backend is not a logout. Purging here would
+    // destroy the offline queue — unsent equipment checks and their photos,
+    // shift reports, drafts — which exists for precisely this situation.
+    it('keeps the session and the offline queue when the request never reached the server', async () => {
+      localStorage.setItem('has_session', '1');
+      mockGetCurrentUser.mockRejectedValue(Object.assign(new Error('Network Error'), { isAxiosError: true }));
+
+      await act(async () => {
+        await getState().loadUser();
+      });
+
+      expect(mockPurgeLocalMemberData).not.toHaveBeenCalled();
+      expect(localStorage.getItem('has_session')).toBe('1');
+      expect(getState().isAuthenticated).toBe(false);
     });
   });
 

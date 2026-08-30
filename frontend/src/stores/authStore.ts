@@ -413,24 +413,31 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         isLoading: false,
       });
     } catch (err: unknown) {
-      // Clear session state regardless of error type
-      localStorage.removeItem('has_session');
-      localStorage.removeItem('access_token');
-      localStorage.removeItem('refresh_token');
-      await purgeLocalMemberData();
+      const appError = toAppError(err);
+      // Only a 401/403 is proof the session is actually gone. A transport
+      // failure proves nothing — the app was opened in a dead spot, or the
+      // backend was restarting — and purging on it destroys the offline queue
+      // that exists for exactly that situation: unsent equipment checks with
+      // their photo blobs, shift reports, training submissions, drafts. A
+      // member who opens the app out of coverage would lose a tour's work and
+      // never learn why, which is the opposite of what the purge is for.
+      const sessionRejected = appError.status === 401 || appError.status === 403;
+      if (sessionRejected) {
+        localStorage.removeItem('has_session');
+        localStorage.removeItem('access_token');
+        localStorage.removeItem('refresh_token');
+        await purgeLocalMemberData();
+      } else {
+        // has_session is deliberately left in place: the session is not known
+        // to be gone, so the next load should try again rather than treat an
+        // outage as a logout.
+        console.error('loadUser failed with unexpected error:', appError.message);
+      }
       set({
         user: null,
         isAuthenticated: false,
         isLoading: false,
       });
-
-      // 401/403 are expected when the session has expired or user is not
-      // authenticated — silently handle them. Any other error is unexpected
-      // and should be logged so it surfaces in dev tools.
-      const appError = toAppError(err);
-      if (appError.status !== 401 && appError.status !== 403) {
-        console.error('loadUser failed with unexpected error:', appError.message);
-      }
     }
   },
 
