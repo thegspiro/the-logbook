@@ -168,6 +168,33 @@ class TestCategoryDomainPinning:
             == "medical_category_updated"
         )
 
+    async def test_update_audit_reports_metadata_not_the_db_column_name(self, svc):
+        """`InventoryService.update_category` renames "metadata" to the DB
+        column name "extra_data" in the *same* dict passed to it, in place.
+        The audit event must still report what the caller actually changed
+        ("metadata"), not the internal column name that rename leaves behind.
+        """
+
+        async def _rename_metadata_in_place(category_id, organization_id, update_data):
+            if "metadata" in update_data:
+                update_data["extra_data"] = update_data.pop("metadata")
+            return MagicMock(), None
+
+        svc.update_category = AsyncMock(side_effect=_rename_metadata_in_place)
+
+        await ms.update_medical_category(
+            MEDICAL_CAT,
+            InventoryCategoryUpdate(metadata={"note": "restocked"}),
+            db=AsyncMock(),
+            current_user=_user(),
+        )
+
+        fields_updated = ms.log_audit_event.await_args.kwargs["event_data"][
+            "fields_updated"
+        ]
+        assert "metadata" in fields_updated
+        assert "extra_data" not in fields_updated
+
 
 class TestItemDomainPinning:
     async def test_list_is_restricted_to_the_medical_domain(self, svc):

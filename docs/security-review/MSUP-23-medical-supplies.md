@@ -343,6 +343,38 @@ which is out of this feature's scope.
 `log_audit_event` is awaited once with the expected `event_type`; verified to
 fail against the pre-fix router (0 awaits) and pass after.
 
+### MSUP-6 — LOW — MSUP-5's own audit event could report the DB column name instead of the field the caller changed — ✅ FIXED
+
+**What:** Codex's review of the MSUP-5 commit caught a real bug in the fix
+itself. `InventoryService.update_category()` renames a `"metadata"` key to
+the DB column name `"extra_data"` inside the _same_ `update_data` dict it was
+given, in place (`inventory_service.py:743-745`). `update_medical_category`
+passes its own `data` dict to that call by reference and then, after the
+call returns, builds the audit event's `fields_updated` from
+`list(data.keys())` — so an update that changed `metadata` recorded
+`extra_data` in the audit trail instead, the exact internal detail an audit
+record shouldn't leak. `inventory.py`'s general-purpose `update_category`
+route doesn't share this bug: it happens to call
+`update_data.model_dump(exclude_unset=True)` a second time for its own audit
+event, which re-derives a fresh dict from the untouched Pydantic model rather
+than reading back the one the service mutated.
+
+**Where:** `app/api/v1/endpoints/medical_supplies.py` —
+`update_medical_category`.
+
+**Fix:** snapshot `fields_updated = list(data.keys())` before calling
+`service.update_category(...)`, so the audit event reflects what the caller
+actually sent rather than whatever the service renamed it to afterward.
+`update_medical_item` was checked for the same shape and doesn't have it —
+`InventoryService.update_item` performs no key renames on its `update_data`.
+
+**Guard test added:** `tests/test_medical_supplies_domain.py` —
+`TestCategoryDomainPinning::test_update_audit_reports_metadata_not_the_db_column_name`,
+which mocks `update_category` with the same in-place rename the real service
+performs and asserts the audit event still reports `"metadata"`; verified to
+fail against the pre-fix endpoint (`fields_updated == ["extra_data"]`) and
+pass after.
+
 ## Guard tests added (pass 2)
 
 - `tests/test_medical_supplies_domain.py`:
@@ -353,6 +385,8 @@ fail against the pre-fix router (0 awaits) and pass after.
     loop is not)
   - `TestCategoryDomainPinning::test_update_logs_an_audit_event` and
     `TestItemDomainPinning::test_update_logs_an_audit_event` (MSUP-5)
+  - `TestCategoryDomainPinning::test_update_audit_reports_metadata_not_the_db_column_name`
+    (MSUP-6)
 
 ## Completion gate (pass 2)
 
@@ -376,3 +410,14 @@ fail against the pre-fix router (0 awaits) and pass after.
 | `tests/test_endpoint_auth_coverage.py`                | 1 passed                            |
 | backend tests, scope (`medical_supplies`/`inventory`) | 577 passed, 1 pre-existing skip     |
 | backend tests, full suite                             | 9273 passed, 22 pre-existing skips  |
+
+### Completion gate — MSUP-6 tend fix (same day)
+
+| Check                                                 | Result                              |
+| ----------------------------------------------------- | ----------------------------------- |
+| `flake8` (changed files)                              | clean                               |
+| `black --check` (changed files)                       | clean                               |
+| `isort --check-only` (changed files)                  | clean                               |
+| new guard test, verified fail-before/pass-after       | confirmed                           |
+| backend tests, scope (`medical_supplies`/`inventory`) | 577 passed, 1 pre-existing skip     |
+| backend tests, full suite                             | see PR — full-suite run in progress |
