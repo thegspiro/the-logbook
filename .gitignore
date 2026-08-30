@@ -206,3 +206,20 @@ Desktop.ini
 /frontend/reports/
 /backend/reports/
 /frontend/.stryker-tmp/
+
+# Scratch reproductions and lint/type probes.
+#
+# Review and verification agents write throwaway files into the tree to prove a
+# finding — a failing repro, a probe that checks whether a lint rule actually
+# fires. They are debugging instruments, not tests: they routinely carry a
+# deliberate always-fail sentinel (`toEqual('SHOWME')`) to dump an observed
+# value, so one committed by accident is a guaranteed-red CI run. Two reached
+# `git add -A` on 2026-08-30 and were only caught by the pre-commit hook.
+#
+# Ignored rather than merely remembered, because the failure mode is silent and
+# the cost of a miss is a broken main. Keep the names distinctive so a genuine
+# test is never swallowed: a real one is never called `__scratch` or `__probe`.
+__scratch*
+__probe*
+__lintprobe*
+scratchRepro*
