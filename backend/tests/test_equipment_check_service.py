@@ -83,6 +83,25 @@ class TestCloneCompartment:
         mock_db.rollback.assert_awaited_once()
         assert mock_db.add.call_count == 2
 
+    async def test_clone_advances_template_revision(self, service, mock_db):
+        result = MagicMock()
+        result.scalars.return_value.first.return_value = SimpleNamespace(id="clone-1")
+        mock_db.execute.return_value = result
+        with (
+            patch.object(
+                service,
+                "_get_compartment",
+                new_callable=AsyncMock,
+                return_value=self.source(),
+            ),
+            patch.object(
+                service, "_advance_content_revision", new_callable=AsyncMock
+            ) as advance,
+        ):
+            await service.clone_compartment("cab", "org-1", 1)
+
+        advance.assert_awaited_once_with("template-1")
+
 
 class TestUpdateTemplateApparatusValidation:
     async def test_foreign_apparatus_rejected(self, service, mock_db):
@@ -305,6 +324,9 @@ class TestBulkItemDeletion:
                 return_value=compartment,
             ),
             patch.object(service, "log_template_change", new_callable=AsyncMock),
+            patch.object(
+                service, "_advance_content_revision", new_callable=AsyncMock
+            ) as advance,
         ):
             deleted, replayed = await service.delete_items_bulk(
                 "comp-1",
@@ -317,6 +339,7 @@ class TestBulkItemDeletion:
         assert deleted == ["item-1", "item-2"]
         assert replayed is False
         assert mock_db.delete.await_count == 2
+        advance.assert_awaited_once_with("template-1")
         mock_db.commit.assert_awaited_once()
 
     async def test_wrong_parent_rolls_back_without_deleting(self, service, mock_db):
