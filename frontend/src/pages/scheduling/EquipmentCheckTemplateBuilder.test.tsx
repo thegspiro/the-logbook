@@ -1320,6 +1320,29 @@ describe('EquipmentCheckTemplateBuilder tablet keeps the preview reachable', () 
     await waitFor(() => expect(screen.getByLabelText('Add items to Medical bag')).toHaveFocus());
   });
 
+  it('leaves the cursor in the field a sheet blocker names, not back in the bar', async () => {
+    const user = userEvent.setup();
+    mockViewport('tablet');
+    renderBuilder();
+
+    // A count item with no par is a blocker that names a field, in a location
+    // that is already open — the one path where nothing else defers the focus.
+    const radioRow = (await screen.findByDisplayValue('Radio')).closest('[id="item-row-radio"]') as HTMLElement;
+    await user.click(within(radioRow).getByRole('button', { name: 'Count' }));
+
+    const bar = screen.getByLabelText('Checklist action bar');
+    const review = within(bar).getByRole('button', { name: 'Review' });
+    await user.click(review);
+    const sheet = screen.getByRole('dialog', { name: 'Before publishing' });
+    await user.click(within(sheet).getByRole('button', { name: /Radio needs a quantity/ }));
+
+    // Closing the sheet unmounts DialogPanel, whose focus trap restores focus
+    // to whatever opened it. A focus set synchronously in the handler is undone
+    // by that restore, landing the cursor back on Review.
+    await waitFor(() => expect(screen.getByLabelText('Par quantity for Radio')).toHaveFocus());
+    expect(review).not.toHaveFocus();
+  });
+
   it('shows the rail instead of the modal once it fits beside the canvas', async () => {
     mockViewport('laptop');
     renderBuilder();

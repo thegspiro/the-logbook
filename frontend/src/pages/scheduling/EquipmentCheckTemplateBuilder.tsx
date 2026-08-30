@@ -4700,7 +4700,18 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     // put the cursor in the item name, which is the one part already correct.
     const field =
       (focusId ? document.getElementById(focusId) : null) ?? row.querySelector<HTMLElement>('input, select, textarea');
-    (field ?? row).focus({ preventScroll: true });
+    // Deferred, because the jump may have come from the blocker sheet. Closing
+    // it is a state update, so `DialogPanel` unmounts after this handler
+    // returns, and `useFocusTrap`'s cleanup then restores focus to whatever
+    // opened it — the Review button in the action bar. A focus set here is
+    // silently undone a moment later: the row scrolls into view and the cursor
+    // ends up back in the bar, which is the one thing the blocker promises not
+    // to do. A macrotask lands after the commit that unmounts the sheet.
+    // Unconditional rather than only when the sheet was open, so the rail and
+    // the sheet cannot drift apart, and the collapsed-location path above
+    // already reaches this line through a timeout of its own.
+    const target = field ?? row;
+    window.setTimeout(() => target.focus({ preventScroll: true }), 0);
   };
   const mobileSelection = compartments
     .map((compartment, index) => ({ index, key: getCompKey(index), compartment }))
