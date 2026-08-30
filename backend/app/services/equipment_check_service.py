@@ -1476,6 +1476,10 @@ class EquipmentCheckService:
                 raise ValueError("Count observations must be integers")
             if quantity < 0:
                 raise ValueError("Count observations must be non-negative")
+            # Keep the value used by reconciliation explicitly tied to the
+            # validated snapshot value. This assignment is intentionally
+            # before either destination consumes the submission.
+            item["quantity_found"] = quantity
             target = EquipmentCheckService._target_quantity(template_item)
             if target is not None:
                 observation_passes = quantity >= target
