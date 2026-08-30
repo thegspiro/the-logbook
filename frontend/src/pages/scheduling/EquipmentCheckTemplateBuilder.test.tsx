@@ -310,16 +310,7 @@ describe('EquipmentCheckTemplateBuilder responsive actions', () => {
     // A shared autosave debounce made each scheduled item cancel the one before
     // it, so a bulk action reported success for the whole selection and sent a
     // single request. Both rows must reach the server.
-    vi.mocked(window.matchMedia).mockImplementation((query: string) => ({
-      matches: query === '(min-width: 640px)',
-      media: query,
-      onchange: null,
-      addListener: vi.fn(),
-      removeListener: vi.fn(),
-      addEventListener: vi.fn(),
-      removeEventListener: vi.fn(),
-      dispatchEvent: vi.fn(),
-    }));
+    mockViewport('laptop');
     renderBuilder();
 
     fireEvent.click(await screen.findByRole('button', { name: 'Radio selection checkbox' }));
