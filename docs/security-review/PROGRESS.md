@@ -16,11 +16,24 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-[#2070](https://github.com/thegspiro/the-logbook/pull/2070) —
-`claude/security-review-grants-fundraising-pass2-tend` — Feature 22 (Grants
-& fundraising), pass 2, round-4 tend continuation.
+[#2073](https://github.com/thegspiro/the-logbook/pull/2073) —
+`claude/security-review-grants-fundraising-pass2-tend2` — Feature 22
+(Grants & fundraising), pass 2, round-5 tend continuation.
 
 ---
+
+### 2026-08-30 — Feature 22 (Grants & fundraising), pass 2 ✅ merged — PR #2070; round-5 tend continues in PR #2073
+
+PR #2070 merged (`e6cf9b5b`) while its round-5 Codex review was still in
+flight — the same shape as the #2069 → #2070 transition above. Two
+commits fixing that round's 3 comments (GF-27a/GF-30, then GF-31) were
+pushed to the branch after the merge and never reached `main`. Per
+CLAUDE.md Pitfall #24, both commits were cherry-picked onto a fresh branch
+(`claude/security-review-grants-fundraising-pass2-tend2`) off current
+`main` and opened as PR #2073 — a clean cherry-pick, no conflicts, gate
+re-run green (`tsc --noEmit` 0 errors, `eslint src/modules/grants-fundraising`
+0/0, `vitest run src/modules/grants-fundraising` 3 files/5 passed).
+Rotation row 22 stays ⏳. Next: 23 medical supplies, once #2073 merges.
 
 ### 2026-08-30 — Feature 22 (Grants & fundraising), pass 2 ✅ merged — PR #2069; round-4 tend continues in PR #2070
 
