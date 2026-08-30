@@ -16,11 +16,24 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-[#2069](https://github.com/thegspiro/the-logbook/pull/2069) —
-`claude/security-review-grants-fundraising-pass2` — Feature 22 (Grants &
-fundraising), pass 2.
+[#2070](https://github.com/thegspiro/the-logbook/pull/2070) —
+`claude/security-review-grants-fundraising-pass2-tend` — Feature 22 (Grants
+& fundraising), pass 2, round-4 tend continuation.
 
 ---
+
+### 2026-08-30 — Feature 22 (Grants & fundraising), pass 2 ✅ merged — PR #2069; round-4 tend continues in PR #2070
+
+PR #2069 merged (`9608aea9`) while its 4th round of Codex review was still
+in flight — 3 more real bugs (GF-27/GF-28/GF-29, all below) were found and
+fixed in a commit pushed to the branch _after_ the merge, so that commit
+never reached `main`. Per CLAUDE.md Pitfall #24 (never reuse a branch name
+after its PR merges — a closed PR cannot track further commits, and reusing
+the branch risks CI not triggering at all), that commit was cherry-picked
+onto a fresh branch (`claude/security-review-grants-fundraising-pass2-tend`)
+off current `main` and opened as PR #2070. Rotation row 22 stays ⏳ — the
+feature isn't fully done until #2070 also merges. Next: 23 medical
+supplies, once #2070 merges.
 
 ### 2026-08-30 — Feature 22 (Grants & fundraising), pass 2 — 0 fixed, 0 new findings; re-verification only
 
