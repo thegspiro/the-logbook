@@ -16,11 +16,26 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-#2075 (`claude/security-review-medical-supplies`) — feature 23 (Medical
-supplies), pass 2. 2 fixed (MSUP-2, MSUP-3), 1 flagged (MSUP-4). Next once
-merged: 24 Meetings & minutes.
+None. Feature 23 (Medical supplies), pass 2, is fully merged — see log
+entry below. Next: feature 24, Meetings & minutes.
 
 ---
+
+### 2026-08-30 — Feature 23 (Medical supplies), pass 2 ✅ merged — PR #2075
+
+PR #2075 merged. 2 findings fixed (MSUP-2: N+1 domain-check loop in bulk
+delivery validation; MSUP-3: `low_stock` tile undercounting past a page
+cap — fixed across two rounds, ending on the existing
+`get_low_stock_items_for_alerts` alert-scan method rather than a raised
+cap), 1 flagged (MSUP-4: `get_expiring_lots` has no row cap, a product
+decision spanning shared callers), and 1 write-up self-correction (baseline
+members do already get medical-supply view access via the broad
+`inventory.view` OR-gate — intentional, documented, no PHI). Codex's
+review converged after MSUP-3's second fix; a third round asking for a
+bare aggregate/count-only query was logged as a possible future
+optimization rather than chased further, per this rotation's own
+convergence-stop precedent (GF-27→GF-27a). Rotation row 23 → ✅. Next: 24
+meetings & minutes.
 
 ### 2026-08-30 — Feature 23 (Medical supplies), pass 2 — 2 fixed (LOW, LOW/MED), 1 flagged (LOW); 1 doc self-correction
 
@@ -2875,7 +2890,7 @@ each row's prior PR is recorded in the Log, not repeated here.
 | 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ✅     |
 | 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ✅     |
 | 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ✅     |
-| 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ⏳     |
+| 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ✅     |
 | 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ⬜     |
 | 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ⬜     |
 | 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                         | ⬜     |
