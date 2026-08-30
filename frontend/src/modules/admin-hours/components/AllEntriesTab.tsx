@@ -39,22 +39,14 @@ const AllEntriesTab: React.FC = () => {
   }, [fetchAllEntries, allStatusFilter, allCategoryFilter, allPage]);
 
   const handleExportCSV = () => {
-    const url = adminHoursEntryService.getExportUrl({
-      status: allStatusFilter || undefined,
-      categoryId: allCategoryFilter || undefined,
-    });
-    // Fetch with httpOnly cookie auth (credentials: 'include')
-    const a = document.createElement('a');
     void (async () => {
       try {
-        const response = await fetch(url, {
-          credentials: 'include', // Send httpOnly cookies automatically
+        const blob = await adminHoursEntryService.exportCsv({
+          status: allStatusFilter || undefined,
+          categoryId: allCategoryFilter || undefined,
         });
-        if (!response.ok) {
-          throw new Error(`Export failed: ${response.status}`);
-        }
-        const blob = await response.blob();
         const blobUrl = URL.createObjectURL(blob);
+        const a = document.createElement('a');
         a.href = blobUrl;
         a.download = 'admin_hours_export.csv';
         a.click();

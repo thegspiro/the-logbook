@@ -16,7 +16,124 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-None.
+[#2065](https://github.com/thegspiro/the-logbook/pull/2065) —
+`claude/security-review-admin-hours-pass2` — Feature 21 (Admin hours), pass 2.
+
+---
+
+### 2026-08-30 — Feature 21 (Admin hours), pass 2 — 1 fixed (LOW), 0 flagged (new); 0 regressions in pass-1 fixes
+
+No security-review PR was open, so the rotation continued directly to
+feature 21 per the pass-2 order. Scoped to the full surface since pass 1's
+merge (`598a8063`, PR #1903): of the four backend files, only
+`admin_hours_service.py` changed (+24/-7), and it's an unrelated
+pre-existing-bug fix (an eager-load for `positions` on `get_user_hours_
+compliance`'s cross-user fetch, fixing a `MissingGreenlet` crash — the AH-7
+org-scoping filter it sits inside is untouched). `event_service.py`'s change
+is EV-17's already-reviewed fix (feature 16). No migration touches an
+admin-hours table since pass 1.
+
+Independently re-verified all 8 pass-1 fixes (AH-7 through AH-14) by reading
+the current code, not re-citing the doc — all intact, including AH-11's
+Codex-caught deadlock fix (locks the complete source set, target row
+included) and AH-10's two-part locking (User-row lock + locking active-
+session read). Re-ran an AST route enumeration from scratch: 27/27 routes,
+matching pass 1 exactly, all carrying `get_current_user` or
+`require_permission("admin_hours.manage")`. Freshly swept every `select(...)`
+call site in the service (~60 sites) for a missing org filter — none found;
+the two by-id `User` lookups with no visible org filter resolve through an
+already-org-scoped `AdminHoursEntry` fetched two lines above, the checklist's
+named exception.
+
+**Frontend scope established for the first time this pass** (pass 1 was
+backend-only): the 21-file `modules/admin-hours/` module plus 6 outside
+consumers (`AdminHoursSection.tsx`, `HourTrackingSection.tsx`,
+`Dashboard.tsx`, `MemberProfilePage.tsx`, `ComplianceRequirementsConfigPage.tsx`,
+`CheckInStationPage.tsx` — see AH21-2 below; a first pass at this list named
+only 3 and wrongly included `AdminHoursRenderer.tsx`, which does not import
+the module). Swept for `window.confirm`/`alert`/`prompt` (0 —
+destructive actions go through `useConfirm()`), `dangerouslySetInnerHTML` (0),
+banned `.toLocale*`/`date-fns` (0 — `formatDate`/`formatForDateTimeInput`/
+`localToUTC` + `useTimezone()` used throughout), and direct `fetch(` (1 hit —
+**AH21-1**, below). Confirmed `/admin-hours/` is already a full-prefix
+`UNCACHEABLE_PREFIXES` entry. Checked the category-edit form against Pitfall
+#1's create-vs-update semantics: `handleUpdate` sends every field the form
+owns on every save with an explicit `null` (not an omitted key) to clear the
+description field — correct, even without calling the shared `blankToNull`
+helper by name.
+
+**AH21-1 (LOW, robustness, FIXED):** `AllEntriesTab.tsx`'s CSV export used a
+hand-rolled `fetch()` with manually-set `credentials: 'include'` instead of
+the module's shared axios client — the only such call site in the module,
+and one of only 3 in the whole frontend (the other two run before a session
+exists). It worked (cookies were sent, GET needs no CSRF header) but
+bypassed the 401-refresh-and-retry interceptor and error-reporting
+integration every other request gets, unlike every comparable export
+elsewhere in the codebase (`reportExportService.exportReport`, storefront),
+which route through the shared client with `responseType: 'blob'`. Fixed by
+replacing the URL-builder + raw-fetch pair with an
+`adminHoursEntryService.exportCsv(...)` method on the existing service,
+matching the established pattern. Guard test added
+(`modules/admin-hours/moduleFetchIntegrity.test.ts`, source-walks the module
+for a reintroduced `fetch(` call), confirmed to fail on reintroduction.
+
+Both items pass 1 flagged as open product decisions (the per-org SoD toggle;
+`credit_event_attendance`'s resync-can-grow-a-decided-entry gap) re-read
+against the current code — unchanged, still deliberate per their own
+docstrings.
+
+Full local completion gate green: flake8/black/isort clean (isort 8.0.1,
+already installed), migrations validated (394 revisions, single head),
+`pytest -k admin_hours` 67 passed/1 pre-existing skip, `tsc --noEmit` 0
+errors, `eslint .` 0 errors (8 pre-existing warnings, none in touched files),
+`vitest run` 67 passed (admin-hours module) + 7 passed (adjacent compliance/
+member-profile suites). Findings doc:
+`docs/security-review/AH-21-admin-hours.md` → Pass 2. Next: 22 grants &
+fundraising, once this PR merges.
+
+**Tend pass (same day):** Codex posted 3 review comments on PR #2065, all
+independently verified against the actual code and addressed in a follow-up
+commit. **AH21-2 (new, LOW, doc accuracy)** — the "3 outside consumers" list
+above was incomplete: a repo-wide import search found 6, not 3
+(`AdminHoursRenderer.tsx` doesn't import the module at all; `Dashboard.tsx`,
+`MemberProfilePage.tsx`, `ComplianceRequirementsConfigPage.tsx`, and
+`CheckInStationPage.tsx` were missing). The 4 newly-found files were swept
+against the same checklist items — 0 hits, all read-only service calls.
+**AH21-1 follow-up** — the CSV export's raw `fetch()` had no timeout;
+routing it through the shared axios client's default `API_TIMEOUT_MS` (30s)
+could newly abort a large department's unfiltered export. Added
+`EXPORT_TIMEOUT_MS` (120s) and applied it to this one call site — the same
+unbounded-query shape exists in `reportExportService.exportReport` and the
+storefront order export, both pre-existing and out of this PR's scope.
+**Rotation-table row** — the same tend pass also caught this PR's PROGRESS.md
+update marking row 21 ✅ before merge, contradicting the legend; corrected to
+⏳. CI re-verified green on the follow-up commit; no merge conflict.
+
+**Tend pass, round 2 (same day):** Codex posted 3 more review comments on
+the follow-up commit — findings kept converging (each fix drew a reshaped
+or new one) rather than repeating, so all three were investigated rather
+than treated as noise. **AH21-1 round 2** — round 1's `EXPORT_TIMEOUT_MS`
+(120s) was correctly called out as still a finite cap that can abort a
+download the old unbounded `fetch()` would have finished; changed to
+`timeout: 0` (axios's actual no-timeout value) instead of guessing a
+bigger number. **AH21-3 (new, MEDIUM)** — `responseType: 'blob'` applies
+to axios error responses too, so a JSON 403/500 body arrived at
+`error.response.data` as an undecoded `Blob`; `toAppError`/`reportApiError`
+both read `.detail`/`.code` directly off it, so a failed export lost its
+error detail and `LB-*` support code behind a generic fallback. Not
+admin-hours-specific — `reportExportService.exportReport` and the
+storefront export share the same latent bug — so fixed once in
+`utils/createApiClient.ts`'s response interceptor (decodes a JSON blob
+body before the 401-retry/reporting logic runs), covering all three call
+sites. **AH21-4 (new, LOW)** — the guard test's regex missed
+`window.fetch(`/`globalThis.fetch(` bypasses (excluded by its own
+dot-exclusion), and no test actually invoked `exportCsv()` to prove the
+fix's real behavior rather than the fix's absence of one string in the
+source. Broadened the guard test (also catches a direct `axios` import)
+and added `services/exportCsv.behavior.test.ts`, which mocks only
+`createApiClient` and asserts the real request shape and failure
+propagation. Full gate re-run green (tsc, eslint, and the admin-hours +
+createApiClient vitest suites); CI re-verified on the new commit.
 
 ---
 
@@ -2370,7 +2487,7 @@ each row's prior PR is recorded in the Log, not repeated here.
 | 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ✅     |
 | 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3723 L)                                                                                                          | ✅     |
 | 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ✅     |
-| 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ⬜     |
+| 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ⏳     |
 | 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ⬜     |
 | 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ⬜     |
 | 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ⬜     |

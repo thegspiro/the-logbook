@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Admin hours CSV export now recovers from an expired session (2026-08-30)
+
+**Fixed**
+
+- Exporting the admin-hours entries CSV bypassed the app's usual
+  session-refresh handling, so if your session needed a refresh at the exact
+  moment you clicked Export CSV, the export failed with a generic error
+  instead of quietly refreshing and continuing like every other action on
+  the page. It now goes through the same handling as the rest of the app.
+- That same fix moved the export onto the app's standard 30-second request
+  timeout, which could have newly cut off a large department's unfiltered
+  export part-way through. The export no longer has a client-side timeout,
+  matching its previous behavior.
+- A failed export (e.g. a server error) showed a generic error message
+  instead of the specific reason, and lost the support code an
+  administrator could use to look it up — an app-wide gap in how a
+  file-download request decodes an error response, now fixed for every
+  export in the app, not just this one.
+
 ### Bulk edits to a saved checklist now save every selected item (2026-08-30)
 
 **Fixed**

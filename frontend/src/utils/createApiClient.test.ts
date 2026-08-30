@@ -267,6 +267,68 @@ describe('createApiClient', () => {
     });
   });
 
+  describe('blob error responses', () => {
+    // `responseType: 'blob'` (CSV/file exports) applies to error responses
+    // too — a 403/500 with a JSON body still arrives as a Blob, not parsed
+    // JSON, unless the interceptor decodes it. Exercises the actual
+    // request/response path (a real blob-responseType request through a
+    // stub adapter) rather than asserting against the interceptor's source,
+    // so it fails if the decoding regresses regardless of how the bypass
+    // happens.
+    function jsonBlob(body: unknown): Blob {
+      return new Blob([JSON.stringify(body)], { type: 'application/json' });
+    }
+
+    function blobErrorAdapter(status: number, data: Blob): AxiosAdapter {
+      return (config) =>
+        Promise.reject(
+          Object.assign(new Error(`Request failed with status code ${status}`), {
+            isAxiosError: true,
+            config,
+            response: { status, data, statusText: '', headers: {}, config },
+          })
+        );
+    }
+
+    it('decodes a JSON error blob so the detail message and support code survive', async () => {
+      const api = withAdapter(
+        createApiClient(),
+        blobErrorAdapter(500, jsonBlob({ detail: 'Export failed: disk quota exceeded', code: 'LB-4821' }))
+      );
+
+      await expect(api.get('/things', { responseType: 'blob' })).rejects.toMatchObject({
+        response: { data: { detail: 'Export failed: disk quota exceeded', code: 'LB-4821' } },
+      });
+
+      // reportApiError's support-code extraction reads response.data.code —
+      // proving the object it received is real JSON, not a Blob it happened
+      // to skip over.
+      expect(mockReportApiError).toHaveBeenCalledTimes(1);
+      const reported = mockReportApiError.mock.calls[0]?.[0] as { response?: { data?: { code?: unknown } } };
+      expect(reported.response?.data?.code).toBe('LB-4821');
+    });
+
+    it('leaves a non-JSON error blob (e.g. an HTML error page) undecoded rather than throwing', async () => {
+      const htmlBlob = new Blob(['<html>502 Bad Gateway</html>'], { type: 'text/html' });
+      const api = withAdapter(createApiClient(), blobErrorAdapter(502, htmlBlob));
+
+      await expect(api.get('/things', { responseType: 'blob' })).rejects.toMatchObject({
+        response: { data: htmlBlob },
+      });
+    });
+
+    it('leaves a successful blob response (the normal export path) untouched', async () => {
+      const csvBlob = new Blob(['a,b,c'], { type: 'text/csv' });
+      const api = withAdapter(createApiClient(), () =>
+        Promise.resolve({ data: csvBlob, status: 200, statusText: 'OK', headers: {}, config: {} as never })
+      );
+
+      const response = await api.get('/things', { responseType: 'blob' });
+
+      expect(response.data).toBe(csvBlob);
+    });
+  });
+
   describe('other failures', () => {
     it.each([403, 404, 500])('does not attempt a refresh on %i', async (status) => {
       const seen: InternalAxiosRequestConfig[] = [];
