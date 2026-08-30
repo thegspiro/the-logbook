@@ -192,6 +192,11 @@ describe('EquipmentCheckTemplateBuilder responsive actions', () => {
 
     await user.click(screen.getByRole('button', { name: 'Select Radio' }));
     expect(screen.getByRole('button', { name: 'Deselect Radio' })).toBeInTheDocument();
+    const actionBar = screen.getByLabelText('Checklist action bar');
+    expect(actionBar).toHaveClass('action-bar-safe');
+    expect(within(actionBar).getByText('1 selected')).toBeInTheDocument();
+    expect(within(actionBar).getByLabelText('Move selected items')).toBeInTheDocument();
+    expect(within(actionBar).getByRole('button', { name: 'Delete' })).toBeEnabled();
     await user.click(screen.getByRole('button', { name: 'Done' }));
     expect(screen.queryByRole('button', { name: 'Select Radio' })).not.toBeInTheDocument();
   });
@@ -649,7 +654,8 @@ describe('EquipmentCheckTemplateBuilder creation guidance', () => {
     fireEvent.click(screen.getByRole('button', { name: /preview/i }));
 
     expect(screen.getAllByText('Switch it on and confirm it works.').length).toBeGreaterThan(0);
-    expect(screen.getByText('Review').closest('div')).toHaveTextContent(/items/);
-    expect(screen.getByText('Review').parentElement?.previousElementSibling).toHaveClass('bg-green-500');
+    const reviewStep = screen.getAllByText('Review').find((node) => node.tagName === 'SPAN');
+    expect(reviewStep?.closest('div')).toHaveTextContent(/items/);
+    expect(reviewStep?.parentElement?.previousElementSibling).toHaveClass('bg-green-500');
   }, 10_000);
 });

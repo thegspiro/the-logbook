@@ -444,6 +444,8 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
 
   // Bulk selection: per-compartment set of selected item indices
   const [selectedItems, setSelectedItems] = useState<Record<string, Set<number>>>({});
+  const actionBarRef = useRef<HTMLDivElement>(null);
+  const [actionBarHeight, setActionBarHeight] = useState(0);
 
   // Compartment keys whose storage-type selector is in free-text ("Custom…")
   // mode, so the text input stays visible even while the value is still blank.
@@ -2224,6 +2226,19 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     };
   }, [compartments]);
 
+  useEffect(() => {
+    const bar = actionBarRef.current;
+    if (!bar) {
+      setActionBarHeight(0);
+      return;
+    }
+    const updateHeight = () => setActionBarHeight(bar.getBoundingClientRect().height);
+    updateHeight();
+    const observer = new ResizeObserver(updateHeight);
+    observer.observe(bar);
+    return () => observer.disconnect();
+  }, [stats.totalItems]);
+
   /**
    * How much of this template is wired to the inventory catalog.
    *
@@ -3866,13 +3881,17 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
   const locationsReady =
     structureReady && compartments.every((comp) => comp.name.trim() && (comp.isHeader || comp.items.length > 0));
   const publishReady = setupReady && locationsReady && blockingItems === 0;
+  const mobileSelection = compartments
+    .map((compartment, index) => ({ index, key: getCompKey(index), compartment }))
+    .find(({ key }) => mobileSelectionLocations.has(key));
+  const mobileSelectedCount = mobileSelection ? (selectedItems[mobileSelection.key]?.size ?? 0) : 0;
 
   // ---------------------------------------------------------------------------
   // Main render
   // ---------------------------------------------------------------------------
 
   return (
-    <div className="pb-16">
+    <div style={actionBarHeight > 0 ? { paddingBottom: actionBarHeight } : undefined}>
       {/* Header */}
       <div className="mx-auto mb-3 flex max-w-7xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex min-w-0 items-center gap-3">
@@ -4262,10 +4281,88 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
         </div>
       </div>
 
-      {/* Sticky footer stats bar */}
+      {/* Laptop statistics stay rich; the phone bar keeps only the current state
+          and its next action. ResizeObserver above makes page clearance follow
+          the bar when translated copy, zoom, validation, or safe-area padding
+          changes its real height. */}
       {stats.totalItems > 0 && (
-        <div className="border-theme-surface-border bg-theme-surface/95 pb-safe fixed right-0 bottom-0 left-0 z-40 border-t backdrop-blur-sm">
-          <div className="mx-auto flex max-w-7xl flex-col items-start justify-between gap-1 px-4 py-2 sm:flex-row sm:items-center sm:gap-0">
+        <div
+          ref={actionBarRef}
+          className="border-theme-surface-border bg-theme-surface/95 action-bar-safe fixed right-0 bottom-0 left-0 z-40 border-t px-4 backdrop-blur-sm"
+          aria-label="Checklist action bar"
+        >
+          <div className="flex min-h-11 items-center justify-between gap-4 sm:hidden">
+            <span className="text-theme-text-secondary min-w-0 text-sm font-medium wrap-break-word" aria-live="polite">
+              {mobileSelection
+                ? `${String(mobileSelectedCount)} selected`
+                : autoSaveStatus === 'saving' || saving
+                  ? 'Saving…'
+                  : blockingItems > 0
+                    ? `${String(blockingItems)} item${blockingItems === 1 ? '' : 's'} need attention`
+                    : `${String(stats.totalItems)} item${stats.totalItems === 1 ? '' : 's'} · ${autoSaveStatus === 'error' ? 'Save failed' : autoSaveStatus === 'saved' ? 'Saved' : isEditing ? 'Saved' : 'Draft'}`}
+            </span>
+            <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 text-sm font-semibold">
+              {mobileSelection ? (
+                <>
+                  <select
+                    aria-label="Move selected items"
+                    className="text-theme-accent-blue max-w-24 bg-transparent"
+                    value=""
+                    disabled={mobileSelectedCount === 0}
+                    onChange={(event) => {
+                      const destination = Number(event.target.value);
+                      const selected = [...(selectedItems[mobileSelection.key] ?? [])].sort((a, b) => b - a);
+                      for (const itemIndex of selected)
+                        void moveItemToCompartment(mobileSelection.index, itemIndex, destination);
+                      setMobileSelectionMode(mobileSelection.index, false);
+                    }}
+                  >
+                    <option value="" disabled>
+                      Move
+                    </option>
+                    {compartments.map((compartment, index) =>
+                      index !== mobileSelection.index && !compartment.isHeader ? (
+                        <option key={compartment.clientKey} value={index}>
+                          {compartment.name || 'Untitled location'}
+                        </option>
+                      ) : null
+                    )}
+                  </select>
+                  <span aria-hidden="true">·</span>
+                  <button
+                    type="button"
+                    className="min-h-11 text-red-600 disabled:opacity-40"
+                    disabled={mobileSelectedCount === 0}
+                    onClick={() => void deleteSelectedItems(mobileSelection.index)}
+                  >
+                    Delete
+                  </button>
+                </>
+              ) : autoSaveStatus === 'saving' || saving ? (
+                <button
+                  type="button"
+                  className="text-theme-accent-blue min-h-11"
+                  onClick={() => inlineInputRef.current?.blur()}
+                >
+                  Done
+                </button>
+              ) : blockingItems > 0 ? (
+                <button type="button" className="text-theme-accent-blue min-h-11" onClick={() => setShowPreview(true)}>
+                  Review
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className="text-theme-accent-blue min-h-11"
+                  onClick={() => void addCompartment()}
+                  disabled={addingCompartment}
+                >
+                  Add
+                </button>
+              )}
+            </div>
+          </div>
+          <div className="mx-auto hidden max-w-7xl items-center justify-between gap-0 py-2 sm:flex">
             <div className="text-theme-text-muted flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
               <span className="flex items-center gap-1">
                 <Hash className="h-3 w-3" />
