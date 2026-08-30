@@ -1096,13 +1096,25 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       bulkDeleteIdempotencyKeys.current[key] = { key: idempotencyKey, payload };
       await ensureDraftBeforeStructureEdit();
       const result = await schedulingService.deleteCheckItemsBulk(comp.id, itemIds, idempotencyKey);
-      const deletedIds = new Set(result.deletedItemIds);
+      const requestedIds = new Set(itemIds);
+      const deletedIds = new Set(result.deletedItemIds.filter((itemId) => requestedIds.has(itemId)));
+      const remainingItems = comp.items.filter((item) => !item.id || !deletedIds.has(item.id));
       updateCompartmentField(compartmentIdx, {
-        items: comp.items.filter((item) => !item.id || !deletedIds.has(item.id)),
+        items: remainingItems,
       });
-      setSelectedItems((prev) => ({ ...prev, [key]: new Set<number>() }));
-      delete bulkDeleteIdempotencyKeys.current[key];
+      const undeletedIds = new Set(itemIds.filter((itemId) => !deletedIds.has(itemId)));
+      setSelectedItems((prev) => ({
+        ...prev,
+        [key]: new Set(remainingItems.flatMap((item, index) => (item.id && undeletedIds.has(item.id) ? [index] : []))),
+      }));
       const deletedCount = deletedIds.size;
+      if (deletedCount !== itemIds.length) {
+        toast.error(
+          `${String(deletedCount)} item${deletedCount !== 1 ? 's were' : ' was'} deleted; ${String(itemIds.length - deletedCount)} could not be deleted`
+        );
+        return;
+      }
+      delete bulkDeleteIdempotencyKeys.current[key];
       toast.success(`Deleted ${deletedCount} item${deletedCount !== 1 ? 's' : ''}`);
     } catch (err) {
       toast.error(getErrorMessage(err, `Could not delete ${count} item${count !== 1 ? 's' : ''}`));
