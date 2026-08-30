@@ -16,11 +16,24 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-[#2069](https://github.com/thegspiro/the-logbook/pull/2069) —
-`claude/security-review-grants-fundraising-pass2` — Feature 22 (Grants &
-fundraising), pass 2.
+[#2070](https://github.com/thegspiro/the-logbook/pull/2070) —
+`claude/security-review-grants-fundraising-pass2-tend` — Feature 22 (Grants
+& fundraising), pass 2, round-4 tend continuation.
 
 ---
+
+### 2026-08-30 — Feature 22 (Grants & fundraising), pass 2 ✅ merged — PR #2069; round-4 tend continues in PR #2070
+
+PR #2069 merged (`9608aea9`) while its 4th round of Codex review was still
+in flight — 3 more real bugs (GF-27/GF-28/GF-29, all below) were found and
+fixed in a commit pushed to the branch _after_ the merge, so that commit
+never reached `main`. Per CLAUDE.md Pitfall #24 (never reuse a branch name
+after its PR merges — a closed PR cannot track further commits, and reusing
+the branch risks CI not triggering at all), that commit was cherry-picked
+onto a fresh branch (`claude/security-review-grants-fundraising-pass2-tend`)
+off current `main` and opened as PR #2070. Rotation row 22 stays ⏳ — the
+feature isn't fully done until #2070 also merges. Next: 23 medical
+supplies, once #2070 merges.
 
 ### 2026-08-30 — Feature 22 (Grants & fundraising), pass 2 — 0 fixed, 0 new findings; re-verification only
 
@@ -148,6 +161,40 @@ item. **The other comment (stale PROGRESS.md entry) was about this doc's
 own pre-round-1-fix state and was already resolved by round 1's check-in
 above** — replied confirming no further action needed. Local gate: docs-only
 change, no code touched, so no re-run needed beyond the markdown itself.
+
+**Tend pass, round 3 (same day):** Codex posted 1 more comment — round 1's
+GF-21 correction fixed the "Backend:" scope line's stale claim about
+`dashboard.py` aggregating already-gated `/grants` figures, but missed the
+parallel "Frontend:" paragraph's identical stale claim just below it.
+Fixed: that paragraph now names `DashboardWidgetService.fundraising`
+explicitly and matches GF-21's own accurate description instead of
+contradicting it. Docs-only.
+
+**Tend pass, round 4 (same day):** Codex posted 3 more comments, all real
+bugs found by continued deeper reading of `GrantsDashboardPage.tsx` (added
+to scope in round 1) rather than reshapes of earlier fixes. **GF-27 (new,
+LOW)** — the dashboard's KPI/pipeline cards link to
+`/grants/applications?status=active` etc., but `GrantApplicationsPage.tsx`/
+`CampaignsPage.tsx` never read the URL's `status` param, so the links
+silently landed on the unfiltered list. Fixed both by seeding
+`statusFilter` from `useSearchParams()`, matching the app's existing
+`?tab=`-reading convention; new guard test
+(`CampaignsPage.statusFilter.test.tsx`, fails before/passes after).
+**GF-28 (new, LOW)** — the dashboard's "View Campaign" link pointed at
+`/grants/campaigns/${id}`, a route that doesn't exist (only the list route
+is registered), silently redirecting to `/` via the app's catch-all. Fixed
+by pointing at the list route instead; building a real per-campaign detail
+view is a separate, larger feature gap, flagged not fixed. **GF-29 (new,
+MED)** — `GrantsReportsPage.tsx`'s `getDefaultDateRange` derived its
+start-of-year bound from the test/browser runtime's own local year instead
+of the organization's, so near midnight UTC on New Year's an org behind UTC
+could get a 1-day default range instead of its full current year — distinct
+from GF-24a (the backend's report-query boundary). Fixed by deriving the
+year from the org's own local "today" directly; new guard test
+(`GrantsReportsPage.defaultRange.test.tsx`, fakes only `Date` to avoid
+starving `waitFor`, fails before/passes after). Full gate re-run green
+(tsc, eslint 0 errors, full grants-fundraising vitest suite 4/4 passing
+across 3 files).
 
 ---
 

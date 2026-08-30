@@ -6,6 +6,7 @@
  */
 
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
+import { useSearchParams } from 'react-router';
 import { Megaphone, Plus, Search, X, DollarSign, Calendar, Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { fundraisingService } from '../services/api';
@@ -90,10 +91,14 @@ const CampaignsPage: React.FC = () => {
   // fundraising.manage. Hide the create affordance for view-only viewers
   // rather than let the submit 403.
   const canManage = useAuthStore((s) => s.checkPermission)('fundraising.manage');
+  const [searchParams] = useSearchParams();
   const [campaigns, setCampaigns] = useState<FundraisingCampaign[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState('');
+  // The dashboard's "Active Campaigns" card links here with `?status=active`
+  // — honor it as the initial filter so the link actually filters, instead
+  // of silently landing on the unfiltered list.
+  const [statusFilter, setStatusFilter] = useState(() => searchParams.get('status') ?? '');
   const [typeFilter, setTypeFilter] = useState('');
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [formData, setFormData] = useState<CreateFormData>(INITIAL_FORM);

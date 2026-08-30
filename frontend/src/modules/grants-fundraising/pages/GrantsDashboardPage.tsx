@@ -452,10 +452,12 @@ const RecentDonationsTable: React.FC<RecentDonationsProps> = ({ donations, timez
                 </td>
                 <td className="text-theme-text-secondary px-4 py-3 text-sm">
                   {donation.campaignId ? (
-                    <Link
-                      to={`/grants/campaigns/${donation.campaignId}`}
-                      className="text-red-600 hover:text-red-700 hover:underline"
-                    >
+                    // No per-campaign detail route exists in this module
+                    // (`routes.tsx` registers only the `/grants/campaigns`
+                    // list) — link there rather than to a route that
+                    // doesn't exist, which previously matched the app's
+                    // catch-all and silently redirected to `/`.
+                    <Link to="/grants/campaigns" className="text-red-600 hover:text-red-700 hover:underline">
                       View Campaign
                     </Link>
                   ) : (
