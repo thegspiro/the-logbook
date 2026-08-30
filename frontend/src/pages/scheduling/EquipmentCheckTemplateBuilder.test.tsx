@@ -941,6 +941,27 @@ describe('EquipmentCheckTemplateBuilder creation guidance', () => {
     expect(screen.getByText(/locations, \d+ with items/)).toBeVisible();
   }, 20_000);
 
+  it('swaps the start card for the vehicle layout list rather than stacking both', async () => {
+    renderNewBuilder();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Details' }));
+    fireEvent.change(screen.getByLabelText('Template Type'), { target: { value: 'vehicle' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Close template details' }));
+
+    expect(screen.getByText('How would you like to start?')).toBeVisible();
+    expect(screen.getByRole('button', { name: /build from scratch/i })).toBeVisible();
+
+    fireEvent.click(screen.getByRole('button', { name: /use a vehicle layout/i }));
+
+    // Both surfaces are the same card now, so the row the user just tapped
+    // must not still be sitting under the list it opened.
+    expect(screen.getByText('Start from a vehicle layout')).toBeVisible();
+    expect(screen.queryByText('How would you like to start?')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Close vehicle layouts' }));
+    expect(screen.getByText('How would you like to start?')).toBeVisible();
+  });
+
   it('uses the opaque themed page canvas for the checklist preview', async () => {
     mockViewport('phone');
     // renderBuilder always mounts at /templates/template-1, so the preview has
@@ -1239,16 +1260,36 @@ describe('EquipmentCheckTemplateBuilder tablet keeps the preview reachable', () 
     getTemplate.mockResolvedValue(structuredClone(template));
   });
 
-  it('falls back to the modal preview where the rail would wrap below the checklist', async () => {
-    // 900px clears the 640px row layout but not the 1152px the canvas and the
-    // rail need side by side. Rendering the rail here would put both the
-    // blocker list and the crew preview after the entire checklist.
+  it('gives the blockers and the crew view a bottom bar where the rail does not fit', async () => {
+    const user = userEvent.setup();
+    // 900px clears the 640px row layout but not the width the rail needs beside
+    // the canvas. Rendering the rail here would starve the checklist; leaving
+    // it out entirely would put the blockers out of reach.
     mockViewport('tablet');
     renderBuilder();
 
-    expect(await screen.findByRole('button', { name: /preview/i })).toBeInTheDocument();
+    const bar = await screen.findByLabelText('Checklist action bar');
+    expect(within(bar).getByText(/thing.* to fix before publishing/)).toBeVisible();
     expect(screen.queryByRole('button', { name: 'Before publishing' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Crew view' })).not.toBeInTheDocument();
+
+    await user.click(within(bar).getByRole('button', { name: 'Review' }));
+    const sheet = screen.getByRole('dialog', { name: 'Before publishing' });
+    expect(within(sheet).getByRole('button', { name: /Medical bag is empty/ })).toBeVisible();
+  });
+
+  it('closes the sheet when a blocker takes you to the row', async () => {
+    const user = userEvent.setup();
+    mockViewport('tablet');
+    renderBuilder();
+
+    const bar = await screen.findByLabelText('Checklist action bar');
+    await user.click(within(bar).getByRole('button', { name: 'Review' }));
+    const sheet = screen.getByRole('dialog', { name: 'Before publishing' });
+    await user.click(within(sheet).getByRole('button', { name: /Medical bag is empty/ }));
+
+    // The sheet covers the row it just sent the author to.
+    await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Before publishing' })).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.getByLabelText('Add items to Medical bag')).toHaveFocus());
   });
 
   it('shows the rail instead of the modal once it fits beside the canvas', async () => {
@@ -1320,6 +1361,38 @@ describe('EquipmentCheckTemplateBuilder duplication identity', () => {
     cloneCompartment.mockReset();
     mockViewport('laptop');
   });
+
+  it('keeps preview answers while items are added, and drops them when a type changes', async () => {
+    const user = userEvent.setup();
+    renderNewBuilder();
+
+    await user.click(screen.getByRole('button', { name: 'Location' }));
+    const composer = (await screen.findAllByPlaceholderText(/press Enter/i))[0] as HTMLElement;
+    await user.type(composer, 'First item{Enter}');
+
+    await user.click(screen.getByRole('button', { name: 'Crew view' }));
+    const answered = within(screen.getByLabelText('Crew preview')).getByRole('button', { name: 'Pass' });
+    await user.click(answered);
+    expect(answered).toHaveClass('bg-green-600');
+
+    // Adding an item cannot mis-assign an existing answer, so it must not
+    // discard one the author was in the middle of looking at.
+    await user.type(composer, 'Second item{Enter}');
+    await waitFor(() => expect(screen.getAllByDisplayValue(/item$/)).toHaveLength(2));
+    expect(within(screen.getByLabelText('Crew preview')).getAllByRole('button', { name: 'Pass' })[0]).toHaveClass(
+      'bg-green-600'
+    );
+
+    // Changing the type leaves a pass/fail recorded against a counter.
+    const firstRow = screen.getByDisplayValue('First item').closest('[id^="item-row-"]') as HTMLElement;
+    await user.click(within(firstRow).getByRole('button', { name: 'Count' }));
+    await waitFor(() =>
+      expect(within(screen.getByLabelText('Crew preview')).queryAllByRole('button', { name: 'Pass' })).toHaveLength(1)
+    );
+    expect(within(screen.getByLabelText('Crew preview')).getByRole('button', { name: 'Pass' })).not.toHaveClass(
+      'bg-green-600'
+    );
+  }, 20_000);
 
   it('gives a duplicated location its own item identities', async () => {
     const user = userEvent.setup();

@@ -1045,6 +1045,24 @@
   @apply border-theme-surface-border my-4 border-t;
 }
 
+@utility numeric-compact {
+  /* A narrow numeric field for an inline row control.
+
+     `type="number"` reserves room for the stepper arrows even while they are
+     hidden, which is invisible until the box is small: at 48px it ate the
+     placeholder and rendered "min" as "mir". These rows are typed into, not
+     stepped, and the label they lost to save width is exactly that
+     placeholder — so the reservation has to go. */
+  appearance: textfield;
+  -moz-appearance: textfield;
+
+  &::-webkit-outer-spin-button,
+  &::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+}
+
 @utility mobile-touch-target {
   /* #21 Guaranteed mobile touch target size */
   @apply inline-flex min-h-[44px] min-w-[44px] items-center justify-center;
