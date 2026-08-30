@@ -482,6 +482,11 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
   const [selectedItems, setSelectedItems] = useState<Record<string, Set<number>>>({});
   const actionBarRef = useRef<HTMLDivElement>(null);
   const [actionBarHeight, setActionBarHeight] = useState(0);
+  // The sticky top bar wraps to two or three rows depending on width and
+  // translated copy, so the rail's own sticky offset is measured rather than
+  // guessed — a stale constant parks the rail's tab strip underneath it.
+  const topBarRef = useRef<HTMLDivElement>(null);
+  const [topBarHeight, setTopBarHeight] = useState(0);
 
   // Compartment keys whose storage-type selector is in free-text ("Custom…")
   // mode, so the text input stays visible even while the value is still blank.
@@ -2325,6 +2330,16 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
   }, [compartments]);
 
   useEffect(() => {
+    const bar = topBarRef.current;
+    if (!bar) return;
+    const updateHeight = () => setTopBarHeight(bar.getBoundingClientRect().height);
+    updateHeight();
+    const observer = new ResizeObserver(updateHeight);
+    observer.observe(bar);
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
     const bar = actionBarRef.current;
     if (!bar) {
       setActionBarHeight(0);
@@ -3513,7 +3528,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             id={`comp-name-${key}`}
             type="text"
             aria-label="Location name"
-            className={`text-theme-text-primary placeholder:text-theme-text-muted grow basis-[200px] rounded-md border bg-transparent px-1.5 py-1 font-semibold outline-none focus:border-blue-400 ${
+            className={`text-theme-text-primary placeholder:text-theme-text-muted min-w-0 grow basis-[200px] rounded-md border bg-transparent px-1.5 py-1 font-semibold outline-none focus:border-blue-400 sm:min-w-[112px] sm:basis-[112px] ${
               depth > 0 ? 'text-sm' : 'text-[15px]'
             } ${comp.name.trim() ? 'hover:border-theme-surface-border border-transparent' : 'bg-theme-input-bg border-amber-500'}`}
             placeholder={`Name this ${typeLabel.toLowerCase()}…`}
@@ -4420,6 +4435,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       {/* Sticky top bar. Bleeds past the page gutters so it reads as a bar
           rather than a card, and sits below the fixed mobile header. */}
       <div
+        ref={topBarRef}
         /* `mobile-header-inset` parks it below the fixed mobile header, which
            only exists under 768px — hence the md override back to the top. */
         className="bg-theme-surface/95 border-theme-surface-border mobile-header-inset sticky z-30 border-b backdrop-blur md:top-0"
@@ -4864,7 +4880,10 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
 
         {/* Right rail — only where there is room for it beside the canvas. */}
         {isLaptop && (
-          <div className="sticky top-[118px] flex max-w-[344px] min-w-[300px] flex-[1_1_320px] flex-col gap-3">
+          <div
+            className="sticky flex max-w-[344px] min-w-[300px] flex-[1_1_320px] scrollbar-thin flex-col gap-3 overflow-y-auto"
+            style={{ top: topBarHeight + 12, maxHeight: `calc(100dvh - ${String(topBarHeight + 24)}px)` }}
+          >
             <div className="bg-theme-surface-border grid grid-cols-2 gap-0.5 rounded-lg p-0.5">
               {[
                 { value: 'blockers' as const, label: 'Before publishing', Icon: AlertTriangle },
