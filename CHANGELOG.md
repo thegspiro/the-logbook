@@ -117,6 +117,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Phones keep the compact rows, the full-height item editor and the search
   inventory add sheet; the new side-by-side row controls are a laptop and
   tablet layout.
+- An item row keeps its name, answer type and grading numbers on one line at
+  every laptop width, including a 1280px screen with the side navigation
+  open. The row previously wrapped its controls onto a second line as soon
+  as the preview was docked beside it. Each number stays labelled once it
+  holds a value — "par 4" and "min 2" on a count, "30 days" on an expiry
+  warning — so a saved checklist never shows two adjacent numbers with no
+  way to tell which threshold is which.
+- Tablets and small laptops (below 1440px) now have the same "Before
+  publishing" list as wider screens, in a bar along the bottom of the
+  checklist that opens the list as a sheet. It was previously only reachable
+  by widening the window.
+- The vehicle-layout picker and the "How would you like to start?" card on an
+  empty template now match the rest of the checklist, and the picker replaces
+  that card rather than appearing above it. Each vehicle layout says how many
+  locations and items it brings in before you choose it.
 - On a brand-new template, adding the first location left it collapsed with
   nowhere to type its items. It now opens ready for them.
 - The checklist preview no longer shows an answer left over from an item that

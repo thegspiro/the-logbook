@@ -467,6 +467,9 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
   // once. The blocker panel is what re-opens it when something is missing.
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [rail, setRail] = useState<'blockers' | 'crew'>('blockers');
+  // Between the phone layout and the width the rail earns, the blockers need a
+  // surface of their own: the handoff's fallback for exactly this range.
+  const [showBlockerSheet, setShowBlockerSheet] = useState(false);
   // One composer per location replaces the old quick-add / bulk-paste mode
   // toggle: the number of lines decides which behaviour applies.
   const [composeValues, setComposeValues] = useState<Record<string, string>>({});
@@ -474,11 +477,12 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
   const [mobileEditor, setMobileEditor] = useState<{ compartmentKey: string; itemKey: string } | null>(null);
   const isLaptop = useMediaQuery('(min-width: 640px)');
-  // The rail is a second flex line, not a column, until the canvas and it both
-  // fit: 420px + 320px + a 24px gap, inside the page gutters and the side nav.
-  // Below that it would sit after the whole checklist, which is no more
-  // reachable than the modal it replaced — so below it, it is the modal.
-  const isWideCanvas = useMediaQuery('(min-width: 1152px)');
+  // The rail costs 344px, and below 1440 that leaves a canvas too narrow for an
+  // item row to stay on one line — measured in the browser, not estimated: at
+  // 1280 even a row with no type settings wrapped. Above it the rail sits
+  // beside the canvas and every row fits; below it the checklist gets the full
+  // width, and the blocker bar and the modal preview stand in for it.
+  const isWideCanvas = useMediaQuery('(min-width: 1440px)');
   const [mobileSelectionLocations, setMobileSelectionLocations] = useState<Set<string>>(new Set());
   const [mobileAddLocations, setMobileAddLocations] = useState<Set<string>>(new Set());
   const [highlightedItemKeys, setHighlightedItemKeys] = useState<Set<string>>(new Set());
@@ -1911,6 +1915,30 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
   // ---------------------------------------------------------------------------
 
   const [showPresetPicker, setShowPresetPicker] = useState(false);
+  const presetPickerRef = useRef<HTMLDivElement>(null);
+  const presetOpenerRef = useRef<HTMLButtonElement>(null);
+  const presetPickerWasOpen = useRef(false);
+  /**
+   * The picker replaces the start card rather than layering over it, so opening
+   * it unmounts the button that was just activated and closing it unmounts the
+   * close button. Either way focus falls back to the body: a keyboard or switch
+   * user is given no indication that the content they asked for has appeared,
+   * and their next Tab restarts from the top of the document.
+   *
+   * Not a focus trap — this is a swap between two page surfaces, not a dialog.
+   * It only has to land focus inside whichever one is now on screen. When a
+   * preset is loaded the opener is gone with the start card, and the ref is
+   * null; nothing to restore to, and the checklist that replaced it is what the
+   * author asked for.
+   */
+  useEffect(() => {
+    if (showPresetPicker) {
+      presetPickerRef.current?.querySelector<HTMLElement>('button')?.focus();
+    } else if (presetPickerWasOpen.current) {
+      presetOpenerRef.current?.focus();
+    }
+    presetPickerWasOpen.current = showPresetPicker;
+  }, [showPresetPicker]);
   const [showPreview, setShowPreview] = useState(false);
 
   const [showChangelog, setShowChangelog] = useState(false);
@@ -2161,7 +2189,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     | null
   >(null);
   // Takes the fixed mobile bottom bar off this overlay while it is open.
-  useOverlaySurface(showChangelog || Boolean(csvPreview) || showPreview || drawerOpen);
+  useOverlaySurface(showChangelog || Boolean(csvPreview) || showPreview || drawerOpen || showBlockerSheet);
 
   const handleCsvImport = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -2359,21 +2387,33 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
   }, [form, compartments, templateId]);
 
   /**
-   * A fingerprint of what the crew preview *asks*, not what it says.
+   * Remount the crew preview only when an answer it holds stops making sense.
    *
    * The docked preview never unmounts while the canvas is edited, so
-   * `EquipmentCheckForm` keeps the answers a viewer typed into it. Keyed on
-   * this, it resets when an item is added, removed, reordered or given a
-   * different check type — and keeps them while a name or a threshold is
-   * being typed, which is the edit an author makes while watching it.
+   * `EquipmentCheckForm` keeps whatever was typed into it. Now that preview ids
+   * come from `clientKey`, adding, deleting, reordering or renaming an item
+   * cannot mis-assign an answer — a deleted item's answer is simply orphaned.
+   * The one edit that invalidates one is changing an item's check type, which
+   * leaves a count recorded against a pass/fail control. So that is the only
+   * edit that resets it: keying on the whole structure meant every added item
+   * wiped the answers an author had just been trying.
    */
-  const previewStructureKey = useMemo(
-    () =>
-      compartments
-        .map((c) => `${c.clientKey}:${c.items.map((i) => `${i.clientKey}.${i.checkType}`).join(',')}`)
-        .join('|'),
-    [compartments]
-  );
+  const previewCheckTypesRef = useRef(new Map<string, CheckType>());
+  const [previewResetToken, setPreviewResetToken] = useState(0);
+  useEffect(() => {
+    const next = new Map<string, CheckType>();
+    let typeChanged = false;
+    for (const compartment of compartments) {
+      for (const item of compartment.items) {
+        const id = item.id ?? item.clientKey;
+        next.set(id, item.checkType);
+        const previous = previewCheckTypesRef.current.get(id);
+        if (previous !== undefined && previous !== item.checkType) typeChanged = true;
+      }
+    }
+    previewCheckTypesRef.current = next;
+    if (typeChanged) setPreviewResetToken((token) => token + 1);
+  }, [compartments]);
 
   // ---------------------------------------------------------------------------
   // Template stats
@@ -2424,9 +2464,12 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     const observer = new ResizeObserver(updateHeight);
     observer.observe(bar);
     return () => observer.disconnect();
-    // The bar's presence depends on the breakpoint as well as the item count,
-    // so a resize across it must re-attach the observer.
-  }, [stats.totalItems, isLaptop]);
+    // The bar's presence depends on the breakpoints and on two different
+    // counts — the phone bar appears with the first item, the tablet bar with
+    // the first location — so both are dependencies. Without the location
+    // count, adding the first empty location on a tablet mounts a bar the page
+    // has reserved no clearance for, and it covers the last row.
+  }, [stats.totalItems, compartments.length, isLaptop, isWideCanvas]);
 
   /**
    * How much of this template is wired to the inventory catalog.
@@ -3185,9 +3228,22 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       );
     }
 
-    const settingLabelClass = 'text-theme-text-muted text-[11px] whitespace-nowrap';
+    // A placeholder is not a label: it disappears the moment a value loads, and
+    // a saved count item then shows two adjacent bare numbers with nothing to
+    // say which is the par and which is the minimum. The name sits *inside* the
+    // field's box instead — visible at rest, costs ~13px against a standing
+    // label's ~40px, and keeps the row on one line.
+    const numberFieldClass =
+      'border-theme-input-border bg-theme-input-bg focus-within:border-blue-400 flex shrink-0 items-center gap-1 rounded-md border px-1.5 py-1';
+    const numberFieldLabelClass = 'text-theme-text-muted text-[10px] leading-none';
+    // Widths are per-field because the ranges differ by an order of magnitude.
+    // A level is a real operational reading — the SCBA cylinder pressures in
+    // this repo's own fixtures are four digits, and the column is a Float, so
+    // it also has to hold a decimal. Counts and warning days are small
+    // integers. Sizing all three to the smallest would silently scroll a
+    // threshold an author has to read at a glance.
     const numberInputClass =
-      'border-theme-input-border bg-theme-input-bg text-theme-text-primary focus:border-blue-400 rounded-md border px-1.5 py-1 text-center text-[13px] tabular-nums outline-none';
+      'numeric-compact text-theme-text-primary bg-transparent p-0 text-center text-[13px] tabular-nums outline-none';
 
     return (
       <div
@@ -3234,7 +3290,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             id={`item-name-${itemKey}`}
             type="text"
             aria-label={isHeader ? 'Header title' : 'Item name'}
-            className={`text-theme-text-primary placeholder:text-theme-text-muted box-border min-w-[132px] shrink grow-0 basis-[200px] rounded-md border bg-transparent px-1.5 py-1.5 text-sm outline-none focus:border-blue-400 2xl:basis-[240px] ${
+            className={`text-theme-text-primary placeholder:text-theme-text-muted box-border min-w-[124px] shrink grow-0 basis-[176px] rounded-md border bg-transparent px-1.5 py-1.5 text-sm outline-none focus:border-blue-400 ${
               item.name.trim()
                 ? 'hover:border-theme-surface-border border-transparent'
                 : 'bg-theme-input-bg border-amber-500'
@@ -3252,7 +3308,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             <div
               role="group"
               aria-label={`Check type for ${item.name.trim() || 'item'}`}
-              className="bg-theme-surface-secondary grid min-w-[150px] shrink grow-0 basis-[168px] grid-cols-4 gap-0.5 rounded-lg p-0.5 2xl:basis-[220px]"
+              className="bg-theme-surface-secondary grid min-w-[150px] shrink grow-0 basis-[156px] grid-cols-4 gap-0.5 rounded-lg p-0.5"
             >
               {CANVAS_CHECK_TYPES.map(({ value, label, Icon }) => {
                 const active = item.checkType === value;
@@ -3269,7 +3325,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                         : 'text-theme-text-muted hover:text-theme-text-primary'
                     }`}
                   >
-                    <Icon className="hidden h-3.5 w-3.5 2xl:block" aria-hidden="true" />
+                    <Icon className="hidden h-3.5 w-3.5 min-[1700px]:block" aria-hidden="true" />
                     {label}
                   </button>
                 );
@@ -3281,51 +3337,64 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
               lone delete icon dangling on a line of its own. */}
           <div className="ml-auto flex shrink-0 flex-nowrap items-center justify-end gap-1.5">
             {item.checkType === 'count' && (
-              <div className="flex shrink-0 items-center gap-1.5 whitespace-nowrap">
-                <span className={settingLabelClass}>Par</span>
-                <input
-                  type="number"
-                  min="0"
-                  id={`item-par-${itemKey}`}
-                  aria-label={`Par quantity for ${item.name.trim() || 'item'}`}
-                  className={`${numberInputClass} w-14`}
-                  value={item.expectedQuantity}
-                  onChange={(e) => updateItemFieldWithAutoSave(compIdx, itemIdx, { expectedQuantity: e.target.value })}
-                />
-                <span className={settingLabelClass}>min</span>
-                <input
-                  type="number"
-                  min="0"
-                  aria-label={`Minimum quantity for ${item.name.trim() || 'item'}`}
-                  className={`${numberInputClass} w-14`}
-                  value={item.requiredQuantity}
-                  onChange={(e) => updateItemFieldWithAutoSave(compIdx, itemIdx, { requiredQuantity: e.target.value })}
-                />
+              <div className="flex shrink-0 items-center gap-1 whitespace-nowrap">
+                <span className={numberFieldClass}>
+                  <span className={numberFieldLabelClass} aria-hidden="true">
+                    par
+                  </span>
+                  <input
+                    type="number"
+                    min="0"
+                    id={`item-par-${itemKey}`}
+                    aria-label={`Par quantity for ${item.name.trim() || 'item'}`}
+                    className={`${numberInputClass} w-8`}
+                    value={item.expectedQuantity}
+                    onChange={(e) =>
+                      updateItemFieldWithAutoSave(compIdx, itemIdx, { expectedQuantity: e.target.value })
+                    }
+                  />
+                </span>
+                <span className={numberFieldClass}>
+                  <span className={numberFieldLabelClass} aria-hidden="true">
+                    min
+                  </span>
+                  <input
+                    type="number"
+                    min="0"
+                    aria-label={`Minimum quantity for ${item.name.trim() || 'item'}`}
+                    className={`${numberInputClass} w-8`}
+                    value={item.requiredQuantity}
+                    onChange={(e) =>
+                      updateItemFieldWithAutoSave(compIdx, itemIdx, { requiredQuantity: e.target.value })
+                    }
+                  />
+                </span>
               </div>
             )}
             {item.checkType === 'level' && (
-              <div className="flex shrink-0 items-center gap-1.5 whitespace-nowrap">
-                <span
-                  className={
-                    item.minLevel.trim()
-                      ? settingLabelClass
-                      : 'text-[11px] font-semibold text-amber-700 dark:text-amber-400'
-                  }
-                >
-                  Min needed
+              <div className="flex shrink-0 items-center gap-1 whitespace-nowrap">
+                <span className={`${numberFieldClass} ${item.minLevel.trim() ? '' : 'border-amber-500'}`}>
+                  <span className={numberFieldLabelClass} aria-hidden="true">
+                    min
+                  </span>
+                  <input
+                    type="number"
+                    min="0"
+                    id={`item-min-level-${itemKey}`}
+                    aria-label={`Minimum level for ${item.name.trim() || 'item'}`}
+                    className={`${numberInputClass} w-10`}
+                    value={item.minLevel}
+                    onChange={(e) => updateItemFieldWithAutoSave(compIdx, itemIdx, { minLevel: e.target.value })}
+                  />
                 </span>
-                <input
-                  type="number"
-                  min="0"
-                  id={`item-min-level-${itemKey}`}
-                  aria-label={`Minimum level for ${item.name.trim() || 'item'}`}
-                  className={`${numberInputClass} w-16 ${item.minLevel.trim() ? '' : 'border-amber-500'}`}
-                  value={item.minLevel}
-                  onChange={(e) => updateItemFieldWithAutoSave(compIdx, itemIdx, { minLevel: e.target.value })}
-                />
                 <select
                   aria-label={`Level unit for ${item.name.trim() || 'item'}`}
-                  className="border-theme-input-border bg-theme-input-bg text-theme-text-secondary rounded-md border px-1 py-1 text-[11px]"
+                  // Sized for the longest unit plus the native dropdown arrow:
+                  // `gallons` measures 35px at this size and the arrow takes
+                  // ~18px, which a 56px box could not hold — it rendered
+                  // "gallon" beside an operational threshold, with nothing to
+                  // say the value had been cut.
+                  className="border-theme-input-border bg-theme-input-bg text-theme-text-secondary w-[68px] rounded-md border px-0.5 py-1 text-[11px]"
                   value={item.levelUnit}
                   onChange={(e) => updateItemFieldWithAutoSave(compIdx, itemIdx, { levelUnit: e.target.value })}
                 >
@@ -3339,19 +3408,22 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
               </div>
             )}
             {item.checkType === 'expiry' && (
-              <div className="flex shrink-0 items-center gap-1.5 whitespace-nowrap">
-                <span className={settingLabelClass}>Warn</span>
-                <input
-                  type="number"
-                  min="0"
-                  aria-label={`Expiration warning days for ${item.name.trim() || 'item'}`}
-                  className={`${numberInputClass} w-14`}
-                  value={item.expirationWarningDays}
-                  onChange={(e) =>
-                    updateItemFieldWithAutoSave(compIdx, itemIdx, { expirationWarningDays: e.target.value })
-                  }
-                />
-                <span className={settingLabelClass}>days ahead</span>
+              <div className="flex shrink-0 items-center gap-1 whitespace-nowrap">
+                <span className={numberFieldClass} title="Days before the expiry date the crew is warned">
+                  <input
+                    type="number"
+                    min="0"
+                    aria-label={`Expiration warning days for ${item.name.trim() || 'item'}`}
+                    className={`${numberInputClass} w-8`}
+                    value={item.expirationWarningDays}
+                    onChange={(e) =>
+                      updateItemFieldWithAutoSave(compIdx, itemIdx, { expirationWarningDays: e.target.value })
+                    }
+                  />
+                  <span className={numberFieldLabelClass} aria-hidden="true">
+                    days
+                  </span>
+                </span>
               </div>
             )}
 
@@ -4181,6 +4253,92 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
    * under the title reports what it holds so it does not have to be opened to
    * be read.
    */
+  /**
+   * The publish blockers, as a list you can act on.
+   *
+   * Shared by the rail and, where the rail does not fit, the sheet the bottom
+   * bar opens — the same list either way, so a narrow window is not told a
+   * different story about what is wrong.
+   */
+  const renderBlockersPanel = () => (
+    <div className="card p-4" id="publish-blockers">
+      <div className="mb-1 flex items-center justify-between gap-2">
+        <h3 className="text-theme-text-primary text-sm font-bold">
+          {blockers.length === 0
+            ? 'Ready to publish'
+            : `${blockers.length} thing${blockers.length === 1 ? '' : 's'} to fix`}
+        </h3>
+        <span className="text-theme-text-muted text-[11px]">Draft saves anyway</span>
+      </div>
+      {blockers.length > 0 && (
+        <p className="text-theme-text-muted mb-3 text-xs">Each one jumps to the row it belongs to.</p>
+      )}
+      <div className="flex flex-col gap-2">
+        {blockers.map((blocker) => {
+          const BlockerIcon =
+            blocker.icon === 'gauge'
+              ? Gauge
+              : blocker.icon === 'package'
+                ? Package
+                : blocker.icon === 'sliders'
+                  ? SlidersHorizontal
+                  : AlertTriangle;
+          return (
+            <button
+              key={blocker.id}
+              type="button"
+              onClick={() =>
+                goToBlocker(blocker.anchorId, blocker.expandKey, blocker.focusId, blocker.editorTarget, blocker.addKey)
+              }
+              className="flex items-start gap-2.5 rounded-lg border border-amber-500/35 bg-amber-500/[0.07] p-2.5 text-left transition-colors hover:bg-amber-500/[0.14]"
+            >
+              <BlockerIcon
+                className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-700 dark:text-amber-400"
+                aria-hidden="true"
+              />
+              <span className="min-w-0">
+                <span className="text-theme-text-primary block text-[13px] font-semibold">{blocker.title}</span>
+                <span className="text-theme-text-muted block text-xs">{blocker.locator}</span>
+              </span>
+            </button>
+          );
+        })}
+      </div>
+      <div className="border-theme-surface-border mt-3.5 flex flex-col gap-1.5 border-t pt-3">
+        <span className="text-theme-text-secondary flex items-center gap-2 text-[13px]">
+          {setupReady ? (
+            <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-green-700 dark:text-green-400" />
+          ) : (
+            <Circle className="text-theme-text-muted h-3.5 w-3.5 shrink-0" />
+          )}
+          Name, timing and crew set
+        </span>
+        <span className="text-theme-text-secondary flex items-center gap-2 text-[13px]">
+          {locationsReady ? (
+            <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-green-700 dark:text-green-400" />
+          ) : (
+            <Circle className="text-theme-text-muted h-3.5 w-3.5 shrink-0" />
+          )}
+          {stats.compartmentCount} location{stats.compartmentCount !== 1 ? 's' : ''},{' '}
+          {compartments.filter((c) => !c.isHeader && c.items.length > 0).length} with items
+        </span>
+        <span className="text-theme-text-secondary flex flex-wrap items-center gap-2 text-[13px]">
+          <Link2 className="text-theme-text-muted h-3.5 w-3.5 shrink-0" />
+          {coverage.linked} of {coverage.linkable} items linked to inventory
+          {templateId && coverage.unlinked > 0 && (
+            <button
+              type="button"
+              onClick={() => setShowInventoryMatch(true)}
+              className="text-blue-700 underline dark:text-blue-400"
+            >
+              link the rest
+            </button>
+          )}
+        </span>
+      </div>
+    </div>
+  );
+
   const renderDetailsDrawer = () => (
     <DialogPortal>
       <div
@@ -4534,6 +4692,8 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     editorTarget?: { compartmentKey: string; itemKey: string },
     addKey?: string
   ) => {
+    // Whatever surface the jump came from is now in the way of where it lands.
+    setShowBlockerSheet(false);
     if (anchorId === DETAILS_ANCHOR) {
       setDrawerOpen(true);
       return;
@@ -4569,7 +4729,18 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     // put the cursor in the item name, which is the one part already correct.
     const field =
       (focusId ? document.getElementById(focusId) : null) ?? row.querySelector<HTMLElement>('input, select, textarea');
-    (field ?? row).focus({ preventScroll: true });
+    // Deferred, because the jump may have come from the blocker sheet. Closing
+    // it is a state update, so `DialogPanel` unmounts after this handler
+    // returns, and `useFocusTrap`'s cleanup then restores focus to whatever
+    // opened it — the Review button in the action bar. A focus set here is
+    // silently undone a moment later: the row scrolls into view and the cursor
+    // ends up back in the bar, which is the one thing the blocker promises not
+    // to do. A macrotask lands after the commit that unmounts the sheet.
+    // Unconditional rather than only when the sheet was open, so the rail and
+    // the sheet cannot drift apart, and the collapsed-location path above
+    // already reaches this line through a timeout of its own.
+    const target = field ?? row;
+    window.setTimeout(() => target.focus({ preventScroll: true }), 0);
   };
   const mobileSelection = compartments
     .map((compartment, index) => ({ index, key: getCompKey(index), compartment }))
@@ -4765,14 +4936,21 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
               <button
                 type="button"
                 onClick={() => {
-                  if (!isWideCanvas) {
-                    const first = blockers[0];
-                    if (first)
-                      goToBlocker(first.anchorId, first.expandKey, first.focusId, first.editorTarget, first.addKey);
+                  // Three surfaces, by what the width can hold: the rail, the
+                  // sheet the bottom bar opens, or — on a phone, which has
+                  // neither — the offending row itself.
+                  if (isWideCanvas) {
+                    setRail('blockers');
+                    document.getElementById('publish-blockers')?.scrollIntoView({ block: 'nearest' });
                     return;
                   }
-                  setRail('blockers');
-                  document.getElementById('publish-blockers')?.scrollIntoView({ block: 'nearest' });
+                  if (isLaptop) {
+                    setShowBlockerSheet(true);
+                    return;
+                  }
+                  const first = blockers[0];
+                  if (first)
+                    goToBlocker(first.anchorId, first.expandKey, first.focusId, first.editorTarget, first.addKey);
                 }}
                 className="rounded-full bg-amber-500/15 px-2.5 py-1 text-xs font-bold text-amber-700 hover:bg-amber-500/25 dark:text-amber-400"
               >
@@ -4907,83 +5085,98 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           </div>
 
           {showPresetPicker && (
-            <div className="rounded-lg border border-orange-500/20 bg-orange-500/5 p-4">
-              <p className="text-theme-text-primary mb-3 text-sm font-medium">
-                Choose a pre-built vehicle check template:
-              </p>
-              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 md:grid-cols-3">
-                {Object.entries(VEHICLE_PRESETS).map(([key, preset]) => (
-                  <button
-                    key={key}
-                    type="button"
-                    onClick={() => void loadVehiclePreset(key)}
-                    className="btn-secondary px-3 text-left text-sm hover:border-orange-500/40 hover:bg-orange-500/10"
-                  >
-                    <span className="font-medium">{preset.label}</span>
-                    <span className="text-theme-text-muted mt-0.5 block text-xs">
-                      {preset.compartments.length} sections,{' '}
+            <div className="card rounded-xl" ref={presetPickerRef}>
+              <div className="bg-theme-surface-secondary border-theme-surface-border flex items-center justify-between gap-3 rounded-t-xl border-b px-4 py-2.5">
+                <span className="text-theme-text-primary text-[13px] font-bold">Start from a vehicle layout</span>
+                <button
+                  type="button"
+                  onClick={() => setShowPresetPicker(false)}
+                  aria-label="Close vehicle layouts"
+                  className="text-theme-text-muted hover:text-theme-text-primary mobile-touch-target flex items-center justify-center rounded-md sm:min-h-0 sm:min-w-0 sm:p-1"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+              {Object.entries(VEHICLE_PRESETS).map(([key, preset]) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => void loadVehiclePreset(key)}
+                  className="border-theme-surface-border hover:bg-theme-surface-hover flex w-full items-center gap-3 border-b px-4 py-3 text-left transition-colors last:rounded-b-xl last:border-b-0"
+                >
+                  <Truck className="h-4 w-4 shrink-0 text-orange-600 dark:text-orange-400" aria-hidden="true" />
+                  <span className="min-w-0 flex-1">
+                    <span className="text-theme-text-primary block text-sm font-semibold">{preset.label}</span>
+                    <span className="text-theme-text-muted block text-xs">
+                      {preset.compartments.length} locations ·{' '}
                       {preset.compartments.reduce((sum, c) => sum + c.items.length, 0)} items
                     </span>
-                  </button>
-                ))}
-              </div>
+                  </span>
+                  <ChevronRight className="text-theme-text-muted h-4 w-4 shrink-0" aria-hidden="true" />
+                </button>
+              ))}
             </div>
           )}
 
           {compartments.length === 0 ? (
-            <div className="card overflow-hidden border-blue-500/20 bg-gradient-to-br from-blue-500/[0.06] via-transparent to-transparent p-5 shadow-sm sm:p-8">
-              <div className="mx-auto max-w-2xl text-center">
-                <h3 className="text-theme-text-primary text-lg font-semibold">How would you like to start?</h3>
-                <p className="text-theme-text-muted mt-1 text-sm">
-                  You can change every detail later. Choose the quickest starting point for this checklist.
-                </p>
-              </div>
-              <div
-                className={`mx-auto mt-5 grid max-w-4xl gap-3 ${form.templateType === 'vehicle' || form.templateType === 'combined' ? 'sm:grid-cols-3' : 'sm:max-w-2xl sm:grid-cols-2'}`}
-              >
+            /* The picker replaces this card rather than stacking above it: both are
+               the same surface, so showing them together repeats the row the
+               user just tapped. */
+            showPresetPicker ? null : (
+              <div className="card rounded-xl">
+                <div className="border-theme-surface-border bg-theme-surface-secondary flex items-center justify-between gap-3 rounded-t-xl border-b px-4 py-2.5">
+                  <span className="text-theme-text-primary text-sm font-semibold">How would you like to start?</span>
+                  <span className="text-theme-text-muted hidden text-xs sm:block">
+                    You can change every detail later
+                  </span>
+                </div>
                 {(form.templateType === 'vehicle' || form.templateType === 'combined') && (
                   <button
                     type="button"
+                    ref={presetOpenerRef}
                     onClick={() => setShowPresetPicker(true)}
-                    className="group border-theme-surface-border bg-theme-surface rounded-xl border p-4 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:border-orange-500/50 hover:shadow-md"
+                    className="border-theme-surface-border hover:bg-theme-surface-hover flex w-full items-center gap-3 border-b px-4 py-3 text-left transition-colors last:rounded-b-xl last:border-b-0"
                   >
-                    <span className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-orange-500/10 text-orange-600">
-                      <Truck className="h-5 w-5" />
+                    <Truck className="h-4 w-4 shrink-0 text-orange-600 dark:text-orange-400" aria-hidden="true" />
+                    <span className="min-w-0 flex-1">
+                      <span className="text-theme-text-primary block text-sm font-semibold">Use a vehicle layout</span>
+                      <span className="text-theme-text-muted block text-xs">
+                        Start with common apparatus locations and inspection items.
+                      </span>
                     </span>
-                    <span className="text-theme-text-primary block text-sm font-semibold">Use a vehicle layout</span>
-                    <span className="text-theme-text-muted mt-1 block text-xs">
-                      Start with common apparatus locations and inspection items.
-                    </span>
+                    <ChevronRight className="text-theme-text-muted h-4 w-4 shrink-0" aria-hidden="true" />
                   </button>
                 )}
                 <button
                   type="button"
                   onClick={() => csvImportRef.current?.click()}
-                  className="group border-theme-surface-border bg-theme-surface rounded-xl border p-4 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:border-blue-500/50 hover:shadow-md"
+                  className="border-theme-surface-border hover:bg-theme-surface-hover flex w-full items-center gap-3 border-b px-4 py-3 text-left transition-colors last:rounded-b-xl last:border-b-0"
                 >
-                  <span className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-blue-500/10 text-blue-600">
-                    <Upload className="h-5 w-5" />
+                  <Upload className="h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" aria-hidden="true" />
+                  <span className="min-w-0 flex-1">
+                    <span className="text-theme-text-primary block text-sm font-semibold">Import a list</span>
+                    <span className="text-theme-text-muted block text-xs">
+                      Bring in the spreadsheet or checklist you already use.
+                    </span>
                   </span>
-                  <span className="text-theme-text-primary block text-sm font-semibold">Import a list</span>
-                  <span className="text-theme-text-muted mt-1 block text-xs">
-                    Bring in the spreadsheet or checklist you already use.
-                  </span>
+                  <ChevronRight className="text-theme-text-muted h-4 w-4 shrink-0" aria-hidden="true" />
                 </button>
                 <button
                   type="button"
                   onClick={() => void addCompartment()}
-                  className="group border-theme-surface-border bg-theme-surface rounded-xl border p-4 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:border-blue-500/50 hover:shadow-md"
+                  className="border-theme-surface-border hover:bg-theme-surface-hover flex w-full items-center gap-3 border-b px-4 py-3 text-left transition-colors last:rounded-b-xl last:border-b-0"
                 >
-                  <span className="mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-blue-500/10 text-blue-600">
-                    <Plus className="h-5 w-5" />
+                  <Plus className="h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" aria-hidden="true" />
+                  <span className="min-w-0 flex-1">
+                    <span className="text-theme-text-primary block text-sm font-semibold">Build from scratch</span>
+                    <span className="text-theme-text-muted block text-xs">
+                      Add the first location and begin typing items immediately.
+                    </span>
                   </span>
-                  <span className="text-theme-text-primary block text-sm font-semibold">Build from scratch</span>
-                  <span className="text-theme-text-muted mt-1 block text-xs">
-                    Add the first location and begin typing items immediately.
-                  </span>
+                  <ChevronRight className="text-theme-text-muted h-4 w-4 shrink-0" aria-hidden="true" />
                 </button>
               </div>
-            </div>
+            )
           ) : (
             /* Deliberately not `overflow-hidden`: the catalog results list is
                absolutely positioned below its input and a clip here cuts it in
@@ -5042,7 +5235,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
         {/* Right rail — only where there is room for it beside the canvas. */}
         {isWideCanvas && (
           <div
-            className="sticky flex max-w-[344px] min-w-[300px] flex-[1_1_320px] scrollbar-thin flex-col gap-3 overflow-y-auto"
+            className="sticky flex max-w-[296px] min-w-[296px] flex-[1_1_296px] scrollbar-thin flex-col gap-3 overflow-y-auto"
             style={{ top: topBarHeight + 12, maxHeight: `calc(100dvh - ${String(topBarHeight + 24)}px)` }}
           >
             <div className="bg-theme-surface-border grid grid-cols-2 gap-0.5 rounded-lg p-0.5">
@@ -5068,97 +5261,14 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             </div>
 
             {rail === 'blockers' ? (
-              <div className="card p-4" id="publish-blockers">
-                <div className="mb-1 flex items-center justify-between gap-2">
-                  <h3 className="text-theme-text-primary text-sm font-bold">
-                    {blockers.length === 0
-                      ? 'Ready to publish'
-                      : `${blockers.length} thing${blockers.length === 1 ? '' : 's'} to fix`}
-                  </h3>
-                  <span className="text-theme-text-muted text-[11px]">Draft saves anyway</span>
-                </div>
-                {blockers.length > 0 && (
-                  <p className="text-theme-text-muted mb-3 text-xs">Each one jumps to the row it belongs to.</p>
-                )}
-                <div className="flex flex-col gap-2">
-                  {blockers.map((blocker) => {
-                    const BlockerIcon =
-                      blocker.icon === 'gauge'
-                        ? Gauge
-                        : blocker.icon === 'package'
-                          ? Package
-                          : blocker.icon === 'sliders'
-                            ? SlidersHorizontal
-                            : AlertTriangle;
-                    return (
-                      <button
-                        key={blocker.id}
-                        type="button"
-                        onClick={() =>
-                          goToBlocker(
-                            blocker.anchorId,
-                            blocker.expandKey,
-                            blocker.focusId,
-                            blocker.editorTarget,
-                            blocker.addKey
-                          )
-                        }
-                        className="flex items-start gap-2.5 rounded-lg border border-amber-500/35 bg-amber-500/[0.07] p-2.5 text-left transition-colors hover:bg-amber-500/[0.14]"
-                      >
-                        <BlockerIcon
-                          className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-700 dark:text-amber-400"
-                          aria-hidden="true"
-                        />
-                        <span className="min-w-0">
-                          <span className="text-theme-text-primary block text-[13px] font-semibold">
-                            {blocker.title}
-                          </span>
-                          <span className="text-theme-text-muted block text-xs">{blocker.locator}</span>
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-                <div className="border-theme-surface-border mt-3.5 flex flex-col gap-1.5 border-t pt-3">
-                  <span className="text-theme-text-secondary flex items-center gap-2 text-[13px]">
-                    {setupReady ? (
-                      <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-green-700 dark:text-green-400" />
-                    ) : (
-                      <Circle className="text-theme-text-muted h-3.5 w-3.5 shrink-0" />
-                    )}
-                    Name, timing and crew set
-                  </span>
-                  <span className="text-theme-text-secondary flex items-center gap-2 text-[13px]">
-                    {locationsReady ? (
-                      <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-green-700 dark:text-green-400" />
-                    ) : (
-                      <Circle className="text-theme-text-muted h-3.5 w-3.5 shrink-0" />
-                    )}
-                    {stats.compartmentCount} location{stats.compartmentCount !== 1 ? 's' : ''},{' '}
-                    {compartments.filter((c) => !c.isHeader && c.items.length > 0).length} with items
-                  </span>
-                  <span className="text-theme-text-secondary flex flex-wrap items-center gap-2 text-[13px]">
-                    <Link2 className="text-theme-text-muted h-3.5 w-3.5 shrink-0" />
-                    {coverage.linked} of {coverage.linkable} items linked to inventory
-                    {templateId && coverage.unlinked > 0 && (
-                      <button
-                        type="button"
-                        onClick={() => setShowInventoryMatch(true)}
-                        className="text-blue-700 underline dark:text-blue-400"
-                      >
-                        link the rest
-                      </button>
-                    )}
-                  </span>
-                </div>
-              </div>
+              renderBlockersPanel()
             ) : (
               <div className="card p-3.5">
                 <div className="mb-2.5 flex items-center justify-between">
                   <h3 className="text-theme-text-primary text-sm font-bold">What the crew sees</h3>
                   <span className="text-theme-text-muted text-[11px]">Updates as you edit</span>
                 </div>
-                <div className="bg-theme-bg mx-auto w-[300px] overflow-hidden rounded-[34px] border-[6px] border-gray-800 shadow-xl dark:border-gray-600">
+                <div className="bg-theme-bg mx-auto w-[268px] overflow-hidden rounded-[34px] border-[6px] border-gray-800 shadow-xl dark:border-gray-600">
                   <div className="flex h-[22px] items-end justify-center bg-gray-800 dark:bg-gray-600">
                     <div className="h-3.5 w-24 rounded-b-[14px] bg-gray-800 dark:bg-gray-600" />
                   </div>
@@ -5176,7 +5286,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                       </p>
                     ) : (
                       <EquipmentCheckForm
-                        key={previewStructureKey}
+                        key={previewResetToken}
                         shiftId="preview"
                         template={buildPreviewTemplate()}
                         previewMode
@@ -5195,6 +5305,103 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
 
       {drawerOpen && renderDetailsDrawer()}
 
+      {/* Between 640px and the width the rail needs, the checklist has the page
+          to itself — so the blockers and the crew view get a bar of their own
+          rather than being unreachable until the window grows. */}
+      {isLaptop && !isWideCanvas && compartments.length > 0 && (
+        <div
+          ref={actionBarRef}
+          /* The bar belongs to the checklist column, so it starts where that
+             column starts. `--side-nav-width` is published by AppLayout and is
+             16rem only in the left-navigation layout at `md` and up — a
+             hardcoded `md:left-64` would leave a 256px dead gap for the
+             departments on the top-navigation layout, which renders content
+             full width. Below 768px it resolves to 0px and under top
+             navigation it is absent, so every action bar can carry it
+             unconditionally — the rule is left with no exceptions to keep
+             straight, which is what let the phone bar below drift.
+
+             `z-30`, not `z-40`, for the other half of that: below 768px the
+             navigation is an off-canvas drawer whose scrim and panel are
+             `z-40` and render before any page content, so a page bar at the
+             same z-index paints over the drawer's bottom — its theme, contrast
+             and logout actions — while it is open. A page's own bar outranks
+             page content and yields to the navigation. */
+          className="border-theme-surface-border bg-theme-surface/95 action-bar-safe fixed right-0 bottom-0 left-[var(--side-nav-width,0px)] z-30 border-t px-4 backdrop-blur-sm"
+          aria-label="Checklist action bar"
+        >
+          <div className="mx-auto flex min-h-14 max-w-[1440px] items-center justify-between gap-3">
+            <span className="flex min-w-0 items-center gap-2 text-sm" aria-live="polite">
+              {blockers.length === 0 ? (
+                <>
+                  <CheckCircle2 className="h-4 w-4 shrink-0 text-green-700 dark:text-green-400" aria-hidden="true" />
+                  <span className="text-theme-text-secondary truncate font-medium">Ready to publish</span>
+                </>
+              ) : (
+                <>
+                  <AlertTriangle className="h-4 w-4 shrink-0 text-amber-700 dark:text-amber-400" aria-hidden="true" />
+                  <span className="text-theme-text-secondary truncate font-medium">
+                    {blockers.length} thing{blockers.length === 1 ? '' : 's'} to fix before publishing
+                  </span>
+                </>
+              )}
+            </span>
+            <div className="flex shrink-0 items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setShowPreview(true)}
+                className="btn-secondary flex min-h-10 items-center gap-2 px-3 text-sm font-medium"
+              >
+                <Smartphone className="h-4 w-4" aria-hidden="true" />
+                <span className="hidden sm:inline">Crew view</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowBlockerSheet(true)}
+                className="btn-secondary flex min-h-10 items-center gap-2 px-3 text-sm font-medium"
+              >
+                <AlertTriangle className="h-4 w-4" aria-hidden="true" />
+                {blockers.length === 0 ? 'Checks' : 'Review'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showBlockerSheet && (
+        <DialogPortal>
+          <div
+            className="modal-overlay z-50 flex items-end justify-center"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="blocker-sheet-title"
+            onClick={(event) => {
+              if (event.target === event.currentTarget) setShowBlockerSheet(false);
+            }}
+          >
+            <DialogPanel
+              onClose={() => setShowBlockerSheet(false)}
+              className="max-h-[85dvh] w-full max-w-[640px] overflow-y-auto rounded-b-none px-4 pt-4 pb-[max(1rem,env(safe-area-inset-bottom))]"
+            >
+              <div className="mb-3 flex items-start justify-between gap-3">
+                <h2 id="blocker-sheet-title" className="text-theme-text-primary text-base font-bold">
+                  Before publishing
+                </h2>
+                <button
+                  type="button"
+                  onClick={() => setShowBlockerSheet(false)}
+                  className="text-theme-text-muted hover:text-theme-text-primary mobile-touch-target flex items-center justify-center rounded-md"
+                  aria-label="Close checks"
+                >
+                  <X className="h-4.5 w-4.5" />
+                </button>
+              </div>
+              {renderBlockersPanel()}
+            </DialogPanel>
+          </div>
+        </DialogPortal>
+      )}
+
       {/* The phone action bar keeps only the current state and its next action;
           on laptop and wider the canvas header carries the counts and the top
           bar carries the save state. ResizeObserver above makes page clearance
@@ -5203,7 +5410,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       {stats.totalItems > 0 && !isLaptop && (
         <div
           ref={actionBarRef}
-          className="border-theme-surface-border bg-theme-surface/95 action-bar-safe fixed right-0 bottom-0 left-0 z-40 border-t px-4 backdrop-blur-sm"
+          className="border-theme-surface-border bg-theme-surface/95 action-bar-safe fixed right-0 bottom-0 left-[var(--side-nav-width,0px)] z-30 border-t px-4 backdrop-blur-sm"
           aria-label="Checklist action bar"
         >
           <div className="flex min-h-11 items-center justify-between gap-4">
