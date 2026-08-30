@@ -4392,6 +4392,12 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     expandKey?: string;
     /** The field the author has to change — not merely the row it sits in. */
     focusId?: string;
+    /**
+     * Below 640px an item's settings live only in the editor sheet, so the
+     * compact row holds no field to focus. Opening that sheet is the phone
+     * equivalent of putting the cursor in the offending input.
+     */
+    editorTarget?: { compartmentKey: string; itemKey: string };
   }> = [];
   if (!setupReady) {
     blockers.push({
@@ -4444,6 +4450,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           anchorId: itemAnchor,
           expandKey: comp.id ?? `comp-${compIdx}`,
           focusId: `item-name-${item.id ?? item.clientKey}`,
+          editorTarget: { compartmentKey: comp.clientKey, itemKey: item.clientKey },
         });
         continue;
       }
@@ -4456,6 +4463,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           anchorId: itemAnchor,
           expandKey: comp.id ?? `comp-${compIdx}`,
           focusId: `item-par-${item.id ?? item.clientKey}`,
+          editorTarget: { compartmentKey: comp.clientKey, itemKey: item.clientKey },
         });
       }
       if (item.checkType === 'level' && !item.minLevel.trim()) {
@@ -4467,6 +4475,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           anchorId: itemAnchor,
           expandKey: comp.id ?? `comp-${compIdx}`,
           focusId: `item-min-level-${item.id ?? item.clientKey}`,
+          editorTarget: { compartmentKey: comp.clientKey, itemKey: item.clientKey },
         });
       }
     }
@@ -4480,16 +4489,28 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
    * that is empty, and a scrolled-to row still costs them a click to find it.
    * `prefers-reduced-motion` turns the smooth scroll off rather than the jump.
    */
-  const goToBlocker = (anchorId: string, expandKey?: string, focusId?: string) => {
+  const goToBlocker = (
+    anchorId: string,
+    expandKey?: string,
+    focusId?: string,
+    editorTarget?: { compartmentKey: string; itemKey: string }
+  ) => {
     if (anchorId === DETAILS_ANCHOR) {
       setDrawerOpen(true);
+      return;
+    }
+    // The phone row is a summary, not a form: every item field it could focus
+    // is inside the editor sheet, so scrolling to the row would leave the
+    // author looking at the problem with no way to fix it.
+    if (!isLaptop && editorTarget) {
+      setMobileEditor(editorTarget);
       return;
     }
     // A row inside a collapsed location is not in the DOM to scroll to, so the
     // jump has to open it first — and then wait a frame for it to render.
     if (expandKey && !expandedCompartments.has(expandKey)) {
       setExpandedCompartments((prev) => new Set(prev).add(expandKey));
-      window.setTimeout(() => goToBlocker(anchorId, undefined, focusId), 0);
+      window.setTimeout(() => goToBlocker(anchorId, undefined, focusId, editorTarget), 0);
       return;
     }
     const row = document.getElementById(anchorId);
@@ -4698,7 +4719,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                 onClick={() => {
                   if (!isWideCanvas) {
                     const first = blockers[0];
-                    if (first) goToBlocker(first.anchorId, first.expandKey, first.focusId);
+                    if (first) goToBlocker(first.anchorId, first.expandKey, first.focusId, first.editorTarget);
                     return;
                   }
                   setRail('blockers');
@@ -5024,7 +5045,9 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                       <button
                         key={blocker.id}
                         type="button"
-                        onClick={() => goToBlocker(blocker.anchorId, blocker.expandKey, blocker.focusId)}
+                        onClick={() =>
+                          goToBlocker(blocker.anchorId, blocker.expandKey, blocker.focusId, blocker.editorTarget)
+                        }
                         className="flex items-start gap-2.5 rounded-lg border border-amber-500/35 bg-amber-500/[0.07] p-2.5 text-left transition-colors hover:bg-amber-500/[0.14]"
                       >
                         <BlockerIcon

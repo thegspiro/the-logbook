@@ -1115,6 +1115,26 @@ describe('EquipmentCheckTemplateBuilder canvas affordances reach both widths', (
     expect(screen.getByDisplayValue('Medical bag')).toHaveFocus();
   });
 
+  it('opens the item editor when a phone blocker names a setting the row does not hold', async () => {
+    const user = userEvent.setup();
+    mockViewport('phone');
+    getTemplate.mockResolvedValue({
+      ...structuredClone(template),
+      compartments: [
+        {
+          ...structuredClone(template.compartments[0]),
+          items: [{ ...template.compartments[0]?.items[0], id: 'foam', name: 'Foam tank level', checkType: 'level' }],
+        },
+      ],
+    });
+    renderBuilder();
+
+    // The compact phone row holds no input at all, so scrolling to it would
+    // leave the author looking at the problem with no way to fix it.
+    await user.click(await screen.findByRole('button', { name: '1 to fix' }));
+    expect(await screen.findByRole('dialog', { name: 'Foam tank level' })).toBeVisible();
+  });
+
   it('opens the phone add sheet from an empty location instead of a missing composer', async () => {
     const user = userEvent.setup();
     mockViewport('phone');
