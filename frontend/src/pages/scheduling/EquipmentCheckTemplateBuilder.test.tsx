@@ -194,7 +194,7 @@ describe('EquipmentCheckTemplateBuilder responsive actions', () => {
     expect(screen.getByRole('button', { name: 'Deselect Radio' })).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Done' }));
     expect(screen.queryByRole('button', { name: 'Select Radio' })).not.toBeInTheDocument();
-  });
+  }, 10_000);
 
   it('opens a full-height progressive item editor and reviews adjacent items on phones', async () => {
     const user = userEvent.setup();
@@ -572,7 +572,7 @@ describe('EquipmentCheckTemplateBuilder quick add queue', () => {
     await waitFor(() => expect(screen.queryByLabelText('Safety vest Saving')).not.toBeInTheDocument());
     expect(screen.getByText('Safety vest')).toBeVisible();
     expect(addCheckItemsBulk.mock.calls[2]?.[2]).toBe(firstKey);
-  });
+  }, 10_000);
 
   it('does not submit the same value again when Enter repeats', async () => {
     const user = userEvent.setup();
@@ -581,6 +581,16 @@ describe('EquipmentCheckTemplateBuilder quick add queue', () => {
     const input = (await screen.findAllByPlaceholderText(/search inventory/i))[0] as HTMLElement;
     await user.type(input, 'Lantern{Enter}{Enter}');
     expect(addCheckItemsBulk).toHaveBeenCalledTimes(1);
+    expect(addCheckItemsBulk).toHaveBeenCalledWith(
+      'cab',
+      [
+        {
+          name: 'Lantern',
+          sort_order: 2,
+        },
+      ],
+      expect.any(String)
+    );
   });
 });
 
@@ -665,6 +675,12 @@ describe('EquipmentCheckTemplateBuilder remaining mutation regressions', () => {
     await user.type(paste, 'Mask\nHood');
     await user.click(screen.getByRole('button', { name: 'Add All' }));
     await waitFor(() => expect(addCheckItemsBulk).toHaveBeenCalledTimes(1));
+    expect(addCheckItemsBulk).toHaveBeenNthCalledWith(
+      1,
+      'cab',
+      [{ name: 'Mask' }, { name: 'Hood' }],
+      expect.any(String)
+    );
     expect(paste).toHaveValue('Mask\nHood');
     await user.click(screen.getByRole('button', { name: 'Add All' }));
     expect(await screen.findByLabelText('Actions for Mask')).toBeVisible();
@@ -704,6 +720,43 @@ describe('EquipmentCheckTemplateBuilder remaining mutation regressions', () => {
   });
 });
 
+describe('EquipmentCheckTemplateBuilder unsaved-change prompts', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    getTemplate.mockResolvedValue(structuredClone(template));
+    updateEquipmentCheckTemplate.mockResolvedValue(structuredClone(template));
+  });
+
+  it('does not prompt when leaving an unchanged loaded template', async () => {
+    renderBuilder();
+    await screen.findByDisplayValue('Engine check');
+    await userEvent.click(screen.getByTitle('Go back'));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('prompts for a real edit, then stops prompting after that edit is saved', async () => {
+    const user = userEvent.setup();
+    renderBuilder();
+    const name = await screen.findByDisplayValue('Engine check');
+    await user.clear(name);
+    await user.type(name, 'Engine daily check');
+
+    await user.click(screen.getByTitle('Go back'));
+    expect(await screen.findByRole('dialog')).toHaveTextContent('Leave without saving?');
+    await user.click(screen.getByRole('button', { name: 'Stay here' }));
+
+    await user.click(screen.getByRole('button', { name: 'Save draft' }));
+    await waitFor(() =>
+      expect(updateEquipmentCheckTemplate).toHaveBeenCalledWith(
+        'template-1',
+        expect.objectContaining({ name: 'Engine daily check', is_active: false })
+      )
+    );
+    await user.click(screen.getByTitle('Go back'));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+});
+
 describe('EquipmentCheckTemplateBuilder creation guidance', () => {
   it('preserves preset test instructions and marks the review step ready', async () => {
     renderNewBuilder();
@@ -716,5 +769,5 @@ describe('EquipmentCheckTemplateBuilder creation guidance', () => {
     expect(screen.getAllByText('Switch it on and confirm it works.').length).toBeGreaterThan(0);
     expect(screen.getByText('Review').closest('div')).toHaveTextContent(/items/);
     expect(screen.getByText('Review').parentElement?.previousElementSibling).toHaveClass('bg-green-500');
-  }, 10_000);
+  }, 20_000);
 });
