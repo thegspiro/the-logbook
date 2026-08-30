@@ -29,6 +29,7 @@ import { getErrorMessage } from '../../../utils/errorHandling';
 import { Modal } from '../../../components/Modal';
 import toast from 'react-hot-toast';
 import { formCoercions } from '../../../utils/formValues';
+import { useMediaQuery } from '../../../hooks/useMediaQuery';
 
 const inputClass = 'form-input w-full';
 const selectClass = 'form-input w-full';
@@ -190,6 +191,9 @@ interface TreeRowProps {
   onDelete: (a: StorageAreaResponse) => void;
   itemsVisible: Set<string>;
   onToggleItems: (id: string) => void;
+  path: TreeNode[];
+  isDesktop: boolean;
+  onNavigate: (node: TreeNode) => void;
 }
 const TreeRow: React.FC<TreeRowProps> = ({
   node,
@@ -200,27 +204,32 @@ const TreeRow: React.FC<TreeRowProps> = ({
   onDelete,
   itemsVisible,
   onToggleItems,
+  path,
+  isDesktop,
+  onNavigate,
 }) => {
   const has = node.treeChildren.length > 0;
   const open = expanded.has(node.id);
   const showItems = itemsVisible.has(node.id);
-  // Cap indentation on mobile to prevent overflow on small screens
-  const cappedDepth = typeof window !== 'undefined' && window.innerWidth < 768 ? Math.min(depth, 3) : depth;
-  const indent = cappedDepth * 16 + 12;
+  const indent = isDesktop ? depth * 16 + 12 : 12;
+  const pathLabel = path.map((area) => area.name).join(' › ');
   return (
     <>
       <div
-        className="hover:bg-theme-surface-hover active:bg-theme-surface-hover group flex items-center gap-2 rounded-lg px-3 py-2.5 transition-colors"
+        data-storage-area-row={node.id}
+        className={`hover:bg-theme-surface-hover active:bg-theme-surface-hover group flex w-full items-center gap-2 rounded-lg px-3 py-2.5 transition-colors ${
+          isDesktop ? '' : 'border-theme-surface-border border-l-2'
+        }`}
         style={{ paddingLeft: `${indent}px` }}
       >
         <button
-          onClick={() => onToggle(node.id)}
+          onClick={() => (isDesktop ? onToggle(node.id) : onNavigate(node))}
           disabled={!has}
           className="text-theme-text-muted flex h-6 w-6 shrink-0 items-center justify-center"
-          aria-label={has ? (open ? 'Collapse' : 'Expand') : undefined}
+          aria-label={has ? (isDesktop ? (open ? 'Collapse' : 'Expand') : `Open ${node.name}`) : undefined}
         >
           {has ? (
-            open ? (
+            isDesktop && open ? (
               <ChevronDown className="h-4 w-4" />
             ) : (
               <ChevronRight className="h-4 w-4" />
@@ -229,13 +238,30 @@ const TreeRow: React.FC<TreeRowProps> = ({
             <span className="h-4 w-4" />
           )}
         </button>
-        <Box className="text-theme-text-muted h-4 w-4 shrink-0" />
+        <Box className="text-theme-text-muted hidden h-4 w-4 shrink-0 md:block" />
         <div className="min-w-0 flex-1">
-          <span className="text-theme-text-primary block truncate text-sm font-medium">
-            {node.name}
+          <span
+            className="text-theme-text-primary block truncate text-sm font-medium"
+            title={pathLabel}
+            aria-label={pathLabel}
+          >
+            <span aria-hidden="true">
+              {isDesktop ? (
+                node.name
+              ) : (
+                <>
+                  {path.length > 2 && <>… › </>}
+                  {path.slice(-2).map((area, index) => (
+                    <React.Fragment key={area.id}>
+                      {index > 0 && ' › '}
+                      {area.name}
+                    </React.Fragment>
+                  ))}
+                </>
+              )}
+            </span>
             {node.label && <span className="text-theme-text-muted ml-1.5 font-normal">({node.label})</span>}
           </span>
-          {depth > 3 && <span className="text-theme-text-muted text-[10px] md:hidden">depth {depth + 1}</span>}
         </div>
         <span className="hidden shrink-0 rounded-full border border-blue-500/30 bg-blue-500/10 px-2 py-0.5 text-xs text-blue-700 sm:inline dark:text-blue-400">
           {getTypeLabel(node.storage_type)}
@@ -277,7 +303,8 @@ const TreeRow: React.FC<TreeRowProps> = ({
         </div>
       </div>
       {showItems && node.item_count > 0 && <ItemsPanel areaId={node.id} indent={indent} />}
-      {has &&
+      {isDesktop &&
+        has &&
         open &&
         node.treeChildren.map((c) => (
           <TreeRow
@@ -290,6 +317,9 @@ const TreeRow: React.FC<TreeRowProps> = ({
             onDelete={onDelete}
             itemsVisible={itemsVisible}
             onToggleItems={onToggleItems}
+            path={[...path, c]}
+            isDesktop={isDesktop}
+            onNavigate={onNavigate}
           />
         ))}
     </>
@@ -298,6 +328,7 @@ const TreeRow: React.FC<TreeRowProps> = ({
 
 /* ---------- Main page ---------- */
 const StorageAreasPage: React.FC = () => {
+  const isDesktopTree = useMediaQuery('(min-width: 768px)');
   const [locations, setLocations] = useState<Location[]>([]);
   const [facilityNames, setFacilityNames] = useState<Map<string, string>>(new Map());
   const [storageAreas, setStorageAreas] = useState<StorageAreaResponse[]>([]);
@@ -314,6 +345,7 @@ const StorageAreasPage: React.FC = () => {
   const [deleteTarget, setDeleteTarget] = useState<StorageAreaResponse | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [itemsVisible, setItemsVisible] = useState<Set<string>>(new Set());
+  const [mobileParentId, setMobileParentId] = useState<string | null>(null);
 
   const toggleItemsPanel = (id: string) => {
     setItemsVisible((prev) => {
@@ -387,6 +419,43 @@ const StorageAreasPage: React.FC = () => {
   const tree = useMemo(() => buildTree(scopedAreas), [scopedAreas]);
   const searchTree = useMemo(() => buildTree(searchResults), [searchResults]);
   const displayTree = isShowingSearch ? searchTree : tree;
+  const areaById = useMemo(() => new Map(storageAreas.map((area) => [area.id, area])), [storageAreas]);
+  const pathFor = useCallback(
+    (node: TreeNode): TreeNode[] => {
+      const path: TreeNode[] = [node];
+      let parentId = node.parent_id;
+      const visited = new Set([node.id]);
+      while (parentId && !visited.has(parentId)) {
+        const parent = areaById.get(parentId);
+        if (!parent) break;
+        path.unshift({ ...parent, treeChildren: [] });
+        visited.add(parent.id);
+        parentId = parent.parent_id;
+      }
+      return path;
+    },
+    [areaById]
+  );
+  const mobileParent = mobileParentId ? areaById.get(mobileParentId) : undefined;
+  const mobileNodes = useMemo(() => {
+    if (isShowingSearch) return searchResults.map((area) => ({ ...area, treeChildren: [] }));
+    if (!mobileParentId) return tree;
+    const parent = areaById.get(mobileParentId);
+    if (!parent) return tree;
+    const findChildren = (nodes: TreeNode[]): TreeNode[] | undefined => {
+      for (const node of nodes) {
+        if (node.id === parent.id) return node.treeChildren;
+        const found = findChildren(node.treeChildren);
+        if (found) return found;
+      }
+      return undefined;
+    };
+    return findChildren(tree) ?? [];
+  }, [areaById, isShowingSearch, mobileParentId, searchResults, tree]);
+
+  useEffect(() => {
+    if (isDesktopTree || isShowingSearch) setMobileParentId(null);
+  }, [isDesktopTree, isShowingSearch]);
 
   const loadLocations = useCallback(async () => {
     setIsLoading(true);
@@ -644,13 +713,28 @@ const StorageAreasPage: React.FC = () => {
           )}
         </div>
       ) : (
-        <div className="card-secondary p-2">
+        <div className="card-secondary p-2" data-testid="storage-area-tree">
           {isShowingSearch && (
             <p className="text-theme-text-muted border-theme-surface-border mb-1 border-b px-3 py-2 text-xs">
               {searchResults.length} result{searchResults.length !== 1 ? 's' : ''} found
             </p>
           )}
-          {displayTree.map((n) => (
+          {!isDesktopTree && mobileParent && !isShowingSearch && (
+            <button
+              type="button"
+              className="text-theme-text-secondary hover:text-theme-text-primary mb-1 flex min-h-11 w-full items-center gap-1 px-3 text-sm"
+              onClick={() => setMobileParentId(mobileParent.parent_id ?? null)}
+              aria-label={`Back from ${mobileParent.name}`}
+            >
+              <ArrowLeft className="h-4 w-4" />
+              <span className="truncate">
+                {pathFor({ ...mobileParent, treeChildren: [] })
+                  .map((area) => area.name)
+                  .join(' › ')}
+              </span>
+            </button>
+          )}
+          {(isDesktopTree ? displayTree : mobileNodes).map((n) => (
             <TreeRow
               key={n.id}
               node={n}
@@ -661,6 +745,11 @@ const StorageAreasPage: React.FC = () => {
               onDelete={setDeleteTarget}
               itemsVisible={itemsVisible}
               onToggleItems={toggleItemsPanel}
+              path={pathFor(n)}
+              isDesktop={isDesktopTree}
+              onNavigate={(node) => {
+                if (node.treeChildren.length > 0) setMobileParentId(node.id);
+              }}
             />
           ))}
         </div>
