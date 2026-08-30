@@ -1306,6 +1306,70 @@ the answer involves a count followed by an insert, lock the parent row **and**
 make the count a locking read. `tests/test_capacity_locking.py` asserts both
 halves at every site.
 
+### 28. `vi.clearAllMocks()` Does Not Clear Implementations, So Mock State Leaks Between `describe` Blocks _(2026-08-30)_
+
+`vi.clearAllMocks()` resets recorded calls. It does **not** reset
+implementations. A `mockImplementation` or `mockResolvedValue` set in one
+`describe` therefore survives into every `describe` that runs after it, and a
+block that sets nothing silently inherits whatever its neighbour left behind.
+Test files read top to bottom, so this is invisible: the leak looks like setup
+that is simply somewhere else in the file.
+
+Two separate defects on 2026-08-30 were the same leak wearing different
+symptoms, and neither is the kind CI catches — a whole-file run is exactly the
+condition under which the leak holds.
+
+**Symptom A — a block inherits the wrong value, and the assertion can never
+pass.** `EquipmentCheckTemplateBuilder.test.tsx` asserted a button labelled
+`Collapse Oxygen mask`. That label only exists at laptop width: under 640px a
+row tap opens the mobile editor sheet, so the toggle reads `Edit …` and never
+`Collapse …`. The global `matchMedia` mock in `src/test/setup.ts` answers
+`false` to every query — phone — and the `movement persistence` block never
+overrode it. The assertion was unsatisfiable from the day it was written; it
+took `main` red, and the follow-up that swapped `getByRole` for `findByRole`
+only turned an immediate miss into a 1s timeout.
+
+**Symptom B — a block inherits the right value, and the test passes for the
+wrong reason.** The `creation guidance` block has no `beforeEach` at all, so a
+preview test added to it on PR #2038 passed only on the `getTemplate` value the
+preceding block happened to leave. `renderBuilder` always mounts at `/templates/template-1`, so
+under any focused run (`vitest run -t "…"`) the template was undefined, nothing
+rendered, and the test failed — while the component was correct the whole time.
+
+```ts
+// WRONG — this block asserts against whatever ran before it
+describe('creation guidance', () => {
+  it('renders the preview', async () => {
+    renderBuilder(); // getTemplate is a bare vi.fn() under a focused run
+```
+
+```ts
+// CORRECT — the block states what it depends on
+describe('creation guidance', () => {
+  beforeEach(() => {
+    getTemplate.mockResolvedValue(structuredClone(template));
+    mockViewport('phone');
+  });
+```
+
+**Rule:** a `describe` states the mock implementations it depends on in its own
+`beforeEach` rather than inheriting them, and an override for one test is
+scoped by giving the block an explicit default to return to. Two corollaries:
+
+- **A component that branches on `useMediaQuery` needs the viewport named.**
+  The suite default is phone, so `Collapse`/`Expand` labels and any
+  laptop-only element never appear unless the test says so. Assert
+  branch-specific output only at the width where that branch renders —
+  asserting it at the other width is not a weaker test, it is an impossible
+  one. Use the `mockViewport` helper in
+  `EquipmentCheckTemplateBuilder.test.tsx` rather than re-typing the
+  `matchMedia` object.
+- **Check a new test in isolation before trusting it.** Running
+  `vitest run -t` with the test's name is the whole check. Passing in the file
+  run proves nothing about order independence, because the file run is what
+  supplies the leak; neither the `vitest related` pre-commit hook nor CI's
+  whole-suite run ever exercises the test alone.
+
 ## Environment Variables
 
 Reference files: `.env.example` (quick start), `.env.example.full` (all options), `frontend/.env.example`.
