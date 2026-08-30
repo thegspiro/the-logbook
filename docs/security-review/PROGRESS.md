@@ -68,6 +68,22 @@ after). Gate re-run: `tsc --noEmit` 0 errors, `eslint
 src/modules/grants-fundraising` 0/0, `vitest run src/modules/grants-fundraising`
 4 files/7 passed. Full write-up in `GF-22-grants-fundraising.md` → GF-34.
 
+**PR #2073 tend, round 8 (Codex review of the GF-34 commit, 2 comments):**
+one re-raise, one new non-security finding. **GF-33 re-raised** — Codex
+flagged the round-6 `limit: 1000` bump as evidence the pagination gap is
+still open, which is exactly GF-33's own already-recorded disposition
+(partial mitigation, full pagination flagged in `KNOWN_LIMITATIONS.md`,
+not built). No further code pushed; replied on the PR pointing to the
+existing GF-33 entry — this thread's convergence-stop point, same shape as
+GF-27a earlier in this PR chain. **Fixture cast (P1, fixed, no GF id)** —
+the `application()` test helper added in round 6 used
+`as unknown as GrantApplication`, the exact broad-cast pattern AGENTS.md
+prohibits; rewritten as a fully, honestly-typed fixture with every field
+given a concrete default. No behavior change; both existing tests still
+pass. Gate re-run: `tsc --noEmit` 0 errors, `eslint
+src/modules/grants-fundraising` 0/0, `vitest run src/modules/grants-fundraising`
+4 files/7 passed.
+
 ### 2026-08-30 — Feature 22 (Grants & fundraising), pass 2 ✅ merged — PR #2069; round-4 tend continues in PR #2070
 
 PR #2069 merged (`9608aea9`) while its 4th round of Codex review was still

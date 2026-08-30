@@ -20,8 +20,40 @@ vi.mock('../services/api', () => ({
 
 import { useGrantsStore } from './grantsStore';
 
-const application = (id: string, applicationStatus: string) =>
-  ({ id, applicationStatus }) as unknown as GrantApplication;
+const application = (id: string, applicationStatus: GrantApplication['applicationStatus']): GrantApplication => ({
+  id,
+  organizationId: 'org-1',
+  opportunityId: null,
+  grantProgramName: 'Test Grant Program',
+  grantAgency: 'Test Agency',
+  applicationStatus,
+  amountRequested: null,
+  amountAwarded: null,
+  matchAmount: null,
+  matchSource: null,
+  applicationDeadline: null,
+  submittedDate: null,
+  awardDate: null,
+  grantStartDate: null,
+  grantEndDate: null,
+  projectDescription: null,
+  narrativeSummary: null,
+  budgetSummary: null,
+  keyContacts: null,
+  federalAwardId: null,
+  nfirsCompliant: null,
+  performancePeriodMonths: null,
+  reportingFrequency: null,
+  nextReportDue: null,
+  finalReportDue: null,
+  assignedTo: null,
+  priority: 'medium',
+  linkedCampaignId: null,
+  notes: null,
+  createdBy: null,
+  createdAt: '2026-01-01T00:00:00Z',
+  updatedAt: '2026-01-01T00:00:00Z',
+});
 
 describe('grantsStore.fetchApplications — out-of-order responses', () => {
   beforeEach(() => {

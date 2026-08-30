@@ -1188,3 +1188,39 @@ re-run:
 | `npx tsc --noEmit`                              | 0 errors             |
 | `npx eslint src/modules/grants-fundraising`     | 0 errors, 0 warnings |
 | `npx vitest run src/modules/grants-fundraising` | 4 files, 7 passed    |
+
+**Tend pass, round 8 (2026-08-30, PR #2073), in response to Codex's 2
+comments on the GF-34 commit:** one re-raise, one new, non-security
+finding on this rotation's own test code.
+
+- **GF-33, re-raised (no code change beyond round 6's):** Codex flagged
+  the round-6 `limit: 1000` bump itself as evidence the pagination gap is
+  "unresolved rather than fixed." Correct, and already the documented
+  disposition — GF-33's own write-up (round 6, above) states plainly that
+  1000 is a partial mitigation, not a fix, and that full pagination is
+  flagged in `KNOWN_LIMITATIONS.md`, not built. No further code pushed for
+  this thread; replied on the PR pointing to the existing GF-33 entry.
+  This is this thread's convergence-stop point, the same shape as GF-27a
+  earlier in this same PR chain: the fix already ships the best available
+  mitigation and states its own remaining limit, so re-litigating it
+  without a page-size UI or real pagination (a design decision, not a
+  drive-by patch) would not change the outcome.
+- **Fixture cast (P1, code-quality, fixed, no GF id — not a security or
+  correctness finding):** the new `application()` test helper in
+  `grantsStore.fetchApplications.test.ts` (added round 6) used
+  `({...}) as unknown as GrantApplication`, the exact pattern AGENTS.md
+  prohibits ("add broad `any`, `unknown`, ... merely to silence errors") —
+  it would have suppressed a real type error from any future required
+  field added to `GrantApplication` that this fixture doesn't set.
+  Rewritten as a fully, honestly-typed `GrantApplication` fixture with
+  every field given a concrete default; only `id` and `applicationStatus`
+  vary per call. No behavior change — both existing tests (GF-32, GF-34)
+  still pass unmodified.
+
+No backend files touched. Gate re-run:
+
+| Check                                           | Result               |
+| ----------------------------------------------- | -------------------- |
+| `npx tsc --noEmit`                              | 0 errors             |
+| `npx eslint src/modules/grants-fundraising`     | 0 errors, 0 warnings |
+| `npx vitest run src/modules/grants-fundraising` | 4 files, 7 passed    |
