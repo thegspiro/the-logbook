@@ -24,6 +24,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   "Record Expenditure," "Add Task," and "Add Note" buttons that failed when
   clicked, with no explanation of why. Those controls are now hidden for
   members who don't have permission to use them.
+- The dashboard's "Active Applications," "Pending Applications," and
+  "Active Campaigns" cards linked to a pre-filtered list, but the list page
+  ignored the filter and always showed everything. The link now filters
+  correctly.
+- The dashboard's "View Campaign" link on a recent donation went to a page
+  that doesn't exist and silently sent you back to the dashboard home. It
+  now goes to the campaigns list.
+- The Grants & Fundraising reports page could default to showing just one
+  day instead of the whole current year, depending on your department's
+  timezone and the exact time you opened it (most noticeable right around
+  New Year's). It now always defaults to your department's full current
+  year.
 
 ### Admin hours CSV export now recovers from an expired session (2026-08-30)
 

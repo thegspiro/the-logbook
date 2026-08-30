@@ -24,7 +24,7 @@ import type { GrantReport, FundraisingReport } from '../types';
 import { COMPLIANCE_STATUS_COLORS } from '../types';
 
 import { formatCurrencyWhole } from '@/utils/currencyFormatting';
-import { getTodayLocalDate, toLocalDateString } from '@/utils/dateFormatting';
+import { getTodayLocalDate } from '@/utils/dateFormatting';
 import { useTimezone } from '@/hooks/useTimezone';
 
 const formatPercent = (value: number): string =>
@@ -115,11 +115,17 @@ const HorizontalBarChart: React.FC<{
 // =============================================================================
 
 function getDefaultDateRange(tz: string): { start: string; end: string } {
-  const now = new Date();
-  const startOfYear = new Date(now.getFullYear(), 0, 1);
+  // Derive the year from the organization's own local "today" (a
+  // "YYYY-MM-DD" string) rather than the browser's `Date.getFullYear()`
+  // and a `Date` round-trip through `tz` — near midnight on New Year's,
+  // the browser's timezone and the org's can disagree on what year (or
+  // even day) it currently is there, producing a start date after the
+  // end date.
+  const today = getTodayLocalDate(tz);
+  const year = today.slice(0, 4);
   return {
-    start: toLocalDateString(startOfYear, tz),
-    end: getTodayLocalDate(tz),
+    start: `${year}-01-01`,
+    end: today,
   };
 }
 

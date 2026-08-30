@@ -709,6 +709,98 @@ what let this bug through untested — and asserts the rendered percentages
 are `33.3%`/`66.7%`. Verified it fails before the fix (both percentages
 render `0.0%`, reproducing the bug exactly) and passes after.
 
+#### GF-27 — LOW (broken UX, not a security hole) — dashboard KPI/pipeline status links silently landed on the unfiltered list
+
+**What:** Caught by Codex review, round 4, on the round-3 commit — after
+`GrantsDashboardPage.tsx` was added to reviewed scope (GF-22) and its
+controls audited for permission-gating (GF-23), a further read found its
+KPI/pipeline cards link to `/grants/applications?status=active`,
+`/grants/applications?status=submitted`, and `/grants/campaigns?status=active`
+— but `GrantApplicationsPage.tsx` and `CampaignsPage.tsx` each initialize
+their own `statusFilter` to `''` from a plain `useState`, never reading the
+URL's `status` query parameter. Clicking any of those cards therefore always
+returned to the full unfiltered list, silently discarding the filter the
+card promised.
+
+**Where:** `frontend/src/modules/grants-fundraising/pages/GrantApplicationsPage.tsx`,
+`frontend/src/modules/grants-fundraising/pages/CampaignsPage.tsx`.
+
+**Fix:** both pages now seed `statusFilter` from `useSearchParams()` at
+initial state (`useState(() => searchParams.get('status') ?? '')`), matching
+the existing `?tab=`-reading convention already used elsewhere in the app
+(`ComplianceRequirementsConfigPage.tsx`, `Dashboard.tsx`). Confirmed the
+dashboard's literal query values (`active`, `submitted`) match the pages'
+own `ApplicationStatus`/`CampaignStatus` enum values exactly, so no mapping
+layer was needed.
+
+**Guard test added (`CampaignsPage.statusFilter.test.tsx`, new file):**
+renders the page with `initialEntries={['/grants/campaigns?status=active']}`
+and asserts `fundraisingService.listCampaigns` is called with
+`{ status: 'active' }` (and with `{}` when the URL carries no `status`).
+Verified it fails before the fix (called with `{}` regardless of the URL)
+and passes after. `GrantApplicationsPage.tsx`'s identical one-line fix was
+not given its own dedicated render test — the change is the same pattern
+verified by the `CampaignsPage` test, `tsc --noEmit` confirms the types
+line up, and the module's applications-list rendering already has no test
+harness to extend without building one from scratch, which is out of
+proportion for a one-line fix. Flagged here rather than silently assumed.
+
+#### GF-28 — LOW (broken UX, not a security hole) — dashboard's "View Campaign" link pointed at a route that does not exist
+
+**What:** Also caught by Codex review, round 4. The dashboard's
+recent-donations table links each row to
+`` `/grants/campaigns/${donation.campaignId}` ``, but `routes.tsx` registers
+only `/grants/campaigns` (the list) — no `/grants/campaigns/:id` detail
+route exists anywhere in this module. Clicking "View Campaign" matched
+`App.tsx`'s catch-all route and silently redirected to `/`, with no error
+and no explanation.
+
+**Where:** `frontend/src/modules/grants-fundraising/pages/GrantsDashboardPage.tsx`.
+
+**Fix:** pointed the link at `/grants/campaigns` (the list, an existing
+valid route) instead of the non-existent per-id route. This is the minimal
+correct fix, not a full solution — `CampaignsPage.tsx` has no per-campaign
+detail view or ID-based deep link at all (confirmed: no `campaignId` route
+param, no expand/detail UI reading one), and the `Donation` type carries
+only `campaignId`, no `campaignName`, so there is no reasonable way to
+land the user on the specific campaign without first building a campaign
+detail page — a real feature gap, not a one-line fix, and out of this PR's
+scope. Flagged rather than building new UI to close it.
+
+#### GF-29 — MED — the reports page's default year could be built from the wrong year across a UTC/local mismatch
+
+**What:** Also caught by Codex review, round 4 — distinct from GF-24a (the
+backend's report-query boundary): this is a frontend bug in
+`getDefaultDateRange`, which built the start-of-year bound from
+`new Date().getFullYear()` (the **test/browser runtime's own local year**)
+and then converted that `Date` instant into the organization's `tz` via
+`toLocalDateString`. Near midnight UTC on January 1st, an organization in a
+timezone behind UTC (e.g. `America/Los_Angeles`) is still in the previous
+year locally while the runtime's own year has already rolled over — the
+old code then produced a `start` date _after_ the correct start of the
+organization's actual current year, collapsing the default report range to
+a single day instead of the full year. Verified with a reproduction: system
+time `2027-01-01T00:30:00Z`, org tz `America/Los_Angeles` (still
+`2026-12-31` there) — old code produced `start: '2026-12-31'`,
+`end: '2026-12-31'`; the organization's actual current year starts
+`2026-01-01`.
+
+**Where:** `frontend/src/modules/grants-fundraising/pages/GrantsReportsPage.tsx`
+(`getDefaultDateRange`).
+
+**Fix:** derive the year from the organization's own local "today" directly
+(`getTodayLocalDate(tz).slice(0, 4)`) rather than round-tripping through a
+`Date` object built in the runtime's own timezone. `toLocalDateString` is no
+longer used in this file and its import was removed.
+
+**Guard test added:** `GrantsReportsPage.defaultRange.test.tsx` (new file).
+Fakes only `Date` (`vi.useFakeTimers({ toFake: ['Date'] })` — faking
+`setTimeout` too starves Testing Library's own `waitFor` polling and the
+page's data-fetch effect), sets system time to `2027-01-01T00:30:00Z`, mocks
+`useTimezone` to `'America/Los_Angeles'`, and asserts the rendered date
+inputs read `2026-01-01`/`2026-12-31`. Verified it fails before the fix
+(`2026-12-31`/`2026-12-31`, reproducing the bug exactly) and passes after.
+
 ### Frontend review (new this pass)
 
 Read `services/api.ts` (410 L), `routes.tsx`, `store/grantsStore.ts` (342 L),

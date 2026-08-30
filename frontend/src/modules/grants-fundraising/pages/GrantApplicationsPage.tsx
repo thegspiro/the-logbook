@@ -6,7 +6,7 @@
  */
 
 import React, { useEffect, useState, useMemo } from 'react';
-import { Link, useNavigate } from 'react-router';
+import { Link, useNavigate, useSearchParams } from 'react-router';
 import {
   Plus,
   Search,
@@ -215,12 +215,16 @@ const SortableHeader: React.FC<SortableHeaderProps> = ({ label, field, currentSo
 export const GrantApplicationsPage: React.FC = () => {
   const navigate = useNavigate();
   const tz = useTimezone();
+  const [searchParams] = useSearchParams();
 
   const { applications, isLoading, error, fetchApplications } = useGrantsStore();
 
   const [viewMode, setViewMode] = useState<ViewMode>('pipeline');
   const [searchText, setSearchText] = useState('');
-  const [statusFilter, setStatusFilter] = useState<string>('');
+  // Dashboard KPI/pipeline cards link here with `?status=<value>` — honor it
+  // as the initial filter so those links actually filter, instead of
+  // silently landing on the unfiltered list.
+  const [statusFilter, setStatusFilter] = useState<string>(() => searchParams.get('status') ?? '');
   const [priorityFilter, setPriorityFilter] = useState<string>('');
   const [sortField, setSortField] = useState<SortField>('applicationDeadline');
   const [sortDir, setSortDir] = useState<SortDir>('asc');
