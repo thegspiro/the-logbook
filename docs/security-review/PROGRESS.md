@@ -20,7 +20,7 @@ feature. The rotation cannot outrun its own review queue.
 
 ---
 
-### 2026-08-30 — Feature 20 (Compliance), pass 2 — 1 fixed (MED), 1 partially fixed/flagged (MED)
+### 2026-08-30 — Feature 20 (Compliance), pass 2 — 3 fixed (1 HIGH, 2 MED), 1 partially fixed/flagged (MED)
 
 Resumed the rotation directly at feature 20 per the pass-2 order (no
 security-review PR was open; the previous `/security-review` loop had
@@ -71,21 +71,63 @@ than built; the panel now carries an explicit "Not yet active" notice so it
 stops implying the toggle does anything, per the pitfall's own sanctioned
 partial remedy. Mirrored into `KNOWN_LIMITATIONS.md`.
 
-**Escalated, not fixed (Hard Stop):** the full frontend `vitest run` (beyond
-the declared gate, run as extra diligence) found one pre-existing failure —
-`EquipmentCheckTemplateBuilder.test.tsx` (scheduling/equipment-check, feature
-14's territory) — unrelated to any file this pass touched. Confirmed
-pre-existing by `git stash`-ing this pass's changes and re-running against
-the untouched base tree (identical failure). Reported here rather than fixed,
-per CLAUDE.md's Hard Stop clause: fixing another feature's component is
-outside this PR's scope. See `docs/security-review/CMP-20-compliance.md`
-Pass 2 completion-gate section.
+**Codex follow-up on the first version of this PR surfaced four issues, all
+investigated and addressed in commit `ef882c98`:**
 
-Full gate: flake8/black/isort clean; migrations valid (394 revisions, single
-head); backend compliance-scoped tests 287 passed, 1 skipped; full backend
-suite 9265 passed, 22 skipped; frontend `tsc --noEmit` 0 errors; `eslint .`
-0 errors (10 pre-existing warnings, none in touched files). Rotation row 20
--> ⏳ (awaiting PR merge). Next: 21 (Admin hours), once this PR merges.
+**CMP2-3 (HIGH, FIXED, new this pass):** `compute_org_compliance_pct` guarded
+both the requirement-list substitution and the threshold overrides behind one
+truthy check (`if profile and profile.required_requirement_ids:`), so a
+profile with an explicitly empty required-requirement list (`[]` — "this
+group requires nothing," only reachable after CMP2-2's own fix) was treated
+the same as `None` ("no override") and graded against every org requirement
+instead of none; the same guard silently skipped both threshold overrides for
+any profile that didn't also override the requirement list. Fixed by checking
+`is not None` for the list substitution and moving the threshold overrides out
+from under that guard entirely. New test:
+`backend/tests/test_compute_org_compliance_pct_profile_overrides.py` (3
+integration tests against a real database).
+
+**CMP2-4 (MED, FIXED, new this pass):** the read-path mirror of CMP2-2 —
+`loadConfig` mapped a loaded config's `null` `notifyDaysBeforeDeadline` back
+to the pre-save placeholder `'30, 14, 7'`, so a cleared-and-saved reminder
+schedule reappeared as the old default immediately on reload even though the
+database correctly held nothing. Fixed the loaded-config fallback to `''`;
+the placeholder now only shows before a config has ever been saved. Swept
+every other loaded field on both the config and profile forms for the same
+class of bug — none found.
+
+**CMP2-2-A (guard test rigor, FIXED):** the original CMP2-2 guard test
+(`ComplianceRequirementsConfigPage.clearFields.test.tsx`) only scanned the
+page's source text for `null`/`undefined` substrings, so it would keep
+passing even if the Save button stopped calling the service. Rewritten to
+render the real page with all five services mocked, drive an actual field
+clear through `@testing-library/user-event`, click Save, and assert the exact
+request body the mocked service methods received — verified by reverting the
+CMP2-2 fix locally and confirming the rewritten tests fail.
+
+**CMP2-B (previously "escalated," now FIXED):** the pre-existing
+`EquipmentCheckTemplateBuilder.test.tsx` failure found in the first version of
+this pass turned out not to be a genuine CLAUDE.md Hard Stop —
+its bar is a fix that "genuinely exceeds the current scope," which a five-line
+test-only change does not. Root cause: the failing `describe` block never
+overrode `window.matchMedia` to simulate a laptop viewport, unlike two sibling
+blocks in the same file, so the component's `isLaptop` flag was permanently
+false and the accessible name the test waits for could never appear. Fixed by
+copying the existing override pattern into that block's `beforeEach`. All 32
+tests in the file now pass. See `docs/security-review/CMP-20-compliance.md`
+Pass 2 completion-gate section for the full writeup, including a correction to
+that doc's own CMP2-2 entry: it had claimed `[]` and `None` are read
+identically everywhere, true for `membership_types`/`report_email_recipients`
+but not for `required_requirement_ids` — the wrong generalization that let
+CMP2-3 ship reachable in the first place.
+
+Full gate (final, commit `ef882c98`): flake8/black/isort clean; migrations
+valid (394 revisions, single head); backend compliance-scoped tests 290
+passed, 1 skipped; full backend suite 9268 passed, 22 skipped; frontend
+`tsc --noEmit` 0 errors; `eslint .` 0 errors (10 pre-existing warnings, none
+in touched files); frontend `vitest run` 5458/5458 passed, 415/415 files (no
+outstanding escalation). Rotation row 20 -> ⏳ (awaiting PR merge). Next: 21
+(Admin hours), once this PR merges.
 
 ### 2026-08-29 — Feature 19 (Skills testing), pass 2 ✅ merged — PR #2017
 
