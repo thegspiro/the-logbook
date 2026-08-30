@@ -1,7 +1,7 @@
 # Security Review — Medical Supplies
 
 **Prefix:** `MSUP` · **Iteration:** 23 · **Reviewed:** 2026-08-26 (pass 1, PR
-#1905), 2026-08-30 (pass 2, PR #TBD)
+#1905), 2026-08-30 (pass 2, PR #2075)
 
 **Backend:** `app/api/v1/endpoints/medical_supplies.py` (667 L, 15 endpoints).
 No dedicated service — every route delegates to the already-audited

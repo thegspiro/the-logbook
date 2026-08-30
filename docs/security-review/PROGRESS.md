@@ -16,7 +16,7 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-#TBD (`claude/security-review-medical-supplies`) — feature 23 (Medical
+#2075 (`claude/security-review-medical-supplies`) — feature 23 (Medical
 supplies), pass 2. No code change; re-verification only. Next once merged:
 24 Meetings & minutes.
 
@@ -50,7 +50,7 @@ grant. No new findings; no code change this iteration. Full local
 completion gate green: flake8 clean on both files, 98/98
 inventory+medical_supplies-scoped and 9271/9271 full backend suite pass, no
 migration needed. Findings doc: `docs/security-review/MSUP-23-medical-supplies.md`.
-PR #TBD opened and subscribed. Next: 24 meetings & minutes, once merged.
+PR #2075 opened and subscribed. Next: 24 meetings & minutes, once merged.
 
 ---
 
