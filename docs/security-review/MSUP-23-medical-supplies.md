@@ -1,7 +1,7 @@
 # Security Review — Medical Supplies
 
 **Prefix:** `MSUP` · **Iteration:** 23 · **Reviewed:** 2026-08-26 (pass 1, PR
-#1905), 2026-08-30 (pass 2, PR #2075)
+#1905), 2026-08-30 (pass 2, PR #2075; audit-trail follow-up, PR #2076)
 
 **Backend:** `app/api/v1/endpoints/medical_supplies.py` (pass 1: 667 L, 15
 endpoints; pass 2: 670 L, 14 routes — no route added or removed). No
@@ -295,6 +295,86 @@ past the cap? what page size is right for each caller?), which is a product
 decision spanning outside this feature's scope, not a mechanical
 medical-supplies patch. Mirrored into `KNOWN_LIMITATIONS.md`.
 
+### MSUP-5 — LOW-MED — medical category/item **updates** were the only writes on this router with no audit trail — ✅ FIXED
+
+**What:** `create_medical_category` and `create_medical_item` both call
+`log_audit_event` on success. Their `update_medical_category` and
+`update_medical_item` counterparts did not — an edit to a medical supply
+category or item (rename, reorder, reclassify a field, change a reorder
+point) left no audit record at all. This is the inverse of what the data's
+sensitivity would suggest: `inventory.py`'s general-purpose `update_category`
+(`inventory.py:400-411`) and `update_item` (`inventory.py:1553-1564`) **do**
+audit their updates — so the medical-scoped router, arguably the
+higher-sensitivity path (EMS/controlled-substance-adjacent stock, run by its
+own officer), was the one place in the whole inventory feature where an
+update left no trail.
+
+**Where:** `app/api/v1/endpoints/medical_supplies.py` —
+`update_medical_category`, `update_medical_item`.
+
+**Failure scenario:** a medical supply officer's `update_medical_item` call
+silently changes an item's reorder point or name. Nothing in
+`audit_logs` records who changed what or when — an after-the-fact question
+("who lowered this item's reorder point last month?") has no answer, unlike
+the identical question for a gear item on the general inventory page, or for
+the medical item's own creation.
+
+**Fix:** both routes now call `log_audit_event` after a successful update,
+mirroring the exact pattern already used by this file's own create routes
+and by `inventory.py`'s `update_category`/`update_item` —
+`event_type="medical_category_updated"` /
+`"medical_item_updated"`, `event_category="inventory"`,
+`event_data={"category_id"/"item_id", "fields_updated": list(data.keys())}`.
+No new dependency, no schema change — `log_audit_event` was already
+imported in this file for the create paths.
+
+**Scope note — lot endpoints not touched.** `add_medical_item_lot`,
+`receive_medical_delivery`, `update_medical_lot`, and `delete_medical_lot`
+also don't audit, but neither do their exact equivalents in `inventory.py`
+(`add_item_lot`, `add_lots_bulk`, `update_item_lot`, `delete_item_lot`) — this
+is a pre-existing, cross-cutting gap in the shared lot-management code, not
+a medical-specific asymmetry the way the category/item gap was. Left alone
+rather than expanded into a broader inventory-module audit-coverage pass,
+which is out of this feature's scope.
+
+**Guard tests added:** `tests/test_medical_supplies_domain.py` —
+`TestCategoryDomainPinning::test_update_logs_an_audit_event`,
+`TestItemDomainPinning::test_update_logs_an_audit_event`. Both assert
+`log_audit_event` is awaited once with the expected `event_type`; verified to
+fail against the pre-fix router (0 awaits) and pass after.
+
+### MSUP-6 — LOW — MSUP-5's own audit event could report the DB column name instead of the field the caller changed — ✅ FIXED
+
+**What:** Codex's review of the MSUP-5 commit caught a real bug in the fix
+itself. `InventoryService.update_category()` renames a `"metadata"` key to
+the DB column name `"extra_data"` inside the _same_ `update_data` dict it was
+given, in place (`inventory_service.py:743-745`). `update_medical_category`
+passes its own `data` dict to that call by reference and then, after the
+call returns, builds the audit event's `fields_updated` from
+`list(data.keys())` — so an update that changed `metadata` recorded
+`extra_data` in the audit trail instead, the exact internal detail an audit
+record shouldn't leak. `inventory.py`'s general-purpose `update_category`
+route doesn't share this bug: it happens to call
+`update_data.model_dump(exclude_unset=True)` a second time for its own audit
+event, which re-derives a fresh dict from the untouched Pydantic model rather
+than reading back the one the service mutated.
+
+**Where:** `app/api/v1/endpoints/medical_supplies.py` —
+`update_medical_category`.
+
+**Fix:** snapshot `fields_updated = list(data.keys())` before calling
+`service.update_category(...)`, so the audit event reflects what the caller
+actually sent rather than whatever the service renamed it to afterward.
+`update_medical_item` was checked for the same shape and doesn't have it —
+`InventoryService.update_item` performs no key renames on its `update_data`.
+
+**Guard test added:** `tests/test_medical_supplies_domain.py` —
+`TestCategoryDomainPinning::test_update_audit_reports_metadata_not_the_db_column_name`,
+which mocks `update_category` with the same in-place rename the real service
+performs and asserts the audit event still reports `"metadata"`; verified to
+fail against the pre-fix endpoint (`fields_updated == ["extra_data"]`) and
+pass after.
+
 ## Guard tests added (pass 2)
 
 - `tests/test_medical_supplies_domain.py`:
@@ -303,6 +383,10 @@ medical-supplies patch. Mirrored into `KNOWN_LIMITATIONS.md`.
   - `TestLotDomainPinning::test_a_delivery_checks_domain_in_one_query_not_one_per_line`
     (MSUP-2 — asserts `items_in_domain` is called and the old `item_in_domain`
     loop is not)
+  - `TestCategoryDomainPinning::test_update_logs_an_audit_event` and
+    `TestItemDomainPinning::test_update_logs_an_audit_event` (MSUP-5)
+  - `TestCategoryDomainPinning::test_update_audit_reports_metadata_not_the_db_column_name`
+    (MSUP-6)
 
 ## Completion gate (pass 2)
 
@@ -314,3 +398,26 @@ medical-supplies patch. Mirrored into `KNOWN_LIMITATIONS.md`.
 | `python3 scripts/validate_migrations.py --strict`                                                                                                                       | PASSED (no migrations)  |
 | `pytest tests/test_inventory_service.py tests/test_medical_supplies_domain.py tests/test_inventory_lot_stock_levels.py tests/test_inventory_low_stock_email_only.py -q` | 112 passed              |
 | backend tests, full suite                                                                                                                                               | 9270 passed, 22 skipped |
+
+### Completion gate — MSUP-5 audit-trail follow-up (same day)
+
+| Check                                                 | Result                              |
+| ----------------------------------------------------- | ----------------------------------- |
+| `flake8` (changed files)                              | clean                               |
+| `black --check` (changed files)                       | clean                               |
+| `isort --check-only` (changed files)                  | clean                               |
+| `python3 scripts/validate_migrations.py --strict`     | PASSED — 394 revisions, single head |
+| `tests/test_endpoint_auth_coverage.py`                | 1 passed                            |
+| backend tests, scope (`medical_supplies`/`inventory`) | 577 passed, 1 pre-existing skip     |
+| backend tests, full suite                             | 9273 passed, 22 pre-existing skips  |
+
+### Completion gate — MSUP-6 tend fix (same day)
+
+| Check                                                 | Result                             |
+| ----------------------------------------------------- | ---------------------------------- |
+| `flake8` (changed files)                              | clean                              |
+| `black --check` (changed files)                       | clean                              |
+| `isort --check-only` (changed files)                  | clean                              |
+| new guard test, verified fail-before/pass-after       | confirmed                          |
+| backend tests, scope (`medical_supplies`/`inventory`) | 577 passed, 1 pre-existing skip    |
+| backend tests, full suite                             | 9273 passed, 22 pre-existing skips |

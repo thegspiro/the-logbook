@@ -145,6 +145,56 @@ class TestCategoryDomainPinning:
 
         assert "item_type" not in svc.update_category.await_args.kwargs["update_data"]
 
+    async def test_update_logs_an_audit_event(self, svc):
+        """Creating a medical category audits; updating one silently didn't.
+
+        `inventory.py`'s general `update_category` route audits every update
+        — this router's medical-scoped equivalent is the higher-sensitivity
+        path, not a lower one, so it should not be the one route that leaves
+        no trail.
+        """
+        svc.update_category = AsyncMock(return_value=(MagicMock(), None))
+
+        await ms.update_medical_category(
+            MEDICAL_CAT,
+            InventoryCategoryUpdate(name="Renamed"),
+            db=AsyncMock(),
+            current_user=_user(),
+        )
+
+        ms.log_audit_event.assert_awaited_once()
+        assert (
+            ms.log_audit_event.await_args.kwargs["event_type"]
+            == "medical_category_updated"
+        )
+
+    async def test_update_audit_reports_metadata_not_the_db_column_name(self, svc):
+        """`InventoryService.update_category` renames "metadata" to the DB
+        column name "extra_data" in the *same* dict passed to it, in place.
+        The audit event must still report what the caller actually changed
+        ("metadata"), not the internal column name that rename leaves behind.
+        """
+
+        async def _rename_metadata_in_place(category_id, organization_id, update_data):
+            if "metadata" in update_data:
+                update_data["extra_data"] = update_data.pop("metadata")
+            return MagicMock(), None
+
+        svc.update_category = AsyncMock(side_effect=_rename_metadata_in_place)
+
+        await ms.update_medical_category(
+            MEDICAL_CAT,
+            InventoryCategoryUpdate(metadata={"note": "restocked"}),
+            db=AsyncMock(),
+            current_user=_user(),
+        )
+
+        fields_updated = ms.log_audit_event.await_args.kwargs["event_data"][
+            "fields_updated"
+        ]
+        assert "metadata" in fields_updated
+        assert "extra_data" not in fields_updated
+
 
 class TestItemDomainPinning:
     async def test_list_is_restricted_to_the_medical_domain(self, svc):
@@ -242,6 +292,22 @@ class TestItemDomainPinning:
         )
 
         assert "category_id" not in svc.update_item.await_args.kwargs["update_data"]
+
+    async def test_update_logs_an_audit_event(self, svc):
+        """Same gap as the category route: create audits, update didn't."""
+        svc.update_item = AsyncMock(return_value=(MagicMock(), None))
+
+        await ms.update_medical_item(
+            MEDICAL_ITEM,
+            InventoryItemUpdate(name="Renamed"),
+            db=AsyncMock(),
+            current_user=_user(),
+        )
+
+        ms.log_audit_event.assert_awaited_once()
+        assert (
+            ms.log_audit_event.await_args.kwargs["event_type"] == "medical_item_updated"
+        )
 
 
 class TestSummaryCounts:

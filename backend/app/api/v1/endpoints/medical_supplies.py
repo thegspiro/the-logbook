@@ -206,6 +206,11 @@ async def update_medical_category(
             service, str(data["parent_category_id"]), org_id
         )
 
+    # Snapshot before the service call: update_category() renames "metadata"
+    # to the DB column name "extra_data" in this same dict in place, which
+    # would otherwise leak the internal column name into the audit record.
+    fields_updated = list(data.keys())
+
     updated, error = await service.update_category(
         category_id=category_id,
         organization_id=current_user.organization_id,
@@ -218,6 +223,19 @@ async def update_medical_category(
         )
     if not updated:
         raise HTTPException(status_code=404, detail="Medical supply category not found")
+
+    await log_audit_event(
+        db=db,
+        event_type="medical_category_updated",
+        event_category="inventory",
+        severity="info",
+        event_data={
+            "category_id": str(category_id),
+            "fields_updated": fields_updated,
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
     return updated
 
 
@@ -418,6 +436,19 @@ async def update_medical_item(
         )
     if not updated:
         raise HTTPException(status_code=404, detail=_NOT_FOUND)
+
+    await log_audit_event(
+        db=db,
+        event_type="medical_item_updated",
+        event_category="inventory",
+        severity="info",
+        event_data={
+            "item_id": str(item_id),
+            "fields_updated": list(data.keys()),
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
     return updated
 
 
