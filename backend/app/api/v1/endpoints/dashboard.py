@@ -633,7 +633,9 @@ async def get_operations_dashboard(
                 href="/action-items?source=minutes&status=overdue",
             )
         )
-    if "scheduling" in enabled and user_has_permission(
+    # Inventory, not Scheduling: failed checks are Inventory's data now, so a
+    # department running Inventory without Scheduling should still see the card.
+    if "inventory" in enabled and user_has_permission(
         current_user, "inventory.check_manage"
     ):
         count, oldest = await _count_and_oldest(

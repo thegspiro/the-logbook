@@ -22,6 +22,7 @@ import {
 import { Link, useNavigate, useSearchParams } from 'react-router';
 import { useAuthStore } from '../stores/authStore';
 import { useTimezone } from '../hooks/useTimezone';
+import { useEnabledModules } from '../hooks/useEnabledModules';
 import { formatTimeOfDay, localToUTC } from '../utils/dateFormatting';
 import { enumLabel } from '../utils/displayValue';
 import { schedulingService, useSchedulingStore } from '../modules/scheduling';
@@ -179,9 +180,23 @@ const SchedulingPage: React.FC = () => {
     };
   }, [canManage]);
   const [shiftReportsEnabled, setShiftReportsEnabled] = useState(true);
+  // Equipment checks are Inventory's now, API gate included, so the tab has to
+  // follow the Inventory switch rather than this page's own. Without this the
+  // tab renders on a department that runs Scheduling with Inventory off and
+  // then 403s against its own API — the half-gated shape
+  // test_a_gated_frontend_module_gates_every_one_of_its_routes exists to stop.
+  // Gating the tab rather than the /scheduling route is what keeps the rest of
+  // the schedule working for that department.
+  const { isModuleOn } = useEnabledModules();
+  const equipmentChecksEnabled = isModuleOn('inventory');
   const visibleTabs = useMemo(
-    () => (shiftReportsEnabled ? TAB_CONFIG : TAB_CONFIG.filter((tab) => tab.id !== 'shift-reports')),
-    [shiftReportsEnabled]
+    () =>
+      TAB_CONFIG.filter(
+        (tab) =>
+          (shiftReportsEnabled || tab.id !== 'shift-reports') &&
+          (equipmentChecksEnabled || tab.id !== 'equipment-checks')
+      ),
+    [shiftReportsEnabled, equipmentChecksEnabled]
   );
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -231,6 +246,16 @@ const SchedulingPage: React.FC = () => {
     },
     [searchParams, setSearchParams]
   );
+
+  // A tab can disappear after the page has already opened it: both the module
+  // switch and the shift-reports flag resolve asynchronously, and ?tab= is
+  // deep-linked from notification emails that were sent while the tab existed.
+  // Without this the tab strip loses the button and the body renders nothing,
+  // which reads as a broken page rather than a disabled feature.
+  useEffect(() => {
+    if (visibleTabs.some((tab) => tab.id === activeTab)) return;
+    handleTabChange('schedule');
+  }, [visibleTabs, activeTab, handleTabChange]);
 
   const handleTabKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLButtonElement>, currentTab: TabId) => {
@@ -616,7 +641,7 @@ const SchedulingPage: React.FC = () => {
             {activeTab === 'my-shifts' && <MyShiftsTab onViewShift={handleShiftClick} />}
             {activeTab === 'open-shifts' && <OpenShiftsTab onViewShift={handleShiftClick} />}
             {activeTab === 'requests' && <RequestsTab />}
-            {activeTab === 'equipment-checks' && <EquipmentChecksTab />}
+            {activeTab === 'equipment-checks' && equipmentChecksEnabled && <EquipmentChecksTab />}
             {activeTab === 'shift-reports' && <ShiftReportsTab />}
           </Suspense>
         )}

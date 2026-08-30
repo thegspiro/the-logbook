@@ -55,6 +55,18 @@ vi.mock('../hooks/useTimezone', () => ({
   useTimezone: () => 'America/New_York',
 }));
 
+// The Equipment Checks tab follows the Inventory module switch, so this page
+// now reads the module gate. Default everything on; the tests that care about
+// a module being off set it themselves.
+const mockIsModuleOn = vi.fn((_key: string) => true);
+vi.mock('../hooks/useEnabledModules', () => ({
+  useEnabledModules: () => ({
+    isModuleOn: (key: string) => mockIsModuleOn(key),
+    enabledModules: null,
+    isLoading: false,
+  }),
+}));
+
 // Mock theme context
 vi.mock('../contexts/ThemeContext', () => ({
   useTheme: () => ({ resolvedTheme: 'light', theme: 'light', setTheme: vi.fn() }),
@@ -70,6 +82,12 @@ describe('SchedulingPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockCheckPermission.mockReturnValue(false);
+    // mockReset, not clearAllMocks: an implementation set by one test survives
+    // clearAllMocks and would decide the next block's module gate for it
+    // (CLAUDE.md pitfall #28). The default is restated here so a per-test
+    // override has something to return to.
+    mockIsModuleOn.mockReset();
+    mockIsModuleOn.mockImplementation(() => true);
     // Tab selection is mirrored into ?tab=, so reset the URL between tests.
     window.history.replaceState({}, '', '/scheduling');
   });
@@ -85,6 +103,41 @@ describe('SchedulingPage', () => {
         expect(screen.getAllByText('Requests').length).toBeGreaterThanOrEqual(1);
         expect(screen.getAllByText('Shift Reports').length).toBeGreaterThanOrEqual(1);
       });
+    });
+
+    it('should render the Equipment Checks tab when Inventory is enabled', async () => {
+      renderWithRouter(<SchedulingPage />);
+
+      await waitFor(() => {
+        expect(screen.getAllByText('Equipment Checks').length).toBeGreaterThanOrEqual(1);
+      });
+    });
+
+    it('should hide the Equipment Checks tab when the Inventory module is off', async () => {
+      // Equipment checks are gated on Inventory now, API included. Leaving the
+      // tab up would load a page that 403s against its own API.
+      mockIsModuleOn.mockImplementation((key: string) => key !== 'inventory');
+
+      renderWithRouter(<SchedulingPage />);
+
+      await waitFor(() => {
+        expect(screen.getAllByText('Schedule').length).toBeGreaterThanOrEqual(1);
+      });
+      expect(screen.queryByText('Equipment Checks')).not.toBeInTheDocument();
+    });
+
+    it('should fall back to Schedule when ?tab= names a tab the org cannot see', async () => {
+      // Notification emails deep-link ?tab=equipment-checks. A department that
+      // later switches Inventory off must land somewhere, not on a blank body.
+      mockIsModuleOn.mockImplementation((key: string) => key !== 'inventory');
+      window.history.replaceState({}, '', '/scheduling?tab=equipment-checks');
+
+      renderWithRouter(<SchedulingPage />);
+
+      await waitFor(() => {
+        expect(new URLSearchParams(window.location.search).get('tab')).toBeNull();
+      });
+      expect(screen.queryByText('Equipment Checks')).not.toBeInTheDocument();
     });
 
     it('should render admin links when user has scheduling.manage permission', async () => {
