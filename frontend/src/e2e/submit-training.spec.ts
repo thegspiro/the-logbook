@@ -203,7 +203,12 @@ test.describe('Submit External Training', () => {
     await gotoSubmit(page);
 
     const clearance = await page.evaluate(() => {
-      const bar = document.querySelector('form .fixed.inset-x-0.bottom-0');
+      // Selected by the utility that makes it an action bar, not by its
+      // horizontal inset: the bar starts at the content column now, so the
+      // inset is `left-[var(--side-nav-width,0px)]` rather than `inset-x-0`,
+      // and a selector naming the geometry silently matches nothing when the
+      // geometry changes — the failure reads as "no bar", not "moved bar".
+      const bar = document.querySelector('form .action-bar-safe.fixed');
       const nav = document.querySelector('nav.fixed.bottom-0');
       if (!bar || !nav) return null;
       const barStyle = getComputedStyle(bar);
