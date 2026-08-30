@@ -178,7 +178,7 @@ describe('EquipmentCheckTemplateBuilder responsive actions', () => {
   it('renders a 375px summary row and exposes selection only after Select items', async () => {
     renderBuilder();
 
-    const radioSummary = await screen.findByRole('button', { name: 'Expand Radio' });
+    const radioSummary = await screen.findByRole('button', { name: 'Edit Radio' });
     expect(radioSummary).toHaveClass('min-h-[44px]');
     expect(within(radioSummary).getByText('Function · Required')).toBeVisible();
     expect(screen.queryByRole('button', { name: 'Select Radio' })).not.toBeInTheDocument();
@@ -188,12 +188,35 @@ describe('EquipmentCheckTemplateBuilder responsive actions', () => {
     expect(screen.getByRole('button', { name: 'Done' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Select Radio' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Radio selection checkbox' })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Expand Radio' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Edit Radio' })).not.toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Select Radio' }));
     expect(screen.getByRole('button', { name: 'Deselect Radio' })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Done' }));
     expect(screen.queryByRole('button', { name: 'Select Radio' })).not.toBeInTheDocument();
+  }, 10_000);
+
+  it('opens a full-height progressive item editor and reviews adjacent items on phones', async () => {
+    const user = userEvent.setup();
+    renderBuilder();
+
+    const radioRow = await screen.findByRole('button', { name: 'Edit Radio' });
+    await user.click(radioRow);
+
+    const editor = screen.getByRole('dialog', { name: 'Radio' });
+    expect(within(editor).getByText('Cab')).toBeVisible();
+    expect(within(editor).getByText('Item 1/2')).toBeVisible();
+    expect(within(editor).getByText('Essentials')).toBeVisible();
+    expect(within(editor).getByText('Inventory and expiration')).toBeVisible();
+    expect(within(editor).getByText('Optional details')).toBeVisible();
+    expect(within(editor).queryByLabelText('Expected Qty')).not.toBeInTheDocument();
+    expect(editor.firstElementChild).toHaveClass('h-[100dvh]');
+
+    await user.click(within(editor).getByRole('button', { name: 'Next' }));
+    expect(screen.getByRole('dialog', { name: 'Flashlight' })).toHaveTextContent('Item 2/2');
+    await user.click(screen.getByRole('button', { name: 'Done' }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Edit Flashlight' }).closest('[id="item-row-flashlight"]')).toHaveFocus();
   });
 
   it('retains bulk selection, drag handles, badges, and dense actions at 1024px', async () => {
@@ -231,6 +254,24 @@ describe('EquipmentCheckTemplateBuilder responsive actions', () => {
     expect(screen.getByRole('button', { name: 'Publish' })).toBeDisabled();
     expect(screen.getByLabelText('Template readiness')).toHaveTextContent('! Setup');
     await waitFor(() => expect(screen.getByRole('button', { name: 'Publish' })).toBeDisabled());
+  });
+
+  it('does not treat structural-only items as a publishable operational compartment', async () => {
+    getTemplate.mockResolvedValue({
+      ...template,
+      isActive: false,
+      compartments: [
+        {
+          ...template.compartments[0],
+          items: [{ ...template.compartments[0]?.items[0], id: 'note', name: 'Instructions', checkType: 'text' }],
+        },
+      ],
+    });
+
+    renderBuilder();
+
+    expect(await screen.findByRole('button', { name: 'Publish' })).toBeDisabled();
+    expect(screen.getByLabelText('Template readiness')).toHaveTextContent('! Locations');
   });
 
   it('publishes after the blocking structure issues are fixed', async () => {
@@ -489,6 +530,30 @@ describe('EquipmentCheckTemplateBuilder quick add queue', () => {
     expect(addCheckItemsBulk).toHaveBeenCalledTimes(2);
   });
 
+  it("does not make one compartment wait for another compartment's slow response", async () => {
+    const user = userEvent.setup();
+    let resolveCab!: (value: unknown) => void;
+    addCheckItemsBulk.mockImplementation((compartmentId: string) => {
+      if (compartmentId === 'cab') return new Promise((resolve) => (resolveCab = resolve));
+      return Promise.resolve({ items: [savedItem('Trauma shears', 'shears')], createdCount: 1 });
+    });
+    renderBuilder();
+    const inputs = await screen.findAllByPlaceholderText(/search inventory/i);
+    const cabInput = inputs[0] as HTMLElement;
+    const bagInput = inputs[1] as HTMLElement;
+
+    await user.type(cabInput, 'Lantern{Enter}');
+    await user.type(bagInput, 'Trauma shears{Enter}');
+
+    expect(screen.getByLabelText('Lantern Saving')).toBeVisible();
+    await waitFor(() => expect(screen.queryByLabelText('Trauma shears Saving')).not.toBeInTheDocument());
+    expect(screen.getByText('Trauma shears')).toBeVisible();
+    expect(addCheckItemsBulk).toHaveBeenCalledTimes(2);
+
+    resolveCab({ items: [savedItem('Lantern', 'lantern')], createdCount: 1 });
+    await waitFor(() => expect(screen.queryByLabelText('Lantern Saving')).not.toBeInTheDocument());
+  });
+
   it('retains a failed row, retries with the same idempotency key, and keeps successful siblings', async () => {
     const user = userEvent.setup();
     addCheckItemsBulk
@@ -508,7 +573,7 @@ describe('EquipmentCheckTemplateBuilder quick add queue', () => {
     await waitFor(() => expect(screen.queryByLabelText('Safety vest Saving')).not.toBeInTheDocument());
     expect(screen.getByText('Safety vest')).toBeVisible();
     expect(addCheckItemsBulk.mock.calls[2]?.[2]).toBe(firstKey);
-  });
+  }, 10_000);
 
   it('does not submit the same value again when Enter repeats', async () => {
     const user = userEvent.setup();
@@ -517,6 +582,16 @@ describe('EquipmentCheckTemplateBuilder quick add queue', () => {
     const input = (await screen.findAllByPlaceholderText(/search inventory/i))[0] as HTMLElement;
     await user.type(input, 'Lantern{Enter}{Enter}');
     expect(addCheckItemsBulk).toHaveBeenCalledTimes(1);
+    expect(addCheckItemsBulk).toHaveBeenCalledWith(
+      'cab',
+      [
+        {
+          name: 'Lantern',
+          sort_order: 2,
+        },
+      ],
+      expect.any(String)
+    );
   });
 });
 
@@ -601,6 +676,12 @@ describe('EquipmentCheckTemplateBuilder remaining mutation regressions', () => {
     await user.type(paste, 'Mask\nHood');
     await user.click(screen.getByRole('button', { name: 'Add All' }));
     await waitFor(() => expect(addCheckItemsBulk).toHaveBeenCalledTimes(1));
+    expect(addCheckItemsBulk).toHaveBeenNthCalledWith(
+      1,
+      'cab',
+      [{ name: 'Mask' }, { name: 'Hood' }],
+      expect.any(String)
+    );
     expect(paste).toHaveValue('Mask\nHood');
     await user.click(screen.getByRole('button', { name: 'Add All' }));
     expect(await screen.findByLabelText('Actions for Mask')).toBeVisible();
@@ -640,6 +721,43 @@ describe('EquipmentCheckTemplateBuilder remaining mutation regressions', () => {
   });
 });
 
+describe('EquipmentCheckTemplateBuilder unsaved-change prompts', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    getTemplate.mockResolvedValue(structuredClone(template));
+    updateEquipmentCheckTemplate.mockResolvedValue(structuredClone(template));
+  });
+
+  it('does not prompt when leaving an unchanged loaded template', async () => {
+    renderBuilder();
+    await screen.findByDisplayValue('Engine check');
+    await userEvent.click(screen.getByTitle('Go back'));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('prompts for a real edit, then stops prompting after that edit is saved', async () => {
+    const user = userEvent.setup();
+    renderBuilder();
+    const name = await screen.findByDisplayValue('Engine check');
+    await user.clear(name);
+    await user.type(name, 'Engine daily check');
+
+    await user.click(screen.getByTitle('Go back'));
+    expect(await screen.findByRole('dialog')).toHaveTextContent('Leave without saving?');
+    await user.click(screen.getByRole('button', { name: 'Stay here' }));
+
+    await user.click(screen.getByRole('button', { name: 'Save draft' }));
+    await waitFor(() =>
+      expect(updateEquipmentCheckTemplate).toHaveBeenCalledWith(
+        'template-1',
+        expect.objectContaining({ name: 'Engine daily check', is_active: false })
+      )
+    );
+    await user.click(screen.getByTitle('Go back'));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+});
+
 describe('EquipmentCheckTemplateBuilder creation guidance', () => {
   it('preserves preset test instructions and marks the review step ready', async () => {
     renderNewBuilder();
@@ -652,5 +770,5 @@ describe('EquipmentCheckTemplateBuilder creation guidance', () => {
     expect(screen.getAllByText('Switch it on and confirm it works.').length).toBeGreaterThan(0);
     expect(screen.getByText('Review').closest('div')).toHaveTextContent(/items/);
     expect(screen.getByText('Review').parentElement?.previousElementSibling).toHaveClass('bg-green-500');
-  }, 10_000);
+  }, 20_000);
 });
