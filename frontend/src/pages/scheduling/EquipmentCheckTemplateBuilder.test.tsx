@@ -255,6 +255,24 @@ describe('EquipmentCheckTemplateBuilder responsive actions', () => {
     expect(screen.getByLabelText('Template readiness')).toHaveTextContent('! Setup');
   });
 
+  it('does not treat structural-only items as a publishable operational compartment', async () => {
+    getTemplate.mockResolvedValue({
+      ...template,
+      isActive: false,
+      compartments: [
+        {
+          ...template.compartments[0],
+          items: [{ ...template.compartments[0]?.items[0], id: 'note', name: 'Instructions', checkType: 'text' }],
+        },
+      ],
+    });
+
+    renderBuilder();
+
+    expect(await screen.findByRole('button', { name: 'Publish' })).toBeDisabled();
+    expect(screen.getByLabelText('Template readiness')).toHaveTextContent('! Locations');
+  });
+
   it('publishes after the blocking structure issues are fixed', async () => {
     const user = userEvent.setup();
     getTemplate.mockResolvedValue({
