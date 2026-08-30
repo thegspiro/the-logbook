@@ -420,6 +420,8 @@ describe('EquipmentCheckTemplateBuilder movement persistence', () => {
     renderBuilder();
     await user.selectOptions(await moveSelect('Oxygen mask'), '1');
     expect(await screen.findByLabelText('Actions for Oxygen mask')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Collapse Oxygen mask' })).toBeInTheDocument();
+    await waitFor(() => expect(document.getElementById('item-row-mask')).toHaveFocus());
     expect(toastSuccess).not.toHaveBeenCalled();
     expect(toastError).toHaveBeenCalledWith('Could not move “Oxygen mask.” Its original location was restored.');
   });
@@ -440,14 +442,24 @@ describe('EquipmentCheckTemplateBuilder movement persistence', () => {
   });
 
   it('reconciles rapid successful moves by stable item identity', async () => {
-    const user = userEvent.setup();
+    let resolveFirst!: (value: object) => void;
+    updateCheckItem
+      .mockImplementationOnce(() => new Promise((resolve) => (resolveFirst = resolve)))
+      .mockResolvedValueOnce({});
     renderBuilder();
     const radio = await moveSelect('Radio');
     const mask = await moveSelect('Oxygen mask');
-    await Promise.all([user.selectOptions(radio, '1'), user.selectOptions(mask, '1')]);
-    expect(updateCheckItem).toHaveBeenCalledTimes(2);
+    fireEvent.change(radio, { target: { value: '1' } });
+    fireEvent.change(mask, { target: { value: '1' } });
+
+    await waitFor(() => expect(updateCheckItem).toHaveBeenCalledTimes(1));
+    expect(updateCheckItem).toHaveBeenNthCalledWith(1, 'radio', { compartment_id: 'bag', sort_order: 0 });
+    resolveFirst({});
+    await waitFor(() => expect(updateCheckItem).toHaveBeenCalledTimes(2));
+    expect(updateCheckItem).toHaveBeenNthCalledWith(2, 'mask', { compartment_id: 'bag', sort_order: 1 });
     expect(await screen.findByLabelText('Actions for Radio')).toBeInTheDocument();
     expect(await screen.findByLabelText('Actions for Oxygen mask')).toBeInTheDocument();
+    expect(toastSuccess).toHaveBeenCalledTimes(2);
   });
 });
 

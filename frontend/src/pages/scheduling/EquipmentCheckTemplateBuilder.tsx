@@ -421,6 +421,9 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
   // State
   const [form, setForm] = useState<TemplateFormState>(defaultTemplateForm);
   const [compartments, setCompartments] = useState<CompartmentFormState[]>([]);
+  const compartmentsRef = useRef(compartments);
+  compartmentsRef.current = compartments;
+  const itemMoveQueue = useRef<Promise<void>>(Promise.resolve());
   // Two guards, not one: adding a compartment and adding a section header are
   // separate buttons, and a shared flag would gray out one because the other
   // is mid-flight.
@@ -956,40 +959,54 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
 
     const item = fromComp.items[itemIdx];
     if (!item) return;
+    const itemKey = item.id ?? item.clientKey;
+    const destinationKey = toComp.id ?? toComp.clientKey;
 
-    if (isEditing && item.id && toComp.id) {
-      try {
-        await ensureDraftBeforeStructureEdit();
-        await schedulingService.updateCheckItem(item.id, {
-          compartment_id: toComp.id,
-          sort_order: toComp.items.length,
-        });
-      } catch {
-        const itemKey = item.id ?? item.clientKey;
-        setExpandedItems((prev) => new Set(prev).add(itemKey));
-        window.setTimeout(() => document.getElementById(`item-row-${itemKey}`)?.focus());
-        toast.error(`Could not move “${item.name || 'item'}.” Its original location was restored.`);
-        return;
+    const persistAndApply = async () => {
+      const current = compartmentsRef.current;
+      const currentSourceIdx = current.findIndex((candidate) =>
+        candidate.items.some((candidateItem) => (candidateItem.id ?? candidateItem.clientKey) === itemKey)
+      );
+      const currentDestinationIdx = current.findIndex(
+        (candidate) => (candidate.id ?? candidate.clientKey) === destinationKey
+      );
+      const currentSource = current[currentSourceIdx];
+      const currentDestination = current[currentDestinationIdx];
+      const currentItem = currentSource?.items.find((candidate) => (candidate.id ?? candidate.clientKey) === itemKey);
+      if (!currentSource || !currentDestination || !currentItem || currentSourceIdx === currentDestinationIdx) return;
+
+      if (isEditing && currentItem.id && currentDestination.id) {
+        try {
+          await ensureDraftBeforeStructureEdit();
+          await schedulingService.updateCheckItem(currentItem.id, {
+            compartment_id: currentDestination.id,
+            sort_order: currentDestination.items.length,
+          });
+        } catch {
+          setExpandedItems((prev) => new Set(prev).add(itemKey));
+          window.setTimeout(() => document.getElementById(`item-row-${itemKey}`)?.focus());
+          toast.error(`Could not move “${currentItem.name || 'item'}.” Its original location was restored.`);
+          return;
+        }
       }
-    }
 
-    setCompartments((prev) => {
-      const next = [...prev];
-      const currentSourceIdx = next.findIndex((candidate) => candidate.clientKey === fromComp.clientKey);
-      const currentDestinationIdx = next.findIndex((candidate) => candidate.clientKey === toComp.clientKey);
-      const src = next[currentSourceIdx];
-      const dst = next[currentDestinationIdx];
-      if (!src || !dst) return prev;
-      const currentItemIdx = src.items.findIndex((candidate) => candidate.clientKey === item.clientKey);
-      if (currentItemIdx < 0) return prev;
-      const srcItems = src.items.filter((candidate) => candidate.clientKey !== item.clientKey);
-      const dstItems = [...dst.items, item];
-      next[currentSourceIdx] = { ...src, items: srcItems };
-      next[currentDestinationIdx] = { ...dst, items: dstItems };
-      return next;
-    });
-    markDirty();
-    toast.success(`Moved "${item.name || 'item'}" to ${toComp.name || 'compartment'}`);
+      const next = [...current];
+      next[currentSourceIdx] = {
+        ...currentSource,
+        items: currentSource.items.filter((candidate) => (candidate.id ?? candidate.clientKey) !== itemKey),
+      };
+      next[currentDestinationIdx] = { ...currentDestination, items: [...currentDestination.items, currentItem] };
+      // Keep the queue's authoritative snapshot ahead of React rendering so a
+      // second completed request cannot reconcile against a stale closure.
+      compartmentsRef.current = next;
+      setCompartments(next);
+      markDirty();
+      toast.success(`Moved "${currentItem.name || 'item'}" to ${currentDestination.name || 'compartment'}`);
+    };
+
+    const queuedMove = itemMoveQueue.current.then(persistAndApply);
+    itemMoveQueue.current = queuedMove.catch(() => undefined);
+    await queuedMove;
   };
 
   // ---------------------------------------------------------------------------
