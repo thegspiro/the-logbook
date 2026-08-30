@@ -423,6 +423,9 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
   // State
   const [form, setForm] = useState<TemplateFormState>(defaultTemplateForm);
   const [compartments, setCompartments] = useState<CompartmentFormState[]>([]);
+  const compartmentsRef = useRef(compartments);
+  compartmentsRef.current = compartments;
+  const itemMoveQueue = useRef<Promise<void>>(Promise.resolve());
   // Two guards, not one: adding a compartment and adding a section header are
   // separate buttons, and a shared flag would gray out one because the other
   // is mid-flight.
@@ -962,40 +965,65 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
 
     const item = fromComp.items[itemIdx];
     if (!item) return;
+    const itemKey = item.id ?? item.clientKey;
+    const destinationKey = toComp.id ?? toComp.clientKey;
 
-    if (isEditing && item.id && toComp.id) {
-      try {
-        await ensureDraftBeforeStructureEdit();
-        await schedulingService.updateCheckItem(item.id, {
-          compartment_id: toComp.id,
-          sort_order: toComp.items.length,
-        });
-      } catch {
-        const itemKey = item.id ?? item.clientKey;
-        setExpandedItems((prev) => new Set(prev).add(itemKey));
-        window.setTimeout(() => document.getElementById(`item-row-${itemKey}`)?.focus());
-        toast.error(`Could not move “${item.name || 'item'}.” Its original location was restored.`);
-        return;
+    const persistAndApply = async () => {
+      const current = compartmentsRef.current;
+      const currentSourceIdx = current.findIndex((candidate) =>
+        candidate.items.some((candidateItem) => (candidateItem.id ?? candidateItem.clientKey) === itemKey)
+      );
+      const currentDestinationIdx = current.findIndex(
+        (candidate) => (candidate.id ?? candidate.clientKey) === destinationKey
+      );
+      const currentSource = current[currentSourceIdx];
+      const currentDestination = current[currentDestinationIdx];
+      const currentItem = currentSource?.items.find((candidate) => (candidate.id ?? candidate.clientKey) === itemKey);
+      if (!currentSource || !currentDestination || !currentItem || currentSourceIdx === currentDestinationIdx) return;
+
+      if (isEditing && currentItem.id && currentDestination.id) {
+        try {
+          await ensureDraftBeforeStructureEdit();
+          await schedulingService.updateCheckItem(currentItem.id, {
+            compartment_id: currentDestination.id,
+            sort_order: currentDestination.items.length,
+          });
+        } catch {
+          setExpandedItems((prev) => new Set(prev).add(itemKey));
+          window.setTimeout(() => document.getElementById(`item-row-${itemKey}`)?.focus());
+          toast.error(`Could not move “${currentItem.name || 'item'}.” Its original location was restored.`);
+          return;
+        }
       }
-    }
 
-    setCompartments((prev) => {
-      const next = [...prev];
-      const currentSourceIdx = next.findIndex((candidate) => candidate.clientKey === fromComp.clientKey);
-      const currentDestinationIdx = next.findIndex((candidate) => candidate.clientKey === toComp.clientKey);
-      const src = next[currentSourceIdx];
-      const dst = next[currentDestinationIdx];
-      if (!src || !dst) return prev;
-      const currentItemIdx = src.items.findIndex((candidate) => candidate.clientKey === item.clientKey);
-      if (currentItemIdx < 0) return prev;
-      const srcItems = src.items.filter((candidate) => candidate.clientKey !== item.clientKey);
-      const dstItems = [...dst.items, item];
-      next[currentSourceIdx] = { ...src, items: srcItems };
-      next[currentDestinationIdx] = { ...dst, items: dstItems };
-      return next;
-    });
-    markDirty();
-    toast.success(`Moved "${item.name || 'item'}" to ${toComp.name || 'compartment'}`);
+      setCompartments((prev) => {
+        const sourceIdx = prev.findIndex((candidate) =>
+          candidate.items.some((candidateItem) => (candidateItem.id ?? candidateItem.clientKey) === itemKey)
+        );
+        const destinationIdx = prev.findIndex((candidate) => (candidate.id ?? candidate.clientKey) === destinationKey);
+        const source = prev[sourceIdx];
+        const destination = prev[destinationIdx];
+        const movedItem = source?.items.find((candidate) => (candidate.id ?? candidate.clientKey) === itemKey);
+        if (!source || !destination || !movedItem || sourceIdx === destinationIdx) return prev;
+
+        const next = [...prev];
+        next[sourceIdx] = {
+          ...source,
+          items: source.items.filter((candidate) => (candidate.id ?? candidate.clientKey) !== itemKey),
+        };
+        next[destinationIdx] = { ...destination, items: [...destination.items, movedItem] };
+        return next;
+      });
+      // The queue must not calculate the next destination position until
+      // React has committed this functional update and refreshed the snapshot.
+      await new Promise<void>((resolve) => window.setTimeout(resolve, 0));
+      markDirty();
+      toast.success(`Moved "${currentItem.name || 'item'}" to ${currentDestination.name || 'compartment'}`);
+    };
+
+    const queuedMove = itemMoveQueue.current.then(persistAndApply);
+    itemMoveQueue.current = queuedMove.catch(() => undefined);
+    await queuedMove;
   };
 
   // ---------------------------------------------------------------------------
@@ -1191,6 +1219,11 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       }
     });
     quickAddQueues.current[job.compartmentKey] = request;
+    void request.finally(() => {
+      if (quickAddQueues.current[job.compartmentKey] === request) {
+        delete quickAddQueues.current[job.compartmentKey];
+      }
+    });
   };
 
   const handleQuickAdd = (compartmentIdx: number, payload: CatalogAddPayload) => {
@@ -1602,29 +1635,15 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     }
     if (autoSavePromiseRef.current) await autoSavePromiseRef.current;
     // Drafts deliberately bypass readiness checks; publication never does.
+    // Keep the blocking rules aligned with the backend instead of putting them
+    // in the overridable warning dialog below.
+    if (publish && !publishReady) return;
     const warnings: string[] = [];
     for (const comp of compartments) {
-      if (!comp.name.trim()) {
-        warnings.push('One or more compartments have no name.');
-        break;
-      }
-    }
-    for (const comp of compartments) {
       if (comp.isHeader) continue;
-      if (comp.items.length === 0) {
-        warnings.push(`Compartment "${comp.name || 'Untitled'}" has no items.`);
-        break;
-      }
       for (const item of comp.items) {
-        if (!item.name.trim()) {
-          warnings.push(`One or more items in "${comp.name || 'Untitled'}" have no name.`);
-          break;
-        }
         if (item.hasExpiration && !item.expirationDate.trim()) {
           warnings.push(`"${item.name || 'Untitled'}" has expiration enabled but no date set.`);
-        }
-        if (item.checkType === 'count' && !item.requiredQuantity && !item.expectedQuantity) {
-          warnings.push(`"${item.name || 'Untitled'}" is a quantity check but has no expected quantity.`);
         }
         if (
           item.checkType === 'count' &&
@@ -1633,9 +1652,6 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           Number(item.criticalMinimumQuantity) >= Number(item.expectedQuantity)
         ) {
           warnings.push(`"${item.name || 'Untitled'}" has critical minimum >= expected quantity.`);
-        }
-        if (item.checkType === 'level' && !item.minLevel) {
-          warnings.push(`"${item.name || 'Untitled'}" is a level check but has no minimum level set.`);
         }
         if (item.checkType === 'expiry' && !item.serialNumber && !item.lotNumber) {
           warnings.push(`"${item.name || 'Untitled'}" is a date/lot check but has no serial or lot number.`);
@@ -2796,6 +2812,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     if (item.saveStatus) {
       return (
         <div
+          key={itemKey}
           className="border-theme-surface-border bg-theme-surface flex min-h-12 items-center gap-3 rounded-md border px-3 py-2"
           aria-label={`${item.name} ${item.saveStatus === 'saving' ? 'Saving' : 'Not saved'}`}
         >
@@ -3968,16 +3985,21 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
   const setupReady = Boolean(form.name.trim() && form.checkTiming && form.templateType);
   const structureReady = compartments.some((comp) => !comp.isHeader);
   const itemsReady = stats.totalItems > 0;
+  const operationalCompartments = compartments.filter((comp) => !comp.isHeader);
   const blockingItems = compartments
     .flatMap((comp) => comp.items)
     .filter(
       (item) =>
         !item.name.trim() ||
-        (item.checkType === 'count' && !item.requiredQuantity && !item.expectedQuantity) ||
-        (item.checkType === 'level' && !item.minLevel)
+        (item.checkType === 'count' && item.requiredQuantity.trim() === '' && item.expectedQuantity.trim() === '') ||
+        (item.checkType === 'level' && item.minLevel.trim() === '')
     ).length;
   const locationsReady =
-    structureReady && compartments.every((comp) => comp.name.trim() && (comp.isHeader || comp.items.length > 0));
+    structureReady &&
+    compartments.every((comp) => comp.name.trim()) &&
+    operationalCompartments.every((comp) =>
+      comp.items.some((item) => item.checkType !== 'header' && item.checkType !== 'text')
+    );
   const publishReady = setupReady && locationsReady && blockingItems === 0;
   const mobileSelectionCompartmentIdx = compartments.findIndex((_, index) =>
     mobileSelectionLocations.has(getCompKey(index))
