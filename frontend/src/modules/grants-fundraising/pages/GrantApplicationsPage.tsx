@@ -223,8 +223,14 @@ export const GrantApplicationsPage: React.FC = () => {
   const [searchText, setSearchText] = useState('');
   // Dashboard KPI/pipeline cards link here with `?status=<value>` — honor it
   // as the initial filter so those links actually filter, instead of
-  // silently landing on the unfiltered list.
-  const [statusFilter, setStatusFilter] = useState<string>(() => searchParams.get('status') ?? '');
+  // silently landing on the unfiltered list. A bookmarked/shared URL can
+  // carry a stale or mistyped value (a status the current release removed,
+  // a typo) — falling back to unfiltered beats silently applying a filter
+  // that matches nothing, which looks like an unexplained empty list.
+  const [statusFilter, setStatusFilter] = useState<string>(() => {
+    const fromUrl = searchParams.get('status');
+    return fromUrl && (PIPELINE_COLUMNS as string[]).includes(fromUrl) ? fromUrl : '';
+  });
   const [priorityFilter, setPriorityFilter] = useState<string>('');
   const [sortField, setSortField] = useState<SortField>('applicationDeadline');
   const [sortDir, setSortDir] = useState<SortDir>('asc');

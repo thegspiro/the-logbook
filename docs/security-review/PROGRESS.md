@@ -35,6 +35,27 @@ off current `main` and opened as PR #2070. Rotation row 22 stays ⏳ — the
 feature isn't fully done until #2070 also merges. Next: 23 medical
 supplies, once #2070 merges.
 
+**PR #2070 tend, round 1 (CI fix):** the new date-range test's direct DOM
+queries tripped `eslint --max-warnings 10` (3 new warnings, 8→11). Fixed
+by adding real `aria-label`s to the two date inputs and switching the test
+to `getByLabelText`; back to 8 warnings.
+
+**PR #2070 tend, round 2 (Codex round 5):** GF-27's own fix drew 2 more
+comments. **GF-27a (new, LOW-MED, FLAGGED not fixed)** — the dashboard's
+KPI cards count multiple statuses per card (`get_dashboard_data()`:
+"Active Grants" = `active`+`reporting`) but link with only one status, so
+GF-27's single-value filter now under-shows what the card counted.
+Fixing it needs a filter-UI decision (a grouped option, or restyling the
+cards as non-filtering summaries), not a mechanical patch — flagged,
+mirrored into `KNOWN_LIMITATIONS.md`. This is the rotation's own
+convergence-stop point: GF-27→GF-27a is the third straight round where a
+fix drew a reshape in the same code; not chasing a fourth variant.
+**GF-30 (new, LOW, fixed)** — a stale or mistyped `?status=` value was
+applied silently instead of falling back to unfiltered, producing an
+unexplained empty list. Both pages now validate against their own
+existing status whitelist first; new test case (fails before/passes
+after). Full gate re-run green.
+
 ### 2026-08-30 — Feature 22 (Grants & fundraising), pass 2 — 0 fixed, 0 new findings; re-verification only
 
 No security-review PR was open (PR #2065/feature 21 admin-hours pass 2 had
