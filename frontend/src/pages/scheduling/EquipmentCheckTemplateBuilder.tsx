@@ -486,6 +486,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
   // translated copy, so the rail's own sticky offset is measured rather than
   // guessed — a stale constant parks the rail's tab strip underneath it.
   const topBarRef = useRef<HTMLDivElement>(null);
+  /** Where the sticky top bar ends: its own height plus the inset it sits at. */
   const [topBarHeight, setTopBarHeight] = useState(0);
 
   // Compartment keys whose storage-type selector is in free-text ("Custom…")
@@ -2350,11 +2351,23 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
   useEffect(() => {
     const bar = topBarRef.current;
     if (!bar) return;
-    const updateHeight = () => setTopBarHeight(bar.getBoundingClientRect().height);
+    const updateHeight = () => {
+      // Between 640px and 767px the rail renders while the bar is itself
+      // pushed down by the fixed mobile header, so the bar's height alone is
+      // not where it ends. Its resolved sticky `top` is exactly that inset.
+      const stickyTop = Number.parseFloat(window.getComputedStyle(bar).top);
+      setTopBarHeight(bar.getBoundingClientRect().height + (Number.isFinite(stickyTop) ? stickyTop : 0));
+    };
     updateHeight();
     const observer = new ResizeObserver(updateHeight);
     observer.observe(bar);
-    return () => observer.disconnect();
+    // The inset is a breakpoint, not a size, so crossing 768px can leave the
+    // bar's own box unchanged; listen for the resize as well.
+    window.addEventListener('resize', updateHeight);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', updateHeight);
+    };
   }, []);
 
   useEffect(() => {
@@ -2368,7 +2381,9 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     const observer = new ResizeObserver(updateHeight);
     observer.observe(bar);
     return () => observer.disconnect();
-  }, [stats.totalItems]);
+    // The bar's presence depends on the breakpoint as well as the item count,
+    // so a resize across it must re-attach the observer.
+  }, [stats.totalItems, isLaptop]);
 
   /**
    * How much of this template is wired to the inventory catalog.
@@ -3228,6 +3243,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                 <input
                   type="number"
                   min="0"
+                  id={`item-par-${itemKey}`}
                   aria-label={`Par quantity for ${item.name.trim() || 'item'}`}
                   className={`${numberInputClass} w-14`}
                   value={item.expectedQuantity}
@@ -3258,6 +3274,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                 <input
                   type="number"
                   min="0"
+                  id={`item-min-level-${itemKey}`}
                   aria-label={`Minimum level for ${item.name.trim() || 'item'}`}
                   className={`${numberInputClass} w-16 ${item.minLevel.trim() ? '' : 'border-amber-500'}`}
                   value={item.minLevel}
@@ -3455,7 +3472,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
               type="button"
               onClick={() => void moveCompartment(idx, 'up')}
               disabled={!canMoveCompartment(compartments, comp.id, 'up')}
-              className="text-theme-text-muted/70 hover:text-theme-text-primary rounded p-1 disabled:opacity-30"
+              className="text-theme-text-muted/70 hover:text-theme-text-primary mobile-touch-target rounded p-1 disabled:opacity-30 sm:min-h-0 sm:min-w-0"
               aria-label="Move section up"
             >
               <ChevronUp className="h-3.5 w-3.5" aria-hidden="true" />
@@ -3464,7 +3481,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
               type="button"
               onClick={() => void moveCompartment(idx, 'down')}
               disabled={!canMoveCompartment(compartments, comp.id, 'down')}
-              className="text-theme-text-muted/70 hover:text-theme-text-primary rounded p-1 disabled:opacity-30"
+              className="text-theme-text-muted/70 hover:text-theme-text-primary mobile-touch-target rounded p-1 disabled:opacity-30 sm:min-h-0 sm:min-w-0"
               aria-label="Move section down"
             >
               <ChevronDown className="h-3.5 w-3.5" aria-hidden="true" />
@@ -3472,7 +3489,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             <button
               type="button"
               onClick={() => void deleteCompartment(idx)}
-              className="text-theme-text-muted/70 rounded p-1 hover:text-red-600"
+              className="text-theme-text-muted/70 mobile-touch-target rounded p-1 hover:text-red-600 sm:min-h-0 sm:min-w-0"
               aria-label="Delete section header"
             >
               <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
@@ -3634,6 +3651,13 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                   type="button"
                   onClick={() => {
                     setExpandedCompartments((prev) => new Set(prev).add(key));
+                    // The composer is laptop-only, and a loaded location is
+                    // already expanded — so on a phone this button used to do
+                    // nothing visible at all.
+                    if (!isLaptop) {
+                      setMobileAddLocations((previous) => new Set(previous).add(key));
+                      return;
+                    }
                     window.setTimeout(() => document.getElementById(`compose-${key}`)?.focus(), 0);
                   }}
                   className="flex min-h-7.5 flex-shrink-0 items-center gap-1.5 rounded-md bg-blue-600 px-2.5 text-xs font-semibold text-white hover:bg-blue-700"
@@ -3741,6 +3765,37 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
               >
                 <Package className="h-4 w-4" aria-hidden="true" /> Add a kit
               </button>
+              {/* The row carries the name and the storage controls, but the
+                  model still has a description and an image, and the expanded
+                  body this replaced was the only place to type them. Without
+                  these two they are readable in an export and unreachable in
+                  the UI. */}
+              <label className={`${mobileMenuItemClass} flex-col items-stretch gap-1`}>
+                <span className="flex items-center gap-3">
+                  <Pencil className="h-4 w-4" aria-hidden="true" /> Description
+                </span>
+                <input
+                  type="text"
+                  className="form-input min-h-[44px] text-sm"
+                  placeholder="Optional description"
+                  aria-label={`Description for ${comp.name || 'location'}`}
+                  value={comp.description}
+                  onChange={(e) => updateCompartmentField(idx, { description: e.target.value })}
+                />
+              </label>
+              <label className={`${mobileMenuItemClass} flex-col items-stretch gap-1`}>
+                <span className="flex items-center gap-3">
+                  <Image className="h-4 w-4" aria-hidden="true" /> Image URL
+                </span>
+                <input
+                  type="text"
+                  className="form-input min-h-[44px] text-sm"
+                  placeholder="https://..."
+                  aria-label={`Image URL for ${comp.name || 'location'}`}
+                  value={comp.imageUrl}
+                  onChange={(e) => updateCompartmentField(idx, { imageUrl: e.target.value })}
+                />
+              </label>
               <label className={`${mobileMenuItemClass} flex-col items-stretch gap-1`}>
                 <span className="flex items-center gap-3">
                   <ArrowRightLeft className="h-4 w-4" aria-hidden="true" /> Stored inside
@@ -4336,6 +4391,8 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     anchorId: string;
     /** Compartment to expand before jumping, when the row is inside one. */
     expandKey?: string;
+    /** The field the author has to change — not merely the row it sits in. */
+    focusId?: string;
   }> = [];
   if (!setupReady) {
     blockers.push({
@@ -4365,6 +4422,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
         locator: comp.isHeader ? 'Name it or delete it' : `Position ${String(compIdx + 1)} in the checklist`,
         icon: 'package',
         anchorId: compAnchor,
+        focusId: `comp-name-${comp.id ?? `comp-${compIdx}`}`,
       });
     }
     if (!comp.isHeader && !comp.items.some((item) => item.checkType !== 'header' && item.checkType !== 'text')) {
@@ -4386,6 +4444,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           icon: 'alert',
           anchorId: itemAnchor,
           expandKey: comp.id ?? `comp-${compIdx}`,
+          focusId: `item-name-${item.id ?? item.clientKey}`,
         });
         continue;
       }
@@ -4397,6 +4456,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           icon: 'alert',
           anchorId: itemAnchor,
           expandKey: comp.id ?? `comp-${compIdx}`,
+          focusId: `item-par-${item.id ?? item.clientKey}`,
         });
       }
       if (item.checkType === 'level' && !item.minLevel.trim()) {
@@ -4407,6 +4467,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           icon: 'gauge',
           anchorId: itemAnchor,
           expandKey: comp.id ?? `comp-${compIdx}`,
+          focusId: `item-min-level-${item.id ?? item.clientKey}`,
         });
       }
     }
@@ -4420,7 +4481,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
    * that is empty, and a scrolled-to row still costs them a click to find it.
    * `prefers-reduced-motion` turns the smooth scroll off rather than the jump.
    */
-  const goToBlocker = (anchorId: string, expandKey?: string) => {
+  const goToBlocker = (anchorId: string, expandKey?: string, focusId?: string) => {
     if (anchorId === DETAILS_ANCHOR) {
       setDrawerOpen(true);
       return;
@@ -4429,14 +4490,17 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     // jump has to open it first — and then wait a frame for it to render.
     if (expandKey && !expandedCompartments.has(expandKey)) {
       setExpandedCompartments((prev) => new Set(prev).add(expandKey));
-      window.setTimeout(() => goToBlocker(anchorId), 0);
+      window.setTimeout(() => goToBlocker(anchorId, undefined, focusId), 0);
       return;
     }
     const row = document.getElementById(anchorId);
     if (!row) return;
     const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     row.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'center' });
-    const field = row.querySelector<HTMLElement>('input, select, textarea');
+    // The blocker named a field; falling back to the row's first control would
+    // put the cursor in the item name, which is the one part already correct.
+    const field =
+      (focusId ? document.getElementById(focusId) : null) ?? row.querySelector<HTMLElement>('input, select, textarea');
     (field ?? row).focus({ preventScroll: true });
   };
   const mobileSelection = compartments
@@ -4628,6 +4692,11 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
               <button
                 type="button"
                 onClick={() => {
+                  if (!isLaptop) {
+                    const first = blockers[0];
+                    if (first) goToBlocker(first.anchorId, first.expandKey, first.focusId);
+                    return;
+                  }
                   setRail('blockers');
                   document.getElementById('publish-blockers')?.scrollIntoView({ block: 'nearest' });
                 }}
@@ -4951,7 +5020,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                       <button
                         key={blocker.id}
                         type="button"
-                        onClick={() => goToBlocker(blocker.anchorId, blocker.expandKey)}
+                        onClick={() => goToBlocker(blocker.anchorId, blocker.expandKey, blocker.focusId)}
                         className="flex items-start gap-2.5 rounded-lg border border-amber-500/35 bg-amber-500/[0.07] p-2.5 text-left transition-colors hover:bg-amber-500/[0.14]"
                       >
                         <BlockerIcon

@@ -1056,3 +1056,81 @@ describe('EquipmentCheckTemplateBuilder single-canvas editor', () => {
     expect(composer).toHaveValue('');
   });
 });
+
+describe('EquipmentCheckTemplateBuilder canvas affordances reach both widths', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    getTemplate.mockReset();
+    getTemplate.mockResolvedValue(structuredClone(template));
+    updateCheckItem.mockResolvedValue({});
+    updateCompartment.mockResolvedValue({});
+  });
+
+  it('focuses the setting a blocker names, not the row it sits in', async () => {
+    const user = userEvent.setup();
+    mockViewport('laptop');
+    getTemplate.mockResolvedValue({
+      ...structuredClone(template),
+      compartments: [
+        {
+          ...structuredClone(template.compartments[0]),
+          items: [
+            {
+              ...template.compartments[0]?.items[0],
+              id: 'foam',
+              name: 'Foam tank level',
+              checkType: 'level',
+            },
+          ],
+        },
+      ],
+    });
+    renderBuilder();
+
+    // The item name is the first control in the row and is already correct;
+    // landing there would say nothing about what to fix.
+    await user.click(await screen.findByRole('button', { name: /Foam tank level needs a minimum/ }));
+    expect(screen.getByLabelText('Minimum level for Foam tank level')).toHaveFocus();
+  });
+
+  it('takes a phone straight to the first blocker, where there is no rail', async () => {
+    const user = userEvent.setup();
+    mockViewport('phone');
+    renderBuilder();
+
+    await user.click(await screen.findByRole('button', { name: '1 to fix' }));
+    expect(screen.getByDisplayValue('Medical bag')).toHaveFocus();
+  });
+
+  it('opens the phone add sheet from an empty location instead of a missing composer', async () => {
+    const user = userEvent.setup();
+    mockViewport('phone');
+    renderBuilder();
+
+    // Medical bag loads expanded and empty, so expanding it again is a no-op —
+    // the button has to reach the sheet that phones actually add through.
+    await user.click(await screen.findByRole('button', { name: 'Add items' }));
+    expect(screen.getByPlaceholderText('Add or search items…')).toBeInTheDocument();
+  });
+
+  it('keeps a location description and image editable from the row overflow', async () => {
+    const user = userEvent.setup();
+    mockViewport('laptop');
+    renderBuilder();
+
+    const trigger = await screen.findByLabelText('Actions for Cab');
+    await user.click(trigger);
+    const menu = trigger.closest('details') as HTMLElement;
+    await user.type(within(menu).getByLabelText('Description for Cab'), 'Front of the rig');
+    expect(within(menu).getByLabelText('Description for Cab')).toHaveValue('Front of the rig');
+    expect(within(menu).getByLabelText('Image URL for Cab')).toBeInTheDocument();
+  });
+
+  it('keeps section actions at a phone-sized target', async () => {
+    mockViewport('phone');
+    renderBuilder();
+
+    expect(await screen.findByRole('button', { name: 'Delete section header' })).toHaveClass('mobile-touch-target');
+    expect(screen.getByRole('button', { name: 'Move section up' })).toHaveClass('mobile-touch-target');
+  });
+});
