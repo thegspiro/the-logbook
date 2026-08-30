@@ -1,6 +1,12 @@
 # Security Review — Grants & Fundraising
 
-**Prefix:** `GF` · **Iteration:** 22 · **Reviewed:** 2026-08-26 · **PR:** #1904
+**Prefix:** `GF` · **Iteration:** 22 · **Reviewed:** 2026-08-26 (pass 1),
+2026-08-30 (pass 2) · **PR:** [#1904](https://github.com/thegspiro/the-logbook/pull/1904)
+(pass 1)
+
+---
+
+## Pass 1 (2026-08-26)
 
 **Backend:** `app/api/v1/endpoints/grants.py` (1,883 L, 45 endpoints),
 `app/services/grant_service.py` (1,135 L), `app/services/fundraising_service.py`
@@ -43,7 +49,13 @@ starts from what is new since the last pass.
   `reporting_frequency` / `task_type` (a plain `str` until the row round-trips
   through the DB) can't 500 the awarded-grant or completed-task paths.
 - **GF-12** — `update_compliance_task`'s `assigned_to` is validated in-org.
-- No SQL injection; `SafeCsvWriter` used for exports, not raw `csv.writer`.
+- No SQL injection. No CSV/spreadsheet export exists anywhere in this module
+  (endpoint file, both services, and a repo-wide grep for `SafeCsvWriter`/
+  `csv.writer` under a grants/fundraising path all confirm this) — Pitfall
+  #15 is **n/a**, not satisfied by an export that uses the safe writer.
+  **Correction (pass 2):** this line originally read "`SafeCsvWriter` used
+  for exports, not raw `csv.writer`," which implied an export exists; it
+  does not.
 - No impersonation — `created_by`/`recorded_by` set from `current_user`,
   never from the request body.
 
@@ -214,9 +226,10 @@ lock(s) _first_, before the child row is added/flushed — new
 `_lock_campaign`/`_lock_donor` (`fundraising_service.py`) and
 `_lock_budget_item` (`grant_service.py`) helpers, called on the full set of
 parents an insert or update could touch (both the old and, if reassigned,
-the new parent) ahead of the child flush. `delete_donation`/
-`delete_expenditure` were not affected — a DELETE on the child never takes a
-lock on the FK's parent.
+the new parent) ahead of the child flush. `delete_expenditure` was not affected — a DELETE on the child never takes a
+lock on the FK's parent. (**Correction, pass 2:** this originally also named
+a `delete_donation` — no such method or endpoint exists; `Donation` has no
+delete path at all, only create/update.)
 
 **GF-14 — the idempotency check itself could misfire on a manually created
 task (P2).** The first version guarded `_generate_compliance_tasks` by
@@ -289,3 +302,224 @@ backend suite re-run green (see Completion gate).
 | backend tests, scope (`grant_service` + `fundraising_service`)     | 52 passed               |
 | backend tests, integration (`test_grant_opportunity_delete_db.py`) | 1 passed                |
 | backend tests, full suite                                          | 8855 passed, 22 skipped |
+
+---
+
+## Pass 2 (2026-08-30)
+
+**Backend:** `app/api/v1/endpoints/grants.py`, `app/services/grant_service.py`,
+`app/services/fundraising_service.py`, `app/models/grant.py`,
+`app/schemas/grant.py`.
+**Frontend:** established for the first time this pass (pass 1 was
+backend-only) — the real module lives at `frontend/src/modules/grants-fundraising/`
+(services, store, routes, types, and 8 pages — `GrantsDashboardPage`,
+`GrantOpportunitiesPage`, `GrantApplicationsPage`, `GrantApplicationFormPage`,
+`GrantDetailPage`, `CampaignsPage`, `DonorsPage`, `DonationsPage`,
+`GrantsReportsPage`), ~6,900 lines across 14 files. A repo-wide grep for
+`grant`/`Grant`/`fundraising`/`Fundraising` also confirmed no grants/donor
+data is read or written from outside this module and `dashboard.py` (a
+different feature's endpoint file) — that call site only aggregates the
+already-gated `/grants` figures onto the org dashboard behind its own
+`fundraising.view` check, read directly and confirmed correct.
+**Migrations:** none since pass 1.
+
+### Scope since pass 1's merge (`520978c4`, PR #1904)
+
+`git diff 520978c4 HEAD --stat` against all five declared backend files came
+back **empty — byte-identical** to what merged in PR #1904; confirmed by the
+diff itself, not assumed from `git log`. `git diff --name-only 520978c4 HEAD
+-- backend/alembic/versions/` lists 19 new migration files; each was checked
+by content (not filename) for any grant/fundraising-table touch — none
+found. No backend or schema drift of any kind to scope against; this pass is
+a full independent re-read of unchanged code plus the module's first
+frontend review.
+
+### Re-verification of pass-1 fixes (GF-13 through GF-18)
+
+Read the current `grants.py`, `grant_service.py`, `fundraising_service.py`,
+and `grant.py` in full (not re-cited from the pass-1 doc) and confirmed
+every fix is intact at its current line:
+
+- **GF-13** — `GrantOpportunity.applications` still carries no cascade and
+  `passive_deletes=True`; the FK (`GrantApplication.opportunity_id`,
+  `ondelete="SET NULL"`) is unchanged. Also checked every other relationship
+  in the model file for the same ORM-cascade-vs-FK-`ondelete` mismatch: all
+  four `cascade="all, delete-orphan"` relationships on `GrantApplication`
+  (`budget_items`, `expenditures`, `compliance_tasks`, `grant_notes`) pair
+  with a child FK that is `ondelete="CASCADE"` — consistent, no GF-13-shaped
+  gap elsewhere. `FundraisingCampaign.donations`/`.pledges`/
+  `.fundraising_events` carry no cascade and no `passive_deletes`, which
+  would reproduce GF-13's exact failure mode on a hard delete of a
+  campaign — but `delete_campaign` is (and was, per its own docstring) a
+  **soft** delete (`campaign.active = False`, no `db.delete()`), and a
+  repo-wide grep for `db.delete(` against `Campaign`/`Donor`/`Pledge`/
+  `FundraisingEvent` found no call site — the mismatch exists on paper but
+  has no reachable trigger.
+- **GF-14** — `_generate_compliance_tasks` still checks
+  `application.compliance_tasks_generated` first and sets it before doing
+  any work; the dedicated boolean column (not a `task_type` query) is
+  unchanged.
+- **GF-15** — `_update_budget_item_spent`, `_update_campaign_total`, and
+  `_update_donor_stats` all still lock the parent row first
+  (`.with_for_update()`) and make the aggregate `SUM` itself a locking read.
+- **GF-16** — all ten update methods still route through `apply_updates`.
+- **GF-17** — `_notes_with_authors`' `User` lookup still filters
+  `organization_id`.
+- **GF-18** — `_update_budget_item_spent`'s budget-item fetch still joins
+  through `GrantApplication` and filters `organization_id`.
+- **Codex P1 (parent-lock-before-child-flush)** — `_lock_budget_item`/
+  `_lock_campaign`/`_lock_donor` are still called before the child row is
+  added/flushed in `create_expenditure`/`update_expenditure` and
+  `create_donation`/`update_donation`, for both the old and (if reassigned)
+  new parent.
+- **Codex P2 (idempotency-guard reliability)** — `compliance_tasks_generated`
+  is still a dedicated column on `GrantApplication`, not inferred from
+  `task_type`; migration `472a1e34aa84` unchanged.
+
+Re-ran an AST-equivalent enumeration by grep from scratch (not a diff
+against pass 1's count): **45/45** routes in `grants.py` carry
+`Depends(require_permission("fundraising.view"))` or
+`Depends(require_permission("fundraising.manage"))` — matching count and
+pattern exactly. Neither permission string appears in `DEFAULT_POSITIONS`'
+`member`/`firefighter` baseline entries in `core/permissions.py` (grepped
+the whole backend for the literal strings — only the two `Permission(...)`
+declarations and this feature's own call sites), so this is not a
+Pitfall #23-shaped baseline-grant gap. Every by-id query in both services
+was re-swept mechanically for a missing `organization_id` filter (direct,
+or via an already-org-scoped join to `GrantApplication`/`FundraisingCampaign`
+etc.) — no gap. All `.ilike()` calls (`list_opportunities`, `list_donors`)
+still pass `escape=LIKE_ESCAPE_CHAR` via `like_pattern()`.
+
+**Re-confirmed still open (unchanged, per every prior pass):** GF-7
+(state-machine/overspend), GF-8 (`is_anonymous` not enforced in responses —
+no public surface exists anywhere in this app that would read it, checked
+`api/public/` directly, so this remains staff-only exposure), GF-9 (float
+money math in both `get_grant_report` and `get_fundraising_report`).
+
+### New this pass
+
+No new backend findings — zero code drift and a full independent re-read
+surfaced nothing pass 1 missed.
+
+**GF-19 (NIT, doc-accuracy, fixed)** — pass 1's "Verified good" section
+claimed `SafeCsvWriter` is "used for exports, not raw `csv.writer`," which
+reads as an export existing and using the safe writer. Neither service file,
+the endpoint file, nor any other file under a grants/fundraising path
+imports `SafeCsvWriter` or `csv.writer` — **no CSV/spreadsheet export exists
+anywhere in this module**, so Pitfall #15 is not "satisfied," it's not
+applicable. Corrected in the Pass 1 section above rather than left standing;
+not a vulnerability (nothing to inject into), just a doc claim that
+overstated what was checked.
+
+**GF-20 (NIT, doc-accuracy, fixed)** — the same section's "Revised after
+Codex review" writeup states "`delete_donation`/`delete_expenditure` were
+not affected" by the parent-lock-ordering fix. `delete_donation` does not
+exist — `Donation` has no delete endpoint or service method at all, only
+`create`/`update` (confirmed: `grep -rn "delete_donation" backend/app`
+returns nothing). Corrected in place.
+
+### Frontend review (new this pass)
+
+Read `services/api.ts` (410 L), `routes.tsx`, `store/grantsStore.ts` (342 L),
+`pages/GrantApplicationFormPage.tsx` (624 L), and `pages/DonationsPage.tsx`
+(232 L) in full; `pages/GrantDetailPage.tsx` (1,428 L, the module's largest
+and most complex file — budget/expenditure/compliance-task/note modals) in
+full through its data-loading, derived-state, and form-submission logic plus
+every external-link render site; the remaining four pages
+(`GrantOpportunitiesPage.tsx`, `CampaignsPage.tsx`, `DonorsPage.tsx`,
+`GrantsReportsPage.tsx`, `GrantApplicationsPage.tsx`) were swept with the
+same targeted greps used below rather than read line-by-line — noted as
+partial-scope, not assumed clean.
+
+- **Auth wiring (Pitfall #7):** `services/api.ts` builds its axios instance
+  via the shared `createApiClient()` factory (`withCredentials: true`, CSRF
+  double-submit header, shared-refresh-promise 401 handling) — not a
+  hand-rolled instance. No gap.
+- **Permission gating:** all 9 routes in `routes.tsx` carry
+  `requiredPermission="fundraising.view"` or `"fundraising.manage"`, matching
+  the backend string-for-string, plus `requiredModule="grants"`.
+- **Cache exclusion:** `apiCache.ts`'s `UNCACHEABLE_PREFIXES` carries a bare
+  `/grants` entry (no trailing slash, so it covers every route in the
+  module by prefix) — correct, though moot in practice: `createApiClient()`
+  wires no cache at all (`getCached`/`setCache` are called only from
+  `services/apiClient.ts`, the separate global instance, and one bespoke
+  scheduling file), so this module's own axios instance never consults the
+  cache either way. Recorded as "verified good" on the list's own terms,
+  not as a live risk either way.
+- **Banned patterns:** repo-wide grep across the whole module for
+  `window.confirm`/`alert`/`prompt`, `dangerouslySetInnerHTML`,
+  `.toLocaleString`/`.toLocaleDateString`/`.toLocaleTimeString`,
+  `date-fns` imports, `localStorage`/`sessionStorage`, `innerHTML`, `eval(`,
+  and direct `fetch(` — **zero hits**, all clean.
+- **Form payload discipline (Pitfall #1):** every form
+  (`GrantApplicationFormPage`, `DonorsPage`, `CampaignsPage`,
+  `GrantDetailPage`'s three modals) builds its payload with `.trim() ||
+null` / `value || null`, uniformly, for **both** create and update calls.
+  This is correct on both paths here specifically: the backend schemas type
+  every optional field `Optional[T] = None`, so an explicit `null` is valid
+  on create (equivalent to omitting the key) and is what actually clears the
+  field on update (`exclude_unset=True` + `apply_updates`, per Pitfall #1's
+  own update-path rule) — no `||`-vs-`??` bug, and no create/update
+  asymmetry to fix.
+- **Outbound URL re-validation:** every external link render
+  (`exp.receiptUrl` in `GrantDetailPage`, `opp.applicationUrl` in
+  `GrantOpportunitiesPage`) is gated behind `isSafeExternalUrl(...)` before
+  being used as an `href`, in addition to the backend's own
+  `validate_external_http_url` field validator on write — both ends
+  checked, matching the pattern `assert_outbound_url_safe` documents
+  elsewhere in the codebase. `target="_blank"` links carry
+  `rel="noopener noreferrer"`.
+- **No delete UI:** no page calls any of the five `delete*` service methods
+  (`deleteOpportunity`, `deleteApplication`, `deleteBudgetItem`,
+  `deleteExpenditure`, `deleteComplianceTask`) — confirmed by grep, not
+  assumed from the missing `useConfirm()` calls. Not a finding (fewer
+  exposed capabilities is not a risk), just why no confirm-dialog
+  discipline needed checking on this surface.
+- **Pitfall #11 (fetch full record after create):** `grantsStore.ts`'s
+  `addBudgetItem`/`addExpenditure`/`addComplianceTask`/`addGrantNote` all
+  re-fetch the full application via `getApplication` after the create call
+  and before updating state — followed correctly.
+- **Known, already-documented gap (not new):** `DonationsPage.tsx` carries
+  an in-code comment (and `KNOWN_LIMITATIONS.md` already carries the row)
+  noting the "Record Donation" action was removed because it pointed at a
+  route that was never built; `fundraisingService.createDonation` and
+  `useGrantsStore.createDonation` exist and are correct but have zero UI
+  callers. Re-confirmed still true, not re-added as a new finding.
+- **Test coverage:** zero `*.test.ts(x)` files exist anywhere under
+  `frontend/src/modules/grants-fundraising/` — noted for completeness, not
+  filed as a security finding (a coverage gap, not a vulnerability); no
+  `npx vitest run` scope exists to execute for this module as a result.
+
+No new frontend findings.
+
+### KNOWN_LIMITATIONS.md
+
+GF-7 and GF-8 were already recorded (rows added by pass 1). **GF-9 (float
+money math) was not** — added this pass, mirroring the existing two rows'
+format.
+
+### Guard tests added
+
+None. No new fix was applied this pass (zero backend drift, no new
+findings needing a code change) — the existing GF-13/14/15 guard tests
+(`test_grant_opportunity_delete_db.py`, `TestComplianceTaskGeneration`,
+`TestUpdateBudgetItemSpent`/`TestUpdateCampaignTotal`/`TestUpdateDonorStats`,
+the two lock-ordering test classes) were re-run and confirmed still passing
+and still enforcing what they were written to enforce.
+
+## Completion gate (pass 2)
+
+| Check                                                   | Result                                                   |
+| ------------------------------------------------------- | -------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                           | 0 violations                                             |
+| `black --check app/ tests/ alembic/`                    | 1335 files unchanged                                     |
+| `isort --check-only app/ tests/ alembic/`               | clean (isort 8.0.1, already installed)                   |
+| `python3 scripts/validate_migrations.py --strict`       | PASSED — 394 revisions, single head                      |
+| `python3 -m pytest tests/ -q -k "grant or fundraising"` | 307 passed, 1 pre-existing skip                          |
+| `python3 -m pytest tests/ -q` (full suite)              | 9268 passed, 22 pre-existing skips, 0 failed             |
+| `npx tsc --noEmit` / `npm run typecheck` (aliased TS 7) | 0 errors                                                 |
+| `npx eslint .`                                          | 0 errors, 8 pre-existing warnings, none in touched files |
+| frontend `vitest run` scoped to this module             | n/a — no test files exist for this module                |
+
+No code changes this pass — findings-doc and `PROGRESS.md`/`KNOWN_LIMITATIONS.md`
+corrections only.

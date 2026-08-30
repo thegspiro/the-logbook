@@ -16,10 +16,102 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-[#2065](https://github.com/thegspiro/the-logbook/pull/2065) —
-`claude/security-review-admin-hours-pass2` — Feature 21 (Admin hours), pass 2.
+None yet recorded in this file — see the bottom log entry below for this
+iteration's branch; the PR number is added to this row in a follow-up commit
+once the PR is open (same pattern as PR #2065's own follow-up).
 
 ---
+
+### 2026-08-30 — Feature 22 (Grants & fundraising), pass 2 — 0 fixed, 0 new findings; re-verification only
+
+No security-review PR was open (PR #2065/feature 21 admin-hours pass 2 had
+already merged as `991c04d2`; its own record-only follow-up PR #2067 was
+still open at the time this iteration started, but per this rotation's
+established convention a record-only PR does not block the next feature —
+confirmed via `mcp__github__list_pull_requests`, not assumed from a stale
+local `Open PR` row, which this iteration also corrects above and in the Log
+below). Continued directly to feature 22 per the pass-2 order.
+
+Scoped to the full backend surface since pass 1's merge (`520978c4`, PR
+#1904): all five declared/adjacent files (`grants.py`, `grant_service.py`,
+`fundraising_service.py`, `grant.py`, `schemas/grant.py`) came back
+**byte-identical** (`git diff --stat`, not assumed) — zero backend drift, so
+this pass independently re-verified all of GF-1 through GF-18 by reading the
+current code directly rather than re-citing the pass-1 doc. Re-ran a route
+enumeration from scratch: 45/45 routes in `grants.py` carry
+`require_permission("fundraising.view"/"fundraising.manage")`, matching pass
+1 exactly; neither permission string is in the `member`/`firefighter`
+baseline grant set. Every by-id query in both services re-swept mechanically
+for a missing `organization_id` filter — no gap. Re-checked GF-13's
+ORM-cascade-vs-FK-`ondelete` class against every other relationship in the
+model file: `FundraisingCampaign.donations`/`.pledges`/
+`.fundraising_events` have the same mismatch on paper, but `delete_campaign`
+is a soft delete and no code path hard-deletes a campaign, donor, or pledge —
+confirmed by grep, not assumed, so the class exists nowhere reachable beyond
+the one instance GF-13 already fixed.
+
+**Frontend scope established for the first time** (pass 1 was backend-only):
+the real module is `frontend/src/modules/grants-fundraising/`, ~6,900 lines
+across 14 files. Full reads of `services/api.ts`, `routes.tsx`,
+`store/grantsStore.ts`, `GrantApplicationFormPage.tsx`, `DonationsPage.tsx`,
+and `GrantDetailPage.tsx` (the module's largest file); the remaining four
+pages swept by targeted grep rather than read line-by-line (noted as
+partial-scope). Confirmed: `createApiClient()` auth wiring present (Pitfall
+#7); all 9 frontend routes gate on `fundraising.view`/`.manage` matching the
+backend; `/grants` is in `apiCache.ts`'s `UNCACHEABLE_PREFIXES` (though moot
+in practice — this module's axios instance never consults that cache at
+all, since only the separate global instance wires it); zero hits for
+`window.confirm`/`alert`/`prompt`, `dangerouslySetInnerHTML`, banned
+`.toLocale*`, `date-fns`, `localStorage`, or direct `fetch(`; every form's
+`|| null` payload construction is correct on **both** create and update
+paths (the backend accepts an explicit `null` as equivalent-to-omitted on
+create and as the intentional clear signal on update, so there is no
+create/update asymmetry to fix here, unlike the general Pitfall #1 shape);
+external links (`receiptUrl`, `applicationUrl`) are gated behind
+`isSafeExternalUrl()` in addition to the backend's own
+`validate_external_http_url` write-time validator. No new frontend findings.
+Zero `*.test.ts(x)` files exist for this module — noted, not filed as a
+security finding.
+
+**GF-19/GF-20 (NIT, doc-accuracy, fixed):** pass 1's doc overstated a
+`SafeCsvWriter`-based export that does not exist in this module (no CSV
+export exists at all — confirmed by grep, not assumed) and named a
+`delete_donation` method that was never built (`Donation` has no delete
+path). Both corrected in `GF-22-grants-fundraising.md`'s Pass 1 section.
+
+GF-7/GF-8/GF-9 re-confirmed unchanged and still flagged as product
+decisions, per every prior pass. GF-9 was missing from `KNOWN_LIMITATIONS.md`
+(GF-7/GF-8 were already there) — added this pass.
+
+Full local completion gate green: flake8/black/isort clean; migrations
+validated (394 revisions, single head); 307/307 grant+fundraising-scoped and
+9268/9268 full backend suite pass (22 pre-existing skips, 0 failed); `tsc
+--noEmit`/`npm run typecheck` 0 errors; `eslint .` 0 errors (8 pre-existing
+warnings, none in touched files — no frontend files were touched, since no
+frontend fix was needed). Findings doc: `docs/security-review/GF-22-grants-fundraising.md`
+→ **Pass 2**. Rotation row 22 → ✅ (this is a docs-only PR: no application
+code changed, only the findings doc, `KNOWN_LIMITATIONS.md`, and
+`PROGRESS.md`). Next: 23 medical supplies, once this PR merges.
+
+---
+
+### 2026-08-30 — Feature 21 (Admin hours), pass 2 ✅ merged — PR #2065
+
+Merged (`991c04d2`). Two Codex review rounds on this PR, both independently
+verified against the actual code and addressed rather than taken on the
+bot's say-so: round 1 (AH21-2 doc-accuracy gap, AH21-1's first timeout
+mitigation) in commit `34761461`; round 2, after Codex correctly rejected
+round 1's finite-timeout fix as still a regression, in commit `fc0aaafc` —
+switched to `timeout: 0` (true no-timeout), and fixed a real MEDIUM
+correctness bug (AH21-3: a JSON error body from a `blob`-typed request was
+silently undecoded, losing the detail message and support code) centrally
+in `utils/createApiClient.ts` so it also covers `reportExportService` and
+the storefront export, not just this PR's new call site. Also strengthened
+the guard test to catch `window.fetch`/`globalThis.fetch`/direct-`axios`
+bypasses and added a real behavioral test of `exportCsv` (AH21-4). CI green
+on the final head; no merge conflict. All 6 review threads resolved.
+Confirmed on `origin/main` by ancestry check. Rotation row 21 -> done.
+Next: 22 grants & fundraising.
 
 ### 2026-08-30 — Feature 21 (Admin hours), pass 2 — 1 fixed (LOW), 0 flagged (new); 0 regressions in pass-1 fixes
 
@@ -2487,8 +2579,8 @@ each row's prior PR is recorded in the Log, not repeated here.
 | 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ✅     |
 | 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3723 L)                                                                                                          | ✅     |
 | 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ✅     |
-| 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ⏳     |
-| 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ⬜     |
+| 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ✅     |
+| 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ✅     |
 | 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ⬜     |
 | 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ⬜     |
 | 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ⬜     |
