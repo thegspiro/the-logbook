@@ -42,7 +42,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - For departments with more than 100 grant applications, a status filter
   on the applications page (including the dashboard's "Active"/"Pending"
   links) only searched the newest 100 and could miss older matches. It now
-  searches all of them.
+  searches up to the newest 1,000 (departments with more than 1,000
+  applications, or more than 1,000 sharing one status, can still miss
+  older ones — full pagination is tracked as a known limitation).
+- Changing the applications page's status filter again before the previous
+  filter's results had loaded could, in rare timing, leave the page
+  showing results for the filter you'd already changed away from. Fixed.
 
 ### Admin hours CSV export now recovers from an expired session (2026-08-30)
 

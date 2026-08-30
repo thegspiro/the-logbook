@@ -916,6 +916,74 @@ both of which already accept and forward a `status` param today (used
 elsewhere), so this is a call-site change, not new plumbing. Noted as a
 coverage gap rather than silently assumed adequate.
 
+**Correction (Codex review of the GF-31 commit itself, 2 more comments) —
+see GF-32 and GF-33 below.** Fixing GF-31 introduced one real regression
+(a race between two in-flight requests) and left one part of the original
+finding only partially closed (the filtered fetch is still capped, just at
+a higher ceiling). Both addressed in the same PR.
+
+#### GF-32 — MED, FIXED — GF-31's own refetch-on-change introduced a stale-response race
+
+**What:** Caught by Codex reviewing the GF-31 commit. `fetchApplications`
+unconditionally overwrites `useGrantsStore`'s `applications` with whatever
+response arrives, and GF-31 made `GrantApplicationsPage.tsx` call it again
+every time `statusFilter` changes. If a user changes the status filter a
+second time before the first request resolves, and the first (now
+superseded) request happens to resolve _after_ the second, its response
+overwrites the newer one — the status dropdown reads "Active" but the list
+shows "Reporting" applications, with no error. This request race did not
+exist before GF-31: the old code fetched exactly once, on mount.
+
+**Where:** `frontend/src/modules/grants-fundraising/store/grantsStore.ts`
+(`fetchApplications`).
+
+**Fix:** a module-level, monotonically-increasing request id
+(`latestApplicationsRequestId`) is captured at the start of each call; the
+response (success or error) is only committed to state if no later call
+has started since. `grantsService.listApplications` is the module's only
+caller of `fetchApplications`, so this closes the race at its source
+rather than adding a guard in the one page that currently triggers it.
+
+**Guard test added:** `grantsStore.fetchApplications.test.ts` (new file).
+Starts a request for `status: 'reporting'` whose promise is held open,
+starts a second request for `status: 'active'` that resolves immediately,
+awaits the second (asserting its result lands), then resolves the first
+and awaits it too — asserting the state still reflects the second,
+newer request's result. Verified to fail before the fix (the store held
+the stale `'reporting'` result) and pass after.
+
+#### GF-33 — LOW-MED, partially fixed / FLAGGED — a status-filtered fetch was still capped, just at a higher ceiling
+
+**What:** Also caught by Codex reviewing the GF-31 commit: fixing "the
+filter runs after an unfiltered, 100-capped fetch" (GF-31) did not fix
+"the filtered fetch is itself still capped at 100" — `fetchApplications`
+called with no explicit `limit` still defaults to 100
+(`grantsService.listApplications`), so a single status with more than 100
+matching applications is still truncated, just by the filtered query
+instead of the unfiltered one.
+
+**Where:** `frontend/src/modules/grants-fundraising/pages/GrantApplicationsPage.tsx`
+(the same effect GF-31 added).
+
+**Why only partially fixed:** this page has no pagination control in
+either view (pipeline or table) — its whole design assumes the org's
+complete application set is loaded at once, for both the filtered and
+unfiltered case. That assumption pre-dates GF-31 (the unfiltered mount
+fetch was _always_ capped at 100, for any organization with more than 100
+applications total, regardless of status) and is out of proportion for
+this fix to redesign. **Partial mitigation applied:** the fetch now
+requests `limit: 1000` — the backend's own declared ceiling
+(`PaginationParams`'s `le=1000` in `app/api/dependencies.py`, ten times
+the previous 100) — for both the filtered and unfiltered load, meaningfully
+raising the practical threshold without inventing a new limit or changing
+the page's data model. **Still open:** an organization with more than 1000
+applications sharing one status (or more than 1000 applications overall,
+for the unfiltered pipeline/table view) will still truncate silently.
+Closing that fully needs either paging through the complete result set or
+a page-size control this page was never built with — a larger change,
+flagged rather than guessed at here, and mirrored into
+`KNOWN_LIMITATIONS.md`.
+
 ### Frontend review (new this pass)
 
 Read `services/api.ts` (410 L), `routes.tsx`, `store/grantsStore.ts` (342 L),
@@ -1066,3 +1134,18 @@ diff):
 | `npx tsc --noEmit`                              | 0 errors                                                          |
 | `npx eslint src/modules/grants-fundraising`     | 0 errors, 0 warnings                                              |
 | `npx vitest run src/modules/grants-fundraising` | 3 files, 5 passed (`CampaignsPage.statusFilter.test.tsx` +1 case) |
+
+**Tend pass, round 6 (2026-08-30, PR #2073), in response to Codex's 2
+review comments on the GF-31 commit:** fixed GF-32 (a stale-response race
+GF-31's own refetch-on-change introduced, `grantsStore.ts`, new guard test
+`grantsStore.fetchApplications.test.ts`) and partially fixed/flagged GF-33
+(the filtered fetch was still capped at 100 — raised to the backend's own
+declared max of 1000 in `GrantApplicationsPage.tsx`; true unbounded
+pagination remains open, mirrored into `KNOWN_LIMITATIONS.md`). No backend
+files touched. Gate re-run:
+
+| Check                                           | Result               |
+| ----------------------------------------------- | -------------------- |
+| `npx tsc --noEmit`                              | 0 errors             |
+| `npx eslint src/modules/grants-fundraising`     | 0 errors, 0 warnings |
+| `npx vitest run src/modules/grants-fundraising` | 4 files, 6 passed    |

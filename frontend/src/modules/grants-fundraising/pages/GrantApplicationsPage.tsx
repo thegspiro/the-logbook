@@ -238,9 +238,17 @@ export const GrantApplicationsPage: React.FC = () => {
   // Status is filtered server-side (and refetched on change) rather than
   // client-side: the list endpoint caps a single fetch at 100 records, so a
   // deep-linked status filter applied only to that first page could miss
-  // matching applications past it (GF-31).
+  // matching applications past it (GF-31). This page has no pagination UI
+  // in either view (pipeline or table) — it's built to show the org's full
+  // application set at once — so the fetch also requests the endpoint's own
+  // declared maximum (`PaginationParams`'s `le=1000`, ten times the default)
+  // rather than leaving it at 100, for both the filtered and unfiltered
+  // case. A department with more than 1000 applications sharing one status
+  // would still be truncated; a true fix needs either paging through the
+  // full result set or a page-size control this page doesn't have, both out
+  // of scope for this fix (GF-33, flagged).
   useEffect(() => {
-    void fetchApplications(statusFilter ? { status: statusFilter } : undefined);
+    void fetchApplications(statusFilter ? { status: statusFilter, limit: 1000 } : { limit: 1000 });
   }, [fetchApplications, statusFilter]);
 
   // ---------------------------------------------------------------------------

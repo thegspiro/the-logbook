@@ -45,6 +45,7 @@ interface GrantsState {
     priority?: string;
     assignedTo?: string;
     search?: string;
+    limit?: number;
   }) => Promise<void>;
   fetchApplication: (id: string) => Promise<void>;
   fetchCampaigns: (params?: { status?: string; campaignType?: string; search?: string }) => Promise<void>;
@@ -71,6 +72,12 @@ interface GrantsState {
   addGrantNote: (applicationId: string, data: Partial<GrantNote>) => Promise<GrantNote>;
   clearError: () => void;
 }
+
+// Guards fetchApplications against out-of-order responses: if the status
+// filter changes again before an in-flight request resolves, a slower
+// response for the superseded filter must not overwrite state a newer
+// request already settled (GF-32).
+let latestApplicationsRequestId = 0;
 
 export const useGrantsStore = create<GrantsState>((set) => ({
   // Initial state
@@ -103,12 +110,15 @@ export const useGrantsStore = create<GrantsState>((set) => ({
   },
 
   fetchApplications: async (params) => {
+    const requestId = ++latestApplicationsRequestId;
     set({ isLoading: true, error: null });
 
     try {
       const applications = await grantsService.listApplications(params);
+      if (requestId !== latestApplicationsRequestId) return; // superseded by a later call
       set({ applications, isLoading: false });
     } catch (error) {
+      if (requestId !== latestApplicationsRequestId) return; // superseded by a later call
       set({
         error: handleStoreError(error, 'Failed to fetch grant applications'),
         isLoading: false,

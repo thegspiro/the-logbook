@@ -35,6 +35,26 @@ re-run green (`tsc --noEmit` 0 errors, `eslint src/modules/grants-fundraising`
 0/0, `vitest run src/modules/grants-fundraising` 3 files/5 passed).
 Rotation row 22 stays ⏳. Next: 23 medical supplies, once #2073 merges.
 
+**PR #2073 tend, round 6 (Codex review of the GF-31 commit, 2 comments):**
+**GF-32 (new, MED, fixed)** — GF-31's own refetch-on-`statusFilter`-change
+introduced a request race: `fetchApplications` unconditionally overwrote
+`applications` with whatever response arrived, so a slower response from a
+filter the user had already changed away from could clobber a newer one.
+Fixed with a monotonic request-id guard in `grantsStore.ts` — a response is
+only committed if no later call has started since. New guard test
+`grantsStore.fetchApplications.test.ts` (fails before/passes after).
+**GF-33 (new, LOW-MED, partially fixed/flagged)** — GF-31 fixed "the filter
+runs after an unfiltered, 100-capped fetch" but not "the filtered fetch is
+itself still capped at 100." This page has no pagination UI in either view
+(it's built to show the org's full set at once), so a full fix means
+building pagination, out of scope here; raised the fetch's `limit` to
+1000 (the backend's own declared ceiling) as a partial mitigation for both
+the filtered and unfiltered case, and mirrored the remaining >1000 gap
+into `KNOWN_LIMITATIONS.md`. Gate re-run: `tsc --noEmit` 0 errors, `eslint
+src/modules/grants-fundraising` 0/0, `vitest run src/modules/grants-fundraising`
+4 files/6 passed. Full write-up in `GF-22-grants-fundraising.md` →
+GF-32/GF-33.
+
 ### 2026-08-30 — Feature 22 (Grants & fundraising), pass 2 ✅ merged — PR #2069; round-4 tend continues in PR #2070
 
 PR #2069 merged (`9608aea9`) while its 4th round of Codex review was still
