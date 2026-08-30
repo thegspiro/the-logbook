@@ -1,6 +1,6 @@
 # Security Review — Admin Hours
 
-**Prefix:** `AH` · **Iteration:** 21 · **Reviewed:** 2026-08-26/27 (pass 1), 2026-08-30 (pass 2) · **PR:** [#1903](https://github.com/thegspiro/the-logbook/pull/1903) (pass 1)
+**Prefix:** `AH` · **Iteration:** 21 · **Reviewed:** 2026-08-26/27 (pass 1), 2026-08-30 (pass 2) · **PR:** [#1903](https://github.com/thegspiro/the-logbook/pull/1903) (pass 1), [#2065](https://github.com/thegspiro/the-logbook/pull/2065) (pass 2)
 
 ## Pass 1 (2026-08-26/27)
 
