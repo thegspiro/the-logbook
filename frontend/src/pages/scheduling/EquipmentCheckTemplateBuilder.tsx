@@ -1915,6 +1915,30 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
   // ---------------------------------------------------------------------------
 
   const [showPresetPicker, setShowPresetPicker] = useState(false);
+  const presetPickerRef = useRef<HTMLDivElement>(null);
+  const presetOpenerRef = useRef<HTMLButtonElement>(null);
+  const presetPickerWasOpen = useRef(false);
+  /**
+   * The picker replaces the start card rather than layering over it, so opening
+   * it unmounts the button that was just activated and closing it unmounts the
+   * close button. Either way focus falls back to the body: a keyboard or switch
+   * user is given no indication that the content they asked for has appeared,
+   * and their next Tab restarts from the top of the document.
+   *
+   * Not a focus trap — this is a swap between two page surfaces, not a dialog.
+   * It only has to land focus inside whichever one is now on screen. When a
+   * preset is loaded the opener is gone with the start card, and the ref is
+   * null; nothing to restore to, and the checklist that replaced it is what the
+   * author asked for.
+   */
+  useEffect(() => {
+    if (showPresetPicker) {
+      presetPickerRef.current?.querySelector<HTMLElement>('button')?.focus();
+    } else if (presetPickerWasOpen.current) {
+      presetOpenerRef.current?.focus();
+    }
+    presetPickerWasOpen.current = showPresetPicker;
+  }, [showPresetPicker]);
   const [showPreview, setShowPreview] = useState(false);
 
   const [showChangelog, setShowChangelog] = useState(false);
@@ -3358,14 +3382,19 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                     min="0"
                     id={`item-min-level-${itemKey}`}
                     aria-label={`Minimum level for ${item.name.trim() || 'item'}`}
-                    className={`${numberInputClass} w-11`}
+                    className={`${numberInputClass} w-10`}
                     value={item.minLevel}
                     onChange={(e) => updateItemFieldWithAutoSave(compIdx, itemIdx, { minLevel: e.target.value })}
                   />
                 </span>
                 <select
                   aria-label={`Level unit for ${item.name.trim() || 'item'}`}
-                  className="border-theme-input-border bg-theme-input-bg text-theme-text-secondary w-14 rounded-md border px-0.5 py-1 text-[11px]"
+                  // Sized for the longest unit plus the native dropdown arrow:
+                  // `gallons` measures 35px at this size and the arrow takes
+                  // ~18px, which a 56px box could not hold — it rendered
+                  // "gallon" beside an operational threshold, with nothing to
+                  // say the value had been cut.
+                  className="border-theme-input-border bg-theme-input-bg text-theme-text-secondary w-[68px] rounded-md border px-0.5 py-1 text-[11px]"
                   value={item.levelUnit}
                   onChange={(e) => updateItemFieldWithAutoSave(compIdx, itemIdx, { levelUnit: e.target.value })}
                 >
@@ -5056,7 +5085,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           </div>
 
           {showPresetPicker && (
-            <div className="card rounded-xl">
+            <div className="card rounded-xl" ref={presetPickerRef}>
               <div className="bg-theme-surface-secondary border-theme-surface-border flex items-center justify-between gap-3 rounded-t-xl border-b px-4 py-2.5">
                 <span className="text-theme-text-primary text-[13px] font-bold">Start from a vehicle layout</span>
                 <button
@@ -5104,6 +5133,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                 {(form.templateType === 'vehicle' || form.templateType === 'combined') && (
                   <button
                     type="button"
+                    ref={presetOpenerRef}
                     onClick={() => setShowPresetPicker(true)}
                     className="border-theme-surface-border hover:bg-theme-surface-hover flex w-full items-center gap-3 border-b px-4 py-3 text-left transition-colors last:rounded-b-xl last:border-b-0"
                   >
@@ -5205,7 +5235,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
         {/* Right rail — only where there is room for it beside the canvas. */}
         {isWideCanvas && (
           <div
-            className="sticky flex max-w-[300px] min-w-[288px] flex-[1_1_296px] scrollbar-thin flex-col gap-3 overflow-y-auto"
+            className="sticky flex max-w-[296px] min-w-[296px] flex-[1_1_296px] scrollbar-thin flex-col gap-3 overflow-y-auto"
             style={{ top: topBarHeight + 12, maxHeight: `calc(100dvh - ${String(topBarHeight + 24)}px)` }}
           >
             <div className="bg-theme-surface-border grid grid-cols-2 gap-0.5 rounded-lg p-0.5">

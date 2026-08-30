@@ -969,6 +969,27 @@ describe('EquipmentCheckTemplateBuilder creation guidance', () => {
     expect(screen.getByText('How would you like to start?')).toBeVisible();
   });
 
+  it('carries focus across the preset swap in both directions', async () => {
+    renderNewBuilder();
+    await screen.findByRole('button', { name: 'Details' });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Details' }));
+    fireEvent.change(screen.getByLabelText('Template Type'), { target: { value: 'vehicle' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Close template details' }));
+
+    const opener = screen.getByRole('button', { name: /use a vehicle layout/i });
+    opener.focus();
+    fireEvent.click(opener);
+
+    // The picker replaces the start card, so the activated button is gone. With
+    // nothing moving focus it lands on the body and the next Tab restarts from
+    // the top of the document, with no sign the content arrived.
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Close vehicle layouts' })).toHaveFocus());
+
+    fireEvent.click(screen.getByRole('button', { name: 'Close vehicle layouts' }));
+    await waitFor(() => expect(screen.getByRole('button', { name: /use a vehicle layout/i })).toHaveFocus());
+  });
+
   it('uses the opaque themed page canvas for the checklist preview', async () => {
     mockViewport('phone');
     // renderBuilder always mounts at /templates/template-1, so the preview has
