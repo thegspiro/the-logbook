@@ -487,8 +487,8 @@ error-check sequence. No behavior change from the user's perspective (same
 filename, same trigger); the difference is only that a 401 mid-export now
 gets the same transparent refresh-and-retry as every other request.
 
-**Follow-up (same finding, caught by Codex review on the PR):** the raw
-`fetch()` this replaced had no timeout at all, while `createApiClient()`
+**Follow-up (same finding, caught by Codex review on the PR, round 1):** the
+raw `fetch()` this replaced had no timeout at all, while `createApiClient()`
 applies `API_TIMEOUT_MS` (30s) to every request. `export_entries_csv`
 (`admin_hours_service.py`) runs one org-scoped query with no row cap, then
 serializes every row before the response starts — for a long-tenured
@@ -500,18 +500,27 @@ disclaims): `reportExportService.exportReport` and the storefront order
 export have the identical unbounded-query-then-30s-timeout shape, but
 neither is touched by this PR, so fixing only admin-hours' new call site is
 the correctly-scoped fix rather than widening this PR into those modules.
-Added `EXPORT_TIMEOUT_MS` (120s, `constants/config.ts`) and passed
-`timeout: EXPORT_TIMEOUT_MS` on `exportCsv`'s request config, restoring
-(with margin) the "no effective timeout for this call" behavior the raw
-`fetch()` had, while keeping every other admin-hours request at the
-standard 30s.
+First fix: added `EXPORT_TIMEOUT_MS` (120s) and passed it as `exportCsv`'s
+request timeout.
+
+**Follow-up, round 2 (same finding, Codex correctly rejected round 1's fix):**
+120s is still a finite cap — any client-side timeout still aborts a download
+the unbounded raw `fetch()` would have let finish once an organization's
+history grows past it, so the "regression" wasn't actually resolved, only
+raised. Reverted `EXPORT_TIMEOUT_MS`/`constants/config.ts` (dead code once
+unused) and set `timeout: 0` on `exportCsv`'s request config instead — axios's
+documented "no timeout" value, which exactly restores the raw `fetch()`'s
+behavior rather than approximating it with a bigger number. The backend
+query itself remains unbounded/non-streaming, matching the two other
+export endpoints with the same shape; still out of this PR's scope.
 
 **Guard test:**
 `frontend/src/modules/admin-hours/moduleFetchIntegrity.test.ts` — walks
 every non-test `.ts`/`.tsx` file under the module and fails on a bare
 `fetch(` call, naming the file and line. Verified to fail on reintroduction
 by temporarily reinserting a `fetch()` call in `AllEntriesTab.tsx` (failed,
-naming the exact line) and confirmed clean after reverting.
+naming the exact line) and confirmed clean after reverting. Broadened
+further under AH21-4 below.
 
 ### AH21-2 — LOW (documentation accuracy) — "every outside consumer" claim was incomplete — ✅ FIXED
 
@@ -545,6 +554,75 @@ payload rules don't apply to any of them. Corrected the consumer list in
 the "Pass 2" header and the "Frontend scope" section above (now 6, not 3,
 with `AdminHoursRenderer.tsx` removed and a note on why). No code change —
 this finding is about the doc's own claim, not the application.
+
+### AH21-3 — MEDIUM — a JSON error body from a `blob`-typed request was silently undecoded, losing the error detail and support code — ✅ FIXED
+
+**What:** Caught by Codex review on `exportCsv`'s new call site, but the
+defect is in shared code, not admin-hours' own: `responseType: 'blob'`
+applies to axios' error responses too, so a 403/500 with a JSON body
+arrives at `error.response.data` as an undecoded `Blob`, not parsed JSON.
+`toAppError`/`getErrorMessage` (`utils/errorHandling.ts`) and
+`reportApiError`'s support-code extraction (`services/errorReporting.ts`)
+both read `data.detail`/`data.message`/`data.code` directly; against a
+`Blob` those are all `undefined`, so a failed export's toast degrades to a
+generic `statusText` fallback and the Error Monitoring record loses the
+`LB-*` support code an administrator would use to match a member's report
+to the row.
+
+**Where:** `frontend/src/utils/createApiClient.ts` (response interceptor) —
+not admin-hours-specific. `reportExportService.exportReport`
+(`modules/reports/services/api.ts`) and the storefront order export
+(`modules/storefront/services/api.ts`) share the exact same latent bug,
+since both also request with `responseType: 'blob'` through an instance
+built by the same `createApiClient()`; neither is touched by this PR.
+
+**Fix:** the fix went in the one place all blob-response callers funnel
+through rather than admin-hours' own file, so it covers the other two
+call sites too, not just this PR's new one. `createApiClient()`'s response
+interceptor now runs first: if `error.response.data instanceof Blob` and
+its `type` includes `json`, decode it via `.text()` + `JSON.parse` and
+replace `error.response.data` in place, before the 401-retry and
+`reportApiError` logic that reads it. A non-JSON blob (e.g. an HTML error
+page from a proxy) is left undecoded rather than throwing — downstream
+code already falls back to `statusText`/`error.message` for that case, the
+same as it did before this fix.
+
+**Guard test:** `frontend/src/utils/createApiClient.test.ts`, new `blob
+error responses` block (3 cases) — drives the real interceptor chain
+(stub adapter, not a mocked axios) rather than asserting the fix's source:
+a JSON error blob's `detail` and `code` both survive to the object
+`reportApiError` receives; a non-JSON error blob is left as the original
+`Blob` rather than crashing; a successful blob response is untouched.
+
+### AH21-4 — LOW (test coverage) — the guard test scanned only one `fetch(` spelling and no test exercised `exportCsv` itself — ✅ FIXED
+
+**What:** Also caught by Codex review. `moduleFetchIntegrity.test.ts`'s
+regex excluded any `fetch(` preceded by a `.`, so a bypass rewritten as
+`window.fetch(...)` or `globalThis.fetch(...)` — still a real bypass of
+the shared client — would not have been caught; and no test anywhere
+actually called `exportCsv()`, so AH21-1's "the fix works" conclusion was
+a source scan's absence of one string, never checked against the
+function's real behavior (its request shape, or that a failure propagates
+instead of being swallowed).
+
+**Fix:** two changes. `moduleFetchIntegrity.test.ts` now runs two checks:
+the existing bare-`fetch(` scan, extended to also match
+`window.fetch(`/`globalThis.fetch(`/`self.fetch(`; and a new scan
+rejecting any direct `import ... from 'axios'` in the module (the other
+way to bypass `createApiClient()`). New file
+`services/exportCsv.behavior.test.ts` mocks only the module's
+`createApiClient` dependency (not `exportCsv` itself, and not `fetch`) and
+asserts the real function sends the expected URL, `params`,
+`responseType: 'blob'`, and `timeout: 0` (AH21-1 round 2), and that a
+rejection from the client propagates to the caller rather than being
+swallowed.
+
+**Guard tests:** `moduleFetchIntegrity.test.ts` — verified to fail on
+reintroduction by temporarily reinserting a bare `fetch(`, a
+`window.fetch(`, and an `import axios from 'axios'` in turn (each failed,
+naming the exact file) and confirmed clean after reverting.
+`services/exportCsv.behavior.test.ts` — 2 new tests, both passing against
+the real `exportCsv` implementation.
 
 ### Confirmed still open — unchanged from pass 1
 

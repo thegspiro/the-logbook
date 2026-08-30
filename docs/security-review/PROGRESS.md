@@ -109,6 +109,32 @@ storefront order export, both pre-existing and out of this PR's scope.
 update marking row 21 ✅ before merge, contradicting the legend; corrected to
 ⏳. CI re-verified green on the follow-up commit; no merge conflict.
 
+**Tend pass, round 2 (same day):** Codex posted 3 more review comments on
+the follow-up commit — findings kept converging (each fix drew a reshaped
+or new one) rather than repeating, so all three were investigated rather
+than treated as noise. **AH21-1 round 2** — round 1's `EXPORT_TIMEOUT_MS`
+(120s) was correctly called out as still a finite cap that can abort a
+download the old unbounded `fetch()` would have finished; changed to
+`timeout: 0` (axios's actual no-timeout value) instead of guessing a
+bigger number. **AH21-3 (new, MEDIUM)** — `responseType: 'blob'` applies
+to axios error responses too, so a JSON 403/500 body arrived at
+`error.response.data` as an undecoded `Blob`; `toAppError`/`reportApiError`
+both read `.detail`/`.code` directly off it, so a failed export lost its
+error detail and `LB-*` support code behind a generic fallback. Not
+admin-hours-specific — `reportExportService.exportReport` and the
+storefront export share the same latent bug — so fixed once in
+`utils/createApiClient.ts`'s response interceptor (decodes a JSON blob
+body before the 401-retry/reporting logic runs), covering all three call
+sites. **AH21-4 (new, LOW)** — the guard test's regex missed
+`window.fetch(`/`globalThis.fetch(` bypasses (excluded by its own
+dot-exclusion), and no test actually invoked `exportCsv()` to prove the
+fix's real behavior rather than the fix's absence of one string in the
+source. Broadened the guard test (also catches a direct `axios` import)
+and added `services/exportCsv.behavior.test.ts`, which mocks only
+`createApiClient` and asserts the real request shape and failure
+propagation. Full gate re-run green (tsc, eslint, and the admin-hours +
+createApiClient vitest suites); CI re-verified on the new commit.
+
 ---
 
 ### 2026-08-30 — Feature 20 (Compliance), pass 2 ✅ merged — PR #2059

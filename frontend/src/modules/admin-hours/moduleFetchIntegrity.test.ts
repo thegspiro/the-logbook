@@ -12,9 +12,15 @@
  * that bypasses it altogether, must not lose the auth handling every other
  * request in the app relies on).
  *
- * This walks the module's source and fails if a raw `fetch(` call
- * reappears — every request in this module should go through the shared
- * `api` client in `services/api.ts` instead.
+ * This walks the module's source and fails on a reintroduced bypass: a bare
+ * `fetch(`, a `window.fetch(`/`globalThis.fetch(`/`self.fetch(` call (still a
+ * bypass, but not caught by the bare-`fetch(` pattern alone since it's a
+ * dotted call), or a direct `import axios` — every request in this module
+ * should go through the shared `api` client in `services/api.ts` instead.
+ * This is a source scan, not a behavioral test — see
+ * `services/exportCsv.behavior.test.ts` for a test that actually drives
+ * `exportCsv()` through the real client and proves the 401-refresh path
+ * still applies to it.
  */
 
 import { describe, it, expect } from 'vitest';
@@ -42,16 +48,31 @@ describe('admin-hours module fetch integrity', () => {
     const offenders: string[] = [];
     for (const file of collectSourceFiles(MODULE_ROOT)) {
       const src = fs.readFileSync(file, 'utf8');
-      // A bare `fetch(` call — not `.fetch(` (a method on some other object,
-      // e.g. a Map or a mocked client) and not inside a comment line.
       const lines = src.split('\n');
       lines.forEach((line, idx) => {
         const trimmed = line.trim();
         if (trimmed.startsWith('//') || trimmed.startsWith('*')) return;
-        if (/(?<![.\w])fetch\(/.test(line)) {
+        // A bare `fetch(` call — not `.fetch(` on some other object (a Map,
+        // a mocked client) — OR the same call explicitly qualified onto the
+        // global object (`window.fetch(`, `globalThis.fetch(`, `self.fetch(`),
+        // which the bare-pattern's dot exclusion would otherwise miss.
+        const isBareFetch = /(?<![.\w])fetch\(/.test(line);
+        const isGlobalQualifiedFetch = /\b(?:window|globalThis|self)\.fetch\(/.test(line);
+        if (isBareFetch || isGlobalQualifiedFetch) {
           offenders.push(`${path.relative(MODULE_ROOT, file)}:${idx + 1}`);
         }
       });
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it('never imports axios directly — every request goes through createApiClient()', () => {
+    const offenders: string[] = [];
+    for (const file of collectSourceFiles(MODULE_ROOT)) {
+      const src = fs.readFileSync(file, 'utf8');
+      if (/from\s+['"]axios['"]/.test(src)) {
+        offenders.push(path.relative(MODULE_ROOT, file));
+      }
     }
     expect(offenders).toEqual([]);
   });
