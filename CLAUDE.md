@@ -1306,44 +1306,21 @@ the answer involves a count followed by an insert, lock the parent row **and**
 make the count a locking read. `tests/test_capacity_locking.py` asserts both
 halves at every site.
 
-### 28. `vi.clearAllMocks()` Does Not Clear Implementations, So Mock State Leaks Between `describe` Blocks _(2026-08-30)_
+### 28. `vi.clearAllMocks()` Does Not Reset Implementations, So Mock Config Leaks Between `describe` Blocks _(2026-08-30)_
 
 `vi.clearAllMocks()` resets recorded calls. It does **not** reset
-implementations. A `mockImplementation` or `mockResolvedValue` set in one
-`describe` therefore survives into every `describe` that runs after it, and a
-block that sets nothing silently inherits whatever its neighbour left behind.
-Test files read top to bottom, so this is invisible: the leak looks like setup
-that is simply somewhere else in the file.
+implementations. A `mockImplementation` / `mockResolvedValue` set in one
+`describe` survives into every block that runs after it, so a block that
+configures nothing silently runs on whatever its neighbour left behind.
 
-Two separate defects on 2026-08-30 were the same leak wearing different
-symptoms, and the two differ in whether anything catches them. CI catches the
-first — loudly, by going red. Nothing catches the second, because a whole-file
-run is the condition under which the leak holds, so the test passes there and
-in every later run.
-
-**Symptom A — a block inherits the wrong value, and the assertion can never
-pass.** `EquipmentCheckTemplateBuilder.test.tsx` asserted a button labelled
-`Collapse Oxygen mask`. That label only exists at laptop width: under 640px a
-row tap opens the mobile editor sheet, so the toggle reads `Edit …` and never
-`Collapse …`. The global `matchMedia` mock in `src/test/setup.ts` answers
-`false` to every query — phone — and the `movement persistence` block never
-overrode it. The assertion was unsatisfiable from the day it was written; it
-took `main` red, and the follow-up that swapped `getByRole` for `findByRole`
-only turned an immediate miss into a 1s timeout.
-
-**Symptom B — a block inherits the right value, and the test passes for the
-wrong reason.** This is the dangerous one, because green is what it looks like.
-A test added to a block with no `beforeEach` of its own reads a service mock
-that only a _previous_ block configured; it passes in the file run and fails the
-moment it is run alone, while the code under test was correct throughout. Found
-this way in the equipment-check builder suite, where a test mounting the
-editing route depended on a `getTemplate` value set two blocks earlier — a
-sibling in the same block needed no such mock, because it drives the creation
-route and never loads a template, which is exactly why the gap was easy to
-miss. Reproduce with `vitest run -t`; see the demonstration below.
+The dangerous direction is the one that looks fine: the borrowed value is the
+value the test wanted, so it **passes for the wrong reason**. It goes red only
+when run alone — which is the one way it is never run. A whole-file run is the
+condition that supplies the leak, so CI's whole-suite run and the pre-commit
+`vitest related` hook both mask it by construction.
 
 ```ts
-// WRONG — this block asserts against whatever ran before it
+// WRONG — this block runs on whatever configured getTemplate last
 describe('creation guidance', () => {
   it('renders the preview', async () => {
     renderBuilder(); // getTemplate is a bare vi.fn() under a focused run
@@ -1355,7 +1332,6 @@ describe('creation guidance', () => {
   beforeEach(() => {
     getTemplate.mockReset();
     getTemplate.mockResolvedValue(structuredClone(template));
-    mockViewport('phone');
   });
 ```
 
@@ -1364,8 +1340,7 @@ unconsumed `mockResolvedValueOnce` / `mockImplementationOnce` stays queued
 through `vi.clearAllMocks()`, and a later `mockResolvedValue` only replaces the
 _fallback_ — the queued one-shot is still handed out first. A test that queues a
 once value and then fails, returns early, or simply never makes the call leaks
-it into whichever test calls that mock next, defaults notwithstanding.
-Demonstrated on this repo's Vitest:
+it into whichever test calls that mock next. Reproduce it in a scratch spec:
 
 ```
 block A: clearAllMocks + mockResolvedValue('A-default'), queues 'A-ONCE', never calls
@@ -1374,32 +1349,45 @@ block B: clearAllMocks + mockResolvedValue('B-default'), then calls
       ->  B receives 'B-default'   with mockReset() before the default
 ```
 
-This matters here because the failure paths in these suites are written with
-`mockRejectedValueOnce`, so the queue is in constant use.
+This is live here, not theoretical: the failure paths in these suites are
+written with `mockRejectedValueOnce`, so the queue is in constant use.
 
 **Rule:** a `describe` states the mock implementations it depends on in its own
-`beforeEach` rather than inheriting them, resets each mock before installing
-that default, and scopes a single test's override by having a block default to
-return to. Two corollaries:
+`beforeEach`, resets each mock before installing that default, and scopes a
+single test's override by having a block default to return to.
 
-- **A component that branches on `useMediaQuery` needs the viewport named.**
-  The suite default is phone, so `Collapse`/`Expand` labels and any
-  laptop-only element never appear unless the test says so. Assert
-  branch-specific output only at the width where that branch renders —
-  asserting it at the other width is not a weaker test, it is an impossible
-  one. Use the `mockViewport` helper in
-  `EquipmentCheckTemplateBuilder.test.tsx` rather than re-typing the
-  `matchMedia` object.
-- **Check a new test in isolation, and know which half that checks.**
-  Running `vitest run -t` with the test's name proves the test does not _depend_
-  on state a predecessor left — worth doing, because passing in the file run
-  proves nothing there: the file run is what supplies the leak, and neither the
-  `vitest related` pre-commit hook nor CI's whole-suite run ever exercises the
-  test alone. It does **not** prove the reverse. `-t` only selects matching
-  tests, so a test that installs a persistent implementation passes both
-  focused and in place while a later test quietly starts passing for the wrong
-  reason. Nothing catches that outbound direction by running the new test;
-  the reset discipline above is what prevents it.
+**Check a new test with `vitest run -t` before trusting it, and know which half
+that checks.** It proves the test does not _depend_ on state a predecessor
+left — worth doing, since passing in the file run proves nothing there. It does
+**not** prove the reverse: `-t` only selects matching tests, so a test that
+installs a persistent implementation passes both focused and in place while a
+later test quietly starts passing for the wrong reason. Nothing catches that
+outbound direction by running the new test; the reset discipline above is what
+prevents it.
+
+### 28a. A Test Asserting Viewport-Specific Output Must Name the Viewport _(2026-08-30)_
+
+Distinct from #28, and worth separating because it presents similarly and was
+initially misdiagnosed as leakage. `src/test/setup.ts` installs a `matchMedia`
+mock answering `false` to every query — phone — **before any test runs**. That
+is the default every block starts from, inherited from nothing.
+
+So a test asserting laptop-only output without setting a viewport fails on its
+own merits, identically under a focused run, with no predecessor involved. The
+equipment-check builder asserted a `Collapse Oxygen mask` button; that label
+exists only in the `isLaptop` branch, because under 640px a row tap opens the
+mobile editor sheet and the toggle reads `Edit …`. The assertion was
+unsatisfiable from the day it was written, and it took `main` red. Swapping
+`getByRole` for `findByRole` only converted an immediate miss into a 1s timeout.
+
+**Rule:** when a component branches on `useMediaQuery`, assert branch-specific
+output only at the width where that branch renders, and set that width
+explicitly — asserting it at the other width is not a weaker test, it is an
+impossible one. Use the `mockViewport` helper in
+`EquipmentCheckTemplateBuilder.test.tsx` rather than re-typing the `matchMedia`
+object. Because a viewport set this way is an implementation and #28 applies to
+it, give the block an explicit default so a per-test override cannot leak
+forward.
 
 ## Environment Variables
 
