@@ -1344,17 +1344,37 @@ describe('creation guidance', () => {
 ```
 
 ```ts
-// CORRECT — the block states what it depends on
+// CORRECT — the block states what it depends on, and resets first
 describe('creation guidance', () => {
   beforeEach(() => {
+    getTemplate.mockReset();
     getTemplate.mockResolvedValue(structuredClone(template));
     mockViewport('phone');
   });
 ```
 
+**`mockReset()`, not `vi.clearAllMocks()`, is what makes the default hold.** An
+unconsumed `mockResolvedValueOnce` / `mockImplementationOnce` stays queued
+through `vi.clearAllMocks()`, and a later `mockResolvedValue` only replaces the
+_fallback_ — the queued one-shot is still handed out first. A test that queues a
+once value and then fails, returns early, or simply never makes the call leaks
+it into whichever test calls that mock next, defaults notwithstanding.
+Demonstrated on this repo's Vitest:
+
+```
+block A: clearAllMocks + mockResolvedValue('A-default'), queues 'A-ONCE', never calls
+block B: clearAllMocks + mockResolvedValue('B-default'), then calls
+      ->  B receives 'A-ONCE'      with clearAllMocks
+      ->  B receives 'B-default'   with mockReset() before the default
+```
+
+This matters here because the failure paths in these suites are written with
+`mockRejectedValueOnce`, so the queue is in constant use.
+
 **Rule:** a `describe` states the mock implementations it depends on in its own
-`beforeEach` rather than inheriting them, and an override for one test is
-scoped by giving the block an explicit default to return to. Two corollaries:
+`beforeEach` rather than inheriting them, resets each mock before installing
+that default, and scopes a single test's override by having a block default to
+return to. Two corollaries:
 
 - **A component that branches on `useMediaQuery` needs the viewport named.**
   The suite default is phone, so `Collapse`/`Expand` labels and any
@@ -1364,11 +1384,16 @@ scoped by giving the block an explicit default to return to. Two corollaries:
   one. Use the `mockViewport` helper in
   `EquipmentCheckTemplateBuilder.test.tsx` rather than re-typing the
   `matchMedia` object.
-- **Check a new test in isolation before trusting it.** Running
-  `vitest run -t` with the test's name is the whole check. Passing in the file
-  run proves nothing about order independence, because the file run is what
-  supplies the leak; neither the `vitest related` pre-commit hook nor CI's
-  whole-suite run ever exercises the test alone.
+- **Check a new test in isolation, and know which half that checks.**
+  Running `vitest run -t` with the test's name proves the test does not _depend_
+  on state a predecessor left — worth doing, because passing in the file run
+  proves nothing there: the file run is what supplies the leak, and neither the
+  `vitest related` pre-commit hook nor CI's whole-suite run ever exercises the
+  test alone. It does **not** prove the reverse. `-t` only selects matching
+  tests, so a test that installs a persistent implementation passes both
+  focused and in place while a later test quietly starts passing for the wrong
+  reason. Nothing catches that outbound direction by running the new test;
+  the reset discipline above is what prevents it.
 
 ## Environment Variables
 
