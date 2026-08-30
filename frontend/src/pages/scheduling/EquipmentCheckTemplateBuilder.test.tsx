@@ -142,6 +142,7 @@ function renderNewBuilder() {
       <ConfirmProvider>
         <Routes>
           <Route path="/templates/new" element={<EquipmentCheckTemplateBuilder />} />
+          <Route path="/scheduling/equipment-check-templates/:templateId" element={null} />
         </Routes>
       </ConfirmProvider>
     </MemoryRouter>
@@ -248,10 +249,11 @@ describe('EquipmentCheckTemplateBuilder responsive actions', () => {
     );
   });
 
-  it('does not allow an invalid template to be published', () => {
+  it('does not allow an invalid template to be published', async () => {
     renderNewBuilder();
     expect(screen.getByRole('button', { name: 'Publish' })).toBeDisabled();
     expect(screen.getByLabelText('Template readiness')).toHaveTextContent('! Setup');
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Publish' })).toBeDisabled());
   });
 
   it('does not treat structural-only items as a publishable operational compartment', async () => {
