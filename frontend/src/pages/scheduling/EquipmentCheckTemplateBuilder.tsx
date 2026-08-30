@@ -447,12 +447,13 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
   const [mobileEditor, setMobileEditor] = useState<{ compartmentKey: string; itemKey: string } | null>(null);
   const isLaptop = useMediaQuery('(min-width: 640px)');
   const [mobileSelectionLocations, setMobileSelectionLocations] = useState<Set<string>>(new Set());
-  const [mobileBulkSheet, setMobileBulkSheet] = useState<{ compartmentIdx: number; action: 'type' | 'move' } | null>(
-    null
-  );
+  const [mobileAddLocations, setMobileAddLocations] = useState<Set<string>>(new Set());
+  const [highlightedItemKeys, setHighlightedItemKeys] = useState<Set<string>>(new Set());
 
   // Bulk selection: per-compartment set of selected item indices
   const [selectedItems, setSelectedItems] = useState<Record<string, Set<number>>>({});
+  const actionBarRef = useRef<HTMLDivElement>(null);
+  const [actionBarHeight, setActionBarHeight] = useState(0);
 
   // Compartment keys whose storage-type selector is in free-text ("Custom…")
   // mode, so the text input stays visible even while the value is still blank.
@@ -1083,8 +1084,12 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
 
   const setMobileSelectionMode = (compartmentIdx: number, active: boolean) => {
     const key = getCompKey(compartmentIdx);
-    setMobileSelectionLocations(active ? new Set([key]) : new Set());
-    setMobileBulkSheet(null);
+    setMobileSelectionLocations((previous) => {
+      const next = new Set(previous);
+      if (active) next.add(key);
+      else next.delete(key);
+      return next;
+    });
     if (!active) deselectAllItems(compartmentIdx);
   };
 
@@ -1126,13 +1131,25 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       bulkDeleteIdempotencyKeys.current[key] = { key: idempotencyKey, payload };
       await ensureDraftBeforeStructureEdit();
       const result = await schedulingService.deleteCheckItemsBulk(comp.id, itemIds, idempotencyKey);
-      const deletedIds = new Set(result.deletedItemIds);
+      const requestedIds = new Set(itemIds);
+      const deletedIds = new Set(result.deletedItemIds.filter((itemId) => requestedIds.has(itemId)));
+      const remainingItems = comp.items.filter((item) => !item.id || !deletedIds.has(item.id));
       updateCompartmentField(compartmentIdx, {
-        items: comp.items.filter((item) => !item.id || !deletedIds.has(item.id)),
+        items: remainingItems,
       });
-      setSelectedItems((prev) => ({ ...prev, [key]: new Set<number>() }));
-      delete bulkDeleteIdempotencyKeys.current[key];
+      const undeletedIds = new Set(itemIds.filter((itemId) => !deletedIds.has(itemId)));
+      setSelectedItems((prev) => ({
+        ...prev,
+        [key]: new Set(remainingItems.flatMap((item, index) => (item.id && undeletedIds.has(item.id) ? [index] : []))),
+      }));
       const deletedCount = deletedIds.size;
+      if (deletedCount !== itemIds.length) {
+        toast.error(
+          `${String(deletedCount)} item${deletedCount !== 1 ? 's were' : ' was'} deleted; ${String(itemIds.length - deletedCount)} could not be deleted`
+        );
+        return;
+      }
+      delete bulkDeleteIdempotencyKeys.current[key];
       toast.success(`Deleted ${deletedCount} item${deletedCount !== 1 ? 's' : ''}`);
     } catch (err) {
       toast.error(getErrorMessage(err, `Could not delete ${count} item${count !== 1 ? 's' : ''}`));
@@ -1235,6 +1252,22 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
 
     setQuickAddValues((prev) => ({ ...prev, [key]: '' }));
 
+    const highlight = (clientKey: string) => {
+      setHighlightedItemKeys((previous) => new Set(previous).add(clientKey));
+      window.setTimeout(() => {
+        document.getElementById(`item-row-${clientKey}`)?.scrollIntoView?.({ block: 'nearest' });
+      });
+      window.setTimeout(
+        () =>
+          setHighlightedItemKeys((previous) => {
+            const next = new Set(previous);
+            next.delete(clientKey);
+            return next;
+          }),
+        1600
+      );
+    };
+
     if (comp.id) {
       const createPayload: CheckTemplateItemCreate = {
         name,
@@ -1262,20 +1295,20 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
         clientKey,
         saveStatus: 'saving',
       });
+      highlight(clientKey);
       runQuickAdd(job);
     } else {
+      const item = {
+        ...emptyItem(),
+        name,
+        ...(payload.inventoryItemId ? { inventoryItemId: payload.inventoryItemId } : {}),
+        ...(payload.checkType ? { checkType: payload.checkType } : {}),
+        ...(payload.hasExpiration ? { hasExpiration: true } : {}),
+      };
       updateCompartmentField(compartmentIdx, {
-        items: [
-          ...comp.items,
-          {
-            ...emptyItem(),
-            name,
-            ...(payload.inventoryItemId ? { inventoryItemId: payload.inventoryItemId } : {}),
-            ...(payload.checkType ? { checkType: payload.checkType } : {}),
-            ...(payload.hasExpiration ? { hasExpiration: true } : {}),
-          },
-        ],
+        items: [...comp.items, item],
       });
+      highlight(item.clientKey);
     }
   };
 
@@ -1454,74 +1487,6 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     toast.success(
       `Set ${selected.size} item${selected.size !== 1 ? 's' : ''} to ${required ? 'required' : 'optional'}`
     );
-  };
-
-  const bulkMoveItems = async (fromCompartmentIdx: number, toCompartmentIdx: number) => {
-    if (fromCompartmentIdx === toCompartmentIdx) return;
-    const source = compartments[fromCompartmentIdx];
-    const destination = compartments[toCompartmentIdx];
-    const sourceKey = getCompKey(fromCompartmentIdx);
-    const selected = selectedItems[sourceKey];
-    if (!source || !destination || !selected?.size) return;
-
-    const chosenItems = source.items.filter((_, index) => selected.has(index));
-    const failedKeys = new Set<string>();
-    if (isEditing && destination.id) {
-      try {
-        await ensureDraftBeforeStructureEdit();
-        await Promise.all(
-          chosenItems.map(async (item, offset) => {
-            if (!item.id) return;
-            try {
-              await schedulingService.updateCheckItem(item.id, {
-                compartment_id: destination.id,
-                sort_order: destination.items.length + offset,
-              });
-            } catch {
-              failedKeys.add(item.clientKey);
-            }
-          })
-        );
-      } catch {
-        chosenItems.forEach((item) => failedKeys.add(item.clientKey));
-      }
-    } else if (isEditing) {
-      chosenItems.forEach((item) => failedKeys.add(item.clientKey));
-    }
-
-    const movedItems = chosenItems.filter((item) => !failedKeys.has(item.clientKey));
-    if (movedItems.length > 0) {
-      const movedKeys = new Set(movedItems.map((item) => item.clientKey));
-      setCompartments((previous) => {
-        const next = [...previous];
-        const currentSource = next[fromCompartmentIdx];
-        const currentDestination = next[toCompartmentIdx];
-        if (!currentSource || !currentDestination) return previous;
-        next[fromCompartmentIdx] = {
-          ...currentSource,
-          items: currentSource.items.filter((item) => !movedKeys.has(item.clientKey)),
-        };
-        next[toCompartmentIdx] = { ...currentDestination, items: [...currentDestination.items, ...movedItems] };
-        return next;
-      });
-      markDirty();
-    }
-
-    if (failedKeys.size === 0) {
-      setSelectedItems((previous) => ({ ...previous, [sourceKey]: new Set<number>() }));
-      setMobileSelectionLocations(new Set());
-      toast.success(
-        `Moved ${movedItems.length} item${movedItems.length === 1 ? '' : 's'} to ${destination.name || 'location'}`
-      );
-    } else {
-      const remainingItems = source.items.filter((item) => !movedItems.includes(item));
-      setSelectedItems((previous) => ({
-        ...previous,
-        [sourceKey]: new Set(remainingItems.flatMap((item, index) => (failedKeys.has(item.clientKey) ? [index] : []))),
-      }));
-      toast.error(`${failedKeys.size} item${failedKeys.size === 1 ? '' : 's'} could not be moved and remain selected`);
-    }
-    setMobileBulkSheet(null);
   };
 
   // ---------------------------------------------------------------------------
@@ -2091,7 +2056,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     | null
   >(null);
   // Takes the fixed mobile bottom bar off this overlay while it is open.
-  useOverlaySurface(showChangelog || Boolean(csvPreview) || showPreview || Boolean(mobileBulkSheet));
+  useOverlaySurface(showChangelog || Boolean(csvPreview) || showPreview);
 
   const handleCsvImport = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -2309,6 +2274,19 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       namedCompartments,
     };
   }, [compartments]);
+
+  useEffect(() => {
+    const bar = actionBarRef.current;
+    if (!bar) {
+      setActionBarHeight(0);
+      return;
+    }
+    const updateHeight = () => setActionBarHeight(bar.getBoundingClientRect().height);
+    updateHeight();
+    const observer = new ResizeObserver(updateHeight);
+    observer.observe(bar);
+    return () => observer.disconnect();
+  }, [stats.totalItems]);
 
   /**
    * How much of this template is wired to the inventory catalog.
@@ -2861,11 +2839,13 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
         id={`item-row-${itemKey}`}
         tabIndex={-1}
         className={`rounded-md border transition-colors ${
-          isSelected
-            ? 'border-blue-400 bg-blue-50/50 dark:border-blue-500 dark:bg-blue-900/10'
-            : isHeader
-              ? 'border-theme-surface-border bg-theme-surface'
-              : 'border-theme-surface-border bg-theme-surface'
+          highlightedItemKeys.has(item.clientKey)
+            ? 'bg-blue-50 ring-2 ring-blue-400 dark:bg-blue-900/20'
+            : isSelected
+              ? 'border-blue-400 bg-blue-50/50 dark:border-blue-500 dark:bg-blue-900/10'
+              : isHeader
+                ? 'border-theme-surface-border bg-theme-surface'
+                : 'border-theme-surface-border bg-theme-surface'
         }`}
       >
         {/* Compact row — always visible */}
@@ -3307,6 +3287,17 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             )}
           </button>
 
+          {isExpanded && (
+            <button
+              type="button"
+              aria-label={`Add item to ${comp.name || 'location'}`}
+              className="flex min-h-[44px] shrink-0 items-center gap-1 px-2 text-sm font-semibold text-blue-600 sm:hidden dark:text-blue-400"
+              onClick={() => setMobileAddLocations((previous) => new Set(previous).add(key))}
+            >
+              <Plus className="h-4 w-4" aria-hidden="true" /> Add
+            </button>
+          )}
+
           {/* Status badges */}
           <div className="hidden flex-shrink-0 items-center gap-1.5 sm:flex">
             {(() => {
@@ -3570,19 +3561,94 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
 
             {/* Items */}
             <div className="space-y-3">
+              {mobileAddLocations.has(key) && (
+                <div className="border-theme-surface-border bg-theme-surface-secondary/30 rounded-lg border p-3 sm:hidden">
+                  <div className="mb-2 flex items-center justify-between">
+                    <div>
+                      <p className="text-theme-text-primary text-sm font-semibold">Add item</p>
+                      <p className="text-theme-text-muted text-xs">
+                        Choose a result to link inventory, or add your text as a checklist task.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      className="min-h-[44px] min-w-[44px]"
+                      aria-label="Close add item"
+                      onClick={() =>
+                        setMobileAddLocations((previous) => {
+                          const next = new Set(previous);
+                          next.delete(key);
+                          return next;
+                        })
+                      }
+                    >
+                      <X className="mx-auto h-4 w-4" aria-hidden="true" />
+                    </button>
+                  </div>
+                  {bulkPasteMode[key] ? (
+                    <div className="space-y-2">
+                      <textarea
+                        className="form-input text-sm"
+                        rows={5}
+                        aria-label="Item names, one per line"
+                        placeholder="Paste item names, one per line"
+                        value={bulkPasteValues[key] ?? ''}
+                        onChange={(event) =>
+                          setBulkPasteValues((previous) => ({ ...previous, [key]: event.target.value }))
+                        }
+                      />
+                      <div className="flex justify-between gap-2">
+                        <button
+                          type="button"
+                          className="min-h-[44px] px-2 text-sm font-medium"
+                          onClick={() => setBulkPasteMode((previous) => ({ ...previous, [key]: false }))}
+                        >
+                          Back to single add
+                        </button>
+                        <button
+                          type="button"
+                          className="min-h-[44px] rounded-md bg-blue-600 px-4 text-sm font-semibold text-white disabled:opacity-40"
+                          disabled={!bulkPasteValues[key]?.trim() || bulkItemPending[key]}
+                          onClick={() => void handleBulkPaste(idx)}
+                        >
+                          Add all
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <CatalogQuickAdd
+                        value={quickAddValues[key] ?? ''}
+                        onChange={(value) => setQuickAddValues((previous) => ({ ...previous, [key]: value }))}
+                        onAdd={(payload) => handleQuickAdd(idx, payload)}
+                        canCreateInventory={canManageInventory}
+                        autoFocus
+                        placeholder="Add or search items…"
+                      />
+                      <button
+                        type="button"
+                        className="text-theme-text-muted mt-3 flex min-h-[44px] items-center gap-1 text-xs font-medium"
+                        onClick={() => setBulkPasteMode((previous) => ({ ...previous, [key]: true }))}
+                      >
+                        <List className="h-3.5 w-3.5" aria-hidden="true" /> Add several
+                      </button>
+                    </>
+                  )}
+                </div>
+              )}
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
                   <div className="flex min-h-[44px] items-center gap-3">
                     <h4 className="text-theme-text-primary text-sm font-semibold">
                       {mobileSelectionLocations.has(getCompKey(idx)) ? 'Select items' : 'Items to check'}
                     </h4>
-                    {comp.items.length > 0 && !isLaptop && !mobileSelectionLocations.has(getCompKey(idx)) && (
+                    {comp.items.length > 0 && !isLaptop && (
                       <button
                         type="button"
                         className="ml-auto min-h-[44px] px-2 text-sm font-medium text-blue-600 sm:hidden dark:text-blue-400"
-                        onClick={() => setMobileSelectionMode(idx, true)}
+                        onClick={() => setMobileSelectionMode(idx, !mobileSelectionLocations.has(getCompKey(idx)))}
                       >
-                        Select items
+                        {mobileSelectionLocations.has(getCompKey(idx)) ? 'Done' : 'Select items'}
                       </button>
                     )}
                   </div>
@@ -3758,7 +3824,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                 const isBulkPaste = bulkPasteMode[compKey] ?? false;
 
                 return (
-                  <div className="border-theme-surface-border bg-theme-surface-secondary/30 mt-2 rounded-md border border-dashed p-2">
+                  <div className="border-theme-surface-border bg-theme-surface-secondary/30 mt-2 hidden rounded-md border border-dashed p-2 sm:block">
                     <div className="mb-1.5 flex items-center gap-2">
                       <span className="text-theme-text-muted text-[10px] font-medium tracking-wide uppercase">
                         {isBulkPaste ? 'Bulk Add' : 'Quick Add'}
@@ -3822,6 +3888,18 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                   </div>
                 );
               })()}
+              <div
+                data-testid={`mobile-add-action-${key}`}
+                className="bg-theme-surface sticky bottom-0 z-20 -mx-4 px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:hidden"
+              >
+                <button
+                  type="button"
+                  className="flex min-h-[48px] w-full items-center justify-center gap-2 rounded-lg bg-blue-600 font-semibold text-white shadow-lg"
+                  onClick={() => setMobileAddLocations((previous) => new Set(previous).add(key))}
+                >
+                  <Plus className="h-5 w-5" aria-hidden="true" /> Add item
+                </button>
+              </div>
             </div>
           </div>
         )}
@@ -4001,17 +4079,17 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       comp.items.some((item) => item.checkType !== 'header' && item.checkType !== 'text')
     );
   const publishReady = setupReady && locationsReady && blockingItems === 0;
-  const mobileSelectionCompartmentIdx = compartments.findIndex((_, index) =>
-    mobileSelectionLocations.has(getCompKey(index))
-  );
-  const mobileSelectionCount = mobileSelectionCompartmentIdx >= 0 ? getSelectedCount(mobileSelectionCompartmentIdx) : 0;
+  const mobileSelection = compartments
+    .map((compartment, index) => ({ index, key: getCompKey(index), compartment }))
+    .find(({ key }) => mobileSelectionLocations.has(key));
+  const mobileSelectedCount = mobileSelection ? (selectedItems[mobileSelection.key]?.size ?? 0) : 0;
 
   // ---------------------------------------------------------------------------
   // Main render
   // ---------------------------------------------------------------------------
 
   return (
-    <div className="pb-16">
+    <div style={actionBarHeight > 0 ? { paddingBottom: actionBarHeight } : undefined}>
       {/* Header */}
       <div className="mx-auto mb-3 flex max-w-7xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex min-w-0 items-center gap-3">
@@ -4401,144 +4479,129 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
         </div>
       </div>
 
-      {/* Phone selection mode replaces the ordinary footer so bulk actions stay
-          within thumb reach without crowding the laptop toolbar. */}
-      {mobileSelectionCompartmentIdx >= 0 && (
-        <section
-          aria-label="Selected item actions"
-          className="border-theme-surface-border bg-theme-surface/98 fixed inset-x-0 bottom-0 z-40 border-t px-3 pt-2 pb-[calc(.75rem+env(safe-area-inset-bottom))] shadow-[0_-8px_24px_rgba(0,0,0,.12)] sm:hidden"
-        >
-          <div className="mx-auto max-w-lg">
-            <div className="mb-2 flex min-h-7 items-center justify-between">
-              <strong className="text-theme-text-primary text-sm">{mobileSelectionCount} selected</strong>
-              <button
-                type="button"
-                className="min-h-9 px-2 text-sm font-semibold text-blue-600 dark:text-blue-400"
-                onClick={() => setMobileSelectionMode(mobileSelectionCompartmentIdx, false)}
-              >
-                Done
-              </button>
-            </div>
-            <div className="grid grid-cols-4 gap-2">
-              <button
-                type="button"
-                className="btn-secondary min-h-11 px-2 text-xs"
-                disabled={mobileSelectionCount === 0}
-                onClick={() => setMobileBulkSheet({ compartmentIdx: mobileSelectionCompartmentIdx, action: 'type' })}
-              >
-                Set type
-              </button>
-              <button
-                type="button"
-                className="btn-secondary min-h-11 px-1 text-xs"
-                disabled={mobileSelectionCount === 0}
-                onClick={() => {
-                  const selected = selectedItems[getCompKey(mobileSelectionCompartmentIdx)];
-                  const compartment = compartments[mobileSelectionCompartmentIdx];
-                  const allRequired =
-                    selected && compartment && [...selected].every((index) => compartment.items[index]?.isRequired);
-                  bulkToggleRequired(mobileSelectionCompartmentIdx, !allRequired);
-                }}
-              >
-                {(() => {
-                  const selected = selectedItems[getCompKey(mobileSelectionCompartmentIdx)];
-                  const compartment = compartments[mobileSelectionCompartmentIdx];
-                  return selected && compartment && [...selected].every((index) => compartment.items[index]?.isRequired)
-                    ? 'Optional'
-                    : 'Required';
-                })()}
-              </button>
-              <button
-                type="button"
-                className="btn-secondary min-h-11 px-2 text-xs"
-                disabled={
-                  mobileSelectionCount === 0 ||
-                  !compartments.some(
-                    (candidate, index) => !candidate.isHeader && index !== mobileSelectionCompartmentIdx
-                  )
-                }
-                onClick={() => setMobileBulkSheet({ compartmentIdx: mobileSelectionCompartmentIdx, action: 'move' })}
-              >
-                Move
-              </button>
-              <button
-                type="button"
-                className="min-h-11 rounded-md border border-red-300 px-2 text-xs font-medium text-red-600 disabled:opacity-40 dark:border-red-800 dark:text-red-400"
-                disabled={mobileSelectionCount === 0}
-                onClick={() => void deleteSelectedItems(mobileSelectionCompartmentIdx)}
-              >
-                Delete
-              </button>
-            </div>
-          </div>
-        </section>
-      )}
-
-      {mobileBulkSheet && (
-        <div
-          className="modal-overlay z-50 flex items-end sm:hidden"
-          role="presentation"
-          onMouseDown={(event) => {
-            if (event.target === event.currentTarget) setMobileBulkSheet(null);
-          }}
-        >
-          <section
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="mobile-bulk-sheet-title"
-            className="border-theme-surface-border bg-theme-surface w-full rounded-t-2xl border-t px-4 pt-4 pb-[calc(1rem+env(safe-area-inset-bottom))] shadow-2xl"
-          >
-            <div className="bg-theme-surface-border mx-auto mb-3 h-1 w-10 rounded-full" />
-            <div className="mb-3 flex items-center justify-between">
-              <h2 id="mobile-bulk-sheet-title" className="text-theme-text-primary text-base font-semibold">
-                {mobileBulkSheet.action === 'type' ? 'Set check type' : 'Move to location'}
-              </h2>
-              <button
-                type="button"
-                className="min-h-11 px-2 text-sm text-blue-600 dark:text-blue-400"
-                onClick={() => setMobileBulkSheet(null)}
-              >
-                Cancel
-              </button>
-            </div>
-            <div className="space-y-1">
-              {mobileBulkSheet.action === 'type'
-                ? CHECK_TYPES.map((checkType) => (
-                    <button
-                      key={checkType.value}
-                      type="button"
-                      className={mobileMenuItemClass}
-                      onClick={() => {
-                        bulkSetCheckType(mobileBulkSheet.compartmentIdx, checkType.value);
-                        setMobileBulkSheet(null);
-                      }}
-                    >
-                      {checkType.label}
-                    </button>
-                  ))
-                : compartments.map((compartment, index) =>
-                    !compartment.isHeader && index !== mobileBulkSheet.compartmentIdx ? (
-                      <button
-                        key={compartment.clientKey}
-                        type="button"
-                        className={mobileMenuItemClass}
-                        onClick={() => void bulkMoveItems(mobileBulkSheet.compartmentIdx, index)}
-                      >
-                        <Package className="h-4 w-4" aria-hidden="true" /> {compartmentPath(index)}
-                      </button>
-                    ) : null
-                  )}
-            </div>
-          </section>
-        </div>
-      )}
-
-      {/* Sticky footer stats bar */}
+      {/* Laptop statistics stay rich; the phone bar keeps only the current state
+          and its next action. ResizeObserver above makes page clearance follow
+          the bar when translated copy, zoom, validation, or safe-area padding
+          changes its real height. */}
       {stats.totalItems > 0 && (
         <div
-          className={`border-theme-surface-border bg-theme-surface/95 pb-safe fixed right-0 bottom-0 left-0 z-40 border-t backdrop-blur-sm ${mobileSelectionCompartmentIdx >= 0 ? 'hidden sm:block' : ''}`}
+          ref={actionBarRef}
+          className="border-theme-surface-border bg-theme-surface/95 action-bar-safe fixed right-0 bottom-0 left-0 z-40 border-t px-4 backdrop-blur-sm"
+          aria-label="Checklist action bar"
         >
-          <div className="mx-auto flex max-w-7xl flex-col items-start justify-between gap-1 px-4 py-2 sm:flex-row sm:items-center sm:gap-0">
+          <div className="flex min-h-11 items-center justify-between gap-4 sm:hidden">
+            <span className="text-theme-text-secondary min-w-0 text-sm font-medium wrap-break-word" aria-live="polite">
+              {mobileSelection
+                ? `${String(mobileSelectedCount)} selected`
+                : autoSaveStatus === 'saving' || saving
+                  ? 'Saving…'
+                  : blockingItems > 0
+                    ? `${String(blockingItems)} item${blockingItems === 1 ? '' : 's'} need attention`
+                    : `${String(stats.totalItems)} item${stats.totalItems === 1 ? '' : 's'} · ${autoSaveStatus === 'error' ? 'Save failed' : autoSaveStatus === 'saved' ? 'Saved' : isEditing ? 'Saved' : 'Draft'}`}
+            </span>
+            <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 text-sm font-semibold">
+              {mobileSelection ? (
+                <>
+                  <select
+                    aria-label="Set type for selected items"
+                    className="text-theme-accent-blue max-w-20 bg-transparent"
+                    value=""
+                    disabled={mobileSelectedCount === 0}
+                    onChange={(event) => {
+                      if (event.target.value) bulkSetCheckType(mobileSelection.index, event.target.value as CheckType);
+                    }}
+                  >
+                    <option value="" disabled>
+                      Type
+                    </option>
+                    {CHECK_TYPES.map((checkType) => (
+                      <option key={checkType.value} value={checkType.value}>
+                        {checkType.label}
+                      </option>
+                    ))}
+                  </select>
+                  <span aria-hidden="true">·</span>
+                  <button
+                    type="button"
+                    className="text-theme-accent-blue min-h-11 disabled:opacity-40"
+                    disabled={mobileSelectedCount === 0}
+                    onClick={() => {
+                      const selected = selectedItems[mobileSelection.key];
+                      const allRequired =
+                        !!selected &&
+                        [...selected].every((index) => mobileSelection.compartment.items[index]?.isRequired);
+                      bulkToggleRequired(mobileSelection.index, !allRequired);
+                    }}
+                  >
+                    {(() => {
+                      const selected = selectedItems[mobileSelection.key];
+                      const allRequired =
+                        !!selected &&
+                        selected.size > 0 &&
+                        [...selected].every((index) => mobileSelection.compartment.items[index]?.isRequired);
+                      return allRequired ? 'Optional' : 'Required';
+                    })()}
+                  </button>
+                  <span aria-hidden="true">·</span>
+                  <select
+                    aria-label="Move selected items"
+                    className="text-theme-accent-blue max-w-24 bg-transparent"
+                    value=""
+                    disabled={mobileSelectedCount === 0}
+                    onChange={(event) => {
+                      const destination = Number(event.target.value);
+                      const selected = [...(selectedItems[mobileSelection.key] ?? [])].sort((a, b) => b - a);
+                      for (const itemIndex of selected)
+                        void moveItemToCompartment(mobileSelection.index, itemIndex, destination);
+                      setMobileSelectionMode(mobileSelection.index, false);
+                    }}
+                  >
+                    <option value="" disabled>
+                      Move
+                    </option>
+                    {compartments.map((compartment, index) =>
+                      index !== mobileSelection.index && !compartment.isHeader ? (
+                        <option key={compartment.clientKey} value={index}>
+                          {compartment.name || 'Untitled location'}
+                        </option>
+                      ) : null
+                    )}
+                  </select>
+                  <span aria-hidden="true">·</span>
+                  <button
+                    type="button"
+                    className="min-h-11 text-red-600 disabled:opacity-40"
+                    disabled={mobileSelectedCount === 0}
+                    onClick={() => void deleteSelectedItems(mobileSelection.index)}
+                  >
+                    Delete
+                  </button>
+                </>
+              ) : autoSaveStatus === 'saving' || saving ? (
+                <button
+                  type="button"
+                  className="text-theme-accent-blue min-h-11"
+                  onClick={() => inlineInputRef.current?.blur()}
+                >
+                  Done
+                </button>
+              ) : blockingItems > 0 ? (
+                <button type="button" className="text-theme-accent-blue min-h-11" onClick={() => setShowPreview(true)}>
+                  Review
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className="text-theme-accent-blue min-h-11"
+                  onClick={() => void addCompartment()}
+                  disabled={addingCompartment}
+                >
+                  Add
+                </button>
+              )}
+            </div>
+          </div>
+          <div className="mx-auto hidden max-w-7xl items-center justify-between gap-0 py-2 sm:flex">
             <div className="text-theme-text-muted flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
               <span className="flex items-center gap-1">
                 <Hash className="h-3 w-3" />
@@ -4869,14 +4932,17 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             </button>
 
             {/* Phone frame */}
-            <div className="bg-theme-surface relative w-[375px] max-w-[90vw] overflow-hidden rounded-[2.5rem] border-[6px] border-gray-800 shadow-2xl dark:border-gray-600">
+            <div
+              className="bg-theme-bg text-theme-text-primary relative w-[375px] max-w-[90vw] overflow-hidden rounded-[2.5rem] border-[6px] border-gray-800 shadow-2xl dark:border-gray-600"
+              aria-label="Mobile checklist preview"
+            >
               {/* Phone notch */}
               <div className="relative flex h-7 items-end justify-center bg-gray-800 dark:bg-gray-600">
                 <div className="h-5 w-28 rounded-b-2xl bg-gray-800 dark:bg-gray-600" />
               </div>
 
               {/* Phone status bar */}
-              <div className="bg-theme-surface text-theme-text-muted flex items-center justify-between px-6 py-1 text-[10px]">
+              <div className="bg-theme-bg text-theme-text-muted flex items-center justify-between px-6 py-1 text-[10px]">
                 <span>9:41</span>
                 <div className="flex items-center gap-1">
                   <span>5G</span>
@@ -4887,7 +4953,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
               </div>
 
               {/* Scrollable content area */}
-              <div className="bg-theme-surface overflow-y-auto" style={{ height: 'min(70vh, 640px)' }}>
+              <div className="bg-theme-bg overflow-y-auto" style={{ height: 'min(70vh, 640px)' }}>
                 <div className="px-1 pb-4">
                   <div className="mx-3 mt-2 mb-3 rounded-lg border border-blue-500/20 bg-blue-500/5 px-3 py-2">
                     <p className="text-[10px] text-blue-700 dark:text-blue-400">
@@ -4899,7 +4965,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
               </div>
 
               {/* Phone home indicator bar */}
-              <div className="bg-theme-surface flex justify-center py-2">
+              <div className="bg-theme-bg flex justify-center py-2">
                 <div className="h-1 w-32 rounded-full bg-gray-800/30 dark:bg-gray-400/30" />
               </div>
             </div>
