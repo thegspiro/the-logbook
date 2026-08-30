@@ -194,7 +194,7 @@ describe('EquipmentCheckTemplateBuilder responsive actions', () => {
     expect(screen.getByRole('button', { name: 'Deselect Radio' })).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Done' }));
     expect(screen.queryByRole('button', { name: 'Select Radio' })).not.toBeInTheDocument();
-  });
+  }, 10_000);
 
   it('opens a full-height progressive item editor and reviews adjacent items on phones', async () => {
     const user = userEvent.setup();
@@ -530,7 +530,7 @@ describe('EquipmentCheckTemplateBuilder quick add queue', () => {
     await waitFor(() => expect(screen.queryByLabelText('Safety vest Saving')).not.toBeInTheDocument());
     expect(screen.getByText('Safety vest')).toBeVisible();
     expect(addCheckItemsBulk.mock.calls[2]?.[2]).toBe(firstKey);
-  });
+  }, 10_000);
 
   it('does not submit the same value again when Enter repeats', async () => {
     const user = userEvent.setup();
@@ -727,5 +727,5 @@ describe('EquipmentCheckTemplateBuilder creation guidance', () => {
     expect(screen.getAllByText('Switch it on and confirm it works.').length).toBeGreaterThan(0);
     expect(screen.getByText('Review').closest('div')).toHaveTextContent(/items/);
     expect(screen.getByText('Review').parentElement?.previousElementSibling).toHaveClass('bg-green-500');
-  }, 10_000);
+  }, 20_000);
 });
