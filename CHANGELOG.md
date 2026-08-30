@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Editing a medical supply category or item left no audit trail (2026-08-30)
+
+**Fixed**
+
+- Creating a medical supply category or item was recorded in the audit
+  trail; editing one afterward was not. Both edits are now recorded,
+  matching the general inventory page's own category and item edits.
+
 ### Grants & fundraising report and permission fixes (2026-08-30)
 
 **Fixed**

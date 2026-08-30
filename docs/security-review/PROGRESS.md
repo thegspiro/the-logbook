@@ -16,10 +16,39 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-None. Feature 22 (Grants & fundraising), pass 2, is fully merged — see log
-entry below. Next: feature 23, Medical supplies.
+[#2075](https://github.com/thegspiro/the-logbook/pull/2075) —
+`claude/security-review-medical-supplies-pass2` — Feature 23 (Medical
+supplies), pass 2.
 
 ---
+
+### 2026-08-30 — Feature 23 (Medical supplies), pass 2 — 1 fixed, 0 flagged
+
+No code changes to `medical_supplies.py` or the `InventoryService` methods
+it calls since pass 1 (PR #1905, 2026-08-26) — a fresh re-verification
+rather than a diff review. Re-read all 14 endpoints directly (pass 1's
+"15" was a miscount) and re-checked every pass-1 claim against the current
+code rather than trusting the summary forward: domain pinning, the MSUP-1
+`apply_updates` fix, XC-1 FK validation on create/update, and LIKE-escaping
+on the shared search — all confirmed still correct.
+
+**MSUP-2 (new, LOW-MED, fixed)** — `update_medical_category` and
+`update_medical_item` were the only writes on this router with no audit
+trail: this file's own create routes audit, and `inventory.py`'s general
+`update_category`/`update_item` audit their updates too, so the
+medical-scoped router — arguably the higher-sensitivity path — was the one
+place a category/item edit left no record. Both routes now call
+`log_audit_event`, mirroring the exact pattern already used elsewhere in
+this file and in `inventory.py`. Lot endpoints (add/receive/update/delete)
+were left alone — they don't audit either, but neither do their exact
+`inventory.py` equivalents, so that's a pre-existing cross-cutting gap, not
+a medical-specific asymmetry. New guard tests (fail before/pass after) in
+`tests/test_medical_supplies_domain.py`. Full gate green: flake8/black/isort
+clean, migrations validated (no schema change), 577/578 scoped tests
+(1 pre-existing skip), 9273/9295 full backend suite (22 pre-existing
+skips). Findings doc: `docs/security-review/MSUP-23-medical-supplies.md`
+→ "Pass 2" section. PR #2075 opened and subscribed. Next: 24 meetings &
+minutes, once #2075 merges.
 
 ### 2026-08-30 — Feature 22 (Grants & fundraising), pass 2 ✅ fully merged — PR #2073 (round-5 tend); duplicate PR #2072 closed
 
@@ -2807,7 +2836,7 @@ each row's prior PR is recorded in the Log, not repeated here.
 | 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ✅     |
 | 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ✅     |
 | 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ✅     |
-| 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ⬜     |
+| 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ⏳     |
 | 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ⬜     |
 | 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ⬜     |
 | 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                         | ⬜     |

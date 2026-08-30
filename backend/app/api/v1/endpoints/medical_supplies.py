@@ -218,6 +218,19 @@ async def update_medical_category(
         )
     if not updated:
         raise HTTPException(status_code=404, detail="Medical supply category not found")
+
+    await log_audit_event(
+        db=db,
+        event_type="medical_category_updated",
+        event_category="inventory",
+        severity="info",
+        event_data={
+            "category_id": str(category_id),
+            "fields_updated": list(data.keys()),
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
     return updated
 
 
@@ -418,6 +431,19 @@ async def update_medical_item(
         )
     if not updated:
         raise HTTPException(status_code=404, detail=_NOT_FOUND)
+
+    await log_audit_event(
+        db=db,
+        event_type="medical_item_updated",
+        event_category="inventory",
+        severity="info",
+        event_data={
+            "item_id": str(item_id),
+            "fields_updated": list(data.keys()),
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
     return updated
 
 

@@ -140,6 +140,29 @@ class TestCategoryDomainPinning:
 
         assert "item_type" not in svc.update_category.await_args.kwargs["update_data"]
 
+    async def test_update_logs_an_audit_event(self, svc):
+        """Creating a medical category audits; updating one silently didn't.
+
+        `inventory.py`'s general `update_category` route audits every update
+        — this router's medical-scoped equivalent is the higher-sensitivity
+        path, not a lower one, so it should not be the one route that leaves
+        no trail.
+        """
+        svc.update_category = AsyncMock(return_value=(MagicMock(), None))
+
+        await ms.update_medical_category(
+            MEDICAL_CAT,
+            InventoryCategoryUpdate(name="Renamed"),
+            db=AsyncMock(),
+            current_user=_user(),
+        )
+
+        ms.log_audit_event.assert_awaited_once()
+        assert (
+            ms.log_audit_event.await_args.kwargs["event_type"]
+            == "medical_category_updated"
+        )
+
 
 class TestItemDomainPinning:
     async def test_list_is_restricted_to_the_medical_domain(self, svc):
@@ -237,6 +260,22 @@ class TestItemDomainPinning:
         )
 
         assert "category_id" not in svc.update_item.await_args.kwargs["update_data"]
+
+    async def test_update_logs_an_audit_event(self, svc):
+        """Same gap as the category route: create audits, update didn't."""
+        svc.update_item = AsyncMock(return_value=(MagicMock(), None))
+
+        await ms.update_medical_item(
+            MEDICAL_ITEM,
+            InventoryItemUpdate(name="Renamed"),
+            db=AsyncMock(),
+            current_user=_user(),
+        )
+
+        ms.log_audit_event.assert_awaited_once()
+        assert (
+            ms.log_audit_event.await_args.kwargs["event_type"] == "medical_item_updated"
+        )
 
 
 class TestSummaryCounts:
