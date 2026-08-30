@@ -245,65 +245,52 @@ class TestItemDomainPinning:
 
 
 class TestSummaryCounts:
-    """The tiles must agree with the table underneath them."""
+    """The tiles must agree with the table underneath them.
 
-    def _item(self, **kw):
-        item = MagicMock()
-        item.reorder_point = kw.get("reorder_point")
-        item.quantity = kw.get("quantity", 0)
-        item.is_lot_stocked = kw.get("is_lot_stocked", False)
-        item.lot_stock = kw.get("lot_stock")
-        return item
+    The on-hand-vs-reorder-point logic itself (lots vs. plain `quantity`) is
+    exercised at the service level in `test_inventory_lot_stock_levels.py`;
+    these tests only pin that the router delegates to that scan, scoped to
+    the medical domain, rather than re-deriving it from a possibly-capped
+    item list.
+    """
 
-    async def _low_stock_count(self, svc, items):
-        svc.get_items = AsyncMock(return_value=(items, len(items)))
-        svc.get_expiring_lots = AsyncMock(return_value=[])
-        result = await ms.medical_supply_summary(
-            expiring_within_days=30, db=AsyncMock(), current_user=_user()
-        )
-        return result["low_stock"]
+    async def test_low_stock_comes_from_the_uncapped_domain_scoped_scan(self, svc):
+        """`low_stock` must equal the alert scan's count, not a page of items.
 
-    async def test_a_replenished_lot_item_is_not_low(self, svc):
-        """Receiving a lot never touches `quantity`.
-
-        Counting the column alone reported a shelf full of in-date stock as
-        still below its reorder point.
-        """
-        item = self._item(
-            reorder_point=10, quantity=0, is_lot_stocked=True, lot_stock=48
-        )
-        assert await self._low_stock_count(svc, [item]) == 0
-
-    async def test_a_depleted_lot_item_is_low(self, svc):
-        item = self._item(
-            reorder_point=10, quantity=99, is_lot_stocked=True, lot_stock=2
-        )
-        assert await self._low_stock_count(svc, [item]) == 1
-
-    async def test_a_plain_counted_item_still_uses_quantity(self, svc):
-        item = self._item(reorder_point=10, quantity=3)
-        assert await self._low_stock_count(svc, [item]) == 1
-
-    async def test_an_item_with_no_reorder_point_is_never_low(self, svc):
-        """No floor set means the department has not said what low means."""
-        item = self._item(quantity=0)
-        assert await self._low_stock_count(svc, [item]) == 0
-
-    async def test_the_low_stock_scan_is_not_capped_at_the_display_page_size(self, svc):
-        """A department with more than 500 active items still gets a true count.
-
-        `low_stock` is computed by walking whatever `get_items` returns, so a
-        500-row page silently dropped every low-stock item past the 500th —
-        this pins the call asking for the whole domain, not a display page.
+        `medical_supply_summary` used to compute `low_stock` by walking a
+        `get_items` page capped well below what a large department could
+        have on file, silently undercounting past the cap. Delegating to
+        `get_low_stock_items_for_alerts` (which filters on `reorder_point IS
+        NOT NULL` before loading any rows) has no page to be capped at.
         """
         svc.get_items = AsyncMock(return_value=([], 0))
         svc.get_expiring_lots = AsyncMock(return_value=[])
+        svc.get_low_stock_items_for_alerts = AsyncMock(
+            return_value=[(MagicMock(), 0, True) for _ in range(3)]
+        )
 
-        await ms.medical_supply_summary(
+        result = await ms.medical_supply_summary(
             expiring_within_days=30, db=AsyncMock(), current_user=_user()
         )
 
-        assert svc.get_items.await_args.kwargs["limit"] > 500
+        assert result["low_stock"] == 3
+        assert (
+            svc.get_low_stock_items_for_alerts.await_args.kwargs["item_types"]
+            == MEDICAL_ITEM_TYPES
+        )
+
+    async def test_total_items_does_not_depend_on_the_low_stock_scan(self, svc):
+        """The two counts come from independent queries, not one shared page."""
+        svc.get_items = AsyncMock(return_value=([], 42))
+        svc.get_expiring_lots = AsyncMock(return_value=[])
+        svc.get_low_stock_items_for_alerts = AsyncMock(return_value=[])
+
+        result = await ms.medical_supply_summary(
+            expiring_within_days=30, db=AsyncMock(), current_user=_user()
+        )
+
+        assert result["total_items"] == 42
+        assert result["low_stock"] == 0
 
 
 class TestLotDomainPinning:

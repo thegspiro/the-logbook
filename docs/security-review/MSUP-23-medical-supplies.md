@@ -11,7 +11,8 @@ pass 2: ~8,200 L; covered in full by `docs/security-review/INV-11-inventory.md`)
 **Frontend:** not reviewed this pass — backend only, per rotation scope.
 **Migrations:** none in either pass — pass 1's fix was service-layer
 null-handling only; pass 2's fixes (MSUP-2/MSUP-3) are a new bulk
-domain-check method and an internal query cap, also model/schema-free.
+domain-check method and reusing an existing alert-scan method for a domain
+count, also model/schema-free.
 
 ---
 
@@ -211,13 +212,25 @@ the query's separate, uncapped count. A department with more than 500
 active medical items got a `low_stock` tile that undercounted — any
 low-stock item sorted past the 500th was invisible to the headline number
 while the table below it (which paginates properly) still showed it.
-**Fix:** raised the internal call's `limit` to 10000, matching the existing
-"whole org, one page" convention already used by the CSV export in
-`inventory.py`. Not a full fix for an unbounded department — that residual
-edge (more than 10000 active medical items) is recorded in
-`KNOWN_LIMITATIONS.md` rather than claimed as resolved, per the same
-disposition this rotation used for GF-33. Guard test:
-`test_the_low_stock_scan_is_not_capped_at_the_display_page_size`.
+**Fix (round 1, superseded):** raising the internal `limit` to 10000 closed
+the undercount for any realistic department, but Codex correctly flagged it
+as still materializing up to 10000 full `InventoryItem` rows (with three
+eager-loaded relationships) merely to derive a count — real database and
+memory cost for a routine dashboard load, and still not exact above the new
+cap.
+**Fix (round 2):** replaced the raised cap with
+`InventoryService.get_low_stock_items_for_alerts` — an existing method
+(already used by the low-stock alert email) that filters on `reorder_point
+IS NOT NULL` _before_ loading any rows, so the candidate set is only the
+items that can ever be "low," not the whole domain. Added an `item_types`
+parameter to scope it to `MEDICAL_ITEM_TYPES` (optional, so the alert
+email's existing whole-org call is unaffected) and `low_stock` is now
+`len()` of that result — no page, no cap, exact at any org size.
+`total_items` no longer needs the item rows either: `get_items` is now
+called with `limit=1`, using only its separate, always-uncapped count.
+Guard tests: `test_low_stock_comes_from_the_uncapped_domain_scoped_scan`,
+`test_total_items_does_not_depend_on_the_low_stock_scan`. No
+`KNOWN_LIMITATIONS.md` entry needed — there is no residual cap to record.
 
 ### Correction — this doc's first draft mischaracterized baseline medical-supply visibility
 
@@ -267,19 +280,19 @@ medical-supplies patch. Mirrored into `KNOWN_LIMITATIONS.md`.
 ## Guard tests added (pass 2)
 
 - `tests/test_medical_supplies_domain.py`:
-  - `TestSummaryCounts::test_the_low_stock_scan_is_not_capped_at_the_display_page_size`
-    (MSUP-3)
+  - `TestSummaryCounts::test_low_stock_comes_from_the_uncapped_domain_scoped_scan`
+    and `::test_total_items_does_not_depend_on_the_low_stock_scan` (MSUP-3)
   - `TestLotDomainPinning::test_a_delivery_checks_domain_in_one_query_not_one_per_line`
     (MSUP-2 — asserts `items_in_domain` is called and the old `item_in_domain`
     loop is not)
 
 ## Completion gate (pass 2)
 
-| Check                                                                                        | Result                 |
-| -------------------------------------------------------------------------------------------- | ---------------------- |
-| `flake8 app/ tests/ alembic/`                                                                | clean                  |
-| `black --check app/ tests/ alembic/`                                                         | clean                  |
-| `isort --check-only app/ tests/ alembic/`                                                    | clean                  |
-| `python3 scripts/validate_migrations.py --strict`                                            | PASSED (no migrations) |
-| `python3 -m pytest tests/test_inventory_service.py tests/test_medical_supplies_domain.py -q` | 100 passed             |
-| backend tests, full suite                                                                    | see PR                 |
+| Check                                                                                                                                                                   | Result                  |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------- |
+| `flake8 app/ tests/ alembic/`                                                                                                                                           | clean                   |
+| `black --check app/ tests/ alembic/`                                                                                                                                    | clean                   |
+| `isort --check-only app/ tests/ alembic/`                                                                                                                               | clean                   |
+| `python3 scripts/validate_migrations.py --strict`                                                                                                                       | PASSED (no migrations)  |
+| `pytest tests/test_inventory_service.py tests/test_medical_supplies_domain.py tests/test_inventory_lot_stock_levels.py tests/test_inventory_low_stock_email_only.py -q` | 112 passed              |
+| backend tests, full suite                                                                                                                                               | 9270 passed, 22 skipped |

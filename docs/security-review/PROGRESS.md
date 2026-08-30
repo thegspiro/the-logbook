@@ -63,21 +63,27 @@ line in one query (Checklist §6, "no N+1 loop issuing a query per row").
 500-row-capped `get_items` page while `total_items` used the query's
 separate, uncapped count — a department with more than 500 active medical
 items got a `low_stock` number that silently excluded every low-stock item
-past the 500th. Raised the internal cap to 10000, matching the existing
-"whole org, one page" convention the CSV export already uses in
-`inventory.py`; the residual >10000 edge is mirrored into
-`KNOWN_LIMITATIONS.md` rather than claimed resolved, same disposition as
-GF-33. **MSUP-4 (LOW, flagged, not fixed)** — `get_expiring_lots` (backs
-`/lots/expiring` and this same summary) has no row cap; not a mechanical
-fix because it's a method shared with the main inventory router and the
-low-stock/expiring alert email, so a cap changes those callers' contracts
-too — needs a page-size decision per caller, mirrored into
-`KNOWN_LIMITATIONS.md`. New guard tests:
-`test_a_delivery_checks_domain_in_one_query_not_one_per_line` and
-`test_the_low_stock_scan_is_not_capped_at_the_display_page_size`. Full
-local completion gate green: flake8/black/isort clean, migrations
-validated (no schema change), 100/100 inventory+medical_supplies-scoped and
-9273/9273 full backend suite pass. Findings doc:
+past the 500th. First fix raised the internal cap to 10000 (matching the
+CSV export's "whole org, one page" convention in `inventory.py`); Codex
+correctly flagged that as still materializing up to 10000 full ORM rows
+with eager loads just to derive a count, and still inexact above the new
+cap. Replaced it instead with the existing (already used by the low-stock
+alert email) `get_low_stock_items_for_alerts`, which filters on
+`reorder_point IS NOT NULL` before loading any rows — given a new optional
+`item_types` parameter to scope it to `MEDICAL_ITEM_TYPES`, `low_stock` is
+now `len()` of that result with no page and no cap at any org size; no
+`KNOWN_LIMITATIONS.md` entry needed. **MSUP-4 (LOW, flagged, not fixed)** —
+`get_expiring_lots` (backs `/lots/expiring` and this same summary) has no
+row cap; not a mechanical fix because it's a method shared with the main
+inventory router and the low-stock/expiring alert email, so a cap changes
+those callers' contracts too — needs a page-size decision per caller,
+mirrored into `KNOWN_LIMITATIONS.md`. New guard tests:
+`test_a_delivery_checks_domain_in_one_query_not_one_per_line`,
+`test_low_stock_comes_from_the_uncapped_domain_scoped_scan`,
+`test_total_items_does_not_depend_on_the_low_stock_scan`. Full local
+completion gate green: flake8/black/isort clean, migrations validated (no
+schema change), 112/112 inventory+medical_supplies-scoped and 9270/9270
+full backend suite pass. Findings doc:
 `docs/security-review/MSUP-23-medical-supplies.md`. PR #2075 opened and
 subscribed. Next: 24 meetings & minutes, once merged.
 

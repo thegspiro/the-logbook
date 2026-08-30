@@ -631,17 +631,14 @@ async def medical_supply_summary(
     service = InventoryService(db)
     org_id = str(current_user.organization_id)
 
-    # `low_stock` below is computed by walking this page, so it must cover
-    # every active medical item, not the display page size — a department
-    # with more than 500 undercounted every low-stock item past the 500th.
-    # 10000 matches the same "whole org, one page" cap used by the CSV
-    # export in inventory.py; a department beyond that is a KNOWN_LIMITATIONS
-    # entry, not a case this summary tile can reasonably page through.
-    items, total = await service.get_items(
+    # `total` comes from get_items's own count query, which covers the whole
+    # org regardless of `limit` — a minimal limit here avoids fetching (and
+    # eager-loading) rows this endpoint doesn't otherwise need.
+    _items, total = await service.get_items(
         organization_id=current_user.organization_id,
         item_types=MEDICAL_ITEM_TYPES,
         active_only=True,
-        limit=10000,
+        limit=1,
     )
     expiring = await service.get_expiring_lots(
         org_id, expiring_within_days, item_types=MEDICAL_ITEM_TYPES
@@ -652,24 +649,15 @@ async def medical_supply_summary(
         1 for lot, _ in expiring if lot.expiration_date and lot.expiration_date < today
     )
 
-    # Reorder point is the department's own floor for the item, so "low" means
-    # what they said it means rather than a number chosen here.
-    #
-    # On-hand comes from the lots when the item is stocked as lots. `quantity`
-    # and the lots are separate ledgers — receiving a lot never touches the
-    # column — so counting `quantity` alone reported a replenished supply as
-    # still low, and missed a depleted one. That is most of this page's stock,
-    # and it made the tile disagree with the table right beside it.
-    def _on_hand(item) -> int:
-        if getattr(item, "is_lot_stocked", False):
-            return item.lot_stock or 0
-        return item.quantity or 0
-
-    low_stock = sum(
-        1
-        for i in items
-        if i.reorder_point is not None and _on_hand(i) <= i.reorder_point
+    # Reorder point is the department's own floor for the item, so "low"
+    # means what they said it means rather than a number chosen here.
+    # `get_low_stock_items_for_alerts` narrows to items with a reorder point
+    # set before loading any rows, so this has no page-size cap — a fixed
+    # cap here previously undercounted for any department past it.
+    low_stock_items = await service.get_low_stock_items_for_alerts(
+        current_user.organization_id, item_types=MEDICAL_ITEM_TYPES
     )
+    low_stock = len(low_stock_items)
 
     return {
         "total_items": total,
