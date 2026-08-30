@@ -1,7 +1,7 @@
 # Security Review — Compliance
 
 **Prefix:** `CMP` · **Iteration:** 20 · **Reviewed:** 2026-08-26 (pass 1),
-2026-08-30 (pass 2) · **PR:** #1902 (pass 1, merged), TBD (pass 2)
+2026-08-30 (pass 2) · **PR:** #1902 (pass 1, merged), [#2059](https://github.com/thegspiro/the-logbook/pull/2059) (pass 2)
 
 ## Pass 1 (2026-08-26)
 
@@ -330,7 +330,7 @@ no column change.
 
 ## Pass 2 (2026-08-30)
 
-**Prefix:** `CMP2` · **PR:** TBD
+**Prefix:** `CMP2` · **PR:** [#2059](https://github.com/thegspiro/the-logbook/pull/2059)
 
 **Scope check:** diffed the current tree against `bf63018b` (the pass-1 merge
 commit for PR #1902) across the full backend surface named in pass 1's scope

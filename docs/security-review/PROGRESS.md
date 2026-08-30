@@ -16,7 +16,7 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-[claude/security-review-compliance-pass2](https://github.com/thegspiro/the-logbook/compare/main...claude/security-review-compliance-pass2) — PR: TBD (opening now).
+[PR #2059](https://github.com/thegspiro/the-logbook/pull/2059) — `claude/security-review-compliance-pass2` — open, awaiting CI/review.
 
 ---
 
