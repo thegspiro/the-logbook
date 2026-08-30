@@ -16,9 +16,76 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-None.
+[claude/security-review-compliance-pass2](https://github.com/thegspiro/the-logbook/compare/main...claude/security-review-compliance-pass2) — PR: TBD (opening now).
 
 ---
+
+### 2026-08-30 — Feature 20 (Compliance), pass 2 — 1 fixed (MED), 1 partially fixed/flagged (MED)
+
+Resumed the rotation directly at feature 20 per the pass-2 order (no
+security-review PR was open; the previous `/security-review` loop had
+stalled with no PR opened in ~24h). Scoped to the full backend surface since
+pass 1's merge (`bf63018b`, PR #1902): all seven declared files
+(`compliance_officer.py`, `compliance_config.py`, both service files,
+`training_compliance.py`, the model, the schema) came back **byte-identical**
+(`git diff --stat`, not assumed) — zero backend diff, so this pass
+re-verified all seven pass-1 fixes (CMP-1 through CMP-7) and re-confirmed
+CS-8/CS-9's still-open-by-design status by reading the current code directly,
+rather than re-deriving anything. Re-ran an AST route enumeration from
+scratch: 20/20 routes (8 in `compliance_officer.py`, 12 in
+`compliance_config.py`) carry `require_permission(...)`, matching pass 1's
+route-for-route inventory. Org-scoping re-swept mechanically across every
+by-id query in both endpoint files — no gap.
+
+**Frontend scope established for the first time** (pass 1 was backend-only):
+traced every file importing `complianceOfficerService`/
+`complianceConfigService` — `trainingServices.ts`'s compliance sections,
+`ComplianceOfficerDashboard.tsx`, `ComplianceRequirementsConfigPage.tsx`, and
+their four test files. Swept for `window.confirm`/`alert`/`prompt` (none —
+both destructive actions go through `useConfirm()`), `dangerouslySetInnerHTML`
+(none), banned `.toLocale*`/`date-fns` (none — both pages use
+`formatDate`/`formatDateCustom` + `useTimezone()`), direct `fetch(` (none —
+shared `api` client, so Pitfall #7 doesn't apply), and confirmed `/compliance/`
+is already a full-prefix `UNCACHEABLE_PREFIXES` entry covering all 20 routes
+including the two that return per-member names + hours
+(`/compliance/annual-report`, `/compliance/contributed-hours`).
+
+**CMP2-2 (MED, FIXED):** the frontend mirror of CMP-1/CMP-2's bug, on the same
+two forms — pass 1 fixed the backend's `exclude_unset` + `apply_updates`
+handling of an explicit `null` clearing a nullable column, but the frontend
+was never updated to send one. Eight fields across the config and profile save
+handlers coerced a cleared field to `undefined` (dropped from the JSON body
+entirely) instead of `null`, so clearing "Email Recipients," a profile's
+threshold override, or its membership-type/requirement selections and saving
+silently kept the old value behind a success toast. Fixed on both the config
+and profile forms; guard test added
+(`ComplianceRequirementsConfigPage.clearFields.test.tsx`).
+
+**CMP2-1 (MED, partially fixed/flagged):** `notify_non_compliant_members` and
+`notify_days_before_deadline` are set from the Configuration page's
+Notifications panel and persisted, but read by no scheduled task or sender
+anywhere in the backend (Pitfall #19 — a second instance of the
+`notification_rules` dead-switch shape, on a different module). Wiring a
+sender is a real feature (cadence, message content) and was flagged rather
+than built; the panel now carries an explicit "Not yet active" notice so it
+stops implying the toggle does anything, per the pitfall's own sanctioned
+partial remedy. Mirrored into `KNOWN_LIMITATIONS.md`.
+
+**Escalated, not fixed (Hard Stop):** the full frontend `vitest run` (beyond
+the declared gate, run as extra diligence) found one pre-existing failure —
+`EquipmentCheckTemplateBuilder.test.tsx` (scheduling/equipment-check, feature
+14's territory) — unrelated to any file this pass touched. Confirmed
+pre-existing by `git stash`-ing this pass's changes and re-running against
+the untouched base tree (identical failure). Reported here rather than fixed,
+per CLAUDE.md's Hard Stop clause: fixing another feature's component is
+outside this PR's scope. See `docs/security-review/CMP-20-compliance.md`
+Pass 2 completion-gate section.
+
+Full gate: flake8/black/isort clean; migrations valid (394 revisions, single
+head); backend compliance-scoped tests 287 passed, 1 skipped; full backend
+suite 9265 passed, 22 skipped; frontend `tsc --noEmit` 0 errors; `eslint .`
+0 errors (10 pre-existing warnings, none in touched files). Rotation row 20
+-> ⏳ (awaiting PR merge). Next: 21 (Admin hours), once this PR merges.
 
 ### 2026-08-29 — Feature 19 (Skills testing), pass 2 ✅ merged — PR #2017
 
@@ -2250,7 +2317,7 @@ each row's prior PR is recorded in the Log, not repeated here.
 | 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`                                                                                   | ✅     |
 | 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ✅     |
 | 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3723 L)                                                                                                          | ✅     |
-| 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ⬜     |
+| 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ⏳     |
 | 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ⬜     |
 | 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ⬜     |
 | 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ⬜     |

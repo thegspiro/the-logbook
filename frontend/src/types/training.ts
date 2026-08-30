@@ -2690,11 +2690,15 @@ export interface ComplianceProfile {
 
 export interface ComplianceProfileCreate {
   name: string;
-  description?: string | undefined;
+  // `| null` alongside `| undefined`: undefined omits the key (create-only
+  // shorthand for "not set"), but this payload is also reused as the *update*
+  // body (see `handleSaveProfile`), where an omitted key means "leave alone"
+  // and only an explicit null clears an override back to the org default.
+  description?: string | null | undefined;
   membership_types?: string[] | undefined;
   role_ids?: string[] | undefined;
-  compliant_threshold_override?: number | undefined;
-  at_risk_threshold_override?: number | undefined;
+  compliant_threshold_override?: number | null | undefined;
+  at_risk_threshold_override?: number | null | undefined;
   required_requirement_ids?: string[] | undefined;
   optional_requirement_ids?: string[] | undefined;
   admin_hours_requirements?: AdminHoursRequirementItem[] | undefined;
@@ -2704,11 +2708,11 @@ export interface ComplianceProfileCreate {
 
 export interface ComplianceProfileUpdate {
   name?: string | undefined;
-  description?: string | undefined;
+  description?: string | null | undefined;
   membership_types?: string[] | undefined;
   role_ids?: string[] | undefined;
-  compliant_threshold_override?: number | undefined;
-  at_risk_threshold_override?: number | undefined;
+  compliant_threshold_override?: number | null | undefined;
+  at_risk_threshold_override?: number | null | undefined;
   required_requirement_ids?: string[] | undefined;
   optional_requirement_ids?: string[] | undefined;
   admin_hours_requirements?: AdminHoursRequirementItem[] | undefined;
@@ -2742,10 +2746,13 @@ export interface ComplianceConfigUpdate {
   grace_period_days?: number | undefined;
   include_current_month?: boolean | undefined;
   auto_report_frequency?: string | undefined;
-  report_email_recipients?: string[] | undefined;
+  // `| null`: this payload also serves `PUT /config` (a partial update, per
+  // `exclude_unset` on the backend), where an omitted key leaves the stored
+  // value untouched — only an explicit null clears it. See CMP2-2.
+  report_email_recipients?: string[] | null | undefined;
   report_day_of_month?: number | undefined;
   notify_non_compliant_members?: boolean | undefined;
-  notify_days_before_deadline?: number[] | undefined;
+  notify_days_before_deadline?: number[] | null | undefined;
 }
 
 export interface AvailableRequirement {

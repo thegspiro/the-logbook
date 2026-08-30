@@ -228,10 +228,14 @@ export default function ComplianceRequirementsConfigPage() {
         grace_period_days: gracePeriodDays,
         include_current_month: includeCurrentMonth,
         auto_report_frequency: autoReportFrequency,
-        report_email_recipients: recipientsList.length > 0 ? recipientsList : undefined,
+        // null (not undefined) when the officer clears the field: this same
+        // payload also drives PUT /config, whose partial-update semantics
+        // treat an omitted key as "leave untouched" — an emptied box would
+        // silently keep mailing the old recipient list. See CMP2-2.
+        report_email_recipients: recipientsList.length > 0 ? recipientsList : null,
         report_day_of_month: reportDayOfMonth,
         notify_non_compliant_members: notifyNonCompliant,
-        notify_days_before_deadline: daysList.length > 0 ? daysList : undefined,
+        notify_days_before_deadline: daysList.length > 0 ? daysList : null,
       };
 
       if (config) {
@@ -302,12 +306,22 @@ export default function ComplianceRequirementsConfigPage() {
     try {
       const profileData: ComplianceProfileCreate = {
         name: profileName.trim(),
-        description: profileDescription.trim() || undefined,
-        membership_types: profileMembershipTypes.length > 0 ? profileMembershipTypes : undefined,
-        required_requirement_ids: profileRequiredReqs.length > 0 ? profileRequiredReqs : undefined,
-        optional_requirement_ids: profileOptionalReqs.length > 0 ? profileOptionalReqs : undefined,
-        compliant_threshold_override: profileCompliantOverride ? parseFloat(profileCompliantOverride) : undefined,
-        at_risk_threshold_override: profileAtRiskOverride ? parseFloat(profileAtRiskOverride) : undefined,
+        // This payload also drives the *update* path below (PUT, a partial
+        // update per the backend's `exclude_unset`), where an omitted key
+        // means "leave alone" — so a cleared box must send an explicit null,
+        // not undefined, or the stale value survives behind a success toast
+        // (CLAUDE.md Pitfall #1). null and undefined are equivalent on the
+        // create path (both leave the schema's own None default), so using
+        // null unconditionally is correct for both branches. See CMP2-2.
+        description: profileDescription.trim() || null,
+        // Always sent (even empty) — like admin_hours_requirements below —
+        // so unchecking every entry actually clears the stored list on
+        // update instead of leaving the old selection behind.
+        membership_types: profileMembershipTypes,
+        required_requirement_ids: profileRequiredReqs,
+        optional_requirement_ids: profileOptionalReqs,
+        compliant_threshold_override: profileCompliantOverride ? parseFloat(profileCompliantOverride) : null,
+        at_risk_threshold_override: profileAtRiskOverride ? parseFloat(profileAtRiskOverride) : null,
         // Always sent (even empty) so removing the last requirement actually
         // clears the stored list on update rather than leaving it behind.
         admin_hours_requirements: profileHoursReqs,
@@ -618,6 +632,14 @@ export default function ComplianceRequirementsConfigPage() {
           {/* Notification settings */}
           <div className="border-theme-surface-border border-t pt-4">
             <h3 className="text-theme-text-primary mb-3 text-sm font-semibold">Notifications</h3>
+            {/* Stored, not yet wired: no scheduled task or sender reads either
+                setting below (CLAUDE.md Pitfall #19 — see CMP2-1). Flagged
+                honestly here rather than implying an alert goes out, until a
+                reminder sender is built to consume them. */}
+            <p className="alert-warning mb-3 text-xs">
+              Not yet active: these settings are saved, but no reminder is sent yet. Members are not notified when they
+              become non-compliant.
+            </p>
             <div className="space-y-3">
               <label className="flex items-center gap-2">
                 <input

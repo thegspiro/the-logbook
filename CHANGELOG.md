@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Clearing a compliance setting on save now actually clears it (2026-08-30)
+
+**Fixed**
+
+- The compliance requirements configuration page (email report recipients,
+  reminder-days list, a profile's description, its threshold overrides, and
+  its membership-type/requirement selections) previously left the old value
+  in place if you cleared the field and saved — the page showed a success
+  toast, but the save was silently dropped for that field. Clearing and
+  saving now actually clears it.
+- The "Notify members when they become non-compliant" panel is now labelled
+  as not yet active — the setting is saved but nothing sends the
+  notification yet, so the page no longer implies it does.
+
 ### A training-effectiveness evaluation list could briefly cache member feedback (2026-08-29)
 
 **Fixed**
