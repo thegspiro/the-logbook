@@ -441,6 +441,9 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
   const isLaptop = useMediaQuery('(min-width: 640px)');
   const [mobileSelectionLocations, setMobileSelectionLocations] = useState<Set<string>>(new Set());
+  const [mobileBulkSheet, setMobileBulkSheet] = useState<{ compartmentIdx: number; action: 'type' | 'move' } | null>(
+    null
+  );
 
   // Bulk selection: per-compartment set of selected item indices
   const [selectedItems, setSelectedItems] = useState<Record<string, Set<number>>>({});
@@ -1049,12 +1052,8 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
 
   const setMobileSelectionMode = (compartmentIdx: number, active: boolean) => {
     const key = getCompKey(compartmentIdx);
-    setMobileSelectionLocations((previous) => {
-      const next = new Set(previous);
-      if (active) next.add(key);
-      else next.delete(key);
-      return next;
-    });
+    setMobileSelectionLocations(active ? new Set([key]) : new Set());
+    setMobileBulkSheet(null);
     if (!active) deselectAllItems(compartmentIdx);
   };
 
@@ -1419,6 +1418,74 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     toast.success(
       `Set ${selected.size} item${selected.size !== 1 ? 's' : ''} to ${required ? 'required' : 'optional'}`
     );
+  };
+
+  const bulkMoveItems = async (fromCompartmentIdx: number, toCompartmentIdx: number) => {
+    if (fromCompartmentIdx === toCompartmentIdx) return;
+    const source = compartments[fromCompartmentIdx];
+    const destination = compartments[toCompartmentIdx];
+    const sourceKey = getCompKey(fromCompartmentIdx);
+    const selected = selectedItems[sourceKey];
+    if (!source || !destination || !selected?.size) return;
+
+    const chosenItems = source.items.filter((_, index) => selected.has(index));
+    const failedKeys = new Set<string>();
+    if (isEditing && destination.id) {
+      try {
+        await ensureDraftBeforeStructureEdit();
+        await Promise.all(
+          chosenItems.map(async (item, offset) => {
+            if (!item.id) return;
+            try {
+              await schedulingService.updateCheckItem(item.id, {
+                compartment_id: destination.id,
+                sort_order: destination.items.length + offset,
+              });
+            } catch {
+              failedKeys.add(item.clientKey);
+            }
+          })
+        );
+      } catch {
+        chosenItems.forEach((item) => failedKeys.add(item.clientKey));
+      }
+    } else if (isEditing) {
+      chosenItems.forEach((item) => failedKeys.add(item.clientKey));
+    }
+
+    const movedItems = chosenItems.filter((item) => !failedKeys.has(item.clientKey));
+    if (movedItems.length > 0) {
+      const movedKeys = new Set(movedItems.map((item) => item.clientKey));
+      setCompartments((previous) => {
+        const next = [...previous];
+        const currentSource = next[fromCompartmentIdx];
+        const currentDestination = next[toCompartmentIdx];
+        if (!currentSource || !currentDestination) return previous;
+        next[fromCompartmentIdx] = {
+          ...currentSource,
+          items: currentSource.items.filter((item) => !movedKeys.has(item.clientKey)),
+        };
+        next[toCompartmentIdx] = { ...currentDestination, items: [...currentDestination.items, ...movedItems] };
+        return next;
+      });
+      markDirty();
+    }
+
+    if (failedKeys.size === 0) {
+      setSelectedItems((previous) => ({ ...previous, [sourceKey]: new Set<number>() }));
+      setMobileSelectionLocations(new Set());
+      toast.success(
+        `Moved ${movedItems.length} item${movedItems.length === 1 ? '' : 's'} to ${destination.name || 'location'}`
+      );
+    } else {
+      const remainingItems = source.items.filter((item) => !movedItems.includes(item));
+      setSelectedItems((previous) => ({
+        ...previous,
+        [sourceKey]: new Set(remainingItems.flatMap((item, index) => (failedKeys.has(item.clientKey) ? [index] : []))),
+      }));
+      toast.error(`${failedKeys.size} item${failedKeys.size === 1 ? '' : 's'} could not be moved and remain selected`);
+    }
+    setMobileBulkSheet(null);
   };
 
   // ---------------------------------------------------------------------------
@@ -2005,7 +2072,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     | null
   >(null);
   // Takes the fixed mobile bottom bar off this overlay while it is open.
-  useOverlaySurface(showChangelog || Boolean(csvPreview) || showPreview);
+  useOverlaySurface(showChangelog || Boolean(csvPreview) || showPreview || Boolean(mobileBulkSheet));
 
   const handleCsvImport = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -3446,13 +3513,13 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                     <h4 className="text-theme-text-primary text-sm font-semibold">
                       {mobileSelectionLocations.has(getCompKey(idx)) ? 'Select items' : 'Items to check'}
                     </h4>
-                    {comp.items.length > 0 && !isLaptop && (
+                    {comp.items.length > 0 && !isLaptop && !mobileSelectionLocations.has(getCompKey(idx)) && (
                       <button
                         type="button"
                         className="ml-auto min-h-[44px] px-2 text-sm font-medium text-blue-600 sm:hidden dark:text-blue-400"
-                        onClick={() => setMobileSelectionMode(idx, !mobileSelectionLocations.has(getCompKey(idx)))}
+                        onClick={() => setMobileSelectionMode(idx, true)}
                       >
-                        {mobileSelectionLocations.has(getCompKey(idx)) ? 'Done' : 'Select items'}
+                        Select items
                       </button>
                     )}
                   </div>
@@ -3866,6 +3933,10 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
   const locationsReady =
     structureReady && compartments.every((comp) => comp.name.trim() && (comp.isHeader || comp.items.length > 0));
   const publishReady = setupReady && locationsReady && blockingItems === 0;
+  const mobileSelectionCompartmentIdx = compartments.findIndex((_, index) =>
+    mobileSelectionLocations.has(getCompKey(index))
+  );
+  const mobileSelectionCount = mobileSelectionCompartmentIdx >= 0 ? getSelectedCount(mobileSelectionCompartmentIdx) : 0;
 
   // ---------------------------------------------------------------------------
   // Main render
@@ -4262,9 +4333,143 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
         </div>
       </div>
 
+      {/* Phone selection mode replaces the ordinary footer so bulk actions stay
+          within thumb reach without crowding the laptop toolbar. */}
+      {mobileSelectionCompartmentIdx >= 0 && (
+        <section
+          aria-label="Selected item actions"
+          className="border-theme-surface-border bg-theme-surface/98 fixed inset-x-0 bottom-0 z-40 border-t px-3 pt-2 pb-[calc(.75rem+env(safe-area-inset-bottom))] shadow-[0_-8px_24px_rgba(0,0,0,.12)] sm:hidden"
+        >
+          <div className="mx-auto max-w-lg">
+            <div className="mb-2 flex min-h-7 items-center justify-between">
+              <strong className="text-theme-text-primary text-sm">{mobileSelectionCount} selected</strong>
+              <button
+                type="button"
+                className="min-h-9 px-2 text-sm font-semibold text-blue-600 dark:text-blue-400"
+                onClick={() => setMobileSelectionMode(mobileSelectionCompartmentIdx, false)}
+              >
+                Done
+              </button>
+            </div>
+            <div className="grid grid-cols-4 gap-2">
+              <button
+                type="button"
+                className="btn-secondary min-h-11 px-2 text-xs"
+                disabled={mobileSelectionCount === 0}
+                onClick={() => setMobileBulkSheet({ compartmentIdx: mobileSelectionCompartmentIdx, action: 'type' })}
+              >
+                Set type
+              </button>
+              <button
+                type="button"
+                className="btn-secondary min-h-11 px-1 text-xs"
+                disabled={mobileSelectionCount === 0}
+                onClick={() => {
+                  const selected = selectedItems[getCompKey(mobileSelectionCompartmentIdx)];
+                  const compartment = compartments[mobileSelectionCompartmentIdx];
+                  const allRequired =
+                    selected && compartment && [...selected].every((index) => compartment.items[index]?.isRequired);
+                  bulkToggleRequired(mobileSelectionCompartmentIdx, !allRequired);
+                }}
+              >
+                {(() => {
+                  const selected = selectedItems[getCompKey(mobileSelectionCompartmentIdx)];
+                  const compartment = compartments[mobileSelectionCompartmentIdx];
+                  return selected && compartment && [...selected].every((index) => compartment.items[index]?.isRequired)
+                    ? 'Optional'
+                    : 'Required';
+                })()}
+              </button>
+              <button
+                type="button"
+                className="btn-secondary min-h-11 px-2 text-xs"
+                disabled={
+                  mobileSelectionCount === 0 ||
+                  !compartments.some(
+                    (candidate, index) => !candidate.isHeader && index !== mobileSelectionCompartmentIdx
+                  )
+                }
+                onClick={() => setMobileBulkSheet({ compartmentIdx: mobileSelectionCompartmentIdx, action: 'move' })}
+              >
+                Move
+              </button>
+              <button
+                type="button"
+                className="min-h-11 rounded-md border border-red-300 px-2 text-xs font-medium text-red-600 disabled:opacity-40 dark:border-red-800 dark:text-red-400"
+                disabled={mobileSelectionCount === 0}
+                onClick={() => void deleteSelectedItems(mobileSelectionCompartmentIdx)}
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </section>
+      )}
+
+      {mobileBulkSheet && (
+        <div
+          className="modal-overlay z-50 flex items-end sm:hidden"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setMobileBulkSheet(null);
+          }}
+        >
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="mobile-bulk-sheet-title"
+            className="border-theme-surface-border bg-theme-surface w-full rounded-t-2xl border-t px-4 pt-4 pb-[calc(1rem+env(safe-area-inset-bottom))] shadow-2xl"
+          >
+            <div className="bg-theme-surface-border mx-auto mb-3 h-1 w-10 rounded-full" />
+            <div className="mb-3 flex items-center justify-between">
+              <h2 id="mobile-bulk-sheet-title" className="text-theme-text-primary text-base font-semibold">
+                {mobileBulkSheet.action === 'type' ? 'Set check type' : 'Move to location'}
+              </h2>
+              <button
+                type="button"
+                className="min-h-11 px-2 text-sm text-blue-600 dark:text-blue-400"
+                onClick={() => setMobileBulkSheet(null)}
+              >
+                Cancel
+              </button>
+            </div>
+            <div className="space-y-1">
+              {mobileBulkSheet.action === 'type'
+                ? CHECK_TYPES.map((checkType) => (
+                    <button
+                      key={checkType.value}
+                      type="button"
+                      className={mobileMenuItemClass}
+                      onClick={() => {
+                        bulkSetCheckType(mobileBulkSheet.compartmentIdx, checkType.value);
+                        setMobileBulkSheet(null);
+                      }}
+                    >
+                      {checkType.label}
+                    </button>
+                  ))
+                : compartments.map((compartment, index) =>
+                    !compartment.isHeader && index !== mobileBulkSheet.compartmentIdx ? (
+                      <button
+                        key={compartment.clientKey}
+                        type="button"
+                        className={mobileMenuItemClass}
+                        onClick={() => void bulkMoveItems(mobileBulkSheet.compartmentIdx, index)}
+                      >
+                        <Package className="h-4 w-4" aria-hidden="true" /> {compartmentPath(index)}
+                      </button>
+                    ) : null
+                  )}
+            </div>
+          </section>
+        </div>
+      )}
+
       {/* Sticky footer stats bar */}
       {stats.totalItems > 0 && (
-        <div className="border-theme-surface-border bg-theme-surface/95 pb-safe fixed right-0 bottom-0 left-0 z-40 border-t backdrop-blur-sm">
+        <div
+          className={`border-theme-surface-border bg-theme-surface/95 pb-safe fixed right-0 bottom-0 left-0 z-40 border-t backdrop-blur-sm ${mobileSelectionCompartmentIdx >= 0 ? 'hidden sm:block' : ''}`}
+        >
           <div className="mx-auto flex max-w-7xl flex-col items-start justify-between gap-1 px-4 py-2 sm:flex-row sm:items-center sm:gap-0">
             <div className="text-theme-text-muted flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
               <span className="flex items-center gap-1">

@@ -160,6 +160,7 @@ describe('EquipmentCheckTemplateBuilder responsive actions', () => {
     updateCheckItem.mockResolvedValue({});
     reorderItems.mockResolvedValue(undefined);
     updateCompartment.mockResolvedValue({});
+    deleteCheckItemsBulk.mockResolvedValue({ deletedItemIds: ['radio'], replayed: false });
     createEquipmentCheckTemplate.mockResolvedValue({ ...template, id: 'draft-1', isActive: false });
     updateEquipmentCheckTemplate.mockResolvedValue(template);
     vi.mocked(window.matchMedia).mockImplementation((query: string) => ({
@@ -194,6 +195,48 @@ describe('EquipmentCheckTemplateBuilder responsive actions', () => {
     expect(screen.getByRole('button', { name: 'Deselect Radio' })).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Done' }));
     expect(screen.queryByRole('button', { name: 'Select Radio' })).not.toBeInTheDocument();
+  });
+
+  it('replaces the phone footer with bulk actions and uses choice sheets without clearing selection', async () => {
+    const user = userEvent.setup();
+    renderBuilder();
+
+    await screen.findByRole('button', { name: 'Expand Radio' });
+    await user.click(screen.getByRole('button', { name: 'Select items' }));
+    await user.click(screen.getByRole('button', { name: 'Select Radio' }));
+
+    const bar = screen.getByRole('region', { name: 'Selected item actions' });
+    expect(bar).toHaveTextContent('1 selected');
+    expect(bar).toHaveClass('pb-[calc(.75rem+env(safe-area-inset-bottom))]');
+    await user.click(within(bar).getByRole('button', { name: 'Set type' }));
+    const typeSheet = screen.getByRole('dialog', { name: 'Set check type' });
+    await user.click(within(typeSheet).getByRole('button', { name: 'Present / Missing' }));
+    expect(bar).toHaveTextContent('1 selected');
+    expect(updateCheckItem).toHaveBeenCalledWith('radio', { check_type: 'pass_fail' });
+
+    await user.click(within(bar).getByRole('button', { name: 'Move' }));
+    const moveSheet = screen.getByRole('dialog', { name: 'Move to location' });
+    await user.click(within(moveSheet).getByRole('button', { name: /Cab \/ Medical bag/ }));
+    await waitFor(() =>
+      expect(updateCheckItem).toHaveBeenCalledWith('radio', expect.objectContaining({ compartment_id: 'bag' }))
+    );
+    expect(screen.queryByRole('region', { name: 'Selected item actions' })).not.toBeInTheDocument();
+  });
+
+  it('keeps failed deletes selected in the phone bar', async () => {
+    const user = userEvent.setup();
+    deleteCheckItemsBulk.mockRejectedValueOnce(new Error('network down'));
+    renderBuilder();
+
+    await screen.findByRole('button', { name: 'Expand Radio' });
+    await user.click(screen.getByRole('button', { name: 'Select items' }));
+    await user.click(screen.getByRole('button', { name: 'Select Radio' }));
+    await user.click(screen.getByRole('button', { name: 'Delete' }));
+    await confirm(/Delete 1/);
+
+    await waitFor(() => expect(toastError).toHaveBeenCalled());
+    expect(screen.getByRole('region', { name: 'Selected item actions' })).toHaveTextContent('1 selected');
+    expect(screen.getByRole('button', { name: 'Deselect Radio' })).toBeInTheDocument();
   });
 
   it('retains bulk selection, drag handles, badges, and dense actions at 1024px', async () => {
