@@ -3212,6 +3212,12 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     const numberFieldClass =
       'border-theme-input-border bg-theme-input-bg focus-within:border-blue-400 flex shrink-0 items-center gap-1 rounded-md border px-1.5 py-1';
     const numberFieldLabelClass = 'text-theme-text-muted text-[10px] leading-none';
+    // Widths are per-field because the ranges differ by an order of magnitude.
+    // A level is a real operational reading — the SCBA cylinder pressures in
+    // this repo's own fixtures are four digits, and the column is a Float, so
+    // it also has to hold a decimal. Counts and warning days are small
+    // integers. Sizing all three to the smallest would silently scroll a
+    // threshold an author has to read at a glance.
     const numberInputClass =
       'numeric-compact text-theme-text-primary bg-transparent p-0 text-center text-[13px] tabular-nums outline-none';
 
@@ -3317,7 +3323,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                     min="0"
                     id={`item-par-${itemKey}`}
                     aria-label={`Par quantity for ${item.name.trim() || 'item'}`}
-                    className={`${numberInputClass} w-7`}
+                    className={`${numberInputClass} w-8`}
                     value={item.expectedQuantity}
                     onChange={(e) =>
                       updateItemFieldWithAutoSave(compIdx, itemIdx, { expectedQuantity: e.target.value })
@@ -3332,7 +3338,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                     type="number"
                     min="0"
                     aria-label={`Minimum quantity for ${item.name.trim() || 'item'}`}
-                    className={`${numberInputClass} w-7`}
+                    className={`${numberInputClass} w-8`}
                     value={item.requiredQuantity}
                     onChange={(e) =>
                       updateItemFieldWithAutoSave(compIdx, itemIdx, { requiredQuantity: e.target.value })
@@ -3352,7 +3358,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                     min="0"
                     id={`item-min-level-${itemKey}`}
                     aria-label={`Minimum level for ${item.name.trim() || 'item'}`}
-                    className={`${numberInputClass} w-7`}
+                    className={`${numberInputClass} w-11`}
                     value={item.minLevel}
                     onChange={(e) => updateItemFieldWithAutoSave(compIdx, itemIdx, { minLevel: e.target.value })}
                   />
@@ -3379,7 +3385,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                     type="number"
                     min="0"
                     aria-label={`Expiration warning days for ${item.name.trim() || 'item'}`}
-                    className={`${numberInputClass} w-7`}
+                    className={`${numberInputClass} w-8`}
                     value={item.expirationWarningDays}
                     onChange={(e) =>
                       updateItemFieldWithAutoSave(compIdx, itemIdx, { expirationWarningDays: e.target.value })
@@ -5188,7 +5194,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
         {/* Right rail — only where there is room for it beside the canvas. */}
         {isWideCanvas && (
           <div
-            className="sticky flex max-w-[312px] min-w-[288px] flex-[1_1_300px] scrollbar-thin flex-col gap-3 overflow-y-auto"
+            className="sticky flex max-w-[300px] min-w-[288px] flex-[1_1_296px] scrollbar-thin flex-col gap-3 overflow-y-auto"
             style={{ top: topBarHeight + 12, maxHeight: `calc(100dvh - ${String(topBarHeight + 24)}px)` }}
           >
             <div className="bg-theme-surface-border grid grid-cols-2 gap-0.5 rounded-lg p-0.5">
@@ -5264,14 +5270,14 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       {isLaptop && !isWideCanvas && compartments.length > 0 && (
         <div
           ref={actionBarRef}
-          /* `left-0` only holds below `md`. From 768px AppLayout offsets the
-             content column by a fixed `md:ml-64`, while the side nav is itself
-             `fixed left-0 z-40` — so a viewport-anchored bar at the same
-             z-index, rendered after the nav, paints over its bottom. This bar
-             belongs to the checklist column, so it starts where that column
-             does. The phone bar below keeps a bare `left-0`: it renders only
+          /* The bar belongs to the checklist column, so it starts where that
+             column starts. `--side-nav-width` is published by AppLayout and is
+             16rem only in the left-navigation layout at `md` and up — a
+             hardcoded `md:left-64` would leave a 256px dead gap for the
+             departments on the top-navigation layout, which renders content
+             full width. The phone bar below needs none of this: it renders only
              under 640px, where the nav is an off-canvas drawer. */
-          className="border-theme-surface-border bg-theme-surface/95 action-bar-safe fixed right-0 bottom-0 left-0 z-40 border-t px-4 backdrop-blur-sm md:left-64"
+          className="border-theme-surface-border bg-theme-surface/95 action-bar-safe fixed right-0 bottom-0 left-[var(--side-nav-width,0px)] z-40 border-t px-4 backdrop-blur-sm"
           aria-label="Checklist action bar"
         >
           <div className="mx-auto flex min-h-14 max-w-[1440px] items-center justify-between gap-3">

@@ -925,6 +925,8 @@ describe('EquipmentCheckTemplateBuilder creation guidance', () => {
 
   it('preserves preset test instructions and reports the loaded locations', async () => {
     renderNewBuilder();
+    // Settle the mount-time apparatus-options fetch, as above.
+    await screen.findByRole('button', { name: 'Details' });
 
     // Template type lives in the details drawer now.
     fireEvent.click(screen.getByRole('button', { name: 'Details' }));
@@ -943,6 +945,11 @@ describe('EquipmentCheckTemplateBuilder creation guidance', () => {
 
   it('swaps the start card for the vehicle layout list rather than stacking both', async () => {
     renderNewBuilder();
+    // Mount starts an apparatus-options fetch that setStates when it resolves.
+    // The rest of this test is synchronous, so settle that update first rather
+    // than racing it — otherwise the assertions run against a render React has
+    // already scheduled to replace.
+    await screen.findByRole('button', { name: 'Details' });
 
     fireEvent.click(screen.getByRole('button', { name: 'Details' }));
     fireEvent.change(screen.getByLabelText('Template Type'), { target: { value: 'vehicle' } });

@@ -1289,6 +1289,23 @@
   }
 }
 
+/* Set on the AppLayout root in the LEFT-navigation layout only, so a page-level
+ * fixed element can start where the content column starts instead of spanning
+ * the side navigation. That layout offsets its content with a matching
+ * `md:ml-64` while the nav is `fixed left-0 z-40`, so a viewport-anchored bar
+ * at the same z-index paints over the nav's bottom. The top-navigation layout
+ * renders content full width and never sets this, so the same element stays
+ * edge to edge there. Must stay in step with SideNavigation's own `w-64` and
+ * AppLayout's `md:ml-64`. */
+.has-side-nav {
+  --side-nav-width: 0px;
+}
+@media (min-width: 768px) {
+  .has-side-nav {
+    --side-nav-width: 16rem;
+  }
+}
+
 /* Republished at the root for fixed elements that are NOT inside AppLayout and
  * so cannot inherit the declaration above — the update banner is mounted beside
  * the router, one level up. `:has` keeps it conditional on the layout, and
