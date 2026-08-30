@@ -805,7 +805,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       containerType: comp.containerType,
       isSealed: comp.isSealed,
       parentCompartmentId: comp.parentCompartmentId,
-      items: comp.items.map(({ id: _discardId, ...rest }) => ({ ...rest })),
+      items: comp.items.map(({ id: _discardId, ...rest }) => ({ ...rest, clientKey: newItemKey() })),
     };
     if (comp.id) {
       try {

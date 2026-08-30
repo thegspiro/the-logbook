@@ -1269,7 +1269,6 @@ describe('EquipmentCheckTemplateBuilder crew preview identity', () => {
 
   it("does not hand a deleted item's preview answer to the one that replaces it", async () => {
     const user = userEvent.setup();
-    createEquipmentCheckTemplate.mockResolvedValue({ ...template, id: 'draft-1', isActive: false });
     renderNewBuilder();
 
     await user.click(screen.getByRole('button', { name: 'Location' }));
@@ -1312,4 +1311,35 @@ describe('EquipmentCheckTemplateBuilder crew preview identity', () => {
 
     expect(await screen.findByRole('button', { name: 'Collapse Cab' })).toHaveClass('mobile-touch-target');
   });
+});
+
+describe('EquipmentCheckTemplateBuilder duplication identity', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    getTemplate.mockReset();
+    cloneCompartment.mockReset();
+    mockViewport('laptop');
+  });
+
+  it('gives a duplicated location its own item identities', async () => {
+    const user = userEvent.setup();
+    renderNewBuilder();
+
+    await user.click(screen.getByRole('button', { name: 'Location' }));
+    const composer = (await screen.findAllByPlaceholderText(/press Enter/i))[0] as HTMLElement;
+    await user.type(composer, 'Shared item{Enter}');
+
+    const trigger = await screen.findByLabelText('Actions for compartment');
+    await user.click(trigger);
+    await user.click(within(trigger.closest('details') as HTMLElement).getByRole('button', { name: 'Duplicate' }));
+
+    // clientKey is the identity for the highlight set, the inline-edit target,
+    // the phone editor and the preview's item ids. Copying it hands the
+    // duplicate's items the originals'.
+    await waitFor(() => expect(screen.getAllByDisplayValue('Shared item')).toHaveLength(2));
+    const rowIds = screen
+      .getAllByDisplayValue('Shared item')
+      .map((input) => input.closest('[id^="item-row-"]')?.id ?? '');
+    expect(new Set(rowIds).size).toBe(2);
+  }, 15_000);
 });
