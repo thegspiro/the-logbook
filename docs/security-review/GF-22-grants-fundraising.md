@@ -918,6 +918,64 @@ before the fix (the pre-fix mount effect always calls
 `fetchApplications()` with zero arguments, matching neither case) and
 pass after.
 
+#### GF-32 — MED — GF-31's own fix left the fetch still capped, and introduced a stale-response race
+
+**What:** Caught by Codex review, round 7, on GF-31's own fix. Two
+distinct findings, both introduced by GF-31 rather than reshapes of an
+earlier one chasing the same code — GF-31 changed _what_ was fetched
+(added `status`), these are about _how much_ and _in what order_:
+
+1. **Still capped, just narrower.** Passing `status` server-side moved
+   the existing 100-row cap (`listApplications` defaults to `limit: 100`)
+   from "newest 100 applications overall" to "newest 100 in the selected
+   status." An organization with more than 100 applications in a single
+   status still silently loses the older ones — the exact failure GF-31
+   set out to fix, in a new shape.
+2. **No request sequencing.** `grantsStore.fetchApplications` writes
+   every response straight into `applications` with no cancellation or
+   ordering. Removing GF-31's client-side `matchesStatus` check means a
+   response that resolves out of order (the user switches the status
+   filter again, or switches it back, before the first request finishes)
+   can silently overwrite the current filter's results with a stale
+   filter's rows — invisible to a slow network in dev, real on a flaky
+   connection.
+
+**Where:** `frontend/src/modules/grants-fundraising/pages/GrantApplicationsPage.tsx`,
+`frontend/src/modules/grants-fundraising/store/grantsStore.ts`.
+
+**Fix:** both are contained, mechanical fixes rather than a redesign, so
+fixed rather than flagged despite this being the second consecutive round
+on this file — GF-27 → GF-27a was flagged because the correct fix needed
+a UI/product decision; neither of these does.
+
+1. The page has no pagination UI at all — the pipeline and table views
+   render every row the store holds — so there is no "page 2" for a user
+   to reach. The fetch now always passes `limit: 1000`, the backend's own
+   ceiling (`PaginationParams.limit`, `le=1000` in
+   `app/api/dependencies.py`), instead of leaving it at the 100-row
+   default. A department with more than 1000 applications in one status
+   is out of scope for this fix, same as it would be for any unpaginated
+   list screen in the app.
+2. `grantsStore.fetchApplications` now tracks a module-scoped, monotonic
+   request counter. Each call captures the counter's value at call time;
+   if the counter has moved on by the time the response (or error)
+   arrives, the result is dropped instead of written to `applications`.
+   Scoped to just this one action — not a store-wide request-cancellation
+   redesign, which several other actions could independently need but
+   which no evidence here shows they do.
+
+**Guard tests added:**
+
+- `GrantApplicationsPage.statusFilter.test.tsx` — both existing cases
+  updated to assert `limit: 1000` is included on every fetch (with and
+  without a status filter).
+- `grantsStore.applicationsRace.test.ts` (new file) — issues two
+  overlapping `fetchApplications` calls with independently-resolvable
+  promises, resolves the newer one first, then resolves the older one
+  late, and asserts the store still holds the newer result. Verified to
+  fail against the pre-fix store (the late response overwrites
+  `applications`) and pass after.
+
 ### Frontend review (new this pass)
 
 Read `services/api.ts` (410 L), `routes.tsx`, `store/grantsStore.ts` (342 L),

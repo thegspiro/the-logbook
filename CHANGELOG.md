@@ -42,7 +42,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - For a department with more than 100 grant applications, filtering the
   grant applications list by status (including via a dashboard link) could
   miss older matching applications. It now searches your department's full
-  set of applications, not just the most recent 100.
+  set of applications, not just the most recent 100 overall — or, in a
+  follow-up fix, the most recent 100 in the selected status.
+- Switching the grant applications list's status filter quickly (or before
+  the previous filter finished loading) could momentarily show applications
+  from the filter you'd already changed away from. The list now always
+  reflects the filter you currently have selected.
 
 ### Admin hours CSV export now recovers from an expired session (2026-08-30)
 

@@ -45,6 +45,7 @@ interface GrantsState {
     priority?: string;
     assignedTo?: string;
     search?: string;
+    limit?: number;
   }) => Promise<void>;
   fetchApplication: (id: string) => Promise<void>;
   fetchCampaigns: (params?: { status?: string; campaignType?: string; search?: string }) => Promise<void>;
@@ -71,6 +72,14 @@ interface GrantsState {
   addGrantNote: (applicationId: string, data: Partial<GrantNote>) => Promise<GrantNote>;
   clearError: () => void;
 }
+
+// Module-scoped so rapid status-filter switches on the applications page
+// (each triggering its own fetchApplications call) can detect and drop a
+// response that resolves after a newer request has already started — the
+// store has no other way to tell an in-flight call is stale, and without
+// this an out-of-order response silently overwrites the current filter's
+// results with the previous filter's.
+let applicationsRequestSeq = 0;
 
 export const useGrantsStore = create<GrantsState>((set) => ({
   // Initial state
@@ -103,12 +112,18 @@ export const useGrantsStore = create<GrantsState>((set) => ({
   },
 
   fetchApplications: async (params) => {
+    const requestId = ++applicationsRequestSeq;
     set({ isLoading: true, error: null });
 
     try {
       const applications = await grantsService.listApplications(params);
+      // A newer call has since started (e.g. the user switched the status
+      // filter again before this one resolved) — its result, not this
+      // stale one, should win.
+      if (requestId !== applicationsRequestSeq) return;
       set({ applications, isLoading: false });
     } catch (error) {
+      if (requestId !== applicationsRequestSeq) return;
       set({
         error: handleStoreError(error, 'Failed to fetch grant applications'),
         isLoading: false,

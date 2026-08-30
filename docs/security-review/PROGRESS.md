@@ -76,6 +76,25 @@ effect now fetches server-side by status and refetches on change; new
 test file, fails before/passes after. Full gate green (tsc/eslint 0
 errors, 4 files/7 tests passing).
 
+**PR #2072 tend, round 7:** Codex found two more issues on GF-31's own
+fix — introduced by that fix rather than a reshape of an earlier finding
+chasing the same code, so fixed rather than flagged despite being a 2nd
+straight round on this file (unlike GF-27→GF-27a, neither needs a
+UI/product decision). **GF-32 (new, MED, fixed)** — (1) passing `status`
+server-side moved the pre-existing 100-row cap from "newest 100 overall"
+to "newest 100 in that status," so a department with >100 applications in
+one status still lost older matches; the page has no pagination UI at
+all (both views render every row the store holds), so the fetch now
+always requests `limit: 1000`, the backend's own ceiling. (2) removing
+the client-side status check left `fetchApplications` with no protection
+against an out-of-order response overwriting the current filter's results
+with a stale one; the store now tracks a monotonic request counter per
+call and drops any response superseded by a newer request before it
+resolves. New test (`grantsStore.applicationsRace.test.ts`) plus updated
+assertions in the existing status-filter test; both verified fail
+before/pass after. Full gate green (tsc/eslint 0 errors — 8 baseline
+warnings unchanged, 5 files/8 tests passing in the module).
+
 ### 2026-08-30 — Feature 22 (Grants & fundraising), pass 2 — 0 fixed, 0 new findings; re-verification only
 
 No security-review PR was open (PR #2065/feature 21 admin-hours pass 2 had

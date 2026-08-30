@@ -243,8 +243,15 @@ export const GrantApplicationsPage: React.FC = () => {
   // instead, and refetch when it changes; the client-side filter below no
   // longer needs to re-check status, since every row the store holds
   // already matches.
+  //
+  // This page has no pagination UI of its own — the pipeline and table
+  // views render every row the store holds — so cap the fetch at the
+  // backend's own maximum (`le=1000` on `PaginationParams.limit`) rather
+  // than its 100-row default; a filtered fetch that still silently
+  // truncates at 100 just moves the same bug from "top 100 overall" to
+  // "top 100 in this status".
   useEffect(() => {
-    void fetchApplications(statusFilter ? { status: statusFilter } : undefined);
+    void fetchApplications({ ...(statusFilter ? { status: statusFilter } : {}), limit: 1000 });
   }, [fetchApplications, statusFilter]);
 
   // ---------------------------------------------------------------------------

@@ -7,6 +7,12 @@
  * older than the newest 100, even though the dashboard's own KPI count —
  * which is not capped — included it. Status is now passed to the
  * server-side fetch and re-fetched whenever it changes.
+ *
+ * Also covers a follow-on finding on that same fix: passing `status`
+ * server-side still left the fetch capped at the backend's 100-row
+ * default, just per-status instead of overall. The page has no pagination
+ * UI, so it now asks for the backend's own maximum (`limit: 1000`) on
+ * every fetch.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, waitFor } from '@testing-library/react';
@@ -39,11 +45,11 @@ describe('GrantApplicationsPage — status filter is server-side', () => {
     );
 
     await waitFor(() => {
-      expect(mockFetchApplications).toHaveBeenCalledWith({ status: 'active' });
+      expect(mockFetchApplications).toHaveBeenCalledWith({ status: 'active', limit: 1000 });
     });
   });
 
-  it('fetches every status (no params) when the URL carries no status', async () => {
+  it('fetches every status, uncapped, when the URL carries no status', async () => {
     render(
       <MemoryRouter initialEntries={['/grants/applications']}>
         <GrantApplicationsPage />
@@ -51,7 +57,7 @@ describe('GrantApplicationsPage — status filter is server-side', () => {
     );
 
     await waitFor(() => {
-      expect(mockFetchApplications).toHaveBeenCalledWith(undefined);
+      expect(mockFetchApplications).toHaveBeenCalledWith({ limit: 1000 });
     });
   });
 });
