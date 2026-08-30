@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Grants & fundraising report and permission fixes (2026-08-30)
+
+**Fixed**
+
+- A grant or fundraising report covering a date range that included today
+  (the default) silently dropped every application or donation recorded
+  later that same day, understating the report's totals. The report now
+  includes the entire end date.
+- On the fundraising report, the percentage breakdown by payment method
+  showed 0.0% for every method as soon as two or more payment methods had
+  donations, with no error. Percentages now calculate correctly.
+- A member with view-only access to Grants & Fundraising could open the
+  campaigns, donors, dashboard, or an individual grant application's detail
+  page and see "New Campaign," "Add Donor," "New Application," "Add Item,"
+  "Record Expenditure," "Add Task," and "Add Note" buttons that failed when
+  clicked, with no explanation of why. Those controls are now hidden for
+  members who don't have permission to use them.
+
 ### Admin hours CSV export now recovers from an expired session (2026-08-30)
 
 **Fixed**
