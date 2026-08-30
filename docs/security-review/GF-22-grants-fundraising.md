@@ -321,12 +321,19 @@ backend-only) — the real module lives at `frontend/src/modules/grants-fundrais
 `GrantDetailPage`, `CampaignsPage`, `DonorsPage`, `DonationsPage`,
 `GrantsReportsPage`), ~6,900 lines across 14 files. A repo-wide grep for
 `grant`/`Grant`/`fundraising`/`Fundraising` also confirmed no grants/donor
-data is read or written from outside this module and `dashboard.py` (a
-different feature's endpoint file) — that call site only aggregates the
-already-gated `/grants` figures onto the org dashboard behind its own
-`fundraising.view` check, read directly and confirmed correct. **Correction
-(tend pass, below):** `GrantsDashboardPage.tsx` was omitted from both the
-"read in full" and "swept" page lists below — see GF-22.
+data is read or written from outside this module and one other call site:
+`DashboardWidgetService.fundraising` (`dashboard_widget_service.py`),
+which does **not** aggregate already-gated `/grants` figures — it queries
+`GrantOpportunity`/`GrantApplication`/`FundraisingCampaign`/`Donation`
+directly, independently of `grant_service.py`/`fundraising_service.py`. Read
+in full and confirmed correct: every query filters `organization_id`
+(the `Donation` sum filters it on both sides of its join to
+`FundraisingCampaign`), `organization_id` comes from `current_user`, never
+a client value, and the block is gated behind both `"grants" in
+enabled_modules` and `fundraising.view` — the same permission string used
+everywhere else in this module. See GF-21. **Correction (tend pass,
+below):** `GrantsDashboardPage.tsx` was omitted from both the "read in
+full" and "swept" page lists below — see GF-22.
 **Migrations:** none since pass 1.
 
 ### Scope since pass 1's merge (`520978c4`, PR #1904)
