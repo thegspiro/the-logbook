@@ -161,9 +161,17 @@ async function confirm(label: string | RegExp) {
  * viewport set by one `describe` survives into the next one unless it is set
  * again. Tests that depend on a width should say which one they mean.
  */
-const mockViewport = (width: 'phone' | 'laptop') => {
+const VIEWPORT_WIDTHS = { phone: 390, tablet: 900, laptop: 1440 } as const;
+
+const mockViewport = (width: keyof typeof VIEWPORT_WIDTHS) => {
   vi.mocked(window.matchMedia).mockImplementation((query: string) => ({
-    matches: width === 'laptop' && query === '(min-width: 640px)',
+    // Resolve against a real pixel width rather than one hard-coded query: the
+    // page asks about 640px for the row layout and 1152px for the rail, and
+    // matching only the first would leave the rail off at every width.
+    matches: (() => {
+      const minWidth = /min-width:\s*(\d+)px/.exec(query);
+      return minWidth ? VIEWPORT_WIDTHS[width] >= Number(minWidth[1]) : false;
+    })(),
     media: query,
     onchange: null,
     addListener: vi.fn(),
@@ -339,11 +347,15 @@ describe('EquipmentCheckTemplateBuilder responsive actions', () => {
     }));
     renderBuilder();
 
-    await screen.findByRole('button', { name: 'Expand Radio' });
+    // The name, the check type and the required flag are all edited in the row
+    // itself; only the rarely-set fields sit behind the disclosure.
+    expect(await screen.findByRole('button', { name: 'Show more settings for Radio' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Radio selection checkbox' })).toBeInTheDocument();
-    expect(screen.getAllByRole('button', { name: 'Drag to reorder' })).not.toHaveLength(0);
-    expect(screen.getAllByText('Function')).not.toHaveLength(0);
-    expect(screen.getByRole('button', { name: 'Move Radio down' })).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: 'Drag Radio to reorder' })).not.toHaveLength(0);
+    expect(screen.getAllByRole('button', { name: 'Works' })).not.toHaveLength(0);
+    expect(screen.getByRole('button', { name: 'Delete Radio' })).toBeInTheDocument();
+    const actions = screen.getByLabelText('Actions for Radio');
+    expect(within(actions.closest('details') as HTMLElement).getByRole('button', { name: 'Move down' })).toBeEnabled();
     expect(screen.queryByRole('button', { name: 'Select items' })).not.toBeInTheDocument();
   });
 
@@ -359,11 +371,15 @@ describe('EquipmentCheckTemplateBuilder responsive actions', () => {
   it('does not allow an invalid template to be published', async () => {
     renderNewBuilder();
     expect(screen.getByRole('button', { name: 'Publish' })).toBeDisabled();
-    expect(screen.getByLabelText('Template readiness')).toHaveTextContent('! Setup');
+    // Two blockers on a blank template: the details, and the empty checklist.
+    expect(screen.getByRole('button', { name: '2 to fix' })).toBeInTheDocument();
     await waitFor(() => expect(screen.getByRole('button', { name: 'Publish' })).toBeDisabled());
   });
 
   it('does not treat structural-only items as a publishable operational compartment', async () => {
+    // The blocker rail only renders beside the canvas, so this asserts at the
+    // width where the reason is actually shown.
+    mockViewport('laptop');
     getTemplate.mockResolvedValue({
       ...template,
       isActive: false,
@@ -378,7 +394,7 @@ describe('EquipmentCheckTemplateBuilder responsive actions', () => {
     renderBuilder();
 
     expect(await screen.findByRole('button', { name: 'Publish' })).toBeDisabled();
-    expect(screen.getByLabelText('Template readiness')).toHaveTextContent('! Locations');
+    expect(screen.getByText('Cab is empty')).toBeVisible();
   });
 
   it('publishes after the blocking structure issues are fixed', async () => {
@@ -495,11 +511,10 @@ describe('EquipmentCheckTemplateBuilder responsive actions', () => {
     expect(screen.queryByLabelText('Actions for Cab (copy)')).not.toBeInTheDocument();
   });
 
-  it('exposes every item action from the phone overflow without drag and drop', async () => {
+  it('exposes every item action from the row overflow without drag and drop', async () => {
     const user = userEvent.setup();
     renderBuilder();
     const trigger = await screen.findByLabelText('Actions for Radio');
-    expect(trigger.closest('details')).toHaveClass('sm:hidden');
     await user.click(trigger);
     const menu = trigger.closest('details') as HTMLElement;
     expect(within(menu).getByRole('button', { name: 'Rename' })).toBeVisible();
@@ -566,15 +581,15 @@ describe('EquipmentCheckTemplateBuilder movement persistence', () => {
 
   it('keeps a rejected item in its source and does not show a success toast', async () => {
     // The re-expand-on-failure behaviour this asserts only exists at laptop
-    // width: below 640px the row opens the mobile editor sheet instead of an
-    // inline editor, so its toggle is labelled "Edit …" and never "Collapse …".
+    // width: below 640px the row opens the mobile editor sheet instead of the
+    // inline disclosure, so no "Hide more settings …" toggle is ever rendered.
     mockViewport('laptop');
     updateCheckItem.mockRejectedValueOnce(new Error('offline'));
     const user = userEvent.setup();
     renderBuilder();
     await user.selectOptions(await moveSelect('Oxygen mask'), '1');
     expect(await screen.findByLabelText('Actions for Oxygen mask')).toBeInTheDocument();
-    expect(await screen.findByRole('button', { name: 'Collapse Oxygen mask' })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'Hide more settings for Oxygen mask' })).toBeInTheDocument();
     await waitFor(() => expect(document.getElementById('item-row-mask')).toHaveFocus());
     expect(toastSuccess).not.toHaveBeenCalled();
     expect(toastError).toHaveBeenCalledWith('Could not move “Oxygen mask.” Its original location was restored.');
@@ -621,7 +636,12 @@ describe('EquipmentCheckTemplateBuilder quick add queue', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     getTemplate.mockResolvedValue(structuredClone(template));
+    // The composer these tests drive is the laptop add path; below 640px the
+    // catalog sheet is the add surface instead.
+    mockViewport('laptop');
   });
+
+  const composer = async (index = 0) => (await screen.findAllByPlaceholderText(/press Enter/i))[index] as HTMLElement;
 
   const savedItem = (name: string, id: string) => ({
     ...template.compartments[0]?.items[0],
@@ -636,7 +656,7 @@ describe('EquipmentCheckTemplateBuilder quick add queue', () => {
       .mockImplementationOnce(() => new Promise((resolve) => (resolveFirst = resolve)))
       .mockResolvedValueOnce({ items: [savedItem('Spare batteries', 'batteries')], createdCount: 1 });
     renderBuilder();
-    const input = await screen.findAllByPlaceholderText(/search inventory/i).then((inputs) => inputs[0] as HTMLElement);
+    const input = await composer();
 
     await user.type(input, 'Lantern{Enter}');
     await user.type(input, 'Spare batteries{Enter}');
@@ -649,8 +669,8 @@ describe('EquipmentCheckTemplateBuilder quick add queue', () => {
     resolveFirst({ items: [savedItem('Lantern', 'lantern')], createdCount: 1 });
     await waitFor(() => expect(screen.queryByLabelText('Lantern Saving')).not.toBeInTheDocument());
     await waitFor(() => expect(screen.queryByLabelText('Spare batteries Saving')).not.toBeInTheDocument());
-    expect(screen.getByText('Lantern')).toBeVisible();
-    expect(screen.getByText('Spare batteries')).toBeVisible();
+    expect(screen.getByDisplayValue('Lantern')).toBeVisible();
+    expect(screen.getByDisplayValue('Spare batteries')).toBeVisible();
     expect(addCheckItemsBulk).toHaveBeenCalledTimes(2);
   });
 
@@ -662,16 +682,15 @@ describe('EquipmentCheckTemplateBuilder quick add queue', () => {
       return Promise.resolve({ items: [savedItem('Trauma shears', 'shears')], createdCount: 1 });
     });
     renderBuilder();
-    const inputs = await screen.findAllByPlaceholderText(/search inventory/i);
-    const cabInput = inputs[0] as HTMLElement;
-    const bagInput = inputs[1] as HTMLElement;
+    const cabInput = await composer(0);
+    const bagInput = await composer(1);
 
     await user.type(cabInput, 'Lantern{Enter}');
     await user.type(bagInput, 'Trauma shears{Enter}');
 
     expect(screen.getByLabelText('Lantern Saving')).toBeVisible();
     await waitFor(() => expect(screen.queryByLabelText('Trauma shears Saving')).not.toBeInTheDocument());
-    expect(screen.getByText('Trauma shears')).toBeVisible();
+    expect(screen.getByDisplayValue('Trauma shears')).toBeVisible();
     expect(addCheckItemsBulk).toHaveBeenCalledTimes(2);
 
     resolveCab({ items: [savedItem('Lantern', 'lantern')], createdCount: 1 });
@@ -685,17 +704,17 @@ describe('EquipmentCheckTemplateBuilder quick add queue', () => {
       .mockResolvedValueOnce({ items: [savedItem('Gloves', 'gloves')], createdCount: 1 })
       .mockResolvedValueOnce({ items: [savedItem('Safety vest', 'vest')], createdCount: 0, replayed: true });
     renderBuilder();
-    const input = (await screen.findAllByPlaceholderText(/search inventory/i))[0] as HTMLElement;
+    const input = await composer();
     await user.type(input, 'Safety vest{Enter}');
     await user.type(input, 'Gloves{Enter}');
 
     const failed = await screen.findByLabelText('Safety vest Not saved');
     await waitFor(() => expect(screen.queryByLabelText('Gloves Saving')).not.toBeInTheDocument());
-    expect(screen.getByText('Gloves')).toBeVisible();
+    expect(screen.getByDisplayValue('Gloves')).toBeVisible();
     const firstKey = String(addCheckItemsBulk.mock.calls[0]?.[2]);
     await user.click(within(failed).getByRole('button', { name: 'Retry' }));
     await waitFor(() => expect(screen.queryByLabelText('Safety vest Saving')).not.toBeInTheDocument());
-    expect(screen.getByText('Safety vest')).toBeVisible();
+    expect(screen.getByDisplayValue('Safety vest')).toBeVisible();
     expect(addCheckItemsBulk.mock.calls[2]?.[2]).toBe(firstKey);
   }, 10_000);
 
@@ -703,7 +722,7 @@ describe('EquipmentCheckTemplateBuilder quick add queue', () => {
     const user = userEvent.setup();
     addCheckItemsBulk.mockResolvedValue({ items: [savedItem('Lantern', 'lantern')], createdCount: 1 });
     renderBuilder();
-    const input = (await screen.findAllByPlaceholderText(/search inventory/i))[0] as HTMLElement;
+    const input = await composer();
     await user.type(input, 'Lantern{Enter}{Enter}');
     expect(addCheckItemsBulk).toHaveBeenCalledTimes(1);
     expect(addCheckItemsBulk).toHaveBeenCalledWith(
@@ -723,12 +742,15 @@ describe('EquipmentCheckTemplateBuilder bulk deletion', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     getTemplate.mockResolvedValue(structuredClone(template));
+    // Row checkboxes and the bulk bar are the laptop selection surface; the
+    // phone reaches the same actions through "Select items".
+    mockViewport('laptop');
   });
 
   async function selectAndDelete() {
     const user = userEvent.setup();
     renderBuilder();
-    await screen.findByText('Radio');
+    await screen.findByDisplayValue('Radio');
     await user.click(screen.getByTitle('Select all items'));
     await user.click(screen.getByRole('button', { name: 'Delete selected items' }));
     await user.click(screen.getByRole('button', { name: 'Delete 2' }));
@@ -737,8 +759,8 @@ describe('EquipmentCheckTemplateBuilder bulk deletion', () => {
   it('removes only IDs confirmed by a completely successful response', async () => {
     deleteCheckItemsBulk.mockResolvedValue({ deletedItemIds: ['radio', 'flashlight'], replayed: false });
     await selectAndDelete();
-    await waitFor(() => expect(screen.queryByText('Radio')).not.toBeInTheDocument());
-    expect(screen.getAllByText(/No items yet/).length).toBeGreaterThan(0);
+    await waitFor(() => expect(screen.queryByDisplayValue('Radio')).not.toBeInTheDocument());
+    expect(screen.getAllByText('Add at least one item to publish').length).toBeGreaterThan(0);
     expect(deleteCheckItemsBulk).toHaveBeenCalledWith('cab', ['radio', 'flashlight'], expect.any(String));
     expect(toastSuccess).toHaveBeenCalledWith('Deleted 2 items');
     expect(toastError).not.toHaveBeenCalled();
@@ -747,8 +769,8 @@ describe('EquipmentCheckTemplateBuilder bulk deletion', () => {
   it('retains visible selected rows and never shows success after failure', async () => {
     deleteCheckItemsBulk.mockRejectedValue(new Error('Database unavailable'));
     await selectAndDelete();
-    expect(await screen.findByText('Radio')).toBeVisible();
-    expect(screen.getByText('Flashlight')).toBeVisible();
+    expect(await screen.findByDisplayValue('Radio')).toBeVisible();
+    expect(screen.getByDisplayValue('Flashlight')).toBeVisible();
     expect(screen.getByText('2 selected')).toBeVisible();
     expect(toastError).toHaveBeenCalled();
     expect(toastSuccess).not.toHaveBeenCalled();
@@ -757,8 +779,8 @@ describe('EquipmentCheckTemplateBuilder bulk deletion', () => {
   it('removes only confirmed IDs and retains an unconfirmed row selected', async () => {
     deleteCheckItemsBulk.mockResolvedValue({ deletedItemIds: ['radio'], replayed: false });
     await selectAndDelete();
-    await waitFor(() => expect(screen.queryByText('Radio')).not.toBeInTheDocument());
-    expect(screen.getByText('Flashlight')).toBeVisible();
+    await waitFor(() => expect(screen.queryByDisplayValue('Radio')).not.toBeInTheDocument());
+    expect(screen.getByDisplayValue('Flashlight')).toBeVisible();
     expect(screen.getByText('1 selected')).toBeVisible();
     expect(toastError).toHaveBeenCalledWith('1 item was deleted; 1 could not be deleted');
     expect(toastSuccess).not.toHaveBeenCalled();
@@ -770,7 +792,7 @@ describe('EquipmentCheckTemplateBuilder bulk deletion', () => {
       .mockResolvedValueOnce({ deletedItemIds: ['radio', 'flashlight'], replayed: true });
     const user = userEvent.setup();
     renderBuilder();
-    await screen.findByText('Radio');
+    await screen.findByDisplayValue('Radio');
     await user.click(screen.getByTitle('Select all items'));
 
     for (let attempt = 0; attempt < 2; attempt += 1) {
@@ -780,7 +802,7 @@ describe('EquipmentCheckTemplateBuilder bulk deletion', () => {
     }
 
     expect(deleteCheckItemsBulk.mock.calls[0]?.[2]).toBe(deleteCheckItemsBulk.mock.calls[1]?.[2]);
-    await waitFor(() => expect(screen.queryByText('Radio')).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByDisplayValue('Radio')).not.toBeInTheDocument());
     expect(toastSuccess).toHaveBeenCalledWith('Deleted 2 items');
   });
 });
@@ -804,11 +826,14 @@ describe('EquipmentCheckTemplateBuilder remaining mutation regressions', () => {
       ],
       createdCount: 2,
     });
+    mockViewport('laptop');
     renderBuilder();
-    await user.click((await screen.findAllByTitle('Switch to bulk paste (one item per line)'))[0] as HTMLElement);
-    const paste = screen.getByPlaceholderText(/Paste item names here/i);
-    await user.type(paste, 'Mask\nHood');
-    await user.click(screen.getByRole('button', { name: 'Add All' }));
+    const paste = (await screen.findAllByPlaceholderText(/press Enter/i))[0] as HTMLElement;
+    // Two lines is what turns the composer into a paste: there is no mode to
+    // pick, so a shift-Enter newline is the whole gesture.
+    await user.type(paste, 'Mask{Shift>}{Enter}{/Shift}Hood');
+    expect(screen.getByText('2 items ready to add')).toBeVisible();
+    await user.click(screen.getByRole('button', { name: 'Add all' }));
     await waitFor(() => expect(addCheckItemsBulk).toHaveBeenCalledTimes(1));
     expect(addCheckItemsBulk).toHaveBeenNthCalledWith(
       1,
@@ -817,7 +842,7 @@ describe('EquipmentCheckTemplateBuilder remaining mutation regressions', () => {
       expect.any(String)
     );
     expect(paste).toHaveValue('Mask\nHood');
-    await user.click(screen.getByRole('button', { name: 'Add All' }));
+    await user.click(screen.getByRole('button', { name: 'Add all' }));
     expect(await screen.findByLabelText('Actions for Mask')).toBeVisible();
     expect(addCheckItemsBulk.mock.calls[0]?.[2]).toBe(addCheckItemsBulk.mock.calls[1]?.[2]);
   });
@@ -865,7 +890,7 @@ describe('EquipmentCheckTemplateBuilder unsaved-change prompts', () => {
   it('does not prompt when leaving an unchanged loaded template', async () => {
     renderBuilder();
     await screen.findByDisplayValue('Engine check');
-    await userEvent.click(screen.getByTitle('Go back'));
+    await userEvent.click(screen.getByTitle('Back to templates'));
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
@@ -876,7 +901,7 @@ describe('EquipmentCheckTemplateBuilder unsaved-change prompts', () => {
     await user.clear(name);
     await user.type(name, 'Engine daily check');
 
-    await user.click(screen.getByTitle('Go back'));
+    await user.click(screen.getByTitle('Back to templates'));
     expect(await screen.findByRole('dialog')).toHaveTextContent('Leave without saving?');
     await user.click(screen.getByRole('button', { name: 'Stay here' }));
 
@@ -887,27 +912,37 @@ describe('EquipmentCheckTemplateBuilder unsaved-change prompts', () => {
         expect.objectContaining({ name: 'Engine daily check', is_active: false })
       )
     );
-    await user.click(screen.getByTitle('Go back'));
+    await user.click(screen.getByTitle('Back to templates'));
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 });
 
 describe('EquipmentCheckTemplateBuilder creation guidance', () => {
-  it('preserves preset test instructions and marks the review step ready', async () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockViewport('laptop');
+  });
+
+  it('preserves preset test instructions and reports the loaded locations', async () => {
     renderNewBuilder();
 
+    // Template type lives in the details drawer now.
+    fireEvent.click(screen.getByRole('button', { name: 'Details' }));
     fireEvent.change(screen.getByLabelText('Template Type'), { target: { value: 'vehicle' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Close template details' }));
     fireEvent.click(screen.getByRole('button', { name: /use a vehicle layout/i }));
     fireEvent.click(screen.getByRole('button', { name: /engine \/ pumper/i }));
-    fireEvent.click(screen.getByRole('button', { name: /preview/i }));
 
+    // The crew view is docked in the rail rather than behind a modal.
+    fireEvent.click(screen.getByRole('button', { name: 'Crew view' }));
     expect(screen.getAllByText('Switch it on and confirm it works.').length).toBeGreaterThan(0);
-    const reviewStep = screen.getAllByText('Review').find((node) => node.tagName === 'SPAN');
-    expect(reviewStep?.closest('div')).toHaveTextContent(/items/);
-    expect(reviewStep?.parentElement?.previousElementSibling).toHaveClass('bg-green-500');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Before publishing' }));
+    expect(screen.getByText(/locations, \d+ with items/)).toBeVisible();
   }, 20_000);
 
   it('uses the opaque themed page canvas for the checklist preview', async () => {
+    mockViewport('phone');
     // renderBuilder always mounts at /templates/template-1, so the preview has
     // nothing to draw until getTemplate resolves. This describe has no
     // beforeEach, so without a local mock the test only passes on the value a
@@ -923,5 +958,304 @@ describe('EquipmentCheckTemplateBuilder creation guidance', () => {
     expect(preview).toHaveClass('bg-theme-bg', 'text-theme-text-primary');
     expect(within(preview).getAllByText('Engine check').length).toBeGreaterThan(0);
     expect(preview.querySelectorAll('.bg-theme-bg').length).toBeGreaterThanOrEqual(3);
+  });
+});
+
+describe('EquipmentCheckTemplateBuilder single-canvas editor', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    // `clearAllMocks` clears calls but keeps implementations, and an unconsumed
+    // `…Once` queued by an earlier block is handed out before any default set
+    // here — so the mocks this block relies on are reset, not just cleared.
+    getTemplate.mockReset();
+    addCheckItemsBulk.mockReset();
+    updateCheckItem.mockReset();
+    updateCompartment.mockReset();
+    updateEquipmentCheckTemplate.mockReset();
+    getTemplate.mockResolvedValue(structuredClone(template));
+    updateCheckItem.mockResolvedValue({});
+    updateCompartment.mockResolvedValue({});
+    updateEquipmentCheckTemplate.mockResolvedValue(structuredClone(template));
+    // The canvas, the rail and the composer are all laptop-and-wider surfaces.
+    mockViewport('laptop');
+  });
+
+  it('edits the name, the check type and the required flag from the row itself', async () => {
+    const user = userEvent.setup();
+    renderBuilder();
+
+    const row = (await screen.findByDisplayValue('Radio')).closest('[id="item-row-radio"]') as HTMLElement;
+    await user.click(within(row).getByRole('button', { name: 'Count' }));
+    // Switching type swaps the settings slot in place rather than opening one.
+    expect(within(row).getByLabelText('Par quantity for Radio')).toBeVisible();
+
+    await user.click(within(row).getByRole('button', { name: 'Required' }));
+    expect(within(row).getByRole('button', { name: 'Optional' })).toHaveAttribute('aria-pressed', 'false');
+  });
+
+  it('names each publish blocker and jumps to the row that causes it', async () => {
+    const user = userEvent.setup();
+    renderBuilder();
+
+    // Medical bag ships with no items, which is exactly the gate on Publish.
+    const blocker = await screen.findByRole('button', { name: /Medical bag is empty/ });
+    expect(within(blocker).getByText('Add an item or delete the location')).toBeVisible();
+    expect(screen.getByRole('button', { name: '1 to fix' })).toBeInTheDocument();
+
+    // The jump lands on what the author has to change. For an empty location
+    // that is the add surface, not the name field, which is already correct.
+    await user.click(blocker);
+    await waitFor(() => expect(screen.getByLabelText('Add items to Medical bag')).toHaveFocus());
+  });
+
+  it('opens the details drawer from a chip and closes it on Escape', async () => {
+    const user = userEvent.setup();
+    renderBuilder();
+
+    await user.click(await screen.findByRole('button', { name: /Start of shift/ }));
+    const drawer = screen.getByRole('dialog', { name: 'Template details' });
+    expect(within(drawer).getByLabelText('Template Type')).toHaveValue('equipment');
+
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog', { name: 'Template details' })).not.toBeInTheDocument();
+  });
+
+  it('nests a location under the one above it and moves it back out', async () => {
+    const user = userEvent.setup();
+    getTemplate.mockResolvedValue({
+      ...structuredClone(template),
+      compartments: structuredClone(template).compartments.map((compartment) =>
+        compartment.id === 'bag' ? { ...compartment, parentCompartmentId: undefined } : compartment
+      ),
+    });
+    renderBuilder();
+
+    const outdent = await screen.findByRole('button', { name: 'Move Medical bag out one level' });
+    expect(outdent).toBeDisabled();
+
+    await user.click(screen.getByRole('button', { name: 'Nest Medical bag inside the location above' }));
+    expect(await screen.findByText('inside Cab')).toBeVisible();
+
+    await user.click(screen.getByRole('button', { name: 'Move Medical bag out one level' }));
+    await waitFor(() => expect(screen.queryByText('inside Cab')).not.toBeInTheDocument());
+  });
+
+  it('sets the check type for every pasted line in one request', async () => {
+    const user = userEvent.setup();
+    addCheckItemsBulk.mockResolvedValue({
+      items: [
+        { ...template.compartments[0]?.items[0], id: 'gauze', name: 'Gauze' },
+        { ...template.compartments[0]?.items[0], id: 'tape', name: 'Tape' },
+      ],
+      createdCount: 2,
+    });
+    renderBuilder();
+
+    const composer = (await screen.findAllByPlaceholderText(/press Enter/i))[0] as HTMLElement;
+    await user.type(composer, 'Gauze{Shift>}{Enter}{/Shift}Tape');
+    await user.selectOptions(screen.getByLabelText('Check type for pasted items'), 'Count');
+    await user.click(screen.getByRole('button', { name: 'Add all' }));
+
+    await waitFor(() => expect(addCheckItemsBulk).toHaveBeenCalledTimes(1));
+    expect(addCheckItemsBulk).toHaveBeenCalledWith(
+      'cab',
+      [
+        { name: 'Gauze', check_type: 'count' },
+        { name: 'Tape', check_type: 'count' },
+      ],
+      expect.any(String)
+    );
+    expect(composer).toHaveValue('');
+  });
+});
+
+describe('EquipmentCheckTemplateBuilder canvas affordances reach both widths', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    getTemplate.mockReset();
+    updateCheckItem.mockReset();
+    updateCompartment.mockReset();
+    getTemplate.mockResolvedValue(structuredClone(template));
+    updateCheckItem.mockResolvedValue({});
+    updateCompartment.mockResolvedValue({});
+  });
+
+  it('focuses the setting a blocker names, not the row it sits in', async () => {
+    const user = userEvent.setup();
+    mockViewport('laptop');
+    getTemplate.mockResolvedValue({
+      ...structuredClone(template),
+      compartments: [
+        {
+          ...structuredClone(template.compartments[0]),
+          items: [
+            {
+              ...template.compartments[0]?.items[0],
+              id: 'foam',
+              name: 'Foam tank level',
+              checkType: 'level',
+            },
+          ],
+        },
+      ],
+    });
+    renderBuilder();
+
+    // The item name is the first control in the row and is already correct;
+    // landing there would say nothing about what to fix.
+    await user.click(await screen.findByRole('button', { name: /Foam tank level needs a minimum/ }));
+    expect(screen.getByLabelText('Minimum level for Foam tank level')).toHaveFocus();
+  });
+
+  it('takes a phone straight to the first blocker, where there is no rail', async () => {
+    const user = userEvent.setup();
+    mockViewport('phone');
+    getTemplate.mockResolvedValue({
+      ...structuredClone(template),
+      compartments: [{ ...structuredClone(template.compartments[0]), name: '' }],
+    });
+    renderBuilder();
+
+    // An unnamed location does have a field that is wrong, so the jump focuses
+    // it rather than opening the add sheet.
+    await user.click(await screen.findByRole('button', { name: '1 to fix' }));
+    expect(screen.getByLabelText('Location name')).toHaveFocus();
+  });
+
+  it('opens the add surface when a blocker says a location is empty', async () => {
+    const user = userEvent.setup();
+    mockViewport('laptop');
+    renderBuilder();
+
+    // The only field on an empty location's row is its name, which is already
+    // correct; what is missing is an item.
+    await user.click(await screen.findByRole('button', { name: /Medical bag is empty/ }));
+    await waitFor(() => expect(screen.getByLabelText('Add items to Medical bag')).toHaveFocus());
+  });
+
+  it('opens the phone add sheet when that same blocker is tapped', async () => {
+    const user = userEvent.setup();
+    mockViewport('phone');
+    renderBuilder();
+
+    await user.click(await screen.findByRole('button', { name: '1 to fix' }));
+    expect(await screen.findByPlaceholderText('Add or search items…')).toBeInTheDocument();
+  });
+
+  it('opens the item editor when a phone blocker names a setting the row does not hold', async () => {
+    const user = userEvent.setup();
+    mockViewport('phone');
+    getTemplate.mockResolvedValue({
+      ...structuredClone(template),
+      compartments: [
+        {
+          ...structuredClone(template.compartments[0]),
+          items: [{ ...template.compartments[0]?.items[0], id: 'foam', name: 'Foam tank level', checkType: 'level' }],
+        },
+      ],
+    });
+    renderBuilder();
+
+    // The compact phone row holds no input at all, so scrolling to it would
+    // leave the author looking at the problem with no way to fix it.
+    await user.click(await screen.findByRole('button', { name: '1 to fix' }));
+    expect(await screen.findByRole('dialog', { name: 'Foam tank level' })).toBeVisible();
+  });
+
+  it('opens the phone add sheet from an empty location instead of a missing composer', async () => {
+    const user = userEvent.setup();
+    mockViewport('phone');
+    renderBuilder();
+
+    // Medical bag loads expanded and empty, so expanding it again is a no-op —
+    // the button has to reach the sheet that phones actually add through.
+    await user.click(await screen.findByRole('button', { name: 'Add items' }));
+    expect(screen.getByPlaceholderText('Add or search items…')).toBeInTheDocument();
+  });
+
+  it('keeps a location description and image editable from the row overflow', async () => {
+    const user = userEvent.setup();
+    mockViewport('laptop');
+    renderBuilder();
+
+    const trigger = await screen.findByLabelText('Actions for Cab');
+    await user.click(trigger);
+    const menu = trigger.closest('details') as HTMLElement;
+    await user.type(within(menu).getByLabelText('Description for Cab'), 'Front of the rig');
+    expect(within(menu).getByLabelText('Description for Cab')).toHaveValue('Front of the rig');
+    expect(within(menu).getByLabelText('Image URL for Cab')).toBeInTheDocument();
+  });
+
+  it('keeps section actions at a phone-sized target', async () => {
+    mockViewport('phone');
+    renderBuilder();
+
+    expect(await screen.findByRole('button', { name: 'Delete section header' })).toHaveClass('mobile-touch-target');
+    expect(screen.getByRole('button', { name: 'Move section up' })).toHaveClass('mobile-touch-target');
+  });
+});
+
+describe('EquipmentCheckTemplateBuilder narrow widths and assistive tech', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    getTemplate.mockReset();
+    updateCheckItem.mockReset();
+    updateCompartment.mockReset();
+    getTemplate.mockResolvedValue(structuredClone(template));
+    updateCheckItem.mockResolvedValue({});
+    updateCompartment.mockResolvedValue({});
+  });
+
+  it('names the toolbar controls where their labels are hidden', async () => {
+    mockViewport('phone');
+    renderBuilder();
+
+    // Below 640px the label span leaves the accessibility tree and the icon is
+    // aria-hidden, so without these the three read as unnamed buttons.
+    expect(await screen.findByRole('button', { name: 'Details' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Save draft' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Tools')).toBeInTheDocument();
+  });
+
+  it('locks the page and takes focus while the details drawer is open', async () => {
+    const user = userEvent.setup();
+    mockViewport('laptop');
+    renderBuilder();
+
+    await user.click(await screen.findByRole('button', { name: 'Details' }));
+    const drawer = screen.getByRole('dialog', { name: 'Template details' });
+    expect(drawer.contains(document.activeElement)).toBe(true);
+    expect(document.body.style.overflow).toBe('hidden');
+
+    await user.click(within(drawer).getByRole('button', { name: 'Close template details' }));
+    await waitFor(() => expect(document.body.style.overflow).not.toBe('hidden'));
+  });
+});
+
+describe('EquipmentCheckTemplateBuilder tablet keeps the preview reachable', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    getTemplate.mockReset();
+    getTemplate.mockResolvedValue(structuredClone(template));
+  });
+
+  it('falls back to the modal preview where the rail would wrap below the checklist', async () => {
+    // 900px clears the 640px row layout but not the 1152px the canvas and the
+    // rail need side by side. Rendering the rail here would put both the
+    // blocker list and the crew preview after the entire checklist.
+    mockViewport('tablet');
+    renderBuilder();
+
+    expect(await screen.findByRole('button', { name: /preview/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Before publishing' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Crew view' })).not.toBeInTheDocument();
+  });
+
+  it('shows the rail instead of the modal once it fits beside the canvas', async () => {
+    mockViewport('laptop');
+    renderBuilder();
+
+    expect(await screen.findByRole('button', { name: 'Before publishing' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /preview/i })).not.toBeInTheDocument();
   });
 });
