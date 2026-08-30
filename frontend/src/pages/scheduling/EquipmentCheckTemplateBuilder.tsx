@@ -1192,6 +1192,11 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       }
     });
     quickAddQueues.current[job.compartmentKey] = request;
+    void request.finally(() => {
+      if (quickAddQueues.current[job.compartmentKey] === request) {
+        delete quickAddQueues.current[job.compartmentKey];
+      }
+    });
   };
 
   const handleQuickAdd = (compartmentIdx: number, payload: CatalogAddPayload) => {
@@ -1535,29 +1540,15 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     }
     if (autoSavePromiseRef.current) await autoSavePromiseRef.current;
     // Drafts deliberately bypass readiness checks; publication never does.
+    // Keep the blocking rules aligned with the backend instead of putting them
+    // in the overridable warning dialog below.
+    if (publish && !publishReady) return;
     const warnings: string[] = [];
     for (const comp of compartments) {
-      if (!comp.name.trim()) {
-        warnings.push('One or more compartments have no name.');
-        break;
-      }
-    }
-    for (const comp of compartments) {
       if (comp.isHeader) continue;
-      if (comp.items.length === 0) {
-        warnings.push(`Compartment "${comp.name || 'Untitled'}" has no items.`);
-        break;
-      }
       for (const item of comp.items) {
-        if (!item.name.trim()) {
-          warnings.push(`One or more items in "${comp.name || 'Untitled'}" have no name.`);
-          break;
-        }
         if (item.hasExpiration && !item.expirationDate.trim()) {
           warnings.push(`"${item.name || 'Untitled'}" has expiration enabled but no date set.`);
-        }
-        if (item.checkType === 'count' && !item.requiredQuantity && !item.expectedQuantity) {
-          warnings.push(`"${item.name || 'Untitled'}" is a quantity check but has no expected quantity.`);
         }
         if (
           item.checkType === 'count' &&
@@ -1566,9 +1557,6 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           Number(item.criticalMinimumQuantity) >= Number(item.expectedQuantity)
         ) {
           warnings.push(`"${item.name || 'Untitled'}" has critical minimum >= expected quantity.`);
-        }
-        if (item.checkType === 'level' && !item.minLevel) {
-          warnings.push(`"${item.name || 'Untitled'}" is a level check but has no minimum level set.`);
         }
         if (item.checkType === 'expiry' && !item.serialNumber && !item.lotNumber) {
           warnings.push(`"${item.name || 'Untitled'}" is a date/lot check but has no serial or lot number.`);
@@ -2729,6 +2717,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     if (item.saveStatus) {
       return (
         <div
+          key={itemKey}
           className="border-theme-surface-border bg-theme-surface flex min-h-12 items-center gap-3 rounded-md border px-3 py-2"
           aria-label={`${item.name} ${item.saveStatus === 'saving' ? 'Saving' : 'Not saved'}`}
         >
@@ -3901,16 +3890,21 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
   const setupReady = Boolean(form.name.trim() && form.checkTiming && form.templateType);
   const structureReady = compartments.some((comp) => !comp.isHeader);
   const itemsReady = stats.totalItems > 0;
+  const operationalCompartments = compartments.filter((comp) => !comp.isHeader);
   const blockingItems = compartments
     .flatMap((comp) => comp.items)
     .filter(
       (item) =>
         !item.name.trim() ||
-        (item.checkType === 'count' && !item.requiredQuantity && !item.expectedQuantity) ||
-        (item.checkType === 'level' && !item.minLevel)
+        (item.checkType === 'count' && item.requiredQuantity.trim() === '' && item.expectedQuantity.trim() === '') ||
+        (item.checkType === 'level' && item.minLevel.trim() === '')
     ).length;
   const locationsReady =
-    structureReady && compartments.every((comp) => comp.name.trim() && (comp.isHeader || comp.items.length > 0));
+    structureReady &&
+    compartments.every((comp) => comp.name.trim()) &&
+    operationalCompartments.every((comp) =>
+      comp.items.some((item) => item.checkType !== 'header' && item.checkType !== 'text')
+    );
   const publishReady = setupReady && locationsReady && blockingItems === 0;
 
   // ---------------------------------------------------------------------------
