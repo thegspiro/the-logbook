@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Bulk edits to a saved checklist now save every selected item (2026-08-30)
+
+**Fixed**
+
+- Selecting several items on a saved equipment-check template and applying a
+  bulk action — Set type, or Required/Optional — saved only the last item in
+  the selection. Every row updated on screen and the toast reported the full
+  count, so nothing looked wrong until the template was reloaded and the rest
+  reverted. All selected items are now saved.
+- Editing two different fields of the same item within about a second and a
+  half of each other kept only the field edited second. Both are now saved.
+
 ### Clearing a compliance setting on save now actually clears it (2026-08-30)
 
 **Fixed**
