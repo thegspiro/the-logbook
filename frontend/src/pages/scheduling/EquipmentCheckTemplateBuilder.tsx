@@ -1192,6 +1192,11 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       }
     });
     quickAddQueues.current[job.compartmentKey] = request;
+    void request.finally(() => {
+      if (quickAddQueues.current[job.compartmentKey] === request) {
+        delete quickAddQueues.current[job.compartmentKey];
+      }
+    });
   };
 
   const handleQuickAdd = (compartmentIdx: number, payload: CatalogAddPayload) => {
@@ -2712,6 +2717,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     if (item.saveStatus) {
       return (
         <div
+          key={itemKey}
           className="border-theme-surface-border bg-theme-surface flex min-h-12 items-center gap-3 rounded-md border px-3 py-2"
           aria-label={`${item.name} ${item.saveStatus === 'saving' ? 'Saving' : 'Not saved'}`}
         >

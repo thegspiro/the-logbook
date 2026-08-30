@@ -529,6 +529,30 @@ describe('EquipmentCheckTemplateBuilder quick add queue', () => {
     expect(addCheckItemsBulk).toHaveBeenCalledTimes(2);
   });
 
+  it("does not make one compartment wait for another compartment's slow response", async () => {
+    const user = userEvent.setup();
+    let resolveCab!: (value: unknown) => void;
+    addCheckItemsBulk.mockImplementation((compartmentId: string) => {
+      if (compartmentId === 'cab') return new Promise((resolve) => (resolveCab = resolve));
+      return Promise.resolve({ items: [savedItem('Trauma shears', 'shears')], createdCount: 1 });
+    });
+    renderBuilder();
+    const inputs = await screen.findAllByPlaceholderText(/search inventory/i);
+    const cabInput = inputs[0] as HTMLElement;
+    const bagInput = inputs[1] as HTMLElement;
+
+    await user.type(cabInput, 'Lantern{Enter}');
+    await user.type(bagInput, 'Trauma shears{Enter}');
+
+    expect(screen.getByLabelText('Lantern Saving')).toBeVisible();
+    await waitFor(() => expect(screen.queryByLabelText('Trauma shears Saving')).not.toBeInTheDocument());
+    expect(screen.getByText('Trauma shears')).toBeVisible();
+    expect(addCheckItemsBulk).toHaveBeenCalledTimes(2);
+
+    resolveCab({ items: [savedItem('Lantern', 'lantern')], createdCount: 1 });
+    await waitFor(() => expect(screen.queryByLabelText('Lantern Saving')).not.toBeInTheDocument());
+  });
+
   it('retains a failed row, retries with the same idempotency key, and keeps successful siblings', async () => {
     const user = userEvent.setup();
     addCheckItemsBulk
