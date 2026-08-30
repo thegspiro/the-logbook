@@ -45,6 +45,8 @@ interface CatalogQuickAddProps {
   /** Whether the viewer may write to the catalog (inventory.manage). */
   canCreateInventory: boolean;
   disabled?: boolean;
+  autoFocus?: boolean;
+  placeholder?: string;
 }
 
 const CatalogQuickAdd: React.FC<CatalogQuickAddProps> = ({
@@ -53,6 +55,8 @@ const CatalogQuickAdd: React.FC<CatalogQuickAddProps> = ({
   onAdd,
   canCreateInventory,
   disabled = false,
+  autoFocus = false,
+  placeholder = 'Search inventory or type a new item name…',
 }) => {
   const [results, setResults] = useState<CatalogResult[]>([]);
   const [open, setOpen] = useState(false);
@@ -63,6 +67,7 @@ const CatalogQuickAdd: React.FC<CatalogQuickAddProps> = ({
   const requestRef = useRef(0);
   const submittingRef = useRef(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
   const listboxId = useId();
   const [anchor, setAnchor] = useState<{
     top: number;
@@ -149,6 +154,7 @@ const CatalogQuickAdd: React.FC<CatalogQuickAddProps> = ({
     submittingRef.current = true;
     reset();
     await onAdd({ name });
+    inputRef.current?.focus();
   };
 
   /**
@@ -182,6 +188,7 @@ const CatalogQuickAdd: React.FC<CatalogQuickAddProps> = ({
       ...(result.trackingType === 'pool' ? { checkType: 'count' as const } : {}),
       ...(hasExpiration ? { hasExpiration: true } : {}),
     });
+    inputRef.current?.focus();
   };
 
   const createAndAdd = async () => {
@@ -199,6 +206,7 @@ const CatalogQuickAdd: React.FC<CatalogQuickAddProps> = ({
         quantity: 0,
       });
       await onAdd({ name: created.name, inventoryItemId: created.id, checkType: 'count' });
+      inputRef.current?.focus();
       toast.success(`Added “${created.name}” to inventory`);
     } catch (err: unknown) {
       submittingRef.current = false;
@@ -266,12 +274,14 @@ const CatalogQuickAdd: React.FC<CatalogQuickAddProps> = ({
         <div className="card focus-within:ring-theme-focus-ring flex min-w-0 flex-1 items-center gap-2 px-3 py-2 focus-within:ring-2">
           <Search className="text-theme-text-muted h-4 w-4 shrink-0" />
           <input
+            ref={inputRef}
             type="text"
+            autoFocus={autoFocus}
             autoCapitalize="none"
             autoCorrect="off"
             spellCheck={false}
             className="text-theme-text-primary placeholder:text-theme-text-muted min-w-0 flex-1 bg-transparent text-sm outline-none"
-            placeholder="Search inventory or type a new item name…"
+            placeholder={placeholder}
             value={value}
             disabled={disabled}
             role="combobox"

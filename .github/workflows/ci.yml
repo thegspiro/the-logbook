@@ -848,7 +848,12 @@ jobs:
   frontend-test:
     name: Frontend Tests
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    # Coverage instruments the entire 414-file source denominator and the
+    # current 5,447-test suite can take just over 25 minutes on a two-core
+    # runner. Keep a bounded timeout, but leave enough headroom for the test
+    # command to emit its JUnit and lcov reports instead of killing an otherwise
+    # passing run during coverage finalization.
+    timeout-minutes: 35
     defaults:
       run:
         working-directory: frontend
