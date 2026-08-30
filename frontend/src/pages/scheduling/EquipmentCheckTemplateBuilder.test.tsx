@@ -1014,6 +1014,27 @@ describe('EquipmentCheckTemplateBuilder single-canvas editor', () => {
     expect(within(row).getByRole('button', { name: 'Optional' })).toHaveAttribute('aria-pressed', 'false');
   });
 
+  it('keeps the par and minimum fields labelled once they hold values', async () => {
+    const user = userEvent.setup();
+    renderBuilder();
+
+    const row = (await screen.findByDisplayValue('Radio')).closest('[id="item-row-radio"]') as HTMLElement;
+    await user.click(within(row).getByRole('button', { name: 'Count' }));
+
+    const par = within(row).getByLabelText('Par quantity for Radio');
+    const minimum = within(row).getByLabelText('Minimum quantity for Radio');
+    await user.type(par, '4');
+    await user.type(minimum, '2');
+
+    // A placeholder would be gone by now, leaving two adjacent bare numbers
+    // with nothing to say which threshold is which. The name sits inside the
+    // field's box so it survives the value.
+    expect(par).toHaveValue(4);
+    expect(minimum).toHaveValue(2);
+    expect(par.parentElement).toHaveTextContent('par');
+    expect(minimum.parentElement).toHaveTextContent('min');
+  });
+
   it('names each publish blocker and jumps to the row that causes it', async () => {
     const user = userEvent.setup();
     renderBuilder();

@@ -3204,8 +3204,16 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       );
     }
 
+    // A placeholder is not a label: it disappears the moment a value loads, and
+    // a saved count item then shows two adjacent bare numbers with nothing to
+    // say which is the par and which is the minimum. The name sits *inside* the
+    // field's box instead — visible at rest, costs ~13px against a standing
+    // label's ~40px, and keeps the row on one line.
+    const numberFieldClass =
+      'border-theme-input-border bg-theme-input-bg focus-within:border-blue-400 flex shrink-0 items-center gap-1 rounded-md border px-1.5 py-1';
+    const numberFieldLabelClass = 'text-theme-text-muted text-[10px] leading-none';
     const numberInputClass =
-      'numeric-compact border-theme-input-border bg-theme-input-bg text-theme-text-primary focus:border-blue-400 rounded-md border px-1.5 py-1 text-center text-[13px] tabular-nums outline-none';
+      'numeric-compact text-theme-text-primary bg-transparent p-0 text-center text-[13px] tabular-nums outline-none';
 
     return (
       <div
@@ -3300,39 +3308,55 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           <div className="ml-auto flex shrink-0 flex-nowrap items-center justify-end gap-1.5">
             {item.checkType === 'count' && (
               <div className="flex shrink-0 items-center gap-1 whitespace-nowrap">
-                <input
-                  type="number"
-                  min="0"
-                  id={`item-par-${itemKey}`}
-                  placeholder="par"
-                  aria-label={`Par quantity for ${item.name.trim() || 'item'}`}
-                  className={`${numberInputClass} w-12`}
-                  value={item.expectedQuantity}
-                  onChange={(e) => updateItemFieldWithAutoSave(compIdx, itemIdx, { expectedQuantity: e.target.value })}
-                />
-                <input
-                  type="number"
-                  min="0"
-                  placeholder="min"
-                  aria-label={`Minimum quantity for ${item.name.trim() || 'item'}`}
-                  className={`${numberInputClass} w-12`}
-                  value={item.requiredQuantity}
-                  onChange={(e) => updateItemFieldWithAutoSave(compIdx, itemIdx, { requiredQuantity: e.target.value })}
-                />
+                <span className={numberFieldClass}>
+                  <span className={numberFieldLabelClass} aria-hidden="true">
+                    par
+                  </span>
+                  <input
+                    type="number"
+                    min="0"
+                    id={`item-par-${itemKey}`}
+                    aria-label={`Par quantity for ${item.name.trim() || 'item'}`}
+                    className={`${numberInputClass} w-7`}
+                    value={item.expectedQuantity}
+                    onChange={(e) =>
+                      updateItemFieldWithAutoSave(compIdx, itemIdx, { expectedQuantity: e.target.value })
+                    }
+                  />
+                </span>
+                <span className={numberFieldClass}>
+                  <span className={numberFieldLabelClass} aria-hidden="true">
+                    min
+                  </span>
+                  <input
+                    type="number"
+                    min="0"
+                    aria-label={`Minimum quantity for ${item.name.trim() || 'item'}`}
+                    className={`${numberInputClass} w-7`}
+                    value={item.requiredQuantity}
+                    onChange={(e) =>
+                      updateItemFieldWithAutoSave(compIdx, itemIdx, { requiredQuantity: e.target.value })
+                    }
+                  />
+                </span>
               </div>
             )}
             {item.checkType === 'level' && (
               <div className="flex shrink-0 items-center gap-1 whitespace-nowrap">
-                <input
-                  type="number"
-                  min="0"
-                  id={`item-min-level-${itemKey}`}
-                  placeholder="min"
-                  aria-label={`Minimum level for ${item.name.trim() || 'item'}`}
-                  className={`${numberInputClass} w-12 ${item.minLevel.trim() ? '' : 'border-amber-500'}`}
-                  value={item.minLevel}
-                  onChange={(e) => updateItemFieldWithAutoSave(compIdx, itemIdx, { minLevel: e.target.value })}
-                />
+                <span className={`${numberFieldClass} ${item.minLevel.trim() ? '' : 'border-amber-500'}`}>
+                  <span className={numberFieldLabelClass} aria-hidden="true">
+                    min
+                  </span>
+                  <input
+                    type="number"
+                    min="0"
+                    id={`item-min-level-${itemKey}`}
+                    aria-label={`Minimum level for ${item.name.trim() || 'item'}`}
+                    className={`${numberInputClass} w-7`}
+                    value={item.minLevel}
+                    onChange={(e) => updateItemFieldWithAutoSave(compIdx, itemIdx, { minLevel: e.target.value })}
+                  />
+                </span>
                 <select
                   aria-label={`Level unit for ${item.name.trim() || 'item'}`}
                   className="border-theme-input-border bg-theme-input-bg text-theme-text-secondary w-14 rounded-md border px-0.5 py-1 text-[11px]"
@@ -3350,18 +3374,21 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             )}
             {item.checkType === 'expiry' && (
               <div className="flex shrink-0 items-center gap-1 whitespace-nowrap">
-                <input
-                  type="number"
-                  min="0"
-                  placeholder="days"
-                  title="Days before the expiry date the crew is warned"
-                  aria-label={`Expiration warning days for ${item.name.trim() || 'item'}`}
-                  className={`${numberInputClass} w-14`}
-                  value={item.expirationWarningDays}
-                  onChange={(e) =>
-                    updateItemFieldWithAutoSave(compIdx, itemIdx, { expirationWarningDays: e.target.value })
-                  }
-                />
+                <span className={numberFieldClass} title="Days before the expiry date the crew is warned">
+                  <input
+                    type="number"
+                    min="0"
+                    aria-label={`Expiration warning days for ${item.name.trim() || 'item'}`}
+                    className={`${numberInputClass} w-7`}
+                    value={item.expirationWarningDays}
+                    onChange={(e) =>
+                      updateItemFieldWithAutoSave(compIdx, itemIdx, { expirationWarningDays: e.target.value })
+                    }
+                  />
+                  <span className={numberFieldLabelClass} aria-hidden="true">
+                    days
+                  </span>
+                </span>
               </div>
             )}
 
@@ -5237,7 +5264,14 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       {isLaptop && !isWideCanvas && compartments.length > 0 && (
         <div
           ref={actionBarRef}
-          className="border-theme-surface-border bg-theme-surface/95 action-bar-safe fixed right-0 bottom-0 left-0 z-40 border-t px-4 backdrop-blur-sm"
+          /* `left-0` only holds below `md`. From 768px AppLayout offsets the
+             content column by a fixed `md:ml-64`, while the side nav is itself
+             `fixed left-0 z-40` — so a viewport-anchored bar at the same
+             z-index, rendered after the nav, paints over its bottom. This bar
+             belongs to the checklist column, so it starts where that column
+             does. The phone bar below keeps a bare `left-0`: it renders only
+             under 640px, where the nav is an off-canvas drawer. */
+          className="border-theme-surface-border bg-theme-surface/95 action-bar-safe fixed right-0 bottom-0 left-0 z-40 border-t px-4 backdrop-blur-sm md:left-64"
           aria-label="Checklist action bar"
         >
           <div className="mx-auto flex min-h-14 max-w-[1440px] items-center justify-between gap-3">
