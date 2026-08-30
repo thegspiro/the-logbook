@@ -23,7 +23,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router';
 import { AlertTriangle, CalendarDays, ClipboardList, Grid3x3, List, Loader2, Search } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { schedulingService } from '../../modules/scheduling/services/api';
+import { equipmentCheckService } from '@/modules/inventory/services/equipmentCheckApi';
 import type { CheckLogEntry, CheckLogResponse } from '../../modules/scheduling/types/equipmentCheck';
 import { CHECK_OUTCOME_LABELS } from '../../modules/scheduling/types/equipmentCheck';
 import {
@@ -62,7 +62,7 @@ export const CheckLogPage: React.FC<CheckLogPageProps> = ({ apparatusId, showHea
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const result = await schedulingService.getCheckLog({
+      const result = await equipmentCheckService.getCheckLog({
         dates: windowDates,
         ...(apparatusId ? { apparatus_id: apparatusId } : {}),
       });

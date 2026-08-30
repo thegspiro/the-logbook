@@ -19,7 +19,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, Check, Link2, Loader2, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { Modal } from '@/components/Modal';
-import { schedulingService } from '@/modules/scheduling';
+import { equipmentCheckService } from '@/modules/inventory/services/equipmentCheckApi';
 import { getErrorMessage } from '@/utils/errorHandling';
 import type { InventoryMatch, LinkCoverage } from '@/modules/scheduling/types/equipmentCheck';
 
@@ -55,7 +55,7 @@ const InventoryMatchModal: React.FC<InventoryMatchModalProps> = ({ templateId, i
     if (!isOpen) return;
     let cancelled = false;
     setLoading(true);
-    void schedulingService
+    void equipmentCheckService
       .getInventoryMatches(templateId)
       .then((result) => {
         if (cancelled) return;
@@ -100,7 +100,7 @@ const InventoryMatchModal: React.FC<InventoryMatchModalProps> = ({ templateId, i
     if (selectedCount === 0) return;
     setSaving(true);
     try {
-      const result = await schedulingService.linkInventoryItems(templateId, choices);
+      const result = await equipmentCheckService.linkInventoryItems(templateId, choices);
       toast.success(`Linked ${result.linked} item${result.linked === 1 ? '' : 's'} to inventory`);
       onLinked(result.coverage);
       onClose();

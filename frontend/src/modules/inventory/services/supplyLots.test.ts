@@ -13,7 +13,7 @@ vi.mock('../../../utils/createApiClient', () => ({
   }),
 }));
 
-import { schedulingService } from './api';
+import { equipmentCheckService } from './equipmentCheckApi';
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -24,7 +24,7 @@ describe('schedulingService supply + swap', () => {
     const overview = { daysAhead: 30, total: 1, items: [] };
     mockGet.mockResolvedValueOnce({ data: overview });
 
-    const result = await schedulingService.getSupplyExpiringItems(30);
+    const result = await equipmentCheckService.getSupplyExpiringItems(30);
 
     expect(mockGet).toHaveBeenCalledWith('/equipment-checks/supply/expiring-items', {
       params: { days_ahead: 30 },
@@ -35,7 +35,7 @@ describe('schedulingService supply + swap', () => {
   it('getSupplyExpiringItems defaults days_ahead to 30', async () => {
     mockGet.mockResolvedValueOnce({ data: { daysAhead: 30, total: 0, items: [] } });
 
-    await schedulingService.getSupplyExpiringItems();
+    await equipmentCheckService.getSupplyExpiringItems();
 
     expect(mockGet).toHaveBeenCalledWith('/equipment-checks/supply/expiring-items', {
       params: { days_ahead: 30 },
@@ -46,7 +46,7 @@ describe('schedulingService supply + swap', () => {
     const res = { templateItemId: 'ti1', lotNumber: 'LOT-9', remainingQuantity: 4 };
     mockPost.mockResolvedValueOnce({ data: res });
 
-    const result = await schedulingService.swapItemLot('ti1', 'lot-9');
+    const result = await equipmentCheckService.swapItemLot('ti1', 'lot-9');
 
     // Defaults to a single unit, which is the whole story for a bracket that
     // holds one; a counted position passes its shortfall instead.
@@ -60,7 +60,7 @@ describe('schedulingService supply + swap', () => {
   it('swapItemLot carries a multi-unit restock through', async () => {
     mockPost.mockResolvedValueOnce({ data: { templateItemId: 'ti1', remainingQuantity: 7 } });
 
-    await schedulingService.swapItemLot('ti1', 'lot-9', 3);
+    await equipmentCheckService.swapItemLot('ti1', 'lot-9', 3);
 
     expect(mockPost).toHaveBeenCalledWith('/equipment-checks/items/ti1/swap', {
       inventory_lot_id: 'lot-9',

@@ -12,7 +12,7 @@ vi.mock('../../../utils/createApiClient', () => ({
   }),
 }));
 
-import { schedulingService } from './api';
+import { equipmentCheckService } from './equipmentCheckApi';
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -56,7 +56,7 @@ describe('check type normalization at the read boundary', () => {
   it('canonicalizes legacy spellings on a fetched template', async () => {
     mockGet.mockResolvedValueOnce({ data: legacyTemplate() });
 
-    const template = await schedulingService.getEquipmentCheckTemplate('tpl-1');
+    const template = await equipmentCheckService.getEquipmentCheckTemplate('tpl-1');
 
     expect(typesOf(template)).toEqual(['count', 'function', 'level', 'expiry']);
   });
@@ -64,7 +64,7 @@ describe('check type normalization at the read boundary', () => {
   it('canonicalizes them in the list response too', async () => {
     mockGet.mockResolvedValueOnce({ data: [legacyTemplate()] });
 
-    const templates = await schedulingService.getEquipmentCheckTemplates();
+    const templates = await equipmentCheckService.getEquipmentCheckTemplates();
     const [first] = templates;
 
     expect(first).toBeDefined();
@@ -94,7 +94,7 @@ describe('check type normalization at the read boundary', () => {
       },
     });
 
-    const template = await schedulingService.getEquipmentCheckTemplate('tpl-2');
+    const template = await equipmentCheckService.getEquipmentCheckTemplate('tpl-2');
 
     expect(typesOf(template)).toEqual(['count', 'function', 'header', 'text']);
   });
@@ -102,7 +102,7 @@ describe('check type normalization at the read boundary', () => {
   it('does not choke on a template with no compartments', async () => {
     mockGet.mockResolvedValueOnce({ data: { id: 'tpl-3', name: 'Empty' } });
 
-    await expect(schedulingService.getEquipmentCheckTemplate('tpl-3')).resolves.toMatchObject({
+    await expect(equipmentCheckService.getEquipmentCheckTemplate('tpl-3')).resolves.toMatchObject({
       id: 'tpl-3',
     });
   });

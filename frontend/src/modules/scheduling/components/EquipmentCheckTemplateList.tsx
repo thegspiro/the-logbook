@@ -24,7 +24,7 @@ import {
   AlertCircle,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { schedulingService } from '../services/api';
+import { equipmentCheckService } from '@/modules/inventory/services/equipmentCheckApi';
 import type { EquipmentCheckTemplate } from '../types/equipmentCheck';
 import { TEMPLATE_TYPE_LABELS, type TemplateType } from '../types/equipmentCheck';
 import { getErrorMessage } from '../../../utils/errorHandling';
@@ -74,7 +74,7 @@ export const EquipmentCheckTemplateList: React.FC = () => {
 
   const loadTemplates = useCallback(async () => {
     try {
-      const data = await schedulingService.getEquipmentCheckTemplates();
+      const data = await equipmentCheckService.getEquipmentCheckTemplates();
       setTemplates(data);
     } catch (err) {
       toast.error(getErrorMessage(err, 'Failed to load templates'));
@@ -90,7 +90,7 @@ export const EquipmentCheckTemplateList: React.FC = () => {
   const handleToggleActive = async (template: EquipmentCheckTemplate) => {
     setTogglingId(template.id);
     try {
-      await schedulingService.updateEquipmentCheckTemplate(template.id, {
+      await equipmentCheckService.updateEquipmentCheckTemplate(template.id, {
         is_active: !template.isActive,
       });
       setTemplates((prev) => prev.map((t) => (t.id === template.id ? { ...t, isActive: !t.isActive } : t)));
@@ -114,7 +114,7 @@ export const EquipmentCheckTemplateList: React.FC = () => {
       return;
     setDeletingId(template.id);
     try {
-      await schedulingService.deleteEquipmentCheckTemplate(template.id);
+      await equipmentCheckService.deleteEquipmentCheckTemplate(template.id);
       setTemplates((prev) => prev.filter((t) => t.id !== template.id));
       toast.success('Template deleted');
     } catch (err) {
@@ -135,7 +135,7 @@ export const EquipmentCheckTemplateList: React.FC = () => {
     const template = cloneTarget;
     setCloning(true);
     try {
-      const cloned = await schedulingService.cloneEquipmentCheckTemplate(
+      const cloned = await equipmentCheckService.cloneEquipmentCheckTemplate(
         template.id,
         newName || cloneNameFor(template)
       );

@@ -17,8 +17,10 @@ const mockGetLastCheckSeals = vi.fn();
 const mockSubmitCheck = vi.fn();
 const authenticatedUser = { id: 'user-1', organization_id: 'org-1' };
 
-vi.mock('../../modules/scheduling/services/api', () => ({
-  schedulingService: {
+// Equipment-check calls moved to modules/inventory when checklists
+// became an Inventory feature; the scheduling service re-exports it.
+vi.mock('@/modules/inventory/services/equipmentCheckApi', () => ({
+  equipmentCheckService: {
     getLastCheckResults: (...a: unknown[]) => mockGetLastCheckResults(...a) as unknown,
     getLastCheckSeals: (...a: unknown[]) => mockGetLastCheckSeals(...a) as unknown,
     submitEquipmentCheck: (...a: unknown[]) => mockSubmitCheck(...a) as unknown,

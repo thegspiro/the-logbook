@@ -35,7 +35,7 @@ import {
   X,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { schedulingService } from '../../modules/scheduling/services/api';
+import { equipmentCheckService } from '@/modules/inventory/services/equipmentCheckApi';
 import { apparatusService } from '../../modules/apparatus/services/api';
 import { useAuthStore } from '../../stores/authStore';
 import type {
@@ -121,7 +121,7 @@ const ApparatusInventoryPage: React.FC<ApparatusInventoryPageProps> = ({ apparat
     }
     setLoading(true);
     try {
-      setInventory(await schedulingService.getApparatusInventory(targetId));
+      setInventory(await equipmentCheckService.getApparatusInventory(targetId));
       return true;
     } catch (err: unknown) {
       setInventory(null);
@@ -159,7 +159,7 @@ const ApparatusInventoryPage: React.FC<ApparatusInventoryPageProps> = ({ apparat
   const reportUsed = async (item: ApparatusInventoryItem, note: string) => {
     setBusyItemId(item.templateItemId);
     try {
-      await schedulingService.reportItemUsed(item.templateItemId, note);
+      await equipmentCheckService.reportItemUsed(item.templateItemId, note);
       toast.success('Reported — the supply officer sees this now');
       await load(selectedId);
     } catch (err: unknown) {
@@ -182,9 +182,9 @@ const ApparatusInventoryPage: React.FC<ApparatusInventoryPageProps> = ({ apparat
     setBusyItemId(item.templateItemId);
     try {
       if (delta < 0) {
-        await schedulingService.reportItemUsed(item.templateItemId, undefined, -delta);
+        await equipmentCheckService.reportItemUsed(item.templateItemId, undefined, -delta);
       } else {
-        await schedulingService.setItemQuantity(item.templateItemId, current + delta);
+        await equipmentCheckService.setItemQuantity(item.templateItemId, current + delta);
       }
       await load(selectedId);
     } catch (err: unknown) {
@@ -197,7 +197,7 @@ const ApparatusInventoryPage: React.FC<ApparatusInventoryPageProps> = ({ apparat
   const openLots = async (item: ApparatusInventoryItem) => {
     setLotsBusy(true);
     try {
-      setLotsTarget(await schedulingService.getItemDeployedLots(item.templateItemId));
+      setLotsTarget(await equipmentCheckService.getItemDeployedLots(item.templateItemId));
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to load the lots on this truck'));
     } finally {
@@ -221,7 +221,7 @@ const ApparatusInventoryPage: React.FC<ApparatusInventoryPageProps> = ({ apparat
     if (!lotsTarget) return;
     setLotsBusy(true);
     try {
-      const updated = await schedulingService.updateDeployedLot(lotsTarget.templateItemId, lotId, changes);
+      const updated = await equipmentCheckService.updateDeployedLot(lotsTarget.templateItemId, lotId, changes);
       setLotsTarget(updated);
       await load(selectedId);
     } catch (err: unknown) {
@@ -234,7 +234,7 @@ const ApparatusInventoryPage: React.FC<ApparatusInventoryPageProps> = ({ apparat
   const clearRestock = async (item: ApparatusInventoryItem) => {
     setBusyItemId(item.templateItemId);
     try {
-      await schedulingService.clearItemRestock(item.templateItemId);
+      await equipmentCheckService.clearItemRestock(item.templateItemId);
       toast.success('Restock report withdrawn');
       await load(selectedId);
     } catch (err: unknown) {
@@ -247,7 +247,7 @@ const ApparatusInventoryPage: React.FC<ApparatusInventoryPageProps> = ({ apparat
   const swapLot = async (item: ApparatusInventoryItem, lot: ReadyLot, quantity: number) => {
     setBusyItemId(item.templateItemId);
     try {
-      await schedulingService.swapItemLot(item.templateItemId, lot.id, quantity);
+      await equipmentCheckService.swapItemLot(item.templateItemId, lot.id, quantity);
       toast.success('Fresh stock is on the truck');
       setSwapTarget(null);
       await load(selectedId);

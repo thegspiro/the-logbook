@@ -38,7 +38,7 @@ import {
   PackageCheck,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { schedulingService } from '../../modules/scheduling/services/api';
+import { equipmentCheckService } from '@/modules/inventory/services/equipmentCheckApi';
 import { inventoryService } from '../../services/inventoryService';
 import type { InventoryLot } from '../../services/eventServices';
 import { getErrorMessage, isNetworkError, isNonRetryableHttpError } from '../../utils/errorHandling';
@@ -409,7 +409,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
           let checkId = entry.submittedCheckId;
           let submittedItemIds = entry.submittedItemIds;
           if (!checkId) {
-            const record = await schedulingService.submitEquipmentCheck(entry.shiftId, entry.payload);
+            const record = await equipmentCheckService.submitEquipmentCheck(entry.shiftId, entry.payload);
             checkId = record.id;
             submittedItemIds = Object.fromEntries(
               (record.items ?? [])
@@ -435,7 +435,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
               throw new Error(`Submitted check item not found for template item ${templateItemId}`);
             }
             const files = photos.map((p) => new File([p.blob], p.fileName, { type: p.blob.type }));
-            await schedulingService.uploadCheckItemPhotos(checkId, checkItemId, files);
+            await equipmentCheckService.uploadCheckItemPhotos(checkId, checkItemId, files);
             // Checkpoint before the next group can fail. The endpoint appends
             // to the item's photo_urls and caps it at three, so a group left
             // queued after a successful POST is re-uploaded on the next drain
@@ -656,7 +656,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
       if (isReplacement && !disposition) return;
       setSwapping(true);
       try {
-        const res = await schedulingService.swapItemLot(
+        const res = await equipmentCheckService.swapItemLot(
           swapTarget.id,
           lot.id,
           1,
@@ -932,7 +932,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
   useEffect(() => {
     if (previewMode) return;
     let cancelled = false;
-    schedulingService
+    equipmentCheckService
       .getLastCheckResults(template.id, template.apparatusId)
       .then((data) => {
         if (cancelled) return;
@@ -981,7 +981,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
     // is every apparatus check on a truck without a drug bag.
     if (!compartments.some((comp) => comp.isSealed)) return;
     let cancelled = false;
-    schedulingService
+    equipmentCheckService
       .getLastCheckSeals(template.id, template.apparatusId)
       .then((data) => {
         if (!cancelled) setLastSeals(data);
@@ -1003,7 +1003,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
   useEffect(() => {
     if (!existingCheckId || previewMode) return;
     let cancelled = false;
-    schedulingService
+    equipmentCheckService
       .getEquipmentCheck(existingCheckId)
       .then((record) => {
         if (cancelled) return;
@@ -1498,13 +1498,13 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
       let checkResult;
       if (shiftId) {
         const payload: ShiftEquipmentCheckCreate = basePayload;
-        checkResult = await schedulingService.submitEquipmentCheck(shiftId, payload);
+        checkResult = await equipmentCheckService.submitEquipmentCheck(shiftId, payload);
       } else {
         const payload: StandaloneEquipmentCheckCreate = {
           ...basePayload,
           apparatus_id: template.apparatusId || undefined,
         };
-        checkResult = await schedulingService.submitStandaloneCheck(payload);
+        checkResult = await equipmentCheckService.submitStandaloneCheck(payload);
       }
 
       const submittedItemIds = Object.fromEntries(
@@ -1539,7 +1539,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
           if (!checkItemId) {
             throw new Error(`Submitted check item not found for template item ${itemId}`);
           }
-          await schedulingService.uploadCheckItemPhotos(checkResult.id, checkItemId, files);
+          await equipmentCheckService.uploadCheckItemPhotos(checkResult.id, checkItemId, files);
           outstandingPhotoCount -= files.length;
           if (photoQueueId) await markPhotosUploaded(photoQueueId, itemId);
         }

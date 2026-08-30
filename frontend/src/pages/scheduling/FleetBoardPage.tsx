@@ -26,7 +26,7 @@ import {
   Wrench,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { schedulingService } from '../../modules/scheduling/services/api';
+import { equipmentCheckService } from '@/modules/inventory/services/equipmentCheckApi';
 import type { FleetApparatusReadiness, FleetReadinessResponse } from '../../modules/scheduling/types/equipmentCheck';
 import type { ActiveChecklistRecord } from '../../modules/scheduling/services/api';
 import { READINESS_LABELS } from '../../modules/scheduling/types/equipmentCheck';
@@ -78,8 +78,8 @@ export const FleetBoardPage: React.FC<FleetBoardPageProps> = ({ onOpenMyChecks }
       // The member's own checklists come from the endpoint that already
       // resolves them by position; the board does not re-derive that.
       const [readiness, checklists] = await Promise.all([
-        schedulingService.getFleetReadiness(),
-        schedulingService.getMyChecklists(),
+        equipmentCheckService.getFleetReadiness(),
+        equipmentCheckService.getMyChecklists(),
       ]);
       setFleet(readiness);
       setMine(checklists);

@@ -26,6 +26,7 @@ import { useEnabledModules } from '../hooks/useEnabledModules';
 import { formatTimeOfDay, localToUTC } from '../utils/dateFormatting';
 import { enumLabel } from '../utils/displayValue';
 import { schedulingService, useSchedulingStore } from '../modules/scheduling';
+import { equipmentCheckService } from '@/modules/inventory/services/equipmentCheckApi';
 import type { ShiftRecord, ShiftTemplateRecord } from '../modules/scheduling';
 import { resolveTemplatePositions } from '../modules/scheduling/services/api';
 import { trainingModuleConfigService } from '../services/api';
@@ -167,7 +168,7 @@ const SchedulingPage: React.FC = () => {
   useEffect(() => {
     if (!canManage) return;
     let cancelled = false;
-    void schedulingService
+    void equipmentCheckService
       .getSupplyExpiringItems(30)
       .then((res) => {
         if (!cancelled) setSupplyCount(res.total);

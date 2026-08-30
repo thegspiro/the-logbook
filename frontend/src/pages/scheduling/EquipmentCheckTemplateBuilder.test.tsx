@@ -40,6 +40,13 @@ vi.mock('react-hot-toast', () => ({ default: { success: toastSuccess, error: toa
 vi.mock('@/modules/scheduling', () => ({
   schedulingService: {
     getApparatusOptions: vi.fn().mockResolvedValue({ options: [] }),
+  },
+}));
+
+// Equipment-check calls moved to modules/inventory when checklists
+// became an Inventory feature; the scheduling service re-exports it.
+vi.mock('@/modules/inventory/services/equipmentCheckApi', () => ({
+  equipmentCheckService: {
     getEquipmentCheckTemplate: (...args: unknown[]) => getTemplate(...args),
     updateCheckItem: (...args: unknown[]) => updateCheckItem(...args),
     addCheckItem: (...args: unknown[]) => addCheckItem(...args),

@@ -7,8 +7,10 @@ import type { CheckLogEntry, CheckLogResponse } from '../../modules/scheduling/t
 
 const mockGetCheckLog = vi.fn();
 
-vi.mock('../../modules/scheduling/services/api', () => ({
-  schedulingService: {
+// Equipment-check calls moved to modules/inventory when checklists
+// became an Inventory feature; the scheduling service re-exports it.
+vi.mock('@/modules/inventory/services/equipmentCheckApi', () => ({
+  equipmentCheckService: {
     getCheckLog: (...a: unknown[]) => mockGetCheckLog(...a) as unknown,
   },
 }));

@@ -17,7 +17,7 @@ import {
   CheckCircle,
   XCircle,
 } from 'lucide-react';
-import { schedulingService } from '../../modules/scheduling/services/api';
+import { equipmentCheckService } from '@/modules/inventory/services/equipmentCheckApi';
 import type {
   ComplianceReport,
   FailureLogResponse,
@@ -123,7 +123,7 @@ const ComplianceTab: React.FC<{ startDate: string; endDate: string; tz: string }
     const load = async () => {
       setLoading(true);
       try {
-        const result = await schedulingService.getEquipmentComplianceReport({
+        const result = await equipmentCheckService.getEquipmentComplianceReport({
           date_from: startDate,
           date_to: endDate,
         });
@@ -138,7 +138,7 @@ const ComplianceTab: React.FC<{ startDate: string; endDate: string; tz: string }
   }, [startDate, endDate]);
 
   const handleExportCsv = () => {
-    const url = schedulingService.getReportExportUrl({
+    const url = equipmentCheckService.getReportExportUrl({
       report_type: 'compliance',
       date_from: startDate,
       date_to: endDate,
@@ -147,7 +147,7 @@ const ComplianceTab: React.FC<{ startDate: string; endDate: string; tz: string }
   };
 
   const handleExportPdf = () => {
-    const url = schedulingService.getReportPdfExportUrl({
+    const url = equipmentCheckService.getReportPdfExportUrl({
       report_type: 'compliance',
       date_from: startDate,
       date_to: endDate,
@@ -308,7 +308,7 @@ const FailuresTab: React.FC<{ startDate: string; endDate: string; tz: string }> 
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const result = await schedulingService.getFailureLog({
+      const result = await equipmentCheckService.getFailureLog({
         date_from: startDate,
         date_to: endDate,
         item_name: searchTerm || undefined,
@@ -341,7 +341,7 @@ const FailuresTab: React.FC<{ startDate: string; endDate: string; tz: string }> 
   }, [loadData]);
 
   const handleExportCsv = () => {
-    const url = schedulingService.getReportExportUrl({
+    const url = equipmentCheckService.getReportExportUrl({
       report_type: 'failures',
       date_from: startDate,
       date_to: endDate,
@@ -350,7 +350,7 @@ const FailuresTab: React.FC<{ startDate: string; endDate: string; tz: string }> 
   };
 
   const handleExportPdf = () => {
-    const url = schedulingService.getReportPdfExportUrl({
+    const url = equipmentCheckService.getReportPdfExportUrl({
       report_type: 'failures',
       date_from: startDate,
       date_to: endDate,
@@ -468,7 +468,7 @@ const TrendsTab: React.FC<{ startDate: string; endDate: string; tz: string }> = 
   useEffect(() => {
     const load = async () => {
       try {
-        const result = await schedulingService.getEquipmentCheckTemplates({});
+        const result = await equipmentCheckService.getEquipmentCheckTemplates({});
         setTemplates(result);
       } catch (err: unknown) {
         // An empty picker and a picker whose contents failed to load looked
@@ -502,7 +502,7 @@ const TrendsTab: React.FC<{ startDate: string; endDate: string; tz: string }> = 
       setLoading(true);
       setError(null);
       try {
-        const result = await schedulingService.getItemTrends({
+        const result = await equipmentCheckService.getItemTrends({
           template_item_id: selectedItemId,
           date_from: startDate,
           date_to: endDate,
@@ -531,7 +531,7 @@ const TrendsTab: React.FC<{ startDate: string; endDate: string; tz: string }> = 
 
   const handleExport = () => {
     if (!selectedItemId) return;
-    const url = schedulingService.getReportExportUrl({
+    const url = equipmentCheckService.getReportExportUrl({
       report_type: 'item-trends',
       template_item_id: selectedItemId,
       date_from: startDate,

@@ -18,13 +18,20 @@ vi.mock('../modules/scheduling/services/api', () => ({
     getTemplates: vi.fn().mockResolvedValue([]),
     getWeekCalendar: vi.fn().mockResolvedValue([]),
     getMonthCalendar: vi.fn().mockResolvedValue([]),
+    getMyAssignments: vi.fn().mockResolvedValue([]),
+    getMyShifts: vi.fn().mockResolvedValue([]),
+    getOpenShifts: vi.fn().mockResolvedValue([]),
+  },
+}));
+
+// Equipment-check calls moved to modules/inventory when checklists
+// became an Inventory feature; the scheduling service re-exports it.
+vi.mock('@/modules/inventory/services/equipmentCheckApi', () => ({
+  equipmentCheckService: {
     getSupplyExpiringItems: vi.fn().mockResolvedValue({ total: 0, items: [] }),
     getMyChecklists: vi.fn().mockResolvedValue([]),
     getMyChecklistHistory: vi.fn().mockResolvedValue([]),
     getEquipmentCheckTemplates: vi.fn().mockResolvedValue([]),
-    getMyAssignments: vi.fn().mockResolvedValue([]),
-    getMyShifts: vi.fn().mockResolvedValue([]),
-    getOpenShifts: vi.fn().mockResolvedValue([]),
   },
 }));
 

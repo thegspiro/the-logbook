@@ -68,6 +68,7 @@ import { formatDateTime } from '@/utils/dateFormatting';
 import { useTimezone } from '@/hooks/useTimezone';
 import { useUnsavedChanges } from '@/hooks/useUnsavedChanges';
 import { schedulingService } from '@/modules/scheduling';
+import { equipmentCheckService } from '@/modules/inventory/services/equipmentCheckApi';
 import {
   canMoveCompartment,
   moveCompartment as moveCompartmentInTree,
@@ -543,7 +544,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
   const loadTemplate = useCallback(async (id: string) => {
     setLoading(true);
     try {
-      const data: EquipmentCheckTemplate = await schedulingService.getEquipmentCheckTemplate(id);
+      const data: EquipmentCheckTemplate = await equipmentCheckService.getEquipmentCheckTemplate(id);
       setForm({
         name: data.name,
         description: data.description ?? '',
@@ -698,7 +699,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           ...(parentCompartmentId ? { parent_compartment_id: parentCompartmentId } : {}),
         };
         await ensureDraftBeforeStructureEdit();
-        const created = await schedulingService.addCompartment(templateId, payload);
+        const created = await equipmentCheckService.addCompartment(templateId, payload);
         const comp: CompartmentFormState = {
           clientKey: newCompartmentKey(),
           id: created.id,
@@ -738,7 +739,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           is_header: true,
         };
         await ensureDraftBeforeStructureEdit();
-        const created = await schedulingService.addCompartment(templateId, payload);
+        const created = await equipmentCheckService.addCompartment(templateId, payload);
         const comp: CompartmentFormState = {
           clientKey: newCompartmentKey(),
           id: created.id,
@@ -785,7 +786,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     if (comp.id) {
       try {
         await ensureDraftBeforeStructureEdit();
-        await schedulingService.deleteCompartment(comp.id);
+        await equipmentCheckService.deleteCompartment(comp.id);
         toast.success('Compartment deleted');
       } catch (err: unknown) {
         toast.error(getErrorMessage(err, 'Failed to delete compartment'));
@@ -814,7 +815,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     if (comp.id) {
       try {
         await ensureDraftBeforeStructureEdit();
-        copy = compartmentFormFromResponse(await schedulingService.cloneCompartment(comp.id, idx + 1));
+        copy = compartmentFormFromResponse(await equipmentCheckService.cloneCompartment(comp.id, idx + 1));
       } catch (err: unknown) {
         toast.error(getErrorMessage(err, 'Failed to duplicate compartment'));
         return;
@@ -847,7 +848,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           is_required: false,
         };
         await ensureDraftBeforeStructureEdit();
-        const created = await schedulingService.addCheckItem(comp.id, payload);
+        const created = await equipmentCheckService.addCheckItem(comp.id, payload);
         const item: ItemFormState = {
           clientKey: newItemKey(),
           id: created.id,
@@ -914,7 +915,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     if (item.id) {
       try {
         await ensureDraftBeforeStructureEdit();
-        await schedulingService.deleteCheckItem(item.id);
+        await equipmentCheckService.deleteCheckItem(item.id);
         toast.success('Item deleted');
       } catch (err: unknown) {
         toast.error(getErrorMessage(err, 'Failed to delete item'));
@@ -936,7 +937,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     if (comp.id && item.id) {
       try {
         await ensureDraftBeforeStructureEdit();
-        const created = await schedulingService.addCheckItem(
+        const created = await equipmentCheckService.addCheckItem(
           comp.id,
           itemCreateFromForm(item, itemIdx + 1, `${item.name} (copy)`)
         );
@@ -963,7 +964,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     if (comp.id && item.id) {
       try {
         await ensureDraftBeforeStructureEdit();
-        await schedulingService.reorderItems(
+        await equipmentCheckService.reorderItems(
           comp.id,
           updatedItems.map((entry) => entry.id).filter((id): id is string => Boolean(id))
         );
@@ -1012,7 +1013,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       if (savedIds.length > 0) {
         try {
           await ensureDraftBeforeStructureEdit();
-          await schedulingService.reorderItems(comp.id, savedIds);
+          await equipmentCheckService.reorderItems(comp.id, savedIds);
         } catch {
           setExpandedItems((prev) => new Set(prev).add(item.id ?? item.clientKey));
           toast.error(`Could not reorder “${item.name || 'item'}.” Its original order was restored.`);
@@ -1051,7 +1052,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       if (isEditing && currentItem.id && currentDestination.id) {
         try {
           await ensureDraftBeforeStructureEdit();
-          await schedulingService.updateCheckItem(currentItem.id, {
+          await equipmentCheckService.updateCheckItem(currentItem.id, {
             compartment_id: currentDestination.id,
             sort_order: currentDestination.items.length,
           });
@@ -1106,7 +1107,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     if (isEditing && templateId) {
       try {
         await ensureDraftBeforeStructureEdit();
-        await schedulingService.reorderCompartments(templateId, orderedCompartmentIds(reordered));
+        await equipmentCheckService.reorderCompartments(templateId, orderedCompartmentIds(reordered));
       } catch {
         toast.error('Could not reorder compartment. Its original order was restored.');
         return;
@@ -1207,7 +1208,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       const idempotencyKey = previousRequest?.payload === payload ? previousRequest.key : crypto.randomUUID();
       bulkDeleteIdempotencyKeys.current[key] = { key: idempotencyKey, payload };
       await ensureDraftBeforeStructureEdit();
-      const result = await schedulingService.deleteCheckItemsBulk(comp.id, itemIds, idempotencyKey);
+      const result = await equipmentCheckService.deleteCheckItemsBulk(comp.id, itemIds, idempotencyKey);
       const requestedIds = new Set(itemIds);
       const deletedIds = new Set(result.deletedItemIds.filter((itemId) => requestedIds.has(itemId)));
       const remainingItems = comp.items.filter((item) => !item.id || !deletedIds.has(item.id));
@@ -1294,7 +1295,11 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     const request = previous.then(async () => {
       try {
         await ensureDraftBeforeStructureEdit();
-        const result = await schedulingService.addCheckItemsBulk(job.compartmentId, [job.payload], job.idempotencyKey);
+        const result = await equipmentCheckService.addCheckItemsBulk(
+          job.compartmentId,
+          [job.payload],
+          job.idempotencyKey
+        );
         const created = result.items[0];
         if (!created) throw new Error('The server did not return the saved item');
         replaceQuickAddItem(job.compartmentKey, job.clientKey, itemFormFromResponse(created));
@@ -1428,7 +1433,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           previousRequest?.payload === payloadFingerprint ? previousRequest.key : crypto.randomUUID();
         bulkIdempotencyKeys.current[requestKey] = { key: idempotencyKey, payload: payloadFingerprint };
         await ensureDraftBeforeStructureEdit();
-        const result = await schedulingService.addCheckItemsBulk(comp.id, payload, idempotencyKey);
+        const result = await equipmentCheckService.addCheckItemsBulk(comp.id, payload, idempotencyKey);
         delete bulkIdempotencyKeys.current[requestKey];
         const newItems = result.items.map(itemFormFromResponse);
         updateCompartmentField(compartmentIdx, { items: [...comp.items, ...newItems] });
@@ -1483,7 +1488,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           previousRequest?.payload === payloadFingerprint ? previousRequest.key : crypto.randomUUID();
         bulkIdempotencyKeys.current[requestKey] = { key: idempotencyKey, payload: payloadFingerprint };
         await ensureDraftBeforeStructureEdit();
-        const result = await schedulingService.addCheckItemsBulk(comp.id, items, idempotencyKey);
+        const result = await equipmentCheckService.addCheckItemsBulk(comp.id, items, idempotencyKey);
         delete bulkIdempotencyKeys.current[requestKey];
         const newItems = result.items.map(itemFormFromResponse);
         updateCompartmentField(compartmentIdx, { items: [...comp.items, ...newItems] });
@@ -1637,7 +1642,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       const timer = setTimeout(() => {
         autoSavePendingRef.current.delete(itemId);
         const request: Promise<void> = ensureDraftBeforeStructureEdit()
-          .then(() => schedulingService.updateCheckItem(itemId, merged))
+          .then(() => equipmentCheckService.updateCheckItem(itemId, merged))
           .then(() => undefined)
           .catch(() => {
             autoSaveErrorRef.current = true;
@@ -1778,7 +1783,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
         }));
 
       if (isEditing && templateId) {
-        await schedulingService.updateEquipmentCheckTemplate(templateId, {
+        await equipmentCheckService.updateEquipmentCheckTemplate(templateId, {
           name: form.name.trim(),
           description: form.description.trim() || undefined,
           check_timing: form.checkTiming,
@@ -1792,7 +1797,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
         // Save any new compartments that haven't been persisted yet
         for (const payload of compartmentPayloads) {
           await ensureDraftBeforeStructureEdit();
-          await schedulingService.addCompartment(templateId, payload);
+          await equipmentCheckService.addCompartment(templateId, payload);
         }
 
         // Update existing compartments and items in parallel
@@ -1800,7 +1805,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
         for (const comp of compartments) {
           if (comp.id) {
             updatePromises.push(
-              schedulingService.updateCompartment(comp.id, {
+              equipmentCheckService.updateCompartment(comp.id, {
                 name: comp.name,
                 description: comp.description.trim() || undefined,
                 image_url: comp.imageUrl.trim() || undefined,
@@ -1814,7 +1819,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             for (const item of comp.items) {
               if (item.id) {
                 updatePromises.push(
-                  schedulingService.updateCheckItem(item.id, {
+                  equipmentCheckService.updateCheckItem(item.id, {
                     name: item.name,
                     description: item.description.trim() || undefined,
                     check_type: item.checkType,
@@ -1844,7 +1849,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
         await Promise.all(updatePromises);
 
         if (publish) {
-          await schedulingService.updateEquipmentCheckTemplate(templateId, { is_active: true });
+          await equipmentCheckService.updateEquipmentCheckTemplate(templateId, { is_active: true });
         }
         setForm((current) => ({ ...current, isActive: publish }));
         setIsDirty(false);
@@ -1891,7 +1896,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             })),
           })),
         };
-        const created = await schedulingService.createEquipmentCheckTemplate(createPayload);
+        const created = await equipmentCheckService.createEquipmentCheckTemplate(createPayload);
         setIsDirty(false);
         toast.success(publish ? 'Template published' : 'Draft saved');
         // Navigate to edit mode so subsequent saves work as updates
@@ -1961,7 +1966,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     if (!templateId) return;
     setChangelogLoading(true);
     try {
-      const result = await schedulingService.getTemplateChangelog(templateId, { limit: 50 });
+      const result = await equipmentCheckService.getTemplateChangelog(templateId, { limit: 50 });
       setChangelogEntries(result.items);
       setChangelogTotal(result.total);
     } catch {
@@ -2024,7 +2029,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     if (!templateId) return;
     setCloning(true);
     try {
-      const cloned = await schedulingService.cloneEquipmentCheckTemplate(templateId, '');
+      const cloned = await equipmentCheckService.cloneEquipmentCheckTemplate(templateId, '');
       setIsDirty(false);
       toast.success('Template cloned');
       void navigate(`/scheduling/equipment-check-templates/${cloned.id}`, { replace: true });
@@ -2599,7 +2604,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     if (isEditing && templateId) {
       try {
         await ensureDraftBeforeStructureEdit();
-        await schedulingService.reorderCompartments(templateId, orderedCompartmentIds(reordered));
+        await equipmentCheckService.reorderCompartments(templateId, orderedCompartmentIds(reordered));
       } catch {
         toast.error('Could not reorder compartment. Its original order was restored.');
         return;
@@ -2630,7 +2635,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       if (savedIds.length > 0) {
         try {
           await ensureDraftBeforeStructureEdit();
-          await schedulingService.reorderItems(comp.id, savedIds);
+          await equipmentCheckService.reorderItems(comp.id, savedIds);
         } catch {
           setExpandedItems((prev) => new Set(prev).add(movedItem.id ?? movedItem.clientKey));
           toast.error(`Could not reorder “${movedItem.name || 'item'}.” Its original order was restored.`);
@@ -4868,7 +4873,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                   <Upload className="h-4 w-4" /> Import spreadsheet
                 </button>
                 <a
-                  href={schedulingService.getCsvSampleUrl()}
+                  href={equipmentCheckService.getCsvSampleUrl()}
                   download
                   className="hover:bg-theme-surface-secondary flex min-h-10 items-center gap-2 rounded-md px-3 text-sm"
                 >

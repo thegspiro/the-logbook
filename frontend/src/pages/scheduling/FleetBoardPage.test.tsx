@@ -8,8 +8,10 @@ import type { FleetApparatusReadiness, FleetReadinessResponse } from '../../modu
 const mockGetFleetReadiness = vi.fn();
 const mockGetMyChecklists = vi.fn();
 
-vi.mock('../../modules/scheduling/services/api', () => ({
-  schedulingService: {
+// Equipment-check calls moved to modules/inventory when checklists
+// became an Inventory feature; the scheduling service re-exports it.
+vi.mock('@/modules/inventory/services/equipmentCheckApi', () => ({
+  equipmentCheckService: {
     getFleetReadiness: (...a: unknown[]) => mockGetFleetReadiness(...a) as unknown,
     getMyChecklists: (...a: unknown[]) => mockGetMyChecklists(...a) as unknown,
   },

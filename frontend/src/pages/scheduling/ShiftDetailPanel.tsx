@@ -44,6 +44,7 @@ import {
 import { QRCodeSVG } from 'qrcode.react';
 import toast from 'react-hot-toast';
 import { schedulingService } from '../../modules/scheduling/services/api';
+import { equipmentCheckService } from '@/modules/inventory/services/equipmentCheckApi';
 import { trainingProgramService } from '../../services/trainingServices';
 import type { ShiftRecord, PlatoonRosterEntry } from '../../modules/scheduling/services/api';
 import { useSchedulingStore } from '../../modules/scheduling/store/schedulingStore';
@@ -303,7 +304,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
       try {
         const [assignData, checkData, attendanceData, allAttData, detail, handoffData] = await Promise.all([
           schedulingService.getShiftAssignments(shift.id),
-          schedulingService.getShiftChecklists(shift.id).catch(() => [] as ShiftCheckSummary[]),
+          equipmentCheckService.getShiftChecklists(shift.id).catch(() => [] as ShiftCheckSummary[]),
           schedulingService.getMyAttendance(shift.id),
           schedulingService.getShiftAttendance(shift.id).catch(() => []),
           schedulingService.getShift(shift.id).catch(() => null),

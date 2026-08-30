@@ -21,7 +21,7 @@ import {
   X,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { schedulingService } from '../../modules/scheduling/services/api';
+import { equipmentCheckService } from '@/modules/inventory/services/equipmentCheckApi';
 import type { SupplyExpiringItem } from '../../modules/scheduling/types/equipmentCheck';
 import { inventoryService } from '../../services/inventoryService';
 import type { InventoryLotCreate } from '../../services/eventServices';
@@ -63,7 +63,7 @@ const SupplyExpiringPage: React.FC = () => {
   const load = useCallback(async (window: number) => {
     setLoading(true);
     try {
-      const overview = await schedulingService.getSupplyExpiringItems(window);
+      const overview = await equipmentCheckService.getSupplyExpiringItems(window);
       setItems(overview.items);
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to load expiring items'));

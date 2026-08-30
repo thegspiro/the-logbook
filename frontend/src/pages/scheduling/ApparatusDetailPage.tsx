@@ -13,7 +13,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
 import { AlertTriangle, ArrowLeft, ClipboardList, Loader2, PackageX, Truck, Wrench } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { schedulingService } from '../../modules/scheduling/services/api';
+import { equipmentCheckService } from '@/modules/inventory/services/equipmentCheckApi';
 import type {
   CheckLogEntry,
   FleetApparatusReadiness,
@@ -67,8 +67,8 @@ export const ApparatusDetailPage: React.FC = () => {
       // counts; asking it for one apparatus rather than adding a second
       // readiness path keeps the two views from ever disagreeing.
       const [fleet, log] = await Promise.all([
-        schedulingService.getFleetReadiness(),
-        schedulingService.getCheckLog({ dates: 14, apparatus_id: apparatusId }),
+        equipmentCheckService.getFleetReadiness(),
+        equipmentCheckService.getCheckLog({ dates: 14, apparatus_id: apparatusId }),
       ]);
       setUnit(fleet.apparatus.find((a) => a.apparatusId === apparatusId) ?? null);
       setRecent(log.entries);
@@ -89,7 +89,7 @@ export const ApparatusDetailPage: React.FC = () => {
     if (activeTab !== 'findings') return;
     void (async () => {
       try {
-        const overview = await schedulingService.getSupplyExpiringItems(30);
+        const overview = await equipmentCheckService.getSupplyExpiringItems(30);
         setSupply(overview.items.filter((item: SupplyExpiringItem) => item.apparatusId === apparatusId));
       } catch (err: unknown) {
         toast.error(getErrorMessage(err, 'Failed to load supply items'));

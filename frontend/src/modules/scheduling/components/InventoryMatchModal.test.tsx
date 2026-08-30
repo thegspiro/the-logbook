@@ -13,8 +13,8 @@ import { renderWithRouter } from '../../../test/utils';
 const mockGetInventoryMatches = vi.fn();
 const mockLinkInventoryItems = vi.fn();
 
-vi.mock('@/modules/scheduling', () => ({
-  schedulingService: {
+vi.mock('@/modules/inventory/services/equipmentCheckApi', () => ({
+  equipmentCheckService: {
     getInventoryMatches: (...a: unknown[]) => mockGetInventoryMatches(...a) as unknown,
     linkInventoryItems: (...a: unknown[]) => mockLinkInventoryItems(...a) as unknown,
   },

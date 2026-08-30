@@ -9,8 +9,10 @@ const mockGetFleetReadiness = vi.fn();
 const mockGetCheckLog = vi.fn();
 const mockGetSupplyExpiringItems = vi.fn();
 
-vi.mock('../../modules/scheduling/services/api', () => ({
-  schedulingService: {
+// Equipment-check calls moved to modules/inventory when checklists
+// became an Inventory feature; the scheduling service re-exports it.
+vi.mock('@/modules/inventory/services/equipmentCheckApi', () => ({
+  equipmentCheckService: {
     getFleetReadiness: (...a: unknown[]) => mockGetFleetReadiness(...a) as unknown,
     getCheckLog: (...a: unknown[]) => mockGetCheckLog(...a) as unknown,
     getSupplyExpiringItems: (...a: unknown[]) => mockGetSupplyExpiringItems(...a) as unknown,

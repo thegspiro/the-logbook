@@ -19,7 +19,7 @@ import {
   X,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { schedulingService } from '../../modules/scheduling/services/api';
+import { equipmentCheckService } from '@/modules/inventory/services/equipmentCheckApi';
 import type { ShiftEquipmentCheckRecord, EquipmentCheckTemplate } from '../../modules/scheduling/types/equipmentCheck';
 import type { ActiveChecklistRecord } from '../../modules/scheduling/services/api';
 import { calendarDaysFromToday, formatCalendarDate, formatDate, formatTime } from '../../utils/dateFormatting';
@@ -171,7 +171,7 @@ export const MyChecklistsPage: React.FC = () => {
   const fetchActiveChecklists = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await schedulingService.getMyChecklists();
+      const data = await equipmentCheckService.getMyChecklists();
       setActiveChecklists(data);
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to load active checklists'));
@@ -186,7 +186,7 @@ export const MyChecklistsPage: React.FC = () => {
       const params: { start_date?: string; end_date?: string; limit?: number; offset?: number } = {
         limit: 50,
       };
-      const records = await schedulingService.getMyChecklistHistory(params);
+      const records = await equipmentCheckService.getMyChecklistHistory(params);
       setHistory(records);
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to load checklist history'));
@@ -221,7 +221,7 @@ export const MyChecklistsPage: React.FC = () => {
 
   const handleStartCheck = useCallback(async (checklist: ActiveChecklist) => {
     try {
-      const template = await schedulingService.getEquipmentCheckTemplate(checklist.templateId);
+      const template = await equipmentCheckService.getEquipmentCheckTemplate(checklist.templateId);
       setActiveTemplate(template);
       setActiveShiftId(checklist.shiftId);
       setActiveCheckId(checklist.checkId || null);
@@ -270,7 +270,7 @@ export const MyChecklistsPage: React.FC = () => {
     setShowTemplatePicker(true);
     setTemplatesLoading(true);
     try {
-      const templates = await schedulingService.getEquipmentCheckTemplates();
+      const templates = await equipmentCheckService.getEquipmentCheckTemplates();
       setAvailableTemplates(crewVisibleTemplates(templates));
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to load templates'));
@@ -281,7 +281,7 @@ export const MyChecklistsPage: React.FC = () => {
 
   const handleStartStandaloneCheck = useCallback(async (templateId: string) => {
     try {
-      const template = await schedulingService.getEquipmentCheckTemplate(templateId);
+      const template = await equipmentCheckService.getEquipmentCheckTemplate(templateId);
       setActiveTemplate(template);
       setActiveShiftId(null);
       setShowTemplatePicker(false);
@@ -292,7 +292,7 @@ export const MyChecklistsPage: React.FC = () => {
 
   const handleViewCheckDetail = useCallback(async (checkId: string) => {
     try {
-      const record = await schedulingService.getEquipmentCheck(checkId);
+      const record = await equipmentCheckService.getEquipmentCheck(checkId);
       setSelectedCheck(record);
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to load check details'));
@@ -305,7 +305,7 @@ export const MyChecklistsPage: React.FC = () => {
       return;
     }
     try {
-      const template = await schedulingService.getEquipmentCheckTemplate(check.templateId);
+      const template = await equipmentCheckService.getEquipmentCheckTemplate(check.templateId);
       setActiveTemplate(template);
       setActiveShiftId(check.shiftId || null);
       setActiveCheckId(check.id);

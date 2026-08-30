@@ -10,6 +10,7 @@ import { useSearchParams, useNavigate } from 'react-router';
 import { LogIn, LogOut, Loader2, CheckCircle2, Clock, AlertCircle, ClipboardCheck } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { schedulingService } from '../../modules/scheduling/services/api';
+import { equipmentCheckService } from '@/modules/inventory/services/equipmentCheckApi';
 import type { ShiftRecord } from '../../modules/scheduling/services/api';
 import { useTimezone } from '../../hooks/useTimezone';
 import { formatCalendarDate, formatTime } from '../../utils/dateFormatting';
@@ -67,7 +68,7 @@ const ShiftCheckInPage: React.FC = () => {
         ]);
         setShift(shiftData);
         setAttendance(attendanceData);
-        const checklists = await schedulingService.getShiftChecklists(sid).catch(() => []);
+        const checklists = await equipmentCheckService.getShiftChecklists(sid).catch(() => []);
         setHasStartChecklist(checklists.some((c) => c.checkTiming === 'start_of_shift' && !c.isCompleted));
       } catch {
         toast.error('Unable to load shift');
