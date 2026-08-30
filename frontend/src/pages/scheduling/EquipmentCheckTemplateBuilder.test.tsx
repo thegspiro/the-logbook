@@ -231,6 +231,10 @@ describe('EquipmentCheckTemplateBuilder responsive actions', () => {
 
     const actionBar = screen.getByLabelText('Checklist action bar');
     expect(within(actionBar).getByRole('button', { name: 'Optional' })).toBeEnabled();
+    // 44px minimum touch target — the select otherwise collapses to its
+    // native text-line height, and the bar's min-h-11 does not reach it
+    // because the controls are centre-aligned.
+    expect(within(actionBar).getByLabelText('Set type for selected items')).toHaveClass('min-h-11');
 
     fireEvent.change(within(actionBar).getByLabelText('Set type for selected items'), {
       target: { value: 'count' },

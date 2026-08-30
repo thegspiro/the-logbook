@@ -4499,12 +4499,12 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                     ? `${String(blockingItems)} item${blockingItems === 1 ? '' : 's'} need attention`
                     : `${String(stats.totalItems)} item${stats.totalItems === 1 ? '' : 's'} · ${autoSaveStatus === 'error' ? 'Save failed' : autoSaveStatus === 'saved' ? 'Saved' : isEditing ? 'Saved' : 'Draft'}`}
             </span>
-            <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 text-sm font-semibold">
+            <div className="flex min-w-0 flex-wrap items-center justify-end gap-2 text-sm font-semibold">
               {mobileSelection ? (
                 <>
                   <select
                     aria-label="Set type for selected items"
-                    className="text-theme-accent-blue max-w-20 bg-transparent"
+                    className="text-theme-accent-blue min-h-11 max-w-20 bg-transparent"
                     value=""
                     disabled={mobileSelectedCount === 0}
                     onChange={(event) => {
