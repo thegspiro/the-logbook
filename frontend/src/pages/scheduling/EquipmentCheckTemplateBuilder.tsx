@@ -5275,8 +5275,10 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
              16rem only in the left-navigation layout at `md` and up — a
              hardcoded `md:left-64` would leave a 256px dead gap for the
              departments on the top-navigation layout, which renders content
-             full width. The phone bar below needs none of this: it renders only
-             under 640px, where the nav is an off-canvas drawer.
+             full width. Below 768px it resolves to 0px and under top
+             navigation it is absent, so every action bar can carry it
+             unconditionally — the rule is left with no exceptions to keep
+             straight, which is what let the phone bar below drift.
 
              `z-30`, not `z-40`, for the other half of that: below 768px the
              navigation is an off-canvas drawer whose scrim and panel are
@@ -5367,7 +5369,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       {stats.totalItems > 0 && !isLaptop && (
         <div
           ref={actionBarRef}
-          className="border-theme-surface-border bg-theme-surface/95 action-bar-safe fixed right-0 bottom-0 left-0 z-30 border-t px-4 backdrop-blur-sm"
+          className="border-theme-surface-border bg-theme-surface/95 action-bar-safe fixed right-0 bottom-0 left-[var(--side-nav-width,0px)] z-30 border-t px-4 backdrop-blur-sm"
           aria-label="Checklist action bar"
         >
           <div className="flex min-h-11 items-center justify-between gap-4">

@@ -66,6 +66,22 @@ describe('side navigation inset contract', () => {
     expect(bars.filter((bar) => bar.z !== '30')).toEqual([]);
   });
 
+  it('starts every page action bar at the content column', () => {
+    // The inset is carried unconditionally rather than only by the bars that
+    // render at desktop widths. It is 0px below 768px and absent under top
+    // navigation, so it costs nothing where no side navigation exists — and
+    // covering those cases is what leaves the rule with no exception to
+    // remember. The bar that was left out of it sat behind the navigation.
+    const bars = collectTsxFiles(srcDir).flatMap((file) =>
+      (readFileSync(file, 'utf8').match(/className="[^"]*action-bar-safe[^"]*"/g) ?? [])
+        .filter((cls) => /\bfixed\b/.test(cls))
+        .map((cls) => ({ file: file.slice(srcDir.length + 1), cls }))
+    );
+
+    expect(bars.length).toBeGreaterThan(0);
+    expect(bars.filter((bar) => !bar.cls.includes('left-[var(--side-nav-width,0px)]')).map((b) => b.file)).toEqual([]);
+  });
+
   it('leaves no fixed element hardcoding the left-navigation offset', () => {
     // Comments are stripped first: the rule is about class strings, and the
     // call sites that got this right say `md:left-64` in prose explaining why
