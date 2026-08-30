@@ -879,6 +879,43 @@ without building one from scratch for a few-line change; `tsc --noEmit`
 confirms the types, and the logic is identical to the tested
 `CampaignsPage` case.
 
+#### GF-31 — MED — a deep-linked status filter only ever searched the first 100 applications, silently missing older matches
+
+**What:** Codex's third comment on the same round-5 review, distinct from
+GF-27a/GF-30. `GrantApplicationsPage.tsx`'s mount effect called
+`fetchApplications()` with no arguments, and `listApplications` defaults
+to `limit: 100`, so every load fetched an **unfiltered** page of at most
+100 applications; `statusFilter` was then applied only to that already-
+capped, already-fetched set (`filteredApplications`'s `matchesStatus`).
+For an organization with more than 100 grant applications, a deep-linked
+`?status=active` or pipeline-column link therefore only ever searched the
+newest 100 records — any older application matching that status was
+invisible, even though the dashboard's own KPI count (and the `active`
+pipeline column, which reads the same `applications` array) includes it.
+
+**Where:** `frontend/src/modules/grants-fundraising/pages/GrantApplicationsPage.tsx`
+(the mount effect and `filteredApplications`).
+
+**Fix:** `statusFilter` is now passed to `fetchApplications({ status:
+statusFilter })`, and the effect re-fetches whenever `statusFilter`
+changes, so the backend applies the status match before the 100-row cap
+rather than after it. `filteredApplications`'s client-side filtering now
+covers only `searchText`/`priorityFilter`. `priorityFilter` has the same
+latent shape (also applied client-side, after an unfiltered fetch) but
+was not raised by Codex and is left alone here — re-plumbing every filter
+through the server in one pass would widen this fix well past what was
+reported. `CampaignsPage.tsx` never had this bug: `loadCampaigns` has sent
+`statusFilter` to `fundraisingService.listCampaigns` server-side since
+GF-27 first seeded it.
+
+**Guard test:** none added. Reproducing the >100-application edge needs
+either seeding 100+ applications through the mocked store or a real-DB
+integration test, out of proportion for this fix; verified instead by
+reading `grantsStore.fetchApplications` → `grantsService.listApplications`,
+both of which already accept and forward a `status` param today (used
+elsewhere), so this is a call-site change, not new plumbing. Noted as a
+coverage gap rather than silently assumed adequate.
+
 ### Frontend review (new this pass)
 
 Read `services/api.ts` (410 L), `routes.tsx`, `store/grantsStore.ts` (342 L),
@@ -1013,3 +1050,19 @@ PR #2069:** fixed GF-23 (frontend, 4 files), GF-24 (backend, 2 service files
   was already clean) and `KNOWN_LIMITATIONS.md` for GF-25 (docs only). No
   backend schema or migration change. Numbers above are from a re-run after
   the tend pass, superseding the original pass-2 numbers.
+
+**Tend pass, round 5 (2026-08-30, PR #2070), in response to Codex's 3
+review comments on the round-4 commit (`e6cf9b5b`):** fixed GF-30 (status
+whitelist validation, `CampaignsPage.tsx` + `GrantApplicationsPage.tsx`,
+new guard-test case) and GF-31 (server-side status filtering to avoid the
+100-record fetch cap, `GrantApplicationsPage.tsx`); flagged GF-27a
+(KPI-card aggregate-vs-single-status mismatch) as a product decision and
+mirrored it into `KNOWN_LIMITATIONS.md`. No backend files touched. Gate
+re-run, scoped to what changed (frontend-only, matching this round's own
+diff):
+
+| Check                                           | Result                                                            |
+| ----------------------------------------------- | ----------------------------------------------------------------- |
+| `npx tsc --noEmit`                              | 0 errors                                                          |
+| `npx eslint src/modules/grants-fundraising`     | 0 errors, 0 warnings                                              |
+| `npx vitest run src/modules/grants-fundraising` | 3 files, 5 passed (`CampaignsPage.statusFilter.test.tsx` +1 case) |

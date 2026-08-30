@@ -56,6 +56,23 @@ unexplained empty list. Both pages now validate against their own
 existing status whitelist first; new test case (fails before/passes
 after). Full gate re-run green.
 
+**PR #2070 tend, round 3 (Codex round 5, 3rd comment):** **GF-31 (new,
+MED, fixed)** — `GrantApplicationsPage.tsx`'s mount effect fetched an
+unfiltered, 100-record-capped page and applied `statusFilter`
+client-side to that already-capped set, so a deep-linked status filter
+(including the dashboard's KPI/pipeline links) could silently miss any
+matching application past the newest 100 for a department with more than
+100 on file. Fixed by passing `statusFilter` to `fetchApplications` and
+refetching on change, so the backend applies the match before the cap
+rather than the frontend after it; `priorityFilter` has the same latent
+shape but wasn't raised and is left alone. `CampaignsPage.tsx` was
+unaffected (already server-side since GF-27). No guard test added
+(reproducing the >100-row edge is out of proportion for this fix; noted
+as a coverage gap). Gate re-run scoped to the frontend diff: `tsc
+--noEmit` 0 errors, `eslint src/modules/grants-fundraising` 0/0,
+`vitest run src/modules/grants-fundraising` 3 files/5 passed. Full
+write-up in `GF-22-grants-fundraising.md` → GF-31.
+
 ### 2026-08-30 — Feature 22 (Grants & fundraising), pass 2 — 0 fixed, 0 new findings; re-verification only
 
 No security-review PR was open (PR #2065/feature 21 admin-hours pass 2 had

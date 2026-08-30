@@ -235,9 +235,13 @@ export const GrantApplicationsPage: React.FC = () => {
   const [sortField, setSortField] = useState<SortField>('applicationDeadline');
   const [sortDir, setSortDir] = useState<SortDir>('asc');
 
+  // Status is filtered server-side (and refetched on change) rather than
+  // client-side: the list endpoint caps a single fetch at 100 records, so a
+  // deep-linked status filter applied only to that first page could miss
+  // matching applications past it (GF-31).
   useEffect(() => {
-    void fetchApplications();
-  }, [fetchApplications]);
+    void fetchApplications(statusFilter ? { status: statusFilter } : undefined);
+  }, [fetchApplications, statusFilter]);
 
   // ---------------------------------------------------------------------------
   // Filtering
@@ -250,11 +254,10 @@ export const GrantApplicationsPage: React.FC = () => {
         app.grantProgramName.toLowerCase().includes(searchText.toLowerCase()) ||
         app.grantAgency.toLowerCase().includes(searchText.toLowerCase()) ||
         (app.assignedTo ?? '').toLowerCase().includes(searchText.toLowerCase());
-      const matchesStatus = !statusFilter || app.applicationStatus === statusFilter;
       const matchesPriority = !priorityFilter || app.priority === priorityFilter;
-      return matchesSearch && matchesStatus && matchesPriority;
+      return matchesSearch && matchesPriority;
     });
-  }, [applications, searchText, statusFilter, priorityFilter]);
+  }, [applications, searchText, priorityFilter]);
 
   // ---------------------------------------------------------------------------
   // Sorting (table view)
