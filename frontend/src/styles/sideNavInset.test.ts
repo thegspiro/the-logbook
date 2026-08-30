@@ -50,6 +50,22 @@ describe('side navigation inset contract', () => {
     expect(appLayout).toMatch(/md:ml-64/);
   });
 
+  it('keeps page action bars below the mobile navigation drawer', () => {
+    // Below 768px the navigation is an off-canvas drawer: scrim and panel are
+    // both `z-40` and render before any page content, so a page-level bar at
+    // `z-40` wins on DOM order and covers the drawer's bottom while it is open.
+    // The bar has to outrank page content and yield to the navigation, which
+    // `z-30` is. jsdom compiles no Tailwind, so only the source shows this.
+    const bars = collectTsxFiles(srcDir).flatMap((file) =>
+      (readFileSync(file, 'utf8').match(/className="[^"]*action-bar-safe[^"]*"/g) ?? [])
+        .filter((cls) => /\bfixed\b/.test(cls))
+        .map((cls) => ({ file: file.slice(srcDir.length + 1), z: /\bz-(\d+)\b/.exec(cls)?.[1] }))
+    );
+
+    expect(bars.length).toBeGreaterThan(0);
+    expect(bars.filter((bar) => bar.z !== '30')).toEqual([]);
+  });
+
   it('leaves no fixed element hardcoding the left-navigation offset', () => {
     // Comments are stripped first: the rule is about class strings, and the
     // call sites that got this right say `md:left-64` in prose explaining why

@@ -5276,8 +5276,15 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
              hardcoded `md:left-64` would leave a 256px dead gap for the
              departments on the top-navigation layout, which renders content
              full width. The phone bar below needs none of this: it renders only
-             under 640px, where the nav is an off-canvas drawer. */
-          className="border-theme-surface-border bg-theme-surface/95 action-bar-safe fixed right-0 bottom-0 left-[var(--side-nav-width,0px)] z-40 border-t px-4 backdrop-blur-sm"
+             under 640px, where the nav is an off-canvas drawer.
+
+             `z-30`, not `z-40`, for the other half of that: below 768px the
+             navigation is an off-canvas drawer whose scrim and panel are
+             `z-40` and render before any page content, so a page bar at the
+             same z-index paints over the drawer's bottom — its theme, contrast
+             and logout actions — while it is open. A page's own bar outranks
+             page content and yields to the navigation. */
+          className="border-theme-surface-border bg-theme-surface/95 action-bar-safe fixed right-0 bottom-0 left-[var(--side-nav-width,0px)] z-30 border-t px-4 backdrop-blur-sm"
           aria-label="Checklist action bar"
         >
           <div className="mx-auto flex min-h-14 max-w-[1440px] items-center justify-between gap-3">
@@ -5360,7 +5367,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       {stats.totalItems > 0 && !isLaptop && (
         <div
           ref={actionBarRef}
-          className="border-theme-surface-border bg-theme-surface/95 action-bar-safe fixed right-0 bottom-0 left-0 z-40 border-t px-4 backdrop-blur-sm"
+          className="border-theme-surface-border bg-theme-surface/95 action-bar-safe fixed right-0 bottom-0 left-0 z-30 border-t px-4 backdrop-blur-sm"
           aria-label="Checklist action bar"
         >
           <div className="flex min-h-11 items-center justify-between gap-4">
