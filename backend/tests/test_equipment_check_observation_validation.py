@@ -36,6 +36,7 @@ class TestSubmissionObservationValidation:
             "expected_quantity": None,
             "critical_minimum_quantity": None,
             "min_level": None,
+            "max_level": None,
             "level_unit": None,
             "serial_number": None,
             "lot_number": None,
@@ -103,6 +104,14 @@ class TestSubmissionObservationValidation:
             EquipmentCheckService._validate_and_snapshot_submission(
                 [item],
                 {"item-1": self.template_item("level", min_level=50.0)},
+            )
+
+    def test_rejects_level_above_configured_maximum(self):
+        item = self.submission(level_reading=100.1)
+        with pytest.raises(ValueError, match="contradicts"):
+            EquipmentCheckService._validate_and_snapshot_submission(
+                [item],
+                {"item-1": self.template_item("level", max_level=100.0)},
             )
 
     def test_irrelevant_observations_are_removed(self):

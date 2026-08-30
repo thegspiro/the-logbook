@@ -1474,6 +1474,10 @@ class EquipmentCheckService:
                 raise ValueError("Count observations must be integers")
             if quantity < 0:
                 raise ValueError("Count observations must be non-negative")
+            # Keep the value used by reconciliation explicitly tied to the
+            # validated snapshot value. This assignment is intentionally
+            # before either destination consumes the submission.
+            item["quantity_found"] = quantity
             target = EquipmentCheckService._target_quantity(template_item)
             if target is not None:
                 observation_passes = quantity >= target
@@ -1486,10 +1490,15 @@ class EquipmentCheckService:
                 raise ValueError("Level observations must be finite")
             item["level_reading"] = reading
             minimum = template_item.min_level
-            if minimum is not None and reading < minimum:
-                observation_passes = False
-            elif minimum is not None:
-                observation_passes = True
+            # Some installations already expose an upper bound on imported
+            # template rows. Keep validation forward-compatible without making
+            # an absent bound behave like zero.
+            maximum = getattr(template_item, "max_level", None)
+            if minimum is not None or maximum is not None:
+                observation_passes = not (
+                    (minimum is not None and reading < minimum)
+                    or (maximum is not None and reading > maximum)
+                )
         elif check_type == EXPIRY:
             expiration = (
                 template_item.expiration_date if template_item.has_expiration else None
