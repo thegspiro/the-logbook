@@ -1490,15 +1490,10 @@ class EquipmentCheckService:
                 raise ValueError("Level observations must be finite")
             item["level_reading"] = reading
             minimum = template_item.min_level
-            # Some installations already expose an upper bound on imported
-            # template rows. Keep validation forward-compatible without making
-            # an absent bound behave like zero.
-            maximum = getattr(template_item, "max_level", None)
-            if minimum is not None or maximum is not None:
-                observation_passes = not (
-                    (minimum is not None and reading < minimum)
-                    or (maximum is not None and reading > maximum)
-                )
+            if minimum is not None and reading < minimum:
+                observation_passes = False
+            elif minimum is not None:
+                observation_passes = True
         elif check_type == EXPIRY:
             expiration = (
                 template_item.expiration_date if template_item.has_expiration else None

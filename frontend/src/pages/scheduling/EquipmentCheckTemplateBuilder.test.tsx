@@ -142,6 +142,7 @@ function renderNewBuilder() {
       <ConfirmProvider>
         <Routes>
           <Route path="/templates/new" element={<EquipmentCheckTemplateBuilder />} />
+          <Route path="/scheduling/equipment-check-templates/:templateId" element={null} />
         </Routes>
       </ConfirmProvider>
     </MemoryRouter>
@@ -175,7 +176,6 @@ describe('EquipmentCheckTemplateBuilder responsive actions', () => {
   });
 
   it('renders a 375px summary row and exposes selection only after Select items', async () => {
-    const user = userEvent.setup();
     renderBuilder();
 
     const radioSummary = await screen.findByRole('button', { name: 'Expand Radio' });
@@ -184,15 +184,15 @@ describe('EquipmentCheckTemplateBuilder responsive actions', () => {
     expect(screen.queryByRole('button', { name: 'Select Radio' })).not.toBeInTheDocument();
     expect(screen.getAllByLabelText('Actions for Radio')).toHaveLength(1);
 
-    await user.click(screen.getByRole('button', { name: 'Select items' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Select items' }));
     expect(screen.getByRole('button', { name: 'Done' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Select Radio' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Radio selection checkbox' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Expand Radio' })).not.toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: 'Select Radio' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Select Radio' }));
     expect(screen.getByRole('button', { name: 'Deselect Radio' })).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Done' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Done' }));
     expect(screen.queryByRole('button', { name: 'Select Radio' })).not.toBeInTheDocument();
   });
 
@@ -226,10 +226,11 @@ describe('EquipmentCheckTemplateBuilder responsive actions', () => {
     );
   });
 
-  it('does not allow an invalid template to be published', () => {
+  it('does not allow an invalid template to be published', async () => {
     renderNewBuilder();
     expect(screen.getByRole('button', { name: 'Publish' })).toBeDisabled();
     expect(screen.getByLabelText('Template readiness')).toHaveTextContent('! Setup');
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Publish' })).toBeDisabled());
   });
 
   it('publishes after the blocking structure issues are fixed', async () => {
