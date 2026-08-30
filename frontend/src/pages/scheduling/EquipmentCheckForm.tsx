@@ -757,11 +757,9 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
       userId: user.id,
       shiftId: shiftId ?? 'standalone',
       templateId: template.id,
-      // Draft reconciliation handles content changes item by item. Keeping this
-      // identity stable lets a new revision find the preceding revision's draft.
-      templateRevision: 'content-revision',
+      templateRevision: String(template.contentRevision),
     };
-  }, [shiftId, template.id, user]);
+  }, [shiftId, template.contentRevision, template.id, user]);
   const [draftReady, setDraftReady] = useState(false);
   const draftSaveWarningShown = useRef(false);
 
