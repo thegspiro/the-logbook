@@ -71,6 +71,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Phones keep the compact rows, the full-height item editor and the search
   inventory add sheet; the new side-by-side row controls are a laptop and
   tablet layout.
+- On a brand-new template, adding the first location left it collapsed with
+  nowhere to type its items. It now opens ready for them.
+- The checklist preview no longer shows an answer left over from an item that
+  was since deleted, and resets when the questions themselves change.
 
 ### Clearing a compliance setting on save now actually clears it (2026-08-30)
 
