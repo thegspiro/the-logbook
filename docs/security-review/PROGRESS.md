@@ -16,9 +16,9 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-None yet recorded in this file — see the bottom log entry below for this
-iteration's branch; the PR number is added to this row in a follow-up commit
-once the PR is open (same pattern as PR #2065's own follow-up).
+[#2069](https://github.com/thegspiro/the-logbook/pull/2069) —
+`claude/security-review-grants-fundraising-pass2` — Feature 22 (Grants &
+fundraising), pass 2.
 
 ---
 
@@ -89,8 +89,9 @@ validated (394 revisions, single head); 307/307 grant+fundraising-scoped and
 --noEmit`/`npm run typecheck` 0 errors; `eslint .` 0 errors (8 pre-existing
 warnings, none in touched files — no frontend files were touched, since no
 frontend fix was needed). Findings doc: `docs/security-review/GF-22-grants-fundraising.md`
-→ **Pass 2**. Rotation row 22 → ✅ (this is a docs-only PR: no application
-code changed, only the findings doc, `KNOWN_LIMITATIONS.md`, and
+→ **Pass 2**. PR #2069 opened and subscribed. Rotation row 22 → ✅ (this is
+a docs-only PR: no application code changed, only the findings doc,
+`KNOWN_LIMITATIONS.md`, and
 `PROGRESS.md`). Next: 23 medical supplies, once this PR merges.
 
 ---
