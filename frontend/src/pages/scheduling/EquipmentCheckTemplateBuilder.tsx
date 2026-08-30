@@ -658,6 +658,23 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     });
   };
 
+  /**
+   * Open whichever surface adds an item to this location.
+   *
+   * The composer is laptop-only and the sheet is phone-only, so "add an item
+   * here" is two different elements depending on the width. Both the row's own
+   * button and the blocker that names the empty location route through here so
+   * they cannot drift apart.
+   */
+  const openAddSurface = (key: string) => {
+    setExpandedCompartments((prev) => new Set(prev).add(key));
+    if (!isLaptop) {
+      setMobileAddLocations((previous) => new Set(previous).add(key));
+      return;
+    }
+    window.setTimeout(() => document.getElementById(`compose-${key}`)?.focus(), 0);
+  };
+
   const addCompartment = (parentCompartmentId = '') =>
     runAddCompartment(async () => {
       if (!templateId) {
@@ -3647,17 +3664,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                 </span>
                 <button
                   type="button"
-                  onClick={() => {
-                    setExpandedCompartments((prev) => new Set(prev).add(key));
-                    // The composer is laptop-only, and a loaded location is
-                    // already expanded — so on a phone this button used to do
-                    // nothing visible at all.
-                    if (!isLaptop) {
-                      setMobileAddLocations((previous) => new Set(previous).add(key));
-                      return;
-                    }
-                    window.setTimeout(() => document.getElementById(`compose-${key}`)?.focus(), 0);
-                  }}
+                  onClick={() => openAddSurface(key)}
                   className="flex min-h-7.5 flex-shrink-0 items-center gap-1.5 rounded-md bg-blue-600 px-2.5 text-xs font-semibold text-white hover:bg-blue-700"
                 >
                   <Plus className="h-3.5 w-3.5" aria-hidden="true" /> Add items
@@ -4398,6 +4405,8 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
      * equivalent of putting the cursor in the offending input.
      */
     editorTarget?: { compartmentKey: string; itemKey: string };
+    /** A location with nothing in it: the fix is adding, not focusing a field. */
+    addKey?: string;
   }> = [];
   if (!setupReady) {
     blockers.push({
@@ -4437,6 +4446,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
         locator: 'Add an item or delete the location',
         icon: 'package',
         anchorId: compAnchor,
+        addKey: comp.id ?? `comp-${compIdx}`,
       });
     }
     for (const [itemIdx, item] of comp.items.entries()) {
@@ -4493,10 +4503,20 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     anchorId: string,
     expandKey?: string,
     focusId?: string,
-    editorTarget?: { compartmentKey: string; itemKey: string }
+    editorTarget?: { compartmentKey: string; itemKey: string },
+    addKey?: string
   ) => {
     if (anchorId === DETAILS_ANCHOR) {
       setDrawerOpen(true);
+      return;
+    }
+    // An empty location has no field that is wrong; what is missing is an item.
+    if (addKey) {
+      document.getElementById(anchorId)?.scrollIntoView({
+        behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
+        block: 'center',
+      });
+      openAddSurface(addKey);
       return;
     }
     // The phone row is a summary, not a form: every item field it could focus
@@ -4510,7 +4530,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     // jump has to open it first — and then wait a frame for it to render.
     if (expandKey && !expandedCompartments.has(expandKey)) {
       setExpandedCompartments((prev) => new Set(prev).add(expandKey));
-      window.setTimeout(() => goToBlocker(anchorId, undefined, focusId, editorTarget), 0);
+      window.setTimeout(() => goToBlocker(anchorId, undefined, focusId, editorTarget, addKey), 0);
       return;
     }
     const row = document.getElementById(anchorId);
@@ -4719,7 +4739,8 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                 onClick={() => {
                   if (!isWideCanvas) {
                     const first = blockers[0];
-                    if (first) goToBlocker(first.anchorId, first.expandKey, first.focusId, first.editorTarget);
+                    if (first)
+                      goToBlocker(first.anchorId, first.expandKey, first.focusId, first.editorTarget, first.addKey);
                     return;
                   }
                   setRail('blockers');
@@ -5046,7 +5067,13 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                         key={blocker.id}
                         type="button"
                         onClick={() =>
-                          goToBlocker(blocker.anchorId, blocker.expandKey, blocker.focusId, blocker.editorTarget)
+                          goToBlocker(
+                            blocker.anchorId,
+                            blocker.expandKey,
+                            blocker.focusId,
+                            blocker.editorTarget,
+                            blocker.addKey
+                          )
                         }
                         className="flex items-start gap-2.5 rounded-lg border border-amber-500/35 bg-amber-500/[0.07] p-2.5 text-left transition-colors hover:bg-amber-500/[0.14]"
                       >

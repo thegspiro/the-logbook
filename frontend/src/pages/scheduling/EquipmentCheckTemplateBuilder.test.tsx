@@ -1002,9 +1002,10 @@ describe('EquipmentCheckTemplateBuilder single-canvas editor', () => {
     expect(within(blocker).getByText('Add an item or delete the location')).toBeVisible();
     expect(screen.getByRole('button', { name: '1 to fix' })).toBeInTheDocument();
 
-    // The jump lands on the field the author has to change, not just the row.
+    // The jump lands on what the author has to change. For an empty location
+    // that is the add surface, not the name field, which is already correct.
     await user.click(blocker);
-    expect(screen.getByDisplayValue('Medical bag')).toHaveFocus();
+    await waitFor(() => expect(screen.getByLabelText('Add items to Medical bag')).toHaveFocus());
   });
 
   it('opens the details drawer from a chip and closes it on Escape', async () => {
@@ -1109,10 +1110,36 @@ describe('EquipmentCheckTemplateBuilder canvas affordances reach both widths', (
   it('takes a phone straight to the first blocker, where there is no rail', async () => {
     const user = userEvent.setup();
     mockViewport('phone');
+    getTemplate.mockResolvedValue({
+      ...structuredClone(template),
+      compartments: [{ ...structuredClone(template.compartments[0]), name: '' }],
+    });
+    renderBuilder();
+
+    // An unnamed location does have a field that is wrong, so the jump focuses
+    // it rather than opening the add sheet.
+    await user.click(await screen.findByRole('button', { name: '1 to fix' }));
+    expect(screen.getByLabelText('Location name')).toHaveFocus();
+  });
+
+  it('opens the add surface when a blocker says a location is empty', async () => {
+    const user = userEvent.setup();
+    mockViewport('laptop');
+    renderBuilder();
+
+    // The only field on an empty location's row is its name, which is already
+    // correct; what is missing is an item.
+    await user.click(await screen.findByRole('button', { name: /Medical bag is empty/ }));
+    await waitFor(() => expect(screen.getByLabelText('Add items to Medical bag')).toHaveFocus());
+  });
+
+  it('opens the phone add sheet when that same blocker is tapped', async () => {
+    const user = userEvent.setup();
+    mockViewport('phone');
     renderBuilder();
 
     await user.click(await screen.findByRole('button', { name: '1 to fix' }));
-    expect(screen.getByDisplayValue('Medical bag')).toHaveFocus();
+    expect(await screen.findByPlaceholderText('Add or search items…')).toBeInTheDocument();
   });
 
   it('opens the item editor when a phone blocker names a setting the row does not hold', async () => {
