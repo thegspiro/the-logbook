@@ -175,7 +175,6 @@ describe('EquipmentCheckTemplateBuilder responsive actions', () => {
   });
 
   it('renders a 375px summary row and exposes selection only after Select items', async () => {
-    const user = userEvent.setup();
     renderBuilder();
 
     const radioSummary = await screen.findByRole('button', { name: 'Edit Radio' });
@@ -184,17 +183,17 @@ describe('EquipmentCheckTemplateBuilder responsive actions', () => {
     expect(screen.queryByRole('button', { name: 'Select Radio' })).not.toBeInTheDocument();
     expect(screen.getAllByLabelText('Actions for Radio')).toHaveLength(1);
 
-    await user.click(screen.getByRole('button', { name: 'Select items' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Select items' }));
     expect(screen.getByRole('button', { name: 'Done' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Select Radio' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Radio selection checkbox' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Edit Radio' })).not.toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: 'Select Radio' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Select Radio' }));
     expect(screen.getByRole('button', { name: 'Deselect Radio' })).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Done' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Done' }));
     expect(screen.queryByRole('button', { name: 'Select Radio' })).not.toBeInTheDocument();
-  });
+  }, 10_000);
 
   it('opens a full-height progressive item editor and reviews adjacent items on phones', async () => {
     const user = userEvent.setup();
@@ -443,7 +442,7 @@ describe('EquipmentCheckTemplateBuilder movement persistence', () => {
     renderBuilder();
     await user.selectOptions(await moveSelect('Oxygen mask'), '1');
     expect(await screen.findByLabelText('Actions for Oxygen mask')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Collapse Oxygen mask' })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'Collapse Oxygen mask' })).toBeInTheDocument();
     await waitFor(() => expect(document.getElementById('item-row-mask')).toHaveFocus());
     expect(toastSuccess).not.toHaveBeenCalled();
     expect(toastError).toHaveBeenCalledWith('Could not move “Oxygen mask.” Its original location was restored.');

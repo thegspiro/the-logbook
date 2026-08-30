@@ -993,16 +993,27 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
         }
       }
 
-      const next = [...current];
-      next[currentSourceIdx] = {
-        ...currentSource,
-        items: currentSource.items.filter((candidate) => (candidate.id ?? candidate.clientKey) !== itemKey),
-      };
-      next[currentDestinationIdx] = { ...currentDestination, items: [...currentDestination.items, currentItem] };
-      // Keep the queue's authoritative snapshot ahead of React rendering so a
-      // second completed request cannot reconcile against a stale closure.
-      compartmentsRef.current = next;
-      setCompartments(next);
+      setCompartments((prev) => {
+        const sourceIdx = prev.findIndex((candidate) =>
+          candidate.items.some((candidateItem) => (candidateItem.id ?? candidateItem.clientKey) === itemKey)
+        );
+        const destinationIdx = prev.findIndex((candidate) => (candidate.id ?? candidate.clientKey) === destinationKey);
+        const source = prev[sourceIdx];
+        const destination = prev[destinationIdx];
+        const movedItem = source?.items.find((candidate) => (candidate.id ?? candidate.clientKey) === itemKey);
+        if (!source || !destination || !movedItem || sourceIdx === destinationIdx) return prev;
+
+        const next = [...prev];
+        next[sourceIdx] = {
+          ...source,
+          items: source.items.filter((candidate) => (candidate.id ?? candidate.clientKey) !== itemKey),
+        };
+        next[destinationIdx] = { ...destination, items: [...destination.items, movedItem] };
+        return next;
+      });
+      // The queue must not calculate the next destination position until
+      // React has committed this functional update and refreshed the snapshot.
+      await new Promise<void>((resolve) => window.setTimeout(resolve, 0));
       markDirty();
       toast.success(`Moved "${currentItem.name || 'item'}" to ${currentDestination.name || 'compartment'}`);
     };
