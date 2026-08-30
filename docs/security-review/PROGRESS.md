@@ -16,8 +16,41 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-None. Feature 22 (Grants & fundraising), pass 2, is fully merged — see log
-entry below. Next: feature 23, Medical supplies.
+#TBD (`claude/security-review-medical-supplies`) — feature 23 (Medical
+supplies), pass 2. No code change; re-verification only. Next once merged:
+24 Meetings & minutes.
+
+---
+
+### 2026-08-30 — Feature 23 (Medical supplies), pass 2 — no findings; re-verification only
+
+No prior module-audit or app-review pass exists for this feature (pass 1's
+own scope note); this is the second security-review pass over it. The
+endpoint file (`medical_supplies.py`) grew by only 3 lines since pass 1
+(667 L → 670 L, no route added or removed) — the growth is
+`medical_supply_summary`'s pre-existing `_on_hand` low-stock calc, not new
+and not security-relevant. `inventory_service.py`, this router's only
+dependency, grew substantially in the interim (~7,450 L → 8,200 L) from
+other features' reviews touching it, so every method this router actually
+calls was re-read directly rather than trusted from pass 1's summary.
+Re-verified against current code: MSUP-1's `apply_updates` fix still holds
+in `update_category`/`update_item`/`update_lot`; `item_in_domain`/
+`category_in_domain`/`lot_in_domain` still org-scope both sides of their
+joins and fail closed; `get_items`'s domain filter and its
+`_category_ids_of_type` subquery are still org-scoped inside the subquery;
+`add_lots_bulk`'s XC-1 check still resolves every client-supplied
+`inventory_item_id` in one org-scoped query before writing any lot; the
+free-text search in `get_items` still uses `like_pattern` +
+`escape=LIKE_ESCAPE_CHAR` (Pitfall #25). Also checked baseline grants in
+`core/permissions.py`: `_LINE_MEMBER_PERMISSIONS` (the firefighter/EMT rank
+default, aliased into `DEFAULT_POSITIONS["firefighter"]["permissions"]` per
+Pitfall #23) grants only the broad `inventory.view`, never
+`inventory.view_medical` — medical-supply visibility is not a baseline
+grant. No new findings; no code change this iteration. Full local
+completion gate green: flake8 clean on both files, 98/98
+inventory+medical_supplies-scoped and 9271/9271 full backend suite pass, no
+migration needed. Findings doc: `docs/security-review/MSUP-23-medical-supplies.md`.
+PR #TBD opened and subscribed. Next: 24 meetings & minutes, once merged.
 
 ---
 
@@ -2807,7 +2840,7 @@ each row's prior PR is recorded in the Log, not repeated here.
 | 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ✅     |
 | 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ✅     |
 | 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ✅     |
-| 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ⬜     |
+| 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ⏳     |
 | 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ⬜     |
 | 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ⬜     |
 | 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                         | ⬜     |

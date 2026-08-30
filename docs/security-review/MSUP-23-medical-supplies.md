@@ -1,6 +1,7 @@
 # Security Review — Medical Supplies
 
-**Prefix:** `MSUP` · **Iteration:** 23 · **Reviewed:** 2026-08-26 · **PR:** #1905
+**Prefix:** `MSUP` · **Iteration:** 23 · **Reviewed:** 2026-08-26 (pass 1, PR
+#1905), 2026-08-30 (pass 2, PR #TBD)
 
 **Backend:** `app/api/v1/endpoints/medical_supplies.py` (667 L, 15 endpoints).
 No dedicated service — every route delegates to the already-audited
@@ -142,7 +143,7 @@ None — no model or migration changes this iteration.
     asserts the router converts `update_lot`'s new `ValueError` into a 400,
     not an unhandled 500.
 
-## Completion gate
+## Completion gate (pass 1)
 
 | Check                                                | Result                               |
 | ---------------------------------------------------- | ------------------------------------ |
@@ -152,3 +153,52 @@ None — no model or migration changes this iteration.
 | `python3 scripts/validate_migrations.py --strict`    | PASSED (no migrations)               |
 | backend tests, scope (`inventory` + `medical_suppl`) | 553 passed, 1 skipped (pre-existing) |
 | backend tests, full suite                            | 8897 passed, 22 skipped              |
+
+## Pass 2 — 2026-08-30
+
+The endpoint file grew by only 3 lines since pass 1 (667 L → 670 L, no route
+added or removed) — the growth is `medical_supply_summary`'s `_on_hand`
+helper and its low-stock calc, which reconciles `quantity` against
+`_attach_lot_stock`'s per-item lot totals; a pre-existing correctness fix,
+not new since pass 1, and not security-relevant (it reads from an already
+org-scoped item list). `inventory_service.py` itself grew substantially
+(~7,450 L → 8,200 L) from other reviews/features touching it, so every
+method this router calls was re-read directly rather than trusting the file
+hasn't moved.
+
+Re-verified directly against current code:
+
+- **MSUP-1's fix holds.** `update_category`, `update_item`, and `update_lot`
+  all still route through `apply_updates`, not a hand-rolled `setattr` loop.
+- **Domain pinning is unchanged and still real.** `item_in_domain`,
+  `category_in_domain`, `lot_in_domain` all still join/filter on
+  `organization_id` on both sides of the join and fail closed.
+- **`get_items`'s domain filter (`item_types`/`exclude_item_types`) and its
+  `_category_ids_of_type` subquery are still org-scoped inside the
+  subquery**, not just the outer query.
+- **`add_lots_bulk`'s XC-1 check still resolves every `inventory_item_id` in
+  one org-scoped query before writing any lot** — a delivery naming another
+  org's item id is rejected whole, not partially applied.
+- **`get_items`'s free-text search still uses `like_pattern` +
+  `escape=LIKE_ESCAPE_CHAR`** on every `ilike` clause (Pitfall #25).
+- **Baseline grants are still correctly scoped.** `_LINE_MEMBER_PERMISSIONS`
+  (the firefighter/EMT rank default, aliased into
+  `DEFAULT_POSITIONS["firefighter"]["permissions"]` per Pitfall #23) grants
+  only the broad `inventory.view`, never `inventory.view_medical` — a
+  rank-and-file member does not get medical-supply visibility for free.
+  `quartermaster` and `apparatus_officer` hold both the broad and medical
+  grants with a comment explaining why (the broad grant already satisfies
+  the OR-check; the medical grant is there so the role editor is honest
+  about what the role actually does); `ems_supply_officer` holds only the
+  medical grants, confirming the split-department case works without the
+  broad `inventory.manage`.
+
+No new findings. No code change this pass.
+
+## Completion gate (pass 2)
+
+| Check                                                                                        | Result           |
+| -------------------------------------------------------------------------------------------- | ---------------- |
+| `flake8 app/api/v1/endpoints/medical_supplies.py app/services/inventory_service.py`          | clean            |
+| `python3 -m pytest tests/test_inventory_service.py tests/test_medical_supplies_domain.py -q` | 98 passed        |
+| backend tests, full suite                                                                    | pending (see PR) |
