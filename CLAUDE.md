@@ -1316,8 +1316,10 @@ Test files read top to bottom, so this is invisible: the leak looks like setup
 that is simply somewhere else in the file.
 
 Two separate defects on 2026-08-30 were the same leak wearing different
-symptoms, and neither is the kind CI catches — a whole-file run is exactly the
-condition under which the leak holds.
+symptoms, and the two differ in whether anything catches them. CI catches the
+first — loudly, by going red. Nothing catches the second, because a whole-file
+run is the condition under which the leak holds, so the test passes there and
+in every later run.
 
 **Symptom A — a block inherits the wrong value, and the assertion can never
 pass.** `EquipmentCheckTemplateBuilder.test.tsx` asserted a button labelled
@@ -1330,11 +1332,15 @@ took `main` red, and the follow-up that swapped `getByRole` for `findByRole`
 only turned an immediate miss into a 1s timeout.
 
 **Symptom B — a block inherits the right value, and the test passes for the
-wrong reason.** The `creation guidance` block has no `beforeEach` at all, so a
-preview test added to it on PR #2038 passed only on the `getTemplate` value the
-preceding block happened to leave. `renderBuilder` always mounts at `/templates/template-1`, so
-under any focused run (`vitest run -t "…"`) the template was undefined, nothing
-rendered, and the test failed — while the component was correct the whole time.
+wrong reason.** This is the dangerous one, because green is what it looks like.
+A test added to a block with no `beforeEach` of its own reads a service mock
+that only a _previous_ block configured; it passes in the file run and fails the
+moment it is run alone, while the code under test was correct throughout. Found
+this way in the equipment-check builder suite, where a test mounting the
+editing route depended on a `getTemplate` value set two blocks earlier — a
+sibling in the same block needed no such mock, because it drives the creation
+route and never loads a template, which is exactly why the gap was easy to
+miss. Reproduce with `vitest run -t`; see the demonstration below.
 
 ```ts
 // WRONG — this block asserts against whatever ran before it
