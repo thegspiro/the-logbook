@@ -501,11 +501,15 @@ async def receive_medical_delivery(
     service = InventoryService(db)
     org_id = str(current_user.organization_id)
 
-    # Every line is checked before any is written. A partially-received
+    # Every line is checked before any is written, in one query rather than
+    # one round trip per line — a request near the schema's 200-entry cap
+    # would otherwise cost 200 sequential queries. A partially-received
     # shipment is worse than a rejected one: the officer cannot tell which
     # lines landed without re-counting the whole delivery.
-    for entry in data.entries:
-        await _require_medical_item(service, entry.inventory_item_id, org_id)
+    ids = [str(entry.inventory_item_id) for entry in data.entries]
+    in_domain = await service.items_in_domain(ids, org_id, MEDICAL_ITEM_TYPES)
+    if any(item_id not in in_domain for item_id in ids):
+        raise HTTPException(status_code=404, detail=_NOT_FOUND)
 
     try:
         return await service.add_lots_bulk(
@@ -627,11 +631,17 @@ async def medical_supply_summary(
     service = InventoryService(db)
     org_id = str(current_user.organization_id)
 
+    # `low_stock` below is computed by walking this page, so it must cover
+    # every active medical item, not the display page size — a department
+    # with more than 500 undercounted every low-stock item past the 500th.
+    # 10000 matches the same "whole org, one page" cap used by the CSV
+    # export in inventory.py; a department beyond that is a KNOWN_LIMITATIONS
+    # entry, not a case this summary tile can reasonably page through.
     items, total = await service.get_items(
         organization_id=current_user.organization_id,
         item_types=MEDICAL_ITEM_TYPES,
         active_only=True,
-        limit=500,
+        limit=10000,
     )
     expiring = await service.get_expiring_lots(
         org_id, expiring_within_days, item_types=MEDICAL_ITEM_TYPES

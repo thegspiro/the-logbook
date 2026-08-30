@@ -3,13 +3,15 @@
 **Prefix:** `MSUP` · **Iteration:** 23 · **Reviewed:** 2026-08-26 (pass 1, PR
 #1905), 2026-08-30 (pass 2, PR #2075)
 
-**Backend:** `app/api/v1/endpoints/medical_supplies.py` (667 L, 15 endpoints).
-No dedicated service — every route delegates to the already-audited
-`InventoryService` (`app/services/inventory_service.py`, ~7,450 L, covered in
-full by `docs/security-review/INV-11-inventory.md`).
+**Backend:** `app/api/v1/endpoints/medical_supplies.py` (pass 1: 667 L, 15
+endpoints; pass 2: 670 L, 14 routes — no route added or removed). No
+dedicated service — every route delegates to the already-audited
+`InventoryService` (`app/services/inventory_service.py`, pass 1: ~7,450 L,
+pass 2: ~8,200 L; covered in full by `docs/security-review/INV-11-inventory.md`).
 **Frontend:** not reviewed this pass — backend only, per rotation scope.
-**Migrations:** none — this iteration's fix is a service-layer null-handling
-change only.
+**Migrations:** none in either pass — pass 1's fix was service-layer
+null-handling only; pass 2's fixes (MSUP-2/MSUP-3) are a new bulk
+domain-check method and an internal query cap, also model/schema-free.
 
 ---
 
@@ -181,24 +183,103 @@ Re-verified directly against current code:
   org's item id is rejected whole, not partially applied.
 - **`get_items`'s free-text search still uses `like_pattern` +
   `escape=LIKE_ESCAPE_CHAR`** on every `ilike` clause (Pitfall #25).
-- **Baseline grants are still correctly scoped.** `_LINE_MEMBER_PERMISSIONS`
-  (the firefighter/EMT rank default, aliased into
-  `DEFAULT_POSITIONS["firefighter"]["permissions"]` per Pitfall #23) grants
-  only the broad `inventory.view`, never `inventory.view_medical` — a
-  rank-and-file member does not get medical-supply visibility for free.
-  `quartermaster` and `apparatus_officer` hold both the broad and medical
-  grants with a comment explaining why (the broad grant already satisfies
-  the OR-check; the medical grant is there so the role editor is honest
-  about what the role actually does); `ems_supply_officer` holds only the
-  medical grants, confirming the split-department case works without the
-  broad `inventory.manage`.
 
-No new findings. No code change this pass.
+Codex's review of the first commit caught two real bugs and corrected a
+misstatement in this doc's own first draft; all three below.
+
+### MSUP-2 — LOW — `receive_medical_delivery` validated domain membership one query per line — ✅ FIXED
+
+**What:** the per-line loop calling `_require_medical_item` (one
+`item_in_domain` query per entry) ran _before_ `add_lots_bulk`'s own
+single-query org check, so a delivery near the schema's 200-entry cap
+(`InventoryLotBulkCreate.entries`, `max_length=200`) cost up to 200
+sequential round trips instead of one. Checklist §6: "no N+1 loop issuing a
+query per row."
+**Fix:** added `InventoryService.items_in_domain` — the bulk counterpart of
+`item_in_domain`, resolving every id in one org+domain-scoped query — and
+switched the router to call it once instead of looping. Behavior is
+unchanged (still all-or-nothing, still 404 on any non-medical or foreign
+line); only the query count changes. Guard test:
+`test_a_delivery_checks_domain_in_one_query_not_one_per_line` pins that
+`items_in_domain` is called and the old `item_in_domain` is not.
+
+### MSUP-3 — LOW/MED — `medical_supply_summary`'s `low_stock` count silently dropped items past the 500th — ✅ FIXED
+
+**What:** `medical_supply_summary` called `get_items(..., limit=500)` and
+computed `low_stock` by walking the returned page, while `total_items` used
+the query's separate, uncapped count. A department with more than 500
+active medical items got a `low_stock` tile that undercounted — any
+low-stock item sorted past the 500th was invisible to the headline number
+while the table below it (which paginates properly) still showed it.
+**Fix:** raised the internal call's `limit` to 10000, matching the existing
+"whole org, one page" convention already used by the CSV export in
+`inventory.py`. Not a full fix for an unbounded department — that residual
+edge (more than 10000 active medical items) is recorded in
+`KNOWN_LIMITATIONS.md` rather than claimed as resolved, per the same
+disposition this rotation used for GF-33. Guard test:
+`test_the_low_stock_scan_is_not_capped_at_the_display_page_size`.
+
+### Correction — this doc's first draft mischaracterized baseline medical-supply visibility
+
+The first commit on this PR claimed "a rank-and-file member does not get
+medical-supply visibility for free" because `_LINE_MEMBER_PERMISSIONS`
+grants only `inventory.view`, never `inventory.view_medical`. That is true
+of the permission grant but false as a conclusion: every medical **view**
+route (`list_medical_categories`, `list_medical_items`, `get_medical_item`,
+`list_medical_item_lots`, `list_expiring_medical_lots`,
+`medical_supply_summary`) OR-gates `inventory.view_medical` against the
+broad `inventory.view` — and `_LINE_MEMBER_PERMISSIONS` grants that broad
+permission to every firefighter/EMT baseline. So every rank-and-file member
+_can_ already view medical-supply categories, items, lots, and expirations,
+via the broad grant every member already holds.
+
+This is the router module docstring's own stated design, not a gap: "Access
+is OR-logic against the broad inventory permissions, so a department that
+runs everything through one quartermaster keeps working unchanged," and the
+permission definitions' comment states plainly that "the broad
+`inventory.manage` still covers medical stock" — additive by design, not a
+narrowing. It is also benign: this domain is physical stock (dressings,
+AEDs, oxygen) with no PHI, unlike the separate `medical_screening` domain
+(feature 09) that holds member fitness-for-duty records. The
+`inventory.view_medical` / `inventory.manage_medical` split governs _manage_
+authority (letting a department appoint a narrower EMS supply officer
+without also handing over the uniform closet) — it was never meant to
+restrict baseline _view_ access, and the two-domain permission design
+doesn't claim otherwise anywhere else in the codebase. No code change; this
+doc's own "Verified good" wording (below) is corrected instead.
+
+### MSUP-4 — LOW, flagged (not fixed) — `get_expiring_lots` has no row cap
+
+**What:** `get_expiring_lots` (used by `GET /lots/expiring` directly, and
+internally by `medical_supply_summary` to derive `expiring_soon`/`expired`)
+has no `limit`/pagination — for a department that never clears old
+zero-or-positive-quantity expired lots, the query returns every matching row
+back to the beginning of the `days_ahead` window, unbounded. Checklist §6:
+"List endpoints and exports are bounded."
+**Why flagged, not fixed:** `get_expiring_lots` is a shared `InventoryService`
+method — it also backs the main (non-medical) inventory router and the
+low-stock/expiring alert email in `scheduled_tasks.py`. Adding a cap changes
+those callers' contracts too (would the alert email now silently omit rows
+past the cap? what page size is right for each caller?), which is a product
+decision spanning outside this feature's scope, not a mechanical
+medical-supplies patch. Mirrored into `KNOWN_LIMITATIONS.md`.
+
+## Guard tests added (pass 2)
+
+- `tests/test_medical_supplies_domain.py`:
+  - `TestSummaryCounts::test_the_low_stock_scan_is_not_capped_at_the_display_page_size`
+    (MSUP-3)
+  - `TestLotDomainPinning::test_a_delivery_checks_domain_in_one_query_not_one_per_line`
+    (MSUP-2 — asserts `items_in_domain` is called and the old `item_in_domain`
+    loop is not)
 
 ## Completion gate (pass 2)
 
-| Check                                                                                        | Result           |
-| -------------------------------------------------------------------------------------------- | ---------------- |
-| `flake8 app/api/v1/endpoints/medical_supplies.py app/services/inventory_service.py`          | clean            |
-| `python3 -m pytest tests/test_inventory_service.py tests/test_medical_supplies_domain.py -q` | 98 passed        |
-| backend tests, full suite                                                                    | pending (see PR) |
+| Check                                                                                        | Result                 |
+| -------------------------------------------------------------------------------------------- | ---------------------- |
+| `flake8 app/ tests/ alembic/`                                                                | clean                  |
+| `black --check app/ tests/ alembic/`                                                         | clean                  |
+| `isort --check-only app/ tests/ alembic/`                                                    | clean                  |
+| `python3 scripts/validate_migrations.py --strict`                                            | PASSED (no migrations) |
+| `python3 -m pytest tests/test_inventory_service.py tests/test_medical_supplies_domain.py -q` | 100 passed             |
+| backend tests, full suite                                                                    | see PR                 |

@@ -49,6 +49,11 @@ def _service(**overrides):
     svc.item_in_domain = AsyncMock(
         side_effect=lambda iid, org, types: str(iid) == MEDICAL_ITEM
     )
+    svc.items_in_domain = AsyncMock(
+        side_effect=lambda ids, org, types: {
+            str(i) for i in ids if str(i) == MEDICAL_ITEM
+        }
+    )
     svc.lot_in_domain = AsyncMock(return_value=True)
     for name, value in overrides.items():
         setattr(svc, name, value)
@@ -284,6 +289,22 @@ class TestSummaryCounts:
         item = self._item(quantity=0)
         assert await self._low_stock_count(svc, [item]) == 0
 
+    async def test_the_low_stock_scan_is_not_capped_at_the_display_page_size(self, svc):
+        """A department with more than 500 active items still gets a true count.
+
+        `low_stock` is computed by walking whatever `get_items` returns, so a
+        500-row page silently dropped every low-stock item past the 500th —
+        this pins the call asking for the whole domain, not a display page.
+        """
+        svc.get_items = AsyncMock(return_value=([], 0))
+        svc.get_expiring_lots = AsyncMock(return_value=[])
+
+        await ms.medical_supply_summary(
+            expiring_within_days=30, db=AsyncMock(), current_user=_user()
+        )
+
+        assert svc.get_items.await_args.kwargs["limit"] > 500
+
 
 class TestLotDomainPinning:
     async def test_lots_of_a_gear_item_are_not_listed(self, svc):
@@ -315,6 +336,7 @@ class TestLotDomainPinning:
 
         assert err.value.status_code == 404
         svc.add_lots_bulk.assert_not_awaited()
+        svc.items_in_domain.assert_awaited_once()
 
     async def test_an_all_medical_delivery_is_written(self, svc):
         svc.add_lots_bulk = AsyncMock(return_value=[])
@@ -328,6 +350,28 @@ class TestLotDomainPinning:
         )
 
         svc.add_lots_bulk.assert_awaited_once()
+
+    async def test_a_delivery_checks_domain_in_one_query_not_one_per_line(self, svc):
+        """A 200-line delivery must cost one query, not two hundred.
+
+        `items_in_domain` replaced a per-entry `item_in_domain` loop for
+        exactly this reason — pin the call shape so it can't regress.
+        """
+        svc.add_lots_bulk = AsyncMock(return_value=[])
+
+        await ms.receive_medical_delivery(
+            InventoryLotBulkCreate(
+                entries=[
+                    {"inventory_item_id": MEDICAL_ITEM, "quantity": 5},
+                    {"inventory_item_id": MEDICAL_ITEM, "quantity": 3},
+                ]
+            ),
+            db=AsyncMock(),
+            current_user=_user(),
+        )
+
+        svc.items_in_domain.assert_awaited_once()
+        svc.item_in_domain.assert_not_awaited()
 
     async def test_expiring_lots_are_scoped_to_the_domain(self, svc):
         svc.get_expiring_lots = AsyncMock(return_value=[])

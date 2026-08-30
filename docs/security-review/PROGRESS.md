@@ -17,12 +17,12 @@ feature. The rotation cannot outrun its own review queue.
 ## Open PR
 
 #2075 (`claude/security-review-medical-supplies`) — feature 23 (Medical
-supplies), pass 2. No code change; re-verification only. Next once merged:
-24 Meetings & minutes.
+supplies), pass 2. 2 fixed (MSUP-2, MSUP-3), 1 flagged (MSUP-4). Next once
+merged: 24 Meetings & minutes.
 
 ---
 
-### 2026-08-30 — Feature 23 (Medical supplies), pass 2 — no findings; re-verification only
+### 2026-08-30 — Feature 23 (Medical supplies), pass 2 — 2 fixed (LOW, LOW/MED), 1 flagged (LOW); 1 doc self-correction
 
 No prior module-audit or app-review pass exists for this feature (pass 1's
 own scope note); this is the second security-review pass over it. The
@@ -41,16 +41,45 @@ joins and fail closed; `get_items`'s domain filter and its
 `add_lots_bulk`'s XC-1 check still resolves every client-supplied
 `inventory_item_id` in one org-scoped query before writing any lot; the
 free-text search in `get_items` still uses `like_pattern` +
-`escape=LIKE_ESCAPE_CHAR` (Pitfall #25). Also checked baseline grants in
-`core/permissions.py`: `_LINE_MEMBER_PERMISSIONS` (the firefighter/EMT rank
-default, aliased into `DEFAULT_POSITIONS["firefighter"]["permissions"]` per
-Pitfall #23) grants only the broad `inventory.view`, never
-`inventory.view_medical` — medical-supply visibility is not a baseline
-grant. No new findings; no code change this iteration. Full local
-completion gate green: flake8 clean on both files, 98/98
-inventory+medical_supplies-scoped and 9271/9271 full backend suite pass, no
-migration needed. Findings doc: `docs/security-review/MSUP-23-medical-supplies.md`.
-PR #2075 opened and subscribed. Next: 24 meetings & minutes, once merged.
+`escape=LIKE_ESCAPE_CHAR` (Pitfall #25).
+
+The PR's first commit also claimed baseline grants restrict medical-supply
+visibility (`_LINE_MEMBER_PERMISSIONS` grants only the broad
+`inventory.view`, never `inventory.view_medical`) — **Codex correctly
+caught this as a false conclusion**: every medical-view route OR-gates
+`inventory.view_medical` against that same broad `inventory.view`, which
+every firefighter/EMT holds by baseline, so every rank-and-file member can
+already view medical-supply stock. This is the router's own stated design
+(the split governs _manage_ authority, not view) and involves no PHI (this
+is equipment stock, not the separate `medical_screening` PHI domain, row 09) — corrected the write-up, no code change needed for this one.
+
+Codex's review of the same commit also caught two real bugs, both fixed:
+**MSUP-2 (LOW)** `receive_medical_delivery` validated each delivery line's
+domain membership with its own query (`_require_medical_item` in a loop) —
+up to 200 sequential queries for a delivery near the schema's entry cap.
+Fixed with a new bulk `InventoryService.items_in_domain`, resolving every
+line in one query (Checklist §6, "no N+1 loop issuing a query per row").
+**MSUP-3 (LOW/MED)** `medical_supply_summary`'s `low_stock` tile walked a
+500-row-capped `get_items` page while `total_items` used the query's
+separate, uncapped count — a department with more than 500 active medical
+items got a `low_stock` number that silently excluded every low-stock item
+past the 500th. Raised the internal cap to 10000, matching the existing
+"whole org, one page" convention the CSV export already uses in
+`inventory.py`; the residual >10000 edge is mirrored into
+`KNOWN_LIMITATIONS.md` rather than claimed resolved, same disposition as
+GF-33. **MSUP-4 (LOW, flagged, not fixed)** — `get_expiring_lots` (backs
+`/lots/expiring` and this same summary) has no row cap; not a mechanical
+fix because it's a method shared with the main inventory router and the
+low-stock/expiring alert email, so a cap changes those callers' contracts
+too — needs a page-size decision per caller, mirrored into
+`KNOWN_LIMITATIONS.md`. New guard tests:
+`test_a_delivery_checks_domain_in_one_query_not_one_per_line` and
+`test_the_low_stock_scan_is_not_capped_at_the_display_page_size`. Full
+local completion gate green: flake8/black/isort clean, migrations
+validated (no schema change), 100/100 inventory+medical_supplies-scoped and
+9273/9273 full backend suite pass. Findings doc:
+`docs/security-review/MSUP-23-medical-supplies.md`. PR #2075 opened and
+subscribed. Next: 24 meetings & minutes, once merged.
 
 ---
 

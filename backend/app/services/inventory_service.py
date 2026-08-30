@@ -5630,6 +5630,37 @@ class InventoryService:
         )
         return found is not None
 
+    async def items_in_domain(
+        self,
+        item_ids: Iterable[str],
+        organization_id: str,
+        item_types: Iterable[ItemType],
+    ) -> Set[str]:
+        """Which of these item ids are filed under a category in ``item_types``?
+
+        Bulk counterpart of ``item_in_domain`` — validating a whole delivery
+        one line at a time cost one query per line; this resolves every id in
+        a single query, so a request near the schema's 200-entry cap is one
+        round trip instead of two hundred.
+        """
+        ids = {str(i) for i in item_ids}
+        if not ids:
+            return set()
+        result = await self.db.execute(
+            select(InventoryItem.id)
+            .join(
+                InventoryCategory,
+                InventoryCategory.id == InventoryItem.category_id,
+            )
+            .where(
+                InventoryItem.id.in_(ids),
+                InventoryItem.organization_id == organization_id,
+                InventoryCategory.organization_id == organization_id,
+                InventoryCategory.item_type.in_(list(item_types)),
+            )
+        )
+        return set(result.scalars().all())
+
     async def lot_in_domain(
         self,
         lot_id: str,
