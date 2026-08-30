@@ -16,9 +16,19 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-[PR #2059](https://github.com/thegspiro/the-logbook/pull/2059) — `claude/security-review-compliance-pass2` — open, awaiting CI/review.
+None.
 
 ---
+
+### 2026-08-30 — Feature 20 (Compliance), pass 2 ✅ merged — PR #2059
+
+Merged (`9e212c13`). Codex posted 4 review comments on the first version of
+the PR (CMP2-2-A, CMP2-3, CMP2-4, CMP2-B); all four independently verified
+against the actual code and addressed in follow-up commit `ef882c98`,
+including CMP2-3 (HIGH) — a real, previously-latent org-wide compliance
+grading bug made reachable by CMP2-2's own fix. CI green on the final head;
+no merge conflict (base was current `main`). Confirmed on `origin/main` by
+ancestry check. Rotation row 20 -> done. Next: 21 admin hours.
 
 ### 2026-08-30 — Feature 20 (Compliance), pass 2 — 3 fixed (1 HIGH, 2 MED), 1 partially fixed/flagged (MED)
 
@@ -2359,7 +2369,7 @@ each row's prior PR is recorded in the Log, not repeated here.
 | 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`                                                                                   | ✅     |
 | 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ✅     |
 | 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3723 L)                                                                                                          | ✅     |
-| 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ⏳     |
+| 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ✅     |
 | 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ⬜     |
 | 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ⬜     |
 | 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ⬜     |
