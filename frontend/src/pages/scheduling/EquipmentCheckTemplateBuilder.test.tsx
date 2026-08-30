@@ -239,6 +239,44 @@ describe('EquipmentCheckTemplateBuilder responsive actions', () => {
     expect(screen.getByRole('button', { name: 'Edit Flashlight' }).closest('[id="item-row-flashlight"]')).toHaveFocus();
   });
 
+  it('opens a focused mobile add flow from the location header and keeps a safe-area action visible', async () => {
+    const user = userEvent.setup();
+    renderBuilder();
+
+    await user.click(await screen.findByRole('button', { name: 'Add item to Cab' }));
+
+    const input = screen.getByPlaceholderText('Add or search items…');
+    expect(input).toHaveFocus();
+    expect(screen.getByText(/Choose a result to link inventory/)).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Add several' })).toBeVisible();
+    expect(screen.getByTestId('mobile-add-action-cab')).toHaveClass('pb-[max(0.75rem,env(safe-area-inset-bottom))]');
+  });
+
+  it('adds plain text to an empty mobile location and retains focus for rapid entry', async () => {
+    const user = userEvent.setup();
+    getTemplate.mockResolvedValue({
+      ...structuredClone(template),
+      compartments: [{ ...structuredClone(template.compartments[0]), items: [] }],
+    });
+    addCheckItemsBulk.mockResolvedValue({
+      items: [{ ...template.compartments[0]?.items[0], id: 'task-1', name: 'Clean windshield' }],
+      createdCount: 1,
+    });
+    renderBuilder();
+
+    await user.click(await screen.findByRole('button', { name: 'Add item to Cab' }));
+    const input = screen.getByPlaceholderText('Add or search items…');
+    await user.type(input, 'Clean windshield{Enter}');
+
+    expect(addCheckItemsBulk).toHaveBeenCalledWith(
+      'cab',
+      [expect.objectContaining({ name: 'Clean windshield' })],
+      expect.any(String)
+    );
+    await waitFor(() => expect(screen.getByText('Clean windshield')).toBeVisible());
+    expect(input).toHaveFocus();
+  });
+
   it('retains bulk selection, drag handles, badges, and dense actions at 1024px', async () => {
     vi.mocked(window.matchMedia).mockImplementation((query: string) => ({
       matches: query === '(min-width: 640px)',
