@@ -35,6 +35,23 @@ import globals from 'globals';
  *     so a bare-identifier selector would flag all 58 legitimate call sites.
  *     `no-restricted-globals` resolves scope, so it fires only when the name
  *     is genuinely the browser global and stays silent on the local binding.
+ *
+ * WHAT THIS DOES NOT CATCH, so nobody reads it as airtight. ESLint matches
+ * syntax, so reaching a dialog through a *value* defeats both rules. All of
+ * these are verified to pass, and none is closable by a selector — the alias
+ * is a variable, not a shape:
+ *
+ *     const w = window; w.confirm('x');
+ *     const { confirm } = window; confirm('x');
+ *     window[someComputedKey]('x');
+ *     Reflect.get(window, 'confirm')('x');
+ *
+ * That is the accepted limit, not an oversight. This rule is a guardrail
+ * against reintroducing the pattern by writing the obvious thing — which is
+ * exactly how it came back on 2026-08-27 — and not a barrier against
+ * deliberate circumvention. Do not rely on it as one. Closing the semantic
+ * class needs a runtime guard (stubbing the three globals to throw in
+ * `src/test/setup.ts`), not a cleverer selector.
  */
 const DIALOG_MESSAGE =
   'A suppressed confirm/alert/prompt is indistinguishable from Cancel. Use useConfirm() from @/contexts/ConfirmContext, or PromptDialog from @/components/ux. See CLAUDE.md pitfall #16.';
