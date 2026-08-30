@@ -178,7 +178,7 @@ describe('EquipmentCheckTemplateBuilder responsive actions', () => {
     const user = userEvent.setup();
     renderBuilder();
 
-    const radioSummary = await screen.findByRole('button', { name: 'Expand Radio' });
+    const radioSummary = await screen.findByRole('button', { name: 'Edit Radio' });
     expect(radioSummary).toHaveClass('min-h-[44px]');
     expect(within(radioSummary).getByText('Function · Required')).toBeVisible();
     expect(screen.queryByRole('button', { name: 'Select Radio' })).not.toBeInTheDocument();
@@ -188,12 +188,35 @@ describe('EquipmentCheckTemplateBuilder responsive actions', () => {
     expect(screen.getByRole('button', { name: 'Done' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Select Radio' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Radio selection checkbox' })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Expand Radio' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Edit Radio' })).not.toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: 'Select Radio' }));
     expect(screen.getByRole('button', { name: 'Deselect Radio' })).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Done' }));
     expect(screen.queryByRole('button', { name: 'Select Radio' })).not.toBeInTheDocument();
+  });
+
+  it('opens a full-height progressive item editor and reviews adjacent items on phones', async () => {
+    const user = userEvent.setup();
+    renderBuilder();
+
+    const radioRow = await screen.findByRole('button', { name: 'Edit Radio' });
+    await user.click(radioRow);
+
+    const editor = screen.getByRole('dialog', { name: 'Radio' });
+    expect(within(editor).getByText('Cab')).toBeVisible();
+    expect(within(editor).getByText('Item 1/2')).toBeVisible();
+    expect(within(editor).getByText('Essentials')).toBeVisible();
+    expect(within(editor).getByText('Inventory and expiration')).toBeVisible();
+    expect(within(editor).getByText('Optional details')).toBeVisible();
+    expect(within(editor).queryByLabelText('Expected Qty')).not.toBeInTheDocument();
+    expect(editor.firstElementChild).toHaveClass('h-[100dvh]');
+
+    await user.click(within(editor).getByRole('button', { name: 'Next' }));
+    expect(screen.getByRole('dialog', { name: 'Flashlight' })).toHaveTextContent('Item 2/2');
+    await user.click(screen.getByRole('button', { name: 'Done' }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Edit Flashlight' }).closest('[id="item-row-flashlight"]')).toHaveFocus();
   });
 
   it('retains bulk selection, drag handles, badges, and dense actions at 1024px', async () => {
