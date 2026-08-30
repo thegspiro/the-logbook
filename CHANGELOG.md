@@ -7,6 +7,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### The equipment check template builder is one canvas (2026-08-30)
+
+**Changed**
+
+- Building an equipment check template no longer spreads the work across a
+  metadata sidebar, a three-step progress strip, a "Template readiness" card
+  and the location list. Sections, locations and items are now rows in a
+  single list, in the order a crew walks them.
+- An item's name, the kind of answer it asks for (Works / Count / Level /
+  Date) and the one number that answer is graded against are edited in the
+  row itself. Description, serial and lot numbers, image, critical minimum
+  and the inventory link moved behind a per-row disclosure, so opening
+  anything is no longer a prerequisite for a complete item.
+- Nesting a location inside another is now an indent button on the row
+  rather than a "Reparent: stored inside" dropdown listing every other
+  location. The dropdown is still available from the row's overflow menu.
+- Adding items is one box per location: type one and press Enter, or paste a
+  whole list and confirm a preview that names every line and lets you set
+  the check type for all of them at once. The separate Quick Add / Bulk
+  Add mode toggle is gone.
+- The reason Publish is unavailable is now a list of the specific things to
+  fix, beside the checklist. Each one says where the problem is and jumps to
+  the row that causes it, opening its location and putting the cursor in the
+  field that is empty.
+- The mobile preview is docked beside the checklist on laptops and tablets
+  and updates as you edit, instead of opening as a modal. On phones it is
+  still a modal, from the Tools menu.
+- Template details — description, timing, template type, who completes it
+  and which apparatus it applies to — moved into a panel opened from the
+  title bar, summarised as chips under the template name.
+- Phones keep the compact rows, the full-height item editor and the search
+  inventory add sheet; the new side-by-side row controls are a laptop and
+  tablet layout.
+
 ### Clearing a compliance setting on save now actually clears it (2026-08-30)
 
 **Fixed**
