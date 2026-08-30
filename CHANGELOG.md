@@ -36,6 +36,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   timezone and the exact time you opened it (most noticeable right around
   New Year's). It now always defaults to your department's full current
   year.
+- A grant applications or campaigns link with an old or mistyped status in
+  the URL showed a confusing empty list. It now shows the full unfiltered
+  list instead.
 
 ### Admin hours CSV export now recovers from an expired session (2026-08-30)
 

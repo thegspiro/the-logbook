@@ -800,6 +800,84 @@ page's data-fetch effect), sets system time to `2027-01-01T00:30:00Z`, mocks
 `useTimezone` to `'America/Los_Angeles'`, and asserts the rendered date
 inputs read `2026-01-01`/`2026-12-31`. Verified it fails before the fix
 (`2026-12-31`/`2026-12-31`, reproducing the bug exactly) and passes after.
+The two date inputs also gained `aria-label="Start date"`/`"End date"` — a
+real, if minor, accessibility gap the test's own need to query them exposed
+— which let this test use `getByLabelText` instead of a direct
+`container.querySelectorAll` (the latter tripped `--max-warnings 10` in CI:
+see "CI fix" below).
+
+**CI fix (same day):** the direct-DOM-query version of this test's own
+first push tripped `Frontend Lint, Typecheck & Build`'s
+`eslint --max-warnings 10` — 3 new `testing-library/no-node-access`/
+`no-container` warnings pushed the repo-wide total from 8 to 11. Fixed by
+adding the `aria-label`s above and switching the test to `getByLabelText`
+(commit `e6cf9b5b`); back to 8 warnings.
+
+#### GF-27a — LOW-MED, FLAGGED, not fixed — the dashboard's KPI-card status links don't match the multi-status aggregate the KPI itself counts
+
+**What:** Caught by Codex review, round 5, on GF-27's own fix. The
+dashboard's "Active Grants" and "Pending Applications" KPI numbers come
+from `GrantService.get_dashboard_data()`, which counts **multiple**
+statuses per KPI — `active` **and** `reporting` for "Active Grants";
+`researching`, `preparing`, `internal_review`, `submitted`, and
+`under_review` for "Pending Applications" (verified directly against
+`backend/app/services/grant_service.py`'s `get_dashboard_data`). But the
+KPI cards link with only **one** status
+(`/grants/applications?status=active`, `?status=submitted`), and GF-27's
+fix made `GrantApplicationsPage.tsx` apply that single value as an exact
+match. The result: clicking "Active Grants" now shows only `active`
+applications, silently excluding `reporting` ones the card's own number
+counted — the opposite failure direction from before GF-27 (which showed
+everything, a superset; this shows too little, a subset).
+
+**Why flagged instead of fixed:** the correct fix is not mechanical.
+`GrantApplicationsPage.tsx`'s status filter is a single-value `<select>`
+with no representation for "two statuses at once," so supporting a
+multi-status initial filter from the URL means either inventing a new
+UI state invisible to the visible dropdown (which then disagrees with
+what's actually applied) or adding a synthetic grouped option to the
+dropdown itself (a real UI/product decision about how "Active" should be
+presented as a filterable concept, not just a KPI label). Guessing at
+either changes user-facing behavior beyond what this fix is meant to do.
+Flagged rather than built; mirrored into `KNOWN_LIMITATIONS.md`.
+
+**Stopping point for this rotation of Codex review:** this is the third
+consecutive round where fixing the previous round's finding surfaced a
+new one in the same code (GF-27 → GF-27a in this same round; GF-28/GF-29
+were independent). Per this rotation's own convergence rule, this is
+where pushing for further reshapes of the same finding stops — GF-27a is
+recorded as the stopping point, not chased into a fourth variant.
+
+#### GF-30 — LOW — an unrecognized `?status=` value was silently applied instead of falling back to unfiltered
+
+**What:** Also caught by Codex review, round 5, on both `CampaignsPage.tsx`
+and `GrantApplicationsPage.tsx`'s GF-27 fix. A bookmarked or shared URL
+carrying a stale or mistyped `status` value (an enum value a later release
+removed, a typo) was accepted as-is and sent to the list query, which then
+returns zero rows — an unexplained empty list, since the value isn't one
+of `STATUS_OPTIONS`/`PIPELINE_COLUMNS` the visible filter UI can display or
+explain.
+
+**Where:** `frontend/src/modules/grants-fundraising/pages/CampaignsPage.tsx`,
+`frontend/src/modules/grants-fundraising/pages/GrantApplicationsPage.tsx`.
+
+**Fix:** both pages now validate the URL's `status` value against their
+own existing whitelist (`STATUS_OPTIONS` / `PIPELINE_COLUMNS` — both
+already existed for the dropdown's own options, so this reused rather than
+duplicated them) before using it as the initial filter, falling back to
+unfiltered (`''`) on no match — the same behavior as no `status` param at
+all, rather than a confusing empty result.
+
+**Guard test added:** a third case in `CampaignsPage.statusFilter.test.tsx`
+— `?status=archived` (not a real `CampaignStatus`) asserts
+`fundraisingService.listCampaigns` is called with `{}`, not
+`{ status: 'archived' }`. Verified it fails before the fix and passes
+after. `GrantApplicationsPage.tsx`'s identical change was not given its
+own dedicated test, for the same proportionality reason GF-27 itself
+noted — the module has no render-test harness for that page to extend
+without building one from scratch for a few-line change; `tsc --noEmit`
+confirms the types, and the logic is identical to the tested
+`CampaignsPage` case.
 
 ### Frontend review (new this pass)
 

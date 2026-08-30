@@ -97,8 +97,14 @@ const CampaignsPage: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   // The dashboard's "Active Campaigns" card links here with `?status=active`
   // — honor it as the initial filter so the link actually filters, instead
-  // of silently landing on the unfiltered list.
-  const [statusFilter, setStatusFilter] = useState(() => searchParams.get('status') ?? '');
+  // of silently landing on the unfiltered list. A bookmarked/shared URL can
+  // carry a stale or mistyped value — falling back to unfiltered beats
+  // silently applying a filter that matches nothing (an unexplained empty
+  // list, with no visible indication in STATUS_OPTIONS of why).
+  const [statusFilter, setStatusFilter] = useState(() => {
+    const fromUrl = searchParams.get('status');
+    return fromUrl && (STATUS_OPTIONS as readonly string[]).includes(fromUrl) ? fromUrl : '';
+  });
   const [typeFilter, setTypeFilter] = useState('');
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [formData, setFormData] = useState<CreateFormData>(INITIAL_FORM);
