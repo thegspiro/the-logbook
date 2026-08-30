@@ -239,9 +239,7 @@ describe('EquipmentCheckTemplateBuilder responsive actions', () => {
     fireEvent.change(within(actionBar).getByLabelText('Set type for selected items'), {
       target: { value: 'count' },
     });
-    expect(
-      within(screen.getByRole('button', { name: 'Deselect Radio' })).getByText(/Count/)
-    ).toBeInTheDocument();
+    expect(within(screen.getByRole('button', { name: 'Deselect Radio' })).getByText(/Count/)).toBeInTheDocument();
 
     fireEvent.click(within(actionBar).getByRole('button', { name: 'Optional' }));
     expect(within(actionBar).getByRole('button', { name: 'Required' })).toBeInTheDocument();
@@ -307,6 +305,26 @@ describe('EquipmentCheckTemplateBuilder responsive actions', () => {
     await waitFor(() => expect(screen.getByText('Clean windshield')).toBeVisible());
     expect(input).toHaveFocus();
   });
+
+  it('persists every selected item when a bulk action is applied, not just the last', async () => {
+    // A shared autosave debounce made each scheduled item cancel the one before
+    // it, so a bulk action reported success for the whole selection and sent a
+    // single request. Both rows must reach the server.
+    mockViewport('laptop');
+    renderBuilder();
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Radio selection checkbox' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Flashlight selection checkbox' }));
+    fireEvent.click(screen.getByRole('button', { name: /^Set (Required|Optional)$/ }));
+
+    await waitFor(
+      () => {
+        const ids = updateCheckItem.mock.calls.map((call) => call[0]);
+        expect(ids).toEqual(expect.arrayContaining(['radio', 'flashlight']));
+      },
+      { timeout: 6000 }
+    );
+  }, 15_000);
 
   it('retains bulk selection, drag handles, badges, and dense actions at 1024px', async () => {
     vi.mocked(window.matchMedia).mockImplementation((query: string) => ({
