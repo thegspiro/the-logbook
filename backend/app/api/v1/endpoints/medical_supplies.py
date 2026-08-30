@@ -527,11 +527,15 @@ async def receive_medical_delivery(
     service = InventoryService(db)
     org_id = str(current_user.organization_id)
 
-    # Every line is checked before any is written. A partially-received
+    # Every line is checked before any is written, in one query rather than
+    # one round trip per line — a request near the schema's 200-entry cap
+    # would otherwise cost 200 sequential queries. A partially-received
     # shipment is worse than a rejected one: the officer cannot tell which
     # lines landed without re-counting the whole delivery.
-    for entry in data.entries:
-        await _require_medical_item(service, entry.inventory_item_id, org_id)
+    ids = [str(entry.inventory_item_id) for entry in data.entries]
+    in_domain = await service.items_in_domain(ids, org_id, MEDICAL_ITEM_TYPES)
+    if any(item_id not in in_domain for item_id in ids):
+        raise HTTPException(status_code=404, detail=_NOT_FOUND)
 
     try:
         return await service.add_lots_bulk(
@@ -653,11 +657,14 @@ async def medical_supply_summary(
     service = InventoryService(db)
     org_id = str(current_user.organization_id)
 
-    items, total = await service.get_items(
+    # `total` comes from get_items's own count query, which covers the whole
+    # org regardless of `limit` — a minimal limit here avoids fetching (and
+    # eager-loading) rows this endpoint doesn't otherwise need.
+    _items, total = await service.get_items(
         organization_id=current_user.organization_id,
         item_types=MEDICAL_ITEM_TYPES,
         active_only=True,
-        limit=500,
+        limit=1,
     )
     expiring = await service.get_expiring_lots(
         org_id, expiring_within_days, item_types=MEDICAL_ITEM_TYPES
@@ -668,24 +675,15 @@ async def medical_supply_summary(
         1 for lot, _ in expiring if lot.expiration_date and lot.expiration_date < today
     )
 
-    # Reorder point is the department's own floor for the item, so "low" means
-    # what they said it means rather than a number chosen here.
-    #
-    # On-hand comes from the lots when the item is stocked as lots. `quantity`
-    # and the lots are separate ledgers — receiving a lot never touches the
-    # column — so counting `quantity` alone reported a replenished supply as
-    # still low, and missed a depleted one. That is most of this page's stock,
-    # and it made the tile disagree with the table right beside it.
-    def _on_hand(item) -> int:
-        if getattr(item, "is_lot_stocked", False):
-            return item.lot_stock or 0
-        return item.quantity or 0
-
-    low_stock = sum(
-        1
-        for i in items
-        if i.reorder_point is not None and _on_hand(i) <= i.reorder_point
+    # Reorder point is the department's own floor for the item, so "low"
+    # means what they said it means rather than a number chosen here.
+    # `get_low_stock_items_for_alerts` narrows to items with a reorder point
+    # set before loading any rows, so this has no page-size cap — a fixed
+    # cap here previously undercounted for any department past it.
+    low_stock_items = await service.get_low_stock_items_for_alerts(
+        current_user.organization_id, item_types=MEDICAL_ITEM_TYPES
     )
+    low_stock = len(low_stock_items)
 
     return {
         "total_items": total,
