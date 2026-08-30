@@ -25,8 +25,6 @@ import {
   X,
   Copy,
   ChevronsUpDown,
-  PanelLeftClose,
-  PanelLeftOpen,
   ChevronRight,
   CheckCircle2,
   Circle,
@@ -42,6 +40,16 @@ import {
   Package,
   Link2,
   MoreHorizontal,
+  SlidersHorizontal,
+  Users,
+  Indent,
+  Outdent,
+  ToggleRight,
+  Gauge,
+  CalendarClock,
+  Smartphone,
+  Signal,
+  BatteryFull,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useSubmitGuard } from '@/hooks/useSubmitGuard';
@@ -114,6 +122,24 @@ import {
 import { useOverlaySurface } from '../../hooks/useOverlaySurface';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 
+/** Sentinel anchor for blockers that live in the details drawer, not on a row. */
+const DETAILS_ANCHOR = '__details__';
+
+/**
+ * The four answerable types, as the row's segmented control presents them.
+ *
+ * Ordered by how often a checklist uses them rather than by
+ * `CANONICAL_CHECK_TYPES`' declaration order, and labelled in the crew's words:
+ * a firefighter is asked whether a thing *works*, not whether its "function"
+ * check passed.
+ */
+const CANVAS_CHECK_TYPES = [
+  { value: 'function', label: 'Works', Icon: ToggleRight },
+  { value: 'count', label: 'Count', Icon: Hash },
+  { value: 'level', label: 'Level', Icon: Gauge },
+  { value: 'expiry', label: 'Date', Icon: CalendarClock },
+] as const satisfies ReadonlyArray<{ value: CheckType; label: string; Icon: typeof ToggleRight }>;
+
 const inputClass = 'form-input';
 
 const selectClass = 'form-input';
@@ -127,10 +153,10 @@ const mobileMenuItemClass =
 const mobileDestructiveMenuItemClass = `${mobileMenuItemClass} text-red-600 dark:text-red-400`;
 
 /** Native details/summary preserves keyboard disclosure behavior without making
- * the compact row permanently carry every secondary action. */
-const MobileActionMenu: React.FC<{ label: string; children: React.ReactNode }> = ({ label, children }) => (
+ * the row permanently carry every secondary action. */
+const RowActionMenu: React.FC<{ label: string; children: React.ReactNode }> = ({ label, children }) => (
   <details
-    className="relative flex-shrink-0 sm:hidden"
+    className="relative flex-shrink-0"
     onClick={(event) => {
       event.stopPropagation();
       if ((event.target as HTMLElement).closest('button')) event.currentTarget.open = false;
@@ -140,10 +166,10 @@ const MobileActionMenu: React.FC<{ label: string; children: React.ReactNode }> =
     }}
   >
     <summary
-      className="text-theme-text-muted hover:bg-theme-surface-secondary flex min-h-[44px] min-w-[44px] cursor-pointer list-none items-center justify-center rounded-md [&::-webkit-details-marker]:hidden"
+      className="text-theme-text-muted hover:bg-theme-surface-secondary flex min-h-[44px] min-w-[44px] cursor-pointer list-none items-center justify-center rounded-md sm:min-h-7 sm:min-w-7 [&::-webkit-details-marker]:hidden"
       aria-label={label}
     >
-      <MoreHorizontal className="h-5 w-5" aria-hidden="true" />
+      <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
     </summary>
     <div className="border-theme-surface-border bg-theme-surface absolute top-full right-0 z-30 mt-1 min-w-56 overflow-hidden rounded-lg border py-1 shadow-lg">
       {children}
@@ -436,13 +462,15 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [cloning, setCloning] = useState(false);
   const [isDirty, setIsDirty] = useState(false);
-  const [sidebarOpen, setSidebarOpen] = useState(() => {
-    if (isEditing) return false;
-    if (typeof window === 'undefined') return true;
-    // On a phone the setup card otherwise consumes the entire first screen and
-    // hides the actual checklist-building choices below the fold.
-    return !window.matchMedia('(max-width: 1023px)').matches;
-  });
+  // Template metadata moved off the canvas into a right-side drawer: the
+  // checklist is what the author came to build, and the metadata is answered
+  // once. The blocker panel is what re-opens it when something is missing.
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [rail, setRail] = useState<'blockers' | 'crew'>('blockers');
+  // One composer per location replaces the old quick-add / bulk-paste mode
+  // toggle: the number of lines decides which behaviour applies.
+  const [composeValues, setComposeValues] = useState<Record<string, string>>({});
+  const [composeTypes, setComposeTypes] = useState<Record<string, CheckType>>({});
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
   const [mobileEditor, setMobileEditor] = useState<{ compartmentKey: string; itemKey: string } | null>(null);
   const isLaptop = useMediaQuery('(min-width: 640px)');
@@ -1312,11 +1340,22 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     }
   };
 
-  const handleBulkPaste = async (compartmentIdx: number) => {
+  /**
+   * Add a parsed list of names to one location in a single request.
+   *
+   * `source` distinguishes the two composers that feed it — the phone add
+   * sheet's textarea and the canvas composer — so the right one is cleared and
+   * the idempotency key of a retried paste stays stable per composer.
+   */
+  const handleBulkPaste = async (
+    compartmentIdx: number,
+    options: { source: 'sheet' | 'compose'; checkType?: CheckType } = { source: 'sheet' }
+  ) => {
     const comp = compartments[compartmentIdx];
     if (!comp) return;
     const key = getCompKey(compartmentIdx);
-    const text = (bulkPasteValues[key] ?? '').trim();
+    const raw = options.source === 'compose' ? (composeValues[key] ?? '') : (bulkPasteValues[key] ?? '');
+    const text = raw.trim();
     if (!text) return;
 
     const names = text
@@ -1325,10 +1364,14 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       .filter(Boolean);
     if (names.length === 0) return;
 
+    // `function` is the stored default, so sending it would be noise on the
+    // wire and a difference from the single-add path for no gain.
+    const checkType = options.checkType && options.checkType !== 'function' ? options.checkType : undefined;
+
     if (comp.id) {
       setBulkItemPending((prev) => ({ ...prev, [key]: true }));
       try {
-        const payload = names.map((name) => ({ name }));
+        const payload = names.map((name) => (checkType ? { name, check_type: checkType } : { name }));
         const requestKey = `paste:${key}`;
         const payloadFingerprint = JSON.stringify(payload);
         const previousRequest = bulkIdempotencyKeys.current[requestKey];
@@ -1348,12 +1391,17 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
         setBulkItemPending((prev) => ({ ...prev, [key]: false }));
       }
     } else {
-      const newItems = names.map((n) => ({ ...emptyItem(), name: n }));
+      const newItems = names.map((n) => ({ ...emptyItem(), name: n, ...(checkType ? { checkType } : {}) }));
       updateCompartmentField(compartmentIdx, { items: [...comp.items, ...newItems] });
     }
 
-    setBulkPasteValues((prev) => ({ ...prev, [key]: '' }));
-    setBulkPasteMode((prev) => ({ ...prev, [key]: false }));
+    if (options.source === 'compose') {
+      setComposeValues((prev) => ({ ...prev, [key]: '' }));
+      setComposeTypes((prev) => ({ ...prev, [key]: 'function' }));
+    } else {
+      setBulkPasteValues((prev) => ({ ...prev, [key]: '' }));
+      setBulkPasteMode((prev) => ({ ...prev, [key]: false }));
+    }
     if (!comp.id) toast.success(`Added ${names.length} item${names.length !== 1 ? 's' : ''}`);
   };
 
@@ -2056,7 +2104,16 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     | null
   >(null);
   // Takes the fixed mobile bottom bar off this overlay while it is open.
-  useOverlaySurface(showChangelog || Boolean(csvPreview) || showPreview);
+  useOverlaySurface(showChangelog || Boolean(csvPreview) || showPreview || drawerOpen);
+
+  useEffect(() => {
+    if (!drawerOpen) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setDrawerOpen(false);
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [drawerOpen]);
 
   const handleCsvImport = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -2260,18 +2317,10 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
   const stats = useMemo(() => {
     const realCompartments = compartments.filter((c) => !c.isHeader);
     const allItems = realCompartments.flatMap((c) => c.items);
-    const totalItems = allItems.length;
-    const requiredItems = allItems.filter((i) => i.isRequired).length;
-    const withExpiration = allItems.filter((i) => i.hasExpiration).length;
-    const namedItems = allItems.filter((i) => i.name.trim()).length;
-    const namedCompartments = realCompartments.filter((c) => c.name.trim()).length;
     return {
       compartmentCount: realCompartments.length,
-      totalItems,
-      requiredItems,
-      withExpiration,
-      completeness: totalItems > 0 ? Math.round((namedItems / totalItems) * 100) : 100,
-      namedCompartments,
+      totalItems: allItems.length,
+      requiredItems: allItems.filter((i) => i.isRequired).length,
     };
   }, [compartments]);
 
@@ -2305,16 +2354,6 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     const linked = items.filter((i) => Boolean(i.inventoryItemId)).length;
     return { linkable: items.length, linked, unlinked: items.length - linked };
   }, [compartments]);
-
-  // ---------------------------------------------------------------------------
-  // Compartment status helpers
-  // ---------------------------------------------------------------------------
-
-  const getCompartmentStatus = (comp: CompartmentFormState): 'complete' | 'warning' | 'empty' => {
-    if (comp.items.length === 0) return 'empty';
-    const allNamed = comp.items.every((i) => i.name.trim());
-    return allNamed ? 'complete' : 'warning';
-  };
 
   // ---------------------------------------------------------------------------
   // Drag & Drop
@@ -2364,6 +2403,56 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     },
     [compartments]
   );
+
+  /**
+   * Nesting by indent/outdent rather than by a "stored inside" select.
+   *
+   * The select asked the author to name a parent out of a flat list of every
+   * other location; the two buttons ask the same question of the row directly
+   * above, which is where the answer already is on screen. The underlying
+   * `parentCompartmentId` is unchanged either way — as is its persistence,
+   * which rides the next save like every other compartment field.
+   */
+  const indentTargetId = useCallback(
+    (comp: CompartmentFormState): string | undefined => {
+      if (comp.isHeader) return undefined;
+      const position = orderedCompartments.findIndex(({ comp: candidate }) => candidate.clientKey === comp.clientKey);
+      if (position < 0) return undefined;
+      const depth = orderedCompartments[position]?.depth ?? 0;
+      for (let cursor = position - 1; cursor >= 0; cursor -= 1) {
+        const entry = orderedCompartments[cursor];
+        if (!entry || entry.depth < depth) return undefined;
+        if (entry.depth !== depth) continue;
+        // A section header is a caption in the list, not a container.
+        if (entry.comp.isHeader) return undefined;
+        // Only a persisted row can be named as a parent: the id is the link.
+        return entry.comp.id;
+      }
+      return undefined;
+    },
+    [orderedCompartments]
+  );
+
+  const canIndentCompartment = (comp: CompartmentFormState) => {
+    const target = indentTargetId(comp);
+    if (!target) return false;
+    return storedInsideOptions(compartments, comp).some((option) => option.id === target);
+  };
+
+  const indentCompartment = (idx: number) => {
+    const comp = compartments[idx];
+    if (!comp) return;
+    const target = indentTargetId(comp);
+    if (!target || !canIndentCompartment(comp)) return;
+    updateCompartmentField(idx, { parentCompartmentId: target });
+  };
+
+  const outdentCompartment = (idx: number) => {
+    const comp = compartments[idx];
+    if (!comp?.parentCompartmentId) return;
+    const parent = compartments.find((candidate) => candidate.id === comp.parentCompartmentId);
+    updateCompartmentField(idx, { parentCompartmentId: parent?.parentCompartmentId ?? '' });
+  };
 
   const handleCompartmentDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event;
@@ -2769,6 +2858,15 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     </div>
   );
 
+  /**
+   * One item, edited in place.
+   *
+   * Everything a crew member will be asked — the name, the kind of answer, and
+   * the one number that answer is graded against — is on the row itself. The
+   * disclosure below it holds only what a template rarely sets (description,
+   * serial and lot, image, critical minimum, the catalog link) so that opening
+   * it is never a prerequisite for a complete item.
+   */
   const renderItem = (
     compIdx: number,
     itemIdx: number,
@@ -2777,6 +2875,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     totalItems?: number
   ) => {
     const itemKey = item.id ?? item.clientKey;
+    const anchorId = `item-row-${itemKey}`;
     const isItemExpanded = expandedItems.has(itemKey);
     const checkTypeLabel = CHECK_TYPES.find((ct) => ct.value === item.checkType)?.label ?? item.checkType;
     const compKey = getCompKey(compIdx);
@@ -2786,6 +2885,8 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     const itemCount = totalItems ?? compartments[compIdx]?.items.length ?? 0;
 
     const isHeader = item.checkType === 'header';
+    const isStructural = isHeader || item.checkType === 'text';
+    const isFlagged = blockerAnchorIds.has(anchorId);
 
     if (item.saveStatus) {
       return (
@@ -2833,281 +2934,398 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       );
     }
 
+    const itemActionsMenu = (
+      <RowActionMenu label={`Actions for ${item.name.trim() || 'item'}`}>
+        <button
+          type="button"
+          className={mobileMenuItemClass}
+          onClick={(e) => {
+            if (isLaptop) {
+              window.setTimeout(() => document.getElementById(`item-name-${itemKey}`)?.focus(), 0);
+              return;
+            }
+            startInlineEdit(itemKey, item.name, e);
+          }}
+        >
+          <Pencil className="h-4 w-4" aria-hidden="true" /> Rename
+        </button>
+        <button
+          type="button"
+          className={mobileMenuItemClass}
+          disabled={itemIdx === 0}
+          onClick={() => void moveItem(compIdx, itemIdx, 'up')}
+        >
+          <ChevronUp className="h-4 w-4" aria-hidden="true" /> Move up
+        </button>
+        <button
+          type="button"
+          className={mobileMenuItemClass}
+          disabled={itemIdx === itemCount - 1}
+          onClick={() => void moveItem(compIdx, itemIdx, 'down')}
+        >
+          <ChevronDown className="h-4 w-4" aria-hidden="true" /> Move down
+        </button>
+        <button type="button" className={mobileMenuItemClass} onClick={() => void duplicateItem(compIdx, itemIdx)}>
+          <Copy className="h-4 w-4" aria-hidden="true" /> Duplicate
+        </button>
+        {compartments.filter(
+          (candidate, candidateIdx) =>
+            !candidate.isHeader && candidateIdx !== compIdx && (!isEditing || !item.id || Boolean(candidate.id))
+        ).length > 0 && (
+          <label className={`${mobileMenuItemClass} flex-col items-stretch gap-1`}>
+            <span className="flex items-center gap-3">
+              <ArrowRightLeft className="h-4 w-4" aria-hidden="true" /> Move to compartment
+            </span>
+            <select
+              className="form-input min-h-[44px] text-sm"
+              value={compIdx}
+              aria-label={`Move ${item.name || 'item'} to compartment; current destination ${compartmentPath(compIdx)}`}
+              onChange={(e) => void moveItemToCompartment(compIdx, itemIdx, Number(e.target.value))}
+            >
+              <option value={compIdx} disabled>
+                Current: {compartmentPath(compIdx)}
+              </option>
+              {compartments.map((candidate, candidateIdx) =>
+                !candidate.isHeader && candidateIdx !== compIdx && (!isEditing || !item.id || Boolean(candidate.id)) ? (
+                  <option key={candidate.id ?? candidateIdx} value={candidateIdx}>
+                    {compartmentPath(candidateIdx)}
+                  </option>
+                ) : null
+              )}
+            </select>
+          </label>
+        )}
+        <button
+          type="button"
+          className={mobileDestructiveMenuItemClass}
+          onClick={() => void deleteItem(compIdx, itemIdx)}
+        >
+          <Trash2 className="h-4 w-4" aria-hidden="true" /> Delete
+        </button>
+      </RowActionMenu>
+    );
+
+    // Phones keep the compact row and the full-height editor sheet: the canvas
+    // row below puts four controls side by side, which is a laptop and tablet
+    // affordance and cannot be tapped accurately at 375px.
+    if (!isLaptop) {
+      return (
+        <div
+          key={itemKey}
+          id={anchorId}
+          tabIndex={-1}
+          className={`rounded-md border transition-colors ${
+            highlightedItemKeys.has(item.clientKey)
+              ? 'bg-blue-50 ring-2 ring-blue-400 dark:bg-blue-900/20'
+              : isSelected
+                ? 'border-blue-400 bg-blue-50/50 dark:border-blue-500 dark:bg-blue-900/10'
+                : isFlagged
+                  ? 'border-amber-500/50 bg-amber-500/[0.06]'
+                  : 'border-theme-surface-border bg-theme-surface'
+          }`}
+        >
+          <div className="flex items-center gap-1.5 px-2">
+            {isMobileSelectionMode && (
+              <button
+                type="button"
+                className="flex min-h-[44px] min-w-[44px] flex-shrink-0 items-center justify-center"
+                onClick={() => toggleItemSelection(compIdx, itemIdx)}
+                aria-label={`${item.name.trim() || 'Item'} selection checkbox`}
+              >
+                {isSelected ? (
+                  <CheckSquare className="h-4 w-4 text-blue-600 dark:text-blue-400" aria-hidden="true" />
+                ) : (
+                  <Square className="text-theme-text-muted h-4 w-4" aria-hidden="true" />
+                )}
+              </button>
+            )}
+            {isInlineEditing ? (
+              <input
+                ref={inlineInputRef}
+                type="text"
+                className="text-theme-text-primary focus:ring-theme-focus-ring min-h-[44px] min-w-0 flex-1 rounded-sm border-b border-blue-400 bg-transparent px-1 text-sm font-medium outline-none focus:ring-2"
+                value={inlineEditValue}
+                onChange={(e) => setInlineEditValue(e.target.value)}
+                onBlur={() => commitInlineEdit(compIdx, itemIdx)}
+                onKeyDown={(e) => {
+                  e.stopPropagation();
+                  if (e.key === 'Enter') commitInlineEdit(compIdx, itemIdx);
+                  if (e.key === 'Escape') cancelInlineEdit();
+                }}
+                autoFocus
+              />
+            ) : (
+              <button
+                type="button"
+                className={`min-h-[44px] min-w-0 flex-1 py-2 text-left text-sm ${isHeader ? 'text-theme-text-primary font-bold' : item.name.trim() ? 'text-theme-text-primary font-medium' : 'text-theme-text-muted italic'}`}
+                onClick={() => {
+                  if (isMobileSelectionMode) {
+                    toggleItemSelection(compIdx, itemIdx);
+                  } else {
+                    setMobileEditor({
+                      compartmentKey: compartments[compIdx]?.clientKey ?? '',
+                      itemKey: item.clientKey,
+                    });
+                  }
+                }}
+                aria-label={
+                  isMobileSelectionMode
+                    ? `${isSelected ? 'Deselect' : 'Select'} ${item.name.trim() || 'item'}`
+                    : `Edit ${item.name.trim() || 'item'}`
+                }
+              >
+                <span className="block truncate">
+                  {item.name.trim() || (isHeader ? 'Untitled Header' : 'Untitled Item')}
+                </span>
+                <span className="text-theme-text-muted mt-0.5 block truncate text-xs font-normal">
+                  {checkTypeLabel}
+                  {item.checkType === 'count' && item.expectedQuantity ? ` · Par ${item.expectedQuantity}` : ''}
+                  {item.checkType === 'level' && item.minLevel
+                    ? ` · Minimum ${item.minLevel}${item.levelUnit ? ` ${item.levelUnit}` : ''}`
+                    : ''}
+                  {item.isRequired ? ' · Required' : ''}
+                  {item.hasExpiration ? ' · Expiration tracked' : ''}
+                </span>
+              </button>
+            )}
+            {itemActionsMenu}
+          </div>
+        </div>
+      );
+    }
+
+    const settingLabelClass = 'text-theme-text-muted text-[11px] whitespace-nowrap';
+    const numberInputClass =
+      'border-theme-input-border bg-theme-input-bg text-theme-text-primary focus:border-blue-400 rounded-md border px-1.5 py-1 text-center text-[13px] tabular-nums outline-none';
+
     return (
       <div
         key={itemKey}
-        id={`item-row-${itemKey}`}
+        id={anchorId}
         tabIndex={-1}
-        className={`rounded-md border transition-colors ${
+        className={`border-theme-surface-border/40 border-b last:border-b-0 ${
           highlightedItemKeys.has(item.clientKey)
-            ? 'bg-blue-50 ring-2 ring-blue-400 dark:bg-blue-900/20'
+            ? 'bg-blue-50 dark:bg-blue-900/20'
             : isSelected
-              ? 'border-blue-400 bg-blue-50/50 dark:border-blue-500 dark:bg-blue-900/10'
-              : isHeader
-                ? 'border-theme-surface-border bg-theme-surface'
-                : 'border-theme-surface-border bg-theme-surface'
+              ? 'bg-blue-50/50 dark:bg-blue-900/10'
+              : isFlagged
+                ? 'rounded-sm border-l-[3px] border-l-amber-500 bg-amber-500/[0.06] pl-2'
+                : ''
         }`}
       >
-        {/* Compact row — always visible */}
-        <div className="group/item hover:bg-theme-surface-secondary/50 flex items-center gap-1.5 px-2 transition-colors sm:px-3 sm:py-2">
-          {/* Bulk selection checkbox */}
-          {(isLaptop || isMobileSelectionMode) && (
-            <button
-              type="button"
-              className="flex min-h-[44px] min-w-[44px] flex-shrink-0 items-center justify-center sm:min-h-0 sm:min-w-0 sm:p-0.5"
-              onClick={() => toggleItemSelection(compIdx, itemIdx)}
-              aria-label={`${item.name.trim() || 'Item'} selection checkbox`}
-            >
-              {isSelected ? (
-                <CheckSquare className="h-4 w-4 text-blue-600 dark:text-blue-400" aria-hidden="true" />
-              ) : (
-                <Square className="text-theme-text-muted hover:text-theme-text-secondary h-4 w-4" aria-hidden="true" />
-              )}
-            </button>
-          )}
-
+        <div className="flex flex-wrap items-center gap-x-1.5 gap-y-2 py-1.5">
           <button
             type="button"
-            className="text-theme-text-muted hidden flex-shrink-0 cursor-grab touch-none p-0.5 active:cursor-grabbing sm:block"
+            className="text-theme-text-muted/60 hover:text-theme-text-muted flex-shrink-0 cursor-grab touch-none p-0.5 active:cursor-grabbing"
             onClick={(e) => e.stopPropagation()}
-            aria-label="Drag to reorder"
+            aria-label={`Drag ${item.name.trim() || 'item'} to reorder`}
             {...(dragHandleProps ?? {})}
           >
-            <GripVertical className="h-4 w-4" />
+            <GripVertical className="h-3.5 w-3.5" />
           </button>
-
-          {isHeader && <Type className="text-theme-text-muted hidden h-3.5 w-3.5 flex-shrink-0 sm:block" />}
-
-          {/* Inline editable name */}
-          {isInlineEditing ? (
-            <input
-              ref={inlineInputRef}
-              type="text"
-              className="text-theme-text-primary focus:ring-theme-focus-ring min-w-0 flex-1 rounded-sm border-b border-blue-400 bg-transparent px-1 text-sm font-medium outline-none focus:ring-2"
-              value={inlineEditValue}
-              onChange={(e) => setInlineEditValue(e.target.value)}
-              onBlur={() => commitInlineEdit(compIdx, itemIdx)}
-              onKeyDown={(e) => {
-                e.stopPropagation();
-                if (e.key === 'Enter') commitInlineEdit(compIdx, itemIdx);
-                if (e.key === 'Escape') cancelInlineEdit();
-              }}
-              onClick={(e) => e.stopPropagation()}
-              autoFocus
-            />
-          ) : (
-            <button
-              type="button"
-              className={`min-h-[44px] min-w-0 flex-1 py-2 text-left text-sm sm:flex sm:min-h-0 sm:items-center sm:gap-1.5 sm:py-0 ${isHeader ? 'text-theme-text-primary font-bold' : item.name.trim() ? 'text-theme-text-primary font-medium' : 'text-theme-text-muted italic'}`}
-              onDoubleClick={(e) => startInlineEdit(itemKey, item.name, e)}
-              onClick={() => {
-                if (isMobileSelectionMode) {
-                  toggleItemSelection(compIdx, itemIdx);
-                } else if (isLaptop) {
-                  toggleItemExpanded(itemKey);
-                } else {
-                  setMobileEditor({ compartmentKey: compartments[compIdx]?.clientKey ?? '', itemKey: item.clientKey });
-                }
-              }}
-              aria-expanded={isMobileSelectionMode || !isLaptop ? undefined : isItemExpanded}
-              aria-label={
-                isMobileSelectionMode
-                  ? `${isSelected ? 'Deselect' : 'Select'} ${item.name.trim() || 'item'}`
-                  : `${isLaptop ? (isItemExpanded ? 'Collapse' : 'Expand') : 'Edit'} ${item.name.trim() || 'item'}`
-              }
-            >
-              <span className="block truncate">
-                {item.name.trim() || (isHeader ? 'Untitled Header' : 'Untitled Item')}
-              </span>
-              <span className="text-theme-text-muted mt-0.5 block truncate text-xs font-normal sm:hidden">
-                {checkTypeLabel}
-                {item.checkType === 'count' && item.expectedQuantity ? ` · Par ${item.expectedQuantity}` : ''}
-                {item.checkType === 'level' && item.minLevel
-                  ? ` · Minimum ${item.minLevel}${item.levelUnit ? ` ${item.levelUnit}` : ''}`
-                  : ''}
-                {item.isRequired ? ' · Required' : ''}
-                {item.hasExpiration ? ' · Expiration tracked' : ''}
-              </span>
-              {!isMobileSelectionMode &&
-                (isItemExpanded ? (
-                  <ChevronDown
-                    className="text-theme-text-muted hidden h-3.5 w-3.5 shrink-0 sm:block"
-                    aria-hidden="true"
-                  />
-                ) : (
-                  <ChevronRight
-                    className="text-theme-text-muted hidden h-3.5 w-3.5 shrink-0 sm:block"
-                    aria-hidden="true"
-                  />
-                ))}
-            </button>
-          )}
 
           <button
             type="button"
-            className="text-theme-text-muted hidden flex-shrink-0 p-0.5 transition-opacity hover:text-blue-600 sm:block sm:opacity-0 sm:group-hover/item:opacity-100"
-            onClick={(e) => {
-              e.stopPropagation();
-              startInlineEdit(itemKey, item.name, e);
-            }}
-            aria-label={`Rename ${item.name.trim() || 'item'}`}
+            className="flex-shrink-0 p-0.5"
+            onClick={() => toggleItemSelection(compIdx, itemIdx)}
+            aria-label={`${item.name.trim() || 'Item'} selection checkbox`}
           >
-            <Pencil className="h-3 w-3" />
+            {isSelected ? (
+              <CheckSquare className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" aria-hidden="true" />
+            ) : (
+              <Square className="text-theme-text-muted/60 hover:text-theme-text-muted h-3.5 w-3.5" aria-hidden="true" />
+            )}
           </button>
 
-          {/* Badges */}
-          <div className="hidden flex-shrink-0 items-center gap-1.5 sm:flex">
-            <span className="bg-theme-surface-secondary text-theme-text-muted rounded-full px-2 py-0.5 text-[10px] font-medium">
-              {checkTypeLabel}
-            </span>
-            {item.isRequired && (
-              <span className="rounded-full bg-red-100 px-1.5 py-0.5 text-[10px] font-medium text-red-600 dark:bg-red-900/30 dark:text-red-400">
-                Req
-              </span>
-            )}
-            {item.hasExpiration && <AlertTriangle className="h-3 w-3 text-yellow-500" />}
-          </div>
+          {isStructural && <Type className="text-theme-text-muted h-3.5 w-3.5 flex-shrink-0" aria-hidden="true" />}
 
-          {/* Actions — stop propagation so clicking them doesn't toggle expansion */}
-          <div className="hidden flex-shrink-0 items-center gap-0.5 sm:flex" onClick={(e) => e.stopPropagation()}>
-            {/* Move up/down buttons */}
-            <button
-              type="button"
-              onClick={() => void moveItem(compIdx, itemIdx, 'up')}
-              disabled={itemIdx === 0}
-              className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-secondary rounded p-1 transition-colors disabled:cursor-not-allowed disabled:opacity-30"
-              aria-label={`Move ${item.name || 'item'} up`}
+          <input
+            id={`item-name-${itemKey}`}
+            type="text"
+            aria-label={isHeader ? 'Header title' : 'Item name'}
+            className={`text-theme-text-primary placeholder:text-theme-text-muted box-border min-w-[132px] shrink grow-0 basis-[200px] rounded-md border bg-transparent px-1.5 py-1.5 text-sm outline-none focus:border-blue-400 2xl:basis-[240px] ${
+              item.name.trim()
+                ? 'hover:border-theme-surface-border border-transparent'
+                : 'bg-theme-input-bg border-amber-500'
+            } ${isStructural ? 'font-bold' : 'font-medium'}`}
+            placeholder={isHeader ? 'Name this section…' : 'Name this item…'}
+            value={item.name}
+            onChange={(e) => updateItemFieldWithAutoSave(compIdx, itemIdx, { name: e.target.value })}
+          />
+
+          {isStructural ? (
+            <span className="bg-theme-surface-secondary text-theme-text-muted rounded-full px-2 py-0.5 text-[11px] font-medium">
+              {isHeader ? 'Section header' : 'Instruction'}
+            </span>
+          ) : (
+            <div
+              role="group"
+              aria-label={`Check type for ${item.name.trim() || 'item'}`}
+              className="bg-theme-surface-secondary grid min-w-[150px] shrink grow-0 basis-[168px] grid-cols-4 gap-0.5 rounded-lg p-0.5 2xl:basis-[220px]"
             >
-              <ChevronUp className="h-3.5 w-3.5" aria-hidden="true" />
-            </button>
-            <button
-              type="button"
-              onClick={() => void moveItem(compIdx, itemIdx, 'down')}
-              disabled={itemIdx === itemCount - 1}
-              className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-secondary rounded p-1 transition-colors disabled:cursor-not-allowed disabled:opacity-30"
-              aria-label={`Move ${item.name || 'item'} down`}
-            >
-              <ChevronDown className="h-3.5 w-3.5" aria-hidden="true" />
-            </button>
-            <button
-              type="button"
-              onClick={() => void duplicateItem(compIdx, itemIdx)}
-              className="text-theme-text-muted rounded p-1 transition-colors hover:bg-blue-50 hover:text-blue-600 dark:hover:bg-blue-900/20"
-              aria-label={`Duplicate ${item.name || 'item'}`}
-            >
-              <Copy className="h-3.5 w-3.5" aria-hidden="true" />
-            </button>
-            {compartments.some(
-              (candidate, candidateIdx) =>
-                candidateIdx !== compIdx && !candidate.isHeader && (!isEditing || !item.id || Boolean(candidate.id))
-            ) && (
-              <div className="text-theme-text-muted relative rounded p-1 transition-colors hover:bg-orange-50 hover:text-orange-600 dark:hover:bg-orange-900/20">
-                <ArrowRightLeft className="pointer-events-none h-3.5 w-3.5" aria-hidden="true" />
-                <select
-                  className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
-                  value=""
-                  onChange={(e) => {
-                    const targetIdx = Number(e.target.value);
-                    if (!Number.isNaN(targetIdx)) {
-                      void moveItemToCompartment(compIdx, itemIdx, targetIdx);
-                    }
-                    e.target.value = '';
-                  }}
-                  onClick={(e) => e.stopPropagation()}
-                  aria-label={`Move ${item.name || 'item'} to another compartment`}
+              {CANVAS_CHECK_TYPES.map(({ value, label, Icon }) => {
+                const active = item.checkType === value;
+                return (
+                  <button
+                    key={value}
+                    type="button"
+                    aria-pressed={active}
+                    onClick={() => updateItemFieldWithAutoSave(compIdx, itemIdx, { checkType: value })}
+                    title={CHECK_TYPE_HELP[value]}
+                    className={`flex min-h-7 items-center justify-center gap-1 rounded-md text-[11px] transition-colors ${
+                      active
+                        ? 'bg-theme-surface text-theme-text-primary font-semibold shadow-sm'
+                        : 'text-theme-text-muted hover:text-theme-text-primary'
+                    }`}
+                  >
+                    <Icon className="hidden h-3.5 w-3.5 2xl:block" aria-hidden="true" />
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          {/* One group so the row wraps as a unit — splitting it would leave a
+              lone delete icon dangling on a line of its own. */}
+          <div className="ml-auto flex shrink-0 flex-nowrap items-center justify-end gap-1.5">
+            {item.checkType === 'count' && (
+              <div className="flex shrink-0 items-center gap-1.5 whitespace-nowrap">
+                <span className={settingLabelClass}>Par</span>
+                <input
+                  type="number"
+                  min="0"
+                  aria-label={`Par quantity for ${item.name.trim() || 'item'}`}
+                  className={`${numberInputClass} w-14`}
+                  value={item.expectedQuantity}
+                  onChange={(e) => updateItemFieldWithAutoSave(compIdx, itemIdx, { expectedQuantity: e.target.value })}
+                />
+                <span className={settingLabelClass}>min</span>
+                <input
+                  type="number"
+                  min="0"
+                  aria-label={`Minimum quantity for ${item.name.trim() || 'item'}`}
+                  className={`${numberInputClass} w-14`}
+                  value={item.requiredQuantity}
+                  onChange={(e) => updateItemFieldWithAutoSave(compIdx, itemIdx, { requiredQuantity: e.target.value })}
+                />
+              </div>
+            )}
+            {item.checkType === 'level' && (
+              <div className="flex shrink-0 items-center gap-1.5 whitespace-nowrap">
+                <span
+                  className={
+                    item.minLevel.trim()
+                      ? settingLabelClass
+                      : 'text-[11px] font-semibold text-amber-700 dark:text-amber-400'
+                  }
                 >
-                  <option value="" disabled>
-                    Move to…
-                  </option>
-                  {compartments.map((c, ci) =>
-                    ci !== compIdx && !c.isHeader && (!isEditing || !item.id || Boolean(c.id)) ? (
-                      <option key={ci} value={ci}>
-                        {compartmentPath(ci)}
-                      </option>
-                    ) : null
-                  )}
+                  Min needed
+                </span>
+                <input
+                  type="number"
+                  min="0"
+                  aria-label={`Minimum level for ${item.name.trim() || 'item'}`}
+                  className={`${numberInputClass} w-16 ${item.minLevel.trim() ? '' : 'border-amber-500'}`}
+                  value={item.minLevel}
+                  onChange={(e) => updateItemFieldWithAutoSave(compIdx, itemIdx, { minLevel: e.target.value })}
+                />
+                <select
+                  aria-label={`Level unit for ${item.name.trim() || 'item'}`}
+                  className="border-theme-input-border bg-theme-input-bg text-theme-text-secondary rounded-md border px-1 py-1 text-[11px]"
+                  value={item.levelUnit}
+                  onChange={(e) => updateItemFieldWithAutoSave(compIdx, itemIdx, { levelUnit: e.target.value })}
+                >
+                  <option value="">unit</option>
+                  {LEVEL_UNIT_PRESETS.map((unit) => (
+                    <option key={unit} value={unit}>
+                      {unit}
+                    </option>
+                  ))}
                 </select>
               </div>
             )}
+            {item.checkType === 'expiry' && (
+              <div className="flex shrink-0 items-center gap-1.5 whitespace-nowrap">
+                <span className={settingLabelClass}>Warn</span>
+                <input
+                  type="number"
+                  min="0"
+                  aria-label={`Expiration warning days for ${item.name.trim() || 'item'}`}
+                  className={`${numberInputClass} w-14`}
+                  value={item.expirationWarningDays}
+                  onChange={(e) =>
+                    updateItemFieldWithAutoSave(compIdx, itemIdx, { expirationWarningDays: e.target.value })
+                  }
+                />
+                <span className={settingLabelClass}>days ahead</span>
+              </div>
+            )}
+
+            {!isStructural && (
+              <button
+                type="button"
+                aria-pressed={item.isRequired}
+                onClick={() => updateItemFieldWithAutoSave(compIdx, itemIdx, { isRequired: !item.isRequired })}
+                className={`min-h-6.5 min-w-[68px] shrink-0 rounded-full border px-2 text-[11px] transition-colors ${
+                  item.isRequired
+                    ? 'border-red-600/30 bg-red-600/[0.08] font-semibold text-red-700 dark:text-red-400'
+                    : 'border-theme-surface-border bg-theme-surface text-theme-text-muted'
+                }`}
+              >
+                {item.isRequired ? 'Required' : 'Optional'}
+              </button>
+            )}
+
+            {!isStructural && (
+              <button
+                type="button"
+                onClick={() => toggleItemExpanded(itemKey)}
+                title={
+                  item.inventoryItemId
+                    ? 'Linked to inventory — open item settings to change it'
+                    : 'Not linked to inventory'
+                }
+                aria-label={`${item.inventoryItemId ? 'Linked to inventory' : 'Not linked to inventory'} — ${item.name.trim() || 'item'}`}
+                className={`flex min-h-6.5 w-[30px] shrink-0 items-center justify-center rounded-md border ${
+                  item.inventoryItemId
+                    ? 'border-theme-surface-border bg-theme-surface text-green-700 dark:text-green-400'
+                    : 'border-theme-surface-border text-theme-text-muted/70 border-dashed'
+                }`}
+              >
+                <Link2 className="h-3.5 w-3.5" aria-hidden="true" />
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={() => toggleItemExpanded(itemKey)}
+              aria-expanded={isItemExpanded}
+              aria-label={`${isItemExpanded ? 'Hide' : 'Show'} more settings for ${item.name.trim() || 'item'}`}
+              className="text-theme-text-muted/70 hover:text-theme-text-primary shrink-0 p-0.5"
+            >
+              {isItemExpanded ? (
+                <ChevronDown className="h-4 w-4" aria-hidden="true" />
+              ) : (
+                <ChevronRight className="h-4 w-4" aria-hidden="true" />
+              )}
+            </button>
+
             <button
               type="button"
               onClick={() => void deleteItem(compIdx, itemIdx)}
-              className="rounded p-1 text-red-500 transition-colors hover:bg-red-50 dark:hover:bg-red-900/20"
               aria-label={`Delete ${item.name || 'item'}`}
+              className="text-theme-text-muted/70 shrink-0 p-0.5 hover:text-red-600"
             >
               <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
             </button>
-          </div>
 
-          <MobileActionMenu label={`Actions for ${item.name.trim() || 'item'}`}>
-            <button
-              type="button"
-              className={mobileMenuItemClass}
-              onClick={(e) => startInlineEdit(itemKey, item.name, e)}
-            >
-              <Pencil className="h-4 w-4" aria-hidden="true" /> Rename
-            </button>
-            <button
-              type="button"
-              className={mobileMenuItemClass}
-              disabled={itemIdx === 0}
-              onClick={() => void moveItem(compIdx, itemIdx, 'up')}
-            >
-              <ChevronUp className="h-4 w-4" aria-hidden="true" /> Move up
-            </button>
-            <button
-              type="button"
-              className={mobileMenuItemClass}
-              disabled={itemIdx === itemCount - 1}
-              onClick={() => void moveItem(compIdx, itemIdx, 'down')}
-            >
-              <ChevronDown className="h-4 w-4" aria-hidden="true" /> Move down
-            </button>
-            <button type="button" className={mobileMenuItemClass} onClick={() => void duplicateItem(compIdx, itemIdx)}>
-              <Copy className="h-4 w-4" aria-hidden="true" /> Duplicate
-            </button>
-            {compartments.filter(
-              (candidate, candidateIdx) =>
-                !candidate.isHeader && candidateIdx !== compIdx && (!isEditing || !item.id || Boolean(candidate.id))
-            ).length > 0 && (
-              <label className={`${mobileMenuItemClass} flex-col items-stretch gap-1`}>
-                <span className="flex items-center gap-3">
-                  <ArrowRightLeft className="h-4 w-4" aria-hidden="true" /> Move to compartment
-                </span>
-                <select
-                  className="form-input min-h-[44px] text-sm"
-                  value={compIdx}
-                  aria-label={`Move ${item.name || 'item'} to compartment; current destination ${compartmentPath(compIdx)}`}
-                  onChange={(e) => void moveItemToCompartment(compIdx, itemIdx, Number(e.target.value))}
-                >
-                  <option value={compIdx} disabled>
-                    Current: {compartmentPath(compIdx)}
-                  </option>
-                  {compartments.map((candidate, candidateIdx) =>
-                    !candidate.isHeader &&
-                    candidateIdx !== compIdx &&
-                    (!isEditing || !item.id || Boolean(candidate.id)) ? (
-                      <option key={candidate.id ?? candidateIdx} value={candidateIdx}>
-                        {compartmentPath(candidateIdx)}
-                      </option>
-                    ) : null
-                  )}
-                </select>
-              </label>
-            )}
-            <button
-              type="button"
-              className={mobileDestructiveMenuItemClass}
-              onClick={() => void deleteItem(compIdx, itemIdx)}
-            >
-              <Trash2 className="h-4 w-4" aria-hidden="true" /> Delete
-            </button>
-          </MobileActionMenu>
+            {itemActionsMenu}
+          </div>
         </div>
 
-        {/* Laptop and wider layouts retain the established inline editor. */}
-        {isItemExpanded && isLaptop && (
-          <div className="border-theme-surface-border border-t px-3 py-3">
+        {isItemExpanded && (
+          <div className="border-theme-surface-border bg-theme-surface-secondary/40 mb-2 rounded-md border px-3 py-3">
             {renderItemEditorFields(compIdx, itemIdx, item, isHeader)}
           </div>
         )}
@@ -3127,6 +3345,14 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
   // Render: Compartment
   // ---------------------------------------------------------------------------
 
+  /**
+   * One row of the canvas: a section heading, or a location and its items.
+   *
+   * Sections, locations and items are all rows in the same list, in the order
+   * a crew walks them. Nesting is shown by indentation and an "inside <parent>"
+   * label rather than by a select that asks the author to re-name a parent
+   * already on screen two rows up.
+   */
   const renderCompartment = (
     comp: CompartmentFormState,
     idx: number,
@@ -3137,70 +3363,307 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     depth = 0
   ) => {
     const key = comp.id ?? `comp-${idx}`;
+    const anchorId = `comp-row-${comp.id ?? comp.clientKey}`;
     const isExpanded = expandedCompartments.has(key);
     const typeLabel = containerTypeLabel(comp.containerType);
     const parentName = comp.parentCompartmentId
       ? compartments.find((c) => c.id === comp.parentCompartmentId)?.name
       : undefined;
-    // Section header compartment — simplified visual divider
+    const isFlagged = blockerAnchorIds.has(anchorId);
+    const indentPadding = depth > 0 ? { paddingLeft: 16 + depth * 18 } : undefined;
+
     if (comp.isHeader) {
+      // Sections are siblings rather than parents in the data model, so a
+      // section's scope is everything between it and the next section.
+      const order = orderedCompartments;
+      const position = order.findIndex(({ comp: candidate }) => candidate.clientKey === comp.clientKey);
+      let childCount = 0;
+      for (let cursor = position + 1; cursor >= 0 && cursor < order.length; cursor += 1) {
+        const entry = order[cursor];
+        if (!entry || entry.comp.isHeader) break;
+        childCount += 1;
+      }
       return (
-        <div key={key} ref={sortableRef} style={sortableStyle} {...(sortableAttributes ?? {})} className="card">
-          <div className="flex items-center gap-1.5 px-2 py-3 sm:gap-2 sm:px-4">
+        <div
+          key={key}
+          id={anchorId}
+          ref={sortableRef}
+          style={sortableStyle}
+          {...(sortableAttributes ?? {})}
+          className={`bg-theme-surface-secondary border-theme-surface-border flex items-center gap-2.5 border-b px-4 py-2.5 ${
+            isFlagged ? 'border-l-[3px] border-l-amber-500 bg-amber-500/[0.06]' : ''
+          }`}
+        >
+          <button
+            type="button"
+            className="text-theme-text-muted/70 hover:text-theme-text-muted flex-shrink-0 cursor-grab touch-none p-0.5 active:cursor-grabbing disabled:cursor-not-allowed"
+            aria-label={comp.id ? 'Drag to reorder section among siblings' : 'Save before dragging this section'}
+            disabled={!comp.id}
+            title={!comp.id ? 'Save before dragging unsaved records' : 'Reorder among sibling sections'}
+            {...(dragHandleProps ?? {})}
+          >
+            <GripVertical className="h-4 w-4" />
+          </button>
+          <Type className="text-theme-text-muted h-3.5 w-3.5 flex-shrink-0" aria-hidden="true" />
+          <input
+            id={`comp-name-${key}`}
+            type="text"
+            aria-label="Section heading"
+            className="text-theme-text-secondary placeholder:text-theme-text-muted min-w-[140px] flex-1 rounded-md border border-transparent bg-transparent px-1.5 py-1 text-[11px] font-bold tracking-[0.1em] uppercase outline-none focus:border-blue-400"
+            placeholder="Section heading…"
+            value={comp.name}
+            onChange={(e) => updateCompartmentField(idx, { name: e.target.value })}
+          />
+          <span className="text-theme-text-muted flex-shrink-0 text-[11px]">
+            {childCount} location{childCount !== 1 ? 's' : ''}
+          </span>
+          <div className="flex flex-shrink-0 items-center gap-0.5">
             <button
               type="button"
-              className="text-theme-text-muted hidden flex-shrink-0 cursor-grab touch-none p-0.5 active:cursor-grabbing sm:block"
-              aria-label={comp.id ? 'Drag to reorder section among siblings' : 'Save before dragging this section'}
-              disabled={!comp.id}
-              title={!comp.id ? 'Save before dragging unsaved records' : 'Reorder among sibling sections'}
-              {...(dragHandleProps ?? {})}
+              onClick={() => void moveCompartment(idx, 'up')}
+              disabled={!canMoveCompartment(compartments, comp.id, 'up')}
+              className="text-theme-text-muted/70 hover:text-theme-text-primary rounded p-1 disabled:opacity-30"
+              aria-label="Move section up"
             >
-              <GripVertical className="h-5 w-5" />
+              <ChevronUp className="h-3.5 w-3.5" aria-hidden="true" />
             </button>
+            <button
+              type="button"
+              onClick={() => void moveCompartment(idx, 'down')}
+              disabled={!canMoveCompartment(compartments, comp.id, 'down')}
+              className="text-theme-text-muted/70 hover:text-theme-text-primary rounded p-1 disabled:opacity-30"
+              aria-label="Move section down"
+            >
+              <ChevronDown className="h-3.5 w-3.5" aria-hidden="true" />
+            </button>
+            <button
+              type="button"
+              onClick={() => void deleteCompartment(idx)}
+              className="text-theme-text-muted/70 rounded p-1 hover:text-red-600"
+              aria-label="Delete section header"
+            >
+              <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+            </button>
+          </div>
+        </div>
+      );
+    }
 
-            <Type className="text-theme-text-muted h-4 w-4 flex-shrink-0" />
+    const requiredCount = comp.items.filter((i) => i.isRequired).length;
+    const answerableCount = comp.items.filter(
+      (item) => item.checkType !== 'header' && item.checkType !== 'text'
+    ).length;
+    const isEmpty = answerableCount === 0;
+    const inCustomContainer = customContainerKeys.has(key) || !isPresetContainerType(comp.containerType);
+    const composeValue = composeValues[key] ?? '';
+    const composeLines = composeValue
+      .split('\n')
+      .map((line) => line.trim())
+      .filter(Boolean);
+    const composeType = composeTypes[key] ?? 'function';
+    const selectedCount = getSelectedCount(idx);
 
+    return (
+      <div key={key} ref={sortableRef} style={sortableStyle} {...(sortableAttributes ?? {})}>
+        {/* Location row */}
+        <div
+          id={anchorId}
+          tabIndex={-1}
+          style={indentPadding}
+          className={`border-theme-surface-border relative flex flex-wrap items-center gap-x-2.5 gap-y-2 border-b px-4 py-3 ${
+            isEmpty || isFlagged ? 'border-l-[3px] border-l-amber-500 bg-amber-500/[0.06]' : ''
+          }`}
+        >
+          {depth > 0 && (
+            <span
+              aria-hidden="true"
+              className="bg-theme-surface-border absolute top-0 bottom-0 w-0.5"
+              style={{ left: 12 + depth * 18 - 22 }}
+            />
+          )}
+          <button
+            type="button"
+            className="text-theme-text-muted/70 hover:text-theme-text-muted flex-shrink-0 cursor-grab touch-none p-0.5 active:cursor-grabbing disabled:cursor-not-allowed"
+            aria-label={
+              comp.id ? 'Drag to reorder compartment among siblings' : 'Save before dragging this compartment'
+            }
+            disabled={!comp.id}
+            title={!comp.id ? 'Save before dragging unsaved records' : 'Reorder among sibling compartments'}
+            {...(dragHandleProps ?? {})}
+          >
+            <GripVertical className="h-4 w-4" />
+          </button>
+
+          <button
+            type="button"
+            onClick={() => toggleCompartmentExpanded(key)}
+            aria-expanded={isExpanded}
+            aria-label={`${isExpanded ? 'Collapse' : 'Expand'} ${comp.name || `Untitled ${typeLabel}`}`}
+            className="text-theme-text-muted hover:text-theme-text-primary flex-shrink-0 p-0.5"
+          >
+            {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+          </button>
+
+          <Package
+            className={`h-4 w-4 flex-shrink-0 ${depth > 0 ? 'text-violet-600 dark:text-violet-400' : 'text-blue-700 dark:text-blue-400'}`}
+            aria-hidden="true"
+          />
+
+          <input
+            id={`comp-name-${key}`}
+            type="text"
+            aria-label="Location name"
+            className={`text-theme-text-primary placeholder:text-theme-text-muted grow basis-[200px] rounded-md border bg-transparent px-1.5 py-1 font-semibold outline-none focus:border-blue-400 ${
+              depth > 0 ? 'text-sm' : 'text-[15px]'
+            } ${comp.name.trim() ? 'hover:border-theme-surface-border border-transparent' : 'bg-theme-input-bg border-amber-500'}`}
+            placeholder={`Name this ${typeLabel.toLowerCase()}…`}
+            value={comp.name}
+            onChange={(e) => updateCompartmentField(idx, { name: e.target.value })}
+          />
+
+          {parentName && (
+            <span className="text-theme-text-muted max-w-[160px] flex-shrink truncate text-[11px]">
+              inside {parentName}
+            </span>
+          )}
+
+          <select
+            aria-label="Storage type"
+            className="border-theme-surface-border bg-theme-surface text-theme-text-muted flex-shrink-0 rounded-full border px-2 py-0.5 text-[11px]"
+            value={inCustomContainer ? '__custom__' : comp.containerType || 'compartment'}
+            onChange={(e) => {
+              const v = e.target.value;
+              if (v === '__custom__') {
+                setCustomContainerKeys((prev) => new Set(prev).add(key));
+                updateCompartmentField(idx, { containerType: '' });
+              } else {
+                setCustomContainerKeys((prev) => {
+                  const next = new Set(prev);
+                  next.delete(key);
+                  return next;
+                });
+                updateCompartmentField(idx, { containerType: v });
+              }
+            }}
+          >
+            {CONTAINER_TYPE_PRESETS.map((p) => (
+              <option key={p.value} value={p.value}>
+                {p.label}
+              </option>
+            ))}
+            <option value="__custom__">Custom…</option>
+          </select>
+
+          {inCustomContainer && (
             <input
               type="text"
-              className="text-theme-text-primary placeholder:text-theme-text-muted focus:ring-theme-focus-ring min-w-0 flex-1 rounded-sm border-none bg-transparent text-sm font-bold outline-none placeholder:font-normal focus:ring-2"
-              placeholder="Section heading..."
-              value={comp.name}
-              onChange={(e) => updateCompartmentField(idx, { name: e.target.value })}
+              className="border-theme-input-border bg-theme-input-bg text-theme-text-primary w-32 flex-shrink-0 rounded-full border px-2 py-0.5 text-[11px] outline-none focus:border-blue-400"
+              placeholder="e.g. Trauma Kit"
+              aria-label="Custom storage type label"
+              value={comp.containerType}
+              onChange={(e) => updateCompartmentField(idx, { containerType: e.target.value })}
             />
+          )}
 
-            <span className="bg-theme-surface-secondary text-theme-text-muted flex-shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium">
-              Section
-            </span>
+          {/* A sealed container's contents cannot change while it sits shut, so
+              the long explanation belongs on hover rather than on the row. */}
+          <label
+            className="text-theme-text-muted flex flex-shrink-0 items-center gap-1.5 text-[11px]"
+            title="A crew that finds the seal intact and matching the last count clears every presence and quantity check inside in one tap. Expiry dates and readings still have to be checked."
+          >
+            <input
+              type="checkbox"
+              className="form-checkbox h-3.5 w-3.5"
+              checked={comp.isSealed}
+              onChange={(e) => updateCompartmentField(idx, { isSealed: e.target.checked })}
+            />
+            Sealed
+          </label>
+
+          {!isLaptop && isExpanded && (
+            <button
+              type="button"
+              aria-label={`Add item to ${comp.name || 'location'}`}
+              className="flex min-h-[44px] shrink-0 items-center gap-1 px-2 text-sm font-semibold text-blue-600 dark:text-blue-400"
+              onClick={() => setMobileAddLocations((previous) => new Set(previous).add(key))}
+            >
+              <Plus className="h-4 w-4" aria-hidden="true" /> Add
+            </button>
+          )}
+
+          <div className="ml-auto flex shrink-0 flex-nowrap items-center gap-2">
+            {isEmpty ? (
+              <>
+                <span className="flex-shrink-0 text-xs font-semibold text-amber-700 dark:text-amber-400">
+                  Add at least one item to publish
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setExpandedCompartments((prev) => new Set(prev).add(key));
+                    window.setTimeout(() => document.getElementById(`compose-${key}`)?.focus(), 0);
+                  }}
+                  className="flex min-h-7.5 flex-shrink-0 items-center gap-1.5 rounded-md bg-blue-600 px-2.5 text-xs font-semibold text-white hover:bg-blue-700"
+                >
+                  <Plus className="h-3.5 w-3.5" aria-hidden="true" /> Add items
+                </button>
+              </>
+            ) : (
+              <span className="inline-flex flex-shrink-0 items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-[11px] font-semibold text-green-700 dark:bg-green-900/30 dark:text-green-400">
+                {comp.items.length} item{comp.items.length !== 1 ? 's' : ''}
+              </span>
+            )}
+            {requiredCount > 0 && (
+              <span className="flex-shrink-0 rounded-full bg-red-100 px-1.5 py-0.5 text-[11px] font-medium text-red-600 dark:bg-red-900/30 dark:text-red-400">
+                {requiredCount} req
+              </span>
+            )}
 
             <div className="hidden flex-shrink-0 items-center gap-0.5 sm:flex">
               <button
                 type="button"
-                onClick={() => void moveCompartment(idx, 'up')}
-                disabled={!canMoveCompartment(compartments, comp.id, 'up')}
-                className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-secondary rounded p-1 transition-colors disabled:cursor-not-allowed disabled:opacity-30"
-                aria-label="Move section up"
+                onClick={() => indentCompartment(idx)}
+                disabled={!canIndentCompartment(comp)}
+                className="text-theme-text-muted/70 hover:text-theme-text-primary mobile-touch-target rounded p-1 disabled:opacity-30 sm:min-h-0 sm:min-w-0"
+                aria-label={`Nest ${comp.name || 'location'} inside the location above`}
+                title="Nest inside the location above"
               >
-                <ChevronUp className="h-4 w-4" aria-hidden="true" />
+                <Indent className="h-3.5 w-3.5" aria-hidden="true" />
               </button>
               <button
                 type="button"
-                onClick={() => void moveCompartment(idx, 'down')}
-                disabled={!canMoveCompartment(compartments, comp.id, 'down')}
-                className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-secondary rounded p-1 transition-colors disabled:cursor-not-allowed disabled:opacity-30"
-                aria-label="Move section down"
+                onClick={() => outdentCompartment(idx)}
+                disabled={!comp.parentCompartmentId}
+                className="text-theme-text-muted/70 hover:text-theme-text-primary mobile-touch-target rounded p-1 disabled:opacity-30 sm:min-h-0 sm:min-w-0"
+                aria-label={`Move ${comp.name || 'location'} out one level`}
+                title="Move out one level"
               >
-                <ChevronDown className="h-4 w-4" aria-hidden="true" />
+                <Outdent className="h-3.5 w-3.5" aria-hidden="true" />
               </button>
               <button
                 type="button"
                 onClick={() => void deleteCompartment(idx)}
-                className="rounded p-1.5 text-red-500 transition-colors hover:bg-red-50 dark:hover:bg-red-900/20"
-                aria-label="Delete section header"
+                className="text-theme-text-muted/70 mobile-touch-target rounded p-1 hover:text-red-600 sm:min-h-0 sm:min-w-0"
+                aria-label={`Delete ${comp.name || 'compartment'}`}
               >
-                <Trash2 className="h-4 w-4" aria-hidden="true" />
+                <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
               </button>
             </div>
-            <MobileActionMenu label={`Actions for ${comp.name || 'section'}`}>
+
+            <RowActionMenu label={`Actions for ${comp.name || 'compartment'}`}>
+              <button
+                type="button"
+                className={mobileMenuItemClass}
+                onClick={() => {
+                  setExpandedCompartments((previous) => new Set(previous).add(key));
+                  window.setTimeout(() => document.getElementById(`comp-name-${key}`)?.focus());
+                }}
+              >
+                <Pencil className="h-4 w-4" aria-hidden="true" /> Rename
+              </button>
+              <button type="button" className={mobileMenuItemClass} onClick={() => void duplicateCompartment(idx)}>
+                <Copy className="h-4 w-4" aria-hidden="true" /> Duplicate
+              </button>
               <button
                 type="button"
                 className={mobileMenuItemClass}
@@ -3217,6 +3680,53 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
               >
                 <ChevronDown className="h-4 w-4" aria-hidden="true" /> Move down
               </button>
+              {comp.id && (
+                <button type="button" className={mobileMenuItemClass} onClick={() => void addCompartment(comp.id)}>
+                  <Package className="h-4 w-4" aria-hidden="true" /> Add a location inside
+                </button>
+              )}
+              {comp.items.length > 0 && (
+                <button
+                  type="button"
+                  title="Select all items"
+                  className={mobileMenuItemClass}
+                  onClick={() => selectAllItems(idx)}
+                >
+                  <CheckSquare className="h-4 w-4" aria-hidden="true" /> Select all items
+                </button>
+              )}
+              <button type="button" className={mobileMenuItemClass} onClick={() => void addHeader(idx)}>
+                <Type className="h-4 w-4" aria-hidden="true" /> Add a header row
+              </button>
+              <button
+                type="button"
+                className={mobileMenuItemClass}
+                onClick={() => {
+                  const compKey = getCompKey(idx);
+                  setShowEquipmentPresets((prev) => ({ ...prev, [compKey]: !prev[compKey] }));
+                }}
+              >
+                <Package className="h-4 w-4" aria-hidden="true" /> Add a kit
+              </button>
+              <label className={`${mobileMenuItemClass} flex-col items-stretch gap-1`}>
+                <span className="flex items-center gap-3">
+                  <ArrowRightLeft className="h-4 w-4" aria-hidden="true" /> Stored inside
+                </span>
+                <select
+                  className="form-input min-h-[44px] text-sm"
+                  value={comp.parentCompartmentId}
+                  aria-label={`Move ${comp.name || 'compartment'} to compartment; current destination ${comp.parentCompartmentId ? compartmentPath(compartments.findIndex((entry) => entry.id === comp.parentCompartmentId)) : 'Top level'}`}
+                  onChange={(e) => updateCompartmentField(idx, { parentCompartmentId: e.target.value })}
+                >
+                  <option value="">Top level{!comp.parentCompartmentId ? ' (current)' : ''}</option>
+                  {storedInsideOptions(compartments, comp).map((option) => (
+                    <option key={option.id} value={option.id}>
+                      {option.label}
+                      {comp.parentCompartmentId === option.id ? ' (current)' : ''}
+                    </option>
+                  ))}
+                </select>
+              </label>
               <button
                 type="button"
                 className={mobileDestructiveMenuItemClass}
@@ -3224,673 +3734,211 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
               >
                 <Trash2 className="h-4 w-4" aria-hidden="true" /> Delete
               </button>
-            </MobileActionMenu>
+            </RowActionMenu>
           </div>
-          {comp.description && (
-            <div className="-mt-1 px-4 pb-2">
-              <p className="text-theme-text-muted text-xs">{comp.description}</p>
-            </div>
-          )}
-        </div>
-      );
-    }
-
-    return (
-      <div
-        key={key}
-        ref={sortableRef}
-        style={sortableStyle}
-        {...(sortableAttributes ?? {})}
-        /* Deliberately not `overflow-hidden`: the quick-add bar is the last
-           thing in the body and its results dropdown is absolutely positioned
-           below it, so a clip here cut the first result in half and hid the
-           rest whatever z-index it carried. Every child sits on the same
-           surface colour as the card, so the rounded corners stay clean
-           without one — the header just rounds its own top corners. */
-        className="card border-l-4 border-l-blue-500/50"
-      >
-        {/* Compartment header */}
-        <div className="bg-theme-surface flex items-center gap-1.5 rounded-t-lg px-2 py-3 sm:gap-2 sm:px-4">
-          <button
-            type="button"
-            className="text-theme-text-muted hidden flex-shrink-0 cursor-grab touch-none p-0.5 active:cursor-grabbing sm:block"
-            aria-label={
-              comp.id ? 'Drag to reorder compartment among siblings' : 'Save before dragging this compartment'
-            }
-            disabled={!comp.id}
-            title={!comp.id ? 'Save before dragging unsaved records' : 'Reorder among sibling compartments'}
-            {...(dragHandleProps ?? {})}
-          >
-            <GripVertical className="h-5 w-5" />
-          </button>
-
-          <button
-            type="button"
-            onClick={() => toggleCompartmentExpanded(key)}
-            className="flex min-h-[44px] min-w-0 flex-1 items-center gap-2 text-left sm:min-h-0"
-            aria-expanded={isExpanded}
-          >
-            {isExpanded ? (
-              <ChevronUp className="text-theme-text-muted h-4 w-4 flex-shrink-0" aria-hidden="true" />
-            ) : (
-              <ChevronDown className="text-theme-text-muted h-4 w-4 flex-shrink-0" aria-hidden="true" />
-            )}
-            {depth > 0 && <Package className="text-theme-text-muted h-3.5 w-3.5 flex-shrink-0" aria-hidden="true" />}
-            <span className="text-theme-text-primary truncate font-medium">{comp.name || `Untitled ${typeLabel}`}</span>
-            <span className="bg-theme-surface-secondary text-theme-text-muted flex-shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium">
-              {typeLabel}
-            </span>
-            {parentName && (
-              <span className="text-theme-text-muted hidden flex-shrink-0 truncate text-[10px] md:inline">
-                in {parentName}
-              </span>
-            )}
-          </button>
-
-          {isExpanded && (
-            <button
-              type="button"
-              aria-label={`Add item to ${comp.name || 'location'}`}
-              className="flex min-h-[44px] shrink-0 items-center gap-1 px-2 text-sm font-semibold text-blue-600 sm:hidden dark:text-blue-400"
-              onClick={() => setMobileAddLocations((previous) => new Set(previous).add(key))}
-            >
-              <Plus className="h-4 w-4" aria-hidden="true" /> Add
-            </button>
-          )}
-
-          {/* Status badges */}
-          <div className="hidden flex-shrink-0 items-center gap-1.5 sm:flex">
-            {(() => {
-              const status = getCompartmentStatus(comp);
-              return (
-                <>
-                  <span
-                    className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium ${
-                      status === 'complete'
-                        ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
-                        : status === 'warning'
-                          ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400'
-                          : 'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400'
-                    }`}
-                  >
-                    {status === 'complete' && <CheckCircle2 className="h-2.5 w-2.5" aria-hidden="true" />}
-                    {status === 'warning' && <AlertTriangle className="h-2.5 w-2.5" aria-hidden="true" />}
-                    {status === 'empty' && <Circle className="h-2.5 w-2.5" aria-hidden="true" />}
-                    {comp.items.length} item{comp.items.length !== 1 ? 's' : ''}
-                  </span>
-                  {comp.items.filter((i) => i.isRequired).length > 0 && (
-                    <span className="rounded-full bg-red-100 px-1.5 py-0.5 text-[10px] font-medium text-red-600 dark:bg-red-900/30 dark:text-red-400">
-                      {comp.items.filter((i) => i.isRequired).length} req
-                    </span>
-                  )}
-                </>
-              );
-            })()}
-          </div>
-
-          {/* Move up/down + delete */}
-          <div className="hidden flex-shrink-0 items-center gap-0.5 sm:flex">
-            <button
-              type="button"
-              onClick={() => void moveCompartment(idx, 'up')}
-              disabled={!canMoveCompartment(compartments, comp.id, 'up')}
-              className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-secondary rounded p-1 transition-colors disabled:cursor-not-allowed disabled:opacity-30"
-              aria-label={`Move ${comp.name || 'compartment'} up`}
-            >
-              <ChevronUp className="h-4 w-4" aria-hidden="true" />
-            </button>
-            <button
-              type="button"
-              onClick={() => void moveCompartment(idx, 'down')}
-              disabled={!canMoveCompartment(compartments, comp.id, 'down')}
-              className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-secondary rounded p-1 transition-colors disabled:cursor-not-allowed disabled:opacity-30"
-              aria-label={`Move ${comp.name || 'compartment'} down`}
-            >
-              <ChevronDown className="h-4 w-4" aria-hidden="true" />
-            </button>
-            <button
-              type="button"
-              onClick={() => void duplicateCompartment(idx)}
-              className="text-theme-text-muted rounded p-1 transition-colors hover:bg-blue-50 hover:text-blue-600 dark:hover:bg-blue-900/20"
-              aria-label={`Duplicate ${comp.name || 'compartment'}`}
-            >
-              <Copy className="h-4 w-4" aria-hidden="true" />
-            </button>
-            <button
-              type="button"
-              onClick={() => void deleteCompartment(idx)}
-              className="rounded p-1.5 text-red-500 transition-colors hover:bg-red-50 dark:hover:bg-red-900/20"
-              aria-label={`Delete ${comp.name || 'compartment'}`}
-            >
-              <Trash2 className="h-4 w-4" aria-hidden="true" />
-            </button>
-          </div>
-
-          <MobileActionMenu label={`Actions for ${comp.name || 'compartment'}`}>
-            <button
-              type="button"
-              className={mobileMenuItemClass}
-              onClick={() => {
-                setExpandedCompartments((previous) => new Set(previous).add(key));
-                window.setTimeout(() => document.getElementById(`comp-name-${key}`)?.focus());
-              }}
-            >
-              <Pencil className="h-4 w-4" aria-hidden="true" /> Rename
-            </button>
-            <button
-              type="button"
-              className={mobileMenuItemClass}
-              disabled={!canMoveCompartment(compartments, comp.id, 'up')}
-              onClick={() => void moveCompartment(idx, 'up')}
-            >
-              <ChevronUp className="h-4 w-4" aria-hidden="true" /> Move up
-            </button>
-            <button
-              type="button"
-              className={mobileMenuItemClass}
-              disabled={!canMoveCompartment(compartments, comp.id, 'down')}
-              onClick={() => void moveCompartment(idx, 'down')}
-            >
-              <ChevronDown className="h-4 w-4" aria-hidden="true" /> Move down
-            </button>
-            <button type="button" className={mobileMenuItemClass} onClick={() => void duplicateCompartment(idx)}>
-              <Copy className="h-4 w-4" aria-hidden="true" /> Duplicate
-            </button>
-            <label className={`${mobileMenuItemClass} flex-col items-stretch gap-1`}>
-              <span className="flex items-center gap-3">
-                <ArrowRightLeft className="h-4 w-4" aria-hidden="true" /> Move to compartment
-              </span>
-              <select
-                className="form-input min-h-[44px] text-sm"
-                value={comp.parentCompartmentId}
-                aria-label={`Move ${comp.name || 'compartment'} to compartment; current destination ${comp.parentCompartmentId ? compartmentPath(compartments.findIndex((entry) => entry.id === comp.parentCompartmentId)) : 'Top level'}`}
-                onChange={(e) => updateCompartmentField(idx, { parentCompartmentId: e.target.value })}
-              >
-                <option value="">Top level{!comp.parentCompartmentId ? ' (current)' : ''}</option>
-                {storedInsideOptions(compartments, comp).map((option) => (
-                  <option key={option.id} value={option.id}>
-                    {option.label}
-                    {comp.parentCompartmentId === option.id ? ' (current)' : ''}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <button
-              type="button"
-              className={mobileDestructiveMenuItemClass}
-              onClick={() => void deleteCompartment(idx)}
-            >
-              <Trash2 className="h-4 w-4" aria-hidden="true" /> Delete
-            </button>
-          </MobileActionMenu>
         </div>
 
-        {/* Compartment body */}
+        {/* Items and the add composer */}
         {isExpanded && (
-          <div className="border-theme-surface-border space-y-4 border-t px-4 py-4">
-            {/* Compartment fields */}
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div>
-                <label htmlFor={`comp-name-${key}`} className={labelClass}>
-                  {typeLabel} Name
-                </label>
-                <input
-                  id={`comp-name-${key}`}
-                  type="text"
-                  className={inputClass}
-                  placeholder="e.g. Driver Side, Trauma Bag, IV Pack"
-                  value={comp.name}
-                  onChange={(e) => updateCompartmentField(idx, { name: e.target.value })}
-                />
-              </div>
-              <div>
-                <label htmlFor={`comp-desc-${key}`} className={labelClass}>
-                  Description
-                </label>
-                <input
-                  id={`comp-desc-${key}`}
-                  type="text"
-                  className={inputClass}
-                  placeholder="Optional description"
-                  value={comp.description}
-                  onChange={(e) => updateCompartmentField(idx, { description: e.target.value })}
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              {/* Storage type: presets + a free-text "Custom…" option so each
-                  department can describe how their equipment is stored. */}
-              {(() => {
-                const inCustom = customContainerKeys.has(key) || !isPresetContainerType(comp.containerType);
-                return (
-                  <div>
-                    <label className={labelClass}>
-                      <Package className="mr-1 inline h-3.5 w-3.5" />
-                      Storage Type
-                    </label>
-                    <select
-                      className={selectClass}
-                      aria-label="Storage type"
-                      value={inCustom ? '__custom__' : comp.containerType || 'compartment'}
-                      onChange={(e) => {
-                        const v = e.target.value;
-                        if (v === '__custom__') {
-                          setCustomContainerKeys((prev) => new Set(prev).add(key));
-                          updateCompartmentField(idx, { containerType: '' });
-                        } else {
-                          setCustomContainerKeys((prev) => {
-                            const next = new Set(prev);
-                            next.delete(key);
-                            return next;
-                          });
-                          updateCompartmentField(idx, { containerType: v });
-                        }
-                      }}
+          <div
+            className="border-theme-surface-border flex flex-col border-b px-4 py-1 pl-8"
+            style={depth > 0 ? { paddingLeft: 32 + depth * 18 } : undefined}
+          >
+            {(showEquipmentPresets[key] ?? false) && (
+              <div className="my-2 rounded-lg border border-green-500/20 bg-green-500/5 p-3">
+                <div className="mb-2 flex items-center justify-between">
+                  <p className="text-theme-text-primary text-xs font-medium">Add equipment kit:</p>
+                  <button
+                    type="button"
+                    onClick={() => setShowEquipmentPresets((prev) => ({ ...prev, [key]: false }))}
+                    className="text-theme-text-muted hover:text-theme-text-primary p-0.5"
+                    aria-label="Close equipment kits"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+                <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3 md:grid-cols-4">
+                  {Object.entries(EQUIPMENT_PRESETS).map(([presetKey, preset]) => (
+                    <button
+                      key={presetKey}
+                      type="button"
+                      onClick={() => void addEquipmentPreset(idx, presetKey)}
+                      disabled={bulkItemPending[key] ?? false}
+                      className="btn-secondary px-2 py-1.5 text-left text-xs hover:border-green-500/40 hover:bg-green-500/10"
                     >
-                      {CONTAINER_TYPE_PRESETS.map((p) => (
-                        <option key={p.value} value={p.value}>
-                          {p.label}
-                        </option>
-                      ))}
-                      <option value="__custom__">Custom…</option>
-                    </select>
-                    {inCustom && (
-                      <input
-                        type="text"
-                        className={`${inputClass} mt-2`}
-                        placeholder="e.g. Trauma Kit, Top Shelf, Red Bag"
-                        aria-label="Custom storage type label"
-                        value={comp.containerType}
-                        onChange={(e) => updateCompartmentField(idx, { containerType: e.target.value })}
-                      />
-                    )}
-                  </div>
-                );
-              })()}
-              <div>
-                <label className={labelClass}>Reparent: stored inside</label>
+                      <span className="font-medium">{preset.label}</span>
+                      <span className="text-theme-text-muted block text-[10px]">{preset.items.length} items</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {selectedCount > 0 && (
+              <div className="my-2 flex flex-wrap items-center gap-2 rounded-md border border-blue-500/30 bg-blue-500/5 px-2.5 py-1.5">
+                <span className="text-xs font-medium text-blue-700 dark:text-blue-400">{selectedCount} selected</span>
                 <select
-                  className={selectClass}
-                  value={comp.parentCompartmentId}
-                  onChange={(e) => updateCompartmentField(idx, { parentCompartmentId: e.target.value })}
+                  className="form-input min-h-8 w-auto py-1 text-xs"
+                  aria-label="Set type for selected items"
+                  value=""
+                  onChange={(e) => {
+                    if (e.target.value) bulkSetCheckType(idx, e.target.value as CheckType);
+                  }}
                 >
-                  <option value="">Nothing (top-level)</option>
-                  {storedInsideOptions(compartments, comp).map((option) => (
-                    <option key={option.id} value={option.id}>
-                      {option.label}
+                  <option value="" disabled>
+                    Set type…
+                  </option>
+                  {CHECK_TYPES.map((ct) => (
+                    <option key={ct.value} value={ct.value}>
+                      {ct.label}
                     </option>
                   ))}
                 </select>
-              </div>
-              {/* A sealed container's contents cannot change while it sits
-                  shut, so a crew that finds the seal intact and matching the
-                  last count does not need to open it. Only dates and pressures
-                  still need eyes on — those move on their own. */}
-              <div className="sm:col-span-2">
-                <label className="flex items-start gap-2.5">
-                  <input
-                    type="checkbox"
-                    className="form-checkbox mt-0.5"
-                    checked={comp.isSealed}
-                    onChange={(e) => updateCompartmentField(idx, { isSealed: e.target.checked })}
-                  />
-                  <span>
-                    <span className="text-theme-text-primary block text-sm font-medium">Closed with a tamper seal</span>
-                    <span className="text-theme-text-muted block text-xs">
-                      A crew that finds the seal intact and matching the last count clears every presence and quantity
-                      check inside in one tap. Expiry dates and readings still have to be checked.
-                    </span>
-                  </span>
-                </label>
-              </div>
-              <div className="sm:col-span-2">
-                <label className={labelClass}>
-                  <Image className="mr-1 inline h-3.5 w-3.5" />
-                  Image URL
-                </label>
-                <input
-                  type="text"
-                  className={inputClass}
-                  placeholder="https://..."
-                  value={comp.imageUrl}
-                  onChange={(e) => updateCompartmentField(idx, { imageUrl: e.target.value })}
-                />
-              </div>
-            </div>
-
-            {/* Items */}
-            <div className="space-y-3">
-              {mobileAddLocations.has(key) && (
-                <div className="border-theme-surface-border bg-theme-surface-secondary/30 rounded-lg border p-3 sm:hidden">
-                  <div className="mb-2 flex items-center justify-between">
-                    <div>
-                      <p className="text-theme-text-primary text-sm font-semibold">Add item</p>
-                      <p className="text-theme-text-muted text-xs">
-                        Choose a result to link inventory, or add your text as a checklist task.
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      className="min-h-[44px] min-w-[44px]"
-                      aria-label="Close add item"
-                      onClick={() =>
-                        setMobileAddLocations((previous) => {
-                          const next = new Set(previous);
-                          next.delete(key);
-                          return next;
-                        })
-                      }
-                    >
-                      <X className="mx-auto h-4 w-4" aria-hidden="true" />
-                    </button>
-                  </div>
-                  {bulkPasteMode[key] ? (
-                    <div className="space-y-2">
-                      <textarea
-                        className="form-input text-sm"
-                        rows={5}
-                        aria-label="Item names, one per line"
-                        placeholder="Paste item names, one per line"
-                        value={bulkPasteValues[key] ?? ''}
-                        onChange={(event) =>
-                          setBulkPasteValues((previous) => ({ ...previous, [key]: event.target.value }))
-                        }
-                      />
-                      <div className="flex justify-between gap-2">
-                        <button
-                          type="button"
-                          className="min-h-[44px] px-2 text-sm font-medium"
-                          onClick={() => setBulkPasteMode((previous) => ({ ...previous, [key]: false }))}
-                        >
-                          Back to single add
-                        </button>
-                        <button
-                          type="button"
-                          className="min-h-[44px] rounded-md bg-blue-600 px-4 text-sm font-semibold text-white disabled:opacity-40"
-                          disabled={!bulkPasteValues[key]?.trim() || bulkItemPending[key]}
-                          onClick={() => void handleBulkPaste(idx)}
-                        >
-                          Add all
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    <>
-                      <CatalogQuickAdd
-                        value={quickAddValues[key] ?? ''}
-                        onChange={(value) => setQuickAddValues((previous) => ({ ...previous, [key]: value }))}
-                        onAdd={(payload) => handleQuickAdd(idx, payload)}
-                        canCreateInventory={canManageInventory}
-                        autoFocus
-                        placeholder="Add or search items…"
-                      />
-                      <button
-                        type="button"
-                        className="text-theme-text-muted mt-3 flex min-h-[44px] items-center gap-1 text-xs font-medium"
-                        onClick={() => setBulkPasteMode((previous) => ({ ...previous, [key]: true }))}
-                      >
-                        <List className="h-3.5 w-3.5" aria-hidden="true" /> Add several
-                      </button>
-                    </>
-                  )}
-                </div>
-              )}
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div>
-                  <div className="flex min-h-[44px] items-center gap-3">
-                    <h4 className="text-theme-text-primary text-sm font-semibold">
-                      {mobileSelectionLocations.has(getCompKey(idx)) ? 'Select items' : 'Items to check'}
-                    </h4>
-                    {comp.items.length > 0 && !isLaptop && (
-                      <button
-                        type="button"
-                        className="ml-auto min-h-[44px] px-2 text-sm font-medium text-blue-600 sm:hidden dark:text-blue-400"
-                        onClick={() => setMobileSelectionMode(idx, !mobileSelectionLocations.has(getCompKey(idx)))}
-                      >
-                        {mobileSelectionLocations.has(getCompKey(idx)) ? 'Done' : 'Select items'}
-                      </button>
-                    )}
-                  </div>
-                  <p className="text-theme-text-muted text-xs">Add equipment or a plain-language task for the crew.</p>
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  {comp.id && (
-                    <button
-                      type="button"
-                      onClick={() => void addCompartment(comp.id)}
-                      className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-secondary flex min-h-9 items-center gap-1 rounded-md border px-2 text-xs font-medium"
-                    >
-                      <Package className="h-3.5 w-3.5" /> Add inside this location
-                    </button>
-                  )}
-                  {/* Bulk selection controls */}
-                  {comp.items.length > 0 && (
-                    <div className="hidden flex-wrap items-center gap-1 sm:flex">
-                      {getSelectedCount(idx) > 0 ? (
-                        <>
-                          <span className="mr-1 text-xs font-medium text-blue-600 dark:text-blue-400">
-                            {getSelectedCount(idx)} selected
-                          </span>
-                          {/* Bulk edit: set check type */}
-                          <select
-                            className="form-input border-blue-300 px-2 py-1 text-xs font-medium text-blue-600 dark:border-blue-700 dark:text-blue-400"
-                            value=""
-                            onChange={(e) => {
-                              if (e.target.value) {
-                                bulkSetCheckType(idx, e.target.value as CheckType);
-                              }
-                            }}
-                          >
-                            <option value="" disabled>
-                              Set type...
-                            </option>
-                            {CHECK_TYPES.map((ct) => (
-                              <option key={ct.value} value={ct.value}>
-                                {ct.label}
-                              </option>
-                            ))}
-                          </select>
-                          {/* Bulk edit: toggle required */}
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const compKey = getCompKey(idx);
-                              const selected = selectedItems[compKey];
-                              const allRequired = selected && [...selected].every((i) => comp.items[i]?.isRequired);
-                              bulkToggleRequired(idx, !allRequired);
-                            }}
-                            className="flex items-center gap-1 rounded-md border border-blue-300 px-2 py-1 text-xs font-medium text-blue-600 transition-colors hover:bg-blue-50 dark:border-blue-700 dark:text-blue-400 dark:hover:bg-blue-900/20"
-                            title="Toggle required status for selected items"
-                          >
-                            {(() => {
-                              const compKey = getCompKey(idx);
-                              const selected = selectedItems[compKey];
-                              const allRequired = selected && [...selected].every((i) => comp.items[i]?.isRequired);
-                              return allRequired ? 'Set Optional' : 'Set Required';
-                            })()}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => void deleteSelectedItems(idx)}
-                            className="flex items-center gap-1 rounded-md border border-red-300 px-2 py-1 text-xs font-medium text-red-600 transition-colors hover:bg-red-50 dark:border-red-700 dark:text-red-400 dark:hover:bg-red-900/20"
-                            aria-label="Delete selected items"
-                          >
-                            <Trash2 className="h-3 w-3" aria-hidden="true" />
-                            Delete
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => deselectAllItems(idx)}
-                            className="text-theme-text-muted hover:text-theme-text-primary rounded-md px-2 py-1 text-xs transition-colors"
-                          >
-                            Clear
-                          </button>
-                        </>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => selectAllItems(idx)}
-                          className="text-theme-text-muted hover:text-theme-text-primary flex items-center gap-1 rounded-md px-2 py-1 text-xs transition-colors"
-                          title="Select all items"
-                        >
-                          <CheckSquare className="h-3 w-3" />
-                          Select all
-                        </button>
-                      )}
-                    </div>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const compKey = getCompKey(idx);
-                      setShowEquipmentPresets((prev) => ({ ...prev, [compKey]: !prev[compKey] }));
-                    }}
-                    className="flex items-center gap-1 rounded-md border border-green-500/30 bg-green-500/10 px-3 py-1.5 text-xs font-medium text-green-700 transition-colors hover:bg-green-500/20 dark:text-green-400"
-                    title="Add a pre-built equipment kit"
-                  >
-                    <Package className="h-3.5 w-3.5" />
-                    Add Kit
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => void addHeader(idx)}
-                    className="border-theme-surface-border text-theme-text-muted hover:border-theme-text-primary hover:text-theme-text-primary flex items-center gap-1 rounded-md border border-dashed px-3 py-1.5 text-xs font-medium transition-colors"
-                  >
-                    <Type className="h-3.5 w-3.5" />
-                    Header
-                  </button>
-                </div>
-              </div>
-
-              {/* Equipment Preset Picker */}
-              {(showEquipmentPresets[getCompKey(idx)] ?? false) && (
-                <div className="rounded-lg border border-green-500/20 bg-green-500/5 p-3">
-                  <div className="mb-2 flex items-center justify-between">
-                    <p className="text-theme-text-primary text-xs font-medium">Add equipment kit:</p>
-                    <button
-                      type="button"
-                      onClick={() => setShowEquipmentPresets((prev) => ({ ...prev, [getCompKey(idx)]: false }))}
-                      className="text-theme-text-muted hover:text-theme-text-primary p-0.5"
-                    >
-                      <X className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
-                  <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3 md:grid-cols-4">
-                    {Object.entries(EQUIPMENT_PRESETS).map(([presetKey, preset]) => (
-                      <button
-                        key={presetKey}
-                        type="button"
-                        onClick={() => void addEquipmentPreset(idx, presetKey)}
-                        disabled={bulkItemPending[getCompKey(idx)] ?? false}
-                        className="btn-secondary px-2 py-1.5 text-left text-xs hover:border-green-500/40 hover:bg-green-500/10"
-                      >
-                        <span className="font-medium">{preset.label}</span>
-                        <span className="text-theme-text-muted block text-[10px]">{preset.items.length} items</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {comp.items.length === 0 && (
-                <p className="text-theme-text-muted py-2 text-sm italic">
-                  No items yet. Type a name below and press Enter, or use &ldquo;Add Kit&rdquo; for pre-built groups.
-                </p>
-              )}
-
-              <DndContext
-                sensors={sensors}
-                collisionDetection={closestCenter}
-                onDragEnd={(e: DragEndEvent) => void handleItemDragEnd(idx, e)}
-              >
-                <SortableContext
-                  items={comp.items.map((item) => item.id ?? item.clientKey)}
-                  strategy={verticalListSortingStrategy}
+                <button
+                  type="button"
+                  onClick={() => {
+                    const selected = selectedItems[key];
+                    const allRequired = selected && [...selected].every((i) => comp.items[i]?.isRequired);
+                    bulkToggleRequired(idx, !allRequired);
+                  }}
+                  className="rounded-md border border-blue-300 px-2 py-1 text-xs font-medium text-blue-600 dark:border-blue-700 dark:text-blue-400"
                 >
-                  {comp.items.map((item, itemIdx) => (
-                    <SortableItemWrapper key={item.id ?? item.clientKey} id={item.id ?? item.clientKey}>
-                      {({ listeners: itemListeners }) =>
-                        renderItem(idx, itemIdx, item, itemListeners, comp.items.length)
+                  {(() => {
+                    const selected = selectedItems[key];
+                    const allRequired = selected && [...selected].every((i) => comp.items[i]?.isRequired);
+                    return allRequired ? 'Set Optional' : 'Set Required';
+                  })()}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void deleteSelectedItems(idx)}
+                  className="flex items-center gap-1 rounded-md border border-red-300 px-2 py-1 text-xs font-medium text-red-600 dark:border-red-700 dark:text-red-400"
+                  aria-label="Delete selected items"
+                >
+                  <Trash2 className="h-3 w-3" aria-hidden="true" /> Delete
+                </button>
+                <button
+                  type="button"
+                  onClick={() => deselectAllItems(idx)}
+                  className="text-theme-text-muted hover:text-theme-text-primary rounded-md px-2 py-1 text-xs"
+                >
+                  Clear
+                </button>
+              </div>
+            )}
+
+            {!isLaptop && comp.items.length > 0 && (
+              <button
+                type="button"
+                className="min-h-[44px] self-start px-2 text-sm font-medium text-blue-600 dark:text-blue-400"
+                onClick={() => setMobileSelectionMode(idx, !mobileSelectionLocations.has(key))}
+              >
+                {mobileSelectionLocations.has(key) ? 'Done' : 'Select items'}
+              </button>
+            )}
+
+            {!isLaptop && mobileAddLocations.has(key) && (
+              <div className="border-theme-surface-border bg-theme-surface-secondary/30 my-2 rounded-lg border p-3">
+                <div className="mb-2 flex items-center justify-between">
+                  <div>
+                    <p className="text-theme-text-primary text-sm font-semibold">Add item</p>
+                    <p className="text-theme-text-muted text-xs">
+                      Choose a result to link inventory, or add your text as a checklist task.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    className="min-h-[44px] min-w-[44px]"
+                    aria-label="Close add item"
+                    onClick={() =>
+                      setMobileAddLocations((previous) => {
+                        const next = new Set(previous);
+                        next.delete(key);
+                        return next;
+                      })
+                    }
+                  >
+                    <X className="mx-auto h-4 w-4" aria-hidden="true" />
+                  </button>
+                </div>
+                {bulkPasteMode[key] ? (
+                  <div className="space-y-2">
+                    <textarea
+                      className="form-input text-sm"
+                      rows={5}
+                      aria-label="Item names, one per line"
+                      placeholder="Paste item names, one per line"
+                      value={bulkPasteValues[key] ?? ''}
+                      onChange={(event) =>
+                        setBulkPasteValues((previous) => ({ ...previous, [key]: event.target.value }))
                       }
-                    </SortableItemWrapper>
-                  ))}
-                </SortableContext>
-              </DndContext>
-
-              {/* Quick-add bar */}
-              {(() => {
-                const compKey = getCompKey(idx);
-                const isBulkPaste = bulkPasteMode[compKey] ?? false;
-
-                return (
-                  <div className="border-theme-surface-border bg-theme-surface-secondary/30 mt-2 hidden rounded-md border border-dashed p-2 sm:block">
-                    <div className="mb-1.5 flex items-center gap-2">
-                      <span className="text-theme-text-muted text-[10px] font-medium tracking-wide uppercase">
-                        {isBulkPaste ? 'Bulk Add' : 'Quick Add'}
-                      </span>
+                    />
+                    <div className="flex justify-between gap-2">
                       <button
                         type="button"
-                        onClick={() => setBulkPasteMode((prev) => ({ ...prev, [compKey]: !isBulkPaste }))}
-                        className={`flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] transition-colors ${
-                          isBulkPaste
-                            ? 'bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400'
-                            : 'text-theme-text-muted hover:text-theme-text-secondary'
-                        }`}
-                        title={isBulkPaste ? 'Switch to single add' : 'Switch to bulk paste (one item per line)'}
+                        className="min-h-[44px] px-2 text-sm font-medium"
+                        onClick={() => setBulkPasteMode((previous) => ({ ...previous, [key]: false }))}
                       >
-                        <List className="h-3 w-3" />
-                        {isBulkPaste ? 'Single' : 'Bulk'}
+                        Back to single add
+                      </button>
+                      <button
+                        type="button"
+                        className="min-h-[44px] rounded-md bg-blue-600 px-4 text-sm font-semibold text-white disabled:opacity-40"
+                        disabled={!bulkPasteValues[key]?.trim() || bulkItemPending[key]}
+                        onClick={() => void handleBulkPaste(idx)}
+                      >
+                        Add all
                       </button>
                     </div>
-                    {isBulkPaste ? (
-                      <div className="space-y-1.5">
-                        <textarea
-                          className="form-input text-sm"
-                          rows={4}
-                          placeholder="Paste item names here, one per line&#10;e.g.&#10;Flashlight&#10;Radio&#10;First aid kit"
-                          value={bulkPasteValues[compKey] ?? ''}
-                          onChange={(e) => setBulkPasteValues((prev) => ({ ...prev, [compKey]: e.target.value }))}
-                        />
-                        <div className="flex items-center justify-between">
-                          <span className="text-theme-text-muted text-[10px]">
-                            {(() => {
-                              const lines = (bulkPasteValues[compKey] ?? '').split('\n').filter((l) => l.trim()).length;
-                              return lines > 0 ? `${lines} item${lines !== 1 ? 's' : ''} to add` : 'Paste a list';
-                            })()}
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => void handleBulkPaste(idx)}
-                            disabled={
-                              (bulkPasteValues[compKey] ?? '').trim().length === 0 ||
-                              (bulkItemPending[compKey] ?? false)
-                            }
-                            className="flex items-center gap-1 rounded-md bg-blue-600 px-3 py-1 text-xs font-medium text-white transition-colors hover:bg-blue-700 disabled:opacity-40"
-                          >
-                            {(bulkItemPending[compKey] ?? false) ? (
-                              <Loader2 className="h-3 w-3 animate-spin" />
-                            ) : (
-                              <Plus className="h-3 w-3" />
-                            )}
-                            {(bulkItemPending[compKey] ?? false) ? 'Adding…' : 'Add All'}
-                          </button>
-                        </div>
-                      </div>
-                    ) : (
-                      <CatalogQuickAdd
-                        value={quickAddValues[compKey] ?? ''}
-                        onChange={(v) => setQuickAddValues((prev) => ({ ...prev, [compKey]: v }))}
-                        onAdd={(payload) => handleQuickAdd(idx, payload)}
-                        canCreateInventory={canManageInventory}
-                      />
-                    )}
                   </div>
-                );
-              })()}
+                ) : (
+                  <>
+                    <CatalogQuickAdd
+                      value={quickAddValues[key] ?? ''}
+                      onChange={(value) => setQuickAddValues((previous) => ({ ...previous, [key]: value }))}
+                      onAdd={(payload) => handleQuickAdd(idx, payload)}
+                      canCreateInventory={canManageInventory}
+                      autoFocus
+                      placeholder="Add or search items…"
+                    />
+                    <button
+                      type="button"
+                      className="text-theme-text-muted mt-3 flex min-h-[44px] items-center gap-1 text-xs font-medium"
+                      onClick={() => setBulkPasteMode((previous) => ({ ...previous, [key]: true }))}
+                    >
+                      <List className="h-3.5 w-3.5" aria-hidden="true" /> Add several
+                    </button>
+                  </>
+                )}
+              </div>
+            )}
+
+            <DndContext
+              sensors={sensors}
+              collisionDetection={closestCenter}
+              onDragEnd={(e: DragEndEvent) => void handleItemDragEnd(idx, e)}
+            >
+              <SortableContext
+                items={comp.items.map((item) => item.id ?? item.clientKey)}
+                strategy={verticalListSortingStrategy}
+              >
+                {comp.items.map((item, itemIdx) => (
+                  <SortableItemWrapper key={item.id ?? item.clientKey} id={item.id ?? item.clientKey}>
+                    {({ listeners: itemListeners }) => renderItem(idx, itemIdx, item, itemListeners, comp.items.length)}
+                  </SortableItemWrapper>
+                ))}
+              </SortableContext>
+            </DndContext>
+
+            {/* The composer. One line and Enter adds one item; two or more
+                lines is a paste, and the preview below says what will be
+                created before anything is. No mode to choose — the text
+                decides, because a mode toggle is a question the author
+                already answered by typing. */}
+            {!isLaptop && (
               <div
                 data-testid={`mobile-add-action-${key}`}
-                className="bg-theme-surface sticky bottom-0 z-20 -mx-4 px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:hidden"
+                className="bg-theme-surface sticky bottom-0 z-20 -mx-4 px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]"
               >
                 <button
                   type="button"
@@ -3900,7 +3948,92 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                   <Plus className="h-5 w-5" aria-hidden="true" /> Add item
                 </button>
               </div>
-            </div>
+            )}
+
+            {isLaptop && (
+              <div className="flex items-start gap-2.5 pt-2 pb-3">
+                <Plus className="text-theme-text-muted mt-2.5 h-3.5 w-3.5 flex-shrink-0" aria-hidden="true" />
+                <div className="min-w-0 flex-1">
+                  <textarea
+                    id={`compose-${key}`}
+                    aria-label={`Add items to ${comp.name || 'this location'}`}
+                    rows={Math.max(1, Math.min(6, composeValue.split('\n').length))}
+                    placeholder="Type an item and press Enter — or paste a whole list, one per line"
+                    className="border-theme-input-border bg-theme-input-bg text-theme-text-primary placeholder:text-theme-text-muted w-full resize-none rounded-lg border border-dashed px-2.5 py-2 text-sm leading-relaxed outline-none focus:border-solid focus:border-blue-400"
+                    value={composeValue}
+                    disabled={bulkItemPending[key] ?? false}
+                    onChange={(e) => setComposeValues((prev) => ({ ...prev, [key]: e.target.value }))}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Escape') {
+                        e.preventDefault();
+                        setComposeValues((prev) => ({ ...prev, [key]: '' }));
+                        return;
+                      }
+                      if (e.key !== 'Enter' || e.shiftKey) return;
+                      // Enter commits a single typed line and keeps focus for the
+                      // next one; a multi-line value belongs to the paste preview,
+                      // where the author still has to confirm.
+                      if (composeLines.length > 1) return;
+                      e.preventDefault();
+                      const name = composeValue.trim();
+                      if (!name) return;
+                      setComposeValues((prev) => ({ ...prev, [key]: '' }));
+                      void handleQuickAdd(idx, { name });
+                    }}
+                  />
+                  {composeLines.length > 1 && (
+                    <div className="mt-2 rounded-lg border border-blue-500/25 bg-blue-500/5 p-2.5">
+                      <div className="mb-2 flex flex-wrap items-center justify-between gap-2.5">
+                        <span className="text-xs font-semibold text-blue-700 dark:text-blue-400">
+                          {composeLines.length} items ready to add
+                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-theme-text-muted text-[11px]">Set all to</span>
+                          <select
+                            aria-label="Check type for pasted items"
+                            className="border-theme-input-border bg-theme-input-bg text-theme-text-secondary rounded-md border px-1.5 py-1 text-[11px]"
+                            value={composeType}
+                            onChange={(e) =>
+                              setComposeTypes((prev) => ({ ...prev, [key]: e.target.value as CheckType }))
+                            }
+                          >
+                            {CANVAS_CHECK_TYPES.map(({ value, label }) => (
+                              <option key={value} value={value}>
+                                {label}
+                              </option>
+                            ))}
+                          </select>
+                          <button
+                            type="button"
+                            disabled={bulkItemPending[key] ?? false}
+                            onClick={() => void handleBulkPaste(idx, { source: 'compose', checkType: composeType })}
+                            className="flex min-h-7 items-center gap-1 rounded-md bg-blue-600 px-3 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-40"
+                          >
+                            {(bulkItemPending[key] ?? false) && <Loader2 className="h-3 w-3 animate-spin" />}
+                            {(bulkItemPending[key] ?? false) ? 'Adding…' : 'Add all'}
+                          </button>
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {composeLines.slice(0, 14).map((name, chipIdx) => (
+                          <span
+                            key={`${name}-${String(chipIdx)}`}
+                            className="bg-theme-surface border-theme-surface-border text-theme-text-secondary rounded-full border px-2 py-0.5 text-xs"
+                          >
+                            {name}
+                          </span>
+                        ))}
+                        {composeLines.length > 14 && (
+                          <span className="text-theme-text-muted px-1 py-0.5 text-xs">
+                            +{composeLines.length - 14} more
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -3919,150 +4052,223 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
   // Sidebar content (template metadata)
   // ---------------------------------------------------------------------------
 
-  const renderSidebar = () => (
-    <div className="space-y-4">
-      {/* Name */}
-      <div>
-        <label className={labelClass}>
-          Name <span className="text-red-500">*</span>
-        </label>
-        <input
-          type="text"
-          className={inputClass}
-          placeholder="e.g. Engine Daily Check"
-          value={form.name}
-          onChange={(e) => updateForm({ name: e.target.value })}
-        />
-      </div>
-
-      {/* Description */}
-      <div>
-        <label className={labelClass}>Description</label>
-        <textarea
-          className={inputClass}
-          rows={2}
-          placeholder="Describe what this template covers..."
-          value={form.description}
-          onChange={(e) => updateForm({ description: e.target.value })}
-        />
-      </div>
-
-      {/* Check Timing */}
-      <div className="border-theme-surface-border border-t pt-4">
-        <label className={labelClass}>
-          <Clock className="mr-1 inline h-3.5 w-3.5" />
-          When should crews complete it?
-        </label>
-        <div className="bg-theme-surface-secondary grid grid-cols-2 gap-1 rounded-lg p-1">
-          {(
-            [
-              ['start_of_shift', 'Start of shift'],
-              ['end_of_shift', 'End of shift'],
-            ] as const
-          ).map(([value, label]) => (
+  /**
+   * Template metadata, in a drawer.
+   *
+   * Who runs the checklist, when, and on what — answered once, then never
+   * looked at again while the actual work (the items) is done. The chip strip
+   * under the title reports what it holds so it does not have to be opened to
+   * be read.
+   */
+  const renderDetailsDrawer = () => (
+    <DialogPortal>
+      <div
+        className="fixed inset-0 z-50 flex justify-end bg-black/40 backdrop-blur-[4px]"
+        role="presentation"
+        onClick={() => setDrawerOpen(false)}
+      >
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="template-details-title"
+          className="bg-theme-surface border-theme-surface-border animate-slide-in-right h-full w-[440px] max-w-[92vw] overflow-y-auto border-l px-5 py-5 shadow-2xl"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="mb-1 flex items-start justify-between gap-3">
+            <h2 id="template-details-title" className="text-theme-text-primary text-[17px] font-bold">
+              Template details
+            </h2>
             <button
-              key={value}
               type="button"
-              onClick={() => updateForm({ checkTiming: value })}
-              className={`min-h-9 rounded-md px-2 text-xs font-medium transition-colors ${form.checkTiming === value ? 'bg-theme-surface text-theme-text-primary shadow-sm ring-1 ring-blue-500/20' : 'text-theme-text-muted hover:text-theme-text-primary'}`}
-              aria-pressed={form.checkTiming === value}
+              onClick={() => setDrawerOpen(false)}
+              className="text-theme-text-muted hover:text-theme-text-primary mobile-touch-target flex items-center justify-center rounded-md sm:min-h-0 sm:min-w-0 sm:p-1.5"
+              aria-label="Close template details"
             >
-              {label}
+              <X className="h-4.5 w-4.5" />
             </button>
-          ))}
-        </div>
-      </div>
+          </div>
+          <p className="text-theme-text-muted mb-4 text-xs">
+            Who runs this checklist, when, and on what. Nothing here changes the items.
+          </p>
 
-      {/* Template Type */}
-      <div>
-        <label className={labelClass} htmlFor="equipment-check-template-type">
-          Template Type
-        </label>
-        <select
-          id="equipment-check-template-type"
-          className={selectClass}
-          value={form.templateType}
-          onChange={(e) => updateForm({ templateType: e.target.value as TemplateType })}
-        >
-          {(Object.entries(TEMPLATE_TYPE_LABELS) as [TemplateType, string][]).map(([value, label]) => (
-            <option key={value} value={value}>
-              {label}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      {/* Assigned Positions */}
-      <div>
-        <label className={labelClass}>Who completes it?</label>
-        <p className="text-theme-text-muted -mt-1 mb-2 text-[11px]">
-          Leave blank to make it available to the whole crew.
-        </p>
-        <div className="flex flex-wrap gap-1.5">
-          {POSITIONS.map((pos) => (
-            <label
-              key={pos}
-              className={`flex min-h-8 cursor-pointer items-center gap-1.5 rounded-full border px-2.5 text-xs capitalize transition-colors ${form.assignedPositions.includes(pos) ? 'border-blue-500/40 bg-blue-500/10 text-blue-700 dark:text-blue-300' : 'border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-secondary'}`}
-            >
+          <div className="flex flex-col gap-4">
+            <div>
+              <label className={labelClass} htmlFor="template-name-drawer">
+                Name <span className="text-red-600">*</span>
+              </label>
               <input
-                type="checkbox"
-                className="sr-only"
-                checked={form.assignedPositions.includes(pos)}
-                onChange={() => togglePosition(pos)}
+                id="template-name-drawer"
+                type="text"
+                className={inputClass}
+                placeholder="e.g. Engine Daily Check"
+                value={form.name}
+                onChange={(e) => updateForm({ name: e.target.value })}
               />
-              {form.assignedPositions.includes(pos) && <CheckCircle2 className="h-3.5 w-3.5" />}
-              {pos}
-            </label>
-          ))}
+            </div>
+
+            <div>
+              <label className={labelClass} htmlFor="template-description">
+                Description
+              </label>
+              <textarea
+                id="template-description"
+                className={inputClass}
+                rows={2}
+                placeholder="Describe what this template covers..."
+                value={form.description}
+                onChange={(e) => updateForm({ description: e.target.value })}
+              />
+            </div>
+
+            <div>
+              <label className={labelClass}>
+                <Clock className="mr-1 inline h-3.5 w-3.5" />
+                When should crews complete it?
+              </label>
+              <div className="bg-theme-surface-secondary grid grid-cols-2 gap-1 rounded-lg p-1">
+                {(
+                  [
+                    ['start_of_shift', 'Start of shift'],
+                    ['end_of_shift', 'End of shift'],
+                  ] as const
+                ).map(([value, label]) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => updateForm({ checkTiming: value })}
+                    className={`min-h-10 rounded-md px-2 text-[13px] transition-colors ${form.checkTiming === value ? 'bg-theme-surface text-theme-text-primary font-semibold shadow-sm ring-1 ring-blue-500/20' : 'text-theme-text-muted hover:text-theme-text-primary'}`}
+                    aria-pressed={form.checkTiming === value}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <label className={labelClass} htmlFor="equipment-check-template-type">
+                Template Type
+              </label>
+              <select
+                id="equipment-check-template-type"
+                className={selectClass}
+                value={form.templateType}
+                onChange={(e) => updateForm({ templateType: e.target.value as TemplateType })}
+              >
+                {(Object.entries(TEMPLATE_TYPE_LABELS) as [TemplateType, string][]).map(([value, label]) => (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className={labelClass}>Who completes it?</label>
+              <p className="text-theme-text-muted -mt-1 mb-2 text-[11px]">
+                Leave blank to make it available to the whole crew.
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {POSITIONS.map((pos) => (
+                  <label
+                    key={pos}
+                    className={`flex min-h-8.5 cursor-pointer items-center gap-1.5 rounded-full border px-3 text-[13px] capitalize transition-colors ${form.assignedPositions.includes(pos) ? 'border-blue-500/40 bg-blue-500/10 text-blue-700 dark:text-blue-300' : 'border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-secondary'}`}
+                  >
+                    <input
+                      type="checkbox"
+                      className="sr-only"
+                      checked={form.assignedPositions.includes(pos)}
+                      onChange={() => togglePosition(pos)}
+                    />
+                    {form.assignedPositions.includes(pos) && <CheckCircle2 className="h-3.5 w-3.5" />}
+                    {pos}
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            <div className="border-theme-surface-border border-t pt-4">
+              <label className={labelClass} htmlFor="template-apparatus-type">
+                Where will it be used?
+              </label>
+              <div className="flex gap-2">
+                <select
+                  id="template-apparatus-type"
+                  className={`${selectClass} min-w-0 flex-1`}
+                  value={form.apparatusType}
+                  onChange={(e) => updateForm({ apparatusType: e.target.value })}
+                >
+                  <option value="">-- Select Type --</option>
+                  {APPARATUS_TYPES.map((t) => (
+                    <option key={t} value={t}>
+                      {t.charAt(0).toUpperCase() + t.slice(1)}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  aria-label="Specific Apparatus"
+                  className={`${selectClass} min-w-0 flex-1`}
+                  value={form.apparatusId}
+                  onChange={(e) => updateForm({ apparatusId: e.target.value })}
+                >
+                  <option value="">All of type (default)</option>
+                  {apparatusOptions
+                    .filter((a) => !form.apparatusType || a.apparatus_type === form.apparatusType)
+                    .filter((a) => a.id)
+                    .map((a) => (
+                      <option key={a.id} value={a.id}>
+                        {a.unit_number ? `${a.unit_number} — ${a.name}` : a.name}
+                      </option>
+                    ))}
+                </select>
+              </div>
+              <p className="text-theme-text-muted mt-1 text-xs">
+                Leave as &quot;All of type&quot; to use this template as the default for all{' '}
+                {form.apparatusType || 'apparatus'} units
+              </p>
+            </div>
+
+            <div className="border-theme-surface-border flex flex-col gap-2 border-t pt-4">
+              <span className="text-theme-text-muted text-[11px] font-bold tracking-[0.08em] uppercase">
+                Template tools
+              </span>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={exportTemplateJson}
+                  disabled={compartments.length === 0}
+                  className="btn-secondary flex min-h-9 items-center gap-1.5 px-3 text-[13px] disabled:opacity-40"
+                >
+                  <Download className="h-3.5 w-3.5" /> Export JSON
+                </button>
+                <button
+                  type="button"
+                  onClick={() => importFileRef.current?.click()}
+                  className="btn-secondary flex min-h-9 items-center gap-1.5 px-3 text-[13px]"
+                >
+                  <Upload className="h-3.5 w-3.5" /> Import JSON
+                </button>
+                {isEditing && templateId && (
+                  <button
+                    type="button"
+                    onClick={() => void handleClone()}
+                    disabled={cloning}
+                    className="btn-secondary flex min-h-9 items-center gap-1.5 px-3 text-[13px] disabled:opacity-50"
+                  >
+                    {cloning ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Copy className="h-3.5 w-3.5" />}{' '}
+                    Clone
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
         </div>
       </div>
-
-      {/* Apparatus Type */}
-      <div className="border-theme-surface-border border-t pt-4">
-        <label className={labelClass}>Where will it be used?</label>
-        <select
-          className={selectClass}
-          value={form.apparatusType}
-          onChange={(e) => updateForm({ apparatusType: e.target.value })}
-        >
-          <option value="">-- Select Type --</option>
-          {APPARATUS_TYPES.map((t) => (
-            <option key={t} value={t}>
-              {t.charAt(0).toUpperCase() + t.slice(1)}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      {/* Specific Apparatus */}
-      <div>
-        <label className={labelClass}>Specific Apparatus</label>
-        <select
-          className={selectClass}
-          value={form.apparatusId}
-          onChange={(e) => updateForm({ apparatusId: e.target.value })}
-        >
-          <option value="">All of type (default)</option>
-          {apparatusOptions
-            .filter((a) => !form.apparatusType || a.apparatus_type === form.apparatusType)
-            .filter((a) => a.id)
-            .map((a) => (
-              <option key={a.id} value={a.id}>
-                {a.unit_number ? `${a.unit_number} — ${a.name}` : a.name}
-              </option>
-            ))}
-        </select>
-        <p className="text-theme-text-muted mt-1 text-xs">
-          Leave as &quot;All of type&quot; to use this template as the default for all{' '}
-          {form.apparatusType || 'apparatus'} units
-        </p>
-      </div>
-    </div>
+    </DialogPortal>
   );
 
   const setupReady = Boolean(form.name.trim() && form.checkTiming && form.templateType);
   const structureReady = compartments.some((comp) => !comp.isHeader);
-  const itemsReady = stats.totalItems > 0;
   const operationalCompartments = compartments.filter((comp) => !comp.isHeader);
   const blockingItems = compartments
     .flatMap((comp) => comp.items)
@@ -4079,6 +4285,127 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       comp.items.some((item) => item.checkType !== 'header' && item.checkType !== 'text')
     );
   const publishReady = setupReady && locationsReady && blockingItems === 0;
+
+  /**
+   * The publish gate, restated as a to-do list.
+   *
+   * Derived from the same predicates as `publishReady` above rather than from
+   * a parallel set, so the panel and the disabled Publish button cannot
+   * disagree about why. Each entry carries the DOM id of the row that causes
+   * it: naming the blocker is only half the job when the checklist is four
+   * hundred rows long.
+   */
+  const blockers: Array<{
+    id: string;
+    title: string;
+    locator: string;
+    icon: 'alert' | 'gauge' | 'package' | 'sliders';
+    anchorId: string;
+    /** Compartment to expand before jumping, when the row is inside one. */
+    expandKey?: string;
+  }> = [];
+  if (!setupReady) {
+    blockers.push({
+      id: 'setup',
+      title: 'Template details are incomplete',
+      locator: 'A name, a timing and a template type are needed',
+      icon: 'sliders',
+      anchorId: DETAILS_ANCHOR,
+    });
+  }
+  if (!structureReady) {
+    blockers.push({
+      id: 'structure',
+      title: 'The checklist has no locations',
+      locator: 'Add a location, load a preset, or import a spreadsheet',
+      icon: 'package',
+      anchorId: 'checklist-canvas',
+    });
+  }
+  for (const [compIdx, comp] of compartments.entries()) {
+    const compAnchor = `comp-row-${comp.id ?? comp.clientKey}`;
+    const compLabel = comp.name.trim() || `Untitled ${containerTypeLabel(comp.containerType)}`;
+    if (!comp.name.trim()) {
+      blockers.push({
+        id: `comp-name-${comp.clientKey}`,
+        title: comp.isHeader ? 'A section has no heading' : 'A location has no name',
+        locator: comp.isHeader ? 'Name it or delete it' : `Position ${String(compIdx + 1)} in the checklist`,
+        icon: 'package',
+        anchorId: compAnchor,
+      });
+    }
+    if (!comp.isHeader && !comp.items.some((item) => item.checkType !== 'header' && item.checkType !== 'text')) {
+      blockers.push({
+        id: `comp-empty-${comp.clientKey}`,
+        title: `${compLabel} is empty`,
+        locator: 'Add an item or delete the location',
+        icon: 'package',
+        anchorId: compAnchor,
+      });
+    }
+    for (const [itemIdx, item] of comp.items.entries()) {
+      const itemAnchor = `item-row-${item.id ?? item.clientKey}`;
+      if (!item.name.trim()) {
+        blockers.push({
+          id: `item-name-${item.clientKey}`,
+          title: 'One item has no name',
+          locator: `${compLabel} · row ${String(itemIdx + 1)}`,
+          icon: 'alert',
+          anchorId: itemAnchor,
+          expandKey: comp.id ?? `comp-${compIdx}`,
+        });
+        continue;
+      }
+      if (item.checkType === 'count' && !item.requiredQuantity.trim() && !item.expectedQuantity.trim()) {
+        blockers.push({
+          id: `item-count-${item.clientKey}`,
+          title: `${item.name.trim()} needs a quantity`,
+          locator: 'A count check needs a par or a minimum to compare against',
+          icon: 'alert',
+          anchorId: itemAnchor,
+          expandKey: comp.id ?? `comp-${compIdx}`,
+        });
+      }
+      if (item.checkType === 'level' && !item.minLevel.trim()) {
+        blockers.push({
+          id: `item-level-${item.clientKey}`,
+          title: `${item.name.trim()} needs a minimum`,
+          locator: "A level check can't pass or fail without one",
+          icon: 'gauge',
+          anchorId: itemAnchor,
+          expandKey: comp.id ?? `comp-${compIdx}`,
+        });
+      }
+    }
+  }
+  const blockerAnchorIds = new Set(blockers.map((blocker) => blocker.anchorId));
+
+  /**
+   * Jump from a blocker to the row that causes it.
+   *
+   * Focus, not just scroll: the author's next act is to type into the field
+   * that is empty, and a scrolled-to row still costs them a click to find it.
+   * `prefers-reduced-motion` turns the smooth scroll off rather than the jump.
+   */
+  const goToBlocker = (anchorId: string, expandKey?: string) => {
+    if (anchorId === DETAILS_ANCHOR) {
+      setDrawerOpen(true);
+      return;
+    }
+    // A row inside a collapsed location is not in the DOM to scroll to, so the
+    // jump has to open it first — and then wait a frame for it to render.
+    if (expandKey && !expandedCompartments.has(expandKey)) {
+      setExpandedCompartments((prev) => new Set(prev).add(expandKey));
+      window.setTimeout(() => goToBlocker(anchorId), 0);
+      return;
+    }
+    const row = document.getElementById(anchorId);
+    if (!row) return;
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    row.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'center' });
+    const field = row.querySelector<HTMLElement>('input, select, textarea');
+    (field ?? row).focus({ preventScroll: true });
+  };
   const mobileSelection = compartments
     .map((compartment, index) => ({ index, key: getCompKey(index), compartment }))
     .find(({ key }) => mobileSelectionLocations.has(key));
@@ -4090,23 +4417,40 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
 
   return (
     <div style={actionBarHeight > 0 ? { paddingBottom: actionBarHeight } : undefined}>
-      {/* Header */}
-      <div className="mx-auto mb-3 flex max-w-7xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex min-w-0 items-center gap-3">
+      {/* Sticky top bar. Bleeds past the page gutters so it reads as a bar
+          rather than a card, and sits below the fixed mobile header. */}
+      <div
+        /* `mobile-header-inset` parks it below the fixed mobile header, which
+           only exists under 768px — hence the md override back to the top. */
+        className="bg-theme-surface/95 border-theme-surface-border mobile-header-inset sticky z-30 border-b backdrop-blur md:top-0"
+        style={{
+          marginInline: 'calc(var(--page-gutter-inline) * -1)',
+          marginTop: 'calc(var(--page-gutter-block) * -1)',
+        }}
+      >
+        <div className="mx-auto flex max-w-[1440px] flex-wrap items-center gap-x-3 gap-y-2.5 px-4 py-2.5 sm:px-6">
           <button
             type="button"
             onClick={() => void handleLeave()}
-            className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface flex-shrink-0 rounded-md p-2 transition-colors"
-            title="Go back"
+            className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-secondary flex-shrink-0 rounded-md p-2 transition-colors"
+            title="Back to templates"
+            aria-label="Back to templates"
           >
             <ArrowLeft className="h-5 w-5" />
           </button>
-          <h1 className="text-theme-text-primary truncate text-2xl font-bold">
-            {isEditing ? `Edit: ${form.name || 'Template'}` : 'New Equipment Check Template'}
-          </h1>
+
+          <input
+            type="text"
+            aria-label="Template name"
+            placeholder="e.g. Engine Daily Check"
+            className="text-theme-text-primary placeholder:text-theme-text-muted hover:border-theme-surface-border focus:bg-theme-input-bg w-full rounded-md border border-transparent bg-transparent px-2 py-1.5 text-xl font-bold outline-none focus:border-blue-400 sm:w-auto sm:max-w-[420px] sm:min-w-[200px] sm:flex-1"
+            value={form.name}
+            onChange={(e) => updateForm({ name: e.target.value })}
+          />
+
           <span
             aria-label="Template status"
-            className={`rounded-full px-2 py-1 text-xs font-semibold ${
+            className={`flex-shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ${
               form.isActive
                 ? 'bg-green-500/10 text-green-700 dark:text-green-400'
                 : 'bg-amber-500/10 text-amber-700 dark:text-amber-400'
@@ -4114,264 +4458,277 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           >
             {form.isActive ? 'Published' : 'Draft'}
           </span>
-        </div>
-        <div className="flex flex-shrink-0 flex-wrap items-center gap-2">
-          <details className="relative">
-            <summary className="btn-secondary hover:bg-theme-surface-secondary flex min-h-11 cursor-pointer list-none items-center gap-2 px-3 text-sm font-medium sm:min-h-10">
-              <MoreHorizontal className="h-4 w-4" />
-              Tools
-            </summary>
-            <div className="bg-theme-surface border-theme-surface-border absolute right-0 z-50 mt-1 w-56 rounded-lg border p-1.5 shadow-xl">
-              {isEditing && templateId && (
-                <button
-                  type="button"
-                  onClick={() => void handleClone()}
-                  disabled={cloning}
-                  className="hover:bg-theme-surface-secondary flex min-h-10 w-full items-center gap-2 rounded-md px-3 text-left text-sm disabled:opacity-50"
-                >
-                  {cloning ? <Loader2 className="h-4 w-4 animate-spin" /> : <Copy className="h-4 w-4" />} Clone
-                  checklist
-                </button>
-              )}
-              <button
-                type="button"
-                onClick={exportTemplateJson}
-                disabled={compartments.length === 0}
-                className="hover:bg-theme-surface-secondary flex min-h-10 w-full items-center gap-2 rounded-md px-3 text-left text-sm disabled:opacity-40"
-              >
-                <Download className="h-4 w-4" /> Export JSON
-              </button>
-              <button
-                type="button"
-                onClick={() => importFileRef.current?.click()}
-                className="hover:bg-theme-surface-secondary flex min-h-10 w-full items-center gap-2 rounded-md px-3 text-left text-sm"
-              >
-                <Upload className="h-4 w-4" /> Import JSON
-              </button>
-              <button
-                type="button"
-                onClick={() => csvImportRef.current?.click()}
-                className="hover:bg-theme-surface-secondary flex min-h-10 w-full items-center gap-2 rounded-md px-3 text-left text-sm"
-              >
-                <Upload className="h-4 w-4" /> Import spreadsheet
-              </button>
-              <a
-                href={schedulingService.getCsvSampleUrl()}
-                download
-                className="hover:bg-theme-surface-secondary flex min-h-10 items-center gap-2 rounded-md px-3 text-sm"
-              >
-                <Download className="h-4 w-4" /> Download CSV sample
-              </a>
-              {templateId && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowChangelog(true);
-                    void loadChangelog();
-                  }}
-                  className="hover:bg-theme-surface-secondary flex min-h-10 w-full items-center gap-2 rounded-md px-3 text-left text-sm"
-                >
-                  <Clock className="h-4 w-4" /> Change history
-                </button>
-              )}
-            </div>
-          </details>
-          <input ref={importFileRef} type="file" accept=".json" className="hidden" onChange={handleImportTemplate} />
-          <input ref={csvImportRef} type="file" accept=".csv" className="hidden" onChange={handleCsvImport} />
-          {templateId && coverage && coverage.linkable > 0 && (
+
+          <span className="flex flex-shrink-0 items-center gap-1.5 text-xs" aria-live="polite">
+            {autoSaveStatus === 'saving' || saving ? (
+              <span className="flex items-center gap-1.5 text-blue-600 dark:text-blue-400">
+                <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" /> Saving…
+              </span>
+            ) : autoSaveStatus === 'error' ? (
+              <span className="flex items-center gap-1.5 text-red-600 dark:text-red-400">
+                <AlertTriangle className="h-3.5 w-3.5" aria-hidden="true" /> Save failed
+              </span>
+            ) : autoSaveStatus === 'saved' ? (
+              <span className="flex items-center gap-1.5 text-green-700 dark:text-green-400">
+                <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" /> Saved just now
+              </span>
+            ) : null}
+          </span>
+
+          <div className="flex-1" />
+
+          <div className="flex flex-shrink-0 flex-wrap items-center gap-2">
             <button
               type="button"
-              onClick={() => setShowInventoryMatch(true)}
-              className={`flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-medium transition-colors ${
-                coverage.unlinked > 0
-                  ? 'border-amber-500/40 bg-amber-500/10 text-amber-700 hover:bg-amber-500/20 dark:text-amber-400'
-                  : 'border-theme-surface-border bg-theme-surface text-theme-text-primary hover:bg-theme-surface-secondary'
-              }`}
-              title={
-                coverage.unlinked > 0
-                  ? `${coverage.unlinked} item(s) are not linked to inventory, so their expiration and stock are not tracked`
-                  : 'Every item is linked to inventory'
-              }
+              onClick={() => setDrawerOpen(true)}
+              className="btn-secondary flex min-h-10 items-center gap-2 px-3 text-sm font-medium"
             >
-              <Link2 className="h-4 w-4" />
-              <span className="hidden sm:inline">
-                {coverage.linked}/{coverage.linkable} linked
-              </span>
-              <span className="sm:hidden">
-                {coverage.linked}/{coverage.linkable}
-              </span>
+              <SlidersHorizontal className="h-4 w-4" />
+              <span className="hidden sm:inline">Details</span>
             </button>
-          )}
-          <button
-            type="button"
-            onClick={() => setShowPreview(true)}
-            disabled={compartments.length === 0}
-            className="btn-secondary hover:bg-theme-surface-secondary flex min-h-11 items-center gap-2 px-3 text-sm font-medium sm:min-h-10"
-          >
-            <Eye className="h-4 w-4" />
-            <span className="sr-only sm:not-sr-only">Preview</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => void handleSave(false)}
-            disabled={saving}
-            className="btn-secondary flex min-h-11 items-center gap-2 px-3 text-sm font-medium sm:min-h-10"
-          >
-            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-            {saving ? 'Saving...' : 'Save draft'}
-          </button>
-          <button
-            type="button"
-            onClick={() => void handleSave(true)}
-            disabled={saving || !publishReady}
-            className="flex min-h-11 items-center gap-2 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50 sm:min-h-10"
-          >
-            <CheckCircle2 className="h-4 w-4" /> Publish
-          </button>
-        </div>
-      </div>
 
-      <div className="mx-auto mb-5 grid max-w-7xl grid-cols-3 overflow-hidden rounded-xl border border-blue-500/15 bg-blue-500/5">
-        {[
-          { number: 1, label: 'Set up', detail: setupReady ? 'Basics ready' : 'Name and assign', ready: setupReady },
-          {
-            number: 2,
-            label: 'Build',
-            detail: structureReady ? `${stats.compartmentCount} locations` : 'Add locations',
-            ready: structureReady,
-          },
-          {
-            number: 3,
-            label: 'Review',
-            detail: itemsReady ? `${stats.totalItems} items` : 'Preview checklist',
-            ready: itemsReady,
-          },
-        ].map((step, index) => (
-          <div
-            key={step.label}
-            className={`flex items-center gap-2 px-3 py-2.5 sm:px-4 ${index > 0 ? 'border-l border-blue-500/15' : ''}`}
-          >
-            <span
-              className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold ${step.ready ? 'bg-green-500 text-white' : index === 0 || (index === 1 && setupReady) || (index === 2 && structureReady) ? 'bg-blue-600 text-white' : 'bg-theme-surface text-theme-text-muted border-theme-surface-border border'}`}
-            >
-              {step.ready ? <CheckCircle2 className="h-4 w-4" /> : step.number}
-            </span>
-            <span className="min-w-0">
-              <span className="text-theme-text-primary block text-xs font-semibold sm:text-sm">{step.label}</span>
-              <span className="text-theme-text-muted hidden truncate text-xs sm:block">{step.detail}</span>
-            </span>
-          </div>
-        ))}
-      </div>
-
-      <div className="card mx-auto mb-5 max-w-7xl p-4" aria-label="Template readiness">
-        <h2 className="text-theme-text-primary mb-2 text-sm font-semibold">Template readiness</h2>
-        <div className="text-theme-text-secondary grid gap-1 text-sm sm:grid-cols-3">
-          <span>{setupReady ? '✓' : '!'} Setup</span>
-          <span>{locationsReady ? '✓' : '!'} Locations</span>
-          <span>{blockingItems === 0 ? '✓ Items configured' : `! ${blockingItems} items need configuration`}</span>
-        </div>
-        {!publishReady && (
-          <p className="text-theme-text-muted mt-2 text-xs">
-            Save this work as a draft. Publish becomes available after every blocking issue is fixed.
-          </p>
-        )}
-      </div>
-
-      {/* Sidebar + Main content */}
-      <div className="mx-auto flex max-w-7xl flex-col gap-4 lg:flex-row lg:gap-6">
-        {/* Sidebar — Template details */}
-        <div
-          className={`flex-shrink-0 overflow-hidden transition-all duration-200 ${sidebarOpen ? 'block w-full lg:w-72' : 'hidden lg:block lg:w-0'}`}
-        >
-          <div className="card w-full p-4 lg:sticky lg:top-4 lg:w-72">
-            <div className="mb-3 flex items-center justify-between">
-              <div>
-                <h2 className="text-theme-text-primary text-sm font-semibold">Checklist setup</h2>
-                <p className="text-theme-text-muted text-[11px]">Name it, schedule it, and choose who sees it.</p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setSidebarOpen(false)}
-                className="text-theme-text-muted hover:text-theme-text-primary rounded p-1 transition-colors lg:hidden"
-                title="Close sidebar"
-              >
-                <PanelLeftClose className="h-4 w-4" />
-              </button>
-            </div>
-            {renderSidebar()}
-          </div>
-        </div>
-
-        {/* Main — Compartments */}
-        <div className="min-w-0 flex-1 space-y-4">
-          {/* Sidebar toggle (when collapsed) + section header */}
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="flex items-center gap-3">
-              {!sidebarOpen && (
+            <details className="relative">
+              <summary className="btn-secondary hover:bg-theme-surface-secondary flex min-h-10 cursor-pointer list-none items-center gap-2 px-3 text-sm font-medium">
+                <MoreHorizontal className="h-4 w-4" />
+                <span className="hidden sm:inline">Tools</span>
+              </summary>
+              <div className="bg-theme-surface border-theme-surface-border absolute right-0 z-50 mt-1 w-56 rounded-lg border p-1.5 shadow-xl">
+                {isEditing && templateId && (
+                  <button
+                    type="button"
+                    onClick={() => void handleClone()}
+                    disabled={cloning}
+                    className="hover:bg-theme-surface-secondary flex min-h-10 w-full items-center gap-2 rounded-md px-3 text-left text-sm disabled:opacity-50"
+                  >
+                    {cloning ? <Loader2 className="h-4 w-4 animate-spin" /> : <Copy className="h-4 w-4" />} Clone
+                    checklist
+                  </button>
+                )}
                 <button
                   type="button"
-                  onClick={() => setSidebarOpen(true)}
-                  className="border-theme-surface-border text-theme-text-secondary hover:text-theme-text-primary hover:bg-theme-surface flex min-h-10 items-center gap-2 rounded-md border px-2.5 transition-colors"
-                  title="Show template details"
+                  onClick={exportTemplateJson}
+                  disabled={compartments.length === 0}
+                  className="hover:bg-theme-surface-secondary flex min-h-10 w-full items-center gap-2 rounded-md px-3 text-left text-sm disabled:opacity-40"
                 >
-                  <PanelLeftOpen className="h-4 w-4" />
-                  <span className="text-xs font-medium lg:hidden">Setup</span>
+                  <Download className="h-4 w-4" /> Export JSON
                 </button>
-              )}
-              <div>
-                <h2 className="text-theme-text-primary text-lg font-semibold">Locations &amp; groups</h2>
-                <p className="text-theme-text-muted text-xs">
-                  Organize the checklist the way equipment is stored on the apparatus.
-                </p>
+                <button
+                  type="button"
+                  onClick={() => importFileRef.current?.click()}
+                  className="hover:bg-theme-surface-secondary flex min-h-10 w-full items-center gap-2 rounded-md px-3 text-left text-sm"
+                >
+                  <Upload className="h-4 w-4" /> Import JSON
+                </button>
+                <button
+                  type="button"
+                  onClick={() => csvImportRef.current?.click()}
+                  className="hover:bg-theme-surface-secondary flex min-h-10 w-full items-center gap-2 rounded-md px-3 text-left text-sm"
+                >
+                  <Upload className="h-4 w-4" /> Import spreadsheet
+                </button>
+                <a
+                  href={schedulingService.getCsvSampleUrl()}
+                  download
+                  className="hover:bg-theme-surface-secondary flex min-h-10 items-center gap-2 rounded-md px-3 text-sm"
+                >
+                  <Download className="h-4 w-4" /> Download CSV sample
+                </a>
+                {templateId && coverage && coverage.linkable > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setShowInventoryMatch(true)}
+                    className="hover:bg-theme-surface-secondary flex min-h-10 w-full items-center gap-2 rounded-md px-3 text-left text-sm"
+                  >
+                    <Link2 className="h-4 w-4" /> Link to inventory ({coverage.linked}/{coverage.linkable})
+                  </button>
+                )}
+                {templateId && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowChangelog(true);
+                      void loadChangelog();
+                    }}
+                    className="hover:bg-theme-surface-secondary flex min-h-10 w-full items-center gap-2 rounded-md px-3 text-left text-sm"
+                  >
+                    <Clock className="h-4 w-4" /> Change history
+                  </button>
+                )}
+                {!isLaptop && (
+                  <button
+                    type="button"
+                    onClick={() => setShowPreview(true)}
+                    disabled={compartments.length === 0}
+                    className="hover:bg-theme-surface-secondary flex min-h-10 w-full items-center gap-2 rounded-md px-3 text-left text-sm disabled:opacity-40"
+                  >
+                    <Eye className="h-4 w-4" /> Preview
+                  </button>
+                )}
               </div>
+            </details>
+
+            <input ref={importFileRef} type="file" accept=".json" className="hidden" onChange={handleImportTemplate} />
+            <input ref={csvImportRef} type="file" accept=".csv" className="hidden" onChange={handleCsvImport} />
+
+            {/* Item edits autosave; the template's own fields do not, so the
+                explicit draft save stays. */}
+            <button
+              type="button"
+              onClick={() => void handleSave(false)}
+              disabled={saving}
+              className="btn-secondary flex min-h-10 items-center gap-2 px-3 text-sm font-medium"
+            >
+              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+              <span className="hidden sm:inline">{saving ? 'Saving...' : 'Save draft'}</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => void handleSave(true)}
+              disabled={saving || !publishReady}
+              className="flex min-h-10 items-center gap-2 rounded-lg bg-blue-600 px-3.5 text-sm font-semibold text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <CheckCircle2 className="h-4 w-4" /> Publish
+            </button>
+            {blockers.length > 0 && (
+              <button
+                type="button"
+                onClick={() => {
+                  setRail('blockers');
+                  document.getElementById('publish-blockers')?.scrollIntoView({ block: 'nearest' });
+                }}
+                className="rounded-full bg-amber-500/15 px-2.5 py-1 text-xs font-bold text-amber-700 hover:bg-amber-500/25 dark:text-amber-400"
+              >
+                {blockers.length} to fix
+              </button>
+            )}
+          </div>
+        </div>
+
+        <div className="mx-auto flex max-w-[1440px] flex-wrap items-center gap-2 px-4 pb-2.5 sm:px-6">
+          <span className="text-theme-text-muted mr-0.5 text-[10px] font-bold tracking-[0.08em] uppercase">
+            Applies to
+          </span>
+          {(
+            [
+              {
+                key: 'timing',
+                Icon: Clock,
+                label: form.checkTiming === 'end_of_shift' ? 'End of shift' : 'Start of shift',
+                set: true,
+                capitalize: false,
+              },
+              {
+                key: 'scope',
+                Icon: Truck,
+                label: `${TEMPLATE_TYPE_LABELS[form.templateType]}${
+                  form.apparatusType
+                    ? ` · ${
+                        form.apparatusId
+                          ? (apparatusOptions.find((a) => a.id === form.apparatusId)?.name ?? 'one unit')
+                          : `all ${form.apparatusType}s`
+                      }`
+                    : ''
+                }`,
+                set: true,
+                capitalize: false,
+              },
+              {
+                key: 'positions',
+                Icon: Users,
+                label: form.assignedPositions.length > 0 ? form.assignedPositions.join(', ') : 'Whole crew',
+                set: form.assignedPositions.length > 0,
+                capitalize: true,
+              },
+              {
+                key: 'description',
+                Icon: Type,
+                label: form.description.trim() || '+ Description',
+                set: Boolean(form.description.trim()),
+                capitalize: false,
+              },
+            ] as const
+          ).map(({ key, Icon, label, set, capitalize }) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => setDrawerOpen(true)}
+              className={`flex min-h-[30px] max-w-[280px] items-center gap-1.5 rounded-full border px-2.5 text-xs transition-colors ${
+                set
+                  ? 'border-theme-surface-border bg-theme-surface text-theme-text-secondary hover:bg-theme-surface-hover font-medium'
+                  : 'border-theme-surface-border text-theme-text-muted hover:bg-theme-surface-hover border-dashed'
+              }`}
+            >
+              {set && <Icon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />}
+              <span className={`truncate ${capitalize ? 'capitalize' : ''}`}>{label}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="mx-auto flex max-w-[1440px] flex-wrap items-start gap-6 pt-5 pb-6">
+        {/* Canvas */}
+        <div id="checklist-canvas" className="flex min-w-0 flex-[1_1_620px] flex-col gap-2.5">
+          <div className="flex flex-wrap items-center justify-between gap-3 px-0.5">
+            <div className="flex items-baseline gap-2.5">
+              <h2 className="text-theme-text-primary text-base font-bold">Checklist</h2>
+              <span className="text-theme-text-muted text-xs">
+                {stats.compartmentCount} location{stats.compartmentCount !== 1 ? 's' : ''} · {stats.totalItems} item
+                {stats.totalItems !== 1 ? 's' : ''} · {stats.requiredItems} required
+              </span>
+            </div>
+            <div className="flex flex-wrap items-center gap-1.5">
               {compartments.length > 1 && (
                 <button
                   type="button"
                   onClick={
                     expandedCompartments.size === compartments.length ? collapseAllCompartments : expandAllCompartments
                   }
-                  className="text-theme-text-muted hover:text-theme-text-primary flex items-center gap-1 text-xs transition-colors"
-                  title={expandedCompartments.size === compartments.length ? 'Collapse all' : 'Expand all'}
+                  className="btn-secondary flex min-h-8 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium"
                 >
                   <ChevronsUpDown className="h-3.5 w-3.5" />
                   {expandedCompartments.size === compartments.length ? 'Collapse all' : 'Expand all'}
                 </button>
               )}
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
               {(form.templateType === 'vehicle' || form.templateType === 'combined') && (
                 <button
                   type="button"
                   onClick={() => setShowPresetPicker(!showPresetPicker)}
-                  className="flex items-center gap-1.5 rounded-md border border-orange-500/30 bg-orange-500/10 px-3 py-2 text-sm font-medium text-orange-700 transition-colors hover:bg-orange-500/20 dark:text-orange-400"
+                  className="flex min-h-8 items-center gap-1.5 rounded-md border border-orange-500/30 bg-orange-500/10 px-2.5 text-xs font-medium text-orange-700 transition-colors hover:bg-orange-500/20 dark:text-orange-400"
                 >
-                  <Truck className="h-4 w-4" />
-                  Load Vehicle Preset
+                  <Truck className="h-3.5 w-3.5" />
+                  Vehicle preset
                 </button>
               )}
               <button
                 type="button"
                 disabled={addingSection}
                 onClick={() => void addSectionHeader()}
-                className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-secondary hover:text-theme-text-primary flex items-center gap-1.5 rounded-md border border-dashed px-3 py-2 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+                className="btn-secondary flex min-h-8 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium disabled:opacity-50"
               >
-                <Type className="h-4 w-4" />
-                Add Section
+                <Type className="h-3.5 w-3.5" />
+                Section
               </button>
               <button
                 type="button"
                 disabled={addingCompartment}
                 onClick={() => void addCompartment()}
-                className="flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+                className="btn-secondary flex min-h-8 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium disabled:opacity-50"
               >
-                <Plus className="h-4 w-4" />
-                Add Location
+                <Package className="h-3.5 w-3.5" />
+                Location
+              </button>
+              <button
+                type="button"
+                onClick={() => csvImportRef.current?.click()}
+                className="btn-secondary flex min-h-8 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium"
+              >
+                <Upload className="h-3.5 w-3.5" />
+                Import
               </button>
             </div>
           </div>
 
-          {/* Vehicle Preset Picker */}
           {showPresetPicker && (
             <div className="rounded-lg border border-orange-500/20 bg-orange-500/5 p-4">
               <p className="text-theme-text-primary mb-3 text-sm font-medium">
@@ -4396,7 +4753,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             </div>
           )}
 
-          {compartments.length === 0 && (
+          {compartments.length === 0 ? (
             <div className="card overflow-hidden border-blue-500/20 bg-gradient-to-br from-blue-500/[0.06] via-transparent to-transparent p-5 shadow-sm sm:p-8">
               <div className="mx-auto max-w-2xl text-center">
                 <h3 className="text-theme-text-primary text-lg font-semibold">How would you like to start?</h3>
@@ -4450,46 +4807,213 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                 </button>
               </div>
             </div>
+          ) : (
+            /* Deliberately not `overflow-hidden`: the catalog results list is
+               absolutely positioned below its input and a clip here cuts it in
+               half whatever z-index it carries. */
+            <div className="card rounded-xl">
+              <DndContext
+                sensors={sensors}
+                collisionDetection={closestCenter}
+                onDragEnd={(event) => void handleCompartmentDragEnd(event)}
+              >
+                <SortableContext items={compartmentIds} strategy={verticalListSortingStrategy}>
+                  {orderedCompartments.map(({ comp, idx, depth }) => {
+                    const id = compartmentKey(comp, idx);
+                    return (
+                      <SortableCompartmentWrapper key={id} id={id} disabled={!comp.id}>
+                        {({ listeners: compListeners, setNodeRef, style, attributes }) =>
+                          renderCompartment(comp, idx, compListeners, setNodeRef, style, attributes, depth)
+                        }
+                      </SortableCompartmentWrapper>
+                    );
+                  })}
+                </SortableContext>
+              </DndContext>
+            </div>
           )}
 
-          <DndContext
-            sensors={sensors}
-            collisionDetection={closestCenter}
-            onDragEnd={(event) => void handleCompartmentDragEnd(event)}
-          >
-            <SortableContext items={compartmentIds} strategy={verticalListSortingStrategy}>
-              {orderedCompartments.map(({ comp, idx, depth }) => {
-                const id = compartmentKey(comp, idx);
-                return (
-                  <div
-                    key={id}
-                    style={depth > 0 ? { marginLeft: depth * 20 } : undefined}
-                    className={depth > 0 ? 'border-theme-surface-border/60 border-l-2 pl-2' : undefined}
-                  >
-                    <SortableCompartmentWrapper id={id} disabled={!comp.id}>
-                      {({ listeners: compListeners, setNodeRef, style, attributes }) =>
-                        renderCompartment(comp, idx, compListeners, setNodeRef, style, attributes, depth)
-                      }
-                    </SortableCompartmentWrapper>
-                  </div>
-                );
-              })}
-            </SortableContext>
-          </DndContext>
+          {compartments.length > 0 && (
+            <div className="flex flex-wrap items-center gap-2 px-0.5">
+              <button
+                type="button"
+                disabled={addingCompartment}
+                onClick={() => void addCompartment()}
+                className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface flex min-h-9 items-center gap-1.5 rounded-lg border border-dashed px-3 text-[13px] font-medium transition-colors disabled:opacity-50"
+              >
+                <Package className="h-3.5 w-3.5" /> Add location
+              </button>
+              <button
+                type="button"
+                disabled={addingSection}
+                onClick={() => void addSectionHeader()}
+                className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface flex min-h-9 items-center gap-1.5 rounded-lg border border-dashed px-3 text-[13px] font-medium transition-colors disabled:opacity-50"
+              >
+                <Type className="h-3.5 w-3.5" /> Add section
+              </button>
+              <button
+                type="button"
+                onClick={() => csvImportRef.current?.click()}
+                className="border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface flex min-h-9 items-center gap-1.5 rounded-lg border border-dashed px-3 text-[13px] font-medium transition-colors"
+              >
+                <Upload className="h-3.5 w-3.5" /> Import spreadsheet
+              </button>
+            </div>
+          )}
         </div>
+
+        {/* Right rail — only where there is room for it beside the canvas. */}
+        {isLaptop && (
+          <div className="sticky top-[118px] flex max-w-[344px] min-w-[300px] flex-[1_1_320px] flex-col gap-3">
+            <div className="bg-theme-surface-border grid grid-cols-2 gap-0.5 rounded-lg p-0.5">
+              {[
+                { value: 'blockers' as const, label: 'Before publishing', Icon: AlertTriangle },
+                { value: 'crew' as const, label: 'Crew view', Icon: Smartphone },
+              ].map(({ value, label, Icon }) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => setRail(value)}
+                  aria-pressed={rail === value}
+                  className={`flex min-h-9 items-center justify-center gap-1.5 rounded-md text-[13px] font-semibold transition-colors ${
+                    rail === value
+                      ? 'bg-theme-surface text-theme-text-primary shadow-sm'
+                      : 'text-theme-text-muted hover:text-theme-text-primary'
+                  }`}
+                >
+                  <Icon className="h-3.5 w-3.5" aria-hidden="true" />
+                  {label}
+                </button>
+              ))}
+            </div>
+
+            {rail === 'blockers' ? (
+              <div className="card p-4" id="publish-blockers">
+                <div className="mb-1 flex items-center justify-between gap-2">
+                  <h3 className="text-theme-text-primary text-sm font-bold">
+                    {blockers.length === 0
+                      ? 'Ready to publish'
+                      : `${blockers.length} thing${blockers.length === 1 ? '' : 's'} to fix`}
+                  </h3>
+                  <span className="text-theme-text-muted text-[11px]">Draft saves anyway</span>
+                </div>
+                {blockers.length > 0 && (
+                  <p className="text-theme-text-muted mb-3 text-xs">Each one jumps to the row it belongs to.</p>
+                )}
+                <div className="flex flex-col gap-2">
+                  {blockers.map((blocker) => {
+                    const BlockerIcon =
+                      blocker.icon === 'gauge'
+                        ? Gauge
+                        : blocker.icon === 'package'
+                          ? Package
+                          : blocker.icon === 'sliders'
+                            ? SlidersHorizontal
+                            : AlertTriangle;
+                    return (
+                      <button
+                        key={blocker.id}
+                        type="button"
+                        onClick={() => goToBlocker(blocker.anchorId, blocker.expandKey)}
+                        className="flex items-start gap-2.5 rounded-lg border border-amber-500/35 bg-amber-500/[0.07] p-2.5 text-left transition-colors hover:bg-amber-500/[0.14]"
+                      >
+                        <BlockerIcon
+                          className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-700 dark:text-amber-400"
+                          aria-hidden="true"
+                        />
+                        <span className="min-w-0">
+                          <span className="text-theme-text-primary block text-[13px] font-semibold">
+                            {blocker.title}
+                          </span>
+                          <span className="text-theme-text-muted block text-xs">{blocker.locator}</span>
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+                <div className="border-theme-surface-border mt-3.5 flex flex-col gap-1.5 border-t pt-3">
+                  <span className="text-theme-text-secondary flex items-center gap-2 text-[13px]">
+                    {setupReady ? (
+                      <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-green-700 dark:text-green-400" />
+                    ) : (
+                      <Circle className="text-theme-text-muted h-3.5 w-3.5 shrink-0" />
+                    )}
+                    Name, timing and crew set
+                  </span>
+                  <span className="text-theme-text-secondary flex items-center gap-2 text-[13px]">
+                    {locationsReady ? (
+                      <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-green-700 dark:text-green-400" />
+                    ) : (
+                      <Circle className="text-theme-text-muted h-3.5 w-3.5 shrink-0" />
+                    )}
+                    {stats.compartmentCount} location{stats.compartmentCount !== 1 ? 's' : ''},{' '}
+                    {compartments.filter((c) => !c.isHeader && c.items.length > 0).length} with items
+                  </span>
+                  <span className="text-theme-text-secondary flex flex-wrap items-center gap-2 text-[13px]">
+                    <Link2 className="text-theme-text-muted h-3.5 w-3.5 shrink-0" />
+                    {coverage.linked} of {coverage.linkable} items linked to inventory
+                    {templateId && coverage.unlinked > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setShowInventoryMatch(true)}
+                        className="text-blue-700 underline dark:text-blue-400"
+                      >
+                        link the rest
+                      </button>
+                    )}
+                  </span>
+                </div>
+              </div>
+            ) : (
+              <div className="card p-3.5">
+                <div className="mb-2.5 flex items-center justify-between">
+                  <h3 className="text-theme-text-primary text-sm font-bold">What the crew sees</h3>
+                  <span className="text-theme-text-muted text-[11px]">Updates as you edit</span>
+                </div>
+                <div className="bg-theme-bg mx-auto w-[300px] overflow-hidden rounded-[34px] border-[6px] border-gray-800 shadow-xl dark:border-gray-600">
+                  <div className="flex h-[22px] items-end justify-center bg-gray-800 dark:bg-gray-600">
+                    <div className="h-3.5 w-24 rounded-b-[14px] bg-gray-800 dark:bg-gray-600" />
+                  </div>
+                  <div className="text-theme-text-muted flex items-center justify-between px-4 py-0.5 text-[10px]">
+                    <span>9:41</span>
+                    <span className="flex items-center gap-1">
+                      <Signal className="h-2.5 w-2.5" aria-hidden="true" />
+                      <BatteryFull className="h-2.5 w-2.5" aria-hidden="true" />
+                    </span>
+                  </div>
+                  <div className="bg-theme-bg h-[430px] overflow-y-auto px-1 pb-4" aria-label="Crew preview">
+                    {compartments.length === 0 ? (
+                      <p className="text-theme-text-muted px-3 py-6 text-center text-xs">
+                        Add a location to see what the crew will get.
+                      </p>
+                    ) : (
+                      <EquipmentCheckForm shiftId="preview" template={buildPreviewTemplate()} previewMode />
+                    )}
+                  </div>
+                  <div className="bg-theme-bg flex justify-center py-1.5">
+                    <div className="h-1 w-28 rounded-full bg-gray-800/25 dark:bg-gray-400/30" />
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
-      {/* Laptop statistics stay rich; the phone bar keeps only the current state
-          and its next action. ResizeObserver above makes page clearance follow
-          the bar when translated copy, zoom, validation, or safe-area padding
-          changes its real height. */}
-      {stats.totalItems > 0 && (
+      {drawerOpen && renderDetailsDrawer()}
+
+      {/* The phone action bar keeps only the current state and its next action;
+          on laptop and wider the canvas header carries the counts and the top
+          bar carries the save state. ResizeObserver above makes page clearance
+          follow the bar when translated copy, zoom, validation, or safe-area
+          padding changes its real height. */}
+      {stats.totalItems > 0 && !isLaptop && (
         <div
           ref={actionBarRef}
           className="border-theme-surface-border bg-theme-surface/95 action-bar-safe fixed right-0 bottom-0 left-0 z-40 border-t px-4 backdrop-blur-sm"
           aria-label="Checklist action bar"
         >
-          <div className="flex min-h-11 items-center justify-between gap-4 sm:hidden">
+          <div className="flex min-h-11 items-center justify-between gap-4">
             <span className="text-theme-text-secondary min-w-0 text-sm font-medium wrap-break-word" aria-live="polite">
               {mobileSelection
                 ? `${String(mobileSelectedCount)} selected`
@@ -4599,60 +5123,6 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                   Add
                 </button>
               )}
-            </div>
-          </div>
-          <div className="mx-auto hidden max-w-7xl items-center justify-between gap-0 py-2 sm:flex">
-            <div className="text-theme-text-muted flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
-              <span className="flex items-center gap-1">
-                <Hash className="h-3 w-3" />
-                {stats.compartmentCount} compartment{stats.compartmentCount !== 1 ? 's' : ''}
-              </span>
-              <span className="flex items-center gap-1">
-                <CheckCircle2 className="h-3 w-3" />
-                {stats.totalItems} item{stats.totalItems !== 1 ? 's' : ''}
-              </span>
-              {stats.requiredItems > 0 && (
-                <span className="flex items-center gap-1 text-red-500">
-                  <AlertTriangle className="h-3 w-3" />
-                  {stats.requiredItems} required
-                </span>
-              )}
-              {stats.withExpiration > 0 && (
-                <span className="flex items-center gap-1 text-yellow-600 dark:text-yellow-400">
-                  <Clock className="h-3 w-3" />
-                  {stats.withExpiration} with expiration
-                </span>
-              )}
-            </div>
-            <div className="flex items-center gap-2">
-              {autoSaveStatus === 'saving' && (
-                <span className="flex animate-pulse items-center gap-1 text-xs text-blue-500">
-                  <Loader2 className="h-3 w-3 animate-spin" />
-                  Saving…
-                </span>
-              )}
-              {autoSaveStatus === 'saved' && (
-                <span className="flex items-center gap-1 text-xs text-green-600 dark:text-green-400">
-                  <CheckCircle2 className="h-3 w-3" />
-                  Saved
-                </span>
-              )}
-              {autoSaveStatus === 'error' && (
-                <span className="flex items-center gap-1 text-xs text-red-500">
-                  <AlertTriangle className="h-3 w-3" />
-                  Save failed
-                </span>
-              )}
-              {!isEditing && <span className="text-theme-text-muted flex items-center gap-1 text-xs">Draft</span>}
-              {stats.completeness < 100 && (
-                <span className="text-xs text-yellow-600 dark:text-yellow-400">{stats.completeness}% items named</span>
-              )}
-              <div className="bg-theme-surface-border h-1.5 w-20 overflow-hidden rounded-full">
-                <div
-                  className={`h-full rounded-full transition-all ${stats.completeness === 100 ? 'bg-green-500' : 'bg-yellow-500'}`}
-                  style={{ width: `${stats.completeness}%` }}
-                />
-              </div>
             </div>
           </div>
         </div>
