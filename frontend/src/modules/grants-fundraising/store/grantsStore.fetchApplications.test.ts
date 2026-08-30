@@ -56,4 +56,16 @@ describe('grantsStore.fetchApplications — out-of-order responses', () => {
     await staleCall;
     expect(useGrantsStore.getState().applications).toEqual(fresh);
   });
+
+  it('clears the list on a failed fetch rather than leaving the previous filter on screen', async () => {
+    useGrantsStore.setState({ applications: [application('1', 'reporting')] });
+    mockListApplications.mockRejectedValueOnce(new Error('network error'));
+
+    await useGrantsStore.getState().fetchApplications({ status: 'active' });
+
+    // The stale 'reporting' rows must not linger under the new 'active'
+    // filter alongside the error banner.
+    expect(useGrantsStore.getState().applications).toEqual([]);
+    expect(useGrantsStore.getState().error).toBe('network error');
+  });
 });

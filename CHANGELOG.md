@@ -48,6 +48,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Changing the applications page's status filter again before the previous
   filter's results had loaded could, in rare timing, leave the page
   showing results for the filter you'd already changed away from. Fixed.
+- If the applications page's status filter failed to load (a network
+  error), it could keep showing applications from whichever filter was
+  selected before, alongside the error message. It now shows an empty
+  list until the filter loads successfully.
 
 ### Admin hours CSV export now recovers from an expired session (2026-08-30)
 

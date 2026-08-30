@@ -119,7 +119,12 @@ export const useGrantsStore = create<GrantsState>((set) => ({
       set({ applications, isLoading: false });
     } catch (error) {
       if (requestId !== latestApplicationsRequestId) return; // superseded by a later call
+      // Clear the list rather than leaving the previous filter's rows on
+      // screen: with the status match applied server-side, a stale list
+      // here would belong to whatever filter was active before this failed
+      // request, disagreeing with what the (now-changed) filter UI shows.
       set({
+        applications: [],
         error: handleStoreError(error, 'Failed to fetch grant applications'),
         isLoading: false,
       });

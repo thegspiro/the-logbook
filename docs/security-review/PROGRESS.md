@@ -55,6 +55,19 @@ src/modules/grants-fundraising` 0/0, `vitest run src/modules/grants-fundraising`
 4 files/6 passed. Full write-up in `GF-22-grants-fundraising.md` →
 GF-32/GF-33.
 
+**PR #2073 tend, round 7 (Codex review of the GF-32/GF-33 commit, 1
+comment):** **GF-34 (new, MED, fixed)** — GF-31 removed the client-side
+status check on `filteredApplications` (the match now happens
+server-side), but `fetchApplications`'s `catch` branch left the previous
+fetch's `applications` untouched on failure — so a failed status-filtered
+fetch left rows from whatever filter was active _before_ on screen,
+mismatched with the dropdown's new selection, alongside the error banner.
+Fixed by clearing `applications` in the `catch` branch. New guard-test
+case in `grantsStore.fetchApplications.test.ts` (fails before/passes
+after). Gate re-run: `tsc --noEmit` 0 errors, `eslint
+src/modules/grants-fundraising` 0/0, `vitest run src/modules/grants-fundraising`
+4 files/7 passed. Full write-up in `GF-22-grants-fundraising.md` → GF-34.
+
 ### 2026-08-30 — Feature 22 (Grants & fundraising), pass 2 ✅ merged — PR #2069; round-4 tend continues in PR #2070
 
 PR #2069 merged (`9608aea9`) while its 4th round of Codex review was still

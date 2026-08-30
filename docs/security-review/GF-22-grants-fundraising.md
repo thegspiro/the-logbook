@@ -984,6 +984,32 @@ a page-size control this page was never built with — a larger change,
 flagged rather than guessed at here, and mirrored into
 `KNOWN_LIMITATIONS.md`.
 
+#### GF-34 — MED, FIXED — a failed status-filtered fetch left the previous filter's rows on screen
+
+**What:** Caught by Codex reviewing the GF-32/GF-33 commit. GF-31 removed
+`filteredApplications`'s client-side `matchesStatus` check (the status
+match now happens server-side), but `fetchApplications`'s `catch` branch
+left `applications` untouched on a failed request — so if a status-filtered
+fetch fails (network error, 500), the page keeps showing whatever rows the
+_previous_ filter had loaded, now silently mismatched with the dropdown's
+new selection, alongside the error banner. Before GF-31 this was
+impossible: the client-side status check would have hidden any row not
+matching the current filter regardless of what `applications` held.
+
+**Where:** `frontend/src/modules/grants-fundraising/store/grantsStore.ts`
+(`fetchApplications`'s `catch` branch).
+
+**Fix:** the `catch` branch now clears `applications` to `[]` alongside
+setting `error`, rather than leaving the prior fetch's rows in place — a
+failed request shows an empty list plus the error banner, never rows that
+belong to a filter the user has since changed away from.
+
+**Guard test added:** a second case in
+`grantsStore.fetchApplications.test.ts` — seeds the store with rows from
+one status, fails a fetch for a different status, and asserts the store
+ends up with an empty list and the error set. Verified to fail before the
+fix (the seeded rows survived the failed fetch) and pass after.
+
 ### Frontend review (new this pass)
 
 Read `services/api.ts` (410 L), `routes.tsx`, `store/grantsStore.ts` (342 L),
@@ -1149,3 +1175,16 @@ files touched. Gate re-run:
 | `npx tsc --noEmit`                              | 0 errors             |
 | `npx eslint src/modules/grants-fundraising`     | 0 errors, 0 warnings |
 | `npx vitest run src/modules/grants-fundraising` | 4 files, 6 passed    |
+
+**Tend pass, round 7 (2026-08-30, PR #2073), in response to Codex's 1
+review comment on the GF-32/GF-33 commit:** fixed GF-34 (a failed
+status-filtered fetch left the previous filter's rows on screen,
+`grantsStore.ts`, new guard-test case in
+`grantsStore.fetchApplications.test.ts`). No backend files touched. Gate
+re-run:
+
+| Check                                           | Result               |
+| ----------------------------------------------- | -------------------- |
+| `npx tsc --noEmit`                              | 0 errors             |
+| `npx eslint src/modules/grants-fundraising`     | 0 errors, 0 warnings |
+| `npx vitest run src/modules/grants-fundraising` | 4 files, 7 passed    |
