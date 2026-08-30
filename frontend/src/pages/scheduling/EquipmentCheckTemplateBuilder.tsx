@@ -441,6 +441,8 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
   const isLaptop = useMediaQuery('(min-width: 640px)');
   const [mobileSelectionLocations, setMobileSelectionLocations] = useState<Set<string>>(new Set());
+  const [mobileAddLocations, setMobileAddLocations] = useState<Set<string>>(new Set());
+  const [highlightedItemKeys, setHighlightedItemKeys] = useState<Set<string>>(new Set());
 
   // Bulk selection: per-compartment set of selected item indices
   const [selectedItems, setSelectedItems] = useState<Record<string, Set<number>>>({});
@@ -1200,6 +1202,22 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
 
     setQuickAddValues((prev) => ({ ...prev, [key]: '' }));
 
+    const highlight = (clientKey: string) => {
+      setHighlightedItemKeys((previous) => new Set(previous).add(clientKey));
+      window.setTimeout(() => {
+        document.getElementById(`item-row-${clientKey}`)?.scrollIntoView?.({ block: 'nearest' });
+      });
+      window.setTimeout(
+        () =>
+          setHighlightedItemKeys((previous) => {
+            const next = new Set(previous);
+            next.delete(clientKey);
+            return next;
+          }),
+        1600
+      );
+    };
+
     if (comp.id) {
       const createPayload: CheckTemplateItemCreate = {
         name,
@@ -1227,20 +1245,20 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
         clientKey,
         saveStatus: 'saving',
       });
+      highlight(clientKey);
       runQuickAdd(job);
     } else {
+      const item = {
+        ...emptyItem(),
+        name,
+        ...(payload.inventoryItemId ? { inventoryItemId: payload.inventoryItemId } : {}),
+        ...(payload.checkType ? { checkType: payload.checkType } : {}),
+        ...(payload.hasExpiration ? { hasExpiration: true } : {}),
+      };
       updateCompartmentField(compartmentIdx, {
-        items: [
-          ...comp.items,
-          {
-            ...emptyItem(),
-            name,
-            ...(payload.inventoryItemId ? { inventoryItemId: payload.inventoryItemId } : {}),
-            ...(payload.checkType ? { checkType: payload.checkType } : {}),
-            ...(payload.hasExpiration ? { hasExpiration: true } : {}),
-          },
-        ],
+        items: [...comp.items, item],
       });
+      highlight(item.clientKey);
     }
   };
 
@@ -2453,11 +2471,13 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
         id={`item-row-${itemKey}`}
         tabIndex={-1}
         className={`rounded-md border transition-colors ${
-          isSelected
-            ? 'border-blue-400 bg-blue-50/50 dark:border-blue-500 dark:bg-blue-900/10'
-            : isHeader
-              ? 'border-theme-surface-border bg-theme-surface'
-              : 'border-theme-surface-border bg-theme-surface'
+          highlightedItemKeys.has(item.clientKey)
+            ? 'bg-blue-50 ring-2 ring-blue-400 dark:bg-blue-900/20'
+            : isSelected
+              ? 'border-blue-400 bg-blue-50/50 dark:border-blue-500 dark:bg-blue-900/10'
+              : isHeader
+                ? 'border-theme-surface-border bg-theme-surface'
+                : 'border-theme-surface-border bg-theme-surface'
         }`}
       >
         {/* Compact row — always visible */}
@@ -3177,6 +3197,17 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             )}
           </button>
 
+          {isExpanded && (
+            <button
+              type="button"
+              aria-label={`Add item to ${comp.name || 'location'}`}
+              className="flex min-h-[44px] shrink-0 items-center gap-1 px-2 text-sm font-semibold text-blue-600 sm:hidden dark:text-blue-400"
+              onClick={() => setMobileAddLocations((previous) => new Set(previous).add(key))}
+            >
+              <Plus className="h-4 w-4" aria-hidden="true" /> Add
+            </button>
+          )}
+
           {/* Status badges */}
           <div className="hidden flex-shrink-0 items-center gap-1.5 sm:flex">
             {(() => {
@@ -3440,6 +3471,81 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
 
             {/* Items */}
             <div className="space-y-3">
+              {mobileAddLocations.has(key) && (
+                <div className="border-theme-surface-border bg-theme-surface-secondary/30 rounded-lg border p-3 sm:hidden">
+                  <div className="mb-2 flex items-center justify-between">
+                    <div>
+                      <p className="text-theme-text-primary text-sm font-semibold">Add item</p>
+                      <p className="text-theme-text-muted text-xs">
+                        Choose a result to link inventory, or add your text as a checklist task.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      className="min-h-[44px] min-w-[44px]"
+                      aria-label="Close add item"
+                      onClick={() =>
+                        setMobileAddLocations((previous) => {
+                          const next = new Set(previous);
+                          next.delete(key);
+                          return next;
+                        })
+                      }
+                    >
+                      <X className="mx-auto h-4 w-4" aria-hidden="true" />
+                    </button>
+                  </div>
+                  {bulkPasteMode[key] ? (
+                    <div className="space-y-2">
+                      <textarea
+                        className="form-input text-sm"
+                        rows={5}
+                        aria-label="Item names, one per line"
+                        placeholder="Paste item names, one per line"
+                        value={bulkPasteValues[key] ?? ''}
+                        onChange={(event) =>
+                          setBulkPasteValues((previous) => ({ ...previous, [key]: event.target.value }))
+                        }
+                      />
+                      <div className="flex justify-between gap-2">
+                        <button
+                          type="button"
+                          className="min-h-[44px] px-2 text-sm font-medium"
+                          onClick={() => setBulkPasteMode((previous) => ({ ...previous, [key]: false }))}
+                        >
+                          Back to single add
+                        </button>
+                        <button
+                          type="button"
+                          className="min-h-[44px] rounded-md bg-blue-600 px-4 text-sm font-semibold text-white disabled:opacity-40"
+                          disabled={!bulkPasteValues[key]?.trim() || bulkItemPending[key]}
+                          onClick={() => void handleBulkPaste(idx)}
+                        >
+                          Add all
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <CatalogQuickAdd
+                        value={quickAddValues[key] ?? ''}
+                        onChange={(value) => setQuickAddValues((previous) => ({ ...previous, [key]: value }))}
+                        onAdd={(payload) => handleQuickAdd(idx, payload)}
+                        canCreateInventory={canManageInventory}
+                        autoFocus
+                        placeholder="Add or search items…"
+                      />
+                      <button
+                        type="button"
+                        className="text-theme-text-muted mt-3 flex min-h-[44px] items-center gap-1 text-xs font-medium"
+                        onClick={() => setBulkPasteMode((previous) => ({ ...previous, [key]: true }))}
+                      >
+                        <List className="h-3.5 w-3.5" aria-hidden="true" /> Add several
+                      </button>
+                    </>
+                  )}
+                </div>
+              )}
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div>
                   <div className="flex min-h-[44px] items-center gap-3">
@@ -3628,7 +3734,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                 const isBulkPaste = bulkPasteMode[compKey] ?? false;
 
                 return (
-                  <div className="border-theme-surface-border bg-theme-surface-secondary/30 mt-2 rounded-md border border-dashed p-2">
+                  <div className="border-theme-surface-border bg-theme-surface-secondary/30 mt-2 hidden rounded-md border border-dashed p-2 sm:block">
                     <div className="mb-1.5 flex items-center gap-2">
                       <span className="text-theme-text-muted text-[10px] font-medium tracking-wide uppercase">
                         {isBulkPaste ? 'Bulk Add' : 'Quick Add'}
@@ -3692,6 +3798,18 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                   </div>
                 );
               })()}
+              <div
+                data-testid={`mobile-add-action-${key}`}
+                className="bg-theme-surface sticky bottom-0 z-20 -mx-4 px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:hidden"
+              >
+                <button
+                  type="button"
+                  className="flex min-h-[48px] w-full items-center justify-center gap-2 rounded-lg bg-blue-600 font-semibold text-white shadow-lg"
+                  onClick={() => setMobileAddLocations((previous) => new Set(previous).add(key))}
+                >
+                  <Plus className="h-5 w-5" aria-hidden="true" /> Add item
+                </button>
+              </div>
             </div>
           </div>
         )}
