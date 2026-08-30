@@ -221,6 +221,32 @@ describe('EquipmentCheckTemplateBuilder responsive actions', () => {
     expect(screen.queryByRole('button', { name: 'Select Radio' })).not.toBeInTheDocument();
   }, 10_000);
 
+  it('bulk-sets check type and toggles required from the phone selection bar', async () => {
+    renderBuilder();
+
+    // Radio is seeded Required; selecting it alone means "all selected are
+    // required", so the toggle must offer the inverse.
+    fireEvent.click(await screen.findByRole('button', { name: 'Select items' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Select Radio' }));
+
+    const actionBar = screen.getByLabelText('Checklist action bar');
+    expect(within(actionBar).getByRole('button', { name: 'Optional' })).toBeEnabled();
+    // 44px minimum touch target — the select otherwise collapses to its
+    // native text-line height, and the bar's min-h-11 does not reach it
+    // because the controls are centre-aligned.
+    expect(within(actionBar).getByLabelText('Set type for selected items')).toHaveClass('min-h-11');
+
+    fireEvent.change(within(actionBar).getByLabelText('Set type for selected items'), {
+      target: { value: 'count' },
+    });
+    expect(
+      within(screen.getByRole('button', { name: 'Deselect Radio' })).getByText(/Count/)
+    ).toBeInTheDocument();
+
+    fireEvent.click(within(actionBar).getByRole('button', { name: 'Optional' }));
+    expect(within(actionBar).getByRole('button', { name: 'Required' })).toBeInTheDocument();
+  }, 10_000);
+
   it('opens a full-height progressive item editor and reviews adjacent items on phones', async () => {
     const user = userEvent.setup();
     renderBuilder();
