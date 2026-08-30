@@ -16,9 +16,118 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-None.
+[PR #2059](https://github.com/thegspiro/the-logbook/pull/2059) — `claude/security-review-compliance-pass2` — open, awaiting CI/review.
 
 ---
+
+### 2026-08-30 — Feature 20 (Compliance), pass 2 — 3 fixed (1 HIGH, 2 MED), 1 partially fixed/flagged (MED)
+
+Resumed the rotation directly at feature 20 per the pass-2 order (no
+security-review PR was open; the previous `/security-review` loop had
+stalled with no PR opened in ~24h). Scoped to the full backend surface since
+pass 1's merge (`bf63018b`, PR #1902): all seven declared files
+(`compliance_officer.py`, `compliance_config.py`, both service files,
+`training_compliance.py`, the model, the schema) came back **byte-identical**
+(`git diff --stat`, not assumed) — zero backend diff, so this pass
+re-verified all seven pass-1 fixes (CMP-1 through CMP-7) and re-confirmed
+CS-8/CS-9's still-open-by-design status by reading the current code directly,
+rather than re-deriving anything. Re-ran an AST route enumeration from
+scratch: 20/20 routes (8 in `compliance_officer.py`, 12 in
+`compliance_config.py`) carry `require_permission(...)`, matching pass 1's
+route-for-route inventory. Org-scoping re-swept mechanically across every
+by-id query in both endpoint files — no gap.
+
+**Frontend scope established for the first time** (pass 1 was backend-only):
+traced every file importing `complianceOfficerService`/
+`complianceConfigService` — `trainingServices.ts`'s compliance sections,
+`ComplianceOfficerDashboard.tsx`, `ComplianceRequirementsConfigPage.tsx`, and
+their four test files. Swept for `window.confirm`/`alert`/`prompt` (none —
+both destructive actions go through `useConfirm()`), `dangerouslySetInnerHTML`
+(none), banned `.toLocale*`/`date-fns` (none — both pages use
+`formatDate`/`formatDateCustom` + `useTimezone()`), direct `fetch(` (none —
+shared `api` client, so Pitfall #7 doesn't apply), and confirmed `/compliance/`
+is already a full-prefix `UNCACHEABLE_PREFIXES` entry covering all 20 routes
+including the two that return per-member names + hours
+(`/compliance/annual-report`, `/compliance/contributed-hours`).
+
+**CMP2-2 (MED, FIXED):** the frontend mirror of CMP-1/CMP-2's bug, on the same
+two forms — pass 1 fixed the backend's `exclude_unset` + `apply_updates`
+handling of an explicit `null` clearing a nullable column, but the frontend
+was never updated to send one. Eight fields across the config and profile save
+handlers coerced a cleared field to `undefined` (dropped from the JSON body
+entirely) instead of `null`, so clearing "Email Recipients," a profile's
+threshold override, or its membership-type/requirement selections and saving
+silently kept the old value behind a success toast. Fixed on both the config
+and profile forms; guard test added
+(`ComplianceRequirementsConfigPage.clearFields.test.tsx`).
+
+**CMP2-1 (MED, partially fixed/flagged):** `notify_non_compliant_members` and
+`notify_days_before_deadline` are set from the Configuration page's
+Notifications panel and persisted, but read by no scheduled task or sender
+anywhere in the backend (Pitfall #19 — a second instance of the
+`notification_rules` dead-switch shape, on a different module). Wiring a
+sender is a real feature (cadence, message content) and was flagged rather
+than built; the panel now carries an explicit "Not yet active" notice so it
+stops implying the toggle does anything, per the pitfall's own sanctioned
+partial remedy. Mirrored into `KNOWN_LIMITATIONS.md`.
+
+**Codex follow-up on the first version of this PR surfaced four issues, all
+investigated and addressed in commit `ef882c98`:**
+
+**CMP2-3 (HIGH, FIXED, new this pass):** `compute_org_compliance_pct` guarded
+both the requirement-list substitution and the threshold overrides behind one
+truthy check (`if profile and profile.required_requirement_ids:`), so a
+profile with an explicitly empty required-requirement list (`[]` — "this
+group requires nothing," only reachable after CMP2-2's own fix) was treated
+the same as `None` ("no override") and graded against every org requirement
+instead of none; the same guard silently skipped both threshold overrides for
+any profile that didn't also override the requirement list. Fixed by checking
+`is not None` for the list substitution and moving the threshold overrides out
+from under that guard entirely. New test:
+`backend/tests/test_compute_org_compliance_pct_profile_overrides.py` (3
+integration tests against a real database).
+
+**CMP2-4 (MED, FIXED, new this pass):** the read-path mirror of CMP2-2 —
+`loadConfig` mapped a loaded config's `null` `notifyDaysBeforeDeadline` back
+to the pre-save placeholder `'30, 14, 7'`, so a cleared-and-saved reminder
+schedule reappeared as the old default immediately on reload even though the
+database correctly held nothing. Fixed the loaded-config fallback to `''`;
+the placeholder now only shows before a config has ever been saved. Swept
+every other loaded field on both the config and profile forms for the same
+class of bug — none found.
+
+**CMP2-2-A (guard test rigor, FIXED):** the original CMP2-2 guard test
+(`ComplianceRequirementsConfigPage.clearFields.test.tsx`) only scanned the
+page's source text for `null`/`undefined` substrings, so it would keep
+passing even if the Save button stopped calling the service. Rewritten to
+render the real page with all five services mocked, drive an actual field
+clear through `@testing-library/user-event`, click Save, and assert the exact
+request body the mocked service methods received — verified by reverting the
+CMP2-2 fix locally and confirming the rewritten tests fail.
+
+**CMP2-B (previously "escalated," now FIXED):** the pre-existing
+`EquipmentCheckTemplateBuilder.test.tsx` failure found in the first version of
+this pass turned out not to be a genuine CLAUDE.md Hard Stop —
+its bar is a fix that "genuinely exceeds the current scope," which a five-line
+test-only change does not. Root cause: the failing `describe` block never
+overrode `window.matchMedia` to simulate a laptop viewport, unlike two sibling
+blocks in the same file, so the component's `isLaptop` flag was permanently
+false and the accessible name the test waits for could never appear. Fixed by
+copying the existing override pattern into that block's `beforeEach`. All 32
+tests in the file now pass. See `docs/security-review/CMP-20-compliance.md`
+Pass 2 completion-gate section for the full writeup, including a correction to
+that doc's own CMP2-2 entry: it had claimed `[]` and `None` are read
+identically everywhere, true for `membership_types`/`report_email_recipients`
+but not for `required_requirement_ids` — the wrong generalization that let
+CMP2-3 ship reachable in the first place.
+
+Full gate (final, commit `ef882c98`): flake8/black/isort clean; migrations
+valid (394 revisions, single head); backend compliance-scoped tests 290
+passed, 1 skipped; full backend suite 9268 passed, 22 skipped; frontend
+`tsc --noEmit` 0 errors; `eslint .` 0 errors (10 pre-existing warnings, none
+in touched files); frontend `vitest run` 5458/5458 passed, 415/415 files (no
+outstanding escalation). Rotation row 20 -> ⏳ (awaiting PR merge). Next: 21
+(Admin hours), once this PR merges.
 
 ### 2026-08-29 — Feature 19 (Skills testing), pass 2 ✅ merged — PR #2017
 
@@ -2250,7 +2359,7 @@ each row's prior PR is recorded in the Log, not repeated here.
 | 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`                                                                                   | ✅     |
 | 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ✅     |
 | 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3723 L)                                                                                                          | ✅     |
-| 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ⬜     |
+| 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ⏳     |
 | 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ⬜     |
 | 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ⬜     |
 | 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ⬜     |
