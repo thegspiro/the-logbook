@@ -1,14 +1,18 @@
 # Security Review — Medical Supplies
 
-**Prefix:** `MSUP` · **Iteration:** 23 · **Reviewed:** 2026-08-26 · **PR:** #1905
+**Prefix:** `MSUP` · **Iteration:** 23 · **Reviewed:** 2026-08-26 (pass 1, PR
+#1905), 2026-08-30 (pass 2, PR #2075)
 
-**Backend:** `app/api/v1/endpoints/medical_supplies.py` (667 L, 15 endpoints).
-No dedicated service — every route delegates to the already-audited
-`InventoryService` (`app/services/inventory_service.py`, ~7,450 L, covered in
-full by `docs/security-review/INV-11-inventory.md`).
+**Backend:** `app/api/v1/endpoints/medical_supplies.py` (pass 1: 667 L, 15
+endpoints; pass 2: 670 L, 14 routes — no route added or removed). No
+dedicated service — every route delegates to the already-audited
+`InventoryService` (`app/services/inventory_service.py`, pass 1: ~7,450 L,
+pass 2: ~8,200 L; covered in full by `docs/security-review/INV-11-inventory.md`).
 **Frontend:** not reviewed this pass — backend only, per rotation scope.
-**Migrations:** none — this iteration's fix is a service-layer null-handling
-change only.
+**Migrations:** none in either pass — pass 1's fix was service-layer
+null-handling only; pass 2's fixes (MSUP-2/MSUP-3) are a new bulk
+domain-check method and reusing an existing alert-scan method for a domain
+count, also model/schema-free.
 
 ---
 
@@ -142,7 +146,7 @@ None — no model or migration changes this iteration.
     asserts the router converts `update_lot`'s new `ValueError` into a 400,
     not an unhandled 500.
 
-## Completion gate
+## Completion gate (pass 1)
 
 | Check                                                | Result                               |
 | ---------------------------------------------------- | ------------------------------------ |
@@ -152,3 +156,161 @@ None — no model or migration changes this iteration.
 | `python3 scripts/validate_migrations.py --strict`    | PASSED (no migrations)               |
 | backend tests, scope (`inventory` + `medical_suppl`) | 553 passed, 1 skipped (pre-existing) |
 | backend tests, full suite                            | 8897 passed, 22 skipped              |
+
+## Pass 2 — 2026-08-30
+
+The endpoint file grew by only 3 lines since pass 1 (667 L → 670 L, no route
+added or removed) — the growth is `medical_supply_summary`'s `_on_hand`
+helper and its low-stock calc, which reconciles `quantity` against
+`_attach_lot_stock`'s per-item lot totals; a pre-existing correctness fix,
+not new since pass 1, and not security-relevant (it reads from an already
+org-scoped item list). `inventory_service.py` itself grew substantially
+(~7,450 L → 8,200 L) from other reviews/features touching it, so every
+method this router calls was re-read directly rather than trusting the file
+hasn't moved.
+
+Re-verified directly against current code:
+
+- **MSUP-1's fix holds.** `update_category`, `update_item`, and `update_lot`
+  all still route through `apply_updates`, not a hand-rolled `setattr` loop.
+- **Domain pinning is unchanged and still real.** `item_in_domain`,
+  `category_in_domain`, `lot_in_domain` all still join/filter on
+  `organization_id` on both sides of the join and fail closed.
+- **`get_items`'s domain filter (`item_types`/`exclude_item_types`) and its
+  `_category_ids_of_type` subquery are still org-scoped inside the
+  subquery**, not just the outer query.
+- **`add_lots_bulk`'s XC-1 check still resolves every `inventory_item_id` in
+  one org-scoped query before writing any lot** — a delivery naming another
+  org's item id is rejected whole, not partially applied.
+- **`get_items`'s free-text search still uses `like_pattern` +
+  `escape=LIKE_ESCAPE_CHAR`** on every `ilike` clause (Pitfall #25).
+
+Codex's review of the first commit caught two real bugs and corrected a
+misstatement in this doc's own first draft; all three below.
+
+### MSUP-2 — LOW — `receive_medical_delivery` validated domain membership one query per line — ✅ FIXED
+
+**What:** the per-line loop calling `_require_medical_item` (one
+`item_in_domain` query per entry) ran _before_ `add_lots_bulk`'s own
+single-query org check, so a delivery near the schema's 200-entry cap
+(`InventoryLotBulkCreate.entries`, `max_length=200`) cost up to 200
+sequential round trips instead of one. Checklist §6: "no N+1 loop issuing a
+query per row."
+**Fix:** added `InventoryService.items_in_domain` — the bulk counterpart of
+`item_in_domain`, resolving every id in one org+domain-scoped query — and
+switched the router to call it once instead of looping. Behavior is
+unchanged (still all-or-nothing, still 404 on any non-medical or foreign
+line); only the query count changes. Guard test:
+`test_a_delivery_checks_domain_in_one_query_not_one_per_line` pins that
+`items_in_domain` is called and the old `item_in_domain` is not.
+
+### MSUP-3 — LOW/MED — `medical_supply_summary`'s `low_stock` count silently dropped items past the 500th — ✅ FIXED
+
+**What:** `medical_supply_summary` called `get_items(..., limit=500)` and
+computed `low_stock` by walking the returned page, while `total_items` used
+the query's separate, uncapped count. A department with more than 500
+active medical items got a `low_stock` tile that undercounted — any
+low-stock item sorted past the 500th was invisible to the headline number
+while the table below it (which paginates properly) still showed it.
+**Fix (round 1, superseded):** raising the internal `limit` to 10000 closed
+the undercount for any realistic department, but Codex correctly flagged it
+as still materializing up to 10000 full `InventoryItem` rows (with three
+eager-loaded relationships) merely to derive a count — real database and
+memory cost for a routine dashboard load, and still not exact above the new
+cap.
+**Fix (round 2):** replaced the raised cap with
+`InventoryService.get_low_stock_items_for_alerts` — an existing method
+(already used by the low-stock alert email) that filters on `reorder_point
+IS NOT NULL` _before_ loading any rows, so the candidate set is only the
+items that can ever be "low," not the whole domain. Added an `item_types`
+parameter to scope it to `MEDICAL_ITEM_TYPES` (optional, so the alert
+email's existing whole-org call is unaffected) and `low_stock` is now
+`len()` of that result — no page, no cap, exact at any org size.
+`total_items` no longer needs the item rows either: `get_items` is now
+called with `limit=1`, using only its separate, always-uncapped count.
+Guard tests: `test_low_stock_comes_from_the_uncapped_domain_scoped_scan`,
+`test_total_items_does_not_depend_on_the_low_stock_scan`. No
+`KNOWN_LIMITATIONS.md` entry needed — there is no residual cap to record.
+
+**Round 3 (efficiency, not fixed — convergence stop):** Codex's third
+comment on this same finding asks for a bare `COUNT(*)`/aggregate query in
+place of `get_low_stock_items_for_alerts`, since that method still
+materializes every candidate `InventoryItem` row (select-in-loading
+category, joining lot totals) to produce a number the endpoint only
+`len()`s. True, and a real optimization for a department with thousands of
+reorder-tracked items — but this is the third round on one finding, and
+rounds 1→2 fixed a genuine correctness bug (an undercount) while round 2→3
+asks for a pure performance rewrite of already-correct, already-shared,
+already-tested logic. Building a bespoke aggregate would mean
+re-deriving `get_low_stock_items_for_alerts`'s on-hand rule (lots vs.
+`quantity`, expired lots excluded) a second time in raw SQL — a duplicate
+implementation to maintain in lockstep, for a dashboard load, not a
+latency-critical path. Per this rotation's own precedent for a
+finding that stops converging (GF-22 pass 2, GF-27→GF-27a — "not chasing a
+further variant"), this is the stopping point: not fixed, noted here as a
+possible future optimization, not a correctness or security concern.
+
+### Correction — this doc's first draft mischaracterized baseline medical-supply visibility
+
+The first commit on this PR claimed "a rank-and-file member does not get
+medical-supply visibility for free" because `_LINE_MEMBER_PERMISSIONS`
+grants only `inventory.view`, never `inventory.view_medical`. That is true
+of the permission grant but false as a conclusion: every medical **view**
+route (`list_medical_categories`, `list_medical_items`, `get_medical_item`,
+`list_medical_item_lots`, `list_expiring_medical_lots`,
+`medical_supply_summary`) OR-gates `inventory.view_medical` against the
+broad `inventory.view` — and `_LINE_MEMBER_PERMISSIONS` grants that broad
+permission to every firefighter/EMT baseline. So every rank-and-file member
+_can_ already view medical-supply categories, items, lots, and expirations,
+via the broad grant every member already holds.
+
+This is the router module docstring's own stated design, not a gap: "Access
+is OR-logic against the broad inventory permissions, so a department that
+runs everything through one quartermaster keeps working unchanged," and the
+permission definitions' comment states plainly that "the broad
+`inventory.manage` still covers medical stock" — additive by design, not a
+narrowing. It is also benign: this domain is physical stock (dressings,
+AEDs, oxygen) with no PHI, unlike the separate `medical_screening` domain
+(feature 09) that holds member fitness-for-duty records. The
+`inventory.view_medical` / `inventory.manage_medical` split governs _manage_
+authority (letting a department appoint a narrower EMS supply officer
+without also handing over the uniform closet) — it was never meant to
+restrict baseline _view_ access, and the two-domain permission design
+doesn't claim otherwise anywhere else in the codebase. No code change; this
+doc's own "Verified good" wording (below) is corrected instead.
+
+### MSUP-4 — LOW, flagged (not fixed) — `get_expiring_lots` has no row cap
+
+**What:** `get_expiring_lots` (used by `GET /lots/expiring` directly, and
+internally by `medical_supply_summary` to derive `expiring_soon`/`expired`)
+has no `limit`/pagination — for a department that never clears old
+zero-or-positive-quantity expired lots, the query returns every matching row
+back to the beginning of the `days_ahead` window, unbounded. Checklist §6:
+"List endpoints and exports are bounded."
+**Why flagged, not fixed:** `get_expiring_lots` is a shared `InventoryService`
+method — it also backs the main (non-medical) inventory router and the
+low-stock/expiring alert email in `scheduled_tasks.py`. Adding a cap changes
+those callers' contracts too (would the alert email now silently omit rows
+past the cap? what page size is right for each caller?), which is a product
+decision spanning outside this feature's scope, not a mechanical
+medical-supplies patch. Mirrored into `KNOWN_LIMITATIONS.md`.
+
+## Guard tests added (pass 2)
+
+- `tests/test_medical_supplies_domain.py`:
+  - `TestSummaryCounts::test_low_stock_comes_from_the_uncapped_domain_scoped_scan`
+    and `::test_total_items_does_not_depend_on_the_low_stock_scan` (MSUP-3)
+  - `TestLotDomainPinning::test_a_delivery_checks_domain_in_one_query_not_one_per_line`
+    (MSUP-2 — asserts `items_in_domain` is called and the old `item_in_domain`
+    loop is not)
+
+## Completion gate (pass 2)
+
+| Check                                                                                                                                                                   | Result                  |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------- |
+| `flake8 app/ tests/ alembic/`                                                                                                                                           | clean                   |
+| `black --check app/ tests/ alembic/`                                                                                                                                    | clean                   |
+| `isort --check-only app/ tests/ alembic/`                                                                                                                               | clean                   |
+| `python3 scripts/validate_migrations.py --strict`                                                                                                                       | PASSED (no migrations)  |
+| `pytest tests/test_inventory_service.py tests/test_medical_supplies_domain.py tests/test_inventory_lot_stock_levels.py tests/test_inventory_low_stock_email_only.py -q` | 112 passed              |
+| backend tests, full suite                                                                                                                                               | 9270 passed, 22 skipped |

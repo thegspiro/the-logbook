@@ -5527,6 +5527,7 @@ class InventoryService:
     async def get_low_stock_items_for_alerts(
         self,
         organization_id: UUID,
+        item_types: Optional[Iterable[ItemType]] = None,
     ) -> List[Tuple[InventoryItem, int, bool]]:
         """Items at or below their reorder point, as (item, on_hand, from_lots).
 
@@ -5544,14 +5545,28 @@ class InventoryService:
         ``from_lots`` tells the caller which ledger the number came from, so an
         alert can say so rather than appear to contradict the item's own
         quantity field.
+
+        ``item_types`` narrows to one domain (e.g. the medical-supplies
+        summary) — omitted, this scans the whole org, which is what the
+        low-stock alert email needs. Filtering on ``reorder_point IS NOT
+        NULL`` first keeps the candidate set to only the items that can ever
+        be "low," so this has no need for — and no risk of — a page-size cap
+        the way a plain items listing would.
         """
-        result = await self.db.execute(
+        query = (
             select(InventoryItem)
             .where(InventoryItem.organization_id == str(organization_id))
             .where(InventoryItem.active.is_(True))
             .where(InventoryItem.reorder_point.isnot(None))
             .options(selectinload(InventoryItem.category))
         )
+        if item_types:
+            query = query.where(
+                InventoryItem.category_id.in_(
+                    self._category_ids_of_type(organization_id, set(item_types))
+                )
+            )
+        result = await self.db.execute(query)
         candidates = list(result.scalars().all())
         if not candidates:
             return []
@@ -5629,6 +5644,37 @@ class InventoryService:
             )
         )
         return found is not None
+
+    async def items_in_domain(
+        self,
+        item_ids: Iterable[str],
+        organization_id: str,
+        item_types: Iterable[ItemType],
+    ) -> Set[str]:
+        """Which of these item ids are filed under a category in ``item_types``?
+
+        Bulk counterpart of ``item_in_domain`` — validating a whole delivery
+        one line at a time cost one query per line; this resolves every id in
+        a single query, so a request near the schema's 200-entry cap is one
+        round trip instead of two hundred.
+        """
+        ids = {str(i) for i in item_ids}
+        if not ids:
+            return set()
+        result = await self.db.execute(
+            select(InventoryItem.id)
+            .join(
+                InventoryCategory,
+                InventoryCategory.id == InventoryItem.category_id,
+            )
+            .where(
+                InventoryItem.id.in_(ids),
+                InventoryItem.organization_id == organization_id,
+                InventoryCategory.organization_id == organization_id,
+                InventoryCategory.item_type.in_(list(item_types)),
+            )
+        )
+        return set(result.scalars().all())
 
     async def lot_in_domain(
         self,

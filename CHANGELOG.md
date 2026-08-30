@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Medical supplies summary fix (2026-08-30)
+
+**Fixed**
+
+- The medical supplies summary's "Low Stock" count only checked the first
+  500 active items, so a department with more than 500 active medical items
+  could have a low-stock item that never showed up in the headline count
+  even though it was correctly listed in the table below. The count now
+  covers the department's full medical supply catalog.
+
 ### Grants & fundraising report and permission fixes (2026-08-30)
 
 **Fixed**
