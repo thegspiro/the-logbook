@@ -285,10 +285,14 @@ jobs:
           # PyPI's advisory endpoint occasionally resets an otherwise healthy
           # runner connection. Retry transport failures without weakening the
           # gate: a real vulnerability still fails all three audit attempts.
+          #
+          # `pip-audit` has to stay the first token on its line.
+          # scripts/check_security_scan_policy.py anchors its match at the start
+          # of a line, which is what stops a comment or a quoted string from
+          # satisfying the policy — wrapping the call in `if ...; then` hides
+          # the invocation from that check and fails the gate.
           for attempt in 1 2 3; do
-            if pip-audit -r requirements.txt; then
-              exit 0
-            fi
+            pip-audit -r requirements.txt && exit 0
             if [ "$attempt" -eq 3 ]; then
               exit 1
             fi
