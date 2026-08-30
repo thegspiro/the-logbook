@@ -282,7 +282,18 @@ jobs:
         # runner-image packages (pip/setuptools/wheel) don't fail the build.
         run: |
           pip install -r requirements.txt
-          pip-audit -r requirements.txt
+          # PyPI's advisory endpoint occasionally resets an otherwise healthy
+          # runner connection. Retry transport failures without weakening the
+          # gate: a real vulnerability still fails all three audit attempts.
+          for attempt in 1 2 3; do
+            if pip-audit -r requirements.txt; then
+              exit 0
+            fi
+            if [ "$attempt" -eq 3 ]; then
+              exit 1
+            fi
+            sleep $((attempt * 5))
+          done
 
       - name: Upload Bandit report
         if: always()
