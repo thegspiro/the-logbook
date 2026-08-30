@@ -4499,9 +4499,50 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                     ? `${String(blockingItems)} item${blockingItems === 1 ? '' : 's'} need attention`
                     : `${String(stats.totalItems)} item${stats.totalItems === 1 ? '' : 's'} · ${autoSaveStatus === 'error' ? 'Save failed' : autoSaveStatus === 'saved' ? 'Saved' : isEditing ? 'Saved' : 'Draft'}`}
             </span>
-            <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 text-sm font-semibold">
+            <div className="flex min-w-0 flex-wrap items-center justify-end gap-2 text-sm font-semibold">
               {mobileSelection ? (
                 <>
+                  <select
+                    aria-label="Set type for selected items"
+                    className="text-theme-accent-blue min-h-11 max-w-20 bg-transparent"
+                    value=""
+                    disabled={mobileSelectedCount === 0}
+                    onChange={(event) => {
+                      if (event.target.value) bulkSetCheckType(mobileSelection.index, event.target.value as CheckType);
+                    }}
+                  >
+                    <option value="" disabled>
+                      Type
+                    </option>
+                    {CHECK_TYPES.map((checkType) => (
+                      <option key={checkType.value} value={checkType.value}>
+                        {checkType.label}
+                      </option>
+                    ))}
+                  </select>
+                  <span aria-hidden="true">·</span>
+                  <button
+                    type="button"
+                    className="text-theme-accent-blue min-h-11 disabled:opacity-40"
+                    disabled={mobileSelectedCount === 0}
+                    onClick={() => {
+                      const selected = selectedItems[mobileSelection.key];
+                      const allRequired =
+                        !!selected &&
+                        [...selected].every((index) => mobileSelection.compartment.items[index]?.isRequired);
+                      bulkToggleRequired(mobileSelection.index, !allRequired);
+                    }}
+                  >
+                    {(() => {
+                      const selected = selectedItems[mobileSelection.key];
+                      const allRequired =
+                        !!selected &&
+                        selected.size > 0 &&
+                        [...selected].every((index) => mobileSelection.compartment.items[index]?.isRequired);
+                      return allRequired ? 'Optional' : 'Required';
+                    })()}
+                  </button>
+                  <span aria-hidden="true">·</span>
                   <select
                     aria-label="Move selected items"
                     className="text-theme-accent-blue max-w-24 bg-transparent"
