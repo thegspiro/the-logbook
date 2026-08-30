@@ -29,15 +29,14 @@ each cherry-picking the orphaned post-merge commits onto its own fresh
 branch per CLAUDE.md Pitfall #24: this session opened PR #2072
 (`claude/security-review-grants-fundraising-pass2-r5`), another opened PR
 #2073 (`claude/security-review-grants-fundraising-pass2-tend2`), off the
-same `main` base (`71c1563b`). Both independently found the same three
-bugs and applied identical fixes — a stale out-of-order response
-overwriting the current filter (GF-32), and a failed refetch leaving the
-previous status's rows on screen (GF-33/34) — plus a third that is only
-**partially** mitigated, not fixed: a status-filtered fetch was capped at
-100 rows (GF-31), and both PRs raised that cap to 1,000 (GF-32/33) rather
-than closing it — an org with more than 1,000 applications in one status
-still silently truncates, which both PRs flag in `KNOWN_LIMITATIONS.md`
-(GF-32a) rather than claim as resolved. PR #2073
+same `main` base (`71c1563b`). Both independently found and applied
+identical fixes for GF-32 (a stale out-of-order response overwriting the
+current filter) and GF-34 (a failed refetch leaving the previous filter's
+rows on screen). Both also raised GF-31's 100-row fetch cap to 1,000
+rather than closing it — that residual gap is GF-33 in the doc below,
+**flagged, not fixed**: an org with more than 1,000 applications in one
+status still silently truncates, recorded in `KNOWN_LIMITATIONS.md` rather
+than claimed as resolved. PR #2073
 reached a superset state first (it also included a fixture-typing nit from
 Codex, fixed in `b513ce2e`) and was merged (`d7a0c456`); PR #2072 was
 closed as a duplicate rather than merged, per the standing "never reuse or
