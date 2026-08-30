@@ -1,0 +1,81 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`StorageAreasPage > matches the desktop three-level hierarchy snapshot at 768px 1`] = `
+{
+  "backLabel": null,
+  "rows": [
+    {
+      "hasMobileIndicator": false,
+      "id": "cab",
+      "paddingLeft": "12px",
+      "path": "Cab",
+    },
+    {
+      "hasMobileIndicator": false,
+      "id": "medical",
+      "paddingLeft": "28px",
+      "path": "Cab › Medical bag",
+    },
+    {
+      "hasMobileIndicator": false,
+      "id": "airway",
+      "paddingLeft": "44px",
+      "path": "Cab › Medical bag › Airway pouch",
+    },
+  ],
+}
+`;
+
+exports[`StorageAreasPage > matches the desktop three-level hierarchy snapshot at 1024px 1`] = `
+{
+  "backLabel": null,
+  "rows": [
+    {
+      "hasMobileIndicator": false,
+      "id": "cab",
+      "paddingLeft": "12px",
+      "path": "Cab",
+    },
+    {
+      "hasMobileIndicator": false,
+      "id": "medical",
+      "paddingLeft": "28px",
+      "path": "Cab › Medical bag",
+    },
+    {
+      "hasMobileIndicator": false,
+      "id": "airway",
+      "paddingLeft": "44px",
+      "path": "Cab › Medical bag › Airway pouch",
+    },
+  ],
+}
+`;
+
+exports[`StorageAreasPage > matches the mobile three-level hierarchy snapshot at 320px 1`] = `
+{
+  "backLabel": "Back from Medical bag",
+  "rows": [
+    {
+      "hasMobileIndicator": true,
+      "id": "airway",
+      "paddingLeft": "12px",
+      "path": "Cab › Medical bag › Airway pouch",
+    },
+  ],
+}
+`;
+
+exports[`StorageAreasPage > matches the mobile three-level hierarchy snapshot at 375px 1`] = `
+{
+  "backLabel": "Back from Medical bag",
+  "rows": [
+    {
+      "hasMobileIndicator": true,
+      "id": "airway",
+      "paddingLeft": "12px",
+      "path": "Cab › Medical bag › Airway pouch",
+    },
+  ],
+}
+`;
