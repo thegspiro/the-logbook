@@ -151,3 +151,182 @@ export function bulkLabel(items: CheckItemSpec[]): string {
   const allCounts = confirmable.every((i) => normalizeCheckType(i.checkType) === CheckType.COUNT);
   return allCounts ? 'All at par' : 'All good';
 }
+
+// ============================================================================
+// The sweep
+// ============================================================================
+
+/**
+ * The claim the bulk button is making, said out loud.
+ *
+ * `bulkLabel` answers "at par or good"; the sweep puts the button at the top of
+ * a stop the crew has not read yet, so it also has to say *how many* items it
+ * speaks for. "All 4 counts at par" is a claim somebody can check against the
+ * cabinet in front of them; "All good" over four items is a button.
+ *
+ * The wording follows the contents for the same reason `bulkLabel` does — never
+ * "All good" over a gauge, because a gauge is not bulk-confirmable at all and
+ * the count here excludes it.
+ */
+export function bulkClaim(items: CheckItemSpec[]): string | null {
+  const confirmable = bulkConfirmable(items);
+  if (confirmable.length === 0) return null;
+  const n = confirmable.length;
+  const types = new Set(confirmable.map((i) => normalizeCheckType(i.checkType)));
+  if (types.size === 1) {
+    const only = [...types][0];
+    if (only === CheckType.COUNT) return `All ${n} count${n === 1 ? '' : 's'} at par`;
+    if (only === CheckType.FUNCTION) return `All ${n} work`;
+    if (only === CheckType.EXPIRY) return `All ${n} date${n === 1 ? '' : 's'} in date`;
+  }
+  return `All ${n} good`;
+}
+
+/**
+ * Items short of par: a restock line, not a failure.
+ *
+ * Kept apart from `stopFailures` because they are different consequences — one
+ * takes the truck out of service, the other adds a line to a supply order — and
+ * the finish screen reports them separately. A count with no answer is neither;
+ * it is unanswered.
+ */
+export function stopRestocks(stop: LapStop, answers: AnswerMap): CheckItemSpec[] {
+  return answerableItems(stop).filter((i) => {
+    if (normalizeCheckType(i.checkType) !== CheckType.COUNT) return false;
+    const found = answers[i.id]?.quantityFound;
+    if (found === undefined) return false;
+    const par = i.expectedQuantity;
+    return typeof par === 'number' && found < par;
+  });
+}
+
+/** Gauges still to read. A stop holding one cannot be finished by a bulk claim. */
+export function unreadGauges(stop: LapStop, answers: AnswerMap): CheckItemSpec[] {
+  return answerableItems(stop).filter((i) => {
+    if (normalizeCheckType(i.checkType) !== CheckType.LEVEL) return false;
+    const a = answers[i.id];
+    return a?.levelReading === undefined && (a?.status === undefined || a.status === 'not_checked');
+  });
+}
+
+/**
+ * What a stop still owes an answer for, under the sweep.
+ *
+ * Deliberately **not** `isStopComplete`'s set, and the difference is not a
+ * refinement — it is a different modelling of the same rule, and picking the
+ * wrong one either hides an expiring drug or asks a crew to count through an
+ * intact seal.
+ *
+ * `isStopComplete` unions in `ownAnswerableItems`, because the lap models a
+ * bag's tag confirmation as an item sitting on the stop: the tag line stays
+ * asked, the pockets are cleared. The sweep is wired into `EquipmentCheckForm`,
+ * where the tag is separate seal state and never an item — so the set here is
+ * exactly `sealClearableIn`'s complement, the reviewed rule on main: a seal
+ * clears a `function` or `count` that does not expire, wherever it sits, and
+ * clears nothing else. A sealed container holding items directly, with no
+ * pockets, is the case the two disagree on, and it is the case the design's
+ * sealed drug box is made of.
+ */
+export function stillAsked(stop: LapStop): CheckItemSpec[] {
+  return contentsAreSealed(stop) ? sealCannotClear(answerableItems(stop)) : answerableItems(stop);
+}
+
+/** `isStopComplete` for the sweep, over the set the sweep actually asks. */
+export function stopSwept(stop: LapStop, answers: AnswerMap): boolean {
+  return stillAsked(stop).every((i) => {
+    const status = answers[i.id]?.status;
+    return status !== undefined && status !== 'not_checked';
+  });
+}
+
+export type StopMapState = 'complete' | 'fault' | 'restock' | 'untouched';
+
+/**
+ * What one segment of the truck map is saying.
+ *
+ * The strip is read at a glance while walking, so the states are ranked by what
+ * the crew has to act on rather than by how far through the stop they are: a
+ * fault outranks a restock, and both outrank finished. A stop part-answered
+ * with nothing wrong reads as untouched — the strip answers "what is left",
+ * and a stop with items still to answer is left.
+ */
+export function stopMapState(stop: LapStop, answers: AnswerMap): StopMapState {
+  if (stopFailures(stop, answers).length > 0) return 'fault';
+  if (stopRestocks(stop, answers).length > 0) return 'restock';
+  return stopSwept(stop, answers) ? 'complete' : 'untouched';
+}
+
+/** Answered questions on a stop, for the map's per-stop progress. */
+export function stopAnswered(stop: LapStop, answers: AnswerMap): number {
+  return answerableItems(stop).filter((i) => {
+    const a = answers[i.id];
+    if (a === undefined) return false;
+    return a.status !== undefined && a.status !== 'not_checked';
+  }).length;
+}
+
+export interface SweepException {
+  item: CheckItemSpec;
+  /** 1-based, because it is shown to the crew as "Go to stop 7". */
+  stopNumber: number;
+  stopName: string;
+}
+
+export interface SweepSummary {
+  faults: SweepException[];
+  unanswered: SweepException[];
+  restocks: SweepException[];
+  /** Everything answered with nothing to report — one line, not a list. */
+  goodCount: number;
+  answeredCount: number;
+  totalCount: number;
+}
+
+/**
+ * The finish screen, exceptions first.
+ *
+ * A crew that has just walked 130 items does not need to read 130 lines back.
+ * What is left to decide is the handful that went wrong, so those are listed
+ * and everything else is accounted for in a single line. The stop number rides
+ * along with each exception because the only useful action on an unanswered
+ * item is going back to where it is.
+ */
+export function sweepSummary(stops: LapStop[], answers: AnswerMap): SweepSummary {
+  const faults: SweepException[] = [];
+  const unanswered: SweepException[] = [];
+  const restocks: SweepException[] = [];
+  let answeredCount = 0;
+  let totalCount = 0;
+
+  stops.forEach((stop, index) => {
+    const at = (item: CheckItemSpec): SweepException => ({
+      item,
+      stopNumber: index + 1,
+      stopName: stop.name,
+    });
+    const failed = new Set(stopFailures(stop, answers).map((i) => i.id));
+    const short = new Set(stopRestocks(stop, answers).map((i) => i.id));
+    // A sealed container's cleared contents are answered by the tag, so they
+    // are neither unanswered nor in the total the crew is accountable for.
+    const asked = stillAsked(stop);
+
+    totalCount += asked.length;
+    asked.forEach((item) => {
+      const status = answers[item.id]?.status;
+      const isAnswered = status !== undefined && status !== 'not_checked';
+      if (isAnswered) answeredCount += 1;
+      if (failed.has(item.id)) faults.push(at(item));
+      else if (short.has(item.id)) restocks.push(at(item));
+      else if (!isAnswered) unanswered.push(at(item));
+    });
+  });
+
+  return {
+    faults,
+    unanswered,
+    restocks,
+    goodCount: answeredCount - faults.length - restocks.length,
+    answeredCount,
+    totalCount,
+  };
+}
