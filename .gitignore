@@ -223,3 +223,7 @@ __scratch*
 __probe*
 __lintprobe*
 scratchRepro*
+# Agents also name a throwaway pytest file so it sorts last, or tag it _tmp.
+# Verified no tracked file matches either.
+test_zz_*
+*_tmp.py
