@@ -32,6 +32,7 @@ from sqlalchemy.orm import aliased, contains_eager, selectinload
 
 from app.api.dependencies import PaginationParams
 from app.core.config import settings
+from app.models.facilities import Facility
 from app.models.finance import (
     ApprovalChain,
     ApprovalChainStep,
@@ -65,7 +66,20 @@ from app.services.separation_of_duties import (
 )
 from app.utils.csv_export import SafeCsvWriter
 from app.utils.model_updates import apply_updates
+from app.utils.org_scoping import assert_in_org
 from app.utils.sql_search import LIKE_ESCAPE_CHAR
+
+# The statuses that genuinely resolve a step, so a later step may become
+# reachable. Deliberately an allowlist: DENIED and SKIPPED are terminal states
+# that mean the chain stopped, not that it advanced, and a blocklist of "not
+# PENDING" silently read both of them as progress.
+_PRIOR_STEP_SATISFIED = frozenset(
+    {
+        ApprovalStepStatus.APPROVED,
+        ApprovalStepStatus.AUTO_APPROVED,
+        ApprovalStepStatus.SENT,
+    }
+)
 
 
 class BudgetLimitExceededError(Exception):
@@ -695,6 +709,36 @@ class FinanceService:
         if current is None or current.id != record.id:
             raise ValueError("An earlier approval step is still pending")
 
+    async def _terminate_pending_steps(
+        self, record: ApprovalStepRecord, org_id: str
+    ) -> int:
+        """Close the rest of the chain once one step denies the entity.
+
+        A denial finalizes the whole entity, so no later step is actionable —
+        but leaving those records PENDING meant the opposite in practice. The
+        next PENDING record became the "current" step, so the denied request
+        was still listed as awaiting approval, and approving the remaining
+        steps walked it to APPROVED and encumbered budget against it.
+
+        Tokens are cleared alongside: an email approver holding a live link for
+        a later step must not be able to act on a request the department has
+        already refused.
+        """
+        records = await self.get_approval_records(
+            record.entity_type, record.entity_id, org_id
+        )
+        terminated = 0
+        for other in records:
+            if other.id == record.id:
+                continue
+            if other.status != ApprovalStepStatus.PENDING:
+                continue
+            other.status = ApprovalStepStatus.SKIPPED
+            other.approval_token = None
+            other.token_expires_at = None
+            terminated += 1
+        return terminated
+
     async def approve_step(
         self,
         step_record_id: str,
@@ -793,6 +837,10 @@ class FinanceService:
         record.acted_by = denier_id
         record.acted_at = now
         record.notes = notes
+
+        # Terminate the rest of the chain first: _finalize_denial only writes
+        # the entity's own status and never touches the step records.
+        await self._terminate_pending_steps(record, org_id)
 
         # Deny the entire entity
         await self._finalize_denial(
@@ -907,6 +955,8 @@ class FinanceService:
         record.acted_at = datetime.now(timezone.utc)
         record.notes = notes
         record.approval_token = None
+
+        await self._terminate_pending_steps(record, org_id)
 
         await self._finalize_denial(
             record.entity_type, record.entity_id, None, notes, org_id
@@ -1075,6 +1125,15 @@ class FinanceService:
         the whole entity, so there is no "next" step to reach).
         """
         records = await self.get_approval_records(entity_type, entity_id, org_id)
+
+        # A denial anywhere in the chain is terminal for the entity, so nothing
+        # downstream is reachable. This paragraph's docstring has always said
+        # so, but the reachability test below only rejected a PENDING prior —
+        # a DENIED one read as "resolved", which minted a fresh 7-day token and
+        # emailed an external approver a live link for a refused request.
+        if any(r.status == ApprovalStepStatus.DENIED for r in records):
+            return
+
         for record in records:
             if record.status != ApprovalStepStatus.PENDING:
                 continue
@@ -1084,7 +1143,10 @@ class FinanceService:
             prior_complete = True
             for prior in records:
                 if prior.step and prior.step.step_order < record.step.step_order:
-                    if prior.status == ApprovalStepStatus.PENDING:
+                    # Name what counts as satisfied rather than what does not:
+                    # the statuses that block are open-ended, the ones that
+                    # genuinely resolve a step are these four.
+                    if prior.status not in _PRIOR_STEP_SATISFIED:
                         prior_complete = False
                         break
             if not prior_complete:
@@ -2670,9 +2732,12 @@ class FinanceService:
         ``budget_id`` would otherwise be silently ignored by the org-scoped
         budget write-helpers on approval/payment (encumbrance/spend never
         recorded, so the PR looks approved but the budget is untouched), and
-        (2) a foreign ``category_id``/``fiscal_year_id`` would leave a dangling
-        cross-tenant reference that skews category/fiscal-year rollups. Only
-        keys actually present in ``data`` are checked (update paths pass
+        (2) a foreign ``category_id``/``fiscal_year_id``/``station_id`` would
+        leave a dangling cross-tenant reference that skews category, fiscal-year
+        or per-station rollups. ``station_id`` is worse than a skewed rollup:
+        it is an ``ondelete="SET NULL"`` FK to facilities, so the other org
+        deleting that facility silently nulls this org's station attribution.
+        Only keys actually present in ``data`` are checked (update paths pass
         ``exclude_unset`` dumps and a null clears rather than sets), so this
         never rejects an omitted or explicitly-cleared field.
         """
@@ -2685,3 +2750,6 @@ class FinanceService:
         fiscal_year_id = data.get("fiscal_year_id")
         if fiscal_year_id and not await self.get_fiscal_year(fiscal_year_id, org_id):
             raise ValueError("Fiscal year not found")
+        station_id = data.get("station_id")
+        if station_id:
+            await assert_in_org(self.db, Facility, station_id, org_id, label="Station")

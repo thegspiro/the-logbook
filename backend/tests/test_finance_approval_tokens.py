@@ -50,7 +50,11 @@ async def test_token_action_locks_and_consumes_token(action):
 
     await getattr(service, action)(record.approval_token, "reviewed")
 
-    statement = db.execute.await_args.args[0]
+    # The FIRST query, not the last: the token lookup is what must hold the
+    # row lock. Asserting on await_args pinned this to whichever query happened
+    # to run last, so it broke as soon as denial gained a follow-up query to
+    # terminate the rest of the chain — while the lock it checks was untouched.
+    statement = db.execute.await_args_list[0].args[0]
     sql = str(statement.compile(dialect=mysql.dialect()))
     assert sql.rstrip().endswith("FOR UPDATE")
     assert record.approval_token is None

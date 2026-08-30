@@ -963,6 +963,124 @@ class TestApprovalChainService:
         approved = await service.approve_step(step2.id, user_id, org_id=org_id)
         assert approved.status == ApprovalStepStatus.APPROVED
 
+    async def _two_step_chain(self, service, org_id, user_id, entity_id):
+        chain = await service.create_approval_chain(
+            org_id=org_id,
+            created_by=user_id,
+            name="Denial",
+            applies_to=ApprovalEntityType.PURCHASE_REQUEST,
+            is_default=True,
+            steps=[
+                {
+                    "step_order": 1,
+                    "name": "Supervisor",
+                    "step_type": ApprovalStepType.APPROVAL,
+                    "approver_type": ApproverType.PERMISSION,
+                    "approver_value": "finance.approve",
+                },
+                {
+                    "step_order": 2,
+                    "name": "Treasurer",
+                    "step_type": ApprovalStepType.APPROVAL,
+                    "approver_type": ApproverType.PERMISSION,
+                    "approver_value": "finance.approve",
+                },
+            ],
+        )
+        return await service.create_approval_records(
+            chain,
+            ApprovalEntityType.PURCHASE_REQUEST,
+            entity_id,
+            1000.00,
+            user_id,
+        )
+
+    async def test_denying_a_step_terminates_the_rest_of_the_chain(
+        self, db_session: AsyncSession, sample_org_data
+    ):
+        """A denial finalizes the entity, so no later step is still awaiting a
+        decision. Leaving them PENDING meant the opposite: the next record
+        became the current step and the denied request kept appearing as
+        actionable."""
+        service = FinanceService(db_session)
+        org_id = sample_org_data["id"]
+        user_id = sample_org_data.get("admin_id", "test-user-id")
+        step1, step2 = await self._two_step_chain(
+            service, org_id, user_id, "deny-terminates"
+        )
+
+        await service.deny_step(step1.id, user_id, "no", org_id=org_id)
+
+        assert step1.status == ApprovalStepStatus.DENIED
+        assert step2.status == ApprovalStepStatus.SKIPPED
+        current = await service.get_current_pending_step(
+            ApprovalEntityType.PURCHASE_REQUEST, "deny-terminates", org_id
+        )
+        assert current is None
+
+    async def test_a_denied_request_cannot_be_walked_to_approved(
+        self, db_session: AsyncSession, sample_org_data
+    ):
+        """The disbursement control this whole chain exists to enforce: with
+        step 2 left PENDING, approving it ran _finalize_approval on an
+        already-denied purchase request and encumbered budget against it."""
+        service = FinanceService(db_session)
+        org_id = sample_org_data["id"]
+        user_id = sample_org_data.get("admin_id", "test-user-id")
+        step1, step2 = await self._two_step_chain(
+            service, org_id, user_id, "deny-walkable"
+        )
+
+        await service.deny_step(step1.id, user_id, "no", org_id=org_id)
+
+        with pytest.raises(ValueError, match="not pending"):
+            await service.approve_step(step2.id, user_id, org_id=org_id)
+
+    async def test_denial_issues_no_token_for_a_later_email_step(
+        self, db_session: AsyncSession, sample_org_data
+    ):
+        """An external approver must not be emailed a live approve/deny link
+        for a request the department has already refused."""
+        service = FinanceService(db_session)
+        org_id = sample_org_data["id"]
+        user_id = sample_org_data.get("admin_id", "test-user-id")
+        chain = await service.create_approval_chain(
+            org_id=org_id,
+            created_by=user_id,
+            name="With external",
+            applies_to=ApprovalEntityType.PURCHASE_REQUEST,
+            is_default=True,
+            steps=[
+                {
+                    "step_order": 1,
+                    "name": "Supervisor",
+                    "step_type": ApprovalStepType.APPROVAL,
+                    "approver_type": ApproverType.PERMISSION,
+                    "approver_value": "finance.approve",
+                },
+                {
+                    "step_order": 2,
+                    "name": "CPA",
+                    "step_type": ApprovalStepType.APPROVAL,
+                    "approver_type": ApproverType.EMAIL,
+                    "approver_value": "cpa@example.com",
+                },
+            ],
+        )
+        step1, step2 = await service.create_approval_records(
+            chain,
+            ApprovalEntityType.PURCHASE_REQUEST,
+            "deny-no-token",
+            1000.00,
+            user_id,
+        )
+
+        await service.deny_step(step1.id, user_id, "no", org_id=org_id)
+
+        assert step2.status == ApprovalStepStatus.SKIPPED
+        assert step2.approval_token is None
+        assert step2.token_expires_at is None
+
     async def test_current_step_tiebreak_matches_the_pending_approvals_list(
         self, db_session: AsyncSession, sample_org_data
     ):
