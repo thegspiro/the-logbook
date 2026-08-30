@@ -16,7 +16,7 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-[#2075](https://github.com/thegspiro/the-logbook/pull/2075) —
+[#2076](https://github.com/thegspiro/the-logbook/pull/2076) —
 `claude/security-review-medical-supplies-pass2` — Feature 23 (Medical
 supplies), pass 2.
 
@@ -47,8 +47,8 @@ a medical-specific asymmetry. New guard tests (fail before/pass after) in
 clean, migrations validated (no schema change), 577/578 scoped tests
 (1 pre-existing skip), 9273/9295 full backend suite (22 pre-existing
 skips). Findings doc: `docs/security-review/MSUP-23-medical-supplies.md`
-→ "Pass 2" section. PR #2075 opened and subscribed. Next: 24 meetings &
-minutes, once #2075 merges.
+→ "Pass 2" section. PR #2076 opened and subscribed. Next: 24 meetings &
+minutes, once #2076 merges.
 
 ### 2026-08-30 — Feature 22 (Grants & fundraising), pass 2 ✅ fully merged — PR #2073 (round-5 tend); duplicate PR #2072 closed
 
