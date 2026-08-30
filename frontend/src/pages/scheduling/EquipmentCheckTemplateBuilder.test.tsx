@@ -516,6 +516,16 @@ describe('EquipmentCheckTemplateBuilder quick add queue', () => {
     const input = (await screen.findAllByPlaceholderText(/search inventory/i))[0] as HTMLElement;
     await user.type(input, 'Lantern{Enter}{Enter}');
     expect(addCheckItemsBulk).toHaveBeenCalledTimes(1);
+    expect(addCheckItemsBulk).toHaveBeenCalledWith(
+      'cab',
+      [
+        {
+          name: 'Lantern',
+          sort_order: 2,
+        },
+      ],
+      expect.any(String)
+    );
   });
 });
 
@@ -600,6 +610,12 @@ describe('EquipmentCheckTemplateBuilder remaining mutation regressions', () => {
     await user.type(paste, 'Mask\nHood');
     await user.click(screen.getByRole('button', { name: 'Add All' }));
     await waitFor(() => expect(addCheckItemsBulk).toHaveBeenCalledTimes(1));
+    expect(addCheckItemsBulk).toHaveBeenNthCalledWith(
+      1,
+      'cab',
+      [{ name: 'Mask' }, { name: 'Hood' }],
+      expect.any(String)
+    );
     expect(paste).toHaveValue('Mask\nHood');
     await user.click(screen.getByRole('button', { name: 'Add All' }));
     expect(await screen.findByLabelText('Actions for Mask')).toBeVisible();
@@ -636,6 +652,43 @@ describe('EquipmentCheckTemplateBuilder remaining mutation regressions', () => {
     await waitFor(() =>
       expect(updateEquipmentCheckTemplate).toHaveBeenLastCalledWith('template-1', { is_active: true })
     );
+  });
+});
+
+describe('EquipmentCheckTemplateBuilder unsaved-change prompts', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    getTemplate.mockResolvedValue(structuredClone(template));
+    updateEquipmentCheckTemplate.mockResolvedValue(structuredClone(template));
+  });
+
+  it('does not prompt when leaving an unchanged loaded template', async () => {
+    renderBuilder();
+    await screen.findByDisplayValue('Engine check');
+    await userEvent.click(screen.getByTitle('Go back'));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('prompts for a real edit, then stops prompting after that edit is saved', async () => {
+    const user = userEvent.setup();
+    renderBuilder();
+    const name = await screen.findByDisplayValue('Engine check');
+    await user.clear(name);
+    await user.type(name, 'Engine daily check');
+
+    await user.click(screen.getByTitle('Go back'));
+    expect(await screen.findByRole('dialog')).toHaveTextContent('Leave without saving?');
+    await user.click(screen.getByRole('button', { name: 'Stay here' }));
+
+    await user.click(screen.getByRole('button', { name: 'Save draft' }));
+    await waitFor(() =>
+      expect(updateEquipmentCheckTemplate).toHaveBeenCalledWith(
+        'template-1',
+        expect.objectContaining({ name: 'Engine daily check', is_active: false })
+      )
+    );
+    await user.click(screen.getByTitle('Go back'));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 });
 
