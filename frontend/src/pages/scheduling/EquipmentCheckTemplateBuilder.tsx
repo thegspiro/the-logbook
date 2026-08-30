@@ -465,8 +465,14 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
   const inlineInputRef = useRef<HTMLInputElement>(null);
 
   // Auto-save debounce timer for item edits
-  const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const autoSavePromiseRef = useRef<Promise<void> | null>(null);
+  // Keyed by item id, not a single shared timer: a bulk action schedules one
+  // save per selected row, and a shared timer made each row cancel the one
+  // before it.
+  const autoSavePendingRef = useRef<
+    Map<string, { timer: ReturnType<typeof setTimeout>; patch: Record<string, unknown> }>
+  >(new Map());
+  const autoSaveInFlightRef = useRef<Set<Promise<void>>>(new Set());
+  const autoSaveErrorRef = useRef(false);
   const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const autoSaveFadeRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -1523,28 +1529,42 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     (itemId: string, patch: Record<string, unknown>) => {
       if (!isEditing || !itemId) return;
 
-      if (autoSaveTimerRef.current) {
-        clearTimeout(autoSaveTimerRef.current);
-      }
+      const pending = autoSavePendingRef.current.get(itemId);
+      if (pending) clearTimeout(pending.timer);
+      // Merge rather than replace, so two edits to different fields of the same
+      // row inside the debounce window both survive.
+      const merged = { ...(pending?.patch ?? {}), ...patch };
+
       if (autoSaveFadeRef.current) {
         clearTimeout(autoSaveFadeRef.current);
       }
+      if (autoSavePendingRef.current.size === 0 && autoSaveInFlightRef.current.size === 0) {
+        autoSaveErrorRef.current = false;
+      }
       setAutoSaveStatus('saving');
-      autoSaveTimerRef.current = setTimeout(() => {
-        autoSavePromiseRef.current = ensureDraftBeforeStructureEdit()
-          .then(() => schedulingService.updateCheckItem(itemId, patch))
-          .then(() => {
-            setAutoSaveStatus('saved');
-            autoSaveFadeRef.current = setTimeout(() => setAutoSaveStatus('idle'), 2000);
-          })
+
+      const timer = setTimeout(() => {
+        autoSavePendingRef.current.delete(itemId);
+        const request: Promise<void> = ensureDraftBeforeStructureEdit()
+          .then(() => schedulingService.updateCheckItem(itemId, merged))
+          .then(() => undefined)
           .catch(() => {
-            setAutoSaveStatus('error');
-            autoSaveFadeRef.current = setTimeout(() => setAutoSaveStatus('idle'), 4000);
+            autoSaveErrorRef.current = true;
           })
           .finally(() => {
-            autoSavePromiseRef.current = null;
+            autoSaveInFlightRef.current.delete(request);
+            // Report only once the whole batch has settled; a per-item "saved"
+            // would flicker through every row a bulk action touched.
+            if (autoSaveInFlightRef.current.size === 0 && autoSavePendingRef.current.size === 0) {
+              const failed = autoSaveErrorRef.current;
+              setAutoSaveStatus(failed ? 'error' : 'saved');
+              autoSaveFadeRef.current = setTimeout(() => setAutoSaveStatus('idle'), failed ? 4000 : 2000);
+            }
           });
+        autoSaveInFlightRef.current.add(request);
       }, 1500);
+
+      autoSavePendingRef.current.set(itemId, { timer, patch: merged });
     },
     [ensureDraftBeforeStructureEdit, isEditing]
   );
@@ -1594,11 +1614,9 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
   // ---------------------------------------------------------------------------
 
   const handleSave = async (publish: boolean) => {
-    if (autoSaveTimerRef.current) {
-      clearTimeout(autoSaveTimerRef.current);
-      autoSaveTimerRef.current = null;
-    }
-    if (autoSavePromiseRef.current) await autoSavePromiseRef.current;
+    for (const { timer } of autoSavePendingRef.current.values()) clearTimeout(timer);
+    autoSavePendingRef.current.clear();
+    if (autoSaveInFlightRef.current.size > 0) await Promise.all([...autoSaveInFlightRef.current]);
     // Drafts deliberately bypass readiness checks; publication never does.
     // Keep the blocking rules aligned with the backend instead of putting them
     // in the overridable warning dialog below.
