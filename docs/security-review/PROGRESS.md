@@ -89,10 +89,44 @@ validated (394 revisions, single head); 307/307 grant+fundraising-scoped and
 --noEmit`/`npm run typecheck` 0 errors; `eslint .` 0 errors (8 pre-existing
 warnings, none in touched files — no frontend files were touched, since no
 frontend fix was needed). Findings doc: `docs/security-review/GF-22-grants-fundraising.md`
-→ **Pass 2**. PR #2069 opened and subscribed. Rotation row 22 → ✅ (this is
-a docs-only PR: no application code changed, only the findings doc,
-`KNOWN_LIMITATIONS.md`, and
-`PROGRESS.md`). Next: 23 medical supplies, once this PR merges.
+→ **Pass 2**. PR #2069 opened and subscribed. Rotation row 22 → ⏳ (awaiting
+merge). Next: 23 medical supplies, once this PR merges.
+
+**Tend pass (same day):** Codex posted 6 review comments on PR #2069, all
+independently verified against the actual code and addressed. Two were real,
+previously-undetected bugs, not just doc gaps: **GF-24 (MED)** — three
+report/list query sites (`get_grant_report`, `get_fundraising_report`,
+`list_donations`) filtered a `DateTime` column with `<= end_date` against a
+bare date, which MySQL coerces to that day's midnight — silently dropping
+every record created later the same day, understating totals whenever
+"today" falls inside the range (the common case, not an edge case). Fixed
+with an explicit UTC end-of-day boundary, matching `reports_service.py`'s
+existing pattern; new real-DB test added (fails before/passes after).
+**GF-26 (MED)** — `donations_by_method` amounts serialize as JSON strings
+(Pydantic's default `Decimal` behavior), but `GrantsReportsPage.tsx` typed
+them as numbers and summed with `+`, silently string-concatenating instead
+of adding (`0 + "10.10" + "20.20"` → `"010.1020.20"`, which then made every
+percentage render `0.0%`). Fixed at the frontend boundary with `Number(...)`,
+matching `DonationsPage.tsx`'s existing convention; new test added (the
+module's first, fails before/passes after). **GF-23 (real UX bug, not a
+security hole — backend enforcement was already correct)** — no page in the
+module checked the caller's permission before rendering a mutation control,
+so a `fundraising.view`-only user saw Edit/Add/Record/Mark-Complete buttons
+that would 403 on click. Fixed 4 files (`CampaignsPage`, `DonorsPage`,
+`GrantDetailPage`, `GrantsDashboardPage`) with the app's established
+`checkPermission('fundraising.manage')` pattern; two lower-severity
+variants and one unrelated dead-route bug flagged, not fixed. **GF-21/GF-22
+(doc-only)** — the backend scope statement omitted `dashboard_widget_service.py`
+(verified clean: org-scoped, permission-gated) and the frontend page
+inventory omitted `GrantsDashboardPage.tsx` (verified clean); both corrected.
+**GF-25 (doc-only)** — `KNOWN_LIMITATIONS.md`'s GF-7 row still described a
+duplicate-compliance-task bug this same doc's own GF-14 re-verification
+had already confirmed fixed; corrected to keep only the still-open
+state-machine/overspend items. Full completion gate re-run green (backend
+full suite 9271/9271, frontend full vitest 5498/5498, tsc/eslint clean).
+CI re-verified on the follow-up commit; merge conflict against `main`
+(from PR #2067's concurrent merge touching the same `Open PR` section)
+resolved by this check-in.
 
 ---
 
@@ -2581,7 +2615,7 @@ each row's prior PR is recorded in the Log, not repeated here.
 | 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3723 L)                                                                                                          | ✅     |
 | 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ✅     |
 | 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ✅     |
-| 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ✅     |
+| 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ⏳     |
 | 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ⬜     |
 | 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ⬜     |
 | 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ⬜     |

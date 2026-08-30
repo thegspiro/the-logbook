@@ -805,7 +805,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       containerType: comp.containerType,
       isSealed: comp.isSealed,
       parentCompartmentId: comp.parentCompartmentId,
-      items: comp.items.map(({ id: _discardId, ...rest }) => ({ ...rest })),
+      items: comp.items.map(({ id: _discardId, ...rest }) => ({ ...rest, clientKey: newItemKey() })),
     };
     if (comp.id) {
       try {
@@ -1116,7 +1116,18 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
   // Bulk selection helpers
   // ---------------------------------------------------------------------------
 
-  const getCompKey = (idx: number) => compartments[idx]?.id ?? `comp-${idx}`;
+  /**
+   * The per-compartment key for expansion, selection and composer state.
+   *
+   * `clientKey`, not the array index: an index moves when a row above it does,
+   * and `addCompartment` expands a new local compartment by its clientKey —
+   * which an index-based key never matched, so a location added to an unsaved
+   * template opened collapsed with its composer out of reach.
+   */
+  const getCompKey = (idx: number) => {
+    const comp = compartments[idx];
+    return comp ? (comp.id ?? comp.clientKey) : `comp-${idx}`;
+  };
 
   const toggleItemSelection = (compartmentIdx: number, itemIdx: number) => {
     const key = getCompKey(compartmentIdx);
@@ -1241,8 +1252,8 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
 
   const replaceQuickAddItem = (compartmentKey: string, clientKey: string, replacement: ItemFormState | null) => {
     setCompartments((previous) =>
-      previous.map((compartment, index) => {
-        if ((compartment.id ?? `comp-${index}`) !== compartmentKey) return compartment;
+      previous.map((compartment) => {
+        if ((compartment.id ?? compartment.clientKey) !== compartmentKey) return compartment;
         return {
           ...compartment,
           items: replacement
@@ -1255,8 +1266,8 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
 
   const appendQuickAddItem = (compartmentKey: string, item: ItemFormState) => {
     setCompartments((previous) =>
-      previous.map((compartment, index) =>
-        (compartment.id ?? `comp-${index}`) === compartmentKey
+      previous.map((compartment) =>
+        (compartment.id ?? compartment.clientKey) === compartmentKey
           ? { ...compartment, items: [...compartment.items, item] }
           : compartment
       )
@@ -1972,7 +1983,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     setShowPresetPicker(false);
     // Expand all new compartments
     const expanded = new Set<string>();
-    newCompartments.forEach((_, i) => expanded.add(`comp-${i}`));
+    newCompartments.forEach((c) => expanded.add(c.id ?? c.clientKey));
     setExpandedCompartments(expanded);
     toast.success(`Loaded ${preset.label} vehicle check preset`);
   };
@@ -2125,7 +2136,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
 
         setCompartments(imported);
         const expanded = new Set<string>();
-        imported.forEach((_, i) => expanded.add(`comp-${i}`));
+        imported.forEach((c) => expanded.add(c.id ?? c.clientKey));
         setExpandedCompartments(expanded);
         markDirty();
         toast.success(`Imported ${imported.length} compartment(s)`);
@@ -2258,7 +2269,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
 
     setCompartments(imported);
     const expanded = new Set<string>();
-    imported.forEach((_, i) => expanded.add(`comp-${i}`));
+    imported.forEach((c) => expanded.add(c.id ?? c.clientKey));
     setExpandedCompartments(expanded);
     setCsvPreview(null);
     setIsDirty(true);
@@ -2277,7 +2288,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
 
   const expandAllCompartments = () => {
     const all = new Set<string>();
-    compartments.forEach((c, i) => all.add(c.id ?? `comp-${i}`));
+    compartments.forEach((c) => all.add(c.id ?? c.clientKey));
     setExpandedCompartments(all);
   };
 
@@ -2313,7 +2324,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       sortOrder: 0,
       contentRevision: 0,
       compartments: compartments.map((c, cIdx) => ({
-        id: c.id ?? `preview-comp-${cIdx}`,
+        id: c.id ?? `preview-comp-${c.clientKey}`,
         templateId: templateId ?? 'preview',
         name: c.name || 'Untitled Compartment',
         ...(c.description ? { description: c.description } : {}),
@@ -2324,8 +2335,8 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
         isSealed: c.isSealed,
         ...(c.parentCompartmentId ? { parentCompartmentId: c.parentCompartmentId } : {}),
         items: c.items.map((item, iIdx): CheckTemplateItem => ({
-          id: item.id ?? `preview-item-${cIdx}-${iIdx}`,
-          compartmentId: c.id ?? `preview-comp-${cIdx}`,
+          id: item.id ?? `preview-item-${item.clientKey}`,
+          compartmentId: c.id ?? `preview-comp-${c.clientKey}`,
           name: item.name || 'Untitled Item',
           ...(item.description ? { description: item.description } : {}),
           sortOrder: iIdx,
@@ -2346,6 +2357,23 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       })),
     };
   }, [form, compartments, templateId]);
+
+  /**
+   * A fingerprint of what the crew preview *asks*, not what it says.
+   *
+   * The docked preview never unmounts while the canvas is edited, so
+   * `EquipmentCheckForm` keeps the answers a viewer typed into it. Keyed on
+   * this, it resets when an item is added, removed, reordered or given a
+   * different check type — and keeps them while a name or a threshold is
+   * being typed, which is the edit an author makes while watching it.
+   */
+  const previewStructureKey = useMemo(
+    () =>
+      compartments
+        .map((c) => `${c.clientKey}:${c.items.map((i) => `${i.clientKey}.${i.checkType}`).join(',')}`)
+        .join('|'),
+    [compartments]
+  );
 
   // ---------------------------------------------------------------------------
   // Template stats
@@ -3427,7 +3455,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     sortableAttributes?: DraggableAttributes,
     depth = 0
   ) => {
-    const key = comp.id ?? `comp-${idx}`;
+    const key = comp.id ?? comp.clientKey;
     const anchorId = `comp-row-${comp.id ?? comp.clientKey}`;
     const isExpanded = expandedCompartments.has(key);
     const typeLabel = containerTypeLabel(comp.containerType);
@@ -3564,7 +3592,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             onClick={() => toggleCompartmentExpanded(key)}
             aria-expanded={isExpanded}
             aria-label={`${isExpanded ? 'Collapse' : 'Expand'} ${comp.name || `Untitled ${typeLabel}`}`}
-            className="text-theme-text-muted hover:text-theme-text-primary flex-shrink-0 p-0.5"
+            className="text-theme-text-muted hover:text-theme-text-primary mobile-touch-target flex-shrink-0 p-0.5 sm:min-h-0 sm:min-w-0"
           >
             {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
           </button>
@@ -4436,7 +4464,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
         locator: comp.isHeader ? 'Name it or delete it' : `Position ${String(compIdx + 1)} in the checklist`,
         icon: 'package',
         anchorId: compAnchor,
-        focusId: `comp-name-${comp.id ?? `comp-${compIdx}`}`,
+        focusId: `comp-name-${comp.id ?? comp.clientKey}`,
       });
     }
     if (!comp.isHeader && !comp.items.some((item) => item.checkType !== 'header' && item.checkType !== 'text')) {
@@ -4446,7 +4474,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
         locator: 'Add an item or delete the location',
         icon: 'package',
         anchorId: compAnchor,
-        addKey: comp.id ?? `comp-${compIdx}`,
+        addKey: comp.id ?? comp.clientKey,
       });
     }
     for (const [itemIdx, item] of comp.items.entries()) {
@@ -4458,7 +4486,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           locator: `${compLabel} · row ${String(itemIdx + 1)}`,
           icon: 'alert',
           anchorId: itemAnchor,
-          expandKey: comp.id ?? `comp-${compIdx}`,
+          expandKey: comp.id ?? comp.clientKey,
           focusId: `item-name-${item.id ?? item.clientKey}`,
           editorTarget: { compartmentKey: comp.clientKey, itemKey: item.clientKey },
         });
@@ -4471,7 +4499,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           locator: 'A count check needs a par or a minimum to compare against',
           icon: 'alert',
           anchorId: itemAnchor,
-          expandKey: comp.id ?? `comp-${compIdx}`,
+          expandKey: comp.id ?? comp.clientKey,
           focusId: `item-par-${item.id ?? item.clientKey}`,
           editorTarget: { compartmentKey: comp.clientKey, itemKey: item.clientKey },
         });
@@ -4483,7 +4511,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           locator: "A level check can't pass or fail without one",
           icon: 'gauge',
           anchorId: itemAnchor,
-          expandKey: comp.id ?? `comp-${compIdx}`,
+          expandKey: comp.id ?? comp.clientKey,
           focusId: `item-min-level-${item.id ?? item.clientKey}`,
           editorTarget: { compartmentKey: comp.clientKey, itemKey: item.clientKey },
         });
@@ -5147,7 +5175,12 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                         Add a location to see what the crew will get.
                       </p>
                     ) : (
-                      <EquipmentCheckForm shiftId="preview" template={buildPreviewTemplate()} previewMode />
+                      <EquipmentCheckForm
+                        key={previewStructureKey}
+                        shiftId="preview"
+                        template={buildPreviewTemplate()}
+                        previewMode
+                      />
                     )}
                   </div>
                   <div className="bg-theme-bg flex justify-center py-1.5">
