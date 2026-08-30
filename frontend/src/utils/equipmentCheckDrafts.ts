@@ -36,6 +36,19 @@ function sameChecklist(draft: EquipmentCheckDraft<unknown>, identity: EquipmentC
   return draft.shiftId === identity.shiftId && draft.templateId === identity.templateId;
 }
 
+/**
+ * Whose work this is — the half of the key that carries a privacy consequence.
+ *
+ * A station tablet is shared. A draft written by another member, or under
+ * another organization, must never be surfaced to the person now holding the
+ * device, so those are purged on sight. A draft written by *this* member under
+ * an older template revision is the opposite case: it is their own in-progress
+ * check, and destroying it is the data loss this module exists to prevent.
+ */
+function sameOwner(draft: EquipmentCheckDraft<unknown>, identity: EquipmentCheckDraftIdentity): boolean {
+  return draft.organizationId === identity.organizationId && draft.userId === identity.userId;
+}
+
 export async function saveEquipmentCheckDraft<T>(
   identity: EquipmentCheckDraftIdentity,
   contents: T,
@@ -75,15 +88,32 @@ export async function loadEquipmentCheckDraft<T>(
     request.onerror = () => reject(request.error ?? new Error('Failed to load equipment-check drafts'));
     request.onsuccess = () => {
       const drafts = request.result as EquipmentCheckDraft<T>[];
+      const wanted = draftId(identity);
       let match: EquipmentCheckDraft<T> | null = null;
+      // Same member, same checklist, older template revision. Returned so the
+      // caller can reconcile it item by item; it is NOT deleted here, because
+      // the caller may not get as far as writing the reconciled draft back.
+      let supersededRevision: EquipmentCheckDraft<T> | null = null;
       for (const draft of drafts) {
-        if (draft.expiresAt <= now || (sameChecklist(draft, identity) && draft.id !== draftId(identity))) {
+        if (draft.expiresAt <= now) {
           store.delete(draft.id);
-        } else if (draft.id === draftId(identity)) {
+          continue;
+        }
+        if (!sameChecklist(draft, identity)) continue;
+        if (!sameOwner(draft, identity)) {
+          store.delete(draft.id);
+          continue;
+        }
+        if (draft.id === wanted) {
           match = draft;
+        } else if (!supersededRevision || draft.updatedAt > supersededRevision.updatedAt) {
+          supersededRevision = draft;
         }
       }
-      resolve(match);
+      // A draft written under the current revision always wins; the older one
+      // is only a fallback for the first load after an officer edits the
+      // template mid-check.
+      resolve(match ?? supersededRevision);
     };
   });
 }
