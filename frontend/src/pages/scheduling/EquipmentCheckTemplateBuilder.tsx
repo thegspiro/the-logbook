@@ -68,6 +68,8 @@ import {
   reorderCompartment,
 } from '@/modules/scheduling/utils/compartmentTree';
 import { EquipmentCheckForm } from '@/pages/scheduling/EquipmentCheckForm';
+import { DialogPortal } from '@/components/DialogPortal';
+import { DialogPanel } from '@/components/ux/DialogPanel';
 import InventoryItemPicker from '@/modules/scheduling/components/InventoryItemPicker';
 import CatalogQuickAdd from '@/modules/scheduling/components/CatalogQuickAdd';
 import InventoryMatchModal from '@/modules/scheduling/components/InventoryMatchModal';
@@ -421,6 +423,9 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
   // State
   const [form, setForm] = useState<TemplateFormState>(defaultTemplateForm);
   const [compartments, setCompartments] = useState<CompartmentFormState[]>([]);
+  const compartmentsRef = useRef(compartments);
+  compartmentsRef.current = compartments;
+  const itemMoveQueue = useRef<Promise<void>>(Promise.resolve());
   // Two guards, not one: adding a compartment and adding a section header are
   // separate buttons, and a shared flag would gray out one because the other
   // is mid-flight.
@@ -439,6 +444,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     return !window.matchMedia('(max-width: 1023px)').matches;
   });
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
+  const [mobileEditor, setMobileEditor] = useState<{ compartmentKey: string; itemKey: string } | null>(null);
   const isLaptop = useMediaQuery('(min-width: 640px)');
   const [mobileSelectionLocations, setMobileSelectionLocations] = useState<Set<string>>(new Set());
   const [mobileAddLocations, setMobileAddLocations] = useState<Set<string>>(new Set());
@@ -958,40 +964,65 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
 
     const item = fromComp.items[itemIdx];
     if (!item) return;
+    const itemKey = item.id ?? item.clientKey;
+    const destinationKey = toComp.id ?? toComp.clientKey;
 
-    if (isEditing && item.id && toComp.id) {
-      try {
-        await ensureDraftBeforeStructureEdit();
-        await schedulingService.updateCheckItem(item.id, {
-          compartment_id: toComp.id,
-          sort_order: toComp.items.length,
-        });
-      } catch {
-        const itemKey = item.id ?? item.clientKey;
-        setExpandedItems((prev) => new Set(prev).add(itemKey));
-        window.setTimeout(() => document.getElementById(`item-row-${itemKey}`)?.focus());
-        toast.error(`Could not move “${item.name || 'item'}.” Its original location was restored.`);
-        return;
+    const persistAndApply = async () => {
+      const current = compartmentsRef.current;
+      const currentSourceIdx = current.findIndex((candidate) =>
+        candidate.items.some((candidateItem) => (candidateItem.id ?? candidateItem.clientKey) === itemKey)
+      );
+      const currentDestinationIdx = current.findIndex(
+        (candidate) => (candidate.id ?? candidate.clientKey) === destinationKey
+      );
+      const currentSource = current[currentSourceIdx];
+      const currentDestination = current[currentDestinationIdx];
+      const currentItem = currentSource?.items.find((candidate) => (candidate.id ?? candidate.clientKey) === itemKey);
+      if (!currentSource || !currentDestination || !currentItem || currentSourceIdx === currentDestinationIdx) return;
+
+      if (isEditing && currentItem.id && currentDestination.id) {
+        try {
+          await ensureDraftBeforeStructureEdit();
+          await schedulingService.updateCheckItem(currentItem.id, {
+            compartment_id: currentDestination.id,
+            sort_order: currentDestination.items.length,
+          });
+        } catch {
+          setExpandedItems((prev) => new Set(prev).add(itemKey));
+          window.setTimeout(() => document.getElementById(`item-row-${itemKey}`)?.focus());
+          toast.error(`Could not move “${currentItem.name || 'item'}.” Its original location was restored.`);
+          return;
+        }
       }
-    }
 
-    setCompartments((prev) => {
-      const next = [...prev];
-      const currentSourceIdx = next.findIndex((candidate) => candidate.clientKey === fromComp.clientKey);
-      const currentDestinationIdx = next.findIndex((candidate) => candidate.clientKey === toComp.clientKey);
-      const src = next[currentSourceIdx];
-      const dst = next[currentDestinationIdx];
-      if (!src || !dst) return prev;
-      const currentItemIdx = src.items.findIndex((candidate) => candidate.clientKey === item.clientKey);
-      if (currentItemIdx < 0) return prev;
-      const srcItems = src.items.filter((candidate) => candidate.clientKey !== item.clientKey);
-      const dstItems = [...dst.items, item];
-      next[currentSourceIdx] = { ...src, items: srcItems };
-      next[currentDestinationIdx] = { ...dst, items: dstItems };
-      return next;
-    });
-    markDirty();
-    toast.success(`Moved "${item.name || 'item'}" to ${toComp.name || 'compartment'}`);
+      setCompartments((prev) => {
+        const sourceIdx = prev.findIndex((candidate) =>
+          candidate.items.some((candidateItem) => (candidateItem.id ?? candidateItem.clientKey) === itemKey)
+        );
+        const destinationIdx = prev.findIndex((candidate) => (candidate.id ?? candidate.clientKey) === destinationKey);
+        const source = prev[sourceIdx];
+        const destination = prev[destinationIdx];
+        const movedItem = source?.items.find((candidate) => (candidate.id ?? candidate.clientKey) === itemKey);
+        if (!source || !destination || !movedItem || sourceIdx === destinationIdx) return prev;
+
+        const next = [...prev];
+        next[sourceIdx] = {
+          ...source,
+          items: source.items.filter((candidate) => (candidate.id ?? candidate.clientKey) !== itemKey),
+        };
+        next[destinationIdx] = { ...destination, items: [...destination.items, movedItem] };
+        return next;
+      });
+      // The queue must not calculate the next destination position until
+      // React has committed this functional update and refreshed the snapshot.
+      await new Promise<void>((resolve) => window.setTimeout(resolve, 0));
+      markDirty();
+      toast.success(`Moved "${currentItem.name || 'item'}" to ${currentDestination.name || 'compartment'}`);
+    };
+
+    const queuedMove = itemMoveQueue.current.then(persistAndApply);
+    itemMoveQueue.current = queuedMove.catch(() => undefined);
+    await queuedMove;
   };
 
   // ---------------------------------------------------------------------------
@@ -1191,6 +1222,11 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       }
     });
     quickAddQueues.current[job.compartmentKey] = request;
+    void request.finally(() => {
+      if (quickAddQueues.current[job.compartmentKey] === request) {
+        delete quickAddQueues.current[job.compartmentKey];
+      }
+    });
   };
 
   const handleQuickAdd = (compartmentIdx: number, payload: CatalogAddPayload) => {
@@ -1550,29 +1586,15 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     }
     if (autoSavePromiseRef.current) await autoSavePromiseRef.current;
     // Drafts deliberately bypass readiness checks; publication never does.
+    // Keep the blocking rules aligned with the backend instead of putting them
+    // in the overridable warning dialog below.
+    if (publish && !publishReady) return;
     const warnings: string[] = [];
     for (const comp of compartments) {
-      if (!comp.name.trim()) {
-        warnings.push('One or more compartments have no name.');
-        break;
-      }
-    }
-    for (const comp of compartments) {
       if (comp.isHeader) continue;
-      if (comp.items.length === 0) {
-        warnings.push(`Compartment "${comp.name || 'Untitled'}" has no items.`);
-        break;
-      }
       for (const item of comp.items) {
-        if (!item.name.trim()) {
-          warnings.push(`One or more items in "${comp.name || 'Untitled'}" have no name.`);
-          break;
-        }
         if (item.hasExpiration && !item.expirationDate.trim()) {
           warnings.push(`"${item.name || 'Untitled'}" has expiration enabled but no date set.`);
-        }
-        if (item.checkType === 'count' && !item.requiredQuantity && !item.expectedQuantity) {
-          warnings.push(`"${item.name || 'Untitled'}" is a quantity check but has no expected quantity.`);
         }
         if (
           item.checkType === 'count' &&
@@ -1581,9 +1603,6 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           Number(item.criticalMinimumQuantity) >= Number(item.expectedQuantity)
         ) {
           warnings.push(`"${item.name || 'Untitled'}" has critical minimum >= expected quantity.`);
-        }
-        if (item.checkType === 'level' && !item.minLevel) {
-          warnings.push(`"${item.name || 'Untitled'}" is a level check but has no minimum level set.`);
         }
         if (item.checkType === 'expiry' && !item.serialNumber && !item.lotNumber) {
           warnings.push(`"${item.name || 'Untitled'}" is a date/lot check but has no serial or lot number.`);
@@ -2402,6 +2421,327 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
   // Render: Item Row
   // ---------------------------------------------------------------------------
 
+  const renderItemEditorFields = (compIdx: number, itemIdx: number, item: ItemFormState, isHeader: boolean) => (
+    <div className="space-y-3">
+      <h3 className="text-theme-text-primary text-sm font-semibold sm:hidden">Essentials</h3>
+      {/* Name + Description */}
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <div>
+          <label className={labelClass}>{isHeader ? 'Header Title' : 'Name'}</label>
+          <input
+            type="text"
+            className={inputClass}
+            placeholder={isHeader ? 'e.g. Medical Supplies' : 'Item name'}
+            value={item.name}
+            onChange={(e) => updateItemFieldWithAutoSave(compIdx, itemIdx, { name: e.target.value })}
+          />
+        </div>
+        <div className="hidden sm:block">
+          <label className={labelClass}>{isHeader ? 'Subtitle' : 'Description'}</label>
+          <input
+            type="text"
+            className={inputClass}
+            placeholder={isHeader ? 'Optional subtitle shown below the header' : 'Optional description'}
+            value={item.description}
+            onChange={(e) => updateItemFieldWithAutoSave(compIdx, itemIdx, { description: e.target.value })}
+          />
+        </div>
+      </div>
+
+      {!isHeader && (
+        <>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            {/* Check Type */}
+            <div>
+              <label className={labelClass}>Check Type</label>
+              <select
+                className={selectClass}
+                value={item.checkType}
+                onChange={(e) =>
+                  updateItemFieldWithAutoSave(compIdx, itemIdx, {
+                    checkType: e.target.value as ItemFormState['checkType'],
+                  })
+                }
+              >
+                {CHECK_TYPES.map((ct) => (
+                  <option key={ct.value} value={ct.value}>
+                    {ct.label}
+                    {CHECK_TYPE_STORES[ct.value as keyof typeof CHECK_TYPE_STORES]
+                      ? ` — ${CHECK_TYPE_STORES[ct.value as keyof typeof CHECK_TYPE_STORES]}`
+                      : ''}
+                  </option>
+                ))}
+              </select>
+              {CHECK_TYPE_HELP[item.checkType] && (
+                <p className="text-theme-text-muted mt-1 text-[10px] leading-tight">
+                  {CHECK_TYPE_HELP[item.checkType]}
+                </p>
+              )}
+            </div>
+
+            {/* Required */}
+            <div className="flex items-end pb-2">
+              <label className="text-theme-text-secondary flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  className={checkboxClass}
+                  checked={item.isRequired}
+                  onChange={(e) => updateItemFieldWithAutoSave(compIdx, itemIdx, { isRequired: e.target.checked })}
+                />
+                Required
+              </label>
+            </div>
+
+            {(item.checkType === 'count' || item.checkType === 'level' || item.checkType === 'expiry') && (
+              <h3 className="text-theme-text-primary border-theme-surface-border border-t pt-4 text-sm font-semibold sm:hidden">
+                Check settings
+              </h3>
+            )}
+
+            {/* Conditional: Quantity */}
+            {item.checkType === 'count' && (
+              <>
+                <div>
+                  <label className={labelClass}>Expected Qty</label>
+                  <p className="text-theme-text-secondary mb-1 text-xs">How many should be on the apparatus</p>
+                  <input
+                    type="number"
+                    className={inputClass}
+                    min="0"
+                    placeholder="0"
+                    value={item.expectedQuantity}
+                    onChange={(e) =>
+                      updateItemFieldWithAutoSave(compIdx, itemIdx, { expectedQuantity: e.target.value })
+                    }
+                  />
+                </div>
+                <div>
+                  <label className={labelClass}>Min to Pass</label>
+                  <p className="text-theme-text-secondary mb-1 text-xs">Below this count = auto-fail</p>
+                  <input
+                    type="number"
+                    className={inputClass}
+                    min="0"
+                    placeholder="0"
+                    value={item.requiredQuantity}
+                    onChange={(e) =>
+                      updateItemFieldWithAutoSave(compIdx, itemIdx, { requiredQuantity: e.target.value })
+                    }
+                  />
+                </div>
+                <div>
+                  <label className={labelClass}>
+                    <AlertTriangle className="mr-1 inline h-3.5 w-3.5 text-red-500" />
+                    Critical Min
+                  </label>
+                  <p className="text-theme-text-secondary mb-1 text-xs">Below this = urgent alert to leadership</p>
+                  <input
+                    type="number"
+                    className={inputClass}
+                    min="0"
+                    placeholder="0"
+                    value={item.criticalMinimumQuantity}
+                    onChange={(e) =>
+                      updateItemFieldWithAutoSave(compIdx, itemIdx, { criticalMinimumQuantity: e.target.value })
+                    }
+                  />
+                </div>
+              </>
+            )}
+
+            {/* Conditional: Level */}
+            {item.checkType === 'level' && (
+              <>
+                <div>
+                  <label className={labelClass}>Min Level</label>
+                  <input
+                    type="number"
+                    className={inputClass}
+                    min="0"
+                    step="0.1"
+                    placeholder="0"
+                    value={item.minLevel}
+                    onChange={(e) => updateItemFieldWithAutoSave(compIdx, itemIdx, { minLevel: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className={labelClass}>Unit</label>
+                  <div className="flex gap-1.5">
+                    <select
+                      className={selectClass}
+                      value={
+                        LEVEL_UNIT_PRESETS.includes(item.levelUnit as (typeof LEVEL_UNIT_PRESETS)[number])
+                          ? item.levelUnit
+                          : '__custom__'
+                      }
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        if (val !== '__custom__') {
+                          updateItemFieldWithAutoSave(compIdx, itemIdx, { levelUnit: val });
+                        }
+                      }}
+                    >
+                      {LEVEL_UNIT_PRESETS.map((u) => (
+                        <option key={u} value={u}>
+                          {u}
+                        </option>
+                      ))}
+                      <option value="__custom__">Custom...</option>
+                    </select>
+                    {!LEVEL_UNIT_PRESETS.includes(item.levelUnit as (typeof LEVEL_UNIT_PRESETS)[number]) && (
+                      <input
+                        type="text"
+                        className={inputClass}
+                        placeholder="Custom unit"
+                        value={item.levelUnit}
+                        onChange={(e) => updateItemFieldWithAutoSave(compIdx, itemIdx, { levelUnit: e.target.value })}
+                      />
+                    )}
+                  </div>
+                </div>
+              </>
+            )}
+
+            {/* Conditional: Serial/Lot */}
+            {(item.checkType === 'expiry' || item.checkType === 'count') && (
+              <>
+                <div>
+                  <label className={labelClass}>Serial #</label>
+                  <input
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                    spellCheck={false}
+                    type="text"
+                    className={inputClass}
+                    placeholder="Serial number"
+                    value={item.serialNumber}
+                    onChange={(e) => updateItemFieldWithAutoSave(compIdx, itemIdx, { serialNumber: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className={labelClass}>Lot #</label>
+                  <input
+                    type="text"
+                    className={inputClass}
+                    placeholder="Lot number"
+                    value={item.lotNumber}
+                    onChange={(e) => updateItemFieldWithAutoSave(compIdx, itemIdx, { lotNumber: e.target.value })}
+                  />
+                </div>
+              </>
+            )}
+
+            {/* Image URL */}
+            <div className="hidden sm:block">
+              <label className={labelClass}>
+                <Image className="mr-1 inline h-3.5 w-3.5" />
+                Image URL
+              </label>
+              <input
+                type="text"
+                className={inputClass}
+                placeholder="https://..."
+                value={item.imageUrl}
+                onChange={(e) => updateItemFieldWithAutoSave(compIdx, itemIdx, { imageUrl: e.target.value })}
+              />
+            </div>
+          </div>
+
+          <h3 className="text-theme-text-primary border-theme-surface-border border-t pt-4 text-sm font-semibold sm:hidden">
+            Inventory and expiration
+          </h3>
+
+          {/* Inventory link — connects to the catalog for ready-stock + swaps */}
+          <div>
+            <label className={labelClass}>
+              <Package className="mr-1 inline h-3.5 w-3.5" />
+              Linked Inventory Item
+            </label>
+            <InventoryItemPicker
+              value={item.inventoryItemId || undefined}
+              onChange={(id) => updateItemFieldWithAutoSave(compIdx, itemIdx, { inventoryItemId: id ?? '' })}
+            />
+            <p className="text-theme-text-muted mt-1 text-[11px]">
+              Link to track replacement stock and enable lot swaps during checks.
+            </p>
+          </div>
+
+          {/* Expiration row */}
+          <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
+            <label className="text-theme-text-secondary flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                className={checkboxClass}
+                checked={item.hasExpiration}
+                onChange={(e) => updateItemFieldWithAutoSave(compIdx, itemIdx, { hasExpiration: e.target.checked })}
+              />
+              <AlertTriangle className="h-3.5 w-3.5" />
+              Has Expiration
+            </label>
+            {item.hasExpiration && (
+              <>
+                <div>
+                  <label className={labelClass}>Expiration Date</label>
+                  <input
+                    type="date"
+                    className={inputClass}
+                    value={item.expirationDate}
+                    onChange={(e) => updateItemFieldWithAutoSave(compIdx, itemIdx, { expirationDate: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className={labelClass}>Warning Days</label>
+                  <input
+                    type="number"
+                    className={inputClass}
+                    min="0"
+                    placeholder="30"
+                    value={item.expirationWarningDays}
+                    onChange={(e) =>
+                      updateItemFieldWithAutoSave(compIdx, itemIdx, { expirationWarningDays: e.target.value })
+                    }
+                  />
+                </div>
+              </>
+            )}
+          </div>
+
+          <details className="border-theme-surface-border border-t pt-1 sm:hidden">
+            <summary className="text-theme-text-primary flex min-h-[44px] cursor-pointer list-none items-center justify-between text-sm font-semibold [&::-webkit-details-marker]:hidden">
+              Optional details
+              <ChevronRight className="h-4 w-4" aria-hidden="true" />
+            </summary>
+            <div className="space-y-3 pb-2">
+              <div>
+                <label className={labelClass}>Description</label>
+                <input
+                  type="text"
+                  className={inputClass}
+                  placeholder="Optional description"
+                  value={item.description}
+                  onChange={(e) => updateItemFieldWithAutoSave(compIdx, itemIdx, { description: e.target.value })}
+                />
+              </div>
+              <div>
+                <label className={labelClass}>
+                  <Image className="mr-1 inline h-3.5 w-3.5" />
+                  Image URL
+                </label>
+                <input
+                  type="text"
+                  className={inputClass}
+                  placeholder="https://..."
+                  value={item.imageUrl}
+                  onChange={(e) => updateItemFieldWithAutoSave(compIdx, itemIdx, { imageUrl: e.target.value })}
+                />
+              </div>
+            </div>
+          </details>
+        </>
+      )}
+    </div>
+  );
+
   const renderItem = (
     compIdx: number,
     itemIdx: number,
@@ -2423,6 +2763,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     if (item.saveStatus) {
       return (
         <div
+          key={itemKey}
           className="border-theme-surface-border bg-theme-surface flex min-h-12 items-center gap-3 rounded-md border px-3 py-2"
           aria-label={`${item.name} ${item.saveStatus === 'saving' ? 'Saving' : 'Not saved'}`}
         >
@@ -2532,14 +2873,20 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
               type="button"
               className={`min-h-[44px] min-w-0 flex-1 py-2 text-left text-sm sm:flex sm:min-h-0 sm:items-center sm:gap-1.5 sm:py-0 ${isHeader ? 'text-theme-text-primary font-bold' : item.name.trim() ? 'text-theme-text-primary font-medium' : 'text-theme-text-muted italic'}`}
               onDoubleClick={(e) => startInlineEdit(itemKey, item.name, e)}
-              onClick={() =>
-                isMobileSelectionMode ? toggleItemSelection(compIdx, itemIdx) : toggleItemExpanded(itemKey)
-              }
-              aria-expanded={isMobileSelectionMode ? undefined : isItemExpanded}
+              onClick={() => {
+                if (isMobileSelectionMode) {
+                  toggleItemSelection(compIdx, itemIdx);
+                } else if (isLaptop) {
+                  toggleItemExpanded(itemKey);
+                } else {
+                  setMobileEditor({ compartmentKey: compartments[compIdx]?.clientKey ?? '', itemKey: item.clientKey });
+                }
+              }}
+              aria-expanded={isMobileSelectionMode || !isLaptop ? undefined : isItemExpanded}
               aria-label={
                 isMobileSelectionMode
                   ? `${isSelected ? 'Deselect' : 'Select'} ${item.name.trim() || 'item'}`
-                  : `${isItemExpanded ? 'Collapse' : 'Expand'} ${item.name.trim() || 'item'}`
+                  : `${isLaptop ? (isItemExpanded ? 'Collapse' : 'Expand') : 'Edit'} ${item.name.trim() || 'item'}`
               }
             >
               <span className="block truncate">
@@ -2731,294 +3078,10 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           </MobileActionMenu>
         </div>
 
-        {/* Expanded form — visible on click */}
-        {isItemExpanded && (
-          <div className="border-theme-surface-border space-y-3 border-t px-3 py-3">
-            {/* Name + Description */}
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <div>
-                <label className={labelClass}>{isHeader ? 'Header Title' : 'Name'}</label>
-                <input
-                  type="text"
-                  className={inputClass}
-                  placeholder={isHeader ? 'e.g. Medical Supplies' : 'Item name'}
-                  value={item.name}
-                  onChange={(e) => updateItemFieldWithAutoSave(compIdx, itemIdx, { name: e.target.value })}
-                />
-              </div>
-              <div>
-                <label className={labelClass}>{isHeader ? 'Subtitle' : 'Description'}</label>
-                <input
-                  type="text"
-                  className={inputClass}
-                  placeholder={isHeader ? 'Optional subtitle shown below the header' : 'Optional description'}
-                  value={item.description}
-                  onChange={(e) => updateItemFieldWithAutoSave(compIdx, itemIdx, { description: e.target.value })}
-                />
-              </div>
-            </div>
-
-            {!isHeader && (
-              <>
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                  {/* Check Type */}
-                  <div>
-                    <label className={labelClass}>Check Type</label>
-                    <select
-                      className={selectClass}
-                      value={item.checkType}
-                      onChange={(e) =>
-                        updateItemFieldWithAutoSave(compIdx, itemIdx, {
-                          checkType: e.target.value as ItemFormState['checkType'],
-                        })
-                      }
-                    >
-                      {CHECK_TYPES.map((ct) => (
-                        <option key={ct.value} value={ct.value}>
-                          {ct.label}
-                          {CHECK_TYPE_STORES[ct.value as keyof typeof CHECK_TYPE_STORES]
-                            ? ` — ${CHECK_TYPE_STORES[ct.value as keyof typeof CHECK_TYPE_STORES]}`
-                            : ''}
-                        </option>
-                      ))}
-                    </select>
-                    {CHECK_TYPE_HELP[item.checkType] && (
-                      <p className="text-theme-text-muted mt-1 text-[10px] leading-tight">
-                        {CHECK_TYPE_HELP[item.checkType]}
-                      </p>
-                    )}
-                  </div>
-
-                  {/* Required */}
-                  <div className="flex items-end pb-2">
-                    <label className="text-theme-text-secondary flex items-center gap-2 text-sm">
-                      <input
-                        type="checkbox"
-                        className={checkboxClass}
-                        checked={item.isRequired}
-                        onChange={(e) =>
-                          updateItemFieldWithAutoSave(compIdx, itemIdx, { isRequired: e.target.checked })
-                        }
-                      />
-                      Required
-                    </label>
-                  </div>
-
-                  {/* Conditional: Quantity */}
-                  {item.checkType === 'count' && (
-                    <>
-                      <div>
-                        <label className={labelClass}>Expected Qty</label>
-                        <p className="text-theme-text-secondary mb-1 text-xs">How many should be on the apparatus</p>
-                        <input
-                          type="number"
-                          className={inputClass}
-                          min="0"
-                          placeholder="0"
-                          value={item.expectedQuantity}
-                          onChange={(e) =>
-                            updateItemFieldWithAutoSave(compIdx, itemIdx, { expectedQuantity: e.target.value })
-                          }
-                        />
-                      </div>
-                      <div>
-                        <label className={labelClass}>Min to Pass</label>
-                        <p className="text-theme-text-secondary mb-1 text-xs">Below this count = auto-fail</p>
-                        <input
-                          type="number"
-                          className={inputClass}
-                          min="0"
-                          placeholder="0"
-                          value={item.requiredQuantity}
-                          onChange={(e) =>
-                            updateItemFieldWithAutoSave(compIdx, itemIdx, { requiredQuantity: e.target.value })
-                          }
-                        />
-                      </div>
-                      <div>
-                        <label className={labelClass}>
-                          <AlertTriangle className="mr-1 inline h-3.5 w-3.5 text-red-500" />
-                          Critical Min
-                        </label>
-                        <p className="text-theme-text-secondary mb-1 text-xs">
-                          Below this = urgent alert to leadership
-                        </p>
-                        <input
-                          type="number"
-                          className={inputClass}
-                          min="0"
-                          placeholder="0"
-                          value={item.criticalMinimumQuantity}
-                          onChange={(e) =>
-                            updateItemFieldWithAutoSave(compIdx, itemIdx, { criticalMinimumQuantity: e.target.value })
-                          }
-                        />
-                      </div>
-                    </>
-                  )}
-
-                  {/* Conditional: Level */}
-                  {item.checkType === 'level' && (
-                    <>
-                      <div>
-                        <label className={labelClass}>Min Level</label>
-                        <input
-                          type="number"
-                          className={inputClass}
-                          min="0"
-                          step="0.1"
-                          placeholder="0"
-                          value={item.minLevel}
-                          onChange={(e) => updateItemFieldWithAutoSave(compIdx, itemIdx, { minLevel: e.target.value })}
-                        />
-                      </div>
-                      <div>
-                        <label className={labelClass}>Unit</label>
-                        <div className="flex gap-1.5">
-                          <select
-                            className={selectClass}
-                            value={
-                              LEVEL_UNIT_PRESETS.includes(item.levelUnit as (typeof LEVEL_UNIT_PRESETS)[number])
-                                ? item.levelUnit
-                                : '__custom__'
-                            }
-                            onChange={(e) => {
-                              const val = e.target.value;
-                              if (val !== '__custom__') {
-                                updateItemFieldWithAutoSave(compIdx, itemIdx, { levelUnit: val });
-                              }
-                            }}
-                          >
-                            {LEVEL_UNIT_PRESETS.map((u) => (
-                              <option key={u} value={u}>
-                                {u}
-                              </option>
-                            ))}
-                            <option value="__custom__">Custom...</option>
-                          </select>
-                          {!LEVEL_UNIT_PRESETS.includes(item.levelUnit as (typeof LEVEL_UNIT_PRESETS)[number]) && (
-                            <input
-                              type="text"
-                              className={inputClass}
-                              placeholder="Custom unit"
-                              value={item.levelUnit}
-                              onChange={(e) =>
-                                updateItemFieldWithAutoSave(compIdx, itemIdx, { levelUnit: e.target.value })
-                              }
-                            />
-                          )}
-                        </div>
-                      </div>
-                    </>
-                  )}
-
-                  {/* Conditional: Serial/Lot */}
-                  {(item.checkType === 'expiry' || item.checkType === 'count') && (
-                    <>
-                      <div>
-                        <label className={labelClass}>Serial #</label>
-                        <input
-                          autoCapitalize="none"
-                          autoCorrect="off"
-                          spellCheck={false}
-                          type="text"
-                          className={inputClass}
-                          placeholder="Serial number"
-                          value={item.serialNumber}
-                          onChange={(e) =>
-                            updateItemFieldWithAutoSave(compIdx, itemIdx, { serialNumber: e.target.value })
-                          }
-                        />
-                      </div>
-                      <div>
-                        <label className={labelClass}>Lot #</label>
-                        <input
-                          type="text"
-                          className={inputClass}
-                          placeholder="Lot number"
-                          value={item.lotNumber}
-                          onChange={(e) => updateItemFieldWithAutoSave(compIdx, itemIdx, { lotNumber: e.target.value })}
-                        />
-                      </div>
-                    </>
-                  )}
-
-                  {/* Image URL */}
-                  <div>
-                    <label className={labelClass}>
-                      <Image className="mr-1 inline h-3.5 w-3.5" />
-                      Image URL
-                    </label>
-                    <input
-                      type="text"
-                      className={inputClass}
-                      placeholder="https://..."
-                      value={item.imageUrl}
-                      onChange={(e) => updateItemFieldWithAutoSave(compIdx, itemIdx, { imageUrl: e.target.value })}
-                    />
-                  </div>
-                </div>
-
-                {/* Inventory link — connects to the catalog for ready-stock + swaps */}
-                <div>
-                  <label className={labelClass}>
-                    <Package className="mr-1 inline h-3.5 w-3.5" />
-                    Linked Inventory Item
-                  </label>
-                  <InventoryItemPicker
-                    value={item.inventoryItemId || undefined}
-                    onChange={(id) => updateItemFieldWithAutoSave(compIdx, itemIdx, { inventoryItemId: id ?? '' })}
-                  />
-                  <p className="text-theme-text-muted mt-1 text-[11px]">
-                    Link to track replacement stock and enable lot swaps during checks.
-                  </p>
-                </div>
-
-                {/* Expiration row */}
-                <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
-                  <label className="text-theme-text-secondary flex items-center gap-2 text-sm">
-                    <input
-                      type="checkbox"
-                      className={checkboxClass}
-                      checked={item.hasExpiration}
-                      onChange={(e) =>
-                        updateItemFieldWithAutoSave(compIdx, itemIdx, { hasExpiration: e.target.checked })
-                      }
-                    />
-                    <AlertTriangle className="h-3.5 w-3.5" />
-                    Has Expiration
-                  </label>
-                  {item.hasExpiration && (
-                    <>
-                      <div>
-                        <label className={labelClass}>Expiration Date</label>
-                        <input
-                          type="date"
-                          className={inputClass}
-                          value={item.expirationDate}
-                          onChange={(e) =>
-                            updateItemFieldWithAutoSave(compIdx, itemIdx, { expirationDate: e.target.value })
-                          }
-                        />
-                      </div>
-                      <div>
-                        <label className={labelClass}>Warning Days</label>
-                        <input
-                          type="number"
-                          className={inputClass}
-                          min="0"
-                          placeholder="30"
-                          value={item.expirationWarningDays}
-                          onChange={(e) =>
-                            updateItemFieldWithAutoSave(compIdx, itemIdx, { expirationWarningDays: e.target.value })
-                          }
-                        />
-                      </div>
-                    </>
-                  )}
-                </div>
-              </>
-            )}
+        {/* Laptop and wider layouts retain the established inline editor. */}
+        {isItemExpanded && isLaptop && (
+          <div className="border-theme-surface-border border-t px-3 py-3">
+            {renderItemEditorFields(compIdx, itemIdx, item, isHeader)}
           </div>
         )}
       </div>
@@ -3973,16 +4036,21 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
   const setupReady = Boolean(form.name.trim() && form.checkTiming && form.templateType);
   const structureReady = compartments.some((comp) => !comp.isHeader);
   const itemsReady = stats.totalItems > 0;
+  const operationalCompartments = compartments.filter((comp) => !comp.isHeader);
   const blockingItems = compartments
     .flatMap((comp) => comp.items)
     .filter(
       (item) =>
         !item.name.trim() ||
-        (item.checkType === 'count' && !item.requiredQuantity && !item.expectedQuantity) ||
-        (item.checkType === 'level' && !item.minLevel)
+        (item.checkType === 'count' && item.requiredQuantity.trim() === '' && item.expectedQuantity.trim() === '') ||
+        (item.checkType === 'level' && item.minLevel.trim() === '')
     ).length;
   const locationsReady =
-    structureReady && compartments.every((comp) => comp.name.trim() && (comp.isHeader || comp.items.length > 0));
+    structureReady &&
+    compartments.every((comp) => comp.name.trim()) &&
+    operationalCompartments.every((comp) =>
+      comp.items.some((item) => item.checkType !== 'header' && item.checkType !== 'text')
+    );
   const publishReady = setupReady && locationsReady && blockingItems === 0;
 
   // ---------------------------------------------------------------------------
@@ -4609,6 +4677,95 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           </div>
         </div>
       )}
+
+      {!isLaptop &&
+        mobileEditor &&
+        (() => {
+          const compIdx = compartments.findIndex(
+            (compartment) => compartment.clientKey === mobileEditor.compartmentKey
+          );
+          const comp = compartments[compIdx];
+          const itemIdx = comp?.items.findIndex((entry) => entry.clientKey === mobileEditor.itemKey) ?? -1;
+          const item = comp?.items[itemIdx];
+          if (!comp || !item || itemIdx < 0) return null;
+          const itemNumber = itemIdx + 1;
+          const closeEditor = () => {
+            const itemKey = item.id ?? item.clientKey;
+            setMobileEditor(null);
+            window.setTimeout(() => document.getElementById(`item-row-${itemKey}`)?.focus(), 0);
+          };
+          const goToItem = (nextIndex: number) => {
+            const nextItem = comp.items[nextIndex];
+            if (nextItem) setMobileEditor({ compartmentKey: comp.clientKey, itemKey: nextItem.clientKey });
+          };
+
+          return (
+            <DialogPortal>
+              <div
+                className="bg-theme-surface-modal fixed inset-0 z-50"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="mobile-item-editor-title"
+              >
+                <DialogPanel
+                  onClose={closeEditor}
+                  className="flex h-[100dvh] w-full flex-col overflow-hidden rounded-none border-0"
+                >
+                  <header className="modal-header-sticky flex shrink-0 items-start gap-3 px-4 py-3">
+                    <button
+                      type="button"
+                      onClick={closeEditor}
+                      className="text-theme-text-primary -ml-2 flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md"
+                      aria-label={`Close editor and return to ${item.name || 'item'}`}
+                    >
+                      <ChevronRight className="h-5 w-5 rotate-180" aria-hidden="true" />
+                    </button>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="text-theme-text-muted truncate text-xs">{compartmentPath(compIdx)}</p>
+                        <p className="text-theme-text-muted shrink-0 text-xs">
+                          Item {itemNumber}/{comp.items.length}
+                        </p>
+                      </div>
+                      <h2
+                        id="mobile-item-editor-title"
+                        className="text-theme-text-primary truncate text-lg font-semibold"
+                      >
+                        {item.name.trim() || 'Untitled item'}
+                      </h2>
+                    </div>
+                  </header>
+                  <div className="modal-content px-4 py-5">
+                    <section aria-label="Item editor fields">
+                      {renderItemEditorFields(compIdx, itemIdx, item, item.checkType === 'header')}
+                    </section>
+                  </div>
+                  <footer className="modal-footer-sticky grid shrink-0 grid-cols-3 items-center gap-2 px-4 py-3">
+                    <button
+                      type="button"
+                      className="btn-secondary min-h-[44px]"
+                      disabled={itemIdx === 0}
+                      onClick={() => goToItem(itemIdx - 1)}
+                    >
+                      Previous
+                    </button>
+                    <button type="button" className="btn-primary min-h-[44px]" onClick={closeEditor}>
+                      Done
+                    </button>
+                    <button
+                      type="button"
+                      className="btn-secondary min-h-[44px]"
+                      disabled={itemIdx === comp.items.length - 1}
+                      onClick={() => goToItem(itemIdx + 1)}
+                    >
+                      Next
+                    </button>
+                  </footer>
+                </DialogPanel>
+              </div>
+            </DialogPortal>
+          );
+        })()}
 
       {/* Preview Modal — mobile device frame */}
       {showPreview && (

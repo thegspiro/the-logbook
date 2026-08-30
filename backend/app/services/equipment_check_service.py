@@ -640,6 +640,7 @@ class EquipmentCheckService:
                 )
             )
         try:
+            await self._advance_content_revision(str(source.template_id))
             await self.db.commit()
         except Exception:
             await self.db.rollback()
@@ -998,6 +999,7 @@ class EquipmentCheckService:
                     changes={"bulk_idempotency_key": idempotency_key},
                 )
                 await self.db.delete(item)
+            await self._advance_content_revision(str(compartment.template_id))
             await self.db.commit()
             return item_ids, False
         except Exception:
@@ -1474,6 +1476,10 @@ class EquipmentCheckService:
                 raise ValueError("Count observations must be integers")
             if quantity < 0:
                 raise ValueError("Count observations must be non-negative")
+            # Keep the value used by reconciliation explicitly tied to the
+            # validated snapshot value. This assignment is intentionally
+            # before either destination consumes the submission.
+            item["quantity_found"] = quantity
             target = EquipmentCheckService._target_quantity(template_item)
             if target is not None:
                 observation_passes = quantity >= target
