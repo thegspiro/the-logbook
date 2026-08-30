@@ -16,11 +16,73 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-[#2070](https://github.com/thegspiro/the-logbook/pull/2070) —
-`claude/security-review-grants-fundraising-pass2-tend` — Feature 22 (Grants
-& fundraising), pass 2, round-4 tend continuation.
+[#2073](https://github.com/thegspiro/the-logbook/pull/2073) —
+`claude/security-review-grants-fundraising-pass2-tend2` — Feature 22
+(Grants & fundraising), pass 2, round-5 tend continuation.
 
 ---
+
+### 2026-08-30 — Feature 22 (Grants & fundraising), pass 2 ✅ merged — PR #2070; round-5 tend continues in PR #2073
+
+PR #2070 merged (`e6cf9b5b`) while its round-5 Codex review was still in
+flight — the same shape as the #2069 → #2070 transition above. Two
+commits fixing that round's 3 comments (GF-27a/GF-30, then GF-31) were
+pushed to the branch after the merge and never reached `main`. Per
+CLAUDE.md Pitfall #24, both commits were cherry-picked onto a fresh branch
+(`claude/security-review-grants-fundraising-pass2-tend2`) off current
+`main` and opened as PR #2073 — a clean cherry-pick, no conflicts, gate
+re-run green (`tsc --noEmit` 0 errors, `eslint src/modules/grants-fundraising`
+0/0, `vitest run src/modules/grants-fundraising` 3 files/5 passed).
+Rotation row 22 stays ⏳. Next: 23 medical supplies, once #2073 merges.
+
+**PR #2073 tend, round 6 (Codex review of the GF-31 commit, 2 comments):**
+**GF-32 (new, MED, fixed)** — GF-31's own refetch-on-`statusFilter`-change
+introduced a request race: `fetchApplications` unconditionally overwrote
+`applications` with whatever response arrived, so a slower response from a
+filter the user had already changed away from could clobber a newer one.
+Fixed with a monotonic request-id guard in `grantsStore.ts` — a response is
+only committed if no later call has started since. New guard test
+`grantsStore.fetchApplications.test.ts` (fails before/passes after).
+**GF-33 (new, LOW-MED, partially fixed/flagged)** — GF-31 fixed "the filter
+runs after an unfiltered, 100-capped fetch" but not "the filtered fetch is
+itself still capped at 100." This page has no pagination UI in either view
+(it's built to show the org's full set at once), so a full fix means
+building pagination, out of scope here; raised the fetch's `limit` to
+1000 (the backend's own declared ceiling) as a partial mitigation for both
+the filtered and unfiltered case, and mirrored the remaining >1000 gap
+into `KNOWN_LIMITATIONS.md`. Gate re-run: `tsc --noEmit` 0 errors, `eslint
+src/modules/grants-fundraising` 0/0, `vitest run src/modules/grants-fundraising`
+4 files/6 passed. Full write-up in `GF-22-grants-fundraising.md` →
+GF-32/GF-33.
+
+**PR #2073 tend, round 7 (Codex review of the GF-32/GF-33 commit, 1
+comment):** **GF-34 (new, MED, fixed)** — GF-31 removed the client-side
+status check on `filteredApplications` (the match now happens
+server-side), but `fetchApplications`'s `catch` branch left the previous
+fetch's `applications` untouched on failure — so a failed status-filtered
+fetch left rows from whatever filter was active _before_ on screen,
+mismatched with the dropdown's new selection, alongside the error banner.
+Fixed by clearing `applications` in the `catch` branch. New guard-test
+case in `grantsStore.fetchApplications.test.ts` (fails before/passes
+after). Gate re-run: `tsc --noEmit` 0 errors, `eslint
+src/modules/grants-fundraising` 0/0, `vitest run src/modules/grants-fundraising`
+4 files/7 passed. Full write-up in `GF-22-grants-fundraising.md` → GF-34.
+
+**PR #2073 tend, round 8 (Codex review of the GF-34 commit, 2 comments):**
+one re-raise, one new non-security finding. **GF-33 re-raised** — Codex
+flagged the round-6 `limit: 1000` bump as evidence the pagination gap is
+still open, which is exactly GF-33's own already-recorded disposition
+(partial mitigation, full pagination flagged in `KNOWN_LIMITATIONS.md`,
+not built). No further code pushed; replied on the PR pointing to the
+existing GF-33 entry — this thread's convergence-stop point, same shape as
+GF-27a earlier in this PR chain. **Fixture cast (P1, fixed, no GF id)** —
+the `application()` test helper added in round 6 used
+`as unknown as GrantApplication`, the exact broad-cast pattern AGENTS.md
+prohibits; rewritten as a fully, honestly-typed fixture with every field
+given a concrete default. No behavior change; both existing tests still
+pass. Gate re-run: `tsc --noEmit` 0 errors, `eslint
+src/modules/grants-fundraising` 0/0, `vitest run src/modules/grants-fundraising`
+4 files/7 passed.
 
 ### 2026-08-30 — Feature 22 (Grants & fundraising), pass 2 ✅ merged — PR #2069; round-4 tend continues in PR #2070
 
@@ -34,6 +96,44 @@ onto a fresh branch (`claude/security-review-grants-fundraising-pass2-tend`)
 off current `main` and opened as PR #2070. Rotation row 22 stays ⏳ — the
 feature isn't fully done until #2070 also merges. Next: 23 medical
 supplies, once #2070 merges.
+
+**PR #2070 tend, round 1 (CI fix):** the new date-range test's direct DOM
+queries tripped `eslint --max-warnings 10` (3 new warnings, 8→11). Fixed
+by adding real `aria-label`s to the two date inputs and switching the test
+to `getByLabelText`; back to 8 warnings.
+
+**PR #2070 tend, round 2 (Codex round 5):** GF-27's own fix drew 2 more
+comments. **GF-27a (new, LOW-MED, FLAGGED not fixed)** — the dashboard's
+KPI cards count multiple statuses per card (`get_dashboard_data()`:
+"Active Grants" = `active`+`reporting`) but link with only one status, so
+GF-27's single-value filter now under-shows what the card counted.
+Fixing it needs a filter-UI decision (a grouped option, or restyling the
+cards as non-filtering summaries), not a mechanical patch — flagged,
+mirrored into `KNOWN_LIMITATIONS.md`. This is the rotation's own
+convergence-stop point: GF-27→GF-27a is the third straight round where a
+fix drew a reshape in the same code; not chasing a fourth variant.
+**GF-30 (new, LOW, fixed)** — a stale or mistyped `?status=` value was
+applied silently instead of falling back to unfiltered, producing an
+unexplained empty list. Both pages now validate against their own
+existing status whitelist first; new test case (fails before/passes
+after). Full gate re-run green.
+
+**PR #2070 tend, round 3 (Codex round 5, 3rd comment):** **GF-31 (new,
+MED, fixed)** — `GrantApplicationsPage.tsx`'s mount effect fetched an
+unfiltered, 100-record-capped page and applied `statusFilter`
+client-side to that already-capped set, so a deep-linked status filter
+(including the dashboard's KPI/pipeline links) could silently miss any
+matching application past the newest 100 for a department with more than
+100 on file. Fixed by passing `statusFilter` to `fetchApplications` and
+refetching on change, so the backend applies the match before the cap
+rather than the frontend after it; `priorityFilter` has the same latent
+shape but wasn't raised and is left alone. `CampaignsPage.tsx` was
+unaffected (already server-side since GF-27). No guard test added
+(reproducing the >100-row edge is out of proportion for this fix; noted
+as a coverage gap). Gate re-run scoped to the frontend diff: `tsc
+--noEmit` 0 errors, `eslint src/modules/grants-fundraising` 0/0,
+`vitest run src/modules/grants-fundraising` 3 files/5 passed. Full
+write-up in `GF-22-grants-fundraising.md` → GF-31.
 
 ### 2026-08-30 — Feature 22 (Grants & fundraising), pass 2 — 0 fixed, 0 new findings; re-verification only
 

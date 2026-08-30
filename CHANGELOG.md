@@ -36,6 +36,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   timezone and the exact time you opened it (most noticeable right around
   New Year's). It now always defaults to your department's full current
   year.
+- A grant applications or campaigns link with an old or mistyped status in
+  the URL showed a confusing empty list. It now shows the full unfiltered
+  list instead.
+- For departments with more than 100 grant applications, a status filter
+  on the applications page (including the dashboard's "Active"/"Pending"
+  links) only searched the newest 100 and could miss older matches. It now
+  searches up to the newest 1,000 (departments with more than 1,000
+  applications, or more than 1,000 sharing one status, can still miss
+  older ones — full pagination is tracked as a known limitation).
+- Changing the applications page's status filter again before the previous
+  filter's results had loaded could, in rare timing, leave the page
+  showing results for the filter you'd already changed away from. Fixed.
+- If the applications page's status filter failed to load (a network
+  error), it could keep showing applications from whichever filter was
+  selected before, alongside the error message. It now shows an empty
+  list until the filter loads successfully.
 
 ### Admin hours CSV export now recovers from an expired session (2026-08-30)
 

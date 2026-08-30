@@ -55,4 +55,18 @@ describe('CampaignsPage — status filter from the URL', () => {
       expect(mockListCampaigns).toHaveBeenCalledWith({});
     });
   });
+
+  it('falls back to unfiltered when the URL carries a status this page does not recognize', async () => {
+    render(
+      <MemoryRouter initialEntries={['/grants/campaigns?status=archived']}>
+        <CampaignsPage />
+      </MemoryRouter>
+    );
+
+    // A stale bookmark or a typo should not silently apply a filter that
+    // matches nothing — it should behave like no filter was given at all.
+    await waitFor(() => {
+      expect(mockListCampaigns).toHaveBeenCalledWith({});
+    });
+  });
 });
