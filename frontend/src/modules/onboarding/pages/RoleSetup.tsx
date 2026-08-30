@@ -158,7 +158,7 @@ const RETIRED_STANDING_SLUGS = new Set([
   'exempt_member',
 ]);
 
-export const BuildPositionTemplates = (
+export const buildPositionTemplates = (
   modules: ModuleDefinition[],
   organizationType: OrganizationType = 'fire_department'
 ) => {
@@ -518,7 +518,7 @@ const PositionSetup: React.FC = () => {
   // This ensures new modules automatically appear in position configuration
   const permissionCategories = useMemo(() => buildPermissionCategories(MODULE_REGISTRY), []);
   const positionTemplates = useMemo(
-    () => BuildPositionTemplates(MODULE_REGISTRY, organizationType),
+    () => buildPositionTemplates(MODULE_REGISTRY, organizationType),
     [organizationType]
   );
 
@@ -578,7 +578,7 @@ const PositionSetup: React.FC = () => {
     // Build templates for initial state. The store default is the full fire
     // set, so a wizard resumed with a cleared store offers one position too
     // many rather than silently hiding one.
-    const templates = BuildPositionTemplates(MODULE_REGISTRY, organizationType);
+    const templates = buildPositionTemplates(MODULE_REGISTRY, organizationType);
 
     // Pre-select essential positions
     const initial: Record<string, RoleConfig> = {};

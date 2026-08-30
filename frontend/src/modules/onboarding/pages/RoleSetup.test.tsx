@@ -1,20 +1,20 @@
 import { describe, it, expect } from 'vitest';
 
-import { BuildPositionTemplates } from './RoleSetup';
+import { buildPositionTemplates } from './RoleSetup';
 import { MODULE_REGISTRY } from '../config/moduleRegistry';
 import type { OrganizationType } from '../store';
 
 const idsFor = (organizationType?: OrganizationType): string[] =>
-  Object.values(BuildPositionTemplates(MODULE_REGISTRY, organizationType))
+  Object.values(buildPositionTemplates(MODULE_REGISTRY, organizationType))
     .flatMap((category) => category.positions)
     .map((position) => position.id);
 
 const named = (organizationType: OrganizationType, id: string): string | undefined =>
-  Object.values(BuildPositionTemplates(MODULE_REGISTRY, organizationType))
+  Object.values(buildPositionTemplates(MODULE_REGISTRY, organizationType))
     .flatMap((category) => category.positions)
     .find((position) => position.id === id)?.name;
 
-describe('BuildPositionTemplates — the wizard follows the agency', () => {
+describe('buildPositionTemplates — the wizard follows the agency', () => {
   it('offers an EMS-only service no firefighter', () => {
     // Not cosmetic: the save handler creates a system position for any id it
     // does not already know, so an offered-and-ticked Firefighter puts back the
