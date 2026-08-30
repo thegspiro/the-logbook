@@ -280,7 +280,10 @@ export const InventoryAdminHub: React.FC = () => {
       ['departure clearances', inventoryService.getDepartureClearances({ status: 'in_progress' })],
     ] as const;
     const results = await Promise.allSettled(sources.map(([, promise]) => promise));
-    const failed = results.flatMap((result, index) => (result.status === 'rejected' ? [sources[index]![0]] : []));
+    const failed = results.flatMap((result, index) => {
+      const source = sources[index];
+      return result.status === 'rejected' && source ? [source[0]] : [];
+    });
     setFailedSources(failed);
     const value = <T,>(index: number, fallback: T): T => {
       const result = results[index];
