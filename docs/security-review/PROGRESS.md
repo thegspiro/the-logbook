@@ -16,9 +16,9 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-[#2070](https://github.com/thegspiro/the-logbook/pull/2070) —
-`claude/security-review-grants-fundraising-pass2-tend` — Feature 22 (Grants
-& fundraising), pass 2, round-4 tend continuation.
+[#2072](https://github.com/thegspiro/the-logbook/pull/2072) —
+`claude/security-review-grants-fundraising-pass2-r5` — Feature 22 (Grants
+& fundraising), pass 2, round-5 tend continuation.
 
 ---
 
@@ -55,6 +55,13 @@ applied silently instead of falling back to unfiltered, producing an
 unexplained empty list. Both pages now validate against their own
 existing status whitelist first; new test case (fails before/passes
 after). Full gate re-run green.
+
+**PR #2070 merged (`71c1563b`) while round-5's fix was still in flight** —
+same shape as #2069→#2070: the round-5 commit was cherry-picked onto a
+fresh branch (`claude/security-review-grants-fundraising-pass2-r5`) off
+current `main` and opened as PR #2072 (CLAUDE.md Pitfall #24 — the closed
+PR can't track further commits). Rotation row 22 stays ⏳ until #2072
+merges.
 
 ### 2026-08-30 — Feature 22 (Grants & fundraising), pass 2 — 0 fixed, 0 new findings; re-verification only
 
