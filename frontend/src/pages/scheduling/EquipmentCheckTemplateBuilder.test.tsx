@@ -161,9 +161,17 @@ async function confirm(label: string | RegExp) {
  * viewport set by one `describe` survives into the next one unless it is set
  * again. Tests that depend on a width should say which one they mean.
  */
-const mockViewport = (width: 'phone' | 'laptop') => {
+const VIEWPORT_WIDTHS = { phone: 390, tablet: 900, laptop: 1440 } as const;
+
+const mockViewport = (width: keyof typeof VIEWPORT_WIDTHS) => {
   vi.mocked(window.matchMedia).mockImplementation((query: string) => ({
-    matches: width === 'laptop' && query === '(min-width: 640px)',
+    // Resolve against a real pixel width rather than one hard-coded query: the
+    // page asks about 640px for the row layout and 1152px for the rail, and
+    // matching only the first would leave the rail off at every width.
+    matches: (() => {
+      const minWidth = /min-width:\s*(\d+)px/.exec(query);
+      return minWidth ? VIEWPORT_WIDTHS[width] >= Number(minWidth[1]) : false;
+    })(),
     media: query,
     onchange: null,
     addListener: vi.fn(),
@@ -961,6 +969,9 @@ describe('EquipmentCheckTemplateBuilder single-canvas editor', () => {
     // here — so the mocks this block relies on are reset, not just cleared.
     getTemplate.mockReset();
     addCheckItemsBulk.mockReset();
+    updateCheckItem.mockReset();
+    updateCompartment.mockReset();
+    updateEquipmentCheckTemplate.mockReset();
     getTemplate.mockResolvedValue(structuredClone(template));
     updateCheckItem.mockResolvedValue({});
     updateCompartment.mockResolvedValue({});
@@ -1061,6 +1072,8 @@ describe('EquipmentCheckTemplateBuilder canvas affordances reach both widths', (
   beforeEach(() => {
     vi.clearAllMocks();
     getTemplate.mockReset();
+    updateCheckItem.mockReset();
+    updateCompartment.mockReset();
     getTemplate.mockResolvedValue(structuredClone(template));
     updateCheckItem.mockResolvedValue({});
     updateCompartment.mockResolvedValue({});
@@ -1132,5 +1145,70 @@ describe('EquipmentCheckTemplateBuilder canvas affordances reach both widths', (
 
     expect(await screen.findByRole('button', { name: 'Delete section header' })).toHaveClass('mobile-touch-target');
     expect(screen.getByRole('button', { name: 'Move section up' })).toHaveClass('mobile-touch-target');
+  });
+});
+
+describe('EquipmentCheckTemplateBuilder narrow widths and assistive tech', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    getTemplate.mockReset();
+    updateCheckItem.mockReset();
+    updateCompartment.mockReset();
+    getTemplate.mockResolvedValue(structuredClone(template));
+    updateCheckItem.mockResolvedValue({});
+    updateCompartment.mockResolvedValue({});
+  });
+
+  it('names the toolbar controls where their labels are hidden', async () => {
+    mockViewport('phone');
+    renderBuilder();
+
+    // Below 640px the label span leaves the accessibility tree and the icon is
+    // aria-hidden, so without these the three read as unnamed buttons.
+    expect(await screen.findByRole('button', { name: 'Details' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Save draft' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Tools')).toBeInTheDocument();
+  });
+
+  it('locks the page and takes focus while the details drawer is open', async () => {
+    const user = userEvent.setup();
+    mockViewport('laptop');
+    renderBuilder();
+
+    await user.click(await screen.findByRole('button', { name: 'Details' }));
+    const drawer = screen.getByRole('dialog', { name: 'Template details' });
+    expect(drawer.contains(document.activeElement)).toBe(true);
+    expect(document.body.style.overflow).toBe('hidden');
+
+    await user.click(within(drawer).getByRole('button', { name: 'Close template details' }));
+    await waitFor(() => expect(document.body.style.overflow).not.toBe('hidden'));
+  });
+});
+
+describe('EquipmentCheckTemplateBuilder tablet keeps the preview reachable', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    getTemplate.mockReset();
+    getTemplate.mockResolvedValue(structuredClone(template));
+  });
+
+  it('falls back to the modal preview where the rail would wrap below the checklist', async () => {
+    // 900px clears the 640px row layout but not the 1152px the canvas and the
+    // rail need side by side. Rendering the rail here would put both the
+    // blocker list and the crew preview after the entire checklist.
+    mockViewport('tablet');
+    renderBuilder();
+
+    expect(await screen.findByRole('button', { name: /preview/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Before publishing' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Crew view' })).not.toBeInTheDocument();
+  });
+
+  it('shows the rail instead of the modal once it fits beside the canvas', async () => {
+    mockViewport('laptop');
+    renderBuilder();
+
+    expect(await screen.findByRole('button', { name: 'Before publishing' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /preview/i })).not.toBeInTheDocument();
   });
 });

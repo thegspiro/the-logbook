@@ -474,6 +474,11 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
   const [mobileEditor, setMobileEditor] = useState<{ compartmentKey: string; itemKey: string } | null>(null);
   const isLaptop = useMediaQuery('(min-width: 640px)');
+  // The rail is a second flex line, not a column, until the canvas and it both
+  // fit: 420px + 320px + a 24px gap, inside the page gutters and the side nav.
+  // Below that it would sit after the whole checklist, which is no more
+  // reachable than the modal it replaced — so below it, it is the modal.
+  const isWideCanvas = useMediaQuery('(min-width: 1152px)');
   const [mobileSelectionLocations, setMobileSelectionLocations] = useState<Set<string>>(new Set());
   const [mobileAddLocations, setMobileAddLocations] = useState<Set<string>>(new Set());
   const [highlightedItemKeys, setHighlightedItemKeys] = useState<Set<string>>(new Set());
@@ -2130,15 +2135,6 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
   // Takes the fixed mobile bottom bar off this overlay while it is open.
   useOverlaySurface(showChangelog || Boolean(csvPreview) || showPreview || drawerOpen);
 
-  useEffect(() => {
-    if (!drawerOpen) return;
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setDrawerOpen(false);
-    };
-    document.addEventListener('keydown', onKeyDown);
-    return () => document.removeEventListener('keydown', onKeyDown);
-  }, [drawerOpen]);
-
   const handleCsvImport = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -2368,7 +2364,9 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       observer.disconnect();
       window.removeEventListener('resize', updateHeight);
     };
-  }, []);
+    // Loading swaps the whole editor for a spinner, so the bar this observed is
+    // gone by the time a template has loaded; re-attach to the new one.
+  }, [loading]);
 
   useEffect(() => {
     const bar = actionBarRef.current;
@@ -4152,15 +4150,16 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     <DialogPortal>
       <div
         className="fixed inset-0 z-50 flex justify-end bg-black/40 backdrop-blur-[4px]"
-        role="presentation"
-        onClick={() => setDrawerOpen(false)}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="template-details-title"
+        onClick={(event) => {
+          if (event.target === event.currentTarget) setDrawerOpen(false);
+        }}
       >
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="template-details-title"
-          className="bg-theme-surface border-theme-surface-border animate-slide-in-right h-full w-[440px] max-w-[92vw] overflow-y-auto border-l px-5 py-5 shadow-2xl"
-          onClick={(e) => e.stopPropagation()}
+        <DialogPanel
+          onClose={() => setDrawerOpen(false)}
+          className="bg-theme-surface border-theme-surface-border animate-slide-in-right h-full w-[440px] max-w-[92vw] overflow-y-auto rounded-none border-0 border-l px-5 py-5 shadow-2xl"
         >
           <div className="mb-1 flex items-start justify-between gap-3">
             <h2 id="template-details-title" className="text-theme-text-primary text-[17px] font-bold">
@@ -4350,7 +4349,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
               </div>
             </div>
           </div>
-        </div>
+        </DialogPanel>
       </div>
     </DialogPortal>
   );
@@ -4579,6 +4578,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             <button
               type="button"
               onClick={() => setDrawerOpen(true)}
+              aria-label="Details"
               className="btn-secondary flex min-h-10 items-center gap-2 px-3 text-sm font-medium"
             >
               <SlidersHorizontal className="h-4 w-4" />
@@ -4586,7 +4586,10 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             </button>
 
             <details className="relative">
-              <summary className="btn-secondary hover:bg-theme-surface-secondary flex min-h-10 cursor-pointer list-none items-center gap-2 px-3 text-sm font-medium">
+              <summary
+                aria-label="Tools"
+                className="btn-secondary hover:bg-theme-surface-secondary flex min-h-10 cursor-pointer list-none items-center gap-2 px-3 text-sm font-medium"
+              >
                 <MoreHorizontal className="h-4 w-4" />
                 <span className="hidden sm:inline">Tools</span>
               </summary>
@@ -4652,7 +4655,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                     <Clock className="h-4 w-4" /> Change history
                   </button>
                 )}
-                {!isLaptop && (
+                {!isWideCanvas && (
                   <button
                     type="button"
                     onClick={() => setShowPreview(true)}
@@ -4674,6 +4677,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
               type="button"
               onClick={() => void handleSave(false)}
               disabled={saving}
+              aria-label={saving ? 'Saving draft' : 'Save draft'}
               className="btn-secondary flex min-h-10 items-center gap-2 px-3 text-sm font-medium"
             >
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
@@ -4692,7 +4696,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
               <button
                 type="button"
                 onClick={() => {
-                  if (!isLaptop) {
+                  if (!isWideCanvas) {
                     const first = blockers[0];
                     if (first) goToBlocker(first.anchorId, first.expandKey, first.focusId);
                     return;
@@ -4771,7 +4775,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
 
       <div className="mx-auto flex max-w-[1440px] flex-wrap items-start gap-6 pt-5 pb-6">
         {/* Canvas */}
-        <div id="checklist-canvas" className="flex min-w-0 flex-[1_1_620px] flex-col gap-2.5">
+        <div id="checklist-canvas" className="flex min-w-0 flex-[1_1_420px] flex-col gap-2.5">
           <div className="flex flex-wrap items-center justify-between gap-3 px-0.5">
             <div className="flex items-baseline gap-2.5">
               <h2 className="text-theme-text-primary text-base font-bold">Checklist</h2>
@@ -4966,7 +4970,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
         </div>
 
         {/* Right rail — only where there is room for it beside the canvas. */}
-        {isLaptop && (
+        {isWideCanvas && (
           <div
             className="sticky flex max-w-[344px] min-w-[300px] flex-[1_1_320px] scrollbar-thin flex-col gap-3 overflow-y-auto"
             style={{ top: topBarHeight + 12, maxHeight: `calc(100dvh - ${String(topBarHeight + 24)}px)` }}
