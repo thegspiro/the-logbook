@@ -16,10 +16,27 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-[#2065](https://github.com/thegspiro/the-logbook/pull/2065) —
-`claude/security-review-admin-hours-pass2` — Feature 21 (Admin hours), pass 2.
+None.
 
 ---
+
+### 2026-08-30 — Feature 21 (Admin hours), pass 2 ✅ merged — PR #2065
+
+Merged (`991c04d2`). Two Codex review rounds on this PR, both independently
+verified against the actual code and addressed rather than taken on the
+bot's say-so: round 1 (AH21-2 doc-accuracy gap, AH21-1's first timeout
+mitigation) in commit `34761461`; round 2, after Codex correctly rejected
+round 1's finite-timeout fix as still a regression, in commit `fc0aaafc` —
+switched to `timeout: 0` (true no-timeout), and fixed a real MEDIUM
+correctness bug (AH21-3: a JSON error body from a `blob`-typed request was
+silently undecoded, losing the detail message and support code) centrally
+in `utils/createApiClient.ts` so it also covers `reportExportService` and
+the storefront export, not just this PR's new call site. Also strengthened
+the guard test to catch `window.fetch`/`globalThis.fetch`/direct-`axios`
+bypasses and added a real behavioral test of `exportCsv` (AH21-4). CI green
+on the final head; no merge conflict. All 6 review threads resolved.
+Confirmed on `origin/main` by ancestry check. Rotation row 21 -> done.
+Next: 22 grants & fundraising.
 
 ### 2026-08-30 — Feature 21 (Admin hours), pass 2 — 1 fixed (LOW), 0 flagged (new); 0 regressions in pass-1 fixes
 
@@ -2487,7 +2504,7 @@ each row's prior PR is recorded in the Log, not repeated here.
 | 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ✅     |
 | 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3723 L)                                                                                                          | ✅     |
 | 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ✅     |
-| 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ⏳     |
+| 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ✅     |
 | 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ⬜     |
 | 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ⬜     |
 | 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ⬜     |
