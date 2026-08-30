@@ -1259,3 +1259,57 @@ describe('EquipmentCheckTemplateBuilder tablet keeps the preview reachable', () 
     expect(screen.queryByRole('button', { name: /preview/i })).not.toBeInTheDocument();
   });
 });
+
+describe('EquipmentCheckTemplateBuilder crew preview identity', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    getTemplate.mockReset();
+    mockViewport('laptop');
+  });
+
+  it("does not hand a deleted item's preview answer to the one that replaces it", async () => {
+    const user = userEvent.setup();
+    createEquipmentCheckTemplate.mockResolvedValue({ ...template, id: 'draft-1', isActive: false });
+    renderNewBuilder();
+
+    await user.click(screen.getByRole('button', { name: 'Location' }));
+    const composer = (await screen.findAllByPlaceholderText(/press Enter/i))[0] as HTMLElement;
+    await user.type(composer, 'First item{Enter}');
+    await user.type(composer, 'Second item{Enter}');
+
+    await user.click(screen.getByRole('button', { name: 'Crew view' }));
+    const answers = within(screen.getByLabelText('Crew preview')).getAllByRole('button', { name: 'Pass' });
+    await user.click(answers[0] as HTMLElement);
+    expect(answers[0]).toHaveClass('bg-green-600');
+
+    await user.click(screen.getByRole('button', { name: 'Delete First item' }));
+    await confirm('Delete');
+
+    // An unsaved item's array index is not its identity. Keyed on the index,
+    // the surviving item inherits both the deleted one's preview id and the
+    // answer recorded against it.
+    await waitFor(() => expect(screen.queryByDisplayValue('First item')).not.toBeInTheDocument());
+    const remaining = within(screen.getByLabelText('Crew preview')).getAllByRole('button', { name: 'Pass' });
+    expect(remaining).toHaveLength(1);
+    expect(remaining[0]).not.toHaveClass('bg-green-600');
+  }, 15_000);
+
+  it('expands a location added to an unsaved template, so its composer is reachable', async () => {
+    const user = userEvent.setup();
+    renderNewBuilder();
+
+    // The expansion set was keyed by the array index while addCompartment
+    // recorded the clientKey, so the two never matched and a brand-new
+    // location opened collapsed with nowhere to type.
+    await user.click(screen.getByRole('button', { name: 'Location' }));
+    expect((await screen.findAllByPlaceholderText(/press Enter/i)).length).toBeGreaterThan(0);
+  });
+
+  it('keeps the phone location disclosure at a tappable size', async () => {
+    mockViewport('phone');
+    getTemplate.mockResolvedValue(structuredClone(template));
+    renderBuilder();
+
+    expect(await screen.findByRole('button', { name: 'Collapse Cab' })).toHaveClass('mobile-touch-target');
+  });
+});
