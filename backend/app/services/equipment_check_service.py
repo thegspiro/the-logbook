@@ -640,6 +640,7 @@ class EquipmentCheckService:
                 )
             )
         try:
+            await self._advance_content_revision(str(source.template_id))
             await self.db.commit()
         except Exception:
             await self.db.rollback()
@@ -998,6 +999,7 @@ class EquipmentCheckService:
                     changes={"bulk_idempotency_key": idempotency_key},
                 )
                 await self.db.delete(item)
+            await self._advance_content_revision(str(compartment.template_id))
             await self.db.commit()
             return item_ids, False
         except Exception:
