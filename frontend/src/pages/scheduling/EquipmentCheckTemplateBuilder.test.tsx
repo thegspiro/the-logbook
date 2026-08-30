@@ -710,6 +710,16 @@ describe('EquipmentCheckTemplateBuilder bulk deletion', () => {
     expect(toastSuccess).not.toHaveBeenCalled();
   });
 
+  it('removes only confirmed IDs and retains an unconfirmed row selected', async () => {
+    deleteCheckItemsBulk.mockResolvedValue({ deletedItemIds: ['radio'], replayed: false });
+    await selectAndDelete();
+    await waitFor(() => expect(screen.queryByText('Radio')).not.toBeInTheDocument());
+    expect(screen.getByText('Flashlight')).toBeVisible();
+    expect(screen.getByText('1 selected')).toBeVisible();
+    expect(toastError).toHaveBeenCalledWith('1 item was deleted; 1 could not be deleted');
+    expect(toastSuccess).not.toHaveBeenCalled();
+  });
+
   it('reuses the idempotency key when the same selected deletion is retried', async () => {
     deleteCheckItemsBulk
       .mockRejectedValueOnce(new Error('Response lost'))
