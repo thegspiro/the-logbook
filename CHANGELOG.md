@@ -20,6 +20,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The "Notify members when they become non-compliant" panel is now labelled
   as not yet active — the setting is saved but nothing sends the
   notification yet, so the page no longer implies it does.
+- A compliance profile whose officer had unchecked every required training
+  requirement (leaving it with none required) was graded against every
+  active org-wide requirement instead of none, once the fix above let that
+  empty selection actually reach the database — org-wide compliance
+  percentages and per-profile grading could be materially wrong for any
+  group meant to have no required certifications. A profile whose only
+  customization was a lenient or strict compliance-threshold override (with
+  no required-requirement override) also never had that override applied.
+  Both now compute correctly.
+- After clearing "Reminder Days Before Deadline" and saving, the compliance
+  configuration page immediately showed the old "30, 14, 7" suggested value
+  again on reload, even though the database correctly held no reminder
+  schedule. The field now reflects what was actually saved.
 
 ### A training-effectiveness evaluation list could briefly cache member feedback (2026-08-29)
 

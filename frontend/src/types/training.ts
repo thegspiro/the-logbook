@@ -2729,10 +2729,15 @@ export interface ComplianceConfigData {
   gracePeriodDays: number;
   includeCurrentMonth: boolean;
   autoReportFrequency: string;
-  reportEmailRecipients?: string[];
+  // `| null`, not just `| undefined`: the backend schema field is
+  // `Optional[List[...]] = None`, so a config an officer explicitly cleared
+  // (CMP2-2) comes back over the wire as an actual `null`, not a missing
+  // key. loadConfig's read path must treat that as "empty", not the
+  // pre-save placeholder — see CMP2-4.
+  reportEmailRecipients?: string[] | null;
   reportDayOfMonth?: number;
   notifyNonCompliantMembers: boolean;
-  notifyDaysBeforeDeadline?: number[];
+  notifyDaysBeforeDeadline?: number[] | null;
   profiles: ComplianceProfile[];
   createdAt: string;
   updatedAt: string;

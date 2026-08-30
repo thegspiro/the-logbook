@@ -742,14 +742,25 @@ async def compute_org_compliance_pct(db: AsyncSession, org_id: str) -> float:
 
         if profiles:
             profile = _find_matching_profile(member, profiles)
-            if profile and profile.required_requirement_ids:
-                # Use only the requirements specified in the profile
-                member_reqs = [
-                    reqs_by_id[rid]
-                    for rid in profile.required_requirement_ids
-                    if rid in reqs_by_id
-                ]
-                # Use profile threshold overrides if set
+            if profile:
+                # `is not None`, not truthy: a profile that explicitly selects
+                # zero required requirements (`[]`, meaning "nothing is
+                # required for this group") must not fall through to grading
+                # against every org-wide requirement, which `if
+                # profile.required_requirement_ids:` did — `[]` and "never
+                # set" (`None`) were indistinguishable. See CMP2-3.
+                if profile.required_requirement_ids is not None:
+                    # Use only the requirements specified in the profile
+                    member_reqs = [
+                        reqs_by_id[rid]
+                        for rid in profile.required_requirement_ids
+                        if rid in reqs_by_id
+                    ]
+                # Threshold overrides apply whenever this profile matched,
+                # independent of whether it also overrides the requirement
+                # list — these were previously nested inside the same `if`
+                # above and so silently skipped for a profile with an empty
+                # required list (CMP2-3).
                 if profile.compliant_threshold_override is not None:
                     member_compliant_threshold = profile.compliant_threshold_override
                 if profile.at_risk_threshold_override is not None:

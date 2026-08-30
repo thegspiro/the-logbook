@@ -535,14 +535,31 @@ list-typed fields (`membership_types`, `required_requirement_ids`,
 `optional_requirement_ids`, `report_email_recipients`,
 `notify_days_before_deadline`) now always send the current array — including
 empty — matching the already-correct `admin_hours_requirements` pattern this
-same file used (with an explanatory comment) for exactly this reason. Verified
-against the read side: every consumer of these columns (`training_compliance.py`
-`if profile.membership_types:`, `if profile and profile.required_requirement_ids:`,
-`compliance_config_service.py`'s `_validate_profile_fks`,
-`if config and config.report_email_recipients:`) does a truthiness check, so
-`[]` and `None` are read identically — the switch from
-"omit when empty" to "always send, possibly empty" changes nothing about
-create-path behavior and only fixes the update path. Two frontend types
+same file used (with an explanatory comment) for exactly this reason.
+
+~~Verified against the read side: every consumer of these columns
+(`training_compliance.py` `if profile.membership_types:`, `if profile and
+profile.required_requirement_ids:`, `compliance_config_service.py`'s
+`_validate_profile_fks`, `if config and config.report_email_recipients:`)
+does a truthiness check, so `[]` and `None` are read identically — the switch
+from "omit when empty" to "always send, possibly empty" changes nothing about
+create-path behavior and only fixes the update path.~~ **Correction (Codex
+review on PR #2059, CMP2-2-C): this generalization was wrong for one of the
+four fields it named.** `membership_types` and `report_email_recipients` are
+_additive restriction_ lists, where "no restriction" and "empty restriction"
+are the same state by design (the page's own copy says as much: "Leave empty
+to apply to all membership types") — `[]` and `None` really are equivalent
+there, and `_validate_profile_fks` no-ops on either regardless of meaning.
+`required_requirement_ids` is a _substitution_ list: `None` means "no
+override, grade against every org-wide requirement" and `[]` means "this
+group requires nothing" — two opposite instructions that the truthy check in
+`compute_org_compliance_pct` (`training_compliance.py`) could not tell apart,
+silently taking the `None` branch either way. Because CMP2-2 is exactly what
+makes an officer's `[]` reach that column for the first time (pass 1 fixed
+only the backend's own update-path handling, not this frontend omission),
+this pass made a pre-existing, previously-unreachable backend bug reachable
+without noticing. Fixed as CMP2-3 below, found in Codex's review of this PR
+rather than by this pass's own verification. Two frontend types
 (`ComplianceProfileCreate`/`ComplianceProfileUpdate`'s three scalar fields,
 `ComplianceConfigUpdate`'s two array fields) were widened to `| null` to
 accept the new payload shape — `exactOptionalPropertyTypes` requires the
@@ -550,51 +567,194 @@ property's declared type to include `null` before a `null` value can be
 assigned to it.
 
 Guard test:
-`ComplianceRequirementsConfigPage.clearFields.test.tsx` — asserts, against the
-page's source (matching this file's own established pattern in
+`ComplianceRequirementsConfigPage.clearFields.test.tsx` — originally asserted
+against the page's source (matching this file's own established pattern in
 `.tab.test.tsx`/`.adminHours.test.tsx`, since reaching these lines via a full
-render needs five mocked services), that the config and profile payload
-blocks send `null` and not `undefined` for the three scalar fields, and that
-the four list fields are sent unconditionally rather than hidden behind a
-`.length > 0 ? … : undefined` guard.
+render needs five mocked services) that the config and profile payload blocks
+send `null` and not `undefined` for the three scalar fields, and that the
+four list fields are sent unconditionally rather than hidden behind a
+`.length > 0 ? … : undefined` guard. **Rewritten (Codex review, CMP2-2-A):**
+a source-text scan would keep passing even if the Save button stopped calling
+the service, or reverted to sending `undefined` — it asserts what the code
+_says_, not what it _does_. The file now renders the real page with the five
+services mocked (the "needs five mocked services" reason the original test
+gave for not doing this no longer holds it back), drives each field through
+an actual clear via `@testing-library/user-event`, clicks Save, and asserts
+the exact request body `updateConfig`/`updateProfile` received — per CLAUDE.md
+rule #13, real arguments via `toHaveBeenCalledWith(...)`, not a bare/zero-arg
+call. It also gained a second describe block, `reading a cleared field back
+after reload (CMP2-4)`, covering the read-path fix below.
+
+### CMP2-3 — HIGH — A compliance profile with zero required requirements graded members against every org requirement instead of none, and its threshold overrides were silently skipped — ✅ FIXED
+
+**What:** `compute_org_compliance_pct` (`training_compliance.py`) matched a
+member to their highest-priority compliance profile and then read two things
+off it behind a single guard:
+
+```python
+if profile and profile.required_requirement_ids:
+    member_reqs = [reqs_by_id[rid] for rid in profile.required_requirement_ids if rid in reqs_by_id]
+    if profile.compliant_threshold_override is not None:
+        member_compliant_threshold = profile.compliant_threshold_override
+    if profile.at_risk_threshold_override is not None:
+        member_at_risk_threshold = profile.at_risk_threshold_override
+```
+
+`if profile.required_requirement_ids:` is a truthy check, so `[]` (an officer
+explicitly unchecked a profile's last required requirement — "this group
+requires nothing") and `None` (the profile never overrode the requirement
+list at all — "no override, use every org requirement") took the _same_
+branch: `member_reqs` stayed `list(requirements)`, every active org-wide
+requirement. An officer who believed they had zeroed out a group's
+requirements instead graded that group against the full org list. The same
+guard also skipped the threshold overrides for a profile that set only
+`compliant_threshold_override`/`at_risk_threshold_override` and never touched
+`required_requirement_ids` — a lenient- or strict-threshold-only profile
+never actually changed the pass bar.
+
+Before CMP2-2, the `[]` half of this was **unreachable in practice**: the
+frontend's `.length > 0 ? list : undefined` guard meant an officer clearing
+every checkbox sent `undefined` (dropped from the request body), and the
+stored value never became `[]` — it silently kept whatever the profile had
+before. CMP2-2 fixed that omission so the clear actually persists, which is
+what makes CMP2-3 the bug an officer can now actually trigger. The
+threshold-override half was reachable independently of CMP2-2, on any profile
+that set an override without also setting `required_requirement_ids`.
+
+**Where:** `backend/app/services/training_compliance.py:744-767` (was
+`:743-756` pre-CMP2-2; the compliance-percentage evaluation loop inside
+`compute_org_compliance_pct`).
+
+**Failure scenario:** a training officer creates an "Admin only" profile for
+members who do no field training, unchecks every required requirement so the
+profile shows 0 required, and saves — the officer now believes the org
+dashboard grades this group against nothing. `compute_org_compliance_pct`
+instead evaluates every admin-only member against the full active-requirement
+list, so members who cannot mechanically complete field-only requirements
+(apparatus checks, driving evaluations) show as chronically non-compliant on
+the org-wide compliance percentage, and a chief pulling that number for a
+grant or ISO submission gets a materially wrong figure. Separately, a "New
+recruit" profile set up with only a lenient `at_risk_threshold_override: 50`
+(no required-list override) never actually got the lenient threshold — every
+recruit was still graded at the org default.
+
+**Fix:** decoupled the two reads. `required_requirement_ids is not None` (not
+truthy) governs the requirement-list substitution, so an explicit `[]` is
+honored as "grade against nothing" instead of falling through to "grade
+against everything." The threshold overrides moved out from under that guard
+entirely — they now apply whenever a profile matched the member at all,
+independent of whether that profile also overrides the requirement list.
+`optional_requirement_ids` was checked for the same class of bug: it is
+tracked on the model and validated on write (`compliance_config_service.py`'s
+`_validate_profile_fks`) but has no reader anywhere in
+`training_compliance.py`, so there is no truthy-vs-`is not None` distinction
+to get wrong there — it is reporting-only today, unrelated to this fix.
+
+Guard test: `backend/tests/test_compute_org_compliance_pct_profile_overrides.py`
+— three integration tests against a real database (`db_session`, no mocked
+query layer): a profile with `required_requirement_ids: []` grades its one
+matched member as fully compliant against an otherwise-unmet requirement
+(fails pre-fix at 0%, per the bug above); the same setup with
+`required_requirement_ids: None` still grades against every org requirement
+(so the first test cannot pass merely by always returning 100, and this half
+was already correct pre-fix); and a profile with only threshold overrides set
+(no required-list override) has that override actually applied (fails
+pre-fix, since the org default's 100%/75% thresholds still governed).
+
+### CMP2-4 — MED — A cleared reminder-days list reappeared with its old-looking default text immediately after reload — ✅ FIXED
+
+**What:** CMP2-2 makes clearing "Reminder Days Before Deadline" and saving
+send/store an explicit `null` in `notify_days_before_deadline`. `loadConfig`'s
+response mapping did not honor that: `data.notifyDaysBeforeDeadline?.join(',
+') ?? '30, 14, 7'` falls back to the suggested-default string whenever the
+field is `null` (optional chaining turns `null` into `undefined`, same as a
+missing key, so `??` cannot tell "never configured" apart from "explicitly
+cleared"). `'30, 14, 7'` is only supposed to be the pre-save placeholder — the
+component's initial `useState` for a config that has never been saved at
+all — but the same fallback fired every time a _saved_ config's field came
+back `null`, so an officer who cleared the box, saved, and reloaded the page
+saw the old-looking default value sitting in the box again, even though the
+database correctly held no reminder schedule. `report_email_recipients` and
+every profile-side field mapped by this same load function
+(`description`, both threshold overrides, `membershipTypes`,
+`requiredRequirementIds`, `optionalRequirementIds`) were checked for the
+identical shape and do not have it — each already falls back to `''`/`[]` on
+`null`, not to a value that looks like real data.
+
+**Where:** `frontend/src/pages/ComplianceRequirementsConfigPage.tsx:165`
+(`loadConfig`, inside the `handleSaveConfig`-adjacent form-state hydration).
+
+**Fix:** the fallback for a loaded (non-null `data`) config is now `''`, not
+`'30, 14, 7'` — the suggested text only ever shows before a config has been
+saved for the first time, never as a stand-in for an explicit clear.
+`ComplianceConfigData.reportEmailRecipients`/`notifyDaysBeforeDeadline` were
+widened to `| null` (they were `| undefined`-only) to type the value the
+backend's `Optional[List[...]] = None` response schema actually sends over
+the wire, matching the pattern the update-payload types already used.
+
+Guard test:
+`ComplianceRequirementsConfigPage.clearFields.test.tsx`'s "reading a cleared
+field back after reload (CMP2-4)" block — a config with
+`notifyDaysBeforeDeadline: null` renders the reminder-days box empty (fails
+pre-fix, shows `'30, 14, 7'`); the same config with a real list still shows it
+(so the first assertion cannot pass by rendering every list as empty); and a
+config with `reportEmailRecipients: null` renders that box empty too
+(already-correct behavior, pinned so it cannot regress).
 
 ## Completion gate (pass 2)
 
 | Check                                             | Result                                                                   |
 | ------------------------------------------------- | ------------------------------------------------------------------------ |
 | `flake8 app/ tests/ alembic/`                     | ✅ 0 violations                                                          |
-| `black --check app/ tests/ alembic/`              | ✅ 1334 files unchanged                                                  |
+| `black --check app/ tests/ alembic/`              | ✅ 1335 files unchanged                                                  |
 | `isort --check-only app/ tests/ alembic/`         | ✅ clean (`isort==8.0.1`, CI's pin, already installed)                   |
 | `python3 scripts/validate_migrations.py --strict` | ✅ 394 revisions, single head `f6a7b8c9d0e1`                             |
-| `pytest tests/ -q -k "compliance or attestation"` | ✅ 287 passed, 1 skipped (pre-existing optional-dependency skip)         |
-| `pytest tests/ -q` (full backend suite)           | ✅ 9265 passed, 22 skipped (pre-existing Docker/no-MySQL/optional skips) |
+| `pytest tests/ -q -k "compliance or attestation"` | ✅ 290 passed, 1 skipped (pre-existing optional-dependency skip)         |
+| `pytest tests/ -q` (full backend suite)           | ✅ 9268 passed, 22 skipped (pre-existing Docker/no-MySQL/optional skips) |
 | `cd frontend && npx tsc --noEmit`                 | ✅ 0 errors                                                              |
 | `cd frontend && npx eslint .`                     | ✅ 0 errors, 10 pre-existing warnings (none in files this pass touched)  |
+| `cd frontend && npx vitest run` (full suite)      | ✅ 5458/5458 passed, 415/415 files — see below                           |
 
-No backend code changed this pass (byte-identical diff confirmed above), so
-the backend gate numbers reflect the same code pass 1 already gated, re-run
-for currency rather than because anything moved.
+Backend code changed after Codex review (CMP2-3, `training_compliance.py`);
+figures above reflect that fix and its new test file
+(`test_compute_org_compliance_pct_profile_overrides.py`).
 
-**Beyond the declared gate — one pre-existing, unrelated frontend failure
-found and escalated, not fixed:** the full `npx vitest run` (not itself part
-of the eight-command gate above, run as extra diligence since this pass
-touches frontend types) came back 5456/5457 passing, 414/415 files. The one
-failure —
+**Beyond the declared gate — one pre-existing, unrelated frontend failure,
+originally escalated and now fixed instead (Codex review, CMP2-B):** the full
+`npx vitest run` (not itself part of the eight-command gate above, run as
+extra diligence since this pass touches frontend types) originally came back
+5456/5457 passing. The one failure —
 `src/pages/scheduling/EquipmentCheckTemplateBuilder.test.tsx > EquipmentCheckTemplateBuilder movement persistence > keeps a rejected item in its source and does not show a success toast`
 (`EquipmentCheckTemplateBuilder.test.tsx:465`, a `findByRole('button', { name:
-'Collapse Oxygen mask' })` that times out) — is in the scheduling/equipment-
+'Collapse Oxygen mask' })` that timed out) — was in the scheduling/equipment-
 check module (feature 14, already reviewed in an earlier rotation pass), not
-compliance, and neither the component nor the test imports anything this
-pass's two changed files (`ComplianceRequirementsConfigPage.tsx`,
-`types/training.ts`) export. Confirmed pre-existing rather than caused by this
-change: `git stash`-ed this pass's five modified/added files, re-ran the test
-against the untouched base tree, and it failed identically
-(same assertion, same line, same timeout) — then restored the stash. Per
-CLAUDE.md's Hard Stop clause, this is reported rather than silently passed
-over or fixed here: fixing another feature's frontend component is outside
-this PR's scope (the rotation's "one feature per run" rule cuts the other
-way too — mixing an unrelated fix into a compliance security-review PR is
-scope creep in the other direction), and it does not affect the declared
-completion gate for this feature, which is fully green. Flagged for whichever
-rotation pass next touches scheduling/equipment-check, or for a maintainer to
-triage directly.
+compliance, and confirmed pre-existing on the untouched base tree.
+
+This pass's first version of this document treated that as a Hard Stop under
+CLAUDE.md and reported it without fixing it. **That was the wrong call.**
+CLAUDE.md's Hard Stop is for a fix that "genuinely exceeds the current scope"
+— its own example is "hundreds of strict-mode violations across unrelated
+files" — and does not carve out an exception for a fix that happens to sit in
+a different feature's file; "pre-existing" and "unrelated" are explicitly
+_not_, on their own, grounds to skip a fix ("There Are No Acceptable
+Pre-Existing Errors"). Investigating the actual cause took a few minutes: the
+`movement persistence` describe block's `beforeEach` was the one block in this
+test file that never overrode `window.matchMedia` to simulate a laptop
+viewport, unlike two sibling blocks in the same file (`EquipmentCheckTemplateBuilder.test.tsx:166,223`)
+that already do exactly this. Left at the suite-wide default
+(`matches: false`, from `src/test/setup.ts`), the component's `isLaptop` flag
+was permanently false for every test in that block, so the item-row toggle's
+accessible name could only ever read "Edit X" — never "Collapse X" — no
+matter how the failed-move error handler expanded the item. Copying the same
+override already used twice in this file into that block's `beforeEach` (a
+five-line, no-production-code change, confined to one test file) makes the
+assertion reachable; the fix does not touch
+`EquipmentCheckTemplateBuilder.tsx` at all, only its test. All 32 tests in
+that file pass, including the previously-failing one — not merely restored to
+its old (broken) state.
+
+`git stash`-ed this pass's changes and re-ran the test against the untouched
+base tree to confirm it failed identically there first (same assertion, same
+line, same timeout) before concluding it was pre-existing and safe to fix
+alongside this pass's own changes rather than a symptom of something this
+pass broke.

@@ -162,7 +162,13 @@ export default function ComplianceRequirementsConfigPage() {
         setReportEmailRecipients(data.reportEmailRecipients?.join(', ') ?? '');
         setReportDayOfMonth(data.reportDayOfMonth ?? 1);
         setNotifyNonCompliant(data.notifyNonCompliantMembers);
-        setNotifyDaysBefore(data.notifyDaysBeforeDeadline?.join(', ') ?? '30, 14, 7');
+        // '30, 14, 7' is only the *pre-save* placeholder (the initial useState
+        // above, for a config that has never been saved at all). Once a saved
+        // config exists, an explicitly cleared (null) list must render as
+        // empty — falling back to the suggested default here would put the
+        // old-looking text right back in the box after every reload, even
+        // though the database correctly holds no reminder schedule (CMP2-4).
+        setNotifyDaysBefore(data.notifyDaysBeforeDeadline?.join(', ') ?? '');
       }
     } catch {
       toast.error('Failed to load compliance configuration');

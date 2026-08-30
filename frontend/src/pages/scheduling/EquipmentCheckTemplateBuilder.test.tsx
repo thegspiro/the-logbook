@@ -440,6 +440,25 @@ describe('EquipmentCheckTemplateBuilder movement persistence', () => {
     });
     updateCheckItem.mockResolvedValue({});
     reorderItems.mockResolvedValue([]);
+    // Laptop viewport (matches the 1024px case above): the rejected-move
+    // assertion below checks the item toggle's accessible name flips to
+    // "Collapse X" once the failure handler re-expands the item — that
+    // Collapse/Expand wording only exists in the isLaptop branch (the
+    // sub-640px branch always reads "Edit X", expanded or not, since a
+    // phone opens a full-height editor instead of an inline one). Without
+    // this override the suite-wide default `matches: false` from
+    // src/test/setup.ts left isLaptop permanently false here, so that
+    // accessible name could never appear and the assertion timed out.
+    vi.mocked(window.matchMedia).mockImplementation((query: string) => ({
+      matches: query === '(min-width: 640px)',
+      media: query,
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    }));
   });
 
   const moveSelect = async (name: string) => {
