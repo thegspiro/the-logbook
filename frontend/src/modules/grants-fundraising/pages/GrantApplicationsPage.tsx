@@ -235,9 +235,17 @@ export const GrantApplicationsPage: React.FC = () => {
   const [sortField, setSortField] = useState<SortField>('applicationDeadline');
   const [sortDir, setSortDir] = useState<SortDir>('asc');
 
+  // `listApplications` defaults to `limit: 100` — filtering client-side
+  // against that single capped, unfiltered fetch would silently drop any
+  // matching application past the newest 100 (the dashboard's KPI counts
+  // are not capped, so a status deep-link could show fewer rows than the
+  // card that linked here counted). Pass status to the server-side fetch
+  // instead, and refetch when it changes; the client-side filter below no
+  // longer needs to re-check status, since every row the store holds
+  // already matches.
   useEffect(() => {
-    void fetchApplications();
-  }, [fetchApplications]);
+    void fetchApplications(statusFilter ? { status: statusFilter } : undefined);
+  }, [fetchApplications, statusFilter]);
 
   // ---------------------------------------------------------------------------
   // Filtering
@@ -250,11 +258,10 @@ export const GrantApplicationsPage: React.FC = () => {
         app.grantProgramName.toLowerCase().includes(searchText.toLowerCase()) ||
         app.grantAgency.toLowerCase().includes(searchText.toLowerCase()) ||
         (app.assignedTo ?? '').toLowerCase().includes(searchText.toLowerCase());
-      const matchesStatus = !statusFilter || app.applicationStatus === statusFilter;
       const matchesPriority = !priorityFilter || app.priority === priorityFilter;
-      return matchesSearch && matchesStatus && matchesPriority;
+      return matchesSearch && matchesPriority;
     });
-  }, [applications, searchText, statusFilter, priorityFilter]);
+  }, [applications, searchText, priorityFilter]);
 
   // ---------------------------------------------------------------------------
   // Sorting (table view)

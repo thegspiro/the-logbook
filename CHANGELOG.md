@@ -39,6 +39,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A grant applications or campaigns link with an old or mistyped status in
   the URL showed a confusing empty list. It now shows the full unfiltered
   list instead.
+- For a department with more than 100 grant applications, filtering the
+  grant applications list by status (including via a dashboard link) could
+  miss older matching applications. It now searches your department's full
+  set of applications, not just the most recent 100.
 
 ### Admin hours CSV export now recovers from an expired session (2026-08-30)
 

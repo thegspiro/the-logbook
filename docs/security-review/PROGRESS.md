@@ -63,6 +63,19 @@ current `main` and opened as PR #2072 (CLAUDE.md Pitfall #24 — the closed
 PR can't track further commits). Rotation row 22 stays ⏳ until #2072
 merges.
 
+**PR #2072 tend, round 6:** Codex found one more real bug on GF-27's
+original fix (merged in #2070), independent of GF-27a. **GF-31 (new, MED,
+fixed)** — `GrantApplicationsPage.tsx` fetched applications once on mount
+with no params (server default `limit: 100`) and filtered by status
+client-side against that single capped page — a status deep-link or the
+page's own dropdown could silently omit a matching application older than
+the newest 100, even though the dashboard's own uncapped KPI count
+included it. Unlike GF-27a this had a direct mechanical fix (the store
+already forwarded a `status` param the page just never passed): the mount
+effect now fetches server-side by status and refetches on change; new
+test file, fails before/passes after. Full gate green (tsc/eslint 0
+errors, 4 files/7 tests passing).
+
 ### 2026-08-30 — Feature 22 (Grants & fundraising), pass 2 — 0 fixed, 0 new findings; re-verification only
 
 No security-review PR was open (PR #2065/feature 21 admin-hours pass 2 had

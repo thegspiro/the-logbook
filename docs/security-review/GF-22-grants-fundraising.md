@@ -879,6 +879,45 @@ without building one from scratch for a few-line change; `tsc --noEmit`
 confirms the types, and the logic is identical to the tested
 `CampaignsPage` case.
 
+#### GF-31 — MED — `GrantApplicationsPage` filtered by status client-side against a single capped, unfiltered fetch
+
+**What:** Caught by Codex review, round 6, on GF-27's own fix (merged in
+PR #2070) — a 4th consecutive finding in this same file's status-filtering
+logic, but a genuinely distinct bug from GF-27a, not a reshape of it:
+independent of whether a KPI represents one status or several,
+`GrantApplicationsPage.tsx` fetched applications **once on mount with no
+params** (`listApplications` defaults to `limit: 100` server-side) and
+then filtered by status **client-side** against that single capped page.
+For an organization with more than 100 grant applications, a
+`?status=active` deep link (or the page's own status dropdown) could
+silently omit any matching application older than the newest 100 — even
+though the dashboard's own KPI count, which queries `COUNT(*)` with no
+limit, included it. Unlike GF-27a (which needs a UI/product decision),
+this one has a direct mechanical fix: the store's `fetchApplications`
+already accepted and forwarded a `status` param to the server
+(`grantsStore.ts`); the page just never passed it.
+
+**Where:** `frontend/src/modules/grants-fundraising/pages/GrantApplicationsPage.tsx`.
+
+**Fix:** the mount effect now passes `{ status: statusFilter }` (when set)
+to `fetchApplications` and re-fetches whenever `statusFilter` changes
+(dropdown or URL), instead of fetching once and filtering client-side.
+Removed the now-redundant `matchesStatus` client-side check — every row
+the store holds already matches, once the fetch itself is filtered. The
+search-text and priority filters are unchanged (still client-side against
+the fetched page) — that limitation is pre-existing on this page (present
+before GF-27 ever touched it) and shared by every list-style page with a
+free-text search in this app; refactoring it is a larger, separate change
+not requested by this finding.
+
+**Guard test added:** `GrantApplicationsPage.statusFilter.test.tsx` (new
+file, mocks `useGrantsStore` directly). Asserts `fetchApplications` is
+called with `{ status: 'active' }` when the URL carries `?status=active`,
+and with `undefined` when it carries none. Verified both cases fail
+before the fix (the pre-fix mount effect always calls
+`fetchApplications()` with zero arguments, matching neither case) and
+pass after.
+
 ### Frontend review (new this pass)
 
 Read `services/api.ts` (410 L), `routes.tsx`, `store/grantsStore.ts` (342 L),
