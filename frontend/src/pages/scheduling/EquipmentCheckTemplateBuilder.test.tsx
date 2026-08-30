@@ -154,6 +154,26 @@ async function confirm(label: string | RegExp) {
   await userEvent.click(within(dialog).getByRole('button', { name: label }));
 }
 
+/**
+ * Point the mocked `matchMedia` at a viewport. The global mock in
+ * `src/test/setup.ts` answers `false` to every query, i.e. phone width, and
+ * `vi.clearAllMocks()` clears recorded calls but keeps implementations — so a
+ * viewport set by one `describe` survives into the next one unless it is set
+ * again. Tests that depend on a width should say which one they mean.
+ */
+const mockViewport = (width: 'phone' | 'laptop') => {
+  vi.mocked(window.matchMedia).mockImplementation((query: string) => ({
+    matches: width === 'laptop' && query === '(min-width: 640px)',
+    media: query,
+    onchange: null,
+    addListener: vi.fn(),
+    removeListener: vi.fn(),
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    dispatchEvent: vi.fn(),
+  }));
+};
+
 describe('EquipmentCheckTemplateBuilder responsive actions', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -440,25 +460,7 @@ describe('EquipmentCheckTemplateBuilder movement persistence', () => {
     });
     updateCheckItem.mockResolvedValue({});
     reorderItems.mockResolvedValue([]);
-    // Laptop viewport (matches the 1024px case above): the rejected-move
-    // assertion below checks the item toggle's accessible name flips to
-    // "Collapse X" once the failure handler re-expands the item — that
-    // Collapse/Expand wording only exists in the isLaptop branch (the
-    // sub-640px branch always reads "Edit X", expanded or not, since a
-    // phone opens a full-height editor instead of an inline one). Without
-    // this override the suite-wide default `matches: false` from
-    // src/test/setup.ts left isLaptop permanently false here, so that
-    // accessible name could never appear and the assertion timed out.
-    vi.mocked(window.matchMedia).mockImplementation((query: string) => ({
-      matches: query === '(min-width: 640px)',
-      media: query,
-      onchange: null,
-      addListener: vi.fn(),
-      removeListener: vi.fn(),
-      addEventListener: vi.fn(),
-      removeEventListener: vi.fn(),
-      dispatchEvent: vi.fn(),
-    }));
+    mockViewport('phone');
   });
 
   const moveSelect = async (name: string) => {
@@ -476,6 +478,10 @@ describe('EquipmentCheckTemplateBuilder movement persistence', () => {
   });
 
   it('keeps a rejected item in its source and does not show a success toast', async () => {
+    // The re-expand-on-failure behaviour this asserts only exists at laptop
+    // width: below 640px the row opens the mobile editor sheet instead of an
+    // inline editor, so its toggle is labelled "Edit …" and never "Collapse …".
+    mockViewport('laptop');
     updateCheckItem.mockRejectedValueOnce(new Error('offline'));
     const user = userEvent.setup();
     renderBuilder();
