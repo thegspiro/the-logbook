@@ -128,6 +128,27 @@ CI re-verified on the follow-up commit; merge conflict against `main`
 (from PR #2067's concurrent merge touching the same `Open PR` section)
 resolved by this check-in.
 
+**Tend pass, round 2 (same day):** Codex posted 2 more review comments on
+the round-1 commit. **GF-24a (new, LOW-MED, cross-cutting, FLAGGED not
+fixed)** — GF-24's fix hard-codes the report date-range boundary as UTC,
+but a non-UTC organization's "June 15" report should mean June 15 in the
+department's own timezone. Confirmed real, but not a regression and not
+unique to this PR: `reports_service.py` has the identical hard-coded-UTC
+boundary at 5 other call sites, and GF-24's fix matched that established
+(if imperfect) pattern rather than inventing a one-off — it's strictly
+better than the bug it replaced (silently dropping the entire end date, in
+every timezone) for every organization regardless of timezone. Doing the
+org-timezone conversion correctly needs a coordinated fix across every
+report date-range filter in the app, not a 3-line patch scoped to this
+PR's own files — `org_timezone.py`'s `resolve_scheduling_timezone` isn't a
+drop-in answer either, since its own docstring ties its fallback
+specifically to scheduling's historical behavior. Flagged in the findings
+doc (GF-24a) and mirrored into `KNOWN_LIMITATIONS.md` as a new cross-cutting
+item. **The other comment (stale PROGRESS.md entry) was about this doc's
+own pre-round-1-fix state and was already resolved by round 1's check-in
+above** — replied confirming no further action needed. Local gate: docs-only
+change, no code touched, so no re-run needed beyond the markdown itself.
+
 ---
 
 ### 2026-08-30 — Feature 21 (Admin hours), pass 2 ✅ merged — PR #2065

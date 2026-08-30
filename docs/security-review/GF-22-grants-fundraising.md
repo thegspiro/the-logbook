@@ -608,6 +608,38 @@ includes both: `test_grant_report_end_date_includes_records_created_later_that_d
 each fails before the fix (temporarily reverted the `Number`/`datetime.combine`
 change, confirmed the 23:30 record was silently dropped) and passes after.
 
+**Follow-up (Codex review, round 2) — GF-24a — LOW-MED, FLAGGED, not fixed —
+the boundary is hard-coded UTC, not the organization's local timezone.**
+Correct: for an org whose `organization.timezone` is not UTC (e.g.
+`Asia/Tokyo`, `America/Los_Angeles`), a report end date of June 15 should
+mean "through June 15 in the department's own timezone," not through
+June 15 in UTC — the current fix's boundary is off by the org's UTC offset,
+which for a report spanning "today" can still include tomorrow's early-UTC
+records or exclude this evening's local records depending on the offset's
+sign. **Not a regression from this fix, and not unique to this PR:** the
+identical hard-coded-UTC boundary is the pre-existing, established pattern
+at every other date-range report filter in the codebase —
+`reports_service.py` alone has the same `datetime.combine(..., tzinfo=timezone.utc)`
+shape at 5 separate call sites, none org-timezone-aware. This fix brings
+`grant_service.py`/`fundraising_service.py` from "silently drops same-day
+records" (strictly wrong for every organization) to "matches every other
+report in the app" (imperfect for non-UTC organizations, consistent with
+existing behavior) — a net improvement, never a regression, for any org in
+any timezone.
+
+Fixing the org-timezone gap correctly is a larger, deliberately out-of-scope
+change for this PR: `app/utils/org_timezone.py`'s `resolve_scheduling_timezone`
+looks like the obvious reusable primitive, but its own docstring says its
+`America/New_York` fallback is specifically scheduling's historical default
+("changing it would move existing departments' shift times") — reusing it
+for reports would need its own decision about what a reporting-context
+default should be, not an assumption borrowed from an unrelated module.
+Doing this correctly means a coordinated fix across every `reports_service.py`
+call site plus these two grants/fundraising ones, not a 3-line patch to the
+files this PR happens to touch. Flagged rather than guessed at; mirrored
+into `docs/KNOWN_LIMITATIONS.md` as a new cross-cutting item (not filed
+under the `GF` prefix, since it spans well beyond this module).
+
 #### GF-25 — NIT (doc-accuracy) — `KNOWN_LIMITATIONS.md`'s GF-7 row still described the already-fixed GF-14 bug
 
 **What:** GF-14 (pass 1, re-confirmed intact above) fixed the
