@@ -810,6 +810,13 @@ describe('EquipmentCheckTemplateBuilder creation guidance', () => {
   }, 20_000);
 
   it('uses the opaque themed page canvas for the checklist preview', async () => {
+    // renderBuilder always mounts at /templates/template-1, so the preview has
+    // nothing to draw until getTemplate resolves. This describe has no
+    // beforeEach, so without a local mock the test only passes on the value a
+    // preceding block happened to leave behind — and fails under any focused
+    // run. The sibling test above does not need one: it drives the preset
+    // creation flow and never reads the loaded template.
+    getTemplate.mockResolvedValue(structuredClone(template));
     renderBuilder();
 
     fireEvent.click(await screen.findByRole('button', { name: /preview/i }));
