@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { ArrowLeft, Loader2, Pencil, Plus, Trash2 } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import toast from 'react-hot-toast';
+import { useConfirm } from '@/contexts/ConfirmContext';
 import { facilitiesService } from '../../../services/facilitiesServices';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import type { FacilityStatus, FacilityType, MaintenanceType } from '../types';
@@ -17,6 +18,7 @@ export default function FacilitiesSettingsPage() {
     [data, setData] = useState<Record<Kind, Lookup[]>>({ types: [], statuses: [], maintenance: [] }),
     [loading, setLoading] = useState(true),
     [editing, setEditing] = useState<{ kind: Kind; item?: Lookup } | null>(null);
+  const { confirm } = useConfirm();
   const load = useCallback(async () => {
     setLoading(true);
     try {
@@ -34,7 +36,17 @@ export default function FacilitiesSettingsPage() {
   }, []);
   useEffect(() => void load(), [load]);
   const remove = async (kind: Kind, item: Lookup) => {
-    if ((item.usageCount ?? 0) > 0 || item.isSystem || !window.confirm(`Delete ${item.name}?`)) return;
+    if ((item.usageCount ?? 0) > 0 || item.isSystem) return;
+    if (
+      !(await confirm({
+        title: `Delete this ${definitions[kind].singular}?`,
+        message: `“${item.name}” will no longer be offered when creating or editing facilities.`,
+        confirmLabel: 'Delete',
+        cancelLabel: 'Keep it',
+        variant: 'danger',
+      }))
+    )
+      return;
     try {
       if (kind === 'types') await facilitiesService.deleteType(item.id);
       else if (kind === 'statuses') await facilitiesService.deleteStatus(item.id);

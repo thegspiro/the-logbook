@@ -7,6 +7,30 @@ import testingLibrary from 'eslint-plugin-testing-library';
 import eslintConfigPrettier from 'eslint-config-prettier';
 import globals from 'globals';
 
+/**
+ * Blocking browser dialogs, banned outright (CLAUDE.md pitfall #16).
+ *
+ * A browser may suppress `window.confirm` / `alert` / `prompt` — Chrome does it
+ * for repeated dialogs and cross-origin frames, and iOS and Firefox offer the
+ * user a "prevent this page from creating further dialogs" checkbox. Once
+ * suppressed, `confirm` returns `false` and `prompt` returns `null`: the exact
+ * values Cancel produces. The action then silently does nothing, with no error
+ * and no clue as to why, which is indistinguishable from the user declining.
+ *
+ * `useConfirm()` and `PromptDialog` are the replacements. This lives in the
+ * lint config rather than in review discipline because the ban held across 58
+ * call sites and then regressed anyway: `FacilitiesSettingsPage` reintroduced
+ * `window.confirm` on 2026-08-27 and nothing caught it, since — unlike the
+ * repo's other documented invariants — this one had no automated enforcement.
+ */
+const noBlockingBrowserDialogs = [
+  {
+    selector: "CallExpression[callee.object.name='window'][callee.property.name=/^(confirm|alert|prompt)$/]",
+    message:
+      'A suppressed window.confirm/alert/prompt is indistinguishable from Cancel. Use useConfirm() from @/contexts/ConfirmContext, or PromptDialog from @/components/ux. See CLAUDE.md pitfall #16.',
+  },
+];
+
 export default tseslint.config(
   // Global ignores (replaces ignorePatterns)
   {
@@ -124,6 +148,7 @@ export default tseslint.config(
           selector: "CallExpression[callee.property.name='toLocaleTimeString']",
           message: 'Use formatTime() from @/utils/dateFormatting instead of .toLocaleTimeString().',
         },
+        ...noBlockingBrowserDialogs,
       ],
       'no-restricted-imports': [
         'error',
@@ -145,7 +170,7 @@ export default tseslint.config(
   {
     files: ['src/utils/dateFormatting.ts', 'src/hooks/useRelativeTime.ts'],
     rules: {
-      'no-restricted-syntax': 'off',
+      'no-restricted-syntax': ['error', ...noBlockingBrowserDialogs],
       'no-restricted-imports': 'off',
     },
   },

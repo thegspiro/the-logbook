@@ -856,6 +856,15 @@ if (!(await confirm({ message: "Delete this?", confirmLabel: "Delete" })))
 the frontend. A `.ts` hook that cannot render JSX does not need to — it calls
 `useConfirm()` like everything else.
 
+**ESLint enforces this** (`no-restricted-syntax`, `noBlockingBrowserDialogs` in
+`eslint.config.js`). It did not until 2026-08-30, and the gap was not
+theoretical: the ban held across 58 call sites on review discipline alone and
+then regressed anyway — `FacilitiesSettingsPage` reintroduced `window.confirm`
+on 2026-08-27 and nothing caught it, because unlike every other invariant in
+this document it had no machine check behind it. The two date-formatting files
+that opt out of `no-restricted-syntax` opt out of the _locale-method_ selectors
+only; the dialog ban still applies to them.
+
 ### 17. Form Controls: Use the `form-*` Utilities, Not a Hand-Rolled Box _(2026-08-10)_
 
 `form-input`, `form-input-sm`, `form-checkbox`, `form-label`, `toggle-track` /
