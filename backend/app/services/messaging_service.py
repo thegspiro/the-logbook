@@ -612,7 +612,17 @@ class MessagingService:
                 )
             )
         for user_id in existing.keys() - targeted:
-            await self.db.delete(existing[user_id])
+            row = existing[user_id]
+            # A receipt is evidence. read_at/acknowledged_at live on this row
+            # and nowhere else, so deleting it destroys the only record that a
+            # member read — and possibly formally acknowledged — this message.
+            # That record is exactly what a department needs to produce later,
+            # and it is lost without anyone acting on the message at all:
+            # _targeted_users filters on User.is_active, so a member simply
+            # going on leave drops out of the audience and takes their
+            # acknowledgment with them. Prune only rows that carry nothing.
+            if row.read_at is None and row.acknowledged_at is None:
+                await self.db.delete(row)
         return len(targeted)
 
     @staticmethod

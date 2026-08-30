@@ -831,5 +831,63 @@ class TestInboxDetailRoute:
         assert paths.index("/inbox/unread-count") < paths.index("/inbox/{message_id}")
 
 
+class TestReconcileRecipients:
+    """Editing a message's audience must not destroy delivery evidence.
+
+    read_at/acknowledged_at live on the recipient row and nowhere else, so a
+    row deleted for falling out of the audience takes the proof of receipt
+    with it. That happens without anyone touching the message: _targeted_users
+    filters on User.is_active, so a member going on leave leaves the audience
+    and their acknowledgment goes too.
+    """
+
+    @staticmethod
+    def _row(user_id, read_at=None, acknowledged_at=None):
+        return SimpleNamespace(
+            user_id=user_id, read_at=read_at, acknowledged_at=acknowledged_at
+        )
+
+    async def _reconcile(self, existing_rows, targeted_ids):
+        svc = _svc()
+        svc.db.add = MagicMock()
+        svc.db.delete = AsyncMock()
+        svc._targeted_users = AsyncMock(
+            return_value=[SimpleNamespace(id=uid) for uid in targeted_ids]
+        )
+        result = MagicMock()
+        result.scalars.return_value.all.return_value = existing_rows
+        svc.db.execute = AsyncMock(return_value=result)
+        await svc.reconcile_recipients(SimpleNamespace(id="m1", organization_id="org1"))
+        return [call.args[0] for call in svc.db.delete.await_args_list]
+
+    async def test_retains_an_acknowledged_row_dropped_from_the_audience(self):
+        signed = self._row(
+            "gone-signed",
+            read_at=datetime(2026, 8, 1, tzinfo=timezone.utc),
+            acknowledged_at=datetime(2026, 8, 1, tzinfo=timezone.utc),
+        )
+        deleted = await self._reconcile([signed], targeted_ids=["still-here"])
+
+        assert signed not in deleted
+
+    async def test_retains_a_read_row_dropped_from_the_audience(self):
+        seen = self._row("gone-read", read_at=datetime(2026, 8, 1, tzinfo=timezone.utc))
+        deleted = await self._reconcile([seen], targeted_ids=["still-here"])
+
+        assert seen not in deleted
+
+    async def test_prunes_a_row_that_carries_no_receipt(self):
+        never_engaged = self._row("gone-clean")
+        deleted = await self._reconcile([never_engaged], targeted_ids=["still-here"])
+
+        assert never_engaged in deleted
+
+    async def test_keeps_rows_still_in_the_audience(self):
+        current = self._row("still-here")
+        deleted = await self._reconcile([current], targeted_ids=["still-here"])
+
+        assert deleted == []
+
+
 if __name__ == "__main__":  # pragma: no cover
     raise SystemExit(pytest.main([__file__, "-v"]))
