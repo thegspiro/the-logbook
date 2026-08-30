@@ -3,6 +3,7 @@
  */
 
 import { createApiClient } from '../../../utils/createApiClient';
+import { EXPORT_TIMEOUT_MS } from '../../../constants/config';
 import type {
   AdminHoursCategory,
   AdminHoursCategoryCreate,
@@ -185,6 +186,12 @@ export const adminHoursEntryService = {
   // than a hand-rolled `fetch()`, so the export gets the same 401 refresh
   // -and-retry and error-reporting handling as every other request in the
   // app instead of failing outright the moment a session needs a refresh.
+  // Overrides the default API_TIMEOUT_MS: an unfiltered export queries and
+  // serializes an org's entire admin-hours history in one shot, which can
+  // legitimately take longer than a typical request for a long-tenured
+  // department — the raw `fetch()` this replaced had no timeout at all, so
+  // keeping the 30s default here would newly time out an export that used
+  // to succeed.
   async exportCsv(params?: {
     status?: string | undefined;
     categoryId?: string | undefined;
@@ -201,6 +208,7 @@ export const adminHoursEntryService = {
         end_date: params?.endDate,
       },
       responseType: 'blob',
+      timeout: EXPORT_TIMEOUT_MS,
     });
     return response.data as Blob;
   },

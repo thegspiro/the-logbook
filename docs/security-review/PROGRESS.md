@@ -46,9 +46,12 @@ already-org-scoped `AdminHoursEntry` fetched two lines above, the checklist's
 named exception.
 
 **Frontend scope established for the first time this pass** (pass 1 was
-backend-only): the 21-file `modules/admin-hours/` module plus 3 outside
-consumers (`AdminHoursSection.tsx`, `AdminHoursRenderer.tsx`,
-`HourTrackingSection.tsx`). Swept for `window.confirm`/`alert`/`prompt` (0 —
+backend-only): the 21-file `modules/admin-hours/` module plus 6 outside
+consumers (`AdminHoursSection.tsx`, `HourTrackingSection.tsx`,
+`Dashboard.tsx`, `MemberProfilePage.tsx`, `ComplianceRequirementsConfigPage.tsx`,
+`CheckInStationPage.tsx` — see AH21-2 below; a first pass at this list named
+only 3 and wrongly included `AdminHoursRenderer.tsx`, which does not import
+the module). Swept for `window.confirm`/`alert`/`prompt` (0 —
 destructive actions go through `useConfirm()`), `dangerouslySetInnerHTML` (0),
 banned `.toLocale*`/`date-fns` (0 — `formatDate`/`formatForDateTimeInput`/
 `localToUTC` + `useTimezone()` used throughout), and direct `fetch(` (1 hit —
@@ -87,6 +90,24 @@ errors, `eslint .` 0 errors (8 pre-existing warnings, none in touched files),
 member-profile suites). Findings doc:
 `docs/security-review/AH-21-admin-hours.md` → Pass 2. Next: 22 grants &
 fundraising, once this PR merges.
+
+**Tend pass (same day):** Codex posted 3 review comments on PR #2065, all
+independently verified against the actual code and addressed in a follow-up
+commit. **AH21-2 (new, LOW, doc accuracy)** — the "3 outside consumers" list
+above was incomplete: a repo-wide import search found 6, not 3
+(`AdminHoursRenderer.tsx` doesn't import the module at all; `Dashboard.tsx`,
+`MemberProfilePage.tsx`, `ComplianceRequirementsConfigPage.tsx`, and
+`CheckInStationPage.tsx` were missing). The 4 newly-found files were swept
+against the same checklist items — 0 hits, all read-only service calls.
+**AH21-1 follow-up** — the CSV export's raw `fetch()` had no timeout;
+routing it through the shared axios client's default `API_TIMEOUT_MS` (30s)
+could newly abort a large department's unfiltered export. Added
+`EXPORT_TIMEOUT_MS` (120s) and applied it to this one call site — the same
+unbounded-query shape exists in `reportExportService.exportReport` and the
+storefront order export, both pre-existing and out of this PR's scope.
+**Rotation-table row** — the same tend pass also caught this PR's PROGRESS.md
+update marking row 21 ✅ before merge, contradicting the legend; corrected to
+⏳. CI re-verified green on the follow-up commit; no merge conflict.
 
 ---
 
@@ -2440,7 +2461,7 @@ each row's prior PR is recorded in the Log, not repeated here.
 | 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ✅     |
 | 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3723 L)                                                                                                          | ✅     |
 | 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ✅     |
-| 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ✅     |
+| 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ⏳     |
 | 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ⬜     |
 | 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ⬜     |
 | 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ⬜     |

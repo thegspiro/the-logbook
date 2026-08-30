@@ -10,6 +10,14 @@
 // ============================================
 export const API_TIMEOUT_MS = 30_000; // 30 seconds
 
+/**
+ * A CSV/report export runs one unbounded org-scoped query and serializes
+ * every row before the response starts — slower than a typical CRUD call
+ * for a department with a long history. Give exports more room than
+ * API_TIMEOUT_MS rather than aborting a download that was still working.
+ */
+export const EXPORT_TIMEOUT_MS = 120_000; // 2 minutes
+
 // ============================================
 // Pagination defaults
 // ============================================

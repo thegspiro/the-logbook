@@ -16,6 +16,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   moment you clicked Export CSV, the export failed with a generic error
   instead of quietly refreshing and continuing like every other action on
   the page. It now goes through the same handling as the rest of the app.
+- That same fix moved the export onto the app's standard 30-second request
+  timeout, which could have newly cut off a large department's unfiltered
+  export part-way through. The export now gets its own longer timeout
+  instead.
 
 ### Bulk edits to a saved checklist now save every selected item (2026-08-30)
 

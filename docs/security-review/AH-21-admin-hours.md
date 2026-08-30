@@ -295,11 +295,27 @@ All in `tests/test_admin_hours_service.py` unless noted:
 **Backend:** `app/api/v1/endpoints/admin_hours.py`, `app/services/admin_hours_service.py`,
 `app/models/admin_hours.py`, `app/schemas/admin_hours.py`.
 **Frontend:** established for the first time this pass — `modules/admin-hours/`
-(services, store, pages, components, types), plus every outside consumer:
+(services, store, pages, components, types), plus every outside consumer,
+found by a repo-wide import search rather than assumed complete from memory
+(a Codex review comment on the first version of this doc caught an
+undercounted list — see AH21-2 below):
 `components/member-profile/AdminHoursSection.tsx`,
-`modules/reports/components/renderers/AdminHoursRenderer.tsx`,
 `pages/events-settings/HourTrackingSection.tsx` (event-hour-mapping config,
-reachable only through `eventHourMappingService`, not the module's own pages).
+reachable only through `eventHourMappingService`, not the module's own pages),
+`pages/Dashboard.tsx` (read-only monthly hours summary card,
+`adminHoursEntryService.getSummary`), `pages/MemberProfilePage.tsx`
+(read-only summary + compliance for the viewed member,
+`adminHoursEntryService.getSummary` / `adminHoursComplianceService.getUserCompliance`,
+gated behind `isSelf || checkPermission('admin_hours.manage')`),
+`pages/ComplianceRequirementsConfigPage.tsx` (read-only category list for the
+compliance-profile editor, `adminHoursCategoryService.list`), and
+`modules/membership/pages/CheckInStationPage.tsx` (read-only category list
+for the kiosk clock-in flow, `adminHoursCategoryService.list`).
+`modules/reports/components/renderers/AdminHoursRenderer.tsx` was listed as a
+consumer by the first version of this doc; it does not import the
+admin-hours module at all (it renders the `AdminHoursReport` shape returned
+by the reports endpoint, a separate data path) and has been removed from
+this list.
 **Migrations:** none since pass 1.
 
 ### Scope since pass 1's merge (`598a8063`, PR #1903)
@@ -386,15 +402,24 @@ exception, not a gap.
 Pass 1 was explicitly backend-only. Traced every file importing an
 admin-hours service, store, or type export: the 21-file `modules/admin-hours/`
 module (services/api.ts, the Zustand store, 5 pages, 9 components, 2 type/
-util files) plus 3 outside consumers that reach in through the module's own
-service exports rather than duplicating them.
+util files) plus 6 outside consumers that reach in through the module's own
+service exports rather than duplicating them (see AH21-2 — the first version
+of this doc's list of "3 outside consumers" was incomplete: it named
+`AdminHoursRenderer.tsx`, which does not actually import the module, and
+missed `Dashboard.tsx`, `MemberProfilePage.tsx`,
+`ComplianceRequirementsConfigPage.tsx`, and `CheckInStationPage.tsx`, found
+by re-running the import search repo-wide rather than trusting the original
+list). All six outside consumers call only read methods
+(`getSummary`/`getUserCompliance`/`list`) — none creates, updates, or
+deletes through the admin-hours service, so CLAUDE.md Pitfall #1's
+create/update payload semantics don't apply to any of them.
 
 `services/api.ts` — every method routes through `createApiClient()`
 (`withCredentials: true`, the CSRF double-submit header on state-changing
 methods, and the shared 401-refresh-and-retry interceptor), matching Pitfall
 #7's requirement, **with one exception below (AH21-1)**.
 
-Swept the full 21-file module plus the 3 outside consumers for:
+Swept the full 21-file module plus all 6 outside consumers for:
 `window.confirm`/`alert`/`prompt` (0 hits — destructive actions
 (deactivate-category) go through `useConfirm()`; approve/reject/bulk-approve
 use inline confirmation UI, not a blocking dialog, which is not this
@@ -462,12 +487,64 @@ error-check sequence. No behavior change from the user's perspective (same
 filename, same trigger); the difference is only that a 401 mid-export now
 gets the same transparent refresh-and-retry as every other request.
 
+**Follow-up (same finding, caught by Codex review on the PR):** the raw
+`fetch()` this replaced had no timeout at all, while `createApiClient()`
+applies `API_TIMEOUT_MS` (30s) to every request. `export_entries_csv`
+(`admin_hours_service.py`) runs one org-scoped query with no row cap, then
+serializes every row before the response starts — for a long-tenured
+department's unfiltered history, that can legitimately exceed 30s, and
+routing the request through the shared client would have newly aborted an
+export that used to succeed. Verified this is a real risk this specific fix
+introduces (not merely a pre-existing pattern the PR's own body already
+disclaims): `reportExportService.exportReport` and the storefront order
+export have the identical unbounded-query-then-30s-timeout shape, but
+neither is touched by this PR, so fixing only admin-hours' new call site is
+the correctly-scoped fix rather than widening this PR into those modules.
+Added `EXPORT_TIMEOUT_MS` (120s, `constants/config.ts`) and passed
+`timeout: EXPORT_TIMEOUT_MS` on `exportCsv`'s request config, restoring
+(with margin) the "no effective timeout for this call" behavior the raw
+`fetch()` had, while keeping every other admin-hours request at the
+standard 30s.
+
 **Guard test:**
 `frontend/src/modules/admin-hours/moduleFetchIntegrity.test.ts` — walks
 every non-test `.ts`/`.tsx` file under the module and fails on a bare
 `fetch(` call, naming the file and line. Verified to fail on reintroduction
 by temporarily reinserting a `fetch()` call in `AllEntriesTab.tsx` (failed,
 naming the exact line) and confirmed clean after reverting.
+
+### AH21-2 — LOW (documentation accuracy) — "every outside consumer" claim was incomplete — ✅ FIXED
+
+**What:** Caught by a Codex review comment on the PR. This doc's first
+version claimed the frontend sweep covered "every outside consumer" but
+listed only 3: `AdminHoursSection.tsx`, `AdminHoursRenderer.tsx`, and
+`HourTrackingSection.tsx`. A repo-wide import search
+(`grep -rln "admin-hours/services/api\|adminHoursService\|AdminHours"
+frontend/src`, excluding the module itself) turns up ten matches, not three:
+the original three, four more genuine consumers the original search missed
+(`pages/Dashboard.tsx`, `pages/MemberProfilePage.tsx`,
+`pages/ComplianceRequirementsConfigPage.tsx`,
+`modules/membership/pages/CheckInStationPage.tsx`), and `App.tsx` plus three
+`.test.tsx` files (route registration and test files, not consumers in the
+security-scope sense). `AdminHoursRenderer.tsx` itself does not import the
+admin-hours module at all — it renders the `AdminHoursReport` shape the
+reports endpoint returns, an unrelated data path — so its inclusion in the
+original list was also wrong in the other direction.
+
+Since a pass that "establishes frontend security scope for the first time"
+and then marks the feature done is exactly the kind of claim a later pass
+would take on faith rather than re-deriving, an incomplete list here would
+have let a real consumer go unswept indefinitely.
+
+**Fix:** re-ran the sweep (`window.confirm`/`alert`/`prompt`,
+`dangerouslySetInnerHTML`, banned `.toLocale*`/`date-fns`, direct `fetch(`)
+against all four newly-found files — 0 hits on all four checks, and all four
+call only read methods on the admin-hours service (`getSummary`,
+`getUserCompliance`, `list`), so CLAUDE.md Pitfall #1's create/update
+payload rules don't apply to any of them. Corrected the consumer list in
+the "Pass 2" header and the "Frontend scope" section above (now 6, not 3,
+with `AdminHoursRenderer.tsx` removed and a note on why). No code change —
+this finding is about the doc's own claim, not the application.
 
 ### Confirmed still open — unchanged from pass 1
 
