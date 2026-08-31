@@ -16,16 +16,15 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-Feature 29 (Reports & analytics), pass 3 — PR
-[#2091](https://github.com/thegspiro/the-logbook/pull/2091), branch
-`claude/security-review-reports-analytics`. Codex's review caught six real
-gaps the initial pass missed (one P1 authorization bypass on five report
-types, one P1 label-length DoS, four P2s); all six fixed with guard tests.
-See log entry below and `docs/security-review/RPT-29-reports-analytics-pass3.md`.
+None. Feature 29 (Reports & analytics) is fully closed — see log entry
+below. Next: feature 30, Onboarding.
 
 ---
 
-### 2026-08-31 — Feature 29 (Reports & analytics), pass 3 — 0 fixed, 0 new flagged — PR #2091
+### 2026-08-31 — Feature 29 (Reports & analytics), pass 3 ✅ PR #2091 merged (`b6c283a7`)
+
+Round 1: 0 fixed, 0 new flagged (claim did not hold). Round 2 (Codex-caught):
+6 fixed — see below.
 
 No security-review PR was open (feature 28/Security-audit-IP fully merged via
 PR #2089), so the rotation continued to feature 29. Loaded `CHECKLIST.md`,
@@ -3693,7 +3692,7 @@ each row's prior PR is recorded in the Log, not repeated here.
 | 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                         | ✅     |
 | 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                         | ✅     |
 | 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`                                                                    | ✅     |
-| 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                              | 🔄     |
+| 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                              | ✅     |
 | 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (24 unauth bootstrap routes)                                                                                             | ⬜     |
 | 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                   | ⬜     |
 | 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                  | ⬜     |
