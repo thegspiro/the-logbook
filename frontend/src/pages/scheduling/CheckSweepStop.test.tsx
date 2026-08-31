@@ -436,3 +436,53 @@ describe('a seal over something that is expiring', () => {
     expect(onSeal).toHaveBeenCalledWith('tray', { status: 'broken' });
   });
 });
+
+describe('a sealed bag with pockets', () => {
+  const gauze: CheckItemSpec = { id: 'gauze', name: 'Gauze', checkType: 'count', expectedQuantity: 4 };
+  const igel: CheckItemSpec = { id: 'igel', name: 'i-gel size 4', checkType: 'count', expectedQuantity: 2 };
+  const cylinder: CheckItemSpec = { id: 'o2', name: 'O2 cylinder', checkType: 'level' };
+
+  const bag = (pocketSeal?: LapStop['seal']): LapStop => ({
+    id: 'bag',
+    name: 'Airway bag',
+    isSealed: true,
+    seal: { status: 'intact', tagNumber: 'M2-40871' },
+    items: [gauze],
+    children: [
+      {
+        id: 'front',
+        name: 'Front pocket',
+        items: [igel, cylinder],
+        ...(pocketSeal ? { isSealed: true, seal: pocketSeal } : {}),
+      },
+    ],
+  });
+
+  it('clears the counting in the pockets too, since they are inside the same tag', () => {
+    // The model already clears the whole tree. Leaving pocket rows on screen
+    // means the tally reports them answered while they sit there asking.
+    render(<CheckSweepStop stop={bag()} answers={{}} onAnswer={vi.fn()} onSeal={vi.fn()} />);
+    expect(screen.queryByTestId('tally-row-gauze')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('tally-row-igel')).not.toBeInTheDocument();
+  });
+
+  it('still asks the pocket for what a seal cannot vouch for', () => {
+    render(<CheckSweepStop stop={bag()} answers={{}} onAnswer={vi.fn()} onSeal={vi.fn()} />);
+    expect(screen.getByTestId('gauge-o2')).toBeVisible();
+  });
+
+  it('lets a pocket with its own tag answer for itself', () => {
+    // An outer seal clearing says nothing about an inner one: a pouch sealed
+    // inside this bag is a separate claim, and it has its own card to make it.
+    render(<CheckSweepStop stop={bag({ tagNumber: 'P9-112' })} answers={{}} onAnswer={vi.fn()} onSeal={vi.fn()} />);
+    expect(screen.getByTestId('seal-front')).toHaveTextContent('Read the tag');
+    expect(screen.getByTestId('tally-row-igel')).toBeVisible();
+  });
+
+  it('asks everything again once the bag tag is broken', () => {
+    const broken = { ...bag(), seal: { status: 'broken' as const } };
+    render(<CheckSweepStop stop={broken} answers={{}} onAnswer={vi.fn()} onSeal={vi.fn()} />);
+    expect(screen.getByTestId('tally-row-gauze')).toBeVisible();
+    expect(screen.getByTestId('tally-row-igel')).toBeVisible();
+  });
+});

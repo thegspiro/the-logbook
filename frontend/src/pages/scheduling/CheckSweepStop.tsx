@@ -37,6 +37,15 @@ export interface StopBodyProps {
   onAnswer: (itemId: string, patch: Partial<CheckItemAnswer>) => void;
   /** Records the crew's reading of a tamper seal. Absent on a read-only body. */
   onSeal?: ((stopId: string, patch: Partial<SealState>) => void) | undefined;
+  /**
+   * A seal further up is already standing in for this pocket's contents.
+   *
+   * A pocket is inside its bag's seal, and the model agrees: `isStopComplete`
+   * and `stillAsked` clear the whole tree, not just the bag's own shelf. Without
+   * this the counting in a pocket stays on screen while the tally reports it
+   * answered — six rows asking to be filled in under "2 of 2 answered".
+   */
+  clearedByAncestorSeal?: boolean | undefined;
   disabled?: boolean | undefined;
 }
 
@@ -614,11 +623,24 @@ const SealCard: React.FC<{
 /**
  * A stop's own items, then its pockets.
  */
-export const CheckSweepStop: React.FC<StopBodyProps> = ({ stop, answers, onAnswer, onSeal, disabled }) => {
+export const CheckSweepStop: React.FC<StopBodyProps> = ({
+  stop,
+  answers,
+  onAnswer,
+  onSeal,
+  disabled,
+  clearedByAncestorSeal,
+}) => {
   // An intact tag answers the counting, so those rows come off the screen
   // rather than sitting there inviting a crew to count through a seal they
   // have just vouched for. What it cannot answer stays.
-  const sealed = contentsAreSealed(stop);
+  //
+  // A pocket carries its own seal where it has one — the flatten helper on main
+  // promotes a sealed bag out of its parent for exactly this reason, that a
+  // seal is a claim about one container and needs a group of its own. Here the
+  // nesting gives it that group, so an inner seal is answered on its own card
+  // and an outer one clearing says nothing about it.
+  const sealed = clearedByAncestorSeal === true || contentsAreSealed(stop);
   const own = sealed ? sealCannotClear(stop.items) : stop.items;
 
   return (
@@ -638,7 +660,16 @@ export const CheckSweepStop: React.FC<StopBodyProps> = ({ stop, answers, onAnswe
           <h3 className="text-theme-text-secondary border-theme-surface-border border-l-2 pl-2 text-[13px] font-bold">
             {pocket.name}
           </h3>
-          <CheckSweepStop stop={pocket} answers={answers} onAnswer={onAnswer} onSeal={onSeal} disabled={disabled} />
+          <CheckSweepStop
+            stop={pocket}
+            answers={answers}
+            onAnswer={onAnswer}
+            onSeal={onSeal}
+            disabled={disabled}
+            // A pocket with its own tag answers for itself; otherwise it is
+            // inside whatever the bag's tag has already settled.
+            clearedByAncestorSeal={pocket.isSealed ? false : sealed}
+          />
         </section>
       ))}
     </div>

@@ -8,11 +8,20 @@
  * each holding what to ask there. This is the only place that translation
  * happens, so a rule about it has one home rather than one per screen.
  *
- * **Pockets nest.** The builder lets a chief put a compartment inside another
- * one, and the design is explicit that a bag is a stop with its own stops. The
- * accordion on main ignores `parentCompartmentId` and renders every
- * compartment as a sibling, so a pocket currently shows up beside the bag it
- * is inside rather than within it. Nesting here is the deliberate change.
+ * **Pockets nest, and stay nested.** The accordion on main reaches the same
+ * hierarchy by flattening it: `flattenCompartmentTree` merges an unsealed
+ * pocket's items into its parent's card under a synthetic header row, and
+ * *promotes* a sealed one to a card of its own, because a seal is a claim
+ * about one container and needs a group it can clear on its own. Both are
+ * consequences of one card per top-level compartment.
+ *
+ * The sweep hands over one place at a time, so it needs neither workaround: a
+ * pocket is a stop inside a stop, a sealed pocket carries its own seal on its
+ * own body, and an outer tag clearing says nothing about an inner one. That is
+ * why this returns a tree where the accordion takes a list.
+ *
+ * Submission still goes through `flattenCompartmentTree` for
+ * `storagePathByItemId`, so where an item lives on the record is unchanged.
  *
  * Nothing is ever dropped. A compartment whose parent id points at nothing,
  * or at something that would form a cycle, comes back as a top-level stop —
