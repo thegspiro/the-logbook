@@ -16,8 +16,63 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-None. Feature 28 (Security, audit & IP) is fully closed — see log entry
-below. Next: feature 29, Reports & analytics.
+Feature 29 (Reports & analytics), pass 3 — branch
+`claude/security-review-reports-analytics`. PR opening; see log entry below.
+
+---
+
+### 2026-08-31 — Feature 29 (Reports & analytics), pass 3 — 0 fixed, 0 new flagged — PR pending
+
+No security-review PR was open (feature 28/Security-audit-IP fully merged via
+PR #2089), so the rotation continued to feature 29. Loaded `CHECKLIST.md`,
+`SEC-00-cross-cutting-baseline.md`, and both prior findings docs
+(`docs/security-review/RPT2-29-reports-analytics.md`, PR #1912;
+`docs/module-audit/reports-analytics.md`; `docs/app-review/reports-analytics.md`;
+`docs/app-review/dashboard.md`) — re-verified their open items rather than
+re-deriving them.
+
+Diffed all ten files (`reports.py`, `analytics.py`, `platform_analytics.py`,
+`dashboard.py`, `labels.py`, `reports_service.py`,
+`dashboard_widget_service.py`, `attendance_dashboard_service.py`,
+`label_service.py`, `label_printer_service.py`) against the commit pass 2
+merged as: the only change since is one small commit adding a `printer_id`
+field to the label preset, which validates the client-supplied printer id
+against the caller's org before storage (correct pitfall-14c pattern) —
+verified good, no finding.
+
+Read every endpoint and service in full (not just the diff), enumerated all
+29 routes' auth/permission dependencies (table in the findings doc), and
+re-verified every prior fix line-by-line: RPT2-29-1, RPT2-29-3, DASH-29-1,
+DASH-29-2, DASH-29-3, LBL-29-1, LBL-29-3 (security-review pass 2) and DASH-3,
+RPT-1, RPT-4, RPT-5a, RPT-5b (module-audit/app-review) all hold exactly as
+recorded, no regressions. Every still-flagged policy item (RPT2-29-2 saved-
+report scheduler, LBL-29-2 label-printer permission gate, LBL-29-4 PDF label
+count cap, RPT-3 PII-tier permission, RPT-5c/RPT-6/RPT-7, DASH-2 dead
+`/dashboard/stats` endpoint) re-confirmed unchanged by grep/re-read, not
+re-applied.
+
+Also checked dimensions the pass-2 writeup didn't fully re-derive: zero
+`.like()`/`.ilike()` calls in this feature (n/a); the frontend's client-side
+CSV export (`modules/reports/utils/export.ts`) routes every cell through
+`escapeCsvCell`, which neutralizes formula-injection triggers the same way
+`SafeCsvWriter` does server-side (verified good); `platform_analytics.py`'s
+error-log aggregate projects only `error_type` + count, never
+`error_message`/`context` (verified good); the one `ondelete="SET NULL"` FK
+in this feature's models (`LabelPrinter.created_by_id`) is `nullable=True`.
+
+Noted in passing, not fixed (dead code, not exploitable): the frontend's
+`modules/reports/services/api.ts` exports a `reportExportService.exportReport`
+that calls a `POST /reports/export` backend route which does not exist, and
+has zero callers anywhere in the frontend.
+
+**No new findings, no code changes this pass.** Full writeup:
+`docs/security-review/RPT-29-reports-analytics-pass3.md`.
+
+Completion gate: `flake8`/`black --check`/`isort --check-only` clean on all
+ten feature files; `validate_migrations.py --strict` passed (394 revisions,
+single head); `pytest tests/ -k "reports or analytics or dashboard or
+attendance or label"` — **486 passed, 1 skipped, 0 failed**. No frontend file
+changed, so `tsc`/`eslint` not re-run.
 
 ---
 
@@ -3600,7 +3655,7 @@ each row's prior PR is recorded in the Log, not repeated here.
 | 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                         | ✅     |
 | 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                         | ✅     |
 | 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`                                                                    | ✅     |
-| 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                              | ⬜     |
+| 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                              | 🔄     |
 | 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (24 unauth bootstrap routes)                                                                                             | ⬜     |
 | 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                   | ⬜     |
 | 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                  | ⬜     |
