@@ -19,12 +19,15 @@ feature. The rotation cannot outrun its own review queue.
 PR [#2083](https://github.com/thegspiro/the-logbook/pull/2083)
 (`claude/security-review-messaging-notifications-pass2-migration-fix`) —
 feature 25 (Messaging & notifications), pass 2 follow-up. PR #2081 (the
-main pass-2 review, MSG-9 fixed + MSG-10 flagged) merged to `main` before
-this iteration's independent finding could be added to it (see log entry
+main pass-2 review, MSG-9 fixed + MSG-10 flagged) and its closing PR #2082
+(Codex doc-accuracy corrections) both merged to `main` before this
+iteration's independent finding could be added to either (see log entries
 below for the full sequence). This follow-up PR carries the finding that
 did not make it into #2081: **MSG-11** (HIGH — a migration existence-guard
 gap, fixed) and **MSG-12** (LOW-MED, flagged). Opened against current
-`main` (which already includes #2081). Opened and subscribed; awaiting CI.
+`main` (which already includes #2081 and #2082). Opened and subscribed;
+awaiting CI. Rotation row 25 stays `⏳` until this merges — the HIGH-severity
+migration fix is still outstanding.
 
 ---
 
@@ -99,6 +102,36 @@ the feature is not fully closed until this follow-up PR merges too. PR
 reusing #2081's now-merged branch name, per Pitfall #24) and subscribed.
 Next: 26 Forms, once this merges.
 
+### 2026-08-31 — Feature 25 (Messaging & notifications), pass 2 ✅ PR #2081 fully merged (PR #2082 closed the tracker)
+
+PR #2081 merged (`7d4c8fda`). Codex's review flagged two real issues on the
+first commit: a finding-id collision (the flagged `reconcile_recipients`
+item in `KNOWN_LIMITATIONS.md` reused `MSG-9`, already assigned to the fixed
+`get_message_stats` org-scoping issue) and an overstated claim that
+narrowing a message's audience "destroys acknowledgment history" — it
+overlooked the independent, tamper-evident `message_acknowledged` audit-log
+entry `reconcile_recipients` never touches. Fixed by renaming the
+limitation to MSG-10 (with cross-references updated in the findings doc and
+this tracker) and rewording the claim to distinguish the acknowledgment
+report's/inbox's lost record from the surviving audit trail. A third Codex
+comment (stale `## Open PR` header) was already addressed by the prior
+commit. All three review threads resolved; CI green on the final head
+(17/17 checks), no merge conflict.
+
+**Correction (2026-08-31, on the closing PR #2082):** Codex's review there
+caught that the "surviving audit trail" framing above overstated it too —
+`AuditLogger.create_log_entry` (`app/core/audit.py:265-270`) is deliberately
+fail-open and `acknowledge_message` never checks its return value, so the
+`message_acknowledged` audit-log write is best-effort, not guaranteed. Fixed
+across three separate spots Codex caught one at a time (the `KNOWN_LIMITATIONS.md`
+body, its own heading, and this tracker's original PR #2081 summary below) to
+say the report/inbox loss is reliable while the audit-trail survival is
+conditional on that write having succeeded. PR #2082 merged (`c71913ec`),
+marking rotation row 25 ✅ — **before** a second, independent security-review
+session's PR #2083 (see entry above) surfaced the still-outstanding
+HIGH-severity MSG-11 migration bug, which reopened row 25 to `⏳`. Next: 26
+Forms, once #2083 merges.
+
 ### 2026-08-31 — Feature 25 (Messaging & notifications), pass 2 — 1 fixed (LOW-MED), 1 flagged (LOW-MED) — PR #2081 ✅ merged
 
 No security-review PR was open (feature 24/Meetings & minutes pass 2 fully
@@ -147,13 +180,16 @@ added that inspects the compiled `WHERE` clause and fails on reintroduction
 **Flagged (MSG-10, not fixed, recorded in `docs/KNOWN_LIMITATIONS.md`)** —
 `reconcile_recipients` hard-deletes a member's `DepartmentMessageRecipient`
 row, including `read_at`/`acknowledged_at`, the moment an audience edit no
-longer targets them — erasing that member's record from
-`get_acknowledgment_report` (an independent `message_acknowledged` audit-log
-entry survives, per Codex's review of PR #2081, so this is a report/inbox-
-visibility loss, not a total loss of evidence), which the same file's own
-`delete_message` docstring calls "compliance evidence." Not mechanically
-fixable like MSG-9 (the org-scoping fix above): keeping resolved rows would also keep the
-message visible in that member's inbox (visibility is a join on the same
+longer targets them — reliably erasing that member's record from
+`get_acknowledgment_report` (which the same file's own `delete_message`
+docstring calls "compliance evidence"). An independent `message_acknowledged`
+audit-log entry may also exist, but that write is best-effort, not
+guaranteed — `AuditLogger.create_log_entry` is deliberately fail-open and
+`acknowledge_message` never checks its return, per Codex's review of the
+closing PR #2082 — so whether any evidence survives beyond the report/inbox
+depends on whether that write happened to succeed. Not mechanically fixable
+like MSG-9 (the org-scoping fix above): keeping resolved rows would also keep
+the message visible in that member's inbox (visibility is a join on the same
 table), which is a product decision, not a bug fix. Not cross-tenant.
 
 Also corrected a stale doc: `docs/app-review/email-templates.md` still marked
