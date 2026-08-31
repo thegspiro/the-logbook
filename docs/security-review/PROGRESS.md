@@ -16,36 +16,21 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-Feature 32 (Locations & kiosk), pass 2 — PR
-[#2098](https://github.com/thegspiro/the-logbook/pull/2098), branch
-`claude/security-review-locations-kiosk-pass2`. Round 1 read every backend
-file in the feature's surface in full and reported zero findings (correctly
-noting the surface is byte-for-byte unchanged since pass 1, PR #1916 — but
-citing an unreachable commit, `1b7be79a`, for that diff). **Round 2
-(Codex-caught):** five real, independently verified findings the full read
-missed — LOC-32-1 (a lost prospect-link race could cost the guest their
-whole attendance record, not just the pipeline link), LOC-32-2 (kiosk
-display codes kept working after the owning organization was deactivated),
-LOC-32-3 (the location-uniqueness check skipped a building-only change),
-LOC-32-4 (the guest-check-in daily cap was reserved before the window-open
-and attendance-finalized rejection gates, letting refused traffic exhaust
-it), LOC-32-5 (an explicit `null` for `name`/`is_active` reached a NOT NULL
-column as a 500 instead of a validation error) — plus the commit-hash
-correction (`1a0a35c8` is the actual, reachable squash-merge commit). All
-five fixed with guard tests. **Round 3 (Codex-caught, on the LOC-32-3
-fix):** the effective-building calculation couldn't tell an explicit
-`building: null` (clearing it) apart from an omitted `building`, so a
-clear skipped the dup-check against the new null scope — fixed by reading
-`model_fields_set` instead of an `is not None` check. See log entry below
-and `docs/security-review/LOC-32-locations-kiosk.md`.
-
-**Note on branch naming:** pass 1's PR (#1916) used the branch name
-`claude/security-review-locations-kiosk` — reusing it for this pass would
-violate CLAUDE.md Pitfall #24, so this pass uses `-pass2` appended, matching
-the convention the CRON-31 and ONB-30 pass-2 iterations used for the same
-collision.
+None. Feature 32 (Locations & kiosk) is fully closed — see log entry below.
+Next: feature 33, Core infrastructure.
 
 ---
+
+### 2026-08-31 — Feature 32 (Locations & kiosk), pass 2 ✅ PR #2098 merged (`5e382921`)
+
+Nine Codex-caught fixes across five review rounds — see the prior log entry
+below for the full account. Two "CI Success" checks reported failure
+mid-review (commits `58002f19`, `8fb906dc`); both were runs cancelled by a
+rapid next push, not real failures, confirmed via each run's
+`conclusion: "cancelled"`. Final head (`3e8626e3`) ran CI to completion
+clean, all nine review threads resolved, no unresolved comments. Findings
+doc: `docs/security-review/LOC-32-locations-kiosk.md`. Next: 33 core
+infrastructure.
 
 ### 2026-08-31 — Feature 32 (Locations & kiosk), pass 2 — round 2: 5 fixed (Codex-caught), 1 doc correction — PR #2098
 
@@ -4057,7 +4042,7 @@ each row's prior PR is recorded in the Log, not repeated here.
 | 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                              | ✅     |
 | 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (24 unauth bootstrap routes)                                                                                             | ✅     |
 | 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                   | ✅     |
-| 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                  | 🔄     |
+| 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                  | ✅     |
 | 33  | Core infrastructure       | CORE   | `core/security_middleware.py`, `core/database.py`, `core/config.py`                                                                             | ⬜     |
 | 34  | Frontend shared           | FE     | `utils/apiCache.ts`, module axios instances, `ProtectedRoute`, global stores                                                                    | ⬜     |
 
