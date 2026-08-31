@@ -19,6 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.error_codes import CodedValueError, ErrorCode
 from app.core.utils import generate_uuid
+from app.models.apparatus import EquipmentCheckTemplate
 from app.models.call_tracking import CallTrackingMode
 from app.models.notification import NotificationLog
 from app.models.training import (
@@ -39,6 +40,7 @@ from app.models.training import (
     ShiftStatus,
     ShiftSwapRequest,
     ShiftTemplate,
+    ShiftTemplateEquipmentCheck,
     ShiftTimeOff,
     SwapRequestStatus,
     TimeOffStatus,
@@ -759,6 +761,22 @@ class SchedulingService:
                 shift_data["positions"] = normalize_stored_positions(
                     shift_data["positions"]
                 )
+
+            # A client-supplied FK, so it is org-checked before it is stored
+            # (pitfall #14c). This one decides which equipment checklists the
+            # shift carries, so a foreign id would not merely dangle — it would
+            # point the crew at another department's checklists.
+            template_id = shift_data.get("template_id")
+            if template_id:
+                owned = await self.db.execute(
+                    select(ShiftTemplate.id).where(
+                        ShiftTemplate.id == template_id,
+                        ShiftTemplate.organization_id == organization_id,
+                    )
+                )
+                if owned.scalar_one_or_none() is None:
+                    return None, "Shift template not found"
+
             shift = Shift(
                 organization_id=organization_id, created_by=created_by, **shift_data
             )
@@ -2243,9 +2261,92 @@ class SchedulingService:
             template_data["positions"] = normalize_stored_positions(
                 template_data["positions"]
             )
-        return await self._crud_create(
+        # Not a column — popped before the model is constructed, then written
+        # as link rows once the template has an id.
+        check_ids = template_data.pop("equipment_check_template_ids", None)
+        template, error = await self._crud_create(
             ShiftTemplate, template_data, organization_id, created_by
         )
+        if error or template is None:
+            return template, error
+        if check_ids is not None:
+            link_error = await self._replace_equipment_check_links(
+                template, organization_id, check_ids
+            )
+            if link_error:
+                return None, link_error
+            await self.db.commit()
+            await self.db.refresh(template)
+        return template, None
+
+    async def _replace_equipment_check_links(
+        self,
+        template: ShiftTemplate,
+        organization_id: UUID,
+        check_template_ids: List[str],
+    ) -> Optional[str]:
+        """Make the template's checklist links exactly *check_template_ids*.
+
+        Returns an error message, or None on success.
+
+        Every id is a client-supplied foreign key, so each is verified to be a
+        checklist in the caller's org before it is stored (pitfall #14c). This
+        one is not merely a dangling-reference risk: the link decides which
+        checklists a crew is shown, so a foreign id would point them at another
+        department's.
+
+        The set is replaced rather than merged. An empty list means the officer
+        cleared them, which restores apparatus-based resolution — that is a
+        real choice, not a no-op.
+        """
+        wanted: List[str] = []
+        for raw in check_template_ids:
+            value = str(raw)
+            if value not in wanted:
+                wanted.append(value)
+
+        if wanted:
+            owned = await self.db.execute(
+                select(EquipmentCheckTemplate.id).where(
+                    EquipmentCheckTemplate.id.in_(wanted),
+                    EquipmentCheckTemplate.organization_id == str(organization_id),
+                )
+            )
+            found = {str(row) for row in owned.scalars().all()}
+            missing = [value for value in wanted if value not in found]
+            if missing:
+                return "Equipment checklist not found"
+
+        existing = await self.db.execute(
+            select(ShiftTemplateEquipmentCheck).where(
+                ShiftTemplateEquipmentCheck.shift_template_id == str(template.id),
+                ShiftTemplateEquipmentCheck.organization_id == str(organization_id),
+            )
+        )
+        by_check_id = {
+            str(row.equipment_check_template_id): row
+            for row in existing.scalars().all()
+        }
+
+        for order, check_id in enumerate(wanted):
+            row = by_check_id.pop(check_id, None)
+            if row is None:
+                self.db.add(
+                    ShiftTemplateEquipmentCheck(
+                        organization_id=str(organization_id),
+                        shift_template_id=str(template.id),
+                        equipment_check_template_id=check_id,
+                        sort_order=order,
+                    )
+                )
+            elif row.sort_order != order:
+                row.sort_order = order
+
+        # Whatever is left was unticked.
+        for row in by_check_id.values():
+            await self.db.delete(row)
+
+        return None
 
     async def get_templates(
         self, organization_id: UUID, active_only: bool = True
@@ -2288,6 +2389,16 @@ class SchedulingService:
             update_data["positions"] = normalize_stored_positions(
                 update_data["positions"]
             )
+        # An omitted key means "leave the links alone"; [] means the officer
+        # cleared them (CLAUDE.md pitfall #1). Popped either way, because it is
+        # not a column and _crud_update is a bare setattr loop.
+        check_ids = update_data.pop("equipment_check_template_ids", None)
+        if check_ids is not None:
+            link_error = await self._replace_equipment_check_links(
+                template, organization_id, check_ids
+            )
+            if link_error:
+                return None, link_error
         return await self._crud_update(template, update_data)
 
     async def delete_template(
@@ -2688,6 +2799,9 @@ class SchedulingService:
                     start_time=shift_start,
                     end_time=shift_end,
                     apparatus_id=getattr(template, "apparatus_id", None),
+                    # Recorded, not just copied from: the equipment checklists
+                    # this shift carries are resolved through its template.
+                    template_id=getattr(template, "id", None),
                     platoon=shift_platoon,
                     color=shift_color,
                     # Structured slots, not bare strings: this writer is how
@@ -3700,12 +3814,19 @@ class SchedulingService:
                 )
 
             checklist_names: list[str] = []
-            if shift.apparatus_id:
+            # A shift whose template names checklists has them whether or not
+            # an apparatus is assigned, so the guard admits either.
+            if shift.apparatus_id or getattr(shift, "template_id", None):
                 templates = await resolve_check_templates(
                     self.db,
                     str(organization_id),
-                    str(shift.apparatus_id),
+                    str(shift.apparatus_id) if shift.apparatus_id else None,
                     "start_of_shift",
+                    shift_template_id=(
+                        str(shift.template_id)
+                        if getattr(shift, "template_id", None)
+                        else None
+                    ),
                 )
                 checklist_names = [t.name for t in templates]
 

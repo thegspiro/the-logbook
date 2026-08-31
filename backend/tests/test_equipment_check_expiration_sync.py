@@ -877,7 +877,7 @@ class TestUpdateDeployedLotAuthorization:
         self._wire(mock_db, item)
         with patch(
             "app.api.v1.endpoints.equipment_check._collect_user_permissions",
-            return_value={"equipment_check.submit"},
+            return_value={"inventory.check_submit"},
         ):
             with pytest.raises(HTTPException) as exc:
                 await update_deployed_lot(
@@ -899,7 +899,7 @@ class TestUpdateDeployedLotAuthorization:
         self._wire(mock_db, item)
         with patch(
             "app.api.v1.endpoints.equipment_check._collect_user_permissions",
-            return_value={"equipment_check.submit"},
+            return_value={"inventory.check_submit"},
         ):
             with pytest.raises(HTTPException) as exc:
                 await update_deployed_lot(
@@ -916,7 +916,7 @@ class TestUpdateDeployedLotAuthorization:
         with (
             patch(
                 "app.api.v1.endpoints.equipment_check._collect_user_permissions",
-                return_value={"equipment_check.submit"},
+                return_value={"inventory.check_submit"},
             ),
             patch(
                 "app.api.v1.endpoints.equipment_check.EquipmentCheckService"
@@ -950,7 +950,7 @@ class TestUpdateDeployedLotAuthorization:
         self._wire(mock_db, item)
         with patch(
             "app.api.v1.endpoints.equipment_check._collect_user_permissions",
-            return_value={"equipment_check.submit"},
+            return_value={"inventory.check_submit"},
         ):
             result = await update_deployed_lot(
                 "ti-1",
@@ -974,7 +974,7 @@ class TestUpdateDeployedLotAuthorization:
         self._wire(mock_db, item)
         with patch(
             "app.api.v1.endpoints.equipment_check._collect_user_permissions",
-            return_value={"equipment_check.submit"},
+            return_value={"inventory.check_submit"},
         ):
             await update_deployed_lot(
                 "ti-1",

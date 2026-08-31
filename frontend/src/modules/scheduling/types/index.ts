@@ -576,23 +576,3 @@ export interface ShiftCallCreate {
 }
 
 export type ShiftCallUpdate = Partial<ShiftCallCreate>;
-
-// Re-export equipment check types
-export type {
-  CheckTemplateItem,
-  CheckTemplateItemCreate,
-  CheckTemplateItemUpdate,
-  CheckTemplateCompartment,
-  CheckTemplateCompartmentCreate,
-  CheckTemplateCompartmentUpdate,
-  EquipmentCheckTemplate,
-  EquipmentCheckTemplateCreate,
-  EquipmentCheckTemplateUpdate,
-  CheckItemResultSubmit,
-  ShiftEquipmentCheckCreate,
-  StandaloneEquipmentCheckCreate,
-  ShiftEquipmentCheckItemRecord,
-  ShiftEquipmentCheckRecord,
-  ShiftCheckSummary,
-  CheckItemHistory,
-} from './equipmentCheck';

@@ -9,7 +9,7 @@ import hashlib
 import json
 import math
 from datetime import date, datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, List, Optional, Sequence, Set
 from uuid import NAMESPACE_URL, uuid5
 
 from sqlalchemy import and_, func, or_, select, update
@@ -37,6 +37,7 @@ from app.models.training import (
     ShiftEquipmentCheck,
     ShiftEquipmentCheckItem,
     ShiftEquipmentCheckSeal,
+    ShiftTemplateEquipmentCheck,
 )
 from app.models.user import Organization, User
 from app.services.inventory_service import InventoryService
@@ -299,8 +300,14 @@ class EquipmentCheckService:
         apparatus_type: Optional[str] = None,
         check_timing: Optional[str] = None,
         visible_positions: Optional[set[str]] = None,
+        template_ids: Optional[Sequence[str]] = None,
     ) -> List[EquipmentCheckTemplate]:
-        """List templates with optional filters and submitter visibility."""
+        """List templates with optional filters and submitter visibility.
+
+        ``template_ids`` narrows to an explicit set — the checklists a shift
+        template names. The org filter below still applies, so an id belonging
+        to another department resolves to nothing rather than leaking a row.
+        """
         query = (
             select(EquipmentCheckTemplate)
             .where(EquipmentCheckTemplate.organization_id == organization_id)
@@ -318,6 +325,11 @@ class EquipmentCheckService:
             query = query.where(EquipmentCheckTemplate.apparatus_type == apparatus_type)
         if check_timing is not None:
             query = query.where(EquipmentCheckTemplate.check_timing == check_timing)
+        if template_ids is not None:
+            # An empty sequence means "no templates", not "no filter" — the
+            # caller already decided the set, and in_(()) is the honest
+            # translation of an empty one.
+            query = query.where(EquipmentCheckTemplate.id.in_(list(template_ids)))
 
         result = await self.db.execute(query)
         return [
@@ -1959,7 +1971,7 @@ class EquipmentCheckService:
         """Complete remaining items on an incomplete check.
 
         Only the member who originally performed the check may complete it,
-        unless ``allow_any`` is set (caller holds equipment_check.manage). This
+        unless ``allow_any`` is set (caller holds inventory.check_manage). This
         prevents an IDOR where any member could overwrite another member's
         safety-critical equipment check by supplying its id.
         """
@@ -4017,24 +4029,67 @@ class EquipmentCheckService:
     # Private Helpers
     # ------------------------------------------------------------------
 
+    async def _linked_check_template_ids(
+        self, shift_template_id: str, organization_id: str
+    ) -> List[str]:
+        """The checklist ids a shift template names, in the officer's order.
+
+        Org-scoped on the link row itself rather than trusted from the shift:
+        a by-id read of a client-reachable id gets the org filter (pitfall
+        #14a), even though the shift it came from was already resolved in-org.
+        """
+        result = await self.db.execute(
+            select(ShiftTemplateEquipmentCheck.equipment_check_template_id)
+            .where(
+                ShiftTemplateEquipmentCheck.shift_template_id == shift_template_id,
+                ShiftTemplateEquipmentCheck.organization_id == organization_id,
+            )
+            .order_by(ShiftTemplateEquipmentCheck.sort_order)
+        )
+        return [str(row) for row in result.scalars().all()]
+
     async def _resolve_templates(
         self,
         shift: Shift,
         organization_id: str,
         user_position: Optional[str],
     ) -> List[EquipmentCheckTemplate]:
-        """Resolve applicable templates for a shift apparatus.
+        """Resolve applicable templates for a shift.
 
-        Templates are defined either for one specific apparatus
-        (``EquipmentCheckTemplate.apparatus_id``, an FK to ``apparatus.id``) or
-        for an apparatus *type* (``apparatus_type``, a plain string). A
-        department on ``BasicApparatus`` has no full apparatus records, so only
-        the type-level route can ever match for it — which is why the shift's
-        id has to be classified rather than assumed.
+        Two routes, and the first one wins outright.
+
+        **The shift's template names them.** If the shift came from a
+        ``ShiftTemplate`` carrying ``shift_template_equipment_checks`` rows,
+        those are the checklists — the officer who wrote the template said so,
+        and the apparatus-type default is not a second opinion to be merged in.
+
+        **Otherwise, the apparatus.** Templates are defined either for one
+        specific apparatus (``EquipmentCheckTemplate.apparatus_id``, an FK to
+        ``apparatus.id``) or for an apparatus *type* (``apparatus_type``, a
+        plain string). A department on ``BasicApparatus`` has no full apparatus
+        records, so only the type-level route can ever match for it — which is
+        why the shift's id has to be classified rather than assumed.
+
+        The fallback is gated on whether the template named *any* checklists,
+        not on whether the lookup returned any rows. A template whose links all
+        point at deactivated checklists resolves to nothing, which is right:
+        the officer said which checklists this shift carries, and "none of them
+        are active any more" is not an invitation to substitute the apparatus's.
         """
         templates = []
 
-        if shift.apparatus_id:
+        explicit = False
+        if getattr(shift, "template_id", None):
+            linked_ids = await self._linked_check_template_ids(
+                str(shift.template_id), organization_id
+            )
+            if linked_ids:
+                explicit = True
+                templates = await self.list_templates(
+                    organization_id, template_ids=linked_ids
+                )
+
+        if not explicit and shift.apparatus_id:
             ref = await resolve_apparatus_ref(
                 self.db, shift.apparatus_id, organization_id
             )
@@ -4383,7 +4438,7 @@ class EquipmentCheckService:
                     category="equipment_check",
                     subject=notif_subject,
                     message=message,
-                    action_url=(f"/scheduling/shifts/{shift.id}"),
+                    action_url="/inventory/checklists/log",
                     delivered=True,
                 )
                 self.db.add(notif)

@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import 'fake-indexeddb/auto';
 import { IDBFactory } from 'fake-indexeddb';
-import type { ShiftEquipmentCheckCreate } from '@/modules/scheduling/types/equipmentCheck';
+import type { ShiftEquipmentCheckCreate } from '@/modules/inventory/types/equipmentCheck';
 import {
   enqueueCheck,
   listPendingChecks,

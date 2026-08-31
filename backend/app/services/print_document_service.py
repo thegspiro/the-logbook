@@ -269,7 +269,7 @@ async def build_apparatus_check_sheet(
 
     Read through :class:`EquipmentCheckService` rather than with a query of our
     own, so this inherits the narrowing the module already applies: a member
-    who only holds ``equipment_check.submit`` sees the checklists for the
+    who only holds ``inventory.check_submit`` sees the checklists for the
     positions they actually check, and not the rest of the department's.
     Querying the table directly would quietly hand them all of it.
     """
@@ -280,8 +280,8 @@ async def build_apparatus_check_sheet(
     permissions = _collect_user_permissions(viewer)
     visible_positions = None
     if not (
-        _has_permission("equipment_check.view", permissions)
-        or _has_permission("equipment_check.manage", permissions)
+        _has_permission("inventory.check_view", permissions)
+        or _has_permission("inventory.check_manage", permissions)
     ):
         visible_positions = await service.get_user_check_positions(
             str(viewer.id), str(organization_id)
@@ -394,9 +394,9 @@ MODULE_DOCUMENTS: Dict[str, Tuple[Tuple[str, ...], DocumentBuilder]] = {
     # department's whole checklist configuration.
     "apparatus_check_sheet": (
         (
-            "equipment_check.view",
-            "equipment_check.submit",
-            "equipment_check.manage",
+            "inventory.check_view",
+            "inventory.check_submit",
+            "inventory.check_manage",
         ),
         build_apparatus_check_sheet,
     ),
