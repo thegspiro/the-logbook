@@ -36,11 +36,12 @@ describe('the count tally', () => {
     expect(onAnswer).toHaveBeenCalledWith('gauze', expect.objectContaining({ quantityFound: 9 }));
   });
 
-  it('keeps short of par a restock rather than a failure', async () => {
+  it('reports short of par as a restock, whatever it stores', async () => {
     const user = userEvent.setup();
     const onAnswer = setup([gauze]);
     await user.click(screen.getByRole('button', { name: 'One fewer 4×4 gauze' }));
-    expect(onAnswer).toHaveBeenCalledWith('gauze', { quantityFound: 9, status: 'pass', restockNeeded: true });
+    // Stored as a failure, because that is what the record holds either way.
+    expect(onAnswer).toHaveBeenCalledWith('gauze', { quantityFound: 9, status: 'fail', restockNeeded: true });
   });
 
   it('never counts below zero', async () => {

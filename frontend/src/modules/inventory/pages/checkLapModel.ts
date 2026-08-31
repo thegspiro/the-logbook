@@ -230,9 +230,23 @@ export function isStopComplete(stop: LapStop, answers: AnswerMap, today: Date = 
 }
 
 export function stopFailures(stop: LapStop, answers: AnswerMap): CheckItemSpec[] {
-  return answerableItems(stop).filter(
-    (i) => answers[i.id]?.status === 'fail' || answers[i.id]?.status === 'out_of_service'
-  );
+  return answerableItems(stop).filter((item) => {
+    const answer = answers[item.id];
+    if (answer?.status !== 'fail' && answer?.status !== 'out_of_service') return false;
+    // A count short of par is *stored* as a failure — the server rewrites it
+    // to one anyway, and the truck's out-of-service verdict is built on that —
+    // but it is *reported* as a restock line, which is a different queue with
+    // a different urgency. `stopRestocks` derives the same rows from the
+    // number and the par, so counting them here too would show one shortfall
+    // twice: once as a fault the crew has to act on now, once as a supply
+    // order.
+    if (normalizeCheckType(item.checkType) === CheckType.COUNT) {
+      const found = answer.quantityFound;
+      const par = item.expectedQuantity;
+      if (typeof par === 'number' && found !== undefined && found < par) return false;
+    }
+    return true;
+  });
 }
 
 /**
