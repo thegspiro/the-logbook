@@ -16,14 +16,77 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-Feature 33 (Core infrastructure), re-verification pass — PR
-[#2106](https://github.com/thegspiro/the-logbook/pull/2106), branch
-`claude/friendly-babbage-ioea3m`. Zero code drift since CI2-33 (PR #1917);
-all 14 prior fixes re-verified, 0 new findings.
+Feature 33 (Core infrastructure), round 2 (Codex-caught) — PR
+[#2107](https://github.com/thegspiro/the-logbook/pull/2107), branch
+`claude/friendly-babbage-ioea3m`. Round 1 merged as
+[#2106](https://github.com/thegspiro/the-logbook/pull/2106) before
+Codex's review of it landed; round 2's 3 fixes follow up in a separate PR
+— see log entry below for why.
 
 ---
 
-### 2026-08-31 — Feature 33 (Core infrastructure), re-verification — 0 new findings
+### 2026-08-31 — Feature 33 (Core infrastructure), re-verification — round 2: 3 fixed (Codex-caught)
+
+Round 1 found zero code drift since CI2-33 and re-verified all 14 prior
+fixes intact, concluding "0 new findings" (see round 1 entry below).
+That conclusion was wrong. Codex reviewed round 1's commit and found three
+real defects the re-verification had certified as correct without
+exercising the actual failure path:
+
+1. **CI-33-1 (P1)** — `RateLimiter`'s lockout-expiry branch unconditionally
+   cleared the request history, which is harmless for a real lockout
+   (`lockout_seconds` in the hundreds/thousands — the window filter would
+   drop the stale entries anyway) but catastrophic for `lockout_seconds=0`,
+   which `public_rate_limit()`'s in-memory Redis-outage fallback uses by
+   default on seven public unauthenticated endpoints (calendar, legal,
+   display, finance-approval tokens, three webhook receivers): the
+   "lockout" reads as expired on the very next call, so every over-limit
+   request got a full fresh allowance instead of staying limited — an
+   attacker sustained ~83% of unrestricted throughput during a Redis
+   outage. Fixed by only clearing history when `lockout_seconds > 0`.
+2. **CI-33-2 (P2)** — `daily_cap_exceeded`'s `INCR`-then-`EXPIRE` isn't
+   atomic; if `EXPIRE` fails right after a successful `INCR`, the counter
+   is left with no TTL and never resets — once it crosses the limit, the
+   scope (public form submissions, guest check-ins, event requests) stays
+   blocked indefinitely instead of resetting the next UTC day. Fixed with a
+   self-heal: any later call checks `TTL` and repairs it if missing.
+3. **CI-33-3 (P2)** — `DatabaseManager.disconnect()` only reset
+   `engine`/`session_factory` to `None` on the success path; a failed
+   `dispose()` left `is_connected` reporting `True` for a connection that
+   had actually failed to close. CI2-33-11's "structurally cannot go stale"
+   claim held only for the success path. Fixed with `try/finally`.
+
+All three verified to fail against the pre-fix code (via `git stash` on the
+source files with the new tests already in place) before being accepted as
+real, per this rotation's standing rule. Also carried forward, not fixed
+(pre-existing, already documented in CI2-33's "Revised after Codex review"
+section but omitted from this pass's initial table): `EXPORT_ENDPOINTS`'s
+exact-match set still can't cover `training_programs.py`'s parameterized
+export route — mirrored into `KNOWN_LIMITATIONS.md`. Also corrected the
+round-1 scope claim: `config.py` was verified at four specific locations
+plus confirmed byte-identical via `git diff`, not read end-to-end this
+pass (round 1's wording had conflated the two).
+
+**PR split:** round 2's fixes were first pushed onto #2106, but the repo
+owner merged #2106 (round 1's "0 new findings" content) at 18:14:21 UTC —
+before Codex's review of that PR, posted at 18:04, had been addressed. The
+push landed after the merge and never reached `main`. Per the branch-reuse
+rule (a merged PR is finished, restart the branch from the new `main`),
+reset `claude/friendly-babbage-ioea3m` to the post-merge `main` and
+cherry-picked the round-2 commit onto it — same commit content, new PR
+[#2107](https://github.com/thegspiro/the-logbook/pull/2107).
+
+**Completion gate:** flake8/black/isort clean across `app/ tests/
+alembic/`; `validate_migrations.py --strict` — 394 revisions, single head,
+no schema change; scoped tests — 171/171 passed (was 166); full backend
+suite — 9376 passed, 2 skipped, 0 failed. No frontend file touched.
+Findings doc updated: `docs/security-review/CI-33-core-infra.md`. Pushed
+to PR #2107. Next: 34 frontend shared, once #2107 merges.
+
+Feature 33 marked 🔄 (not ✅ yet — that happens on the closing PR after
+merge, per the rotation's own rule).
+
+### 2026-08-31 — Feature 33 (Core infrastructure), re-verification, round 1 — 0 new findings (superseded by round 2 above)
 
 No security-review PR was open (feature 32 fully merged and closed via PR
 #2099 earlier), so the rotation continued to feature 33. Loaded
