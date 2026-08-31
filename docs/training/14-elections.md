@@ -308,7 +308,9 @@ By default, all active members in the organization are eligible to vote. Eligibi
 > derived from the old field when it has not been set. **A member on an
 > org-configured membership tier (the shipped `senior` tier, for example)
 > resolves to no class and no status**, deliberately: that is exactly what the
-> tier matched before, and guessing would widen the electorate.
+> tier matched before, and guessing would widen the electorate. **A member with
+> nothing recorded at all is different** — an empty value resolves to the
+> defaults, operational and regular, so they do receive both those ballots.
 
 ### Voter Overrides
 
@@ -333,17 +335,18 @@ When a member is excluded from voting but should be allowed (e.g., absent member
 
 ### Edge Cases
 
-| Scenario                                                           | Behavior                                                                                             |
-| ------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------- |
-| Member not on attendance list                                      | Ineligible unless override granted                                                                   |
-| Override granted, then member's standing changes                   | Override persists regardless                                                                         |
-| Bulk override for remote voters                                    | Use bulk override endpoint to add multiple members                                                   |
-| Life member, on an **operational** item                            | **Not** eligible — `operational` requires regular standing. They receive `regular` and `life` items  |
-| Life member, on a **regular** item                                 | **Eligible** _(changed 2026-08-26)_ — the old fused field could not put them in both                 |
-| Probationary member, on an **operational** item                    | **Not** eligible; they receive `probationary` items                                                  |
-| Administrative member with regular standing, on a **regular** item | **Not** eligible _(tightened 2026-08-26)_ — status categories now also require the operational class |
-| Administrative member holding an operational role                  | **Not** eligible for operational items — the class decides, not the role                             |
-| Member on an org-configured tier (e.g. `senior`)                   | Matches no class and no status; eligible only for `all`                                              |
+| Scenario                                                               | Behavior                                                                                                                                                         |
+| ---------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Member not on attendance list                                          | Ineligible unless override granted                                                                                                                               |
+| Override granted, then member's standing changes                       | Override persists regardless                                                                                                                                     |
+| Bulk override for remote voters                                        | Use bulk override endpoint to add multiple members                                                                                                               |
+| Life member, on an **operational** item                                | **Not** eligible — `operational` requires regular standing. They receive `regular` and `life` items                                                              |
+| Life member, on a **regular** item                                     | **Eligible** _(changed 2026-08-26)_ — the old fused field could not put them in both                                                                             |
+| Probationary member, on an **operational** item                        | **Not** eligible; they receive `probationary` items                                                                                                              |
+| Administrative member with regular standing, on a **regular** item     | **Not** eligible _(tightened 2026-08-26)_ — status categories now also require the operational class                                                             |
+| Administrative member holding an operational role                      | **Not** eligible for operational items — the class decides, not the role                                                                                         |
+| Member on an org-configured tier (e.g. `senior`)                       | Matches no class and no status; eligible for `all` only — deliberate, since the tier satisfied neither category before the split                                 |
+| Member with **nothing** recorded (no class, status or membership type) | **Treated as operational + regular** — an empty value resolves to the defaults, so they do receive both those ballots. Not the same as the custom-tier row above |
 
 ---
 

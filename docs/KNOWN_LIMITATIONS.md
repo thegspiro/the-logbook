@@ -2623,9 +2623,14 @@ That has three practical consequences worth recording:
 - **A pre-existing card cannot be recorded without inventing a course
   completion.** A member who has held a Paramedic licence for a decade needs a
   training record dated to match, against a course that certifies it.
-- **An expiry cannot be corrected.** `expires_on` comes from the sync; if a
-  member renews outside the department's own course, the only route is another
-  training record.
+- **An expiry is corrected on the record that produced it, not on the
+  qualification.** `PATCH /training/records/{record_id}` accepts
+  `expiration_date` and re-runs `_sync_qualifications`, which recomputes
+  `expires_on` from the supporting records — so a typo is fixed by editing that
+  record. **Filing a second completion for a correction would invent training
+  history that never happened**; a new record is for a genuine renewal. What is
+  missing is any way to reach `expires_on` without going through a training
+  record at all.
 - **Setting `grants_qualification` on a course is not retroactive.** Records
   filed against that course _before_ the selector was set wrote no
   qualification, and nothing backfills them.

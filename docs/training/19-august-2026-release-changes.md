@@ -2089,8 +2089,8 @@ That is serialized now.
 
 ### "Checkout batch" is now "Item Distribution"
 
-The module had several names for the same operations. They are settled now, and
-the screens use these and no others:
+The module had several names for the same operations. This is the vocabulary
+it is standardising **on**:
 
 | Term               | Means                                                                       |
 | ------------------ | ---------------------------------------------------------------------------- |
@@ -2229,11 +2229,13 @@ Tell your officers about these. Each was live before this release:
   otherwise view it.
 - **A member's audit history** could show unrelated actions performed on
   somebody else.
-- **Six pages** could hold member-identifying data in the browser's short-lived
-  cache for up to 90 seconds — a training cohort's roster, a program's
-  enrollment-eligibility list, an external provider's member mappings, a
-  form-management page, a raw analytics export, and two training-officer
-  dashboards.
+- **Eight named surfaces** could hold member-identifying data in the browser's
+  short-lived response cache for up to 90 seconds — a training cohort's roster, a
+  program's enrollment-eligibility list, an external provider's member mappings, a
+  form-management page, a raw analytics export, the department-wide competency
+  heat map, the training dashboard's at-risk widgets, and the training-session
+  approval roster. All are now excluded, and a grants/fundraising list was closed
+  as a precaution.
 
 And four **separation-of-duties** gaps: a storefront manager could settle their
 own order's payment, a finance approval token could approve its own requester's

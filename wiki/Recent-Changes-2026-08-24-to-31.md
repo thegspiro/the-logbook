@@ -137,7 +137,11 @@ do not reverse. See [Database upgrade route](#database-upgrade-route).
 
 Tell your officers about these:
 
-- **Facility files** — the whole department, through Documents. Closed.
+- **Facility files** — the whole department, through Documents. **Closed for
+  files uploaded from now on only.** Files that predate the upgrade are still
+  folderless and still downloadable by anyone who can open Documents until you
+  re-file them; see the warning above. This is the one item on this list that
+  needs you to do something.
 - **Notifications** — every member could read every other member's. Closed.
 - **Admin-hours progress** — an officer with compliance access could look up
   any member's progress **in any department**. Closed.
@@ -145,11 +149,13 @@ Tell your officers about these:
   steps. Closed.
 - **A membership applicant's file** could reach a signer who could not
   otherwise view it. Closed.
-- **Six pages** could hold member-identifying data in the browser's short-lived
-  response cache for up to 90 seconds — a training cohort roster, a program's
-  enrollment-eligibility list, an external provider's member mappings, a
-  form-management page, a raw analytics export, and two training-officer
-  dashboards. All now excluded.
+- **Eight named surfaces** could hold member-identifying data in the browser's
+  short-lived response cache for up to 90 seconds — a training cohort's roster, a
+  program's enrollment-eligibility list, an external provider's member mappings, a
+  form-management page, a raw analytics export, the department-wide competency
+  heat map, the training dashboard's at-risk widgets, and the training-session
+  approval roster. All are now excluded, and a grants/fundraising list was closed
+  as a precaution.
 - **Separation of duties** — a storefront manager could settle their own
   order's payment, a finance approval token could approve its own requester's
   request, a secretary could submit _and_ approve their own meeting minutes,
