@@ -1,6 +1,6 @@
 # Security Review — Feature 34: Frontend Shared (pass 3)
 
-**Prefix:** `FE3` · **Iteration:** 34 · **Reviewed:** 2026-08-31 · **PR:** #2112
+**Prefix:** `FE3` · **Iteration:** 34 · **Reviewed:** 2026-08-31 · **PR:** #2112 (round 1, merged), #2118 (round 2, Codex-caught fixes)
 
 **Frontend:** `utils/apiCache.ts`, `services/apiClient.ts`, `utils/errorHandling.ts`,
 `services/errorTracking.ts`, `utils/createApiClient.ts`, all 13 module axios
