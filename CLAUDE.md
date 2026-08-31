@@ -1459,11 +1459,10 @@ python3 -c "import secrets; print(secrets.token_hex(16))"        # ENCRYPTION_SA
 
 ### Frontend (Vite)
 
-| Variable           | Default                 | Purpose                                                                |
-| ------------------ | ----------------------- | ---------------------------------------------------------------------- |
-| `VITE_API_URL`     | `/api/v1`               | API base URL                                                           |
-| `VITE_BACKEND_URL` | `http://localhost:3001` | Backend URL for Vite dev proxy                                         |
-| `VITE_SESSION_KEY` | (random per session)    | Onboarding session encryption key — set a 32+ char value in production |
+| Variable           | Default                 | Purpose                        |
+| ------------------ | ----------------------- | ------------------------------ |
+| `VITE_API_URL`     | `/api/v1`               | API base URL                   |
+| `VITE_BACKEND_URL` | `http://localhost:3001` | Backend URL for Vite dev proxy |
 
 ### Optional Services
 

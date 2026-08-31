@@ -71,6 +71,10 @@ router = APIRouter(prefix="/onboarding", tags=["onboarding"])
 # used for admin password resets (users.py's _rate_limit_admin_reset).
 
 
+async def _rate_limit_onboarding_status(request: Request) -> None:
+    await check_rate_limit(request, scope="onboarding_status")
+
+
 async def _rate_limit_onboarding_start(request: Request) -> None:
     await check_rate_limit(request, scope="onboarding_start")
 
@@ -807,7 +811,11 @@ async def _persist_session_data_to_org(
 # ============================================
 
 
-@router.get("/status", response_model=OnboardingStatusResponse)
+@router.get(
+    "/status",
+    response_model=OnboardingStatusResponse,
+    dependencies=[Depends(_rate_limit_onboarding_status)],
+)
 async def get_onboarding_status(db: AsyncSession = Depends(get_db)):
     """
     Check if onboarding is needed and get current status

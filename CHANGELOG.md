@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Onboarding hardening and setup docs cleanup (2026-08-31)
+
+**Fixed**
+
+- The unauthenticated setup-status check (`GET /onboarding/status`), used by
+  the login page to detect a not-yet-configured instance, now has the same
+  per-route rate limiting as every other onboarding bootstrap endpoint —
+  it was the one anonymous route without one.
+- `frontend/.env.example`, `frontend/setup.sh`, and the setup documentation
+  no longer instruct operators to set a `VITE_SESSION_KEY` "for production" —
+  that variable has not been read by any code since onboarding data stopped
+  being encrypted client-side; the real protection is the backend's own
+  `ENCRYPTION_KEY`. Following the old instruction had no security effect
+  either way, but told operators otherwise.
+
 ### Integrations fix (2026-08-31)
 
 **Fixed**
