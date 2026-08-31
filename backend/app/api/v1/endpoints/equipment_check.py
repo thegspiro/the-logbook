@@ -912,9 +912,29 @@ async def get_last_check_seals(
     clear the contents count in one tap.
     """
     service = EquipmentCheckService(db)
-    return await service.get_last_check_seals(
+    seals = await service.get_last_check_seals(
         template_id, current_user.organization_id, apparatus_id
     )
+    # Serialized camelCase, like every other response this frontend reads.
+    # There is no response schema here to carry the usual alias generator --
+    # the payload is a bare dict keyed by compartment id -- so the conversion
+    # is explicit. Without it the seal shortcut could never fire: the check
+    # form types this as LastSealRecord { sealNumber }, so every lookup was
+    # undefined, the tag never prefilled, and `canClear` stayed false no matter
+    # how well the number matched. The crew was told "No seal recorded at the
+    # last count" on a bag whose seal had been recorded, and the one-tap clear
+    # the feature exists for was unreachable.
+    #
+    # The service keeps snake_case: it is Python-facing, and its own tests
+    # assert those keys.
+    return {
+        compartment_id: {
+            "sealNumber": row.get("seal_number"),
+            "intact": row.get("intact"),
+            "checkedAt": row.get("checked_at"),
+        }
+        for compartment_id, row in seals.items()
+    }
 
 
 # =====================================================================

@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### The tamper-seal shortcut never fired (2026-08-25)
+
+**Fixed**
+
+- **A sealed bag could never clear its own contents count.**
+  `GET /equipment-checks/templates/{id}/last-seals` returns a bare dict keyed
+  by compartment id, so it carries none of the camelCase alias generation the
+  schema-backed responses get. It answered `seal_number` and `checked_at`,
+  while the check form types the payload as `LastSealRecord { sealNumber,
+checkedAt }` and casts the response without mapping it.
+
+  Every lookup was therefore `undefined`. `SealPanel` prefills its input from
+  the last count and decides `canClear` by comparing against it, so the tag
+  never prefilled, the panel told the crew _"No seal recorded at the last
+  count"_ on a bag whose seal **had** been recorded, and the one-tap
+  clear-the-contents shortcut — the reason a tamper seal is worth reading —
+  could not be reached at any number they typed. The seal was still filed, so
+  nothing looked broken; the bag was simply counted by hand every time.
+
+  Converted at the endpoint. The service keeps snake_case, which is what its
+  own tests assert.
+
 ### Admin hours: reading another member's requirement progress returned a 500 (2026-08-25)
 
 **Fixed**
