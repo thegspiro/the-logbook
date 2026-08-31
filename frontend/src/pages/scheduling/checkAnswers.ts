@@ -16,17 +16,7 @@ import { daysUntil } from '@/modules/scheduling/types/equipmentCheck';
 
 import type { CheckItemAnswer, CheckItemSpec } from './CheckItemControls';
 
-/**
- * What answering an item stores, independent of what it looks like.
- *
- * Extracted because the sweep lays these four types out differently — a tally
- * table, a gauge card, a verdict pair — while asking exactly the same
- * questions. Two layouts each carrying their own copy of "an expired unit fails
- * whatever the crew taps" is two chances to lose it, and the one that shipped
- * would be whichever the crew happened to be looking at.
- *
- * The controls below call these too, so the pair cannot drift.
- */
+/** The controls call these too, so the two layouts cannot drift apart. */
 export function countAnswer(item: CheckItemSpec, next: number): Partial<CheckItemAnswer> {
   const par = item.expectedQuantity ?? null;
   const value = Math.max(0, next);

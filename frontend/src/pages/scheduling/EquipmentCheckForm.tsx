@@ -115,10 +115,19 @@ interface EquipmentCheckFormProps {
     | undefined;
 }
 
-interface ItemResult {
+export interface ItemResult {
   status: CheckItemStatus;
   quantityFound?: number | undefined;
   levelReading?: number | undefined;
+  /**
+   * The printed date was looked at and confirmed.
+   *
+   * Distinct from `status`, which an expiry sets from the date itself — an
+   * expired unit fails whatever the crew taps, so status alone cannot say
+   * whether anybody read it. The sweep's expiry row needs the difference to
+   * stop offering "Confirm" on a date that has already been confirmed.
+   */
+  expiryConfirmed?: boolean | undefined;
   photoUrls?: string[] | undefined;
   photoFiles?: File[] | undefined;
   notes?: string | undefined;
