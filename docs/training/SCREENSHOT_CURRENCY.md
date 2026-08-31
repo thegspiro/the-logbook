@@ -1,5 +1,59 @@
 # Screenshot currency
 
+## Eight unreferenced images, triaged rather than swept (2026-08-31)
+
+Eight PNGs in `images/` were reachable from no guide. "Unreferenced" turned out
+to mean five different things, and only a per-file check told them apart — a
+markdown-only grep found six of them and called all six orphans, and four of
+those were not. Widening the sweep to `manifest.mjs` found the other two.
+
+**Five deleted, three applied.** After this pass every PNG under `images/` is
+referenced by a guide, a manifest entry, or both.
+
+| Image | Why it was unreferenced | Done |
+| ----- | ----------------------- | ---- |
+| `03-94-debug-shift-panel.png` | Taken while diagnosing the crew board; never had a marker. Also predates the 2026-08-23 palette uplift — its Sign Up buttons are still violet | Deleted |
+| `10-13-mobile-top-bar.png` | Superseded by `10-13-mobile-header-menu.png`, which is applied at guide 10's phone-header marker. Same subject, and the numbering collision is what hid it | Deleted |
+| `08-35-notifications-show-read.png` | Same screen and same state as `08-63-inbox-show-read.png`, which fills the marker this one was written for. Its `holdBack` (the pre-fix `ShiftPosition.FIREFIGHTER` bodies) had cleared on the re-shoot, so it is redundant rather than blocked | Deleted |
+| `19-02-minutes-card-counts.png` | Written to replace a guide-04 capture that pictured the zero-count defect. `04-14-meeting-minutes.png` was itself re-shot on 2026-08-17 and already reads "4 attendees / 8 attendees, 2 action items", so the replacement has nothing left to replace | Deleted |
+| `08-76-org-dashboard-without-finance.png` | **Half of an applied pair.** The marker asked for the administrator's dashboard *beside* the member's, and the applier consumed that one marker with `08-75` alone — the comparison the marker was about was never in the guide | Applied beside `08-75` in guide 08 |
+| `19-01-platoons-permission-error.png` | Applied to guide 19 by `1558c10e8`, then dropped — image and marker both — by the merge in `18bade651` on 2026-08-18. The topic now lives in guide 03's "Who Can See the Platoon Roster", which had no picture of the refusal | Applied in guide 03 |
+| `15-06-applicant-drawer.png` | Superseded by `15-14-applicant-drawer-overview.png`, the same drawer over an unfiltered board. `15-06` was shot with "Rivera" typed into the search box, so a column behind it reads "No applicants" | Deleted |
+| `02-67-competency-matrix.png` | Held back against a placeholder describing a member-by-competency heat-map. That screen does not exist, the guide was rewritten to say so, and the marker went with it — leaving a correct capture of what the Competency tab actually is, with nothing pointing at it | Applied in guide 02, holdBack dropped |
+
+**The three that were applied are the finding, not the five deletions.** Each was
+a verified capture of something a guide claims in prose and could not show, and
+each had been *lost* rather than never taken — one to a half-consumed pair
+marker, one to a merge resolution, one to a holdBack that outlived the
+placeholder it was written against. A sweep that deleted them on the strength of
+a `*.md` grep would have thrown away the evidence for three documented
+behaviours and left the gaps invisible, because none of those guides carries a
+marker any more.
+
+Manifest entries for the deleted shots that had them (`08-35`, `19-02`, `15-06`)
+were removed with the files; an entry whose anchor no longer exists can never
+apply, so leaving it would have re-shot an orphan on the next capture run. The
+three surviving entries now record where their image actually landed — `19-01`'s
+`doc` moved to `03-scheduling.md`, `02-67`'s anchor moved to the paragraph it now
+sits above, and `08-76` carries a note that it was placed by hand.
+
+**`08-76`'s caption was wrong on first placement, and review caught it.** It
+read "a member without `finance.manage`", which is false for a member who lacks
+that and holds `fundraising.view` or `events.manage`: `get_main_dashboard_widgets`
+gates the finance, fundraising and community blocks independently, and
+`DashboardOrganizationWidgets` drops the section only when all three come back
+empty. A member holding one of the other two still sees Department pulse, minus
+the money cards. The caption and the manifest `alt` now say all three are
+withheld — which is what the pictured member actually has.
+
+**Check the whole tree, not just `*.md`.** Six of the eight were referenced from
+`scripts/screenshots/manifest.mjs`, which is where a shot's route, auth and
+`prepare` steps live. The manifest is the reason a capture is reproducible, so
+it is part of "referenced" — and two of the eight were reachable *only* from it,
+so a markdown-only sweep does not even find them to ask the question.
+
+---
+
 ## Disposition for the 2026-08-24 → 08-31 window (recorded 2026-08-31)
 
 Reason and data-path context in
@@ -7,8 +61,9 @@ Reason and data-path context in
 
 **This is a disposition, not a capture pass.** It records what the week's
 changes did to the existing library and what new markers were written into the
-guides. Nothing below has been shot yet. `status_report.py` now counts **530
-placeholders, 505 filled, 25 remaining** — the twenty-five are the **sixteen
+guides. Nothing below has been shot yet. `status_report.py` counted **530
+placeholders, 505 filled, 25 remaining** at the time (533 / 508 / 25 after the
+2026-08-31 triage above applied three images already on disk) — the twenty-five are the **sixteen
 new markers** written this window plus the nine that were already outstanding.
 The library was 514 placeholders before it.
 
