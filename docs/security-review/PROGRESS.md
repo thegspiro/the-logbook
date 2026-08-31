@@ -16,9 +16,10 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-Feature 34 (Frontend shared, pass 3) — PR opening this iteration. Docs-only,
-0 findings (diff-based re-verification of FE2-34 + first full read of
-`components/ux/*`). Once merged, every row (00-34) is ✅ and the rotation
+Feature 34 (Frontend shared, pass 3) —
+[#2112](https://github.com/thegspiro/the-logbook/pull/2112), subscribed.
+Docs-only, 0 findings (diff-based re-verification of FE2-34 + first full read
+of `components/ux/*`). Once merged, every row (00-34) is ✅ and the rotation
 wraps to 00 for the next full pass.
 
 ---
