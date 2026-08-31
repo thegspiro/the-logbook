@@ -1,5 +1,83 @@
 # Screenshot currency
 
+## Re-captured 2026-08-25 — 470 images refreshed, and 35 shots that no longer reach their screen
+
+The pass planned in the entry below. Verified before committing, which is where
+most of what follows came from.
+
+**470 images rewritten, 328 of them at identical dimensions** — same layout,
+new palette, which is exactly what a colour migration should look like. 31 grew
+and 11 shrank; each of the 11 was opened.
+
+### Byte size is the wrong detector; dimensions are the right one
+
+The obvious check — "did the file get much smaller?" — is useless here. The
+median re-captured image is **0.35** of its committed size, because `pngquant`
+now applies where it did not for many of the originals. On bytes alone, 182 of
+302 looked like data loss. On dimensions, 8 did. Anyone repeating this should
+compare heights, not bytes.
+
+### Two images were worse, and are restored rather than committed
+
+`01-31-applicant-documents` went from a populated list to "No documents yet",
+and `19-08-store-admin-activity` from a full activity feed to "No order updates
+were recorded in the last 7 days". Both are seed gaps rather than code changes,
+so the committed bytes stand and the gap is recorded here — the rule the
+pipeline already carries. The cost is real and worth naming: those two keep the
+**old** button colour until their fixtures are fixed, so the palette is not
+uniformly migrated.
+
+`19-08`'s cause is worth writing down because it will recur. The storefront
+seeder advances order statuses only when they do not already match, so on a
+re-seed the orders keep their original timestamps and slide out of the
+seven-day activity window. The guard that makes the step idempotent is what
+makes the fixture expire.
+
+### One shot was photographing the demo scaffolding
+
+`04-02-event-detail` came back reading "Attendance (0)" with every statistic
+zero. It selected its subject with `isUpcoming` — the soonest upcoming event —
+which is now permanently the early check-in fixture: 90 minutes out,
+`requires_rsvp` false, RSVP cleared on every seed *by design*. A fixture added
+for one marker had quietly taken over a shot two guides away. Re-pointed at
+`isRsvpOpen`, the property its caption is about, and re-captured: 3333px with
+its attendance back. `isUpcoming` now has no callers, and its own docstring had
+already warned that the nearest upcoming event is the wrong subject for an RSVP
+shot — it burned the RSVP modal shot the same way.
+
+### 35 shots never reached their screen, and that is UI drift, not flake
+
+Re-run individually, they fail identically every time, so these are stale
+selectors rather than timing. They cluster on precisely the screens the review
+found rewritten last week — the email template editor, the shift-reports tabs,
+the training admin pages, the equipment-check builder.
+
+Nothing was overwritten: a shot that fails in `prepare` never reaches
+`page.screenshot`, so all 35 keep their committed bytes. **That is the problem,
+not the mitigation** — those 35 keep the pre-2026-08-23 button colour while the
+470 around them do not, which is the mixed palette this pass set out to remove.
+They need their prepare steps repaired against the current DOM, one screen at a
+time.
+
+`02-30-shift-reports` shows why the drift is real and not cosmetic: the tab it
+lands on is now a six-tab strip (About me / Written by me / Review Queue /
+Flagged / Drafts / New) that did not exist when the neighbouring shots were
+written. The image itself is good — four pending reports, named, with hours,
+calls and competency badges — it is simply half the height it used to be.
+
+### Also found, not fixed here
+
+Election Settings renders **two switches with no visible label**.
+`SettingsToggle` puts its `label` prop on `aria-label` only — its own prop
+comment says "Required whenever no visible label is tied to the switch" — and
+`ElectionsSettingsPage` passes the label while rendering no adjacent text. A
+screen-reader user hears "Anonymous voting by default"; a sighted user sees a
+bare toggle. `EmailSettingsSection` shows the house pattern: visible title and
+description beside the switch, no `label` prop.
+
+Four `audit_baseline.txt` entries no longer flag and are removed, as the audit
+asks. No new findings across 512 images; 281 markdown files, 0 broken links.
+
 ## Reviewed 2026-08-25 — the primary button changed colour, and 80% of the library predates it
 
 Not a marker pass. A review of what merged in the week to 2026-08-25 turned up
