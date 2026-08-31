@@ -7,10 +7,17 @@ Reason and data-path context in
 
 **This is a disposition, not a capture pass.** It records what the week's
 changes did to the existing library and what new markers were written into the
-guides. Nothing below has been shot yet. `status_report.py` now counts **528
-placeholders, 505 filled, 23 remaining** — the twenty-three are the **fourteen
+guides. Nothing below has been shot yet. `status_report.py` now counts **530
+placeholders, 505 filled, 25 remaining** — the twenty-five are the **sixteen
 new markers** written this window plus the nine that were already outstanding.
 The library was 514 placeholders before it.
+
+**Two of the sixteen were added late** (`/messages/:id` and
+`/communications/photo-use-consent`). Review caught that the audit listed both
+as NEW captures while **no guide covered either page**, so no marker existed and
+`status_report.py` did not count them — a producer working the queue would have
+silently skipped both new surfaces. The release lesson now has a Communications
+section, and the markers are real.
 
 ### Two changes invalidate captures in bulk rather than one at a time
 
@@ -73,6 +80,9 @@ recipient list — and nowhere on a member screen.**
 | Settings → **Modules**, Testing Checklist **off** | 08, 19 | The single most useful capture in this window — it is the answer to "where did /testing go" |
 | **Testing Home** with a named run and the run picker | 08, 19 | Current run, one archived predecessor, mixed marks, **one gate mismatch flagged** |
 | **Printable testing report** | 08, 19 | A failure carrying a note *and* a gate mismatch, so both report sections have content |
+
+| **`/messages/:id`** | 19 | A message long enough to show the page is not a modal, sender and date visible, breadcrumb in frame |
+| **`/communications/photo-use-consent`** | 19 | One consented member, one refused, one with nothing recorded; caption which of the four accepted permissions the capturing account holds |
 
 ### Do not capture
 

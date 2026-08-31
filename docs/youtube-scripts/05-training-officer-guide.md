@@ -5,7 +5,7 @@
 **Target Audience:** Training Officers, Safety Officers, Compliance Officers
 **Roles Covered:** training_officer, safety_officer
 **Chapters:** 5 (each designed as a standalone clip)
-**Requires permission:** `training.manage` — **and, since 2026-08-25, `training.configure` for the training module's org-level settings.** The two are deliberately separate: `training.configure` gates the settings — chiefly the **member visibility panel**, which decides how much of an officer's written assessment the member being assessed may read — while `training.manage` carries the power to create and edit anybody's training records. A membership coordinator needs the first without the second. **Any take that says the visibility panel is behind "training management" is now wrong.**
+**Requires permission:** `training.manage`. Since 2026-08-25 there is a narrower alternative, `training.configure`, which grants **the member-disclosure policy and nothing else** — how much of an officer's written assessment the assessed member may read. Every other training setting (shift reports, the report form, apparatus mapping, the rating scale, the review workflow) returns 403 without `training.manage`, which on its own still covers the full payload. So a Membership Coordinator can be given `training.configure` for that one panel without gaining the power to edit anybody's records. **A take saying the visibility panel is behind "training management" is wrong; so is a take implying `training.configure` covers the module's other settings.**
 
 > **This is Part 1 of two.** Part 1 sets the system up: the dashboard, building
 > programs and requirements, and recording completions.

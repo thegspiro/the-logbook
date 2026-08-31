@@ -906,7 +906,9 @@ an officer section. ~1:15.
 
 ## ADD TO "YOUR PROFILE" (ADDED 2026-08-31)
 
-**[SCREEN: A member profile header showing class and status as separate fields]**
+**[SCREEN: The member profile header **as it is today** — a single Membership
+Type value. Do not stage a two-field header; none exists. The change this beat
+describes has no UI surface, so narrate it over the current screen.]**
 
 > "Your profile now says two things where it used to say one. **Class** is what
 > kind of member you are — operational, administrative or social. **Status** is

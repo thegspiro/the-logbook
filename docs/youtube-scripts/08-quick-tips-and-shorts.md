@@ -1391,16 +1391,22 @@ directory of two hundred names, giving up.]**
 > to take it to. So you ask whoever you happen to see, and they don't know
 > either."
 
-**[0:12 — SCREEN: Governance → Organizational Chart. The outline expanding.]**
+**[0:12 — SCREEN: Governance → Organizational Chart, outline view, already
+showing several levels. **There is no expand/collapse** — the outline renders
+its levels statically — so pan or scroll rather than staging an expansion.]**
 
 > "Governance, Organizational Chart. Your department's chain of command, drawn
 > out — who runs training, who runs the trucks, who owns uniforms."
 
-**[0:22 — SCREEN: Tap a seat; the responsibility text and contact details.]**
+**[0:22 — SCREEN: Hold on a seat card. **Do not stage a tap** — for an ordinary
+member the card is static: `OrgChartSeatCard` renders responsibility and contact
+links directly and shows controls only when the viewer can manage the chart.
+Point to the details already on the card.]**
 
-> "Tap a seat and you get what it's responsible for and how to reach whoever
-> holds it. And a seat can hold more than one person, so two deputy chiefs
-> share one box instead of you guessing which one to email."
+> "The card tells you what that seat is responsible for and how to reach whoever
+> holds it — no tapping, it's right there. And a seat can hold more than one
+> person, so two deputy chiefs share one box instead of you guessing which one
+> to email."
 
 **[0:32 — CALLOUT: "No permission needed. That's the point."]**
 

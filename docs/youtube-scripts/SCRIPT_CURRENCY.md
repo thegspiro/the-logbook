@@ -124,8 +124,11 @@ The beat now carries a production note stating the shipped contract and naming
 `_user_has_role_type` as the thing to check.
 
 **Also corrected:** the screen note asking for a re-shot eligibility roster. The
-refusal reason string is **unchanged** — it still reads "membership type not
-eligible … (requires: …; member has: …)" — so the existing capture is current.
+refusal reason string is **unchanged** — `ElectionService` still emits
+"membership type not eligible … (requires: …; member has: …)" — so **the
+existing capture is current and needs no replacement.** An earlier draft of this
+entry said the reason now names class and status separately; it does not, and
+that would have generated an unreproducible re-shoot request.
 
 ### 13 — Department Store · **WRONG — one control for two different jobs**
 
@@ -155,8 +158,8 @@ cannot collapse them back together.
 
 ### 03 — IT Manager / System Admin · **NEW CHAPTER, existing chapter left alone**
 
-Chapter 10, "The August 31 upgrade: forty-five migrations, and five that take
-permissions away". Head `f6a7b8c9d0e1`.
+Chapter 10, "The August 31 upgrade: forty-five migrations, and six that move
+permissions". Head `f6a7b8c9d0e1`.
 
 **The August 24 chapter is deliberately not revised.** It documents a different
 head and a different irreversible migration and remains correct for anybody
@@ -166,10 +169,11 @@ upgrade narration to avoid having two chapters.
 The two beats the chapter marks as uncuttable are both "a thing disappeared"
 support calls, which is exactly this script's audience:
 
-1. **Five permission revocations** — `compliance.view` off the Member position,
-   `notifications.view` off the baseline member and junior ranks, and
-   `facilities.view` off regular members _and then_ off the shared operational
-   officer positions. Nothing grants them back.
+1. **Four permission revocations, plus two new grants** — `compliance.view` off
+   the Member position, `notifications.view` off the baseline member and junior
+   ranks, and `facilities.view` off regular members _and then_ off the shared
+   operational officer positions; `training.configure` and `users.view_consents`
+   granted. Nothing grants the four revoked ones back.
 2. **The Testing Checklist ships switched off.** `/testing` is gone until
    Settings → Modules, and nobody will connect a missing page to a module they
    did not know existed.

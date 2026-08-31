@@ -1864,8 +1864,10 @@ expiry date would be worse than having none.
 > **Certifies** on a course in the Course Library, and recording a member's
 > completion of that course creates or renews the qualification. There is **no
 > panel for entering, editing or expiring one on its own** — so a card a member
-> has held for years needs a training record to match, an expiry cannot be
-> corrected except by filing another record, and setting **Certifies** on a
+> has held for years needs a training record to match, an incorrect expiry is
+> corrected by **editing the training record that produced it** — never by
+> filing a second completion, which would invent training history that never
+> happened — and setting **Certifies** on a
 > course does **not** backfill records already filed against it.
 
 ## Equipment check templates: one list you scroll
@@ -2207,6 +2209,43 @@ notification yet. The page no longer implies otherwise.
 - **Editing a category or item left no audit trail.** Creating one was
   recorded; editing it was not. Both are recorded now.
 
+## Communications: a message page, and a consent roster
+
+### A message now has a page of its own
+
+**`/messages/:id`** is new. A message you were sent opens on its own page
+instead of only inside the inbox list, so a link to it works — the breadcrumb
+back to the inbox is the URL's own parent.
+
+It needs **no permission beyond signing in**, and that is safe rather than
+loose: the server only serves a message the caller was actually targeted with.
+
+> **[SCREENSHOT NEEDED — `/messages/:id`.** _Demo data:_ a department message
+> with a body long enough to show the page is not a modal, its sender and sent
+> date visible, and the breadcrumb back to the inbox in frame.**]**
+
+### Two message fixes worth knowing
+
+- **An already-sent department message could go out a second time.** Delivery
+  is keyed now.
+- **A send that was reported as failed could still be recorded as delivered.**
+  It is not.
+
+### Photo Use Consent
+
+**`/communications/photo-use-consent`** is new — the roster of who has and has
+not consented to their photograph being used, for the people who publish.
+
+Open to any of `users.view_consents` (new this window, granted to the Historian
+and PIO), `notifications.manage`, `members.manage` or `users.edit`. It is
+excluded from the browser's response cache, like other member-identifying data.
+
+> **[SCREENSHOT NEEDED — `/communications/photo-use-consent`.** _Demo data:_ at
+> least one consented member, one who has refused and one with nothing
+> recorded, so all three states are visible. Capture with an account holding
+> `users.view_consents` and caption that — the page has four accepted
+> permissions and the reader will ask which one they need.**]**
+
 ## Meetings and minutes
 
 - **"Unlink" on a linked event never unlinked anything.** It showed *Event
@@ -2303,7 +2342,7 @@ checks run now.
   control — a rank carries chain-of-command permissions, which is what that
   class is outside of. If the rank is right, **change their class first**.
 
-- **Four migrations do not reverse**, and in three of them a downgrade that
+- **Five migrations do not reverse.** Four are no-ops where a downgrade that
   *did* put the old values back would be the more destructive choice: the rank
   clearing above; the recovery of membership standing out of membership
   positions (nothing records which members it reclassified, so putting them all
@@ -2312,6 +2351,13 @@ checks run now.
   them again would have to guess. The fourth — the administrative-seat flag on
   stored seats — is a no-op downgrade because older readers accept the extra
   field.
+
+> **⚠️ One of the five destroys data on the way down.** `a7c93f21d5b8` (org-chart
+> multi-holder) restores the single-holder shape by keeping **each seat's first
+> holder only**, then drops the holders table. Every additional holder is lost,
+> and a seat whose holders came only from a position link comes back **empty**.
+> **If your department has drawn its org chart and you may roll back, export the
+> holders first.** No other migration in this window destroys data downward.
 
 - **Several migrations deliberately backfill nothing.** Member qualifications
   start empty, the org chart starts empty, and testing runs start empty. An

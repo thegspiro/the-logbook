@@ -114,10 +114,26 @@ project has recorded, and every one came from two branches picking the same
 
 ### Reversibility
 
-**Four migrations do not restore the prior state on downgrade, and each says
-so in its own docstring.** They are not bugs, and in three of the four cases
-a downgrade that _did_ restore the old values would be the more destructive
-option:
+**Five migrations do not restore the prior state on downgrade, and each says
+so in its own docstring.** Four are no-ops where a downgrade that _did_ restore
+the old values would be the more destructive option. **The fifth is different
+in kind and is the one to plan around:** `a7c93f21d5b8` is _lossy by
+construction_.
+
+> **⚠️ Rolling back past `a7c93f21d5b8` destroys org-chart holder data.** The
+> downgrade restores the single-holder shape by keeping **each seat's first
+> holder only**, then drops `org_chart_node_holders`. Every additional holder a
+> department added is gone, and a seat whose holders came only from a position
+> link comes back **empty**. The migration's own docstring calls this lossy and
+> explains the trade: refusing to downgrade at all would strand an operator
+> rolling back a deploy, which was judged worse than a documented, bounded
+> loss.
+>
+> **If a department has drawn its org chart and you may roll back, export
+> `org_chart_node_holders` first.** No other migration in this window destroys
+> data on the way down.
+
+The four no-op downgrades:
 
 | Revision       | What it does                                                    | Why the downgrade is a no-op                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | -------------- | --------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |

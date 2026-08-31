@@ -705,8 +705,10 @@ expiry date would be worse than having none.
 > **Certifies** on a course in the Course Library, and recording a member's
 > completion of that course creates or renews the qualification. There is **no
 > panel for entering, editing or expiring one on its own** — so a card a member
-> has held for years needs a training record to match, an expiry cannot be
-> corrected except by filing another record, and setting **Certifies** on a
+> has held for years needs a training record to match, an incorrect expiry is
+> corrected by **editing the training record that produced it** — never by
+> filing a second completion, which would invent training history that never
+> happened — and setting **Certifies** on a
 > course does **not** backfill records already filed against it.
 >
 > Because shift eligibility reads the expiry **as of the shift date**, a stale
