@@ -16,13 +16,19 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-Feature 34 (Frontend shared, pass 3) —
-[#2112](https://github.com/thegspiro/the-logbook/pull/2112), subscribed.
-Docs-only, 0 findings (diff-based re-verification of FE2-34 + first full read
-of `components/ux/*`). Once merged, every row (00-34) is ✅ and the rotation
-wraps to 00 for the next full pass.
+None. Feature 34 (Frontend shared, pass 3) is closed —
+[#2112](https://github.com/thegspiro/the-logbook/pull/2112) merged. Every
+row (00-34) is now ✅; the rotation wraps to 00 (cross-cutting baseline) for
+a fresh pass.
 
 ---
+
+### 2026-08-31 — Feature 34 (Frontend shared, pass 3) ✅ PR #2112 merged
+
+PR #2112 merged (`6b119ece`), carrying the FE3-34 re-verification write-up
+onto `main`. All 3 checks (CI, Secret Scan, Supply Chain) passed, no
+unresolved review threads. Every row 00-34 is now ✅ for this rotation
+cycle. Next: feature 00, cross-cutting baseline, starting a fresh pass.
 
 ### 2026-08-31 — Feature 34 (Frontend shared, pass 3) — 0 new findings, PR opening
 
@@ -4173,7 +4179,7 @@ each row's prior PR is recorded in the Log, not repeated here.
 | 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                   | ✅     |
 | 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                  | ✅     |
 | 33  | Core infrastructure       | CORE   | `core/security_middleware.py`, `core/database.py`, `core/config.py`                                                                             | ✅     |
-| 34  | Frontend shared           | FE     | `utils/apiCache.ts`, module axios instances, `ProtectedRoute`, global stores                                                                    | ⏳     |
+| 34  | Frontend shared           | FE     | `utils/apiCache.ts`, module axios instances, `ProtectedRoute`, global stores                                                                    | ✅     |
 
 **35 iterations per full pass.** After 34 the rotation wraps to 00, which
 re-runs the whole-codebase sweeps against whatever has landed since.
