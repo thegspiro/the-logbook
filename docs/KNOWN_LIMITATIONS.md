@@ -2436,7 +2436,7 @@ today), which lowers today's exploitability but does not change that the API
 itself grants any `meetings.manage` holder an unconditional, unaudited-before-
 this-pass, untracked approval with no self-check.
 
-## MSG-10 — Narrowing a Department Message's Audience Erases the Acknowledgment Report's Record, Though an Independent Audit Entry Survives (2026-08-31)
+## MSG-10 — Narrowing a Department Message's Audience Erases the Acknowledgment Report's Record; an Independent Audit Entry May Survive (2026-08-31)
 
 `MessagingService.reconcile_recipients` rebuilds a published message's audience
 when an admin edits its targeting (e.g. switches from "by role" to a corrected

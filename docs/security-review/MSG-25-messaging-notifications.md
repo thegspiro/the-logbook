@@ -449,7 +449,7 @@ value, so a silently-failed audit write leaves no trace for
 inbox-visibility semantics, since visibility is currently derived from the
 same row the fix would need to keep). See `docs/KNOWN_LIMITATIONS.md` →
 "MSG-10 — Narrowing a Department Message's Audience Erases the Acknowledgment
-Report's Record, Though an Independent Audit Entry Survives" for the full
+Report's Record; an Independent Audit Entry May Survive" for the full
 write-up and options.
 
 ### Frontend — verified good ✅
