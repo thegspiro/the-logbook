@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Meetings and minutes fixes (2026-08-31)
+
+**Fixed**
+
+- Clicking "Unlink" on a meeting minutes record's linked event showed an
+  "Event unlinked" success message, but the link was never actually
+  removed — it would reappear on the next page load. Unlinking now takes
+  effect immediately and persists.
+- Creating, editing, deleting, or approving a meeting record (or adding,
+  removing, or editing its attendees and action items) left no record of
+  who made the change or when. Meeting minutes already recorded this; the
+  meeting scheduling records now do too.
+- A rare failure while creating a meeting record from a calendar event
+  could surface an internal error message instead of a clean explanation.
+
 ### Editing a medical supply category or item left no audit trail (2026-08-30)
 
 **Fixed**
