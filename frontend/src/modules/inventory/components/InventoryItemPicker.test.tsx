@@ -130,6 +130,19 @@ describe('InventoryItemPicker', () => {
       expect(mockCreateItem).not.toHaveBeenCalled();
     });
 
+    it('does not offer creation when the search itself failed', async () => {
+      // A failed search proves nothing about the catalog. Offering to create
+      // here is how one item ends up as two rows with its links and lots split
+      // between them.
+      mockGetItems.mockRejectedValue(new Error('Network Error'));
+      render(<InventoryItemPicker onChange={onChange} canCreateInventory />);
+      await typeSearch('Code Oxygen Cylinder');
+
+      expect(await screen.findByText(/Couldn’t search the catalog/)).toBeInTheDocument();
+      expect(screen.queryByText(/Create .* in inventory/)).not.toBeInTheDocument();
+      expect(screen.queryByText('No matching items.')).not.toBeInTheDocument();
+    });
+
     it('reports a failed create and leaves the position unlinked', async () => {
       mockCreateItem.mockRejectedValue(new Error('Pool item quantity cannot be negative'));
       render(<InventoryItemPicker onChange={onChange} canCreateInventory />);

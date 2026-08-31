@@ -50,6 +50,7 @@ const InventoryItemPicker: React.FC<InventoryItemPickerProps> = ({
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [searchFailed, setSearchFailed] = useState(false);
   const [selectedName, setSelectedName] = useState<string | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Sequences responses: a slow earlier search resolving last would otherwise
@@ -107,6 +108,7 @@ const InventoryItemPicker: React.FC<InventoryItemPickerProps> = ({
       .getItems({ search: q.trim(), limit: 10, active_only: true })
       .then((res) => {
         if (request !== requestRef.current) return;
+        setSearchFailed(false);
         setResults(
           res.items.map((i) => {
             const sub = [i.manufacturer, i.model_number || i.serial_number].filter(Boolean).join(' · ');
@@ -115,7 +117,13 @@ const InventoryItemPicker: React.FC<InventoryItemPickerProps> = ({
         );
       })
       .catch(() => {
-        if (request === requestRef.current) setResults([]);
+        // A failed search establishes nothing. Reporting it as an empty
+        // catalog would let the create row offer to add an item that may
+        // already be on file, splitting its checklist links and lots across
+        // two rows — so absence has to be proven, not assumed.
+        if (request !== requestRef.current) return;
+        setResults([]);
+        setSearchFailed(true);
       })
       .finally(() => {
         if (request === requestRef.current) setLoading(false);
@@ -126,6 +134,7 @@ const InventoryItemPicker: React.FC<InventoryItemPickerProps> = ({
     setQuery(q);
     setOpen(true);
     setResults([]);
+    setSearchFailed(false);
     if (debounceRef.current) clearTimeout(debounceRef.current);
     // Loading covers the debounce interval too, so an empty settled result is
     // the only thing that means "no match". Otherwise the create row and the
@@ -137,7 +146,7 @@ const InventoryItemPicker: React.FC<InventoryItemPickerProps> = ({
 
   const typed = query.trim();
   const hasExactMatch = results.some((r) => r.name.trim().toLowerCase() === typed.toLowerCase());
-  const showCreate = canCreateInventory && typed.length > 0 && !loading && !hasExactMatch;
+  const showCreate = canCreateInventory && typed.length > 0 && !loading && !searchFailed && !hasExactMatch;
 
   /**
    * Add the typed name to the catalog and link it in one step.
@@ -246,8 +255,14 @@ const InventoryItemPicker: React.FC<InventoryItemPickerProps> = ({
             </button>
           )}
 
-          {results.length === 0 && !loading && !showCreate && (
-            <p className="text-theme-text-muted px-3 py-2 text-xs">No matching items.</p>
+          {searchFailed ? (
+            <p role="status" className="text-theme-text-muted px-3 py-2 text-xs">
+              Couldn&rsquo;t search the catalog. Check your connection and try again.
+            </p>
+          ) : (
+            results.length === 0 &&
+            !loading &&
+            !showCreate && <p className="text-theme-text-muted px-3 py-2 text-xs">No matching items.</p>
           )}
         </div>
       )}

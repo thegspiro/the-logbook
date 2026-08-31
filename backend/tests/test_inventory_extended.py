@@ -1012,10 +1012,16 @@ class TestCategoryUpdate:
 class TestPoolItemValidation:
 
     @pytest.mark.asyncio
-    async def test_pool_item_quantity_zero_rejected(
+    async def test_pool_item_quantity_zero_accepted(
         self, db_session, setup_org_and_user
     ):
-        """Pool items with quantity 0 should be rejected."""
+        """A pool item may be created with nothing on hand.
+
+        This is the shape the checklist builder posts when a crew adds a
+        catalog row from an equipment-check position: the row records that the
+        item exists, not that any of it is in the stock room. ``update_item``
+        has always allowed the same value.
+        """
         org_id, user_id, _ = setup_org_and_user
         svc = InventoryService(db_session)
 
@@ -1030,9 +1036,32 @@ class TestPoolItemValidation:
             },
             created_by=uuid.UUID(user_id),
         )
+        assert err is None
+        assert item is not None
+        assert item.quantity == 0
+
+    @pytest.mark.asyncio
+    async def test_pool_item_negative_quantity_rejected(
+        self, db_session, setup_org_and_user
+    ):
+        """Zero is a real stock level; a negative one is incoherent."""
+        org_id, user_id, _ = setup_org_and_user
+        svc = InventoryService(db_session)
+
+        item, err = await svc.create_item(
+            organization_id=uuid.UUID(org_id),
+            item_data={
+                "name": "Negative Pool",
+                "condition": "good",
+                "status": "available",
+                "tracking_type": "pool",
+                "quantity": -1,
+            },
+            created_by=uuid.UUID(user_id),
+        )
         assert item is None
         assert err is not None
-        assert "quantity" in err.lower()
+        assert "negative" in err.lower()
 
 
 # ── Barcode Label Generation Tests ─────────────────────────────────
