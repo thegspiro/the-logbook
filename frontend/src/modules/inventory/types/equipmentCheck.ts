@@ -118,6 +118,20 @@ export function soonestExpiration(item: CheckTemplateItem): string | undefined {
 }
 
 /**
+ * What this position is supposed to hold, as `_target_quantity` resolves it.
+ *
+ * `required_quantity or expected_quantity` on the server — Python's `or`, so a
+ * `required_quantity` of **0** falls through to the expected count rather than
+ * standing as the target. `??` does not: it only filters null and undefined,
+ * so it would hand back a target of zero and report a position holding four of
+ * an expected four as having no target at all. The same distinction CLAUDE.md
+ * pitfall #1 draws for form values, on a number rather than a string.
+ */
+export function targetQuantity(item: CheckTemplateItem): number | null {
+  return item.requiredQuantity || item.expectedQuantity || null;
+}
+
+/**
  * Whether a member below manage may draw stock for this position.
  *
  * `EquipmentCheckService.swap_item_lot` sets `enforce_submitter_limits` for

@@ -76,6 +76,7 @@ import {
   ExpiredStockDisposition,
   soonestExpiration,
   submitterMaySwap,
+  targetQuantity,
 } from '../types/equipmentCheck';
 import { flattenCompartmentTree } from '../utils/compartmentTree';
 import LotsAboardPanel from '../components/LotsAboardPanel';
@@ -2133,11 +2134,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
     // path instead. `submitterMaySwap` owns that rule for both experiences.
     const swapRefused =
       !canManageStock &&
-      !submitterMaySwap(
-        getExpirationStatus(item, today) === 'expired',
-        item.requiredQuantity ?? item.expectedQuantity ?? null,
-        countedOnTruck(item)
-      );
+      !submitterMaySwap(getExpirationStatus(item, today) === 'expired', targetQuantity(item), countedOnTruck(item));
     const TypeIcon = CHECK_TYPE_ICONS[item.checkType] ?? CheckCircle;
     const isQuantity = item.checkType === 'count';
 

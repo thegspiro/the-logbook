@@ -5,6 +5,7 @@ import {
   daysUntil,
   isPresetContainerType,
   submitterMaySwap,
+  targetQuantity,
 } from './equipmentCheck';
 
 describe('containerTypeLabel', () => {
@@ -90,6 +91,38 @@ describe('submitterMaySwap', () => {
     // not the same as an empty bracket. Zero here would invent a shortfall the
     // server will not find, and the swap it enables comes back 403.
     expect(submitterMaySwap(false, 4, null)).toBe(false);
+  });
+});
+
+describe('targetQuantity', () => {
+  const item = (over: Record<string, unknown>) =>
+    ({
+      id: 'i',
+      compartmentId: 'c',
+      name: 'X',
+      sortOrder: 0,
+      isRequired: true,
+      hasExpiration: false,
+      expirationWarningDays: 30,
+      checkType: 'count',
+      ...over,
+    }) as never;
+
+  it('prefers the required minimum where one is set', () => {
+    expect(targetQuantity(item({ requiredQuantity: 6, expectedQuantity: 4 }))).toBe(6);
+  });
+
+  it('falls through a required minimum of zero, the way Python\u2019s `or` does', () => {
+    // `_target_quantity` is `required_quantity or expected_quantity`, which is
+    // falsy-based. `??` only filters null and undefined, so it would hand back
+    // a target of zero — and a zero target reports every position as having
+    // nothing to be short of, refusing a top-up the server allows.
+    expect(targetQuantity(item({ requiredQuantity: 0, expectedQuantity: 4 }))).toBe(4);
+  });
+
+  it('reports null when the position is not counted at all', () => {
+    expect(targetQuantity(item({}))).toBeNull();
+    expect(targetQuantity(item({ requiredQuantity: 0, expectedQuantity: 0 }))).toBeNull();
   });
 });
 

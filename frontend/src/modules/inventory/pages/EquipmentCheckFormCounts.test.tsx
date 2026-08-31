@@ -896,6 +896,28 @@ describe('who the accordion offers a swap to', () => {
     expect(await swapButton()).toBeEnabled();
   });
 
+  it('reads a zero required minimum as no minimum, not as a zero target', async () => {
+    // `_target_quantity` is `required_quantity or expected_quantity`, so a
+    // required minimum of 0 falls through to the expected count. Resolving it
+    // with `??` would make the target 0, report a position of one-against-four
+    // as having nothing to be short of, and refuse a top-up the server allows.
+    asSubmitter();
+    renderWithRouter(
+      <EquipmentCheckForm
+        shiftId="shift-1"
+        template={
+          template({
+            inventoryItemId: 'inv-1',
+            requiredQuantity: 0,
+            expectedQuantity: 4,
+            quantityOnTruck: 1,
+          }) as never
+        }
+      />
+    );
+    expect(await swapButton()).toBeEnabled();
+  });
+
   it('leaves an officer the swap on any linked item', async () => {
     renderWithRouter(
       <EquipmentCheckForm
