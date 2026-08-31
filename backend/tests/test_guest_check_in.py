@@ -20,6 +20,7 @@ from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
 import pytest
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.event import CheckInWindowType, Event, EventExternalAttendee, EventType
@@ -54,6 +55,22 @@ def _make_event(**overrides):
     return Event(**defaults)
 
 
+class _SavepointCM:
+    """Stand-in for db.begin_nested()'s async SAVEPOINT context manager.
+
+    Does not suppress an exception raised inside the block — matching the
+    real ``AsyncSessionTransaction``, whose ``__aexit__`` rolls back to the
+    savepoint and re-raises. The caller's own ``try/except`` is what actually
+    swallows it.
+    """
+
+    async def __aenter__(self):
+        return None
+
+    async def __aexit__(self, *exc):
+        return False
+
+
 def _mock_db(existing_attendee=None, existing_link=None):
     """AsyncMock session whose SELECTs answer from the supplied rows.
 
@@ -84,6 +101,7 @@ def _mock_db(existing_attendee=None, existing_link=None):
     mock_db.commit = AsyncMock()
     mock_db.flush = AsyncMock()
     mock_db.refresh = AsyncMock()
+    mock_db.begin_nested = MagicMock(side_effect=lambda: _SavepointCM())
     return mock_db
 
 
@@ -505,6 +523,49 @@ class TestGuestProspectCreation:
             for obj in mock_db.added
             if obj.__class__.__name__ == "ProspectEventLink"
         ] == []
+
+    async def test_link_race_is_scoped_to_a_savepoint_not_the_whole_commit(
+        self, monkeypatch
+    ):
+        """A lost duplicate-link race must not cost the guest their attendance.
+
+        Two concurrent sign-ins for the same prospect/event can both pass the
+        existing-link SELECT and both attempt the INSERT; the loser's flush()
+        raises IntegrityError. Before the fix, that exception was caught
+        outside any SAVEPOINT — on a real connection this leaves the whole
+        transaction needing a rollback it never gets, so check_in_guest's own
+        db.commit() (the guest's attendance record) fails too. The fix wraps
+        the insert in begin_nested() so only that insert unwinds.
+        """
+        event = _make_event(guest_check_in_creates_prospect=True)
+        prospect = _make_prospect()
+        mock_db = _mock_db()
+        service = GuestCheckInService(mock_db)
+        _patch_pipeline(service, monkeypatch, existing=prospect)
+
+        async def flaky_flush():
+            if mock_db.added and mock_db.added[-1].__class__.__name__ == (
+                "ProspectEventLink"
+            ):
+                raise IntegrityError("insert", {}, Exception("duplicate key"))
+
+        mock_db.flush = AsyncMock(side_effect=flaky_flush)
+
+        attendee, error, created = await service.check_in_guest(
+            event=event,
+            organization_id=event.organization_id,
+            first_name="Dana",
+            last_name="Reyes",
+            email="dana.reyes@example.com",
+        )
+
+        # The race is invisible to the guest: attendance still records and
+        # commits, exactly as if the link had gone in cleanly.
+        assert error is None
+        assert attendee is not None
+        assert attendee.checked_in is True
+        mock_db.commit.assert_awaited()
+        mock_db.begin_nested.assert_called_once()
 
     async def test_does_not_duplicate_an_existing_event_link(self, monkeypatch):
         """prospect_event_links carries a unique (prospect, event) index."""

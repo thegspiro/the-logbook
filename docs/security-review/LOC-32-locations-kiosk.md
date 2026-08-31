@@ -1,199 +1,268 @@
 # Security Review — Feature 32: Locations & Kiosk (pass 2)
 
-**Prefix:** `LOC` · **Iteration:** 32 · **Reviewed:** 2026-08-31 · **PR:** (this PR)
+**Prefix:** `LOC` · **Iteration:** 32 · **Reviewed:** 2026-08-31 · **PR:** [#2098](https://github.com/thegspiro/the-logbook/pull/2098)
 
 **Backend:** `app/api/v1/endpoints/locations.py` (364 L, 8 routes),
-`app/services/location_service.py` (365 L), `app/api/public/display.py`
-(401 L, 3 routes), `app/api/v1/endpoints/admin_hub.py` (112 L, 3 routes),
+`app/services/location_service.py` (373 L), `app/api/public/display.py`
+(410 L, 3 routes), `app/api/v1/endpoints/admin_hub.py` (112 L, 3 routes),
 `app/services/admin_hub_service.py` (1,841 L), `app/services/
-guest_check_in_service.py` (361 L), `app/models/location.py`,
+guest_check_in_service.py` (369 L), `app/models/location.py`,
 `app/models/admin_hub.py`, `app/schemas/location.py`, `app/schemas/
 admin_hub.py`.
-**Frontend:** not re-read this pass (see Scope) — no backend or shared type
-changed, so nothing new to verify on the frontend side.
-**Migrations:** none this pass — no schema change since the last one
-(`20260218_0900_add_location_display_code.py`, unchanged).
+**Frontend:** not read this pass — no response shape or contract this
+pass's fixes touch changed (see each finding).
+**Migrations:** none — no schema change.
 
-This is a **zero-diff re-verification**. A byte-for-byte diff against PR
-#1916's merge commit (`1b7be79a`) across every backend file in this
-feature's surface — endpoints, services, models, schemas — came back empty:
+## Correction — the round-1 zero-diff claim used an unreachable commit
 
-```
-git diff 1b7be79a HEAD -- app/services/admin_hub_service.py \
-  app/api/v1/endpoints/admin_hub.py app/api/v1/endpoints/locations.py \
-  app/services/location_service.py app/api/public/display.py \
-  app/schemas/admin_hub.py app/models/admin_hub.py app/models/location.py \
-  app/services/guest_check_in_service.py
-# (no output)
-```
+The first round of this pass diffed against `1b7be79a`, the last commit of
+pass 1's source branch before it merged. **That object is not reachable
+from `main`'s history.** PR #1916 was squash-merged, and `1a0a35c8` is the
+actual commit that landed. `1b7be79a` only resolved locally in that round
+because this session had explicitly fetched it by SHA earlier in the same
+session (GitHub will serve an object by exact SHA if it exists anywhere on
+the remote, including an orphaned pre-squash branch tip); a normal clone or
+CI checkout cannot resolve it, so `git diff 1b7be79a HEAD` as written was
+not actually reproducible. Verified the fix: `1a0a35c8` is a real ancestor
+of `main` (`git log` shows it as `security(locations-kiosk): 3 fixes,
+LOC-3 still flagged (#1916)`), and diffs identically to `1b7be79a` for
+every file in this feature's surface — the zero-diff conclusion itself was
+correct, only the citation was wrong. Caught by Codex's review of this PR;
+thanks. Every commit reference in this document uses `1a0a35c8`.
 
-Per the rotation's "read the real code, don't trust a diff" rule, every file
-above was still read in full this pass rather than skipped on the strength of
-that diff — the diff only set expectations for what the read would find.
+## Correction — the round-1 zero-diff read missed four real gaps
+
+Round 1 read every file in the surface in full but reported zero findings.
+Codex's review of the same PR found four real, independently verified
+issues that a genuine diff would not have surfaced (nothing in the diffed
+files changed) but that a closer functional read should have caught. All
+four are fixed below. This is why the rotation runs the completion gate and
+accepts review findings as bug reports to verify, not merely a formality —
+"no diff" is not the same claim as "no bug."
+
+---
 
 ## Scope
 
-**Read in full, this pass:** `locations.py` (all 8 routes),
-`admin_hub.py` (all 3 routes), `location_service.py` (all methods),
-`public/display.py` (all 3 routes, including `_resolve_guest_event`),
-`admin_hub_service.py` (all 1,841 lines — every metric resolver, every
-attention resolver, the full `MODULE_REGISTRY`, and the `AdminHubService`
-class), `guest_check_in_service.py` (all methods), `models/location.py`,
-`models/admin_hub.py`, `schemas/location.py`, `schemas/admin_hub.py`.
+**Read in full:** `locations.py` (all 8 routes), `admin_hub.py` (all 3
+routes), `location_service.py` (all methods), `public/display.py` (all 3
+routes), `admin_hub_service.py` (all 1,841 lines), `guest_check_in_service.py`
+(all methods), `models/location.py`, `models/admin_hub.py`,
+`schemas/location.py`, `schemas/admin_hub.py`.
 
 **Re-verified against:** `docs/security-review/LOC2-32-locations-kiosk.md`
-(pass 1, PR #1916, 3 findings + LOC-3 flagged) and, transitively, `docs/
-app-review/locations-kiosk.md` (LOC-1 through LOC-4) which pass 1 already
-re-verified.
-
-**Not read this pass:** the four frontend pages pass 1 covered
-(`LocationKioskPage.tsx`, `GuestCheckInPage.tsx`, `RoomQRCodesPage.tsx`,
-`LocationsPage.tsx`) — the zero-diff check above covers every backend
-contract they depend on (response shapes, field names, the
-`can_view_kiosk_display_codes` gate), and none of those files themselves
-appear in `git diff 1b7be79a HEAD --stat -- frontend/src` either, so there is
-no new frontend behavior to verify.
+(pass 1, PR #1916, 3 findings + LOC-3 flagged).
 
 ## Route inventory
 
-Unchanged from pass 1 — reproduced here for a self-contained record, each
-row re-confirmed by this pass's own read rather than copied:
-
-| Method | Path                                                       | Auth dependency           | Permission                            | Org-scoped                            | Notes                                                          |
-| ------ | ---------------------------------------------------------- | ------------------------- | ------------------------------------- | ------------------------------------- | -------------------------------------------------------------- |
-| GET    | `/locations`                                               | `get_current_user`        | none (read)                           | yes                                   | `display_code` included only if `can_view_kiosk_display_codes` |
-| POST   | `/locations`                                               | `get_current_user`        | `locations.create` OR `.manage`       | yes                                   |                                                                |
-| GET    | `/locations/{id}`                                          | `get_current_user`        | none (read)                           | yes                                   |                                                                |
-| PATCH  | `/locations/{id}`                                          | `get_current_user`        | `locations.edit` OR `.manage`         | yes                                   |                                                                |
-| DELETE | `/locations/{id}`                                          | `get_current_user`        | `locations.delete` OR `.manage`       | yes                                   |                                                                |
-| POST   | `/locations/{id}/regenerate-display-code`                  | `get_current_user`        | `locations.edit` OR `.manage`         | yes                                   | audit-logged                                                   |
-| GET    | `/locations/{id}/display`                                  | `get_current_user`        | none (read)                           | yes                                   | dead code, zero callers — LOC-3, still open                    |
-| GET    | `/api/public/v1/display/{code}`                            | none (public)             | n/a                                   | via `display_code` (global-unique)    | rate-limited 60/min/IP                                         |
-| GET    | `/api/public/v1/display/{code}/events/{id}/guest`          | none (public)             | n/a                                   | resolved server-side via location→org | rate-limited 60/min/IP                                         |
-| POST   | `/api/public/v1/display/{code}/events/{id}/guest-check-in` | none (public)             | n/a                                   | resolved server-side via location→org | rate-limited 10/min/IP + 300/day/event                         |
-| GET    | `/admin-hub/{module_key}/summary`                          | `get_current_active_user` | `spec.permission` (`<module>.manage`) | yes                                   | 404s an unknown/forbidden module identically                   |
-| GET    | `/admin-hub/{module_key}/metrics`                          | `get_current_active_user` | `spec.permission`                     | yes                                   |                                                                |
-| PUT    | `/admin-hub/{module_key}/metrics`                          | `get_current_active_user` | `spec.permission`                     | yes                                   | audit-logged                                                   |
-
-Every route carries an auth dependency; the three public routes are
-intentionally public and rate-limited.
+| Method | Path                                                       | Auth dependency           | Permission                            | Org-scoped                                            | Notes                                                                                 |
+| ------ | ---------------------------------------------------------- | ------------------------- | ------------------------------------- | ----------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| GET    | `/locations`                                               | `get_current_user`        | none (read)                           | yes                                                   | `display_code` included only if `can_view_kiosk_display_codes`                        |
+| POST   | `/locations`                                               | `get_current_user`        | `locations.create` OR `.manage`       | yes                                                   |                                                                                       |
+| GET    | `/locations/{id}`                                          | `get_current_user`        | none (read)                           | yes                                                   |                                                                                       |
+| PATCH  | `/locations/{id}`                                          | `get_current_user`        | `locations.edit` OR `.manage`         | yes                                                   |                                                                                       |
+| DELETE | `/locations/{id}`                                          | `get_current_user`        | `locations.delete` OR `.manage`       | yes                                                   |                                                                                       |
+| POST   | `/locations/{id}/regenerate-display-code`                  | `get_current_user`        | `locations.edit` OR `.manage`         | yes                                                   | audit-logged                                                                          |
+| GET    | `/locations/{id}/display`                                  | `get_current_user`        | none (read)                           | yes                                                   | dead code, zero callers — LOC-3, still open                                           |
+| GET    | `/api/public/v1/display/{code}`                            | none (public)             | n/a                                   | via `display_code` + `Organization.active` (LOC-32-2) | rate-limited 60/min/IP                                                                |
+| GET    | `/api/public/v1/display/{code}/events/{id}/guest`          | none (public)             | n/a                                   | resolved server-side via location→org                 | rate-limited 60/min/IP                                                                |
+| POST   | `/api/public/v1/display/{code}/events/{id}/guest-check-in` | none (public)             | n/a                                   | resolved server-side via location→org                 | rate-limited 10/min/IP + 300/day/event, reserved after all rejection gates (LOC-32-4) |
+| GET    | `/admin-hub/{module_key}/summary`                          | `get_current_active_user` | `spec.permission` (`<module>.manage`) | yes                                                   | 404s an unknown/forbidden module identically                                          |
+| GET    | `/admin-hub/{module_key}/metrics`                          | `get_current_active_user` | `spec.permission`                     | yes                                                   |                                                                                       |
+| PUT    | `/admin-hub/{module_key}/metrics`                          | `get_current_active_user` | `spec.permission`                     | yes                                                   | audit-logged                                                                          |
 
 ## Verified good ✅
 
-- **LOC2-32-1 still fixed.** `admin_hub_service.py:1059-1092`
-  (`_events_attendance_rate`) still filters `Event.organization_id ==
-ctx.organization_id` independently on both queries, not just the RSVP
-  side. Guard test `tests/test_admin_hub_db.py::
-TestEventsAttendanceRateOrgScoping` unchanged and still passing.
-- **LOC2-32-2 still fixed.** `admin_hub_service.py:1600-1635` (`_sanitize`)
-  still runs the shared `_permitted()` closure in both the primary
-  selection loop and the default-metric padding loop — a permission-gated
-  default cannot be padded into a resolved selection for a caller who lacks
-  the permission. Guard test `tests/test_admin_hub_metrics.py::
-TestSlotResolution::test_padding_from_module_defaults_still_respects_permission_gates`
-  unchanged and still passing.
-- **LOC2-32-3 still fixed, including the Codex round's correction.**
-  `admin_hub_service.py:1768-1819` (`save_settings`) still wraps the
-  first-insert race in a bounded 2-attempt retry, and the `except
-IntegrityError` branch still explicitly `db.refresh(ctx.user)`s (columns,
-  then `positions`) before the retry — the fix for the session-expiration
-  gap Codex caught in PR #1916. Guard tests
-  `tests/test_admin_hub_metrics.py::TestSaveSettingsFirstInsertRace`
-  unchanged and still passing (both the single-conflict-retries and the
-  second-conflict-still-raises cases).
-- **LOC-1, LOC-2, LOC-4 (pre-pass-1 findings) still hold**, re-confirmed
-  directly rather than inherited: `locations.py:329` and
-  `display.py:198,329` (via `location_service.py:273`) still call
-  `EventService._get_check_in_window(event)` rather than a hardcoded
-  window; `display.py:235-248` still populates `LocationDisplayInfo.timezone`
-  from `Organization.timezone`; `location_service.py:249` still bounds its
-  SQL prefilter to a 24h horizon matching the widest configurable check-in
-  lead, with the exact window still applied in Python against the canonical
-  per-event function.
-- **`can_view_kiosk_display_codes` gate still applied uniformly.** All four
-  `locations.py` response builders (`_location_to_list_item`,
-  `_location_to_response`, called from `list`, `create`, `get`, `update`,
-  `regenerate_display_code`) still pass `include_display_code=
-can_view_kiosk_display_codes(current_user)` — no response path bypasses it.
-- **Guest check-in surface (`guest_check_in_service.py`, read in full this
-  pass) has no injection or tenant-isolation surface.** `organization_id` is
-  always the value the endpoint resolved from `display_code` → `Location` →
-  org, never read from the request body or trusted from the client;
-  `_find_existing_attendee` matches on `func.lower(...)` equality, not
-  `.like()`/`.ilike()`, so `LIKE_ESCAPE_CHAR` does not apply. Pipeline and
-  prospect-creation failures (`_link_prospect`,
-  `try_advance_attendance_pipeline`) are caught and logged, never allowed to
-  roll back a guest's already-committed attendance record — matches the
-  file's own stated intent.
-- **`admin_hub_service.py`'s full resolver set (all 1,841 lines, one
-  continuous read this pass) remains org-scoped throughout** — every
-  `select()` filters `organization_id` directly or through a shared
-  criteria helper (`_active_member_criteria`, `_in_service_criteria`,
-  `_below_par_criteria`) that is never called without it. No raw SQL, no
-  `.like()`/`.ilike()` anywhere in the file (re-confirmed by grep, not just
-  the read).
-- **No PII/PHI leak in dashboard text**, re-confirmed line by line: every
-  `AdminAttentionItem`/`AdminMetric` value constructed in this pass's read
-  is an aggregate count, percentage, or generic phrase — no member name,
-  email, or other identifying field is interpolated into a `title` or
-  `detail` string anywhere in the file.
-- **Fail-safe exception boundaries unchanged.** `get_summary`'s attention-
-  queue try/except and `_render_metric`'s per-metric try/except both still
-  degrade to an empty queue / `UNKNOWN_VALUE` on failure rather than taking
-  the whole page down, exactly as pass 1 found.
-- **`ondelete="SET NULL"` columns still `nullable=True`.**
-  `Location.facility_id` and `Location.facility_room_id` (`models/
-location.py:73-85`) are both `ForeignKey(..., ondelete="SET NULL")` and
-  both `nullable=True` — CLAUDE.md Pitfall #2 holds.
-- **`AdminMetricSettingsUpdate` sends every field the screen owns on every
-  save** (`metric_keys`, `applies_to_everyone`, both required, no optional
-  omission path) — CLAUDE.md Pitfall #1's update-path form does not apply
-  here since there is no partial-update semantics for this payload.
+- **LOC2-32-1/2/3 (pass 1) still fixed**, unchanged since PR #1916:
+  `_events_attendance_rate`'s independent `Event.organization_id` filter;
+  `_sanitize`'s shared `_permitted()` gate across both selection loops; the
+  bounded first-insert retry (with the Codex-caught `db.refresh(ctx.user)`
+  correction) in `save_settings`.
+- **LOC-1, LOC-2, LOC-4 (pre-pass-1) still hold** — canonical check-in
+  window, kiosk timezone, and the 24h prefilter bound.
+- **`admin_hub_service.py`'s full resolver set remains org-scoped
+  throughout** — every `select()` filters `organization_id` directly or via
+  a shared criteria helper never called without it. No raw SQL, no
+  `.like()`/`.ilike()` anywhere in the file.
+- **No PII/PHI leak in dashboard text** — every attention/metric value is
+  an aggregate count, percentage, or generic phrase.
+- **`can_view_kiosk_display_codes` gate applied uniformly** across all four
+  `locations.py` response builders.
+- **`ondelete="SET NULL"` columns still `nullable=True`** —
+  `Location.facility_id`/`facility_room_id`.
 
 ## Findings
 
-None. Zero code change since pass 1 (verified by diff, above), and this
-pass's independent full read of every file found no new issue and no
-regression in any of pass 1's three fixes.
+### LOC-32-1 — MED — A lost prospect-link race could cost the guest their attendance, not just the pipeline link — ✅ FIXED
+
+**What:** `guest_check_in_service.py`'s `_link_prospect` catches a broad
+`Exception` around its whole body, on the documented reasoning that
+"a failure here must not cost the guest their attendance." That reasoning
+holds for a business-logic failure, but not for a failed database flush:
+`link_prospect_to_event`'s `self.db.add(...)` + `await self.db.flush()` ran
+with no SAVEPOINT, so a duplicate-key `IntegrityError` (two concurrent
+sign-ins linking the same prospect to the same event both pass the
+existing-link SELECT and both attempt the INSERT) left the whole session's
+transaction needing a rollback it never got. `check_in_guest`'s own
+`await self.db.commit()` — which is what actually persists the guest's
+`EventExternalAttendee` row — runs unguarded a few lines later and fails on
+that poisoned session, so the request 500s and the attendance record the
+comment promised would survive is lost along with the pipeline link.
+
+**Where:** `backend/app/services/guest_check_in_service.py:249-266` (as it
+stood at `1a0a35c8`; `link_prospect_to_event`).
+
+**Failure scenario:** two guests (or one guest tapping the QR code twice
+from two tabs) with the same email sign in for the same event within the
+same race window. Both resolve to the same existing prospect, both attempt
+to insert the `(prospect_id, event_id)` link, and the second one's flush
+fails. Before the fix, that guest sees a 500 and their sign-in is not
+recorded at all — worse than the pipeline simply not linking.
+
+**Impact:** availability — a race an anonymous, unauthenticated, rate-limited
+but still-reachable caller can trigger (deliberately, or just two people
+scanning the same code at once) turns a best-effort pipeline link into a
+lost attendance record.
+
+**Fix:** wrapped the insert in `async with self.db.begin_nested():` (a
+SAVEPOINT), matching the identical pattern `MembershipPipelineService.
+create_prospect` already uses for its own duplicate-email race, and catch
+only `IntegrityError` there. A lost race now rolls back just the failed
+insert; the outer transaction (the attendee record) is untouched. Guard
+test: `tests/test_guest_check_in.py::TestGuestProspectCreation::
+test_link_race_is_scoped_to_a_savepoint_not_the_whole_commit`.
+
+### LOC-32-2 — MED — Kiosk display codes kept working after the organization was deactivated — ✅ FIXED
+
+**What:** `LocationService.get_location_by_display_code` filtered only
+`Location.is_active`, never `Organization.active`. Deactivating an
+organization does not touch its `Location` rows, so a printed QR code or a
+bookmarked kiosk tablet URL kept resolving indefinitely — both the public
+display read and the guest-check-in write paths (`public/display.py`)
+depend on this one lookup for tenant resolution. Other public intake
+surfaces in this codebase (`event_requests.py:264`, and every login path in
+`auth.py`) already gate on `Organization.active`; this was the one that
+didn't.
+
+**Where:** `backend/app/services/location_service.py` (`get_location_by_
+display_code`, was lines 343-352 at `1a0a35c8`).
+
+**Failure scenario:** a department's account is deactivated (contract
+ended, account suspended). Its kiosk tablets and any previously-printed
+room QR codes keep showing live event data and accepting guest sign-ins —
+including creating `ProspectiveMember` records — for an org that should have
+no further activity.
+
+**Impact:** a deactivated tenant's public surface stays live; low
+likelihood (requires an org to actually be deactivated) but a real gap with
+no compensating control, matching the established app-wide invariant.
+
+**Fix:** joined `Organization` and added `Organization.active == True` to
+the query, alongside the existing `Location.is_active` filter. Both public
+callers already treat "not found" as a generic 404, so a deactivated org's
+code is now indistinguishable from one that never existed — no new error
+path needed. Guard tests: `tests/test_location_display_code.py::
+TestGetLocationByDisplayCode`.
+
+### LOC-32-3 — LOW/MED — A location's uniqueness scope was only re-checked on a name change — ✅ FIXED
+
+**What:** `LocationService.update_location`'s duplicate check only ran when
+`location_data.name and location_data.name != location.name`. The scope it
+protects, per the create path's own comment ("Rooms at different stations
+may share a name"), is the pair `(name, building)` — but a PATCH that
+changes only `building` skipped the check entirely.
+
+**Where:** `backend/app/services/location_service.py` (`update_location`,
+was lines 122-145 at `1a0a35c8`).
+
+**Failure scenario:** two locations named "Bunk Room" exist, one at Station
+1 and one at Station 2 — both valid under the stated scope. An admin PATCHes
+Station 2's "Bunk Room" with `{"building": "Station 1"}` (no `name` in the
+payload). The check never runs; both stations now have a "Bunk Room" at
+Station 1, an ambiguous duplicate the uniqueness rule exists to prevent.
+
+**Impact:** data-quality, not tenant isolation or injection — ambiguous
+entries in location pickers/event forms. Real and directly reachable by any
+caller with `locations.edit`, not merely latent.
+
+**Fix:** compute the effective `(name, building)` pair (payload value if
+supplied, else the location's current value) and run the duplicate check
+whenever either component differs from the current row — not only when
+`name` is supplied. Guard tests: `tests/test_location_uniqueness.py`.
+
+### LOC-32-4 — MED — The guest-check-in daily cap was reserved before every rejection gate — ✅ FIXED
+
+**What:** `POST .../guest-check-in` called `daily_cap_exceeded()` — an
+atomic Redis `INCR`, so asking the question spends an allowance slot —
+_before_ checking whether the check-in window was even open, and before the
+service-level `attendance_is_finalized` check. `event_requests.py`'s public
+submission endpoint documents and enforces the correct ordering for the
+identical class of cap (EV-19): "the counter is spent only by a submission
+that would otherwise be accepted, so every rejection path belongs above
+it." This endpoint didn't follow it.
+
+**Where:** `backend/app/api/public/display.py` (`guest_check_in`, was lines
+325-345 at `1a0a35c8`).
+
+**Failure scenario:** a distributed caller who has seen (or guessed) a
+room's display code and an upcoming event id sends requests before the
+check-in window opens (or after attendance is finalized). Every one gets
+rejected with 400 — but each rejection still consumed one unit of the
+event's 300/day allowance. Enough of them exhaust the cap before the window
+opens, so every legitimate guest who shows up later that day gets a 429
+instead of being able to sign in — the exact denial-of-service the cap
+exists to prevent, now caused by the cap itself.
+
+**Impact:** availability — turns a compensating control into the attack
+surface. Reachable by an unauthenticated caller with no rate-limit bypass
+needed beyond the existing per-IP window (distributed callers are exactly
+what the daily cap is meant to catch that per-IP limiting can't).
+
+**Fix:** moved the check-in-window-open check and the
+`attendance_is_finalized` check (previously only checked inside the
+service, after the cap) above `daily_cap_exceeded`, matching
+`event_requests.py`'s established ordering. The service's own
+`attendance_is_finalized` check stays in place as defense in depth for the
+staff-entry path that shares `check_in_guest`. Guard tests:
+`tests/test_public_display.py::TestGuestCheckInDailyCapOrdering`.
 
 ## LOC-3 status — still flagged, unchanged
 
-`GET /locations/{id}/display` (`locations.py:290-364`) still has zero
-frontend callers (confirmed via grep across `frontend/src`), still hardcodes
-`is_valid=True`/`can_check_in=True`, still never populates `timezone`
-(defaults to `None`), and still emits `event_description=event.description`
-unredacted (`locations.py:336`) while its public sibling
-(`display.py:206`) explicitly nulls that field. No new gap since pass 1 — the
-third gap (description redaction) pass 1 already identified is the same one
-today. Not fixed this pass either, for the same reason: deleting or wiring up
-a dead endpoint is an API-surface decision, not a drive-by correction.
-Already tracked in `docs/KNOWN_LIMITATIONS.md`; no change needed there.
+`GET /locations/{id}/display` still has zero frontend callers, still
+hardcodes `is_valid`/omits `timezone`, still emits `event_description`
+unredacted. Not fixed, for the same reason as pass 1: deleting or wiring up
+a dead endpoint is an API-surface decision. Already tracked in
+`docs/KNOWN_LIMITATIONS.md`.
 
 ## Schema & migration notes
 
-No new columns or tables. `AdminHubMetricPreference` and
-`Location.display_code` both unchanged since pass 1.
-`scripts/validate_migrations.py --strict` — 394 revisions, single head.
+No new columns or tables. `scripts/validate_migrations.py --strict` — 394
+revisions, single head.
 
 ## Guard tests added
 
-None this pass — no fix to guard, since no new finding. Pass 1's three guard
-tests (`TestEventsAttendanceRateOrgScoping`,
-`test_padding_from_module_defaults_still_respects_permission_gates`,
-`TestSaveSettingsFirstInsertRace`) were re-run and still pass (see
-Completion gate).
+- `tests/test_guest_check_in.py::TestGuestProspectCreation::
+test_link_race_is_scoped_to_a_savepoint_not_the_whole_commit` — LOC-32-1:
+  asserts `begin_nested()` wraps the link insert and a lost race still lets
+  the attendee commit succeed.
+- `tests/test_location_display_code.py::TestGetLocationByDisplayCode` —
+  LOC-32-2: asserts the query joins `organizations` and filters `active`.
+- `tests/test_location_uniqueness.py` — LOC-32-3: a building-only change
+  against a same-named location in the target building is rejected; a
+  building-only change with no conflict succeeds; a change touching neither
+  name nor building skips the query entirely.
+- `tests/test_public_display.py::TestGuestCheckInDailyCapOrdering` —
+  LOC-32-4: a window-not-open rejection and a finalized-attendance rejection
+  never call `daily_cap_exceeded`; a genuinely open request still does.
 
 ## Completion gate
 
-| Check                                                                 | Result                                                        |
-| --------------------------------------------------------------------- | ------------------------------------------------------------- |
-| Diff against pass 1's merge commit (`1b7be79a`), full feature surface | ✅ empty — no backend or frontend file changed                |
-| Scoped backend tests (`-k "location or admin_hub or guest_check_in"`) | ✅ 290 passed, 1 skipped (pre-existing, missing optional dep) |
-| `python3 scripts/validate_migrations.py --strict`                     | ✅ passed, 394 revisions, single head                         |
-| `flake8`/`black --check`/`isort --check-only`                         | n/a — no file in this feature's surface changed               |
-| `tsc --noEmit` / `eslint .`                                           | n/a — no frontend file in this feature's surface changed      |
-
-No linter run was needed or skipped: nothing changed for it to check, so
-running it would exercise no code this pass touched. The full-suite lint/
-typecheck jobs already ran clean on this exact `HEAD` as part of PR #2095's
-completion gate one iteration ago.
+| Check                                                                           | Result                                              |
+| ------------------------------------------------------------------------------- | --------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                                   | ✅ 0 violations                                     |
+| `black --check app/ tests/ alembic/`                                            | ✅ clean (after formatting one file)                |
+| `isort --check-only app/ tests/ alembic/`                                       | ✅ clean                                            |
+| `python3 scripts/validate_migrations.py --strict`                               | ✅ 394 revisions, single head                       |
+| Scoped tests (`-k "location or admin_hub or guest_check_in or public_display"`) | ✅ 307 passed, 1 skipped (pre-existing)             |
+| Full backend suite (`pytest tests/`)                                            | ✅ 9362 passed, 22 skipped (pre-existing), 0 failed |
+| `tsc --noEmit` / `eslint .`                                                     | n/a — no frontend file changed                      |

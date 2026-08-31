@@ -23,6 +23,7 @@ from typing import Optional, Tuple
 
 from loguru import logger
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.utils import generate_uuid
@@ -255,15 +256,31 @@ class GuestCheckInService:
         if existing.scalars().first() is not None:
             return
 
-        self.db.add(
-            ProspectEventLink(
-                id=generate_uuid(),
-                prospect_id=str(prospect_id),
-                event_id=str(event.id),
-                notes=note or f"Checked in at {event.title} via room QR code",
-            )
-        )
-        await self.db.flush()
+        # Scope a duplicate-key race (two concurrent sign-ins linking the same
+        # prospect to the same event) to a SAVEPOINT, matching
+        # MembershipPipelineService.create_prospect's own pattern. Without
+        # this, a lost race's flush() failure leaves the whole session
+        # needing a rollback it never gets — _link_prospect's caller swallows
+        # the exception and returns, but the guest's already-flushed
+        # EventExternalAttendee then fails at check_in_guest's own
+        # db.commit(), turning "the pipeline link is best-effort" into "the
+        # guest's attendance is lost too."
+        try:
+            async with self.db.begin_nested():
+                self.db.add(
+                    ProspectEventLink(
+                        id=generate_uuid(),
+                        prospect_id=str(prospect_id),
+                        event_id=str(event.id),
+                        notes=note or f"Checked in at {event.title} via room QR code",
+                    )
+                )
+                await self.db.flush()
+        except IntegrityError:
+            # Lost the race — a concurrent sign-in already created the link
+            # we wanted. The SAVEPOINT rollback undoes only this insert, and
+            # the outer transaction (the attendee record) is unaffected.
+            pass
 
     @staticmethod
     def _meeting_config_matches_event(config: dict, event: Event) -> bool:

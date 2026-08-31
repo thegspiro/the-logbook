@@ -16,17 +16,22 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-Feature 32 (Locations & kiosk), pass 2 — PR (this PR), branch
-`claude/security-review-locations-kiosk-pass2`. Zero-diff re-verification:
-every backend file in this feature's surface (`locations.py`,
-`admin_hub.py`, `location_service.py`, `public/display.py`,
-`admin_hub_service.py`, `guest_check_in_service.py`, models, schemas) is
-byte-for-byte unchanged since pass 1's merge (PR #1916, `1b7be79a`), but was
-still read in full rather than skipped on the strength of that diff. All
-three pass-1 fixes (LOC2-32-1/2/3, including the Codex-caught session-
-refresh correction) re-verified intact; LOC-1/2/4 (pre-pass-1) re-confirmed;
-LOC-3 (dead endpoint) still open, unchanged. No new findings. See log entry
-below and `docs/security-review/LOC-32-locations-kiosk.md`.
+Feature 32 (Locations & kiosk), pass 2 — PR
+[#2098](https://github.com/thegspiro/the-logbook/pull/2098), branch
+`claude/security-review-locations-kiosk-pass2`. Round 1 read every backend
+file in the feature's surface in full and reported zero findings (correctly
+noting the surface is byte-for-byte unchanged since pass 1, PR #1916 — but
+citing an unreachable commit, `1b7be79a`, for that diff). **Round 2
+(Codex-caught):** four real, independently verified findings the full read
+missed — LOC-32-1 (a lost prospect-link race could cost the guest their
+whole attendance record, not just the pipeline link), LOC-32-2 (kiosk
+display codes kept working after the owning organization was deactivated),
+LOC-32-3 (the location-uniqueness check skipped a building-only change),
+LOC-32-4 (the guest-check-in daily cap was reserved before the window-open
+and attendance-finalized rejection gates, letting refused traffic exhaust
+it) — plus the commit-hash correction (`1a0a35c8` is the actual, reachable
+squash-merge commit). All four fixed with guard tests. See log entry below
+and `docs/security-review/LOC-32-locations-kiosk.md`.
 
 **Note on branch naming:** pass 1's PR (#1916) used the branch name
 `claude/security-review-locations-kiosk` — reusing it for this pass would
@@ -36,7 +41,7 @@ collision.
 
 ---
 
-### 2026-08-31 — Feature 32 (Locations & kiosk), pass 2 — 0 fixed, 0 flagged (new); LOC-3 still open — PR pending
+### 2026-08-31 — Feature 32 (Locations & kiosk), pass 2 — round 2: 4 fixed (Codex-caught), 1 doc correction — PR #2098
 
 No security-review PR was open (feature 31 fully merged via PR #2095, closed
 out via PR #2097 earlier this iteration), so the rotation continued to
@@ -44,47 +49,71 @@ feature 32. Loaded `CHECKLIST.md`, `SEC-00-cross-cutting-baseline.md`, and
 `docs/security-review/LOC2-32-locations-kiosk.md` (pass 1, PR #1916, 3
 findings + LOC-3 flagged) before reading any code.
 
-A diff against pass 1's merge commit (`1b7be79a`) across every backend file
-in the feature's surface — `locations.py`, `admin_hub.py`,
-`location_service.py`, `public/display.py`, `admin_hub_service.py` (1,841
-L), `guest_check_in_service.py`, `models/location.py`, `models/admin_hub.py`,
-`schemas/location.py`, `schemas/admin_hub.py` — came back completely empty,
-and the four frontend pages pass 1 covered do not appear in a `git diff
---stat` against `frontend/src` either. Per the rotation's "read the real
-code, don't trust a diff" rule, every one of those backend files was still
-read in full this pass (not diffed, not sampled) rather than skipped on the
-strength of that result.
+**Round 1** read every backend file in the feature's surface in full —
+`locations.py`, `admin_hub.py`, `location_service.py`, `public/display.py`,
+`admin_hub_service.py` (1,841 L), `guest_check_in_service.py`, models,
+schemas — and confirmed a diff against what it believed was pass 1's merge
+commit came back empty. Re-verified LOC2-32-1/2/3 and LOC-1/2/4 all hold.
+Reported zero new findings and opened PR #2098 on that basis.
 
-Re-verified all three pass-1 fixes hold with no regression: LOC2-32-1
-(`_events_attendance_rate`'s independent `Event.organization_id` filter),
-LOC2-32-2 (`_sanitize`'s shared `_permitted()` gate across both the primary
-and padding loops), and LOC2-32-3 (the bounded first-insert retry in
-`save_settings`, including the Codex-caught `db.refresh(ctx.user)` correction
-after rollback). Also re-confirmed LOC-1, LOC-2 and LOC-4 (pre-pass-1
-findings) all still hold, and that the guest check-in surface
-(`guest_check_in_service.py`, read in full — not explicitly re-verified
-line-by-line in pass 1's own writeup beyond the route level) has no
-injection or tenant-isolation surface: `organization_id` is always resolved
-server-side from the room's `display_code`, never taken from the client, and
-its one lookup query matches on `func.lower(...)` equality rather than
-`.like()`/`.ilike()`, so `LIKE_ESCAPE_CHAR` does not apply.
+**Round 2 (Codex-caught), all verified against actual code before fixing:**
 
-**No new findings.** LOC-3 (`GET /locations/{id}/display`, the dead
-authenticated display endpoint) is unchanged from pass 1 — still zero
-frontend callers, still hardcodes `is_valid`/omits `timezone`, still fails
-to redact `event_description`. Not fixed, for the same reason as before
-(deleting or wiring up a dead endpoint is an API-surface decision). Already
-tracked in `docs/KNOWN_LIMITATIONS.md`; no change needed there.
+1. **Commit-hash correction.** The diff commit `1b7be79a` cited in round 1
+   is the last commit of pass 1's source branch before it was
+   squash-merged, and is not reachable from `main` — it only resolved
+   locally because this session had fetched it by exact SHA earlier. The
+   actual, reachable squash-merge commit is `1a0a35c8`. Confirmed it diffs
+   identically to `1b7be79a` for every file in the surface — round 1's
+   zero-diff conclusion was correct, only its citation was not
+   reproducible by anyone who hadn't done that SHA-targeted fetch.
+2. **LOC-32-1 (MED)** — `guest_check_in_service.py`'s `_link_prospect`
+   catches a broad exception on the reasoning that a pipeline failure must
+   not cost the guest their attendance, but `link_prospect_to_event`'s
+   insert ran with no SAVEPOINT — a lost duplicate-key race left the whole
+   session needing a rollback it never got, so `check_in_guest`'s own
+   commit (the attendance record itself) failed too. Fixed by wrapping the
+   insert in `begin_nested()`, matching `MembershipPipelineService.
+create_prospect`'s own established pattern for the identical race
+   shape.
+3. **LOC-32-2 (MED)** — `get_location_by_display_code` filtered only
+   `Location.is_active`, never `Organization.active` — a deactivated
+   org's kiosk codes and guest sign-in path kept working indefinitely.
+   Other public intake surfaces (`event_requests.py`, `auth.py`) already
+   gate on `Organization.active`; this one didn't. Fixed with a join.
+4. **LOC-32-3 (LOW/MED)** — `update_location`'s duplicate check only ran
+   on a `name` change, even though the uniqueness scope is `(name,
+building)` together — a building-only PATCH could merge two
+   legitimately-separate same-named locations into one building
+   undetected. Fixed by computing the effective `(name, building)` pair and
+   checking whenever either changes.
+5. **LOC-32-4 (MED)** — the guest-check-in daily cap (`daily_cap_exceeded`,
+   an atomic Redis INCR) was checked before the check-in-window-open and
+   attendance-finalized rejection gates, so refused traffic before the
+   window opens could exhaust the 300/day allowance and deny legitimate
+   guests once it does — the exact ordering bug `event_requests.py`'s
+   EV-19 fix already documents and avoids for the identical cap shape.
+   Fixed by moving both rejection checks above the cap.
 
-**Completion gate:** scoped backend tests
-(`-k "location or admin_hub or guest_check_in"`) — **290 passed, 1 skipped**
-(pre-existing, missing optional dependency); `validate_migrations.py
---strict` — 394 revisions, single head. Linters/typecheck not re-run — no
-file in this feature's surface changed for them to check, and the full
-suite already ran clean on this exact `HEAD` as part of PR #2095's gate one
-iteration ago. Findings doc:
-`docs/security-review/LOC-32-locations-kiosk.md`. PR pending. Next: 33 core
-infrastructure, once this PR merges.
+Every fix has a guard test independently verified against the new code:
+`tests/test_guest_check_in.py::TestGuestProspectCreation::
+test_link_race_is_scoped_to_a_savepoint_not_the_whole_commit`,
+`tests/test_location_display_code.py::TestGetLocationByDisplayCode`,
+`tests/test_location_uniqueness.py` (new file, 3 tests), and
+`tests/test_public_display.py::TestGuestCheckInDailyCapOrdering` (3 tests).
+
+**LOC-3** (`GET /locations/{id}/display`, the dead authenticated display
+endpoint) remains unchanged and flagged, not fixed, for the same reason as
+pass 1 — already tracked in `docs/KNOWN_LIMITATIONS.md`.
+
+**Completion gate:** `flake8`/`isort` clean; `black --check` required
+reformatting one file (`location_service.py`), applied. Scoped tests
+(`-k "location or admin_hub or guest_check_in or public_display"`) —
+**307 passed** (was 290), 1 skipped (pre-existing). Full backend suite —
+**9362 passed** (was 9353), 22 skipped, 0 failed.
+`validate_migrations.py --strict` — 394 revisions, single head (no schema
+change). No frontend file touched. Findings doc:
+`docs/security-review/LOC-32-locations-kiosk.md`. PR #2098 opened and
+subscribed. Next: 33 core infrastructure, once #2098 merges.
 
 Feature 32 marked 🔄 (not ✅ yet — that happens on the closing PR after
 merge, per the rotation's own rule).

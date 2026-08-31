@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Locations & kiosk guest check-in hardening (2026-08-31)
+
+**Fixed**
+
+- A guest check-in racing another sign-in for the same person and event
+  could, in rare cases, fail entirely instead of just skipping the
+  duplicate pipeline link — the guest's attendance now always records.
+- A deactivated organization's kiosk display codes and guest sign-in links
+  kept working indefinitely; they now stop resolving along with the rest
+  of the organization's public surface.
+- Moving a location to a different building without renaming it could
+  create an ambiguous duplicate with an existing location of the same name
+  in the target building — the uniqueness check now covers this case.
+- The guest-check-in daily sign-in limit could be exhausted by requests
+  sent before an event's check-in window opened (or after attendance was
+  finalized), denying legitimate guests later that day — those requests no
+  longer count against the limit.
+
 ### Scheduled-task reliability fixes (2026-08-31)
 
 **Fixed**
