@@ -54,6 +54,11 @@ class ShiftCreate(BaseModel):
     min_staffing: Optional[int] = None
     notes: Optional[str] = None
     activities: Optional[Any] = None
+    # The template this shift was built from, when the caller built it from
+    # one. Recorded rather than only copied: the equipment checklists a shift
+    # carries are resolved through its template. Validated in-org before it is
+    # stored.
+    template_id: Optional[str] = None
 
     @model_validator(mode="after")
     def validate_shift_times(self) -> "ShiftCreate":
@@ -144,6 +149,9 @@ class ShiftResponse(UTCResponseBase):
     positions: Optional[List[PositionSlot | str]] = None
     apparatus_positions: Optional[List[PositionSlot | str]] = None
     min_staffing: Optional[int] = None
+    # The template this shift came from, when it came from one. NULL on ad-hoc
+    # shifts and on every shift created before the column existed.
+    template_id: Optional[UUID] = None
     station_id: Optional[str] = None
     shift_officer_id: Optional[UUID] = None
     shift_officer_name: Optional[str] = None

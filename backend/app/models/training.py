@@ -2912,6 +2912,25 @@ class Shift(Base):
     # Assignment
     apparatus_id = Column(String(36))  # Link to apparatus (future)
     station_id = Column(String(36))  # Link to station (future)
+
+    # The ShiftTemplate this shift was created from, when it came from one.
+    #
+    # Shifts have always *copied* a template's fields (color, positions,
+    # min_staffing, apparatus_id) and kept no reference back, which was fine
+    # while nothing needed to ask the question later. Equipment checklists do:
+    # a shift template names the checklists its shifts carry, and resolving
+    # those at check time means knowing which template a shift came from.
+    #
+    # SET NULL and nullable (pitfall #2 — SET NULL requires nullable): a
+    # template may be retired long after the shifts it generated, and losing
+    # the link must not take the shift with it. Shifts created before this
+    # column existed carry NULL and fall back to apparatus-based checklist
+    # resolution, which is the behaviour they have today.
+    template_id = Column(
+        String(36),
+        ForeignKey("shift_templates.id", ondelete="SET NULL"),
+        nullable=True,
+    )
     # Duty platoon this shift belongs to (A/B/C…) when generated from a platoon
     # rotation. Lets the UI label the shift and show the platoon roster.
     platoon = Column(String(20), nullable=True)

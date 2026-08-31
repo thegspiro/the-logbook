@@ -759,6 +759,22 @@ class SchedulingService:
                 shift_data["positions"] = normalize_stored_positions(
                     shift_data["positions"]
                 )
+
+            # A client-supplied FK, so it is org-checked before it is stored
+            # (pitfall #14c). This one decides which equipment checklists the
+            # shift carries, so a foreign id would not merely dangle — it would
+            # point the crew at another department's checklists.
+            template_id = shift_data.get("template_id")
+            if template_id:
+                owned = await self.db.execute(
+                    select(ShiftTemplate.id).where(
+                        ShiftTemplate.id == template_id,
+                        ShiftTemplate.organization_id == organization_id,
+                    )
+                )
+                if owned.scalar_one_or_none() is None:
+                    return None, "Shift template not found"
+
             shift = Shift(
                 organization_id=organization_id, created_by=created_by, **shift_data
             )
@@ -2688,6 +2704,9 @@ class SchedulingService:
                     start_time=shift_start,
                     end_time=shift_end,
                     apparatus_id=getattr(template, "apparatus_id", None),
+                    # Recorded, not just copied from: the equipment checklists
+                    # this shift carries are resolved through its template.
+                    template_id=getattr(template, "id", None),
                     platoon=shift_platoon,
                     color=shift_color,
                     # Structured slots, not bare strings: this writer is how
