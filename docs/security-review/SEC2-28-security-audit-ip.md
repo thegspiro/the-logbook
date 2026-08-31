@@ -19,8 +19,10 @@ store, service, components), `pages/AuditLogPage.tsx`,
 `pages/ErrorMonitoringPage.tsx`.
 **Migrations:** none in either pass — pass 1's fixes were all application-logic
 only (the audit hash-chain version bump changes what new rows hash over, not
-the schema; existing rows are unaffected and verify unchanged); pass 2 made no
-code change at all.
+the schema; existing rows are unaffected and verify unchanged). Pass 2's
+findings work made no code change; a Codex review round on the pass-2 PR
+itself did produce one small frontend fix — see "Small fix applied this
+pass" below.
 
 ---
 
@@ -343,10 +345,10 @@ wrong and is fixed below, not just corrected in the writeup.
 
 ### SEC2-28-7 — HIGH (operational-security value, not an access-control bypass) — `security_monitoring.py`'s alert surface has no admin UI, and two of its four detectors have a deeper visibility gap than "missing UI" alone
 
-**Corrected after Codex review** (five findings across this section were
-wrong or overstated in the original writeup — severity, visibility, and the
-underlying wiring status — all now verified directly against the code
-rather than assumed):
+**Corrected after Codex review, in two rounds** (nine findings across this
+section were wrong or overstated in the original writeup — severity,
+visibility, and the underlying wiring status — all now verified directly
+against the code rather than assumed):
 
 **What actually fires, and at what severity** (`app/services/
 security_monitoring.py`): `detect_brute_force` (called from `endpoints/
@@ -355,9 +357,13 @@ once the per-IP/per-user hourly failed-attempt threshold is crossed — never
 CRITICAL. `detect_data_exfiltration` (called from
 `core/security_middleware.py`'s `SecurityMonitoringMiddleware`, post-response,
 on export endpoints) creates a `HIGH` alert for a single large transfer, and
-only escalates to `CRITICAL` if the destination is external
-(`AlertType.EXTERNAL_DATA_TRANSFER`) or the user's rolling 24h total exceeds
-5× the single-transfer threshold. `detect_session_hijack` and
+escalates to `CRITICAL` only if the user's rolling 24h total exceeds 5× the
+single-transfer threshold. `detect_data_exfiltration` also accepts an
+optional `destination` argument that would escalate an external transfer to
+`CRITICAL` (`AlertType.EXTERNAL_DATA_TRANSFER`) — but the sole production
+call site (`security_middleware.py:1406`) never supplies it, so that branch
+is unreachable as currently wired; only the cumulative-volume path can
+produce a CRITICAL exfiltration alert today. `detect_session_hijack` and
 `report_privilege_escalation_attempt`/`detect_privilege_escalation` are the
 only two that are unconditionally `CRITICAL`. The original finding's "all
 five paths create `ThreatLevel.CRITICAL` rows" was wrong for three of the
@@ -453,12 +459,15 @@ security_middleware.py` (`Content-Length`-gated exfiltration check);
 **Why not fixed:** three distinct pieces of real work, none a drive-by fix —
 a new admin screen with an alert list/detail view and acknowledge/resolve
 actions (permission decision: `audit.view` for the read endpoints matches
-the backend; `resolve` and the destructive `/audit-log/rehash`/`checkpoint`
-ops already require `audit.export` server-side); a platform-level alert
-ownership/viewing design for `organization_id=NULL` rows that does not
-weaken existing tenant isolation; and a `Content-Length` fix across however
-many of the fifteen `EXPORT_ENDPOINTS` routes turn out to use
-`StreamingResponse` without one. All three flagged; mirrored into
+the backend; both `/alerts/{id}/acknowledge` and `/alerts/{id}/resolve` —
+not just `resolve` — require `audit.export` server-side, same as the
+destructive `/audit-log/rehash`/`checkpoint` ops, so a screen admitting
+`audit.view`-only holders for reads needs its two mutation actions gated
+separately or they 403 for every read-only auditor who can see them); a
+platform-level alert ownership/viewing design for `organization_id=NULL`
+rows that does not weaken existing tenant isolation; and a `Content-Length`
+fix across however many of the fifteen `EXPORT_ENDPOINTS` routes turn out to
+use `StreamingResponse` without one. All three flagged; mirrored into
 `docs/KNOWN_LIMITATIONS.md`.
 
 ### Small fix applied this pass — IP-security route permission gate
@@ -473,9 +482,14 @@ matched.
 **Fix:** `requiredPermission="security.manage"` →
 `requiredAnyPermission={['security.manage', 'settings.manage']}`, using
 `ProtectedRoute`'s existing any-of support (already used by
-`communications`/`scheduling` routes elsewhere in the codebase).
-`npx eslint`, `tsc --noEmit`, and `vitest run src/modules/ip-security
-src/routeIntegrity.test.ts` (39/39) all pass.
+`communications`/`scheduling` routes elsewhere in the codebase). This alone
+turned CI red: `src/modules/testing/testingRegistry.test.ts`'s
+`repeats each route gate exactly` test compares every route's actual gate
+against a source-of-truth registry (`testingRegistry.ts`), which still
+declared `/ip-security` as `permission: 'security.manage'` — updated to
+`anyPermission: ['security.manage', 'settings.manage']` to match.
+`npx eslint`, `tsc --noEmit`, and the full frontend suite (`npx vitest run`,
+5520/5520) all pass.
 
 ### Minor note — `/admin/errors` route permission doesn't match its API's
 
@@ -494,15 +508,22 @@ flagged observation rather than fixed inline.
 
 ## Guard tests added (Pass 2)
 
-None new. The one code change this pass (the `IPSecurityAdminPage` route
-permission fix) is covered by existing tests —
-`src/routeIntegrity.test.ts` and `vitest run src/modules/ip-security`
-(39/39, both re-run after the fix) — rather than a dedicated new test, since
-no other route file in the codebase carries a per-route permission-gate
-regression test either; SEC2-28-7's three corrected/expanded findings
-(brute-force platform-alert visibility, the exfiltration `Content-Length`
-gap, and the missing alert UI) are all flagged, not fixed, so none has a
-reproducible code path to pin.
+None new, but the one code change this pass (the `IPSecurityAdminPage`
+route permission fix) is protected by an _existing_ test that actually
+covers it — `src/modules/testing/testingRegistry.test.ts`'s
+`repeats each route gate exactly` — corrected from an earlier draft of this
+section that credited `routeIntegrity.test.ts` and the `ip-security` store
+test instead: neither of those touches route permissions at all
+(`routeIntegrity.test.ts` checks declared paths and navigation targets;
+`vitest run src/modules/ip-security`'s one test exercises the Zustand
+store), so reverting the route to `requiredPermission="security.manage"`
+would have left that reported suite green. The `testingRegistry.ts` entry
+this fix required (`anyPermission: [...]`, replacing `permission: '...'`)
+is what the gate-comparison test actually diffs against, and it caught the
+drift live — see "Fix" above. SEC2-28-7's remaining findings (brute-force
+platform-alert visibility, the exfiltration `Content-Length` gap, the
+external-destination-escalation dead code, and the missing alert UI) are
+all flagged, not fixed, so none has a reproducible code path to pin.
 
 ## Completion gate (Pass 2)
 
@@ -520,4 +541,4 @@ CLAUDE.md.
 | backend tests, scope (privilege_ceiling/audit_hash_chain/audit_org_scoping/security_middleware/ip_security_service) | 129/129 passed             |
 | `node scripts/tsc-native.mjs --noEmit` (full project, per the wrapper CLAUDE.md documents)                          | 0 errors                   |
 | `npx eslint` (ip-security module + AuditLogPage/ErrorMonitoringPage/adminServices.ts, the files reviewed this pass) | 0 errors/warnings          |
-| `vitest run src/modules/ip-security src/routeIntegrity.test.ts`                                                     | 39/39 passed               |
+| `npx vitest run` (full frontend suite, after the route permission fix + its `testingRegistry.ts` update)            | 5520/5520 passed           |

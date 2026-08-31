@@ -71,15 +71,23 @@ were originally reported as all matching their backend endpoints — wrong:
 `ip_security.py` accepts `security.manage` OR `settings.manage`, refusing a
 `settings.manage`-only admin the page the API would authorize them for.
 Codex caught it; fixed by switching to `ProtectedRoute`'s
-`requiredAnyPermission`, verified with `tsc --noEmit`, `eslint`, and
-`vitest run src/modules/ip-security src/routeIntegrity.test.ts` (39/39).
+`requiredAnyPermission`. That alone turned CI red: the actual test covering
+route permissions, `testingRegistry.test.ts`'s `repeats each route gate
+exactly` (a second Codex catch — the first fix's own summary had credited
+`routeIntegrity.test.ts` and the ip-security store test, neither of which
+touches permissions at all), diffs every route against `testingRegistry.ts`,
+which still declared the old single permission; updated to match. Verified
+with `tsc --noEmit`, `eslint`, and the full frontend suite (5520/5520).
 
 **SEC2-28-7 (HIGH — operational-security value, not an access-control bypass;
 flagged, not fixed) — corrected after Codex review.** The original writeup
 overstated severity (claimed all five detector paths fire
 `ThreatLevel.CRITICAL`; actually `detect_brute_force` is `HIGH`, and
-`detect_data_exfiltration` is `HIGH` unless the destination is external or
-the 24h cumulative total is 5× the single-transfer threshold — only
+`detect_data_exfiltration` is `HIGH`, escalating to `CRITICAL` only when the
+24h cumulative total exceeds 5× the single-transfer threshold — it also
+accepts a `destination` argument that would escalate an external transfer,
+but the sole production call site never supplies it, so that branch is
+unreachable as currently wired (a third Codex catch) — only
 `detect_session_hijack`/`report_privilege_escalation_attempt` are
 unconditionally `CRITICAL`) and overstated the visibility gap (claimed
 "only a direct DB/API query surfaces one" for all five; actually
@@ -118,11 +126,11 @@ permission-string mismatch, not a bypass in either direction.
 Full local completion gate: flake8/black/isort clean on the 9 backend files
 this feature covers (no backend code changed); 129/129 scoped backend tests
 pass; `tsc --noEmit` 0 errors; `eslint` 0 errors/warnings on the files
-reviewed; `vitest run src/modules/ip-security src/routeIntegrity.test.ts`
-39/39 pass (includes the route-permission fix). Findings appended to
-`docs/security-review/SEC2-28-security-audit-ip.md`'s existing Pass 1 doc as
-a new Pass 2 section, corrected once during Codex review of this PR. Rotation
-row 28 → ⏳ pending this PR's merge.
+reviewed; full frontend suite (`npx vitest run`) 5520/5520 pass, including
+the route-permission fix and its `testingRegistry.ts` update. Findings
+appended to `docs/security-review/SEC2-28-security-audit-ip.md`'s existing
+Pass 1 doc as a new Pass 2 section, corrected across two rounds of Codex
+review on this PR. Rotation row 28 → ⏳ pending this PR's merge.
 
 ---
 
