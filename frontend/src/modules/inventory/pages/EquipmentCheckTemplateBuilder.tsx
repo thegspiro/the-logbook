@@ -94,11 +94,11 @@ import type {
   CheckTemplateCompartment,
   CheckTemplateItemCreate,
   CheckTemplateItem,
-  CheckType,
   TemplateType,
   LinkCoverage,
 } from '@/modules/inventory/types/equipmentCheck';
 import {
+  CheckType,
   TEMPLATE_TYPE_LABELS,
   CONTAINER_TYPE_PRESETS,
   CHECK_TYPE_STORES,
@@ -208,6 +208,18 @@ interface ItemFormState {
 
 let nextItemKey = 0;
 const newItemKey = () => `local-item-${Date.now()}-${nextItemKey++}`;
+
+/**
+ * How a catalog item created from this position should be tracked.
+ *
+ * Count and expiry positions are consumable stock replaced from a shelf —
+ * counted, lot-tracked, `pool`. Level and function positions are a particular
+ * vessel or device (an O2 cylinder, a thermal imager), and the custody, serial
+ * and transfer paths all require an `individual` row, so creating those as pool
+ * left them unable to use any of it until somebody reclassified them by hand.
+ */
+const trackingTypeForCheck = (checkType: CheckType): 'pool' | 'individual' =>
+  checkType === CheckType.COUNT || checkType === CheckType.EXPIRY ? 'pool' : 'individual';
 
 function emptyItem(): ItemFormState {
   return {
@@ -2916,6 +2928,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             <InventoryItemPicker
               value={item.inventoryItemId || undefined}
               canCreateInventory={canManageInventory}
+              createTrackingType={trackingTypeForCheck(item.checkType)}
               onChange={(id) => updateItemFieldWithAutoSave(compIdx, itemIdx, { inventoryItemId: id ?? '' })}
             />
             <p className="text-theme-text-muted mt-1 text-[11px]">

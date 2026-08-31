@@ -23,6 +23,7 @@ from app.services.inventory_service import InventoryService
 
 pytestmark = [pytest.mark.integration]
 from app.models.inventory import (
+    MEDICAL_ITEM_TYPES,
     ClearanceLineDisposition,
     ClearanceStatus,
     InventoryActionType,
@@ -1062,6 +1063,101 @@ class TestPoolItemValidation:
         assert item is None
         assert err is not None
         assert "negative" in err.lower()
+
+
+class TestItemNameExists:
+    """The guard that stops a create-and-link filing a second row.
+
+    The gear list this UI searches excludes medical types and returns one page,
+    so it cannot answer "is this already in the catalog". These assert that the
+    server-side check can.
+    """
+
+    @pytest.mark.asyncio
+    async def test_name_already_on_file_is_reported(
+        self, db_session, setup_org_and_user
+    ):
+        org_id, user_id, _ = setup_org_and_user
+        svc = InventoryService(db_session)
+        await svc.create_item(
+            organization_id=uuid.UUID(org_id),
+            item_data={"name": "Gauze Pads, 4x4", "condition": "good"},
+            created_by=uuid.UUID(user_id),
+        )
+
+        assert await svc.item_name_exists(org_id, "Gauze Pads, 4x4") is True
+
+    @pytest.mark.asyncio
+    async def test_punctuation_and_case_do_not_hide_a_duplicate(
+        self, db_session, setup_org_and_user
+    ):
+        """ "Gauze Pads, 4x4" and "gauze pads 4x4" are the same box."""
+        org_id, user_id, _ = setup_org_and_user
+        svc = InventoryService(db_session)
+        await svc.create_item(
+            organization_id=uuid.UUID(org_id),
+            item_data={"name": "Gauze Pads, 4x4", "condition": "good"},
+            created_by=uuid.UUID(user_id),
+        )
+
+        assert await svc.item_name_exists(org_id, "gauze pads 4x4") is True
+
+    @pytest.mark.asyncio
+    async def test_a_medical_item_is_not_invisible_here(
+        self, db_session, setup_org_and_user
+    ):
+        """The whole point: the gear list hides medical stock, this must not.
+
+        Filed under a medical category, the item is absent from
+        ``GET /inventory/items`` — which is exactly the case that produced a
+        duplicate row before this check existed.
+        """
+        org_id, user_id, _ = setup_org_and_user
+        svc = InventoryService(db_session)
+        category, cat_err = await svc.create_category(
+            organization_id=uuid.UUID(org_id),
+            category_data={"name": "EMS Consumables", "item_type": "medical"},
+            created_by=uuid.UUID(user_id),
+        )
+        assert cat_err is None
+        await svc.create_item(
+            organization_id=uuid.UUID(org_id),
+            item_data={
+                "name": "Code Oxygen Cylinder",
+                "condition": "good",
+                "category_id": uuid.UUID(category.id),
+            },
+            created_by=uuid.UUID(user_id),
+        )
+
+        items, _ = await svc.get_items(
+            organization_id=uuid.UUID(org_id),
+            search="Code Oxygen Cylinder",
+            exclude_item_types=MEDICAL_ITEM_TYPES,
+        )
+        assert items == []
+        assert await svc.item_name_exists(org_id, "Code Oxygen Cylinder") is True
+
+    @pytest.mark.asyncio
+    async def test_another_orgs_item_does_not_block_creation(
+        self, db_session, setup_org_and_user
+    ):
+        org_id, user_id, _ = setup_org_and_user
+        svc = InventoryService(db_session)
+        await svc.create_item(
+            organization_id=uuid.UUID(org_id),
+            item_data={"name": "Gauze Pads, 4x4", "condition": "good"},
+            created_by=uuid.UUID(user_id),
+        )
+
+        assert await svc.item_name_exists(str(uuid.uuid4()), "Gauze Pads, 4x4") is False
+
+    @pytest.mark.asyncio
+    async def test_an_unused_name_is_free(self, db_session, setup_org_and_user):
+        org_id, _, _ = setup_org_and_user
+        svc = InventoryService(db_session)
+
+        assert await svc.item_name_exists(org_id, "Nothing Like This") is False
 
 
 # ── Barcode Label Generation Tests ─────────────────────────────────

@@ -5880,6 +5880,29 @@ class InventoryService:
             await self.db.refresh(item)
         return items, skipped
 
+    async def item_name_exists(self, organization_id: str, name: str) -> bool:
+        """Whether the org's catalog already carries an item under this name.
+
+        Deliberately spans the **whole** catalog, medical stock included. The
+        gear list (`GET /inventory/items`) excludes medical types by design, so
+        a caller that only searched there cannot answer this — and a caller that
+        assumes it can is how one item becomes two rows with its checklist links
+        and replacement lots split between them.
+
+        Matched on `normalize_name` rather than raw equality, for the same
+        reason `create_items_bulk` does: "Gauze Pads, 4x4" and "gauze pads 4x4"
+        are the same box.
+        """
+        key = normalize_name(name)
+        if not key:
+            return False
+        result = await self.db.execute(
+            select(InventoryItem.name).where(
+                InventoryItem.organization_id == organization_id
+            )
+        )
+        return any(normalize_name(n) == key for n in result.scalars().all() if n)
+
     async def update_lot(
         self,
         lot_id: str,

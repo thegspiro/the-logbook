@@ -214,6 +214,20 @@ export const inventoryService = {
     return response.data;
   },
 
+  /**
+   * Whether the org's catalog already holds an item under this name.
+   *
+   * Spans the whole catalog, medical included — which `getItems` cannot do,
+   * because it excludes medical types and returns one page. Used to refuse a
+   * create that would file a second row for an item already on the books.
+   */
+  async itemNameExists(name: string): Promise<boolean> {
+    const response = await api.get<{ exists: boolean }>('/inventory/items/name-exists', {
+      params: { name },
+    });
+    return response.data.exists;
+  },
+
   async createItem(data: InventoryItemCreate): Promise<InventoryItem> {
     const response = await api.post<InventoryItem>('/inventory/items', data);
     return response.data;

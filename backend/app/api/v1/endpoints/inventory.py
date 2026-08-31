@@ -797,6 +797,31 @@ async def create_items_bulk(
     )
 
 
+@router.get("/items/name-exists")
+async def item_name_exists(
+    name: str = Query(..., min_length=1, max_length=255),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """
+    Whether an item under this name is already in the org's catalog.
+
+    Declared above `/items/{item_id}` so the literal path wins the match.
+
+    Exists because the gear list this UI searches excludes medical types, and
+    returns at most a page of results — so "no match on screen" is not the same
+    as "not in the catalog". A create-and-link flow that treats the two as
+    equal files a second row for an item already on the books, splitting its
+    checklist links and replacement lots between them.
+
+    **Authentication required**
+    **Requires permission: inventory.manage**
+    """
+    service = InventoryService(db)
+    exists = await service.item_name_exists(current_user.organization_id, name)
+    return {"exists": exists}
+
+
 @router.get("/items/export")
 async def export_items_csv(
     category_id: UUID | None = None,

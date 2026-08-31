@@ -11,6 +11,11 @@
  * the state a fresh department is always in, because nothing seeds the catalog,
  * so the control whose whole purpose is making the link could never make one.
  *
+ * Creation is refused when the catalog already holds the name, checked
+ * server-side: the search here excludes medical stock and returns one page, so
+ * "nothing on screen" is not "nothing on file", and acting on the difference
+ * files a second row for an item already on the books.
+ *
  * What gets created is a bare name. The position's own numbers — required
  * quantity, critical minimum, min level — are deliberately not copied onto it:
  * one catalog item is stocked in many places (gauze in a jump bag, a cabinet
@@ -37,6 +42,13 @@ interface InventoryItemPickerProps {
    * receives stock *against* an existing item — is unaffected.
    */
   canCreateInventory?: boolean;
+  /**
+   * How a newly created item should be tracked. Counted stock is a `pool`
+   * row; a single device or vessel is `individual`, which is what the custody,
+   * serial and transfer paths require. Forcing every creation to `pool` left a
+   * thermal imager unable to use any of them until somebody reclassified it.
+   */
+  createTrackingType?: 'pool' | 'individual';
 }
 
 const InventoryItemPicker: React.FC<InventoryItemPickerProps> = ({
@@ -44,6 +56,7 @@ const InventoryItemPicker: React.FC<InventoryItemPickerProps> = ({
   onChange,
   placeholder = 'Search inventory to link…',
   canCreateInventory = false,
+  createTrackingType = 'pool',
 }) => {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<{ id: string; name: string; sub?: string }[]>([]);
@@ -151,18 +164,27 @@ const InventoryItemPicker: React.FC<InventoryItemPickerProps> = ({
   /**
    * Add the typed name to the catalog and link it in one step.
    *
-   * Pool-tracked because checklist stock is counted, not serialized, and with
-   * nothing on hand: a catalog row born from a checklist knows the item exists,
-   * not how many are in the stock room.
+   * Refused when the name is already on file. A failed existence check also
+   * refuses, by falling to the catch below: creating a duplicate is worse than
+   * making somebody try again, because nothing in the UI afterwards reveals
+   * that an item's lots and links have been split across two rows.
    */
   const createAndLink = async () => {
     if (!typed || creating) return;
     setCreating(true);
     try {
+      // The search above cannot prove absence: it excludes medical stock and
+      // returns one page of ten. Ask the server, which sees the whole catalog.
+      if (await inventoryService.itemNameExists(typed)) {
+        toast.error(`“${typed}” is already in the inventory catalog. Search for it to link it.`);
+        return;
+      }
       const created = await inventoryService.createItem({
         name: typed,
-        tracking_type: 'pool',
-        quantity: 0,
+        tracking_type: createTrackingType,
+        // Counted stock starts at nothing on hand; an individually tracked
+        // row is the one physical asset it describes.
+        quantity: createTrackingType === 'pool' ? 0 : 1,
       });
       onChange(created.id, created.name);
       setSelectedName(created.name);
