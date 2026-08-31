@@ -1424,10 +1424,16 @@ class InventoryService:
             # INV-4 (XC-1): location/storage/variant-group/assignee must be in-org.
             await self._assert_item_fks_in_org(item_data, organization_id)
 
-            # Validate pool items have quantity >= 1
+            # Pool stock can legitimately sit at zero. A catalog row created
+            # from a checklist position is a definition — "this truck carries
+            # 4x4 gauze" — and says nothing about what is in the stock room
+            # yet; update_item has always allowed the same value (only a
+            # negative is refused). Only ``create_items_bulk`` still requires a
+            # count, and deliberately: that path is somebody pasting a stock
+            # list, where the number is the point.
             tracking = item_data.get("tracking_type", "individual")
-            if tracking == "pool" and item_data.get("quantity", 1) < 1:
-                return None, "Pool items must have a quantity of at least 1"
+            if tracking == "pool" and item_data.get("quantity", 1) < 0:
+                return None, "Pool item quantity cannot be negative"
 
             # Validate serial number uniqueness within the organization
             sn_err = await self._check_serial_number_unique(

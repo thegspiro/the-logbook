@@ -2915,10 +2915,12 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             </label>
             <InventoryItemPicker
               value={item.inventoryItemId || undefined}
+              canCreateInventory={canManageInventory}
               onChange={(id) => updateItemFieldWithAutoSave(compIdx, itemIdx, { inventoryItemId: id ?? '' })}
             />
             <p className="text-theme-text-muted mt-1 text-[11px]">
-              Link to track replacement stock and enable lot swaps during checks.
+              Link to track replacement stock and enable lot swaps during checks. The count and minimum above stay on
+              this position — the same item can be stocked in other places, each counted on its own.
             </p>
           </div>
 
