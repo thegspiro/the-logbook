@@ -16,8 +16,15 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-None. Feature 25 (Messaging & notifications) is fully closed — see log entry
-below. Next: feature 26, Forms.
+**Feature 26 (Forms), pass 2** — [PR #2085](https://github.com/thegspiro/the-logbook/pull/2085),
+branch `claude/security-review-forms-pass2`. One finding (FORM-9, LOW-MED,
+fixed): integration-processor exceptions were persisted to
+`submission.integration_result` and served back verbatim through
+`FormSubmissionResponse` on `submit_form`/`get_submission`/
+`list_submissions`/`reprocess_submission_integrations` — three prior review
+passes had misjudged this as internal-only. See
+`docs/security-review/FORM-26-forms.md` pass 2. Subscribed for CI/review
+events.
 
 ---
 
