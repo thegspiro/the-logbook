@@ -54,6 +54,10 @@ def _has_column(table: str, column: str) -> bool:
     return column in {c["name"] for c in _inspector().get_columns(table)}
 
 
+def _has_foreign_key(table: str, name: str) -> bool:
+    return any(fk["name"] == name for fk in _inspector().get_foreign_keys(table))
+
+
 def _index_columns(table: str, name: str) -> list[str] | None:
     for index in _inspector().get_indexes(table):
         if index["name"] == name:
@@ -198,13 +202,70 @@ def upgrade() -> None:
         )
 
 
+def _collapse_to_one_mark_per_page() -> None:
+    """Keep the newest mark per (org, member, page); delete the rest.
+
+    The old unique index is ``(organization_id, user_id, route_path)``, and a
+    second run makes that key non-unique by design — one row per run. So the
+    downgrade cannot simply recreate it: CREATE UNIQUE INDEX fails with 1062
+    the moment a department has run the checklist twice, and MySQL DDL is not
+    transactional, so the column and index drops above it have already
+    committed. What is left is a table with no ``run_id`` and no unique index,
+    still stamped as this revision, which Alembic will therefore never re-run:
+    the /testing screen 1054s on every query and nothing self-heals.
+
+    Collapsing first is lossy — the older passes' marks go — but the docstring
+    already says the downgrade destroys run grouping, and losing the history
+    the old schema could not represent is the intended shape of that. Losing
+    the *schema* is not.
+    """
+    bind = op.get_bind()
+    order = "e.checked_at DESC, e.id DESC"
+    join = ""
+    if _has_column(_ENTRIES, "run_id") and _has_table(_RUNS):
+        # Newest run first; a mark whose run row is missing sorts last rather
+        # than winning on a NULL.
+        join = f" LEFT JOIN {_RUNS} r ON r.id = e.run_id"
+        order = f"r.sequence DESC, {order}"
+    rows = bind.execute(
+        sa.text(
+            f"SELECT e.id, e.organization_id, e.user_id, e.route_path "  # noqa: S608
+            f"FROM {_ENTRIES} e{join} ORDER BY {order}"
+        )
+    ).fetchall()
+
+    seen: set = set()
+    doomed: list = []
+    for row_id, organization_id, user_id, route_path in rows:
+        key = (organization_id, user_id, route_path)
+        if key in seen:
+            doomed.append(row_id)
+        else:
+            seen.add(key)
+
+    for start in range(0, len(doomed), 500):
+        batch = doomed[start : start + 500]
+        bind.execute(
+            sa.text(
+                f"DELETE FROM {_ENTRIES} WHERE id IN :ids"  # noqa: S608
+            ).bindparams(sa.bindparam("ids", expanding=True)),
+            {"ids": batch},
+        )
+
+
 def downgrade() -> None:
     """Irreversible in substance: run labels and grouping are lost."""
     if _has_table(_ENTRIES):
+        _collapse_to_one_mark_per_page()
         if _index_columns(_ENTRIES, _OLD_UNIQUE) is not None:
             op.drop_index(_OLD_UNIQUE, table_name=_ENTRIES)
         if _has_column(_ENTRIES, "run_id"):
-            op.drop_constraint("fk_testing_entry_run", _ENTRIES, type_="foreignkey")
+            # Guarded like every other step, and for the same reason: an
+            # installation whose table came from create_all has the column
+            # without this migration's constraint name, and an unguarded drop
+            # aborts the downgrade with the column drops already committed.
+            if _has_foreign_key(_ENTRIES, "fk_testing_entry_run"):
+                op.drop_constraint("fk_testing_entry_run", _ENTRIES, type_="foreignkey")
             op.drop_column(_ENTRIES, "run_id")
         for column in ("expected_access", "build_id"):
             if _has_column(_ENTRIES, column):

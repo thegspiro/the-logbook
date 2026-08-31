@@ -1503,13 +1503,20 @@ class EquipmentCheckService:
             if expiration is not None:
                 observation_passes = expiration >= date.today()
 
-        if status in ("pass", "fail") and observation_passes is not None:
-            expected_status = "pass" if observation_passes else "fail"
-            if status != expected_status:
-                raise ValueError(
-                    f"Status '{status}' contradicts the authoritative "
-                    f"{check_type} observation"
-                )
+        # One direction only. A measurement can refute a "pass" — a cylinder
+        # reading below the minimum is not a serviceable cylinder, whatever
+        # the crew tapped — but it cannot refute a "fail". An AED pad packet
+        # can be torn open a year before the pads expire, a regulator can be
+        # cracked on a full cylinder, and a full drawer can hold the wrong
+        # size. Rejecting those answers 400s the *entire* checklist, with a
+        # message that gives the crew nothing to do, and offline the same
+        # payload is retried to the queue ceiling and then discarded — the
+        # finding is lost rather than filed.
+        if status == "pass" and observation_passes is False:
+            raise ValueError(
+                f"Status 'pass' contradicts the authoritative "
+                f"{check_type} observation"
+            )
 
     @staticmethod
     def _snapshot_from_template(
