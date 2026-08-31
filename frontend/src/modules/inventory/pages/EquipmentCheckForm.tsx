@@ -210,7 +210,7 @@ const ShortfallList: React.FC<{
       </p>
       <ul className="border-theme-surface-border divide-theme-surface-border divide-y rounded-md border">
         {shown.map((item) => {
-          const required = item.requiredQuantity ?? item.expectedQuantity;
+          const required = targetQuantity(item);
           const found = results[item.id]?.quantityFound;
           return (
             <li key={item.id} className="flex items-center justify-between gap-3 px-3 py-1.5">
@@ -1228,7 +1228,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
       const next = { ...prev };
       for (const item of items) {
         const existing = next[item.id];
-        const required = item.requiredQuantity ?? item.expectedQuantity;
+        const required = targetQuantity(item);
         const shown = existing?.quantityFound;
         const patch: Partial<ItemResult> = { status: 'pass' };
         if (item.checkType === 'count' && required != null) {
@@ -1254,7 +1254,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
     (compartment: CheckTemplateCompartment) =>
       checkableIn(compartment).filter((item) => {
         if (item.checkType !== 'count') return false;
-        const required = item.requiredQuantity ?? item.expectedQuantity;
+        const required = targetQuantity(item);
         const shown = results[item.id]?.quantityFound;
         return required != null && shown != null && shown < required;
       }),
@@ -1289,7 +1289,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
           const existing = next[item.id];
           const patch: Partial<ItemResult> = { status: 'pass' };
           if (item.checkType === 'count') {
-            const required = item.requiredQuantity ?? item.expectedQuantity;
+            const required = targetQuantity(item);
             if (required != null) patch.quantityFound = required;
           }
           next[item.id] = { status: 'not_checked', ...existing, ...patch };
@@ -1549,7 +1549,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
           check_type: item.checkType,
           status: getEffectiveStatus(item, result, today),
           quantity_found: result?.quantityFound,
-          required_quantity: item.requiredQuantity ?? item.expectedQuantity,
+          required_quantity: targetQuantity(item) ?? undefined,
           critical_minimum_quantity: item.criticalMinimumQuantity ?? undefined,
           level_reading: result?.levelReading,
           level_unit: item.levelUnit || undefined,
@@ -1882,7 +1882,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
         return passFailButtons;
 
       case 'count': {
-        const required = item.requiredQuantity ?? item.expectedQuantity;
+        const required = targetQuantity(item);
         const expected = item.expectedQuantity ?? required;
         const criticalMin = item.criticalMinimumQuantity;
         const currentQty = result?.quantityFound ?? 0;

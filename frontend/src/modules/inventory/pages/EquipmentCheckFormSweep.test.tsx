@@ -239,6 +239,53 @@ describe('replacing expiring stock from inside the sweep', () => {
     ],
   });
 
+  it('submits the same target it counted against', async () => {
+    // The sweep evaluates the shortfall against the resolved par. If the
+    // payload carried the raw `requiredQuantity` instead, a zero-minimum
+    // position would file quantity 1 against required 0 with status fail —
+    // and the server only ever upgrades a status, so the contradiction sticks
+    // to the record.
+    const user = userEvent.setup();
+    renderWithRouter(
+      <EquipmentCheckForm
+        shiftId="shift-1"
+        template={
+          {
+            ...template(),
+            compartments: [
+              {
+                id: 'cab',
+                templateId: 'tmpl-1',
+                name: 'Cab',
+                sortOrder: 0,
+                items: [
+                  item({
+                    id: 'gauze',
+                    name: 'Roller gauze',
+                    checkType: 'count',
+                    requiredQuantity: 0,
+                    expectedQuantity: 4,
+                  }),
+                ],
+              },
+            ],
+          } as never
+        }
+        experience="sweep"
+        onBack={vi.fn()}
+      />
+    );
+    await user.click(await screen.findByRole('button', { name: /Finish the check/ }));
+    await user.click(await screen.findByRole('button', { name: /^Submit with/ }));
+    await user.click(await screen.findByRole('button', { name: 'Submit anyway' }));
+
+    await waitFor(() => expect(mockSubmitCheck).toHaveBeenCalled());
+    const payload = mockSubmitCheck.mock.calls[0]?.[1] as {
+      items: { template_item_id: string; required_quantity?: number }[];
+    };
+    expect(payload.items.find((i) => i.template_item_id === 'gauze')?.required_quantity).toBe(4);
+  });
+
   it('does not offer a second submit once the check is filed', async () => {
     // `submitting` goes false in handleSubmit's `finally` whether or not the
     // POST succeeded, and nothing here unmounts the sweep — so an accepted

@@ -523,6 +523,25 @@ describe('EquipmentCheckForm quantity seeding', () => {
     expect(screen.queryByText(/showing below the required quantity/)).not.toBeInTheDocument();
   });
 
+  it('sets a zero-minimum position to its expected count, not to zero', async () => {
+    // `_target_quantity` is `required_quantity or expected_quantity`, so a
+    // required minimum of 0 means "no minimum" and the expected count is the
+    // par. Resolving it with `??` made par 0 here, and "set all to par" then
+    // wrote a zero onto the truck — a crew tapping it to say the compartment
+    // is full recorded it as empty.
+    const user = userEvent.setup();
+    render({ requiredQuantity: 0, expectedQuantity: 4, quantityOnTruck: 1 });
+    await screen.findByDisplayValue('1');
+
+    await user.click(screen.getByRole('button', { name: /Set all items in .* to par/ }));
+    // Deterministic: with par resolved to 4 the row shows 1, so it is short and
+    // the confirmation always appears. It is that dialog naming a par of 4
+    // rather than 0 that the crew is agreeing to.
+    await user.click(await screen.findByRole('button', { name: /Yes, it is full/ }));
+
+    expect(await screen.findByDisplayValue('4')).toBeInTheDocument();
+  });
+
   it('keeps the photo control with the note it evidences', async () => {
     const user = userEvent.setup();
     render({ quantityOnTruck: 4 });
