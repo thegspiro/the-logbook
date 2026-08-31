@@ -16,7 +16,8 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-Feature 31 (Scheduled tasks), pass 2 — PR TBD, branch
+Feature 31 (Scheduled tasks), pass 2 — PR
+[#2095](https://github.com/thegspiro/the-logbook/pull/2095), branch
 `claude/security-review-scheduled-tasks-pass2`. Re-verified all 13 findings
 from `docs/security-review/CRON2-31-scheduled-tasks.md` (pass 1) hold, no
 regressions. Read `scheduled.py` and `scheduled_tasks.py` (43 runners) end to
@@ -32,7 +33,7 @@ pass-2 iterations have used when a name collision like this comes up.
 
 ---
 
-### 2026-08-31 — Feature 31 (Scheduled tasks), pass 2 — 6 fixed, 3 new flagged — PR TBD
+### 2026-08-31 — Feature 31 (Scheduled tasks), pass 2 — 6 fixed, 3 new flagged — PR #2095
 
 No security-review PR was open (feature 30 fully merged via PR #2093 earlier
 this iteration), so the rotation continued to feature 31. Loaded
