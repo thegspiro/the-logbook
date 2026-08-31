@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Integrations fix (2026-08-31)
+
+**Fixed**
+
+- Testing an integration's connection, or checking Salesforce sync
+  readiness, could show a raw internal/connection error message instead of
+  a clean explanation if the underlying network call failed unexpectedly.
+  Errors now show a generic message while the details are still logged for
+  troubleshooting; the specific, intentional messages (e.g. "Salesforce
+  rejected these credentials") are unaffected.
+
 ### Forms fix (2026-08-31)
 
 **Fixed**

@@ -152,4 +152,11 @@ class OutlookCalendarService(CalendarSyncInterface):
                 calendars = response.json().get("value", [])
                 return f"Connected to Outlook ({len(calendars)} calendar(s))"
         except Exception as e:
-            raise Exception(f"Outlook Calendar connection failed: {e}")
+            # Don't interpolate the raw exception into the re-raised
+            # message — httpx/Graph API failures can surface transport-
+            # level detail (DNS, TLS, timeouts) that a caller-facing bare
+            # Exception is otherwise trusted to be safe (INT-6 follow-up).
+            logger.error("Outlook Calendar connection test failed: {}", e)
+            raise Exception(
+                "Outlook Calendar connection failed — check the stored credentials"
+            )

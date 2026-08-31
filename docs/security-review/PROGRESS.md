@@ -16,8 +16,45 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-None. Feature 26 (Forms) is fully closed — see log entry below. Next:
-feature 27, Integrations.
+Feature 27 (Integrations), pass 2 — branch
+`claude/security-review-integrations-pass2`, PR
+[#2087](https://github.com/thegspiro/the-logbook/pull/2087). One finding
+(INT-6, LOW-MED, fixed). See log entry below and
+`docs/security-review/INT-27-integrations.md`.
+
+---
+
+### 2026-08-31 — Feature 27 (Integrations), pass 2 ⏳ PR #2087 opened
+
+Re-read all five backend files in full (`integrations.py`, `salesforce_sync.py`,
+`salesforce_service.py`, `salesforce_oauth_service.py`,
+`salesforce_sync_service.py`) plus `schemas/integration.py`. File sizes
+essentially unchanged since pass 1 (PR #1910); re-verified INT-1 through
+INT-5 all still hold, INT-5 still an open owner decision. Enumerated all 16
+routes across both endpoint files with their auth dependency, permission,
+and org-scoping — no gap.
+
+1. **INT-6 (LOW-MED, fixed).** Prompted by FORM-9 landing one file over in
+   the same feature 26 pass, checked every `except Exception` in this
+   feature's files against where its message ends up. Two sites returned
+   an unhandled connector exception's raw `str(e)`/`str(exc)` straight to
+   the client: `POST /integrations/{id}/test-connection` and
+   `GET /integrations/salesforce/readiness`. Most connector failure paths
+   raise a safe, hand-authored message, but not every outbound call inside
+   them is individually wrapped, so an unhandled infra-level exception
+   (DNS, TLS, timeout) could still reach the client unsanitized. Fixed by
+   routing both through `sanitize_error_message()` — not
+   `safe_error_detail()`, which only passes through `ValueError`/
+   `PermissionError` and would have replaced every intentional connector
+   message with the generic fallback, since these connectors raise bare
+   `Exception`. Two guard tests per site (leak case + hand-authored-message
+   passthrough case), all verified to fail on reintroduction.
+
+Full local completion gate green: flake8/black/isort clean across
+`app/ tests/ alembic/`, `validate_migrations.py --strict` passed (394
+revisions, single head), 1561/1561 integration/salesforce-scoped tests pass
+(21 skipped, all environment-only). No frontend file changed —
+`tsc`/`eslint` n/a. Findings doc: `docs/security-review/INT-27-integrations.md`.
 
 ---
 
@@ -3371,7 +3408,7 @@ each row's prior PR is recorded in the Log, not repeated here.
 | 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ✅     |
 | 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ✅     |
 | 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                         | ✅     |
-| 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                         | ⬜     |
+| 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                         | ⏳     |
 | 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`                                                                    | ⬜     |
 | 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                              | ⬜     |
 | 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (24 unauth bootstrap routes)                                                                                             | ⬜     |
