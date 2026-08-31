@@ -1047,6 +1047,13 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
     detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
   },
   {
+    path: '/inventory/admin/checklists/settings',
+    source: 'src/modules/inventory/routes.tsx',
+    coverage: 'exempt',
+    detail:
+      'secondary admin route reached from the checklists hub, which is its representative route; its four controls are two form-checkbox toggles and two form-input number fields, so the 44px touch target and focus ring come from the shared form utilities rather than anything route-specific',
+  },
+  {
     path: '/inventory/admin/checklists/templates/new',
     source: 'src/modules/inventory/routes.tsx',
     coverage: 'exempt',
