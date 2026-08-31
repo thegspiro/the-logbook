@@ -2726,6 +2726,47 @@ is a deliberate design change, not a same-pass patch. Found in
 `docs/security-review/FE3-34-frontend-shared.md` (feature 34, pass 3,
 FE3-34-4).
 
+## FE3-34-5 — An Offline Queue Item Can Sync Under the Next Member's Identity on a Shared Device (2026-08-31)
+
+None of the three offline queues (`utils/genericOfflineQueue.ts` for
+training submissions/RSVPs, `utils/offlineQueue.ts` for equipment checks,
+`utils/shiftReportOfflineQueue.ts` for shift reports) records which member
+queued an item — no user or session field on any of their stored shapes.
+`useOfflineSyncEngine` drains the generic queue automatically on mount or
+reconnect using whichever session's cookies are attached to the shared
+`api` client _at that moment_; the equipment-check and shift-report queues
+drain the same way, page-scoped, whenever their respective forms next
+mount.
+
+On a shared station computer: member A queues a training submission while
+offline, then does not explicitly log out (a common real pattern — the
+shift ends, the browser tab is just left). A later session check
+(`authStore.loadUser()`) hits a transient error, and — correctly, per
+FE3-34-1 above — no longer purges the queue on a non-auth-confirmed
+failure, so the item survives. The UI shows Login. Member B, a different
+person, logs in with their own credentials. The moment `AppLayout` mounts
+for B, `useOfflineSyncEngine` sees the device online and drains A's queued
+item using B's now-current cookies — the backend receives and attributes
+A's training submission (or RSVP) as an action B took, silently, with no
+error surfaced to either member.
+
+This is a direct consequence of fixing FE3-34-1: before that fix, the same
+transient failure would have wiped the queue outright (the data-loss bug
+FE3-34-1 closes), which incidentally also closed this attribution path.
+Not fixed in the same PR because a correct close needs to tag each queued
+item with the identity (or a per-login session marker) of whoever queued
+it, and have all three drain paths — the automatic engine and both
+page-scoped ones — refuse to flush an item queued under a different
+identity than the one currently authenticated (purging it with a notice
+instead, matching the existing `lastLogoutPurge` pattern). That spans three
+independent subsystems and needs dedicated test coverage per drain path —
+landing it alongside FE3-34-1 in the same commit, without that coverage, is
+exactly the kind of rushed change to a security-sensitive shared-device
+path this rotation's own standing rule warns against. Found in
+`docs/security-review/FE3-34-frontend-shared.md` (feature 34, pass 3,
+FE3-34-5) — Codex caught this reviewing the very commit that fixed
+FE3-34-1.
+
 ## Process
 
 The review loop (see [review-log.md](./review-log.md)) advances through one area

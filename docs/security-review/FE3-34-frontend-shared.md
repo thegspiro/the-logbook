@@ -27,15 +27,15 @@ since there is no route table for a frontend-only feature to enumerate.
 
 ## Checklist dimensions
 
-| #   | Dimension                    | Disposition                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
-| --- | ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1   | Authentication coverage      | Checked. `ProtectedRoute.tsx` re-verified: gates strictly pre-render, no flash of unauthorized content — see Verified good. **FE3-34-3 (FIXED):** the global client's 401→refresh interceptor mistook `/auth/mfa/login`'s intentional 401 (wrong/expired code) for an expired session. **FE3-34-2 (FLAGGED):** `authStore.logout()` presents an unauthenticated UI even when the server-side logout call fails, while the httpOnly session cookies remain live. |
-| 2   | Authorization & role fit     | n/a — no owned backend routes.                                                                                                                                                                                                                                                                                                                                                                                                                                  |
-| 3   | Tenant isolation             | n/a — this layer carries no by-id backend queries to scope.                                                                                                                                                                                                                                                                                                                                                                                                     |
-| 4   | Injection & untrusted output | Checked. `components/ux/*` swept for XSS sinks (none); `LinkifiedText.tsx` verified safe by construction (see below).                                                                                                                                                                                                                                                                                                                                           |
-| 5   | Data exposure                | Checked — this feature's central concern. Diff-based cache-exclusion sweep (below) plus all 9 FE2-34 exposure findings re-verified intact. **FE3-34-1 (FIXED):** `loadUser()` purged local offline drafts on _any_ profile-fetch failure, not only a confirmed 401/403. **FE3-34-4 (FLAGGED):** a stale in-flight cacheable GET can still write into the shared cache after a session-boundary `clearCache()`.                                                  |
-| 6   | Abuse resistance             | Checked. Cache bounded at 200 entries/FIFO eviction (Verified good); no new unbounded tracking introduced this pass.                                                                                                                                                                                                                                                                                                                                            |
-| 7   | Schema & migration integrity | n/a — see Schema & migration notes below.                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| #   | Dimension                    | Disposition                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| --- | ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Authentication coverage      | Checked. `ProtectedRoute.tsx` re-verified: gates strictly pre-render, no flash of unauthorized content — see Verified good. **FE3-34-3 (FIXED):** the global client's 401→refresh interceptor mistook `/auth/mfa/login`'s intentional 401 (wrong/expired code) for an expired session. **FE3-34-2 (FLAGGED):** `authStore.logout()` presents an unauthenticated UI even when the server-side logout call fails, while the httpOnly session cookies remain live.                                                                                          |
+| 2   | Authorization & role fit     | n/a — no owned backend routes.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| 3   | Tenant isolation             | n/a — this layer carries no by-id backend queries to scope.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| 4   | Injection & untrusted output | Checked. `components/ux/*` swept for XSS sinks (none); `LinkifiedText.tsx` verified safe by construction (see below).                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| 5   | Data exposure                | Checked — this feature's central concern. Diff-based cache-exclusion sweep (below) plus all 9 FE2-34 exposure findings re-verified intact. **FE3-34-1 (FIXED):** `loadUser()` purged local offline drafts on _any_ profile-fetch failure, not only a confirmed 401/403. **FE3-34-4 (FLAGGED):** a stale in-flight cacheable GET can still write into the shared cache after a session-boundary `clearCache()`. **FE3-34-5 (FLAGGED):** FE3-34-1's own fix can let a queued offline item sync under the next member's identity on the same shared device. |
+| 6   | Abuse resistance             | Checked. Cache bounded at 200 entries/FIFO eviction (Verified good); no new unbounded tracking introduced this pass.                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| 7   | Schema & migration integrity | n/a — see Schema & migration notes below.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 
 ## Scope
 
@@ -187,7 +187,10 @@ full read of `components/ux/*`. Codex's review of this pass's first commit
 found four real defects in the auth/cache core that the initial pass's
 methodology (diff-sweep + re-verification of prior findings) wasn't shaped to
 catch — none is a cache-exclusion or XSS issue, the classes the sweep and the
-`components/ux/*` read targeted. Two fixed, two flagged.
+`components/ux/*` read targeted. Two fixed, two flagged. A second Codex
+review, of the commit fixing those four, then caught a fifth: a real
+follow-on consequence of FE3-34-1's own fix (FE3-34-5) — two fixed, three
+flagged in total.
 
 ### FE3-34-1 — MEDIUM — `loadUser()` purged local member data on any profile-fetch failure, not only a confirmed session failure — ✅ FIXED
 
@@ -209,6 +212,48 @@ invalid.
 purge only on a confirmed auth failure; every other error still reports
 unauthenticated for this load (unchanged) but leaves local data intact so it
 can sync once connectivity/the backend recovers.
+
+### FE3-34-5 — HIGH — FE3-34-1's own fix can let a queued item sync under the _next_ member's identity — OPEN, FLAGGED (found by Codex reviewing this PR's own commit)
+
+**What:** FE3-34-1 stops destroying queued offline work on a transient
+`loadUser()` failure — correct on its own — but the queue it now preserves
+has no owner. `GenericQueuedItem` (`utils/genericOfflineQueue.ts`) carries
+`id, kind, url, body, label, queuedAt, retries, lastError` — no user or
+session identifier — and the same is true of `offlineQueue.ts` (equipment
+checks) and `shiftReportOfflineQueue.ts` (shift reports). `useOfflineSyncEngine`
+drains the generic queue automatically on mount/reconnect via `flushOne(item,
+api)` against whichever session's cookies are attached to `api` _right now_;
+the equipment-check and shift-report queues drain the same way, page-scoped,
+whenever `EquipmentCheckForm.tsx` / `ShiftReportsTab.tsx` next mount.
+**Where:** `frontend/src/hooks/useOfflineSyncEngine.ts`; `frontend/src/utils/
+genericOfflineQueue.ts`, `offlineQueue.ts`, `shiftReportOfflineQueue.ts`;
+`frontend/src/stores/authStore.ts` (`loadUser`, this PR's FE3-34-1 change).
+**Failure scenario:** member A queues a training submission while offline,
+then a later `loadUser()` call (a reload, an idle-timeout re-check) hits a
+transient error — with FE3-34-1's fix, the item survives and the browser
+shows Login rather than purging. Before FE3-34-1, the same failure would
+have wiped the item (the bug that fix closes) — closing it removed the one
+thing that had been (accidentally) preventing this. Member B, a different
+real person, logs in on the same shared device. `AppLayout` mounts,
+`useOfflineSyncEngine` sees the device online, and drains A's queued item
+with B's now-current session cookies attached — the backend receives and
+attributes A's training submission (or RSVP) as an action B took.
+**Impact:** a genuine data-integrity/attribution bug on the exact
+shared-workstation threat model this whole feature otherwise defends
+carefully — one member's action recorded under another member's name, with
+no error, no notice, and no way for either member to know it happened.
+**Why flagged, not fixed in this same round:** a correct close needs the
+same shape of decision as FE3-34-4 (a real design change, not a same-pass
+patch), and it spans three independent queue subsystems, not one:
+tag each queued item with the id (or a per-login session marker) of
+whoever queued it at enqueue time, and have every drain path — the
+automatic engine and both page-scoped ones — refuse to flush (and instead
+purge-with-notice, matching `lastLogoutPurge`'s pattern) an item queued
+under a different identity than the one currently authenticated. Landing
+that alongside FE3-34-1 in the same PR, for all three queues, without
+dedicated test coverage of each drain path, is exactly the kind of rushed
+security-sensitive change this rotation's own standing rule warns against.
+Mirrored into `KNOWN_LIMITATIONS.md`.
 
 ### FE3-34-2 — HIGH — `authStore.logout()` presents an unauthenticated UI even when the server-side logout call fails — OPEN, FLAGGED
 
@@ -335,8 +380,8 @@ n/a — frontend-only feature, no owned tables.
   confirmed 401 and on a confirmed 403, does _not_ purge on a plain network
   error or a 500 (FE3-34-1). The two "does NOT purge" cases verified to fail
   against the pre-fix code (both called the purge unconditionally).
-- No test added for FE3-34-2/FE3-34-4 (flagged, not fixed) — a guard test
-  would either lock in the current unsafe behavior or need the
+- No test added for FE3-34-2/FE3-34-4/FE3-34-5 (flagged, not fixed) — a
+  guard test would either lock in the current unsafe behavior or need the
   not-yet-decided remediation shape.
 
 Existing guard tests from FE2-34 (`apiCache.test.ts`'s trailing-slash and

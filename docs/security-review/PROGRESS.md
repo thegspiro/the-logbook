@@ -16,7 +16,8 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-Feature 34 (Frontend shared, pass 3), round 2 — PR opening this iteration.
+Feature 34 (Frontend shared, pass 3), round 2 —
+[#2118](https://github.com/thegspiro/the-logbook/pull/2118), subscribed.
 Round 1 ([#2112](https://github.com/thegspiro/the-logbook/pull/2112))
 merged before Codex's review of its commit landed, carrying only the
 "0 findings" content; Codex then caught 4 real defects in the auth/cache
@@ -25,10 +26,32 @@ read of `components/ux/*`) wasn't aimed at. Round 2 carries the fix as a
 fresh PR off current `main` (round 1's branch had already merged — never
 reuse a branch whose PR has merged, CLAUDE.md Pitfall #24): 2 fixed
 (FE3-34-1/3), 2 flagged (FE3-34-2/4, mirrored into `KNOWN_LIMITATIONS.md`).
-Once round 2 merges, every row (00-34) is ✅ and the rotation wraps to 00
-for the next full pass.
+Codex's review of _that_ fix then caught a fifth defect — FE3-34-5, a
+direct consequence of FE3-34-1's own fix (see the round-3 entry below) —
+flagged, not fixed, same PR. Once merged, every row (00-34) is ✅ and the
+rotation wraps to 00 for the next full pass.
 
 ---
+
+### 2026-08-31 — Feature 34 (Frontend shared, pass 3), round 3: 1 more flagged (Codex-caught, on round 2's own fix)
+
+Codex reviewed round 2's commit (below) and caught a fifth defect,
+**FE3-34-5 (HIGH)**: FE3-34-1's fix (stop purging local offline data on a
+transient `loadUser()` failure) removed the one thing that had been
+accidentally preventing a worse problem. None of the three offline queues
+(`genericOfflineQueue.ts`, `offlineQueue.ts`, `shiftReportOfflineQueue.ts`)
+records which member queued an item. `useOfflineSyncEngine` (and the two
+page-scoped equipment-check/shift-report drains) flush whatever is queued
+using whichever session's cookies are attached to the shared client _right
+now_ — so on a shared station, member A's queued training submission can
+survive a transient session-check failure (correctly, per FE3-34-1) only to
+be silently drained and attributed to member B once B logs in on the same
+device. Flagged, not fixed: a correct close needs identity-tagging each
+queued item and refusing-to-flush-on-mismatch across all three queue
+subsystems, with dedicated test coverage per drain path — not a same-commit
+patch. Mirrored into `KNOWN_LIMITATIONS.md`. Findings doc and PR unchanged
+(`docs/security-review/FE3-34-frontend-shared.md`, PR #2118) — this is an
+addition to the same round-2 PR, not a new one.
 
 ### 2026-08-31 — Feature 34 (Frontend shared, pass 3), round 2: 2 fixed, 2 flagged (Codex-caught)
 
