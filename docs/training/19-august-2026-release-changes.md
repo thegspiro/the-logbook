@@ -1761,10 +1761,17 @@ If a seat corresponds to a position you already maintain — Quartermaster, say 
 link it, and the chart **fills the holders in from that position's assignees**.
 You do not retype a roster you already keep.
 
-**Unlinking leaves those people in the seat.** The link is a convenience for
-filling the box, not the box's identity. This matters because most departments'
-org charts and permission structures do not match, and the chart has to be able
-to say what is actually true rather than what the permissions imply.
+**Unlinking keeps the people you typed, and drops the ones the link supplied.**
+That distinction matters before you press it: holders that arrived *from* the
+position or rank are filtered out of the seat when the link is removed, because
+they were never stored on the seat — they were resolved through the link every
+time the chart was drawn. Only hand-entered holders are rows of their own and
+survive. **A seat whose holders all came from its link becomes vacant when you
+unlink it**, so type the names in first if you want to keep them.
+
+The link is an *assist*, not the box's identity — most departments' org charts
+and permission structures do not match, and the chart has to be able to say
+what is actually true rather than what the permissions imply.
 
 > **[SCREENSHOT NEEDED — the org chart node modal.** _Demo data:_ a seat with
 > two member holders and one non-member holder, its responsibility text filled
@@ -1955,8 +1962,15 @@ leaves it **off**.
 
 Turn it back on at **Settings → Modules → Testing Checklist**.
 
-**Nothing you recorded is lost.** Every mark and every note is still there and
-reappears the moment you switch the module on. While it is off, the navigation
+**Marks held on the server are not lost.** They are still there and reappear
+the moment you switch the module on.
+
+> **⚠️ One exception.** The checklist used to keep marks in the **browser**,
+> under `logbook.testing-checklist.v1`. When it moved to the server there was
+> no import path, and there still isn't. If you are part-way through a
+> walkthrough on a build from before that move, **export your run before you
+> upgrade** — re-enabling the module afterwards gives you an empty server run.
+ While it is off, the navigation
 entry, the page and the data behind it all refuse, the same way every other
 switched-off module behaves.
 
@@ -2276,8 +2290,12 @@ checks run now.
   chain-of-command permissions with it, so an administrative member holding one
   held grants that role was never meant to have. Nothing recorded which ranks
   were cleared — restoring them would also restore ranks an officer cleared
-  deliberately. If an administrative member genuinely holds an operational
-  rank, set it again after upgrading.
+  deliberately.
+
+  **You cannot simply set the rank again.** The API refuses the
+  administrative-class/rank pair with a 400 and the edit screen disables the
+  control — a rank carries chain-of-command permissions, which is what that
+  class is outside of. If the rank is right, **change their class first**.
 
 - **Four migrations do not reverse**, and in three of them a downgrade that
   *did* put the old values back would be the more destructive choice: the rank

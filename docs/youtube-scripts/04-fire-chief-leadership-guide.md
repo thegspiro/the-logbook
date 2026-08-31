@@ -909,13 +909,17 @@ and tables.]**
 > fills the holders in from that position's assignees. You are not retyping a
 > roster you already keep."
 
-**[CALLOUT: "Unlink, and the people stay."]**
+**[CALLOUT: "Unlink, and the linked names go with it."]**
 
-> "But here is the part worth understanding. **Unlinking leaves those people in
-> the seat.** The link fills the box; it doesn't define it. And that matters
-> because most departments' org charts and their permission structures do not
-> match — so the chart has to be able to say what is actually true, rather than
-> what your permissions imply."
+> "But know what unlinking does before you press it. **The people you typed in
+> stay. The people the link supplied go.** They were never stored on the seat —
+> they were being resolved through the link each time the chart drew. So a seat
+> whose holders all came from its position goes **vacant** when you unlink it.
+> Type the names in first if you want to keep them."
+
+> "The link is an assist, not the box's identity — most departments' org charts
+> and their permission structures do not match, so the chart has to be able to
+> say what is actually true rather than what your permissions imply."
 
 **[SCREEN: An empty chart, first seat being added]**
 

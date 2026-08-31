@@ -595,13 +595,19 @@ any of the configuration below appears. From there you can:
 Until August 26 a single "membership type" field carried two independent facts,
 and you could only ever record one of them:
 
-| Field             | Answers                                  | Values                                            |
-| ----------------- | ---------------------------------------- | ------------------------------------------------- |
-| **Member class**  | What kind of member is this?             | operational, administrative, social               |
-| **Member status** | Where are they on the membership ladder? | prospective, probationary, regular, life, retired |
+| Field             | Answers                                  | Values                                                              |
+| ----------------- | ---------------------------------------- | ------------------------------------------------------------------- |
+| **Member class**  | What kind of member is this?             | operational, administrative, social                                 |
+| **Member status** | Where are they on the membership ladder? | prospective, probationary, regular, life, retired, honorary, junior |
 
 Because they shared a field, there was **no way to record a probationary
 treasurer**, and **nothing said whether a life member still rides**.
+
+> **Integrators: the status enum has seven values, not the five common ladder
+> stages.** `honorary` and `junior` are valid statuses too — the backfill
+> records an honorary member as the **social class plus honorary status** — so
+> a client generated from a five-value vocabulary will reject or erase
+> legitimate records.
 
 ### What this changed for elections
 
@@ -653,9 +659,18 @@ that role was never meant to have.
 
 The upgrade **clears the operational rank of every administrative member**, and
 that does not reverse — nothing recorded which ranks were cleared, so restoring
-them would also restore ranks an officer cleared deliberately. **If an
-administrative member genuinely holds an operational rank, set it again after
-upgrading.**
+them would also restore ranks an officer cleared deliberately.
+
+**You cannot simply set the rank again, and that is deliberate.** The API
+refuses the administrative-class/rank pair outright (400), the edit UI disables
+the rank control for an administrative member, and moving a ranked member into
+the administrative class clears the rank rather than rejecting the save. A rank
+carries chain-of-command permissions with it, which is exactly what an
+administrative member is outside of.
+
+If somebody genuinely holds an operational rank, **the fix is their class, not
+their rank**: move them out of the administrative class first, then set the
+rank.
 
 ---
 

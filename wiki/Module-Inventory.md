@@ -2,9 +2,9 @@
 
 ## Quartermaster vocabulary _(settled 2026-08-26)_
 
-The module used several names for the same operations. They are now fixed in
-one place (`frontend/src/modules/inventory/terminology.ts`), and the screens
-use these words and no others:
+The module used several names for the same operations. The canonical set now
+lives in one place (`frontend/src/modules/inventory/terminology.ts`), which
+supplies a glossary and a request-type helper:
 
 | Term               | Means                                                                      |
 | ------------------ | -------------------------------------------------------------------------- |
@@ -16,8 +16,15 @@ use these words and no others:
 | **Transfer**       | Moving serialized gear between holders                                     |
 | **Distribution**   | One mixed batch that may create assignments, temporary loans and issuances |
 
-**"Checkout batch" is now "Item Distribution".** This is a label change only —
-the API payload values (`checkout`, `assignment`, `issuance`) are unchanged, so
+**"Checkout batch" is now "Item Distribution".** That rename is applied; the
+glossary below is the vocabulary the module is standardising **on**, not a
+description of every label on every screen yet. Some screens still use older
+wording — the expanded member-equipment view still says **Active Checkouts**,
+and the equipment-request fulfilment selector still offers **Checkout —
+returnable individual item**. Treat the table as the target, and the
+distribution rename as the part that has landed.
+
+**API payload values are unchanged** (`checkout`, `assignment`, `issuance`), so
 no integration needs updating.
 
 The Inventory module tracks department equipment, member assignments, pool/quantity items, batch operations, departure clearance, write-off approval, and thermal label printing.

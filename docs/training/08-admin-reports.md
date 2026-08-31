@@ -2337,10 +2337,17 @@ Linking a seat to a position you already maintain **fills its holders in from
 that position's current assignees**, so you do not retype a roster you already
 keep.
 
-**Unlinking leaves those people in the seat.** The link is a convenience for
-populating the box, not the box's identity. Most departments' org charts and
-permission structures do not match, and the chart has to be able to say what is
-actually true rather than what the permissions imply.
+**Unlinking keeps the people you typed, and drops the ones the link supplied.**
+That distinction matters before you press it: holders that arrived _from_ the
+position or rank are filtered out of the seat when the link is removed, because
+they were never stored on the seat — they were resolved through the link every
+time the chart was drawn. Only hand-entered holders are rows of their own and
+survive. **A seat whose holders all came from its link becomes vacant when you
+unlink it**, so type the names in first if you want to keep them.
+
+The link is an _assist_, not the box's identity — most departments' org charts
+and permission structures do not match, and the chart has to be able to say
+what is actually true rather than what the permissions imply.
 
 ### It starts empty
 
@@ -2377,10 +2384,17 @@ leaves it **switched off**.
 
 **Settings → Modules → Testing Checklist** brings it back.
 
-**Nothing you recorded is lost.** Every mark and note stays in the database and
-reappears the moment the module is on. While it is off, the navigation entry,
-the page and the data behind it all refuse — the same way every other
-switched-off module behaves.
+**Marks held on the server are not lost.** They stay in the database and
+reappear the moment the module is on.
+
+> **⚠️ One exception.** The checklist used to keep marks in the **browser**,
+> under `logbook.testing-checklist.v1`. When it moved to the server there was
+> no import path, and there still isn't. If you are part-way through a
+> walkthrough on a build from before that move, **export your run before you
+> upgrade** — re-enabling the module afterwards gives you an empty server run.
+> While it is off, the navigation entry,
+> the page and the data behind it all refuse — the same way every other
+> switched-off module behaves.
 
 **It is not offered during first-time setup**, deliberately: it is a tool for
 checking an installation, not a decision a department needs to make while

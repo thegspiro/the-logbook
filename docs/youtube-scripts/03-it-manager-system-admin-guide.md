@@ -970,8 +970,19 @@ untouched."]**
 
 > "Nothing recorded which ranks it cleared. So the downgrade leaves them
 > cleared, deliberately — putting them back would also restore ranks an officer
-> cleared on purpose. If one of your administrative members genuinely holds an
-> operational rank, set it again after you upgrade."
+> cleared on purpose."
+
+**[SCREEN: The edit screen refusing the pair — a 400, and the rank control
+disabled for an administrative member.]**
+
+> "And you can't just set the rank again. The API refuses that pair outright —
+> four hundred — and the edit screen disables the control. That's the same
+> boundary, not a bug: a rank carries chain-of-command permissions with it,
+> which is exactly what the administrative class is outside of."
+
+> "So if one of your people genuinely holds an operational rank, **their class
+> is what's wrong, not their rank.** Move them out of the administrative class
+> first, then set it."
 
 **[SCREEN: Settings → Modules, with Testing Checklist switched off]**
 

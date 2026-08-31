@@ -1471,8 +1471,14 @@ permissions, finding nothing wrong.]**
 
 **[0:24 — SCREEN: `/testing` back, with every previous mark still in place.]**
 
-> "**Nothing you recorded is lost.** Every mark, every note — still there, back
-> the moment you switch it on."
+> "**Anything on the server is still there** — every mark, every note, back the
+> moment you switch it on."
+
+**[0:28 — SCREEN: The old browser-stored checklist, and an export button.]**
+
+> "One catch, and it's the one that costs you a walkthrough: if you're on a
+> build from before the checklist moved to the server, your marks are in the
+> **browser**, and nothing imports them. **Export before you upgrade.**"
 
 **[0:31 — CALLOUT: "Off by default. Not gone."]**
 

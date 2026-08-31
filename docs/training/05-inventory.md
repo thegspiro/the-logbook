@@ -633,8 +633,8 @@ Both start from a **member**, not from a list of items — you pick the person o
 There is no separate entry in the admin menu for either.
 
 > **"Batch Checkout" is now "Item Distribution"** _(renamed 2026-08-26)_. The
-> module had several names for the same operations; they are settled now, and
-> the screens use these words and no others:
+> module had several names for the same operations. The canonical set now lives
+> in one place, as a glossary and a request-type helper:
 >
 > | Term               | Means                                                                      |
 > | ------------------ | -------------------------------------------------------------------------- |
@@ -646,7 +646,11 @@ There is no separate entry in the admin menu for either.
 > | **Transfer**       | Moving serialized gear between holders                                     |
 > | **Distribution**   | One mixed batch that may create assignments, temporary loans and issuances |
 >
-> Nothing about your data changed — this is labels only.
+> **The distribution rename has landed; the rest of the vocabulary is a target,
+> not a description of every screen.** You will still see **Active Checkouts**
+> on the expanded member-equipment view and **Checkout — returnable individual
+> item** in the equipment-request fulfilment selector. Nothing about your data
+> changed either way — these are labels.
 
 ### Item Distribution
 

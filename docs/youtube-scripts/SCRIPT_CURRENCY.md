@@ -1,5 +1,41 @@
 # Script currency
 
+## Editing incident, 2026-08-31 — a rewrite deleted two chapters of script 12
+
+**Recorded here permanently, because the failure was in the editing method and
+nothing else in this file would have caught it.**
+
+Correcting the `PER-ITEM ELIGIBILITY` beat in script 12 also deleted:
+
+- the `PER-ITEM OVERRIDES` section (per-item victory conditions),
+- **all of `CHAPTER 5: Candidates & Nominations`**, including its 2026-08-16
+  editor note on phase-scoped nomination visibility, and
+- the opening of `CHAPTER 6`, with its four-layer eligibility diagram.
+
+Forty-four lines, none of them related to the correction. The product still
+exposes Nominations, Candidates and Eligibility tabs, so a producer following
+the damaged script would simply have **omitted core election-management
+training** with nothing to signal the gap.
+
+**Cause:** the edit was applied as `text[:start] + new + text[end:]`, with
+`end` anchored on a string that occurred much further down the file than
+assumed. The replacement looked correct in isolation; everything between the
+two anchors vanished silently. No test, link check or lint covers prose
+deletion, and the diff was large enough that "+91 −44" did not look alarming.
+
+**Caught by:** PR review (Codex), not by this file and not by CI.
+
+**The rule, now applied to every edit in this pass:** an edit that replaces a
+_range_ must assert what it is about to remove, not just what it inserts.
+Prefer replacing an exact known block; where a range is unavoidable, check the
+removed slice against the sections it is expected to contain before writing.
+After any prose rewrite, read the deletion side of the diff — `git diff | grep
+'^-'` — and confirm every removed line was meant to go.
+
+The script was rebuilt from the pre-edit version with only the intended beat
+replaced; all fourteen chapters are present and the two smaller corrections
+(the roster screen note and the overrides wording) were re-applied on top.
+
 ## Flagged by the 2026-08-24 → 08-31 changes
 
 Full reason/data-path context in

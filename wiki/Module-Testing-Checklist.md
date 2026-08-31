@@ -15,10 +15,18 @@ live.
 If you were using the Testing Home before upgrading, it is gone until an
 administrator turns it on at **Settings → Modules → Testing Checklist**.
 
-**Nothing you recorded is lost.** Marks and notes stay in the database and
+**Marks held on the server are not lost.** They stay in the database and
 reappear the moment the module is switched back on. While it is off, the
 navigation entry, the route and the data behind it all refuse — the same way
 every other switched-off module behaves.
+
+> **⚠️ One exception, and it bites exactly the department this page is for.**
+> The checklist used to keep marks in the **browser**, under
+> `logbook.testing-checklist.v1`. When it moved to the server there was no
+> import path, and there still isn't. If you are part-way through a
+> walkthrough on a build from before that move, **export your run before you
+> upgrade** — re-enabling the module afterwards gives you an empty server run,
+> not your previous marks.
 
 **It is not offered during first-time setup.** It is a tool for checking an
 installation, not a decision a department needs to make while making every

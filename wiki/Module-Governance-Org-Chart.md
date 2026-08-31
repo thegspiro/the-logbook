@@ -40,14 +40,18 @@ does not define it:
 
 - Linking a seat to a position **fills its holders in** from that position's
   current assignees, so you do not retype the roster you already maintain.
-- **Unlinking leaves the holders in place.** The link is a convenience for
-  populating the seat, not the seat's identity — so removing it does not empty
-  the box and lose the chart you drew.
+- **Unlinking keeps the people you typed, and drops the ones the link supplied.**
+  That distinction matters before you press it: holders that arrived _from_ the
+  position or rank are filtered out of the seat when the link is removed, because
+  they were never stored on the seat — they were resolved through the link every
+  time the chart was drawn. Only hand-entered holders are rows of their own and
+  survive. **A seat whose holders all came from its link becomes vacant when you
+  unlink it**, so type the names in first if you want to keep them.
 
-This is deliberate. An earlier draft made the position the seat's definition,
-which meant a seat could not hold anyone the position did not, and a
-department whose org chart differs from its permission structure — which is
-most of them — could not draw its real chain of command.
+The link is an _assist_ rather than the seat's definition — a seat can hold
+people the position does not, which is the point: a department whose org chart
+differs from its permission structure, which is most of them, still has to be
+able to draw its real chain of command.
 
 ## Getting started
 

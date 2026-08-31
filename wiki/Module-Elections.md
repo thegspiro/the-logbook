@@ -51,12 +51,12 @@ Voter eligibility for each ballot item is determined by the member's **standing*
 
 Eligibility used to read `User.membership_type`, a single column that conflated two independent facts. It now reads the pair that replaced it:
 
-| Concept             | Field                  | Purpose                                                                  | Example                                           |
-| ------------------- | ---------------------- | ------------------------------------------------------------------------ | ------------------------------------------------- |
-| **Member class**    | `User.member_class`    | What kind of member somebody is; decides `operational` eligibility       | operational, administrative, social               |
-| **Member status**   | `User.member_status`   | Where they sit on the membership ladder; decides `life` / `probationary` | prospective, probationary, regular, life, retired |
-| **Membership type** | `User.membership_type` | Legacy single classification, now **derived** from the pair              | active, administrative, life, probationary        |
-| **Role / Position** | `User.roles`           | Assigned positions; determines system permissions                        | EMT, Quartermaster, Secretary, Chief              |
+| Concept             | Field                  | Purpose                                                                  | Example                                                             |
+| ------------------- | ---------------------- | ------------------------------------------------------------------------ | ------------------------------------------------------------------- |
+| **Member class**    | `User.member_class`    | What kind of member somebody is; decides `operational` eligibility       | operational, administrative, social                                 |
+| **Member status**   | `User.member_status`   | Where they sit on the membership ladder; decides `life` / `probationary` | prospective, probationary, regular, life, retired, honorary, junior |
+| **Membership type** | `User.membership_type` | Legacy single classification, now **derived** from the pair              | active, administrative, life, probationary                          |
+| **Role / Position** | `User.roles`           | Assigned positions; determines system permissions                        | EMT, Quartermaster, Secretary, Chief                                |
 
 **What each built-in category requires**, per `ElectionService._user_has_role_type`:
 
