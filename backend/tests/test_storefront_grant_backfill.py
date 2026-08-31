@@ -73,7 +73,7 @@ def _pristine_registry_set(slug: str) -> set[str]:
     it matching a pristine row and quietly turn the backfill into a no-op that
     still reports success.
 
-    A permission *rename* lands here for the same reason. ``20260830_0001``
+    A permission *rename* lands here for the same reason. ``ff8076f4987a``
     renames ``equipment_check.*`` to ``inventory.check_*`` and also runs later
     in the chain, so the rows this backfill meets still carry the old spelling.
     The names are translated back rather than the snapshot being respelled.

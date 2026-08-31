@@ -23,8 +23,8 @@ reach this revision having never had the column.
 import sqlalchemy as sa
 from alembic import op
 
-revision = "20260831_0003"
-down_revision = "20260831_0002"
+revision = "4e7e125cb00f"
+down_revision = "191a99d1d16f"
 branch_labels = None
 depends_on = None
 

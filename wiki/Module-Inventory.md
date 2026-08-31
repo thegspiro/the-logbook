@@ -121,7 +121,7 @@ officers.
 The API keeps its `/api/v1/equipment-checks` prefix — the paths did not move,
 only ownership — but the router is gated on the **Inventory** module now. A
 department that had switched Inventory off has it switched back on by migration
-`20260830_0002` if it uses checks at all; if it is later switched off
+`7e2f11397849` if it uses checks at all; if it is later switched off
 deliberately, the Equipment Checks tab disappears from the shift screen rather
 than loading a page that cannot reach its own API.
 
@@ -172,7 +172,7 @@ Renamed on 2026-08-31 from `equipment_check.*`:
 | `inventory.check_submit` | Perform a check (held by the default member position) |
 
 `app.core.permissions.LEGACY_PERMISSION_ALIASES` keeps the old names working
-for any stored row migration `20260830_0001` could not reach. Being in the
+for any stored row migration `ff8076f4987a` could not reach. Being in the
 inventory namespace, all three are now granted by the `inventory.*` module
 wildcard, exactly as `view_medical` / `manage_medical` already were.
 

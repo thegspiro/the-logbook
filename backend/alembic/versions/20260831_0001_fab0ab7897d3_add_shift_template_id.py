@@ -28,8 +28,8 @@ import sqlalchemy as sa
 from alembic import op
 
 # revision identifiers
-revision = "20260831_0001"
-down_revision = "20260830_0002"
+revision = "fab0ab7897d3"
+down_revision = "7e2f11397849"
 branch_labels = None
 depends_on = None
 
