@@ -349,6 +349,12 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
     checkPermission('inventory.check_submit') ||
     checkPermission('inventory.check_manage') ||
     checkPermission('inventory.manage');
+  // The half of the endpoint's rule a submitter does not clear. `swap_item_lot`
+  // sets enforce_submitter_limits for anyone below manage: with a disposition
+  // it allows up to the expired units aboard, without one only up to the
+  // position's count shortfall. So a submitter can replace expired stock but
+  // cannot top up a position that is not counted.
+  const canManageStock = checkPermission('inventory.check_manage') || checkPermission('inventory.manage');
   const tz = useTimezone();
   // Calendar day in the org's timezone — the reference every expiry check in
   // this form compares against, so the badge, the auto-fail and the server all
@@ -2760,6 +2766,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
                       }
                 }
                 canSwap={canSwapStock}
+                canManageSwap={canManageStock}
                 // The organization's calendar day, so an expiry verdict does
                 // not move with the phone's timezone.
                 today={new Date(`${today}T00:00:00`)}

@@ -227,6 +227,55 @@ describe('replacing what is expiring', () => {
     expect(screen.queryByRole('button', { name: 'Replace' })).not.toBeInTheDocument();
   });
 
+  it('does not offer a submitter an in-window swap the server will refuse', () => {
+    // Below manage, `swap_item_lot` allows a swap with no disposition only up
+    // to the position's count shortfall, and an expiry-only row has no count —
+    // so the POST comes back 403 every time. Disabled with the reason beats a
+    // tap that spends the crew's attention on an error.
+    render(
+      <CheckSweepStop
+        stop={{ id: 's', name: 'Drug box', items: [epi()] }}
+        answers={{}}
+        onAnswer={vi.fn()}
+        onSwap={vi.fn()}
+        canManageSwap={false}
+      />
+    );
+    const swap = screen.getByRole('button', { name: 'Swap' });
+    expect(swap).toBeDisabled();
+    expect(swap).toHaveAttribute('title', expect.stringContaining('has not expired yet'));
+  });
+
+  it('still lets a submitter replace stock that has actually expired', () => {
+    // The expired path carries a disposition, which the endpoint allows up to
+    // the expired units aboard — so this one is not theirs to lose.
+    render(
+      <CheckSweepStop
+        stop={{ id: 's', name: 'Drug box', items: [epi({ expirationDate: YESTERDAY })] }}
+        answers={{}}
+        onAnswer={vi.fn()}
+        onSwap={vi.fn()}
+        canManageSwap={false}
+      />
+    );
+    expect(screen.getByRole('button', { name: 'Replace' })).toBeEnabled();
+  });
+
+  it('lets a submitter top up a counted position that is demonstrably short', () => {
+    // Here the shortfall the endpoint measures is real and visible on the row,
+    // so the swap is one the server will accept.
+    render(
+      <CheckSweepStop
+        stop={{ id: 's', name: 'Drug box', items: [epi({ expectedQuantity: 4, carriedQuantity: 1 })] }}
+        answers={{}}
+        onAnswer={vi.fn()}
+        onSwap={vi.fn()}
+        canManageSwap={false}
+      />
+    );
+    expect(screen.getByRole('button', { name: 'Swap' })).toBeEnabled();
+  });
+
   it('calls an expired swap a replacement, because that one does retire stock', () => {
     mount(epi({ expirationDate: YESTERDAY }));
     expect(screen.getByRole('button', { name: 'Replace' })).toBeVisible();
