@@ -474,6 +474,42 @@ see, since those only recognize `op.*` calls). With
 `_tables_created_by_migrations` fixed, it now correctly reports zero
 offenders for the current migration chain.
 
+Two further rounds of Codex review on this same PR caught real problems in
+the new detector code itself, both fixed:
+
+- **The `_AUTOLOAD_TABLE` regex only matched one exact spelling**
+  (`sa.Table("t", meta, autoload_with=...)`), missing a bare (directly
+  imported) `Table(...)`, reordered/extra arguments before `autoload_with`,
+  and an argument containing its own call (`sa.MetaData()`) — any of which
+  would let a genuinely unguarded reflection pass the ratchet undetected.
+  Broadened to tolerate an optional module-qualifier, one level of nested
+  parens, and argument order, with pinning tests for each new shape plus a
+  negative test (`MyTable(...)` must not match).
+- **`_tables_created_by_migrations`'s new `op.rename_table` recognition
+  scanned the whole file, not just `upgrade()`** — so a rename destination
+  that exists only in `downgrade()` (undoing an `upgrade()`-side rename)
+  would be wrongly credited as migration-created, which is the dangerous
+  direction: it removes a genuinely create_all-only table from that set and
+  lets an unguarded `upgrade()`-time reflection of it slip past this exact
+  ratchet. `20260312_0200_rename_meeting_action_items_table.py`'s
+  `downgrade()` renames `minutes_action_items` back to
+  `meeting_action_items` for exactly this shape — harmless only by
+  coincidence, since that table is separately created by `op.create_table`
+  too. Fixed by adding `_upgrade_body`, which extracts and scopes both the
+  `create_table` and `rename_table` scans to `upgrade()` only. (Its first
+  version, matching only an unannotated `def upgrade():`, matched nothing
+  at all against this codebase's `def upgrade() -> None:` convention and
+  was caught before shipping by comparing its output against the unscoped
+  scan on the real chain — not by review, by actually running it.)
+
+Kept the `_returns_early_when_a_model_only_table_is_absent` exemption and
+`_guarded_tables` themselves file-wide/unscoped, per the "not addressed"
+paragraph below — narrowing the classification of what counts as
+"created" is safe to get precise; narrowing what counts as "guarded"
+without the same rigor risks the opposite failure mode (a real offender
+going undetected), which is exactly the class of mistake this scoping fix
+was written to prevent elsewhere in the same file.
+
 **Not addressed:** Codex separately noted (on PR #2083, before this
 correction) that `_guarded_tables`'s guard-detection scans a migration's
 whole source text rather than being scoped to `upgrade()`, so a guard that

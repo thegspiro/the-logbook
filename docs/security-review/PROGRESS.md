@@ -141,6 +141,26 @@ this correction. See MSG-11 in the findings doc for the complete writeup.
 Rotation row 25 still `⏳` pending this PR's merge; MSG-12 unaffected. Next:
 26 Forms, once this merges.
 
+**Second correction (2026-08-31, same PR):** two further rounds of Codex
+review, both on code this correction had just added, both real. (1)
+`_AUTOLOAD_TABLE`'s regex matched only one exact call spelling and missed a
+bare `Table(...)` import, reordered/extra arguments, and a nested-call
+argument (`sa.MetaData()`) — broadened it, with pinning tests per shape
+plus a negative test. (2) The `op.rename_table` recognition just added to
+`_tables_created_by_migrations` scanned whole files, so a rename
+destination appearing only in a migration's `downgrade()` (undoing an
+`upgrade()`-side rename) would be wrongly credited as migration-created —
+the dangerous direction, since it removes a real create_all-only table from
+that set. Added `_upgrade_body` to scope both the `create_table` and
+`rename_table` scans to `upgrade()` only; its first version (matching only
+an unannotated `def upgrade():`) matched nothing against this codebase's
+`def upgrade() -> None:` convention and was caught before shipping by
+diffing its output against the unscoped scan on the real chain, not by
+review. Re-verified `positions`/`user_positions` still correctly excluded
+from create_all-only after the fix (40-table set, unchanged). Full local
+gate green again (17 tests in this file, up from 13; 1170 scoped +
+9291 full backend). See MSG-11 in the findings doc for the complete writeup.
+
 ### 2026-08-31 — Feature 25 (Messaging & notifications), pass 2 ✅ PR #2081 fully merged (PR #2082 closed the tracker)
 
 PR #2081 merged (`7d4c8fda`). Codex's review flagged two real issues on the

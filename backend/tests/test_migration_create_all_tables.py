@@ -69,8 +69,35 @@ def _migration_sources() -> dict[str, str]:
     }
 
 
+def _upgrade_body(text: str) -> str:
+    """The text of a migration's ``upgrade()`` function, excluding whatever
+    follows it (``downgrade()``, or a private helper defined after it).
+
+    A ``rename_table`` destination that appears only in ``downgrade()`` —
+    e.g. renaming back to a table dropped in ``upgrade()`` — does not exist
+    on the fresh-upgrade path, so treating it as migration-created the same
+    as an ``upgrade()``-side rename would be wrong in the dangerous
+    direction: it would remove a genuinely create_all-only table from that
+    set, letting an unguarded reflection of it slip past the ratchet.
+    ``20260312_0200_rename_meeting_action_items_table.py``'s ``downgrade()``
+    renames ``minutes_action_items`` back to ``meeting_action_items`` for
+    exactly this shape (harmless today only because that table is also
+    genuinely migration-created elsewhere).
+
+    The signature match tolerates a return-type annotation
+    (``def upgrade() -> None:``, used throughout this codebase) — an earlier,
+    unannotated-only version of this pattern matched nothing at all and was
+    caught before it shipped by comparing its output against the unscoped
+    scan on the real migration chain.
+    """
+    match = re.search(
+        r"def upgrade\([^)]*\)[^:]*:\n(.*?)(?=\ndef \w|\Z)", text, re.DOTALL
+    )
+    return match.group(1) if match else ""
+
+
 def _tables_created_by_migrations(sources: dict[str, str]) -> set[str]:
-    """Tables a migration brings into existence, by their current name.
+    """Tables an ``upgrade()`` brings into existence, by their current name.
 
     ``op.create_table`` is the obvious case. ``op.rename_table(old, new)`` also
     counts, and for the *destination* name: ``20260805_0008`` renames
@@ -85,15 +112,16 @@ def _tables_created_by_migrations(sources: dict[str, str]) -> set[str]:
     ``20260826_1700_d4e5f6a7b8c9_message_recipients.py`` — see that
     migration's own comment and MSG-11 in
     ``docs/security-review/MSG-25-messaging-notifications.md`` for the full
-    account.
+    account. Both are scoped to ``upgrade()`` — see ``_upgrade_body``.
     """
     created: set[str] = set()
     for text in sources.values():
-        created.update(re.findall(r"op\.create_table\(\s*[\"']([a-z0-9_]+)[\"']", text))
+        body = _upgrade_body(text)
+        created.update(re.findall(r"op\.create_table\(\s*[\"']([a-z0-9_]+)[\"']", body))
         created.update(
             re.findall(
                 r"op\.rename_table\(\s*[\"'][a-z0-9_]+[\"']\s*,\s*[\"']([a-z0-9_]+)[\"']",
-                text,
+                body,
             )
         )
     return created
@@ -420,6 +448,26 @@ class TestTheDetectionItself:
         }
 
         assert _find_offenders(sources, self.CREATE_ALL_ONLY) == []
+
+    def test_a_downgrade_only_rename_does_not_count_as_created(self):
+        """A rename destination that exists only in `downgrade()` — undoing
+        an `upgrade()`-side rename away from that name — is not present on
+        the fresh-upgrade path, so it must not be credited as
+        migration-created. Crediting it would remove a genuinely
+        create_all-only table from that set and let an unguarded upgrade-
+        time reflection of it slip past this ratchet."""
+        sources = {
+            "0001_rename.py": (
+                "def upgrade():\n"
+                '    op.rename_table("event_requests", "renamed_requests")\n'
+                "\n"
+                "def downgrade():\n"
+                '    op.rename_table("renamed_requests", "event_requests")\n'
+            )
+        }
+
+        assert "event_requests" not in _tables_created_by_migrations(sources)
+        assert "renamed_requests" in _tables_created_by_migrations(sources)
 
     def test_an_unguarded_reflection_is_flagged(self):
         """A raw `sa.Table(..., autoload_with=bind)` on a genuinely
