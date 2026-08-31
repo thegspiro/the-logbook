@@ -19,7 +19,7 @@ from loguru import logger
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.utils import sanitize_error_message
+from app.core.utils import sanitize_connector_error
 from app.models.integration import Integration
 from app.models.user import User
 from app.services.integration_services.salesforce_oauth_service import (
@@ -656,10 +656,12 @@ class SalesforceSyncService:
             await self.sf.test_connection()
             report["connected"] = True
         except Exception as exc:
-            # test_connection() raises hand-authored messages on the expected
+            # test_connection() raises bare Exception on its own expected
             # paths, but doesn't wrap every outbound call — an unhandled
-            # infra-level exception can still reach here unsanitized (INT-6).
-            report["error"] = sanitize_error_message(str(exc))
+            # infra-level exception (DNS, TLS, timeout) can still reach here.
+            # sanitize_connector_error only trusts an exact-type Exception
+            # and generic-fallbacks anything else (INT-6 follow-up).
+            report["error"] = sanitize_connector_error(exc)
             return report
 
         expected: dict[str, set[str]] = {
@@ -697,7 +699,9 @@ class SalesforceSyncService:
                 if ext_ids & set(missing):
                     external_id_ready = False
             except Exception as exc:
-                entry["error"] = sanitize_error_message(str(exc))
+                # Same defect class as the test_connection() catch above —
+                # get_field_names() doesn't wrap every outbound call either.
+                entry["error"] = sanitize_connector_error(exc)
                 external_id_ready = False
             report["objects"][sobject] = entry
 

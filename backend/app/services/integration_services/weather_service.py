@@ -59,4 +59,11 @@ async def test_zone(zone_id: str) -> str:
         alerts = await fetch_active_alerts(zone_id)
         return f"Zone {zone_id} is valid. {len(alerts)} active alert(s)."
     except Exception as e:
-        raise Exception(f"Could not fetch alerts for zone {zone_id}: {e}")
+        # Don't interpolate the raw exception into the re-raised message —
+        # the underlying httpx call can surface transport-level detail
+        # (DNS, TLS, timeouts) that a caller-facing bare Exception is
+        # otherwise trusted to be safe (INT-6 follow-up). zone_id itself is
+        # config data (an NWS zone code), not attacker/exception text, so
+        # it's still safe to include.
+        logger.error("Could not fetch alerts for zone {}: {}", zone_id, e)
+        raise Exception(f"Could not fetch alerts for zone {zone_id}")

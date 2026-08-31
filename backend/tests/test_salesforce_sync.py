@@ -619,6 +619,35 @@ async def test_check_readiness_sanitizes_field_lookup_error():
         assert sensitive not in (entry["error"] or "")
 
 
+async def test_check_readiness_sanitizes_infra_exception_with_no_blacklist_match():
+    """INT-6 follow-up: sanitize_error_message()'s pattern blacklist doesn't
+    cover generic DNS/TLS/timeout text, so a raw httpx transport error (not
+    bare Exception, and not caught by the blacklist) must still be replaced
+    by the generic fallback rather than passed through unchanged."""
+    dns_failure = "[Errno -2] Name or service not known"
+    sf = AsyncMock()
+    sf.test_connection.side_effect = httpx.ConnectError(dns_failure)
+    service, _ = make_sync_service(config={}, sf=sf)
+
+    report = await service.check_readiness()
+    assert dns_failure not in report["error"]
+    assert report["error"] == "An unexpected error occurred. Please try again."
+
+
+async def test_check_readiness_field_lookup_sanitizes_infra_exception():
+    """Same follow-up, the per-sObject describe call."""
+    dns_failure = "[Errno -2] Name or service not known"
+    sf = AsyncMock()
+    sf.test_connection.return_value = "ok"
+    sf.get_field_names.side_effect = httpx.ConnectError(dns_failure)
+    service, _ = make_sync_service(config={}, sf=sf)
+
+    report = await service.check_readiness()
+    for entry in report["objects"].values():
+        assert dns_failure not in (entry["error"] or "")
+        assert entry["error"] == "An unexpected error occurred. Please try again."
+
+
 async def test_preview_counts_create_update_adopt_skip():
     async def query(soql):
         if "Logbook_Member_ID__c" in soql:

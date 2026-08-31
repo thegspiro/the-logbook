@@ -11,6 +11,7 @@ Tests cover:
 import socket
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import httpx
 import pytest
 from fastapi import HTTPException
 from pydantic import ValidationError
@@ -560,6 +561,63 @@ class TestTestConnectionEndpointSanitizesErrors:
         with patch(
             "app.services.integration_services.test_integration_connection",
             AsyncMock(side_effect=Exception(safe)),
+        ):
+            result = await run_test_connection_route(
+                integration_id="int-1",
+                request=MagicMock(),
+                db=db,
+                current_user=current_user,
+            )
+
+        assert result["success"] is False
+        assert result["message"] == safe
+
+    async def test_infra_exception_with_no_blacklist_match_gets_generic_fallback(
+        self,
+    ):
+        """INT-6 follow-up: sanitize_error_message()'s pattern blacklist
+        doesn't cover generic DNS/TLS/timeout text, so a raw httpx transport
+        error (not bare Exception, and not caught by the blacklist) must
+        still be replaced by the generic fallback rather than passed
+        through unchanged."""
+        integration = MagicMock()
+        integration.id = "int-1"
+        integration.organization_id = "org-1"
+        db = self._db_with_integration(integration)
+        current_user = MagicMock(organization_id="org-1")
+
+        dns_failure = "[Errno -2] Name or service not known"
+        with patch(
+            "app.services.integration_services.test_integration_connection",
+            AsyncMock(side_effect=httpx.ConnectError(dns_failure)),
+        ):
+            result = await run_test_connection_route(
+                integration_id="int-1",
+                request=MagicMock(),
+                db=db,
+                current_user=current_user,
+            )
+
+        assert result["success"] is False
+        assert dns_failure not in result["message"]
+        assert result["message"] == "An unexpected error occurred. Please try again."
+
+    async def test_paypal_error_still_passes_through(self):
+        """PayPalError is the one named trusted_types exception besides bare
+        Exception — its hand-authored messages (raised for a rejected
+        client id/secret, a non-2xx token response, etc.) must survive."""
+        from app.services.integration_services.paypal_service import PayPalError
+
+        integration = MagicMock()
+        integration.id = "int-1"
+        integration.organization_id = "org-1"
+        db = self._db_with_integration(integration)
+        current_user = MagicMock(organization_id="org-1")
+
+        safe = "PayPal rejected these credentials. Check the client ID and secret."
+        with patch(
+            "app.services.integration_services.test_integration_connection",
+            AsyncMock(side_effect=PayPalError(safe)),
         ):
             result = await run_test_connection_route(
                 integration_id="int-1",

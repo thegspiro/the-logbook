@@ -177,6 +177,44 @@ a message that matches the SQL/path/traceback unsafe-pattern list, so the
 existing hand-authored messages pass through unchanged — verified by a
 dedicated regression test (below) alongside the leak-prevention test.
 
+**Correction (2026-08-31, on PR #2087 itself):** Codex caught that
+`sanitize_error_message()`'s blacklist is the wrong tool for this specific
+boundary. It only recognizes SQL/path/traceback/driver-name patterns — a
+realistic DNS/TLS/timeout message like
+`[Errno -2] Name or service not known` matches none of them and passed
+through unchanged, so the exact scenario the fix was written to close (an
+unhandled infra-level exception reaching the client) still leaked. Fixed by
+adding `sanitize_connector_error()` (`app/core/utils.py`) as the correct
+tool for this boundary: it checks the exception's _type_, not its message —
+`type(exc) is Exception` (or an explicitly-named `trusted_types` subclass,
+e.g. `PayPalError`) is trusted content from a connector's own hand-authored
+raise, and anything else (an `httpx` transport error, any other exception
+class) always gets the generic fallback regardless of what its message
+looks like, since a generic infra failure has no fixed vocabulary a
+blacklist could enumerate. Both original INT-6 sites, plus the
+previously-unfixed second `check_readiness` site
+(`salesforce_sync_service.py`'s per-sObject `get_field_names` catch, same
+method, same defect, not itself named in the original finding) now use it.
+
+Investigating why the exact-type check is _necessary_ (not just a nicety)
+surfaced a second, sharper instance of the same root problem: three
+connectors' own `test_connection()` — `google_calendar_service.py`,
+`outlook_calendar_service.py`, `weather_service.py` — catch a broad
+exception and re-raise it as `Exception(f"...: {e}")`, interpolating the
+caught exception's raw text into the new message. That re-raised message
+_is_ of exact type `Exception`, which is exactly what a type-based check
+(correctly) treats as "hand-authored and safe" — so the interpolated raw
+text (an httpx DNS/TLS/timeout message, unfiltered) would have reached the
+client anyway, defeating both the blacklist approach and the type-check
+approach. Confirmed the other reachable connectors (Slack, Discord, Teams,
+generic-webhook, Documenso, Cal.com, PayPal) don't have this shape: their
+outbound calls are either unwrapped (a raw `httpx` exception propagates
+under its own type, which the boundary check already treats as untrusted)
+or the exception is fully swallowed and replaced with a static,
+non-interpolated message. Fixed all three by dropping the interpolation —
+they now log the real exception server-side (`logger.error`) and raise a
+static, connector-specific message with no embedded exception text.
+
 ## Confirmed still open — nothing needing a product decision
 
 - **INT-5** (uninvoked `KNOWN_WEBHOOK_DOMAINS` chat-webhook allowlist) —
@@ -208,14 +246,38 @@ Verified to fail on reintroduction: reverting either `sanitize_error_message`
 call back to bare `str(e)`/`str(exc)` fails its corresponding test with the
 literal sensitive substring showing up in the assertion diff.
 
+**Correction round guard tests added:**
+
+- `test_salesforce_sync.py::test_check_readiness_sanitizes_infra_exception_with_no_blacklist_match`
+  and `::test_check_readiness_field_lookup_sanitizes_infra_exception` — an
+  `httpx.ConnectError` with DNS-failure text that matches no
+  `sanitize_error_message()` pattern must still resolve to the generic
+  fallback, at both `check_readiness()` catch sites.
+- `test_integrations_security.py::test_infra_exception_with_no_blacklist_match_gets_generic_fallback`
+  — same scenario at the `test-connection` endpoint.
+- `test_integrations_security.py::test_paypal_error_still_passes_through` —
+  `PayPalError`, the one named `trusted_types` exception besides bare
+  `Exception`, must still pass its hand-authored message through unchanged.
+- `test_connector_exception_wrapping.py` (new file) — one test per fixed
+  connector (Google Calendar, Outlook Calendar, NWS weather): a caught
+  DNS-failure exception must not appear, in any form, in the message the
+  connector re-raises.
+
+All four verified to fail on reintroduction: reverting `sanitize_connector_error`'s
+type check back to an unconditional `sanitize_error_message(str(exc))` call
+fails the three infra-exception tests (the DNS text passes through
+unfiltered); reverting any of the three connectors' fix back to
+`raise Exception(f"...: {e}")` fails that connector's test in
+`test_connector_exception_wrapping.py`.
+
 ## Completion gate
 
-| Check                                                                                                                                      | Result                                          |
-| ------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------- |
-| `flake8 app/ tests/ alembic/`                                                                                                              | ✅ 0 violations                                 |
-| `black --check app/ tests/ alembic/`                                                                                                       | ✅ 1337 files unchanged                         |
-| `isort --check-only app/ tests/ alembic/`                                                                                                  | ✅ clean                                        |
-| `python3 scripts/validate_migrations.py --strict`                                                                                          | ✅ 394 revisions, single head, PASSED           |
-| backend tests, scope (integration/salesforce)                                                                                              | ✅ 1561 passed, 21 skipped (env-only), 0 failed |
-| backend tests, `test_integrations_security.py` + `test_salesforce_sync.py` + `test_integration_services.py` + `test_salesforce_webhook.py` | ✅ 165 passed                                   |
-| `tsc --noEmit` / `eslint .`                                                                                                                | n/a — no frontend file changed this iteration   |
+| Check                                                                                                                                                                               | Result                                          |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                                                                                                                                       | ✅ 0 violations                                 |
+| `black --check app/ tests/ alembic/`                                                                                                                                                | ✅ 1337 files unchanged                         |
+| `isort --check-only app/ tests/ alembic/`                                                                                                                                           | ✅ clean                                        |
+| `python3 scripts/validate_migrations.py --strict`                                                                                                                                   | ✅ 394 revisions, single head, PASSED           |
+| backend tests, scope (integration/salesforce/connector)                                                                                                                             | ✅ 1581 passed, 21 skipped (env-only), 0 failed |
+| backend tests, `test_integrations_security.py` + `test_salesforce_sync.py` + `test_integration_services.py` + `test_salesforce_webhook.py` + `test_connector_exception_wrapping.py` | ✅ 172 passed                                   |
+| `tsc --noEmit` / `eslint .`                                                                                                                                                         | n/a — no frontend file changed this iteration   |
