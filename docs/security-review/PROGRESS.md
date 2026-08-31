@@ -16,15 +16,40 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**Feature 26 (Forms), pass 2** — [PR #2085](https://github.com/thegspiro/the-logbook/pull/2085),
-branch `claude/security-review-forms-pass2`. One finding (FORM-9, LOW-MED,
-fixed): integration-processor exceptions were persisted to
-`submission.integration_result` and served back verbatim through
-`FormSubmissionResponse` on `submit_form`/`get_submission`/
-`list_submissions`/`reprocess_submission_integrations` — three prior review
-passes had misjudged this as internal-only. See
-`docs/security-review/FORM-26-forms.md` pass 2. Subscribed for CI/review
-events.
+None. Feature 26 (Forms) is fully closed — see log entry below. Next:
+feature 27, Integrations.
+
+---
+
+### 2026-08-31 — Feature 26 (Forms), pass 2 ✅ PR #2085 merged
+
+PR #2085 merged (`8f42de4d`). One finding, one Codex correction round:
+
+1. **FORM-9 (LOW-MED, fixed).** Three prior review passes (module-audit
+   iteration 13, app-review pass 1, this doc's own pass 1) had misjudged six
+   `except Exception as e:` sites in `forms_service.py`'s integration
+   processors as "internal, never returned to the client" — the dict those
+   blocks build is persisted to `submission.integration_result`, which
+   `FormSubmissionResponse` serializes straight back on
+   `submit_form`/`get_submission`/`list_submissions`/
+   `reprocess_submission_integrations`, and `SubmissionViewer.tsx` renders
+   it verbatim. Fixed by routing all six through `safe_error_detail(e)`,
+   matching the existing FORM-7 pattern.
+
+2. **Codex correction, same commit round.** A seventh site had the same
+   shape but not the same fix: `InventoryService.assign_item_to_user()`
+   never raises on failure, it returns `(None, str(e))`, so
+   `_process_equipment_assignment`'s `if error: return {"success": False,
+"error": error}` branch returned that raw string untouched — no
+   exception ever reaches the `except`-block sanitizer. `error` here is
+   already a plain string, not an `Exception`, so `safe_error_detail`
+   doesn't apply; fixed by routing it through `sanitize_error_message()`
+   instead (the sibling helper `inventory.py`'s own caller already uses for
+   this exact tuple shape). Both sites now have dedicated guard tests,
+   each verified to fail on reintroduction.
+
+CI green (17/17), one review thread resolved, no merge conflict. See
+`docs/security-review/FORM-26-forms.md` for the full writeup.
 
 ---
 
@@ -3345,7 +3370,7 @@ each row's prior PR is recorded in the Log, not repeated here.
 | 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ✅     |
 | 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ✅     |
 | 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ✅     |
-| 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                         | ⏳     |
+| 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                         | ✅     |
 | 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                         | ⬜     |
 | 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`                                                                    | ⬜     |
 | 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                              | ⬜     |
