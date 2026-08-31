@@ -55,6 +55,23 @@ export interface StopBodyProps {
    * there is nothing to drive the strip.
    */
   openPocketIndex?: number | undefined;
+  /**
+   * The calendar day every expiry here is judged against.
+   *
+   * The organization's day, not the device's. A phone in another timezone an
+   * hour either side of midnight lands on a different date, and expiry is the
+   * one verdict that comes from the department's own record rather than from
+   * the crew — so the sweep and the accordion have to agree on which day it is.
+   */
+  today?: Date | undefined;
+  /**
+   * Open the replacement flow for an expiring item drawn from inventory.
+   *
+   * The seal rule tells a crew to open a container and replace what is
+   * expiring. Without a way to do that from here, the instruction is a dead
+   * end and they have to leave the walk to act on it.
+   */
+  onSwap?: ((itemId: string) => void) | undefined;
   disabled?: boolean | undefined;
 }
 
@@ -107,6 +124,7 @@ const CountTally: React.FC<Omit<StopBodyProps, 'stop'> & { items: CheckItemSpec[
           const found = answer?.quantityFound ?? item.carriedQuantity ?? undefined;
           const short = par !== null && found !== undefined && found < par;
           const carried = found !== undefined && !confirmed;
+          const notOnTruck = answer?.status === 'not_applicable';
           const set = (next: number) => onAnswer(item.id, countAnswer(item, next));
           return (
             <div
@@ -128,7 +146,7 @@ const CountTally: React.FC<Omit<StopBodyProps, 'stop'> & { items: CheckItemSpec[
               <div className="flex w-[132px] items-center justify-end gap-1.5">
                 <button
                   type="button"
-                  disabled={disabled}
+                  disabled={disabled || notOnTruck}
                   onClick={() => set((found ?? par ?? 0) - 1)}
                   aria-label={`One fewer ${item.name}`}
                   className="border-theme-input-border text-theme-text-secondary hover:bg-theme-surface-hover h-11 w-11 shrink-0 rounded-lg border text-[20px] font-bold disabled:opacity-50"
@@ -149,12 +167,33 @@ const CountTally: React.FC<Omit<StopBodyProps, 'stop'> & { items: CheckItemSpec[
                 </span>
                 <button
                   type="button"
-                  disabled={disabled}
+                  disabled={disabled || notOnTruck}
                   onClick={() => set((found ?? par ?? 0) + 1)}
                   aria-label={`One more ${item.name}`}
                   className="border-theme-input-border text-theme-text-secondary hover:bg-theme-surface-hover h-11 w-11 shrink-0 rounded-lg border text-[20px] font-bold disabled:opacity-50"
                 >
                   +
+                </button>
+                {/* Counting to zero is a shortage, which the server turns into
+                    a failure. An item this apparatus does not carry is not
+                    short of anything, and leaving it alone files the check
+                    incomplete — so it needs its own answer, as the accordion
+                    gives it. */}
+                <button
+                  type="button"
+                  disabled={disabled}
+                  aria-pressed={notOnTruck}
+                  onClick={() =>
+                    onAnswer(item.id, notOnTruck ? { status: 'not_checked' } : { status: 'not_applicable' })
+                  }
+                  aria-label={`${item.name} is not on this truck`}
+                  className={`h-11 w-11 shrink-0 rounded-lg border text-[13px] font-bold disabled:opacity-50 ${
+                    notOnTruck
+                      ? 'border-slate-900 bg-slate-900 text-white dark:border-white dark:bg-white dark:text-slate-900'
+                      : 'border-theme-input-border text-theme-text-muted hover:bg-theme-surface-hover'
+                  }`}
+                >
+                  n/a
                 </button>
               </div>
             </div>
@@ -320,8 +359,10 @@ const ExpiryRow: React.FC<{
   answer: CheckItemAnswer | undefined;
   onAnswer: (patch: Partial<CheckItemAnswer>) => void;
   disabled?: boolean | undefined;
-}> = ({ item, answer, onAnswer, disabled }) => {
-  const days = daysUntil(item.expirationDate, new Date());
+  today: Date;
+  onSwap?: ((itemId: string) => void) | undefined;
+}> = ({ item, answer, onAnswer, disabled, today, onSwap }) => {
+  const days = daysUntil(item.expirationDate, today);
   const pullAt = item.expirationWarningDays ?? 30;
   const expired = days !== null && days < 0;
   const inWindow = days !== null && days >= 0 && days <= pullAt;
@@ -354,18 +395,34 @@ const ExpiryRow: React.FC<{
           {inWindow && ` · pull at ${pullAt}`}
         </p>
       </div>
-      <button
-        type="button"
-        disabled={disabled}
-        onClick={() => onAnswer(expiryAnswer(item))}
-        className={`min-h-11 shrink-0 rounded-lg border px-3 text-[14px] font-bold transition-colors disabled:opacity-50 ${
-          confirmed
-            ? 'border-green-800 bg-green-800 text-white'
-            : 'border-theme-input-border text-theme-text-secondary hover:border-green-800'
-        }`}
-      >
-        {confirmed ? 'Read' : 'Confirm'}
-      </button>
+      <div className="flex shrink-0 items-center gap-1.5">
+        {/* The replacement the expiry rule is asking for, where there is ready
+            stock to draw it from. Telling a crew to swap an expiring drug and
+            then making them leave the walk to do it is the instruction with
+            nowhere to go. */}
+        {onSwap && (expired || inWindow) && item.inventoryItemId ? (
+          <button
+            type="button"
+            disabled={disabled}
+            onClick={() => onSwap(item.id)}
+            className="border-theme-alert-danger-icon text-theme-alert-danger-title min-h-11 rounded-lg border px-3 text-[14px] font-bold disabled:opacity-50"
+          >
+            Replace
+          </button>
+        ) : null}
+        <button
+          type="button"
+          disabled={disabled}
+          onClick={() => onAnswer(expiryAnswer(item))}
+          className={`min-h-11 shrink-0 rounded-lg border px-3 text-[14px] font-bold transition-colors disabled:opacity-50 ${
+            confirmed
+              ? 'border-green-800 bg-green-800 text-white'
+              : 'border-theme-input-border text-theme-text-secondary hover:border-green-800'
+          }`}
+        >
+          {confirmed ? 'Read' : 'Confirm'}
+        </button>
+      </div>
     </div>
   );
 };
@@ -385,6 +442,8 @@ const ItemGroups: React.FC<Omit<StopBodyProps, 'stop'> & { items: CheckItemSpec[
   answers,
   onAnswer,
   disabled,
+  today = new Date(),
+  onSwap,
 }) => {
   const of = (type: string) => items.filter((i) => normalizeCheckType(i.checkType) === type);
   const counts = of(CheckType.COUNT);
@@ -440,6 +499,8 @@ const ItemGroups: React.FC<Omit<StopBodyProps, 'stop'> & { items: CheckItemSpec[
               answer={answers[item.id]}
               onAnswer={(patch) => onAnswer(item.id, patch)}
               disabled={disabled}
+              today={today}
+              onSwap={onSwap}
             />
           ))}
         </div>
@@ -470,11 +531,18 @@ const SealCard: React.FC<{
   stop: LapStop;
   onSeal: ((stopId: string, patch: Partial<SealState>) => void) | undefined;
   disabled?: boolean | undefined;
-}> = ({ stop, onSeal, disabled }) => {
+  today: Date;
+}> = ({ stop, onSeal, disabled, today }) => {
   const seal = stop.seal;
   const status = seal?.status;
   const tag = seal?.tagNumber;
-  const blockers = sealBlockers(stop);
+  const blockers = sealBlockers(stop, today);
+  // Only a tag matching an *intact* prior seal is evidence the container
+  // stayed shut. With no tag on record there is nothing to match against, and
+  // where the last check recorded a broken seal the container was open since —
+  // the crew can still say the tag in their hand is intact, and it still
+  // clears nothing. Same rule the accordion's SealPanel enforces.
+  const canClear = Boolean(tag) && seal?.priorIntact === true;
 
   // An intact tag does not survive contact with a drug that is expiring. The
   // crew is going in whatever the tag says, so this branch is checked first
@@ -490,7 +558,7 @@ const SealCard: React.FC<{
           {blockers.map((item) => (
             <li key={item.id} data-testid={`seal-blocker-${item.id}`}>
               <span className="font-semibold">{item.name}</span>{' '}
-              {expiryUrgency(item) === 'expired' ? 'has expired' : 'is inside the pull window'}
+              {expiryUrgency(item, today) === 'expired' ? 'has expired' : 'is inside the pull window'}
               {item.expirationDate ? <span className="font-mono"> · {item.expirationDate}</span> : null}
             </li>
           ))}
@@ -604,11 +672,18 @@ const SealCard: React.FC<{
           'No tag number on record for this container.'
         )}
       </p>
+      {!canClear && (
+        <p data-testid={`seal-no-evidence-${stop.id}`} className="text-theme-alert-warning-text mt-1 text-[13px]">
+          {tag
+            ? 'The last check found this seal broken, so a matching tag proves nothing about the time since. Count it either way.'
+            : 'Nothing on record to match against, so the tag cannot answer for the contents. Count it either way.'}
+        </p>
+      )}
       <div className="mt-2.5 grid grid-cols-2 gap-2">
         <button
           type="button"
           disabled={disabled || !onSeal}
-          onClick={() => onSeal?.(stop.id, { status: 'intact' })}
+          onClick={() => onSeal?.(stop.id, { status: 'intact', cleared: canClear })}
           className="min-h-14 rounded-lg border border-green-800 bg-green-800 text-[15px] font-bold text-white disabled:opacity-50"
         >
           Tag matches
@@ -641,6 +716,8 @@ export const CheckSweepStop: React.FC<StopBodyProps> = ({
   disabled,
   clearedByAncestorSeal,
   openPocketIndex,
+  today = new Date(),
+  onSwap,
 }) => {
   // An intact tag answers the counting, so those rows come off the screen
   // rather than sitting there inviting a crew to count through a seal they
@@ -651,7 +728,7 @@ export const CheckSweepStop: React.FC<StopBodyProps> = ({
   // seal is a claim about one container and needs a group of its own. Here the
   // nesting gives it that group, so an inner seal is answered on its own card
   // and an outer one clearing says nothing about it.
-  const sealed = clearedByAncestorSeal === true || contentsAreSealed(stop);
+  const sealed = clearedByAncestorSeal === true || contentsAreSealed(stop, today);
   const own = sealed ? sealCannotClear(stop.items) : stop.items;
 
   // One pocket while the sweep is driving the strip, all of them when nothing
@@ -663,9 +740,9 @@ export const CheckSweepStop: React.FC<StopBodyProps> = ({
 
   return (
     <div className="flex flex-col gap-3">
-      {stop.isSealed && <SealCard stop={stop} onSeal={onSeal} disabled={disabled} />}
+      {stop.isSealed && <SealCard stop={stop} onSeal={onSeal} disabled={disabled} today={today} />}
 
-      <ItemGroups items={own} answers={answers} onAnswer={onAnswer} disabled={disabled} />
+      <ItemGroups items={own} answers={answers} onAnswer={onAnswer} disabled={disabled} today={today} onSwap={onSwap} />
 
       {/* Pockets. A bag is one stop, not several — the crew is standing in front
         of the whole thing — so its pockets are sections inside this screen
@@ -691,6 +768,8 @@ export const CheckSweepStop: React.FC<StopBodyProps> = ({
             // A pocket with its own tag answers for itself; otherwise it is
             // inside whatever the bag's tag has already settled.
             clearedByAncestorSeal={pocket.isSealed ? false : sealed}
+            today={today}
+            onSwap={onSwap}
           />
         </section>
       ))}

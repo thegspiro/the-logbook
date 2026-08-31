@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   bulkClaim,
+  stopFailures,
   contentsAreSealed,
   expiryUrgency,
   sealBlockers,
@@ -243,5 +244,32 @@ describe('sealBlockers', () => {
     // nothing at all about whether what is left is still usable.
     expect(contentsAreSealed(tray([dated('epi', '2026-09-01')]), today)).toBe(true);
     expect(contentsAreSealed(tray([dated('epi', '2026-05-30')]), today)).toBe(false);
+  });
+});
+
+describe('a shortfall is one thing, reported once', () => {
+  const gauze: CheckItemSpec = { id: 'gauze', name: 'Gauze', checkType: 'count', expectedQuantity: 10 };
+  const siren: CheckItemSpec = { id: 'siren', name: 'Siren', checkType: 'function' };
+  const stop: LapStop = { id: 's', name: 'EMS', items: [gauze, siren] };
+
+  it('reports a short count as a restock and not as a fault', () => {
+    // It is stored `fail` — the server rewrites it to that anyway and the
+    // out-of-service verdict is built on it — but showing it in both places
+    // would put one shortfall on screen twice: once as something to act on
+    // now, once as a supply order.
+    const answers: AnswerMap = { gauze: { status: 'fail', quantityFound: 6 } };
+    expect(stopRestocks(stop, answers).map((i) => i.id)).toEqual(['gauze']);
+    expect(stopFailures(stop, answers)).toEqual([]);
+  });
+
+  it('still reports a genuine fault as one', () => {
+    const answers: AnswerMap = { siren: { status: 'fail' } };
+    expect(stopFailures(stop, answers).map((i) => i.id)).toEqual(['siren']);
+  });
+
+  it('reports a count that failed for some other reason as a fault', () => {
+    // At par and still failed is not a shortfall, so nothing hides it.
+    const answers: AnswerMap = { gauze: { status: 'out_of_service', quantityFound: 10 } };
+    expect(stopFailures(stop, answers).map((i) => i.id)).toEqual(['gauze']);
   });
 });
