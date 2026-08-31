@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**262 tables · 4446 columns · 844 foreign keys**
+**263 tables · 4453 columns · 848 foreign keys**
 
 ---
 
@@ -488,7 +488,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 | Table | Model | Columns | Purpose |
 |---|---|---|---|
-| [`scheduling_module_configs`](#scheduling_module_configs) | `SchedulingModuleConfig` | 14 | Per-organization scheduling module defaults (one row per org). |
+| [`scheduling_module_configs`](#scheduling_module_configs) | `SchedulingModuleConfig` | 13 | Per-organization scheduling module defaults (one row per org). |
 
 ### Security Alerts
 
@@ -572,9 +572,10 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | [`shift_equipment_checks`](#shift_equipment_checks) | `ShiftEquipmentCheck` | 18 | A completed equipment checklist submission for a shift. |
 | [`shift_patterns`](#shift_patterns) | `ShiftPattern` | 17 | Recurring shift pattern for automatic schedule generation. |
 | [`shift_swap_requests`](#shift_swap_requests) | `ShiftSwapRequest` | 13 | Request to swap shifts between two members. |
+| [`shift_template_equipment_checks`](#shift_template_equipment_checks) | `ShiftTemplateEquipmentCheck` | 7 | One equipment checklist a shift template puts on the shifts it creates. |
 | [`shift_templates`](#shift_templates) | `ShiftTemplate` | 19 | Reusable shift template for quick shift creation. |
 | [`shift_time_off`](#shift_time_off) | `ShiftTimeOff` | 12 | Member request for time off / unavailability. |
-| [`shifts`](#shifts) | `Shift` | 30 | Shift model (Framework) |
+| [`shifts`](#shifts) | `Shift` | 31 | Shift model (Framework) |
 | [`skill_checkoffs`](#skill_checkoffs) | `SkillCheckoff` | 14 | Skill Checkoff model |
 | [`skill_evaluations`](#skill_evaluations) | `SkillEvaluation` | 13 | Skill Evaluation model |
 | [`standing_shift_claims`](#standing_shift_claims) | `StandingShiftClaim` | 14 | A member's recurring claim on a shift — "every Tuesday night". |
@@ -1709,7 +1710,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 
 **TemplateChangeLog** · `app/models/apparatus.py`
 
-> Granular audit trail for equipment check template edits. Records every add/update/delete action on templates, compartments, and items so leadership can review who changed what and when. Visible only to users with equipment_check.manage permission.
+> Granular audit trail for equipment check template edits. Records every add/update/delete action on templates, compartments, and items so leadership can review who changed what and when. Visible only to users with inventory.check_manage permission.
 
 | Column | Type | Null | Key | Default | References |
 |---|---|---|---|---|---|
@@ -6640,7 +6641,6 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `custom_positions` | JSON | yes |  |  |  |
 | `apparatus_type_defaults` | JSON | yes |  |  |  |
 | `resource_type_defaults` | JSON | yes |  |  |  |
-| `equipment_check_settings` | JSON | yes |  |  |  |
 | `created_at` | DATETIME | yes |  | `now()` |  |
 | `updated_at` | DATETIME | yes |  | `now()` |  |
 | `updated_by` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
@@ -8260,6 +8260,30 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 - `idx_swap_req_status` (`status`)
 - `idx_swap_req_user` (`requesting_user_id`)
 
+### `shift_template_equipment_checks`
+
+**ShiftTemplateEquipmentCheck** · `app/models/training.py`
+
+> One equipment checklist a shift template puts on the shifts it creates. Deliberately thin: the two sides, the org, and an order. Timing (start/end of shift) and position eligibility stay on ``EquipmentCheckTemplate``, which is where they are edited and where every other reader already looks — duplicating either here is how the two come to disagree with no way to tell which is right. Presence is meaningful. A template with **no** links falls back to apparatus-based resolution, which is how every shift worked before this table existed. A template **with** links carries exactly those, so an officer can also deliberately give a shift a checklist its apparatus would not have suggested. Both foreign keys CASCADE rather than SET NULL, so pitfall #2 does not apply: a link row with either side missing describes nothing.
+
+| Column | Type | Null | Key | Default | References |
+|---|---|---|---|---|---|
+| `id` | VARCHAR(36) | no | PK | `generate_uuid()` |  |
+| `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
+| `shift_template_id` | VARCHAR(36) | no | FK |  | → `shift_templates.id` ON DELETE CASCADE |
+| `equipment_check_template_id` | VARCHAR(36) | no | FK |  | → `equipment_check_templates.id` ON DELETE CASCADE |
+| `sort_order` | INTEGER | no |  | `0` |  |
+| `created_at` | DATETIME | yes |  | `now()` |  |
+| `updated_at` | DATETIME | yes |  | `now()` |  |
+
+**Indexes**
+
+- `idx_stec_org_template` (`organization_id`, `shift_template_id`)
+
+**Constraints**
+
+- UNIQUE `uq_stec_template_pair` (`shift_template_id`, `equipment_check_template_id`)
+
 ### `shift_templates`
 
 **ShiftTemplate** · `app/models/training.py`
@@ -8334,6 +8358,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `end_time` | DATETIME | yes |  |  |  |
 | `apparatus_id` | VARCHAR(36) | yes |  |  |  |
 | `station_id` | VARCHAR(36) | yes |  |  |  |
+| `template_id` | VARCHAR(36) | yes | FK |  | → `shift_templates.id` ON DELETE SET NULL |
 | `platoon` | VARCHAR(20) | yes |  |  |  |
 | `shift_officer_id` | VARCHAR(36) | yes | FK |  | → `users.id` ON DELETE SET NULL |
 | `color` | VARCHAR(7) | yes |  |  |  |
@@ -9570,7 +9595,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `votes` | `voter_id` | SET NULL | yes |
 | `xapi_statements` | `user_id` | SET NULL | yes |
 
-### → `organizations` (208 references)
+### → `organizations` (209 references)
 
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
@@ -9745,6 +9770,7 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `shift_equipment_checks` | `organization_id` | CASCADE | no |
 | `shift_patterns` | `organization_id` | CASCADE | no |
 | `shift_swap_requests` | `organization_id` | CASCADE | no |
+| `shift_template_equipment_checks` | `organization_id` | CASCADE | no |
 | `shift_templates` | `organization_id` | CASCADE | no |
 | `shift_time_off` | `organization_id` | CASCADE | no |
 | `shifts` | `organization_id` | CASCADE | no |
@@ -10082,6 +10108,15 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `membership_pipeline_steps` | `email_template_id` | SET NULL | yes |
 | `scheduled_emails` | `template_id` | SET NULL | yes |
 
+### → `equipment_check_templates` (4 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `check_template_compartments` | `template_id` | CASCADE | no |
+| `shift_equipment_checks` | `template_id` | SET NULL | yes |
+| `shift_template_equipment_checks` | `equipment_check_template_id` | CASCADE | no |
+| `template_change_logs` | `template_id` | CASCADE | no |
+
 ### → `fundraising_campaigns` (4 references)
 
 | From table | Column | On delete | Nullable |
@@ -10143,14 +10178,6 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `expense_line_items` | `budget_id` | SET NULL | yes |
 | `purchase_requests` | `budget_id` | SET NULL | yes |
 
-### → `equipment_check_templates` (3 references)
-
-| From table | Column | On delete | Nullable |
-|---|---|---|---|
-| `check_template_compartments` | `template_id` | CASCADE | no |
-| `shift_equipment_checks` | `template_id` | SET NULL | yes |
-| `template_change_logs` | `template_id` | CASCADE | no |
-
 ### → `forms` (3 references)
 
 | From table | Column | On delete | Nullable |
@@ -10190,6 +10217,14 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | `public_portal_access_log` | `config_id` | CASCADE | no |
 | `public_portal_api_keys` | `config_id` | CASCADE | no |
 | `public_portal_data_whitelist` | `config_id` | CASCADE | no |
+
+### → `shift_templates` (3 references)
+
+| From table | Column | On delete | Nullable |
+|---|---|---|---|
+| `shift_patterns` | `template_id` | SET NULL | yes |
+| `shift_template_equipment_checks` | `shift_template_id` | CASCADE | no |
+| `shifts` | `template_id` | SET NULL | yes |
 
 ### → `skill_evaluations` (3 references)
 
@@ -10574,12 +10609,6 @@ Every foreign key in the schema, grouped by the table it points at — the map o
 | From table | Column | On delete | Nullable |
 |---|---|---|---|
 | `screening_records` | `requirement_id` | SET NULL | yes |
-
-### → `shift_templates` (1 references)
-
-| From table | Column | On delete | Nullable |
-|---|---|---|---|
-| `shift_patterns` | `template_id` | SET NULL | yes |
 
 ### → `skill_templates` (1 references)
 
