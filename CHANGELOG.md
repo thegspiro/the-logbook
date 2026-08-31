@@ -30,6 +30,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   stock on hand, which the catalog refused even though editing an item to the
   same value had always been allowed. A pool item can now be created with
   nothing on hand, which is what a catalog entry added from a checklist knows.
+
 ### Frontend shared re-verification fixes (2026-08-31)
 
 **Fixed**
