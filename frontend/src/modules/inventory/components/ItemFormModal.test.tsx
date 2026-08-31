@@ -32,6 +32,23 @@ vi.mock('react-hot-toast', () => ({
 
 import { ItemFormModal } from './ItemFormModal';
 
+// The Condition control renders only for item types whose ITEM_TYPE_FIELDS
+// include `inspection_interval_days` — ppe alone — so these tests need a PPE
+// category selected for the dropdown to exist at all.
+const ppeCategory = {
+  id: 'cat-ppe',
+  organization_id: 'org-1',
+  name: 'Turnout Gear',
+  item_type: 'ppe',
+  requires_assignment: false,
+  requires_serial_number: false,
+  requires_maintenance: false,
+  nfpa_tracking_enabled: false,
+  active: true,
+  created_at: '2026-01-01T00:00:00Z',
+  updated_at: '2026-01-01T00:00:00Z',
+};
+
 const baseProps = {
   onClose: vi.fn(),
   onSaved: vi.fn(),
@@ -39,6 +56,8 @@ const baseProps = {
   locations: [],
   storageAreas: [],
 };
+
+const ppeProps = { ...baseProps, categories: [ppeCategory] };
 
 const makeItem = (overrides: Partial<InventoryItem> = {}): InventoryItem => ({
   id: 'it-1',
@@ -117,6 +136,59 @@ describe('ItemFormModal', () => {
     await waitFor(() => expect(mockUpdateItem).toHaveBeenCalledTimes(1));
     expect(mockUpdateItem.mock.calls[0]?.[0]).toBe('it-1');
     expect(mockToastSuccess).toHaveBeenCalledWith('Item updated');
+  });
+
+  // The form has no Status control, but the backend requires an AVAILABLE
+  // item to be in excellent/good/fair condition — so the last four options of
+  // this form's own Condition dropdown produced a 400 naming a field that does
+  // not appear anywhere on the screen, and no way to satisfy it.
+  it('derives a quarantined status when an item is recorded damaged', async () => {
+    const user = userEvent.setup();
+    render(<ItemFormModal {...ppeProps} isOpen editItem={makeItem({ category_id: 'cat-ppe', status: 'available' })} />);
+
+    await user.selectOptions(screen.getByLabelText('Condition'), 'damaged');
+    await user.click(screen.getByRole('button', { name: 'Update' }));
+
+    await waitFor(() => expect(mockUpdateItem).toHaveBeenCalledTimes(1));
+    expect(mockUpdateItem.mock.calls[0]?.[1]).toMatchObject({
+      condition: 'damaged',
+      status: 'in_maintenance',
+    });
+  });
+
+  it('derives a retired status from a retired condition', async () => {
+    const user = userEvent.setup();
+    render(<ItemFormModal {...ppeProps} isOpen editItem={makeItem({ category_id: 'cat-ppe', status: 'available' })} />);
+
+    await user.selectOptions(screen.getByLabelText('Condition'), 'retired');
+    await user.click(screen.getByRole('button', { name: 'Update' }));
+
+    await waitFor(() => expect(mockUpdateItem).toHaveBeenCalledTimes(1));
+    expect(mockUpdateItem.mock.calls[0]?.[1]).toMatchObject({ status: 'retired' });
+  });
+
+  it('sends no status for a condition that is already legal', async () => {
+    const user = userEvent.setup();
+    render(<ItemFormModal {...ppeProps} isOpen editItem={makeItem({ category_id: 'cat-ppe', status: 'available' })} />);
+
+    await user.selectOptions(screen.getByLabelText('Condition'), 'fair');
+    await user.click(screen.getByRole('button', { name: 'Update' }));
+
+    await waitFor(() => expect(mockUpdateItem).toHaveBeenCalledTimes(1));
+    expect(mockUpdateItem.mock.calls[0]?.[1]).not.toHaveProperty('status');
+  });
+
+  it('leaves the status of an assigned item alone when its condition is edited', async () => {
+    const user = userEvent.setup();
+    render(<ItemFormModal {...ppeProps} isOpen editItem={makeItem({ category_id: 'cat-ppe', status: 'assigned' })} />);
+
+    await user.selectOptions(screen.getByLabelText('Condition'), 'damaged');
+    await user.click(screen.getByRole('button', { name: 'Update' }));
+
+    await waitFor(() => expect(mockUpdateItem).toHaveBeenCalledTimes(1));
+    // ASSIGNED + damaged is a legal pair. Overriding it here would pull a
+    // member's issued gear out of service on an unrelated edit.
+    expect(mockUpdateItem.mock.calls[0]?.[1]).not.toHaveProperty('status');
   });
 
   it('shows an error toast when saving fails', async () => {
