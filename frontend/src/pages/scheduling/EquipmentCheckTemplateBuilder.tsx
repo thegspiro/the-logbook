@@ -111,6 +111,7 @@ import {
 } from './equipmentCheckPresets';
 import { useOverlaySurface } from '../../hooks/useOverlaySurface';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
+import { formatItemSummary } from './itemSummary';
 
 const inputClass = 'form-input';
 
@@ -2393,7 +2394,6 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
   ) => {
     const itemKey = item.id ?? item.clientKey;
     const isItemExpanded = expandedItems.has(itemKey);
-    const checkTypeLabel = CHECK_TYPES.find((ct) => ct.value === item.checkType)?.label ?? item.checkType;
     const compKey = getCompKey(compIdx);
     const isSelected = selectedItems[compKey]?.has(itemIdx) ?? false;
     const isMobileSelectionMode = !isLaptop && mobileSelectionLocations.has(compKey);
@@ -2446,6 +2446,8 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
         </div>
       );
     }
+
+    const itemSummary = formatItemSummary(item);
 
     return (
       <div
@@ -2526,13 +2528,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                 {item.name.trim() || (isHeader ? 'Untitled Header' : 'Untitled Item')}
               </span>
               <span className="text-theme-text-muted mt-0.5 block truncate text-xs font-normal sm:hidden">
-                {checkTypeLabel}
-                {item.checkType === 'count' && item.expectedQuantity ? ` · Par ${item.expectedQuantity}` : ''}
-                {item.checkType === 'level' && item.minLevel
-                  ? ` · Minimum ${item.minLevel}${item.levelUnit ? ` ${item.levelUnit}` : ''}`
-                  : ''}
-                {item.isRequired ? ' · Required' : ''}
-                {item.hasExpiration ? ' · Expiration tracked' : ''}
+                {itemSummary.map(({ text }) => text).join(' · ')}
               </span>
               {!isMobileSelectionMode &&
                 (isItemExpanded ? (
@@ -2563,15 +2559,21 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
 
           {/* Badges */}
           <div className="hidden flex-shrink-0 items-center gap-1.5 sm:flex">
-            <span className="bg-theme-surface-secondary text-theme-text-muted rounded-full px-2 py-0.5 text-[10px] font-medium">
-              {checkTypeLabel}
-            </span>
-            {item.isRequired && (
-              <span className="rounded-full bg-red-100 px-1.5 py-0.5 text-[10px] font-medium text-red-600 dark:bg-red-900/30 dark:text-red-400">
-                Req
+            {itemSummary.map((summary) => (
+              <span
+                key={summary.text}
+                className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                  summary.tone === 'problem'
+                    ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
+                    : summary.tone === 'important'
+                      ? 'bg-theme-surface-secondary text-theme-text-secondary'
+                      : 'bg-theme-surface-secondary text-theme-text-muted'
+                }`}
+              >
+                {summary.tone === 'problem' && <AlertTriangle className="h-3 w-3" aria-hidden="true" />}
+                {summary.text}
               </span>
-            )}
-            {item.hasExpiration && <AlertTriangle className="h-3 w-3 text-yellow-500" />}
+            ))}
           </div>
 
           {/* Actions — stop propagation so clicking them doesn't toggle expansion */}
