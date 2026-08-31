@@ -24,6 +24,8 @@ sign up for, and no setting could unblock it (see CHANGELOG 2026-08-26).
 
 from typing import Any, Dict, List
 
+from pydantic import BaseModel
+
 # The seat vocabulary the rest of the system speaks: ``ShiftPosition`` on the
 # wire, ``operational_ranks.eligible_positions`` in config, and the rank
 # editor's own button list. ``tests/test_position_slots.py`` asserts this set
@@ -81,12 +83,23 @@ def normalize_stored_positions(positions: Any) -> Any:
     in the app has ever written one — expands into that many seats. One slot
     per seat is what every reader counts, so collapsing a count would quietly
     cut a three-firefighter template down to one.
+
+    Pydantic models (``PositionSlot``) are accepted alongside dicts: an
+    endpoint that hands over a parsed request body must settle to the same
+    shape as one that hands over ``model_dump()`` output.
     """
     if not isinstance(positions, list):
         return positions
 
     slots: List[Dict[str, Any]] = []
     for entry in positions:
+        # A request body typed ``List[PositionSlot | str]`` arrives already
+        # parsed, so the seats reach this function as models rather than
+        # dicts. Matching neither branch below dropped every structured seat
+        # on POST /scheduling/apparatus while the PATCH sibling — which dumps
+        # the payload first — kept them.
+        if isinstance(entry, BaseModel):
+            entry = entry.model_dump()
         if isinstance(entry, str):
             name = canonical_position(entry)
             if name:

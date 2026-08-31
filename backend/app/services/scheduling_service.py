@@ -353,7 +353,12 @@ class SchedulingService:
         if isinstance(positions, dict):
             flat = positions.get("flat_positions")
             if isinstance(flat, list) and flat:
-                return [{"position": p, "required": True} for p in flat]
+                # The templates form writes seat objects here, not bare
+                # strings; binding an entry straight in as the seat *name*
+                # produced {"position": {"position": "officer", ...}} — a seat
+                # nobody can be assigned to, which then failed ShiftResponse.
+                # The list branch above already settles both shapes.
+                return SchedulingService.normalize_positions(flat)
             resources = positions.get("resources")
             if isinstance(resources, list):
                 result: List[Dict[str, Any]] = []
@@ -2694,8 +2699,12 @@ class SchedulingService:
                     # a recurring pattern fills the calendar, so stripping the
                     # required flag here would re-seed the legacy shape after
                     # the migration and quietly promote every optional seat.
-                    positions=self.normalize_positions(
-                        getattr(template, "positions", None)
+                    # The display normalizer flattens an event template's
+                    # metadata into seats, which is what a generated shift
+                    # wants; the stored-form pass then settles the seat names
+                    # so this write path matches every other one.
+                    positions=normalize_stored_positions(
+                        self.normalize_positions(getattr(template, "positions", None))
                     )
                     or None,
                     min_staffing=getattr(template, "min_staffing", None),
