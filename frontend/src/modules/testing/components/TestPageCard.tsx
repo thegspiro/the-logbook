@@ -251,7 +251,7 @@ const TestPageCardComponent: React.FC<TestPageCardProps> = ({
           <p className="text-theme-text-muted mb-1.5 text-xs">Other testers</p>
           <ul className="flex flex-wrap gap-1.5">
             {(otherMarks ?? []).map((mark) => (
-              <li key={mark.userId}>
+              <li key={mark.markId}>
                 {/* The seat is the point: the same page tested by a chief and
                     by a firefighter are two different observations. */}
                 <span

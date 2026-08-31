@@ -84,7 +84,10 @@ export const flattenRun = (context: RunExportContext): FlatMark[] => {
         rows.push({
           group,
           page,
-          testerId: other.userId,
+          // '' when the author's account is gone, matching the untested row
+          // above; the per-tester matrix already skips falsy ids, which is
+          // right — there is no tester left to give a column to.
+          testerId: other.userId ?? '',
           testerName: other.testerName,
           testedAs: other.testedAs,
           status: other.status,

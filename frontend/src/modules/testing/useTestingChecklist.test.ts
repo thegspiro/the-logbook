@@ -122,6 +122,9 @@ describe('useTestingChecklist', () => {
     expect(result.current.results['/events']?.status).toBe('pass');
     expect(result.current.otherMarks['/events']).toEqual([
       {
+        // The entry's own id, carried so the list has a key that survives the
+        // tester's account being deleted (userId is then null).
+        markId: 'theirs',
         userId: 'u2',
         testerName: 'The Chief',
         testedAs: ['chief'],

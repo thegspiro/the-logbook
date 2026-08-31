@@ -12,6 +12,7 @@ import pytest
 from fastapi import HTTPException
 
 from app.api.v1.endpoints.testing_checklist import (
+    _serialize,
     clear_checklist,
     list_checklist,
     upsert_entry,
@@ -126,6 +127,65 @@ class TestTestingChecklistService:
             org.id, str(firefighter.id), include_all_testers=True
         )
         assert len(everyone) == 2
+
+    async def test_a_mark_survives_its_author_being_deleted(self, db_session):
+        """testing_checklist_entries.user_id is ON DELETE SET NULL and the row
+        is kept on purpose: an archived run is the record of what was found
+        then, so hard-deleting a member must not rewrite it. The response
+        schema declared user_id required, so one such row raised a Pydantic
+        ValidationError and 500'd the shared run for the whole department."""
+        org = await _make_org(db_session)
+        author = await _make_user(db_session, org)
+        viewer = await _make_user(db_session, org, first="Ivy", last="Ross")
+        service = ChecklistService(db_session)
+        entry = await service.upsert_entry(org.id, author, _upsert())
+
+        # What ON DELETE SET NULL leaves behind.
+        entry.user_id = None
+        await db_session.flush()
+
+        names = await service.resolve_tester_names(org.id, [entry])
+        rendered = _serialize(entry, names, str(viewer.id))
+
+        assert rendered.user_id is None
+        assert rendered.user_name is None
+        # Nobody's mark, not everybody's.
+        assert rendered.is_mine is False
+
+    async def test_a_duplicate_insert_recovers_instead_of_500ing(self, db_session):
+        """Two taps in quick succession on an unmarked page both read no row
+        and both INSERT; the unique index refuses the second. The recovery
+        exists so the tester sees their mark recorded rather than a failed
+        save — but it dereferenced run.id AFTER db.rollback() had expired
+        every instance in the transaction, which issues a lazy refresh from a
+        sync context and raises MissingGreenlet. A recoverable duplicate
+        became an unhandled 500.
+        """
+        org = await _make_org(db_session)
+        user = await _make_user(db_session, org)
+        service = ChecklistService(db_session)
+        await service.upsert_entry(org.id, user, _upsert(note="first"))
+
+        # Force the losing-race shape: the pre-insert lookup misses once, so
+        # the code inserts a row that already exists. The IntegrityError and
+        # the rollback that follows are both real, which is what expires the
+        # instances the recovery then has to read.
+        real_find = service._find_entry
+        calls = {"n": 0}
+
+        async def find_once_missing(*args, **kwargs):
+            calls["n"] += 1
+            if calls["n"] == 1:
+                return None
+            return await real_find(*args, **kwargs)
+
+        service._find_entry = find_once_missing
+
+        entry = await service.upsert_entry(org.id, user, _upsert(note="second"))
+
+        assert entry is not None
+        assert entry.note == "second"
+        assert calls["n"] >= 2, "the recovery path did not run"
 
     async def test_never_reads_another_department(self, db_session):
         org_a = await _make_org(db_session, "A FD")

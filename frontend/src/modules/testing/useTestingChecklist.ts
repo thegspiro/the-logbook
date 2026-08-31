@@ -78,7 +78,10 @@ export type ChecklistState = Record<string, TestResult>;
 
 /** Another tester's mark on a page, as shown beside your own. */
 export interface OtherTesterMark {
-  userId: string;
+  /** The entry's own id — stable even when the tester's account is gone. */
+  markId: string;
+  /** Null once the account that made the mark is hard-deleted. */
+  userId: string | null;
   testerName: string;
   testedAs: string[];
   status: TestStatus;
@@ -250,6 +253,10 @@ export const useTestingChecklist = ({
           continue;
         }
         (others[entry.routePath] ??= []).push({
+          // The entry id, not the tester id: a mark whose author was deleted
+          // has userId null, and two of them on one page would collide as
+          // React keys.
+          markId: entry.id,
           userId: entry.userId,
           testerName: entry.userName || 'another tester',
           testedAs: entry.testedAs ?? [],

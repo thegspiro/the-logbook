@@ -29,6 +29,7 @@ from app.services import (
     event_service,
     finance_service,
     scheduling_service,
+    testing_checklist_service,
 )
 
 
@@ -257,4 +258,48 @@ class TestFinanceBudgetCeilingOnUpdate:
         assert "BudgetLimitExceededError" in source, (
             "A reduction below what is already committed must raise the "
             "same ceiling error _mutate_budget raises, not silently persist."
+        )
+
+
+class TestTestingRunImplicitFirstRun:
+    """The department's first mark opens a run implicitly. Two testers tapping
+    at the same moment both saw no run and both opened one, splitting the
+    marks across a pair nobody meant to have — a one-per-thing invariant
+    enforced by read-then-insert, the same shape as a seat count.
+
+    The organization row was already locked here; the re-check inside that
+    lock was a plain SELECT, which under REPEATABLE READ still answered from
+    the snapshot taken before the lock. That is the half that is easy to miss:
+    the lock was present and the answer was still stale.
+    """
+
+    def test_start_run_locks_the_organization_row(self):
+        source = _source_of(testing_checklist_service.TestingChecklistService.start_run)
+        assert "with_for_update()" in source, (
+            "start_run must serialize on the organization row, or two "
+            "administrators opening a run together create two."
+        )
+
+    def test_the_reuse_existing_recheck_is_a_locking_read(self):
+        source = _source_of(testing_checklist_service.TestingChecklistService.start_run)
+        assert "for_update=True" in source, (
+            "The reuse_existing re-check must be a locking read. A plain "
+            "current_run() inside the lock answers from the pre-lock "
+            "snapshot, so the loser of the race still sees no run and opens "
+            "a second one (CLAUDE.md pitfall #27)."
+        )
+
+    def test_current_run_can_lock(self):
+        source = _source_of(
+            testing_checklist_service.TestingChecklistService.current_run
+        )
+        assert "with_for_update()" in source, (
+            "current_run(for_update=True) must take a row lock; a plain read "
+            "answers from the transaction's snapshot."
+        )
+        assert "populate_existing" in source, (
+            "The locking read must also refresh: the run may already be in "
+            "the session's identity map from the plain read that preceded the "
+            "lock, and without populate_existing the locked row is discarded "
+            "in favour of the stale instance."
         )
