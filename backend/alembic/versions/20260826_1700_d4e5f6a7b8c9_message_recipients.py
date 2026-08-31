@@ -57,6 +57,17 @@ def upgrade():
     )
 
     bind = op.get_bind()
+    # `positions`/`user_positions` are reflected unconditionally here on
+    # purpose: they are not create_all-only (CLAUDE.md Pitfall #26 does not
+    # apply). `20260805_0008_rename_roles_to_positions.py` renames
+    # `roles`/`user_roles` — created outright by the initial schema
+    # migration — to these names, and is a required upgrade-path ancestor of
+    # this revision, so a fresh database always has both tables by the time
+    # this runs. Verified empirically: `alembic upgrade head` against a
+    # freshly created, empty database completes with no NoSuchTableError.
+    # `backend/tests/test_migration_create_all_tables.py`'s
+    # `_tables_created_by_migrations` recognizes `op.rename_table`
+    # destinations for exactly this reason.
     meta = sa.MetaData()
     messages = sa.Table("department_messages", meta, autoload_with=bind)
     users = sa.Table("users", meta, autoload_with=bind)

@@ -849,3 +849,78 @@ for the shelf side of it.
 ## August 12–14, 2026 update
 
 Room QR rotation/download/printing, sensitive facility reads, and rank-backed crew seats from August 12–14 are taught in [the release workflow lesson](./19-august-2026-release-changes.md#room-and-apparatus-qr-codes); its screenshot markers remain open.
+
+---
+
+## Facilities: Files, Access and Settings _(2026-08-27 → 08-28)_
+
+### Your facility files were readable by the whole department
+
+**Tell your officers about this one.**
+
+A facility's **Files** section stores each upload in the shared **Documents**
+module and keeps a reference on the facility record. The facility _record_ was
+properly restricted — to members holding "view sensitive facility data",
+facility edit, or facility management. The _file_ it pointed at was not.
+
+Uploads landed **outside any folder**, and a file in no folder is treated as
+belonging to the whole organization. So anyone who could open the Documents
+module could list and download a facility's **insurance policies, lease
+documents, capital project files and inspection paperwork**.
+
+**Fixed:**
+
+- Facility file folders now carry the same three facility grants.
+- A newly uploaded file is filed into its facility's own folder as soon as it
+  is attached.
+- Existing facility **folders** have their permissions corrected on upgrade.
+- A **documents administrator no longer sees facility files** by virtue of that
+  role alone — for files that are in a folder. Access now requires a facilities
+  grant, which is what the facility screens have always required.
+
+> **⚠️ **Existing files are not re-filed, and that is the part to act on.** The
+> migration sets the folders' permissions; it does **not** move documents that
+> were already stored outside a folder into them, and the app files a document
+> only as it is newly attached. **Every facility file uploaded before this
+> upgrade is still folderless, still treated as organization-wide, and still
+> listable and downloadable by anyone who can open Documents.** Re-attach or
+> re-file them to close it — the upgrade alone does not.
+
+> **[SCREENSHOT — REPLACE the facility detail Files tab capture.** The folder
+> structure is visible now, and the audience is different.**]**
+
+### Facilities is a leadership and facility-manager workspace now
+
+`facilities.view` has been **revoked from the regular member position, and then
+from the shared operational officer positions.** If your line officers used to
+open the Facilities workspace, they will not be able to after this upgrade.
+
+Re-grant it on a position that is meant to carry it if that was your intent —
+nothing grants it back automatically.
+
+> **[SCREENSHOT — REPLACE any navigation capture that shows Facilities in a
+> regular member's menu.** It is not there any more.**]**
+
+### Two officers, one new facility
+
+The first time anyone opened a facility's Files tab, the app built that
+facility's folder structure automatically. Two people doing that within the
+same moment — which is exactly what happens the day a new station is added, and
+two officers go looking — could each end up creating a **duplicate set** of
+folders instead of sharing one. That is serialized now.
+
+### A settings screen for facility managers
+
+**`/facilities/settings`** is new and needs `facilities.manage`. It holds the
+module's lookup configuration — the values you would previously have been
+editing through one-off dialogs scattered across the facility screens.
+
+> **[SCREENSHOT NEEDED — `/facilities/settings`.** _Demo data:_ at least two
+> lookup categories populated, so the screen is not empty. Capture at laptop
+> width; there is a separate phone layout worth a second shot.**]**
+
+### File edits could be silently swallowed
+
+Editing a facility file's details could be dropped without an error, and the
+delete button was missing for some managers who held the grant for it. Both
+fixed.

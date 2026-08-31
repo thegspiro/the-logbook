@@ -588,11 +588,144 @@ any of the configuration below appears. From there you can:
 
 ---
 
+## Member Class and Member Status _(changed 2026-08-26)_
+
+**A member record now states two things where it stated one.**
+
+Until August 26 a single "membership type" field carried two independent facts,
+and you could only ever record one of them:
+
+| Field             | Answers                                  | Values                                                              |
+| ----------------- | ---------------------------------------- | ------------------------------------------------------------------- |
+| **Member class**  | What kind of member is this?             | operational, administrative, social                                 |
+| **Member status** | Where are they on the membership ladder? | prospective, probationary, regular, life, retired, honorary, junior |
+
+Because they shared a field, there was **no way to record a probationary
+treasurer**, and **nothing said whether a life member still rides**.
+
+> **Integrators: the status enum has seven values, not the five common ladder
+> stages.** `honorary` and `junior` are valid statuses too — the backfill
+> records an honorary member as the **social class plus honorary status** — so
+> a client generated from a five-value vocabulary will reject or erase
+> legitimate records.
+
+### What this changed for elections
+
+Elections is where the fused field showed most: `ElectionService` could only
+answer "is this member operational" by testing for one specific value.
+
+**What actually changed, and one of the two narrows eligibility.** The built-in
+voter categories **keep their legacy meaning**: `operational` still requires
+operational class **and** regular standing. (An earlier version of this change
+read the class alone; it was reverted the same day because it admitted
+probationary and retired members to a restricted ballot.) The two real changes
+are that **a life member now receives a `regular` ballot** — with one fused
+field, "life" and "regular" were competing values and they could not — and that
+**every status category now also requires the operational class**, so an
+administrative member with regular standing no longer receives ballots
+restricted to active or life members.
+
+**If your bylaws intend administrative members to vote on items restricted to
+active or life members, use an override or an explicit voter list** — that
+route is now closed to them by category alone.
+
+### Honorary members are now the "social" class
+
+That is not a new judgement about your honorary members — it is what the system
+already did with them. Honorary has always been grouped with administrative and
+retired when deciding who gets shift access, so mapping them anywhere else
+would have **widened** shift access on upgrade.
+
+### What integrators need to know
+
+The old `membership_type` field is still present, still correct, and still
+returned by the API. It is now **derived** from the class/status pair rather
+than being the authority. If an integration **writes** it, move to the pair —
+the derivation is deliberately lossy in one direction, because the old
+vocabulary cannot express an administrative probationer.
+
+> **No screenshot change here.** The class/status split has **no UI surface**:
+> the member screens still show a single Membership Type selector and the pair
+> is derived from its value. Existing captures of the profile, the create/edit
+> form and the Members administration list are current. The only place a user
+> can see this change is a **ballot recipient list**.
+
+### Administrative members no longer hold an operational rank
+
+An operational rank is a chain-of-command position and it **carries permissions
+with it**. Nothing previously stopped a member from being Administrative _and_
+Fire Chief at once, so an administrative member could hold operational grants
+that role was never meant to have.
+
+The upgrade **clears the operational rank of every administrative member**, and
+that does not reverse — nothing recorded which ranks were cleared, so restoring
+them would also restore ranks an officer cleared deliberately.
+
+**You cannot simply set the rank again, and that is deliberate.** The API
+refuses the administrative-class/rank pair outright (400), the edit UI disables
+the rank control for an administrative member, and moving a ranked member into
+the administrative class clears the rank rather than rejecting the save. A rank
+carries chain-of-command permissions with it, which is exactly what an
+administrative member is outside of.
+
+If somebody genuinely holds an operational rank, **the fix is their class, not
+their rank**: move them out of the administrative class first, then set the
+rank.
+
+---
+
+## Rank and Qualification Are Different Things _(2026-08-26)_
+
+A **rank** says where somebody sits in the chain of command. A
+**qualification** says what they are trained to do. They used to be the same
+field, so a **Captain who is also a Paramedic** — an entirely ordinary member
+of a volunteer department — had nowhere to be recorded as both.
+
+The standards already draw the line: Firefighter I/II is NFPA 1001, apparatus
+operator is NFPA 1002, the officer ladder is NFPA 1021, and EMT and Paramedic
+are EMS credentials on a separate track again.
+
+**The other half of the reason: qualifications expire and ranks do not.** Shift
+eligibility reads a qualification's expiry **as of the shift date**, not as of
+today — the same rule EVOC certifications already use for drivers. A card that
+is current when the roster is built and expired when the truck rolls qualifies
+nobody to be on that truck.
+
+`emt` is now **both a rank code and a qualification code, meaning two different
+things on purpose.** If your agency uses EMT as a line rank, carry on. If you
+want to record who holds a current EMT card, that is the qualification. Neither
+implies the other, and you may use either or both.
+
+**Nothing was inferred from your existing records.** The qualification list
+starts empty. A department that recorded somebody as an EMT _rank_ has said
+where they sit, not which card they hold or when it expires — and inventing an
+expiry date would be worse than having none.
+
+> **Qualifications are recorded through courses, not entered directly.** Set
+> **Certifies** on a course in the Course Library, and recording a member's
+> completion of that course creates or renews the qualification. There is **no
+> panel for entering, editing or expiring one on its own** — so a card a member
+> has held for years needs a training record to match, an incorrect expiry is
+> corrected by **editing the training record that produced it** — never by
+> filing a second completion, which would invent training history that never
+> happened — and setting **Certifies** on a
+> course does **not** backfill records already filed against it.
+>
+> Because shift eligibility reads the expiry **as of the shift date**, a stale
+> or missing qualification decides who may be rostered — it is not cosmetic.
+
+---
+
 ## Member Status Management
 
 **Required Permission:** `members.manage`
 
 Officers change a member's status from the member's profile page.
+
+> **Creating a new member was completely broken** between the August 26 change
+> and its fix on August 27 — every attempt failed with a server error, because
+> the password, initial roles, welcome-email option, mailing address and
+> emergency-contact fields had been dropped from the create form. All are back.
 
 ### Changing a Member's Status
 

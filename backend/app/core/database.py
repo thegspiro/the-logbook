@@ -182,9 +182,18 @@ class DatabaseManager:
     async def disconnect(self):
         """Close database connection"""
         if self.engine:
-            await self.engine.dispose()
-            self.engine = None
-            self.session_factory = None
+            try:
+                await self.engine.dispose()
+            except Exception:
+                # Reset state even when dispose() itself fails (Codex, PR
+                # #2106) — otherwise self.engine/session_factory stay set to
+                # the now-unusable engine and is_connected keeps reporting
+                # True for a connection that is actually gone.
+                logger.exception("Error disposing database engine")
+                raise
+            finally:
+                self.engine = None
+                self.session_factory = None
             logger.info("Database connection closed")
 
     async def get_session(self) -> AsyncGenerator[AsyncSession]:

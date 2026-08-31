@@ -45,6 +45,133 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   The check also follows the high-contrast theme properly, which it previously
   ignored.
 
+### Core infrastructure re-verification fixes (2026-08-31)
+
+**Fixed**
+
+- Several unauthenticated public endpoints (calendar, legal, kiosk display,
+  finance-approval token lookups, and three inbound webhook receivers)
+  effectively lost their rate limiting during a Redis outage — the
+  in-memory fallback reset an attacker's full request allowance on almost
+  every over-limit request instead of actually limiting them.
+- A public form/event-request/guest-check-in daily submission cap could get
+  permanently stuck denying legitimate traffic (instead of resetting the
+  next day) if a transient Redis error hit at exactly the wrong moment.
+- A failed database-engine shutdown could leave the app reporting itself as
+  still connected to a database it had actually lost.
+
+### Locations & kiosk guest check-in hardening (2026-08-31)
+
+**Fixed**
+
+- A guest check-in racing another sign-in for the same person and event
+  could, in rare cases, fail entirely instead of just skipping the
+  duplicate pipeline link — the guest's attendance now always records.
+- A deactivated organization's kiosk display codes and guest sign-in links
+  kept working indefinitely; they now stop resolving along with the rest
+  of the organization's public surface.
+- Moving a location to a different building without renaming it could
+  create an ambiguous duplicate with an existing location of the same name
+  in the target building — the uniqueness check now covers this case.
+- The guest-check-in daily sign-in limit could be exhausted by requests
+  sent before an event's check-in window opened (or after attendance was
+  finalized), denying legitimate guests later that day — those requests no
+  longer count against the limit.
+- Explicitly clearing a location's name or active status to null returned
+  a server error instead of a clear validation message; it's now rejected
+  up front.
+
+### Scheduled-task reliability fixes (2026-08-31)
+
+**Fixed**
+
+- A department message scheduled to publish could, in a batch with other
+  due messages, silently vanish forever if a different message in the same
+  batch failed to process first — the failed message no longer costs the
+  rest of the batch its delivery.
+- Reminders for overdue meeting-minutes action items were silently failing
+  every single time, with no error visible anywhere — they now send
+  correctly.
+- A shift with no currently-active assigned members was permanently marked
+  as "reminded" even though nobody was actually notified, so a member added
+  or reactivated later in the same window never received the pre-shift
+  reminder — fixed to match the equivalent end-of-shift-checklist behavior.
+- Extending recurring event series to their rolling 12-month horizon could,
+  on one series' failure, silently discard other series' already-generated
+  occurrences from the same run.
+- An external training-provider sync failure could cascade into every
+  provider synced after it in the same run being misreported as failed too.
+
+### Onboarding hardening and setup docs cleanup (2026-08-31)
+
+**Fixed**
+
+- The unauthenticated setup-status check (`GET /onboarding/status`), used by
+  the login page to detect a not-yet-configured instance, now has the same
+  per-route rate limiting as every other onboarding bootstrap endpoint —
+  it was the one anonymous route without one.
+- `frontend/.env.example`, `frontend/setup.sh`, and the setup documentation
+  no longer instruct operators to set a `VITE_SESSION_KEY` "for production" —
+  that variable has not been read by any code since onboarding data stopped
+  being encrypted client-side; the real protection is the backend's own
+  `ENCRYPTION_KEY`. Following the old instruction had no security effect
+  either way, but told operators otherwise.
+
+### Integrations fix (2026-08-31)
+
+**Fixed**
+
+- Testing an integration's connection, or checking Salesforce sync
+  readiness, could show a raw internal/connection error message instead of
+  a clean explanation if the underlying network call failed unexpectedly.
+  Errors now show a generic message while the details are still logged for
+  troubleshooting; the specific, intentional messages (e.g. "Salesforce
+  rejected these credentials") are unaffected.
+
+### Forms fix (2026-08-31)
+
+**Fixed**
+
+- If a form's cross-module integration (assigning equipment, registering
+  for an event, or creating an event request from a form submission) hit
+  an unexpected internal error, the submission's integration results could
+  show a raw internal error message instead of a clean explanation. Errors
+  now show a generic message while the details are still logged for
+  troubleshooting.
+
+### Meetings and minutes fixes (2026-08-31)
+
+**Fixed**
+
+- Clicking "Unlink" on a meeting minutes record's linked event showed an
+  "Event unlinked" success message, but the link was never actually
+  removed — it would reappear on the next page load. Unlinking now takes
+  effect immediately and persists.
+- Creating, editing, deleting, or approving a meeting record (or adding,
+  removing, or editing its attendees and action items) left no record of
+  who made the change or when. Meeting minutes already recorded this; the
+  meeting scheduling records now do too.
+- A rare failure while creating a meeting record from a calendar event
+  could surface an internal error message instead of a clean explanation.
+
+### Editing a medical supply category or item left no audit trail (2026-08-30)
+
+**Fixed**
+
+- Creating a medical supply category or item was recorded in the audit
+  trail; editing one afterward was not. Both edits are now recorded,
+  matching the general inventory page's own category and item edits.
+
+### Medical supplies summary fix (2026-08-30)
+
+**Fixed**
+
+- The medical supplies summary's "Low Stock" count only checked the first
+  500 active items, so a department with more than 500 active medical items
+  could have a low-stock item that never showed up in the headline count
+  even though it was correctly listed in the table below. The count now
+  covers the department's full medical supply catalog.
+
 ### Grants & fundraising report and permission fixes (2026-08-30)
 
 **Fixed**
@@ -155,6 +282,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Phones keep the compact rows, the full-height item editor and the search
   inventory add sheet; the new side-by-side row controls are a laptop and
   tablet layout.
+- An item row keeps its name, answer type and grading numbers on one line at
+  every laptop width, including a 1280px screen with the side navigation
+  open. The row previously wrapped its controls onto a second line as soon
+  as the preview was docked beside it. Each number stays labelled once it
+  holds a value — "par 4" and "min 2" on a count, "30 days" on an expiry
+  warning — so a saved checklist never shows two adjacent numbers with no
+  way to tell which threshold is which.
+- Tablets and small laptops (below 1440px) now have the same "Before
+  publishing" list as wider screens, in a bar along the bottom of the
+  checklist that opens the list as a sheet. It was previously only reachable
+  by widening the window.
+- The vehicle-layout picker and the "How would you like to start?" card on an
+  empty template now match the rest of the checklist, and the picker replaces
+  that card rather than appearing above it. Each vehicle layout says how many
+  locations and items it brings in before you choose it.
 - On a brand-new template, adding the first location left it collapsed with
   nowhere to type its items. It now opens ready for them.
 - The checklist preview no longer shows an answer left over from an item that
@@ -1147,13 +1289,41 @@ the "kept in lockstep with the frontend" comment that nothing had been enforcing
   no way to record a _probationary treasurer_, and nothing said whether a _life
   member_ still rides.
 
-  The clearest symptom was in elections. `ElectionService` could only answer
-  "is this member operational" as `membership_type == "active"`, because that
-  was the one value that meant it — so a bylaws question put to the operational
-  members never reached anyone who had earned life membership, or anyone still
-  on probation. It now reads the member's **class**, and every operational
-  standing counts. "regular", "life" and "probationary" stay **status** checks,
-  because they name a status.
+  Elections is where the fused field showed most. `ElectionService` could only
+  answer "is this member operational" as `membership_type == "active"`.
+
+  **Correction (2026-08-31).** This entry originally said the `operational`
+  category now "reads the member's class, and every operational standing
+  counts". That was true of `7204f9134` and **false ninety minutes later**:
+  `f65e4e7ae` ("Fix election voter category authorization", the same day)
+  reverted the widening because it was a disclosure — reading class alone
+  admitted probationary and retired members to a restricted ballot. The entry
+  was never updated, and the claim was propagated into the training guides,
+  the wiki and two video scripts before being caught on PR #2096.
+
+  **What the shipped code does**, per
+  `ElectionService._user_has_role_type`:
+
+  | Category         | Requires                                        |
+  | ---------------- | ----------------------------------------------- |
+  | `operational`    | operational class **and** regular status        |
+  | `regular`        | operational class **and** (regular **or** life) |
+  | `life`           | operational class **and** life status           |
+  | `probationary`   | operational class **and** probationary status   |
+  | `administrative` | administrative class                            |
+  | `social`         | social class                                    |
+
+  So the built-in categories **keep their legacy meaning**, and the real
+  changes are narrower than first written, one of them a tightening:
+
+  - **A life member now receives a `regular` ballot.** With one fused field
+    `life` and `regular` were mutually exclusive values, so they could not.
+  - **Every status category now also requires the operational class**, so an
+    administrative member with regular standing no longer receives ballots
+    restricted to active/life members. That is a **tightening**, and it is the
+    reason the widening was reverted.
+  - `administrative` and `social` are answered by class rather than by a value
+    that had to mean both things at once.
 
   `membership_type` is kept and kept correct: ~160 call sites read it, and it
   is now derived from the pair by `app/utils/membership.py`, reconciled on
@@ -1759,6 +1929,43 @@ check the consent itself.
   rotation (35 iterations, ordered by risk) with a per-iteration checklist,
   findings template, and a `/security-review` command that opens one pull
   request per feature and tends it to green before starting the next.
+
+### Governance: the department's organizational chart (2026-08-24)
+
+**Added**
+
+- **`/governance/org-chart`** — the department's chain of command, as an
+  outline or as a diagram. New tables `org_chart_nodes` and
+  `org_chart_node_holders`; `GET /org-chart`, `POST /org-chart/nodes`,
+  `PUT /org-chart/nodes/{id}`, `POST /org-chart/nodes/{id}/move`,
+  `DELETE /org-chart/nodes/{id}`.
+
+- **Reading is gated on authentication alone, deliberately.** The chart exists
+  so any member can work out who is in charge of an area without asking around;
+  a permission here would leave the general membership — the audience — outside
+  the one screen built for them. Editing is `orgchart.manage` OR
+  `settings.manage`, enforced server-side, and the page renders read-only
+  without either rather than offering controls that fail.
+
+- **A seat holds several people.** `org_chart_node_holders` is a separate
+  table for exactly this: a department with two deputy chiefs puts both in one
+  box instead of inventing two boxes that mean the same thing.
+
+- **A holder need not be a member.** `user_id` is nullable and `display_name`
+  carries a name with no account behind it, for the town attorney, a
+  mutual-aid liaison or a county fire marshal. Nothing else about that person
+  is stored and they gain no access.
+
+- **`position_id` assists a seat rather than defining it.** Linking a seat to a
+  position fills its holders from that position's assignees; **unlinking leaves
+  them in place.** An earlier draft made the position the seat's definition,
+  which meant a seat could not hold anyone the position did not — and a
+  department whose org chart differs from its permission structure, which is
+  most of them, could not draw its real chain of command.
+
+- **The chart starts empty and nothing is inferred.** A permission structure is
+  not an org chart. A guessed diagram is one nobody recognises, and correcting
+  it costs more than drawing it.
 
 ### Attendance finalization: the lock is atomic, and reopening reconciles what it undoes (2026-08-24)
 

@@ -102,6 +102,123 @@ class TestPublicDisplayWindow:
         assert exc.value.status_code == 404
 
 
+class TestGuestCheckInDailyCapOrdering:
+    """The daily cap must be reserved only by a sign-in that could succeed.
+
+    daily_cap_exceeded is an atomic Redis INCR — merely asking spends an
+    allowance slot — so a rejection running after it lets refused traffic
+    burn the event's 300/day ceiling before the window even opens (or after
+    attendance is finalized), denying legitimate guests later. Every
+    rejection gate must run first.
+    """
+
+    def _finalizable_event(self, **overrides):
+        now = datetime.now(tz.utc)
+        defaults = dict(
+            id=uuid4(),
+            organization_id="org-1",
+            title="Open House",
+            event_type=None,
+            # Starts in 2h; FLEXIBLE's 30-min-before default means the window
+            # is not open yet.
+            start_datetime=now + timedelta(hours=2),
+            end_datetime=now + timedelta(hours=4),
+            actual_start_time=None,
+            actual_end_time=None,
+            check_in_window_type=CheckInWindowType.FLEXIBLE,
+            check_in_minutes_before=30,
+            check_in_minutes_after=None,
+            allow_guest_check_in=True,
+            attendance_finalized_at=None,
+            custom_fields={},
+        )
+        defaults.update(overrides)
+        return SimpleNamespace(**defaults)
+
+    def _payload(self):
+        from app.schemas.event import GuestCheckInRequest
+
+        return GuestCheckInRequest(first_name="Dana", last_name="Reyes")
+
+    def _patch_resolve(self, monkeypatch, event):
+        location = SimpleNamespace(id=LOC_ID, organization_id="org-1")
+        org = SimpleNamespace(name="Test Dept", timezone="UTC")
+        resolve = AsyncMock(return_value=(location, event, org))
+        monkeypatch.setattr(display, "_resolve_guest_event", resolve)
+        return location, org
+
+    async def test_window_not_open_does_not_spend_the_cap(self, monkeypatch):
+        from fastapi import HTTPException
+
+        event = self._finalizable_event()  # window opens in 90 min, not yet
+        self._patch_resolve(monkeypatch, event)
+        cap_mock = AsyncMock(return_value=False)
+        monkeypatch.setattr(display, "daily_cap_exceeded", cap_mock)
+
+        with pytest.raises(HTTPException) as exc:
+            await display.guest_check_in(
+                display_code="abc123",
+                event_id=event.id,
+                payload=self._payload(),
+                request=MagicMock(),
+                db=_db(),
+            )
+
+        assert exc.value.status_code == 400
+        cap_mock.assert_not_awaited()
+
+    async def test_finalized_attendance_does_not_spend_the_cap(self, monkeypatch):
+        from fastapi import HTTPException
+
+        # Window is open (starts now), but attendance was already finalized.
+        now = datetime.now(tz.utc)
+        event = self._finalizable_event(
+            start_datetime=now - timedelta(minutes=5),
+            end_datetime=now + timedelta(hours=1),
+            attendance_finalized_at=now - timedelta(minutes=1),
+        )
+        self._patch_resolve(monkeypatch, event)
+        cap_mock = AsyncMock(return_value=False)
+        monkeypatch.setattr(display, "daily_cap_exceeded", cap_mock)
+
+        with pytest.raises(HTTPException) as exc:
+            await display.guest_check_in(
+                display_code="abc123",
+                event_id=event.id,
+                payload=self._payload(),
+                request=MagicMock(),
+                db=_db(),
+            )
+
+        assert exc.value.status_code == 400
+        cap_mock.assert_not_awaited()
+
+    async def test_open_window_still_spends_the_cap(self, monkeypatch):
+        """A genuinely acceptable sign-in still reserves the allowance."""
+        now = datetime.now(tz.utc)
+        event = self._finalizable_event(
+            start_datetime=now - timedelta(minutes=5),
+            end_datetime=now + timedelta(hours=1),
+        )
+        self._patch_resolve(monkeypatch, event)
+        cap_mock = AsyncMock(return_value=True)  # cap already spent
+        monkeypatch.setattr(display, "daily_cap_exceeded", cap_mock)
+
+        from fastapi import HTTPException
+
+        with pytest.raises(HTTPException) as exc:
+            await display.guest_check_in(
+                display_code="abc123",
+                event_id=event.id,
+                payload=self._payload(),
+                request=MagicMock(),
+                db=_db(),
+            )
+
+        assert exc.value.status_code == 429
+        cap_mock.assert_awaited_once()
+
+
 class TestGuestCheckInFlag:
     """The kiosk only draws a guest QR code for events that opted in.
 

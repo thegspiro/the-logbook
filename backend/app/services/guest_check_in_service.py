@@ -23,6 +23,7 @@ from typing import Optional, Tuple
 
 from loguru import logger
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.utils import generate_uuid
@@ -255,15 +256,57 @@ class GuestCheckInService:
         if existing.scalars().first() is not None:
             return
 
-        self.db.add(
-            ProspectEventLink(
-                id=generate_uuid(),
-                prospect_id=str(prospect_id),
-                event_id=str(event.id),
-                notes=note or f"Checked in at {event.title} via room QR code",
+        # Scope a duplicate-key race (two concurrent sign-ins linking the same
+        # prospect to the same event) to a SAVEPOINT, matching
+        # MembershipPipelineService.create_prospect's own pattern. Without
+        # this, a lost race's flush() failure leaves the whole session
+        # needing a rollback it never gets — _link_prospect's caller swallows
+        # the exception and returns, but the guest's already-flushed
+        # EventExternalAttendee then fails at check_in_guest's own
+        # db.commit(), turning "the pipeline link is best-effort" into "the
+        # guest's attendance is lost too."
+        try:
+            async with self.db.begin_nested():
+                self.db.add(
+                    ProspectEventLink(
+                        id=generate_uuid(),
+                        prospect_id=str(prospect_id),
+                        event_id=str(event.id),
+                        notes=note or f"Checked in at {event.title} via room QR code",
+                    )
+                )
+                await self.db.flush()
+        except IntegrityError:
+            # Not every IntegrityError here is the duplicate-link race this
+            # was written for — the prospect could instead have been deleted
+            # concurrently (a real FK violation, not a harmless re-insert).
+            # Swallowing that one too would let the caller keep treating a
+            # since-deleted prospect as linked: check_in_guest would still
+            # set attendee.prospect_id to it, and its own commit would then
+            # fail the same FK check, losing the attendance this SAVEPOINT
+            # exists to protect. Re-check the link actually exists before
+            # treating the failure as harmless; otherwise re-raise so
+            # _link_prospect's handler logs it and returns no prospect.
+            #
+            # Must be a locking read (FOR UPDATE): under this app's default
+            # REPEATABLE READ, a plain SELECT answers from the snapshot
+            # taken at this transaction's first statement — long before the
+            # concurrent transaction committed its insert — so it would see
+            # no row and wrongly re-raise even in the ordinary, successful
+            # race this except exists to swallow (CLAUDE.md Pitfall #27).
+            # The INSERT's own unique-index check already proved a row
+            # exists in the *current* committed state; the recheck has to
+            # look there too, not at a stale snapshot.
+            recheck = await self.db.execute(
+                select(ProspectEventLink)
+                .where(
+                    ProspectEventLink.prospect_id == str(prospect_id),
+                    ProspectEventLink.event_id == str(event.id),
+                )
+                .with_for_update()
             )
-        )
-        await self.db.flush()
+            if recheck.scalars().first() is None:
+                raise
 
     @staticmethod
     def _meeting_config_matches_event(config: dict, event: Event) -> bool:

@@ -8,7 +8,7 @@ from datetime import datetime
 from typing import Optional
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.schemas.base import UTCResponseBase
 
@@ -70,6 +70,19 @@ class LocationUpdate(BaseModel):
     capacity: Optional[int] = Field(None, ge=1)
     facility_id: Optional[UUID] = None
     is_active: Optional[bool] = None
+
+    # `name` and `is_active` back NOT NULL columns. Optional here only means
+    # "omittable" (exclude_unset lets the service leave them alone) — an
+    # explicit `null` for either must be rejected at the schema boundary,
+    # not left to reach update_location's setattr and 500 on the database's
+    # own NOT NULL constraint.
+    @model_validator(mode="after")
+    def _reject_null_for_non_nullable_fields(self) -> "LocationUpdate":
+        if "name" in self.model_fields_set and self.name is None:
+            raise ValueError("name cannot be cleared to null")
+        if "is_active" in self.model_fields_set and self.is_active is None:
+            raise ValueError("is_active cannot be cleared to null")
+        return self
 
 
 class LocationResponse(LocationBase):

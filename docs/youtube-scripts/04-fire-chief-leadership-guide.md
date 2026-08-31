@@ -861,3 +861,105 @@ and tables.]**
 > the compatibility exception."
 
 **EDITOR:** Add 2:30 and fix the pre-existing 17:30–18:00 / 17:45–18:00 overlap while re-timing every later chapter.
+
+---
+
+## NEW CHAPTER — "WHO RUNS WHAT": THE ORGANIZATIONAL CHART (ADDED 2026-08-31)
+
+**Placement:** after the governance chapter, before elections. ~2:30.
+
+**[SCREEN: Governance → Organizational Chart, outline view, a four-level chart]**
+
+> "This is new, and it is the screen your members will actually open. Governance,
+> Organizational Chart — your department's chain of command, drawn."
+
+> "Read it as an outline, or flip to the diagram. Same chart, two ways of
+> looking at it, and which one people prefer turns out to be about fifty-fifty."
+
+**[SCREEN: Toggle to the diagram view]**
+
+**[CALLOUT: "Every member can read it. That is the point."]**
+
+> "Reading it needs no permission beyond being signed in. That is deliberate,
+> and I want to be clear about why: this screen exists so a member who joined
+> six weeks ago can work out who is in charge of an area without asking three
+> people first. Put a permission on it and you have locked out exactly the
+> audience it was built for."
+
+> "Editing is a different matter — that's `orgchart.manage`, or
+> `settings.manage`. Without either, the page just opens read-only. No edit
+> buttons to tease anyone with."
+
+**[SCREEN: A seat holding two deputy chiefs]**
+
+> "A box on the chart is a **seat**, and a seat holds however many people fill
+> it. If you run two deputy chiefs, they share one box — you do not have to
+> invent two boxes that mean the same thing."
+
+**[SCREEN: A seat whose holder is a name with no member account]**
+
+> "And a holder does not have to be a member here at all. Your town attorney,
+> a mutual-aid liaison, the county fire marshal — type the name and they appear
+> on the chart. Nothing else about them is stored, and they get no access to
+> anything."
+
+**[SCREEN: Linking a seat to the Quartermaster position; the holders populate]**
+
+> "If a seat matches a position you already maintain, link it, and the chart
+> fills the holders in from that position's assignees. You are not retyping a
+> roster you already keep."
+
+**[CALLOUT: "Unlink, and the linked names go with it."]**
+
+> "But know what unlinking does before you press it. **The people you typed in
+> stay. The people the link supplied go.** They were never stored on the seat —
+> they were being resolved through the link each time the chart drew. So a seat
+> whose holders all came from its position goes **vacant** when you unlink it.
+> Type the names in first if you want to keep them."
+
+> "The link is an assist, not the box's identity — most departments' org charts
+> and their permission structures do not match, so the chart has to be able to
+> say what is actually true rather than what your permissions imply."
+
+**[SCREEN: An empty chart, first seat being added]**
+
+> "It starts empty. Nothing is guessed from your positions or your member list,
+> because a permission structure is not an org chart, and a guessed diagram is
+> one nobody recognises — you'd spend longer correcting it than drawing it.
+> Start at the top and work down. Twenty minutes, once."
+
+**PRODUCTION:** shoot the outline and the diagram as **two separate captures**
+— they are not interchangeable and a single shot cannot stand in for both. The
+demo chart needs a shared seat and a non-member holder visible, because those
+are the two things a chief will ask about within the first minute.
+
+---
+
+## ADD TO THE ELECTIONS CHAPTER (ADDED 2026-08-31)
+
+> "One change to your electorate, and it goes in both directions. A member's
+> standing is now two facts — their **class**, and their **status** on the
+> ladder."
+
+> "Ballots restricted to your **operational members** reach exactly who they
+> reached before; that category still means operational class in regular
+> standing. But **a life member now qualifies for a `regular` ballot** — under
+> the old single field, 'life' and 'regular' were competing values, so your
+> life members were dropping out of those restrictions without anyone
+> noticing."
+
+> "And going the other way: **an administrative member with regular standing no
+> longer qualifies for a `regular` ballot.** If your bylaws intend them to vote
+> on those items, that now takes an override or an explicit voter list.
+> **Check your next ballot's recipient list against your roster** — it will
+> have moved in both directions."
+
+---
+
+## ADD TO THE ADMINISTRATION CHAPTER (ADDED 2026-08-31)
+
+> "Two things to expect after the August 31 upgrade. Your line officers lose
+> the Facilities workspace unless you re-grant it — `facilities.view` came off
+> the operational officer positions. And the Testing Checklist page is switched
+> off; it is a module now, and it comes back at Settings, Modules. Nothing
+> anybody recorded in it is lost."

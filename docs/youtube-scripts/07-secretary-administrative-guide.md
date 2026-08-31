@@ -684,3 +684,35 @@ choice. Add 1:30.
 > use `members.view`; the scanner requires `users.view` or `members.manage`."
 
 **EDITOR:** Add 2:30; re-time Chapters 3–7, Wrap-Up, and clip rows.
+
+---
+
+## ADD TO "MEETING MINUTES" (ADDED 2026-08-31)
+
+**[SCREEN: A meeting record with a linked event; press Unlink; reload the page]**
+
+> "Two fixes here worth knowing about, and one of them you may have been
+> working around without realising."
+
+**[CALLOUT: "Unlink now actually unlinks."]**
+
+> "Pressing **Unlink** on a meeting record's linked event told you 'Event
+> unlinked' — and then the link came straight back on the next page load. It
+> never removed anything. If you've been re-doing that and assuming you'd
+> misclicked, you hadn't. It takes effect now, and it sticks."
+
+**[SCREEN: A meeting record's audit history]**
+
+> "And meeting **records** now leave an audit trail. Minutes always did —
+> who edited what, when. But creating, editing, deleting or approving the
+> meeting record itself, and adding or removing its attendees and action items,
+> recorded nothing at all. All of it is recorded now, which matters the first
+> time somebody asks who moved a meeting."
+
+---
+
+## ADD TO "SUBMITTING MINUTES" (ADDED 2026-08-31)
+
+> "One separation-of-duties fix: **a secretary could submit and approve their
+> own meeting minutes.** That is closed. If you are used to doing both, you now
+> need the second signature your bylaws probably already required."

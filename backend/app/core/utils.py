@@ -88,6 +88,29 @@ def sanitize_error_message(
     return msg
 
 
+def sanitize_connector_error(
+    exc: Exception,
+    trusted_types: tuple[type, ...] = (),
+    fallback: str = _GENERIC_ERROR,
+) -> str:
+    """Return a user-safe message for an integration-connector failure.
+
+    A connector's own `test_connection()` raises bare `Exception` (or a
+    caller-named `trusted_types` subclass, e.g. PayPalError) for its
+    hand-authored, safe messages. Anything else — an httpx transport
+    error, a DNS/TLS/timeout failure, a provider SDK internal — was never
+    vetted for safe content and always gets the generic fallback,
+    regardless of what its message looks like: unlike
+    sanitize_error_message()'s pattern blacklist (built for service-layer
+    SQL/path/traceback leaks), a generic infra failure has no fixed
+    vocabulary to blacklist against.
+    """
+    if type(exc) is Exception or isinstance(exc, trusted_types):
+        return sanitize_error_message(str(exc), fallback)
+    logger.error("Unexpected connector exception: {}: {}", type(exc).__name__, exc)
+    return fallback
+
+
 T = TypeVar("T")
 
 

@@ -25,9 +25,10 @@ always escaped — so on that path a member `O'Brien` mailed as `O&#x27;Brien` a
 on for HTML — the XSS boundary on the HTML body is untouched (verified an `O'Brien`
 apostrophe still escapes there). 1 DB-free regression test (`test_email_fallback_render.py`).
 
-**Flagged (unchanged, policy):** MAIL-3 (`upload_attachment` now does magic-byte
-validation; residual is the `except ImportError: pass` extension-only degrade and
-`.svg` allowance — policy), MAIL-4 (arbitrary recipients — the CS-9 policy call).
+**Flagged (unchanged, policy):** MAIL-4 (arbitrary recipients — the CS-9 policy
+call). MAIL-3's residual (the `except ImportError: pass` extension-only degrade)
+is also since fixed — see the ✅ FIXED entry below (2026-08-31); `.svg` remains
+an intentional allowance, not a gap.
 
 ---
 
@@ -161,22 +162,33 @@ covered.
 whether the id exists elsewhere. The processor's lookup is additionally
 org-scoped, which also neutralizes any row already stored with a foreign id.
 
-### MAIL-3 — LOW — Attachment validation is extension-only — OPEN
+### MAIL-3 — LOW — Attachment validation is extension-only — ✅ FIXED (superseded)
 
-**What:** the upload checks the filename extension against an allowlist but does
+**What:** the upload checked the filename extension against an allowlist but did
 not sniff magic bytes, unlike the documents module (DOC finding set) and the
 storefront product-image upload, which both verify content type from the bytes.
 
 **Impact:** low. The file is stored and attached to outgoing mail, never
 executed or rendered server-side, and the allowlist blocks executable
-extensions. The realistic case is a mislabeled file (an `.exe` renamed `.pdf`)
+extensions. The realistic case was a mislabeled file (an `.exe` renamed `.pdf`)
 being mailed to members over the department's own domain, which is a
 reputational rather than a technical compromise.
 
-**Why not fixed:** the codebase has a magic-byte validator, but wiring it in
-means deciding the policy for the long tail of allowed office formats (a
-`.docx` is a zip; a `.xls` is OLE2), and getting that wrong would reject
-legitimate attachments. Worth doing deliberately rather than as a drive-by.
+**Status (2026-08-31, security-review MSG-25 pass 2):** fixed since this entry
+was written, in a commit this doc never separately tracked. `upload_attachment`
+(`email_templates.py`) now calls `detect_mime_type` on the uploaded bytes and
+rejects anything not in an explicit `ALLOWED_EMAIL_MIME_TYPES` set — and fails
+**closed** with a 503 (not the extension-only degrade the pass-2 summary above
+flagged as residual) when libmagic itself is unavailable. Re-verified directly
+in `backend/app/api/v1/endpoints/email_templates.py:595-634`. Original entry
+kept below for the record of what was decided and why.
+
+**Why it had not been fixed when this was written:** the codebase has a
+magic-byte validator, but wiring it in means deciding the policy for the long
+tail of allowed office formats (a `.docx` is a zip; a `.xls` is OLE2), and
+getting that wrong would reject legitimate attachments. That policy call was
+made (13 explicit MIME types, matching the extension allowlist) rather than
+left as a drive-by.
 
 ### MAIL-4 — LOW — Scheduled email accepts arbitrary recipients — 🚩 FLAGGED
 
@@ -219,8 +231,8 @@ no unreferenced service methods surfaced.
    existing suite covered HTML escaping thoroughly (which is why that half was
    correct) and never checked the other two outputs. 7 tests added; 3 of them
    verified to fail against the pre-fix code.
-2. **Magic-byte attachment validation** (MAIL-3), once the office-format policy
-   is decided.
+2. ~~Magic-byte attachment validation (MAIL-3), once the office-format policy
+   is decided.~~ Done — see MAIL-3 ✅ FIXED (2026-08-31).
 3. **Scheduled emails have no send-time preview or dry run.** An admin schedules
    a template + context blob and finds out whether it rendered correctly when
    members receive it. `POST /{id}/preview` exists for templates but is not

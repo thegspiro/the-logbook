@@ -297,7 +297,7 @@ Requires `events.manage` permission. Tab-based admin interface.
 | `/facilities/:id`         | Facility Detail            | `facilities.view` **OR** `facilities.manage` |
 | `/facilities/maintenance` | Cross-Facility Maintenance | `facilities.view` **OR** `facilities.manage` |
 | `/facilities/inspections` | Cross-Facility Inspections | `facilities.view` **OR** `facilities.manage` |
-| `/facilities/settings`    | Facility Settings          | `facilities.manage` |
+| `/facilities/settings`    | Facility Settings          | `facilities.manage`                          |
 
 > The **Dashboard** shows summary statistics (total facilities, pending maintenance, upcoming inspections), recent maintenance completions, and a searchable facility card grid. The **Facility Detail** page uses sidebar navigation to sections: overview, rooms, building systems, maintenance, inspections, utilities, emergency contacts, access keys, shutoff locations, capital projects, insurance, occupants, and compliance checklists. The utilities, access keys, capital projects, insurance, and occupants sections carry sensitive data (door/alarm codes, account numbers, budgets, lease terms) and require `facilities.view_sensitive`, `facilities.edit`, or `facilities.manage` — they are hidden from members who only hold `facilities.view`, and the API enforces the same restriction. `facilities.view_sensitive` is a read-only, organization-wide grant; the default position templates give it to Vice President and Treasurer, while chief officers, President, and Facilities Manager see everything through `facilities.manage`. Station-specific ranks such as Captain are not granted organization-wide sensitive access by default. Rooms created in Facilities own and automatically synchronize linked Location records for Events and QR check-in; standalone Locations may reference a Facility but do not create or update Facility Rooms. **Rooms can be nested inside other rooms** _(2026-08-16)_: the Rooms section renders the containment tree with per-room sub-room counts and an add-a-room-inside action, the room form offers a "Located inside" picker (same facility only, no cycles, five levels max), and deleting a room re-parents its sub-rooms one level up rather than deleting them. A nested room's linked Location carries the full containment path (e.g. "Quartermaster's Storage — Volunteer Office — Station 1"), and the cross-module room picker in Events, Training, and Scheduling indents sub-rooms under their container. Cross-facility **Maintenance** and **Inspections** pages provide department-wide views. The module replaces the standalone Locations page when enabled.
 
@@ -1079,10 +1079,10 @@ lot's number or expiration date require `equipment_check.manage` or
 
 ## IP Security _(documented 2026-08-10)_
 
-| URL                        | Page                       | Permission        |
-| -------------------------- | -------------------------- | ----------------- |
-| `/ip-security`             | IP Security Administration | `security.manage` |
-| `/ip-security/my-requests` | My Access Requests         | Authenticated     |
+| URL                        | Page                       | Permission                                  |
+| -------------------------- | -------------------------- | ------------------------------------------- |
+| `/ip-security`             | IP Security Administration | any of `security.manage`, `settings.manage` |
+| `/ip-security/my-requests` | My Access Requests         | Authenticated                               |
 
 ---
 

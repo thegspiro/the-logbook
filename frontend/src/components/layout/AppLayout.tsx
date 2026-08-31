@@ -172,7 +172,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
   if (navigationLayout === 'left') {
     return (
       <div
-        className="has-bottom-nav flex min-h-screen flex-col"
+        className="has-bottom-nav has-side-nav flex min-h-screen flex-col"
         style={{
           background:
             'linear-gradient(to bottom right, var(--bg-gradient-from), var(--bg-gradient-via), var(--bg-gradient-to))',

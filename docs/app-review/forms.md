@@ -228,9 +228,17 @@ defense-in-depth against a future renderer change.
 
 ## Dead code / internal
 
-The 5 `{"success": False, "error": str(e)}` processor dicts are internal
-diagnostics (not client-facing). Sanitizing them is optional DiD; left to keep the
-change focused on the reachable leak.
+The 5 `{"success": False, "error": str(e)}` processor dicts were assessed here
+as internal diagnostics (not client-facing). Sanitizing them was left as
+optional DiD, to keep the change focused on the reachable leak.
+
+**Correction (security-review FORM-26 pass 2, 2026-08-31):** they were
+client-facing after all — `submission.integration_result` (the dict these
+sites populate) is a field on `FormSubmissionResponse`, the response model for
+`submit_form`/`get_submission`/`list_submissions`/
+`reprocess_submission_integrations`, and is rendered directly in
+`SubmissionViewer.tsx`. Fixed as FORM-9; see
+`docs/security-review/FORM-26-forms.md` pass 2.
 
 ## Documentation
 
