@@ -2370,6 +2370,37 @@ error until a sender exists, rather than the current silent-accept.
 See `docs/security-review/CRON2-31-scheduled-tasks.md` for the full pass
 (12 findings fixed, these 2 flagged).
 
+## CRON-31-7/8 — Two More Scheduled-Task Dedup Trade-offs, and a Redis-Down Fallback (2026-08-31)
+
+A second security-review pass over `scheduled_tasks.py` and the in-process
+scheduler in `main.py` fixed six new findings (`docs/security-review/
+CRON-31-scheduled-tasks.md`) and flagged three, all deliberate trade-offs
+rather than bugs with an obviously-correct fix:
+
+- **`run_end_of_shift_summary` can mark a member "sent" without either
+  channel actually reaching them** if both the in-app notification build and
+  the email send fail for the same member — the same dedup-stamped-early
+  shape CRON2-31-3 fixed elsewhere, but here the realistic exposure is much
+  narrower (the in-app half is an in-memory operation, not a flush, so it
+  almost never fails on its own) and changing it means deciding whether
+  "in-app succeeded, email failed" should count as delivered for this one
+  task — a product call.
+- **`run_event_reminders` stamps a due reminder interval as sent when zero
+  recipients exist yet** (an event targeted at "going" RSVPs, with nobody
+  RSVP'd at the moment that interval comes due) — by explicit, commented
+  design ("avoid re-processing"), not an oversight. A late RSVP after that
+  point will not retroactively receive that specific interval's reminder,
+  though closer, not-yet-due intervals still fire normally.
+- **The in-process scheduler's Redis-down fallback runs on every worker,
+  unguarded.** `main.py`'s `_try_claim_background_task` returns "you may
+  run this" on any Redis error, so if Redis is unavailable, every uvicorn
+  worker runs the scheduler loop concurrently with no coordination — a
+  duplicate-notification risk (two workers processing the same due row),
+  not a data-loss or security risk. The alternative (fail closed, run on no
+  worker) is worse for this feature: zero scheduled tasks would fire until
+  Redis recovers. Mirrors the documented breached-password fail-open
+  trade-off in CLAUDE.md's Attack Protection table.
+
 ## LOC-3 — The Authenticated Location Display Endpoint Is Dead Code With a Growing Gap List (2026-08-27)
 
 `GET /locations/{id}/display` (`locations.py`) has had **zero frontend

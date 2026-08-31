@@ -2,7 +2,9 @@
 (app/services/message_delivery_service.py).
 
 Covers channel routing by priority/ack and the in-app fan-out. DB and the
-email/SMS services are mocked; no MySQL, no network.
+email/SMS services are mocked; no MySQL, no network — except
+TestPublishScheduledMessagesCommitFailureIsSurvivable, marked `integration`
+because it needs a real connection to reproduce PendingRollbackError.
 """
 
 import asyncio
@@ -10,6 +12,9 @@ from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
+
+from app.models.user import Organization
 from app.services.consent_service import ConsentService
 from app.services.message_delivery_service import MessageDeliveryService
 from app.services.messaging_service import MessagingService
@@ -509,10 +514,126 @@ class TestPublishScheduledMessages:
             "task": "publish_scheduled_messages",
             "published": 0,
             "expired": 1,
+            "failed": 0,
         }
         assert due.is_active is False
         assert due.scheduled_at is None
         deliver.assert_not_awaited()
+
+    async def test_one_message_failure_does_not_lose_the_rest_of_the_batch(self):
+        """The claim step clears scheduled_at for the whole batch up front,
+        so a message that fails mid-loop must not propagate and orphan
+        every message still left in `due` — the due-query would never
+        select them again (same shape as CRON2-31-1/5/6's session-poisoning
+        class: a claim/dedup marker must not be stamped independent of
+        whether the action it guards actually happened for every item)."""
+        from app.services.scheduled_tasks import run_publish_scheduled_messages
+
+        bad = SimpleNamespace(
+            id="bad",
+            scheduled_at=datetime.now(timezone.utc) - timedelta(minutes=2),
+            expires_at=None,
+            is_active=True,
+            deleted_at=None,
+        )
+        good = SimpleNamespace(
+            id="good",
+            scheduled_at=datetime.now(timezone.utc) - timedelta(minutes=1),
+            expires_at=None,
+            is_active=True,
+            deleted_at=None,
+        )
+        db = MagicMock()
+        db.commit = AsyncMock()
+        db.rollback = AsyncMock()
+        db.refresh = AsyncMock()
+        result_set = MagicMock()
+        result_set.scalars.return_value.all.return_value = [bad, good]
+        db.execute = AsyncMock(return_value=result_set)
+
+        with patch.object(
+            MessagingService,
+            "materialize_recipients",
+            new=AsyncMock(side_effect=[Exception("boom"), None]),
+        ), patch.object(MessageDeliveryService, "deliver", new=AsyncMock()) as deliver:
+            result = await run_publish_scheduled_messages(db)
+
+        assert result["published"] == 1
+        assert result["failed"] == 1
+        # Both messages were claimed (scheduled_at cleared) in the batch
+        # step; only the surviving message was actually delivered — proving
+        # `good` was not skipped even though `bad` (processed first) raised.
+        assert bad.scheduled_at is None
+        assert good.scheduled_at is None
+        deliver.assert_awaited_once_with(good)
+        db.rollback.assert_awaited_once()
+        # The rollback after `bad` failed expires every persistent object in
+        # the session, so `good` (fetched in the same original batch) must
+        # be refreshed before its attributes are read again.
+        db.refresh.assert_awaited_once_with(good)
+
+
+@pytest.mark.integration
+class TestPublishScheduledMessagesCommitFailureIsSurvivable:
+    """CRON-31-1 addendum (Codex-caught): the mock-based test above proves
+    the batch survives materialize_recipients() *raising*, but not the
+    narrower case where the risk actually lives — db.commit() itself
+    failing (a real flush error, e.g. an FK violation on the just-added
+    recipient rows). Against a real connection, *any* attribute read on
+    *any* loaded object raises PendingRollbackError until an explicit
+    rollback runs — not just on an expired object. The pre-fix except
+    block read `getattr(message, "id", "?")` for its own log line
+    *before* calling db.rollback(), so that read itself raised and
+    propagated out of the whole function, taking every remaining message
+    in the batch down with it. This needs a real DB session: a MagicMock
+    attribute read never raises on its own."""
+
+    async def test_a_commit_failure_on_one_message_does_not_abort_the_batch(
+        self, db_session
+    ):
+        from app.models.notification import DepartmentMessage
+        from app.services.scheduled_tasks import run_publish_scheduled_messages
+
+        org = Organization(name="Commit Failure Org", slug="cron-31-1-commit-fail")
+        db_session.add(org)
+        await db_session.flush()
+
+        bad = DepartmentMessage(
+            organization_id=org.id,
+            title="bad",
+            body="b",
+            scheduled_at=datetime.now(timezone.utc) - timedelta(minutes=2),
+        )
+        good = DepartmentMessage(
+            organization_id=org.id,
+            title="good",
+            body="b",
+            scheduled_at=datetime.now(timezone.utc) - timedelta(minutes=1),
+        )
+        db_session.add_all([bad, good])
+        await db_session.commit()
+
+        # A user id that doesn't exist violates department_message_recipients'
+        # FK on user_id — the commit right after materialize_recipients()
+        # fails with a real IntegrityError, not a Python-level raise. Only
+        # `bad`'s targeting returns this ghost user; `good`'s returns none,
+        # so it must succeed regardless of which message the "due" query
+        # (unordered) happens to process first.
+        ghost_user = SimpleNamespace(id="ghost-user-does-not-exist")
+
+        async def _targeted_users(self_, message, organization_id):
+            return [ghost_user] if message.title == "bad" else []
+
+        with patch.object(
+            MessagingService, "_targeted_users", new=_targeted_users
+        ), patch.object(MessageDeliveryService, "deliver", new=AsyncMock()) as deliver:
+            result = await run_publish_scheduled_messages(db_session)
+
+        assert result["failed"] == 1
+        assert result["published"] == 1
+        deliver.assert_awaited_once()
+        delivered_message = deliver.await_args.args[0]
+        assert delivered_message.id == good.id
 
 
 if __name__ == "__main__":  # pragma: no cover

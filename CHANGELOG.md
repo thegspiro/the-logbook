@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Scheduled-task reliability fixes (2026-08-31)
+
+**Fixed**
+
+- A department message scheduled to publish could, in a batch with other
+  due messages, silently vanish forever if a different message in the same
+  batch failed to process first — the failed message no longer costs the
+  rest of the batch its delivery.
+- Reminders for overdue meeting-minutes action items were silently failing
+  every single time, with no error visible anywhere — they now send
+  correctly.
+- A shift with no currently-active assigned members was permanently marked
+  as "reminded" even though nobody was actually notified, so a member added
+  or reactivated later in the same window never received the pre-shift
+  reminder — fixed to match the equivalent end-of-shift-checklist behavior.
+- Extending recurring event series to their rolling 12-month horizon could,
+  on one series' failure, silently discard other series' already-generated
+  occurrences from the same run.
+- An external training-provider sync failure could cascade into every
+  provider synced after it in the same run being misreported as failed too.
+
 ### Onboarding hardening and setup docs cleanup (2026-08-31)
 
 **Fixed**
