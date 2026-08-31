@@ -13916,6 +13916,349 @@ class Seeder:
         },
     ]
 
+    # Guide 19's "rebuilt My Admin Hours page" marker wants a member with hours
+    # in at least three categories, one configured requirement, and at least
+    # one category with *no* hours in the period so the muted "nothing logged
+    # in" line appears. It has to be the member's own page and the member's own
+    # hours: the administrator has hours in all six categories, which satisfies
+    # the first half and makes the last half impossible.
+    #
+    # Four of the department's six categories, so two stay empty and that line
+    # has something to name.
+    MEMBER_HOURS = [
+        ("Station Maintenance", 3, "Bay floor scrub and compressor service"),
+        ("Meetings & Governance", 2, "Monthly membership meeting"),
+        ("Fundraising", 4, "Pancake breakfast prep and service"),
+    ]
+    MEMBER_HOURS_REQUIREMENT = ("Community Outreach", 8)
+
+    def seed_member_admin_hours(self) -> dict[str, Any]:
+        """Give the demo member a spread of approved hours and a requirement.
+
+        The requirement is placed on a category the member *has* logged
+        against, so the progress bar shows partial progress rather than a bare
+        zero -- a requirement at 0 of 8 reads as "not started" and teaches
+        nothing about how progress is displayed.
+        """
+        categories = {
+            str(pick(c, "name")): str(pick(c, "id"))
+            for c in items(self.api.get("/admin-hours/categories"), "categories")
+        }
+        member = next(
+            (
+                u
+                for u in items(self.api.get("/users?limit=200"), "users")
+                if pick(u, "username") == DEMO_MEMBER_USERNAME
+            ),
+            None,
+        )
+        if not member or not categories:
+            return {"blocked": "no demo member or no categories"}
+
+        logged = {
+            str(pick(e, "description") or "")
+            for e in items(self.api.get("/admin-hours/entries?limit=300"), "entries")
+        }
+        session = self.member_session(
+            self.base_url, str(pick(member, "id")), DEMO_MEMBER_USERNAME
+        )
+        created = 0
+        for index, (name, hours, description) in enumerate(self.MEMBER_HOURS):
+            category_id = categories.get(name)
+            if not category_id or description in logged:
+                continue
+            day = TODAY - timedelta(days=11 * index + 6)
+            if day.year != TODAY.year:
+                day = date(TODAY.year, 1, 1) + timedelta(days=index)
+            start = datetime.combine(day, time(hour=9), tzinfo=ORG_TIMEZONE)
+            try:
+                session.post(
+                    "/admin-hours/entries",
+                    {
+                        "category_id": category_id,
+                        "clock_in_at": iso(start.astimezone(timezone.utc)),
+                        "clock_out_at": iso(
+                            (start + timedelta(hours=hours)).astimezone(timezone.utc)
+                        ),
+                        "description": description,
+                    },
+                )
+                created += 1
+            except ApiError as exc:
+                self.blocked.append(f"member admin hours: entry refused ({exc})")
+
+        # Approve them. A manual entry always lands pending -- see
+        # seed_admin_hours_entries -- and only approved hours count against a
+        # requirement, so leaving them pending would show the progress section
+        # with every bar at zero under hours the page also reports as logged.
+        wanted = {description for _, _, description in self.MEMBER_HOURS}
+        for entry in items(
+            self.api.get("/admin-hours/entries?limit=300"), "entries"
+        ):
+            if str(pick(entry, "description") or "") not in wanted:
+                continue
+            if str(pick(entry, "status")) != "pending":
+                continue
+            try:
+                self.api.post(
+                    f"/admin-hours/entries/{pick(entry, 'id')}/review",
+                    {"action": "approve"},
+                )
+            except ApiError as exc:
+                self.blocked.append(f"member admin hours: review refused ({exc})")
+
+        # The requirement the progress section renders. Attached to the
+        # highest-priority active profile that admits this member's membership
+        # type, which is how the resolver picks one.
+        config = self.api.get("/compliance/config")
+        category_name, required_hours = self.MEMBER_HOURS_REQUIREMENT
+        category_id = categories.get(category_name)
+        membership = str(pick(member, "membership_type") or "active")
+        profile = next(
+            (
+                pr
+                for pr in sorted(
+                    items(config, "profiles"),
+                    key=lambda pr: pick(pr, "priority") or 0,
+                    reverse=True,
+                )
+                if pick(pr, "is_active")
+                and membership in (pick(pr, "membership_types") or [membership])
+            ),
+            None,
+        )
+        if not profile or not category_id:
+            return {"created": created, "blocked": "no profile to carry it"}
+        if not pick(profile, "admin_hours_requirements"):
+            self.api.put(
+                f"/compliance/config/profiles/{pick(profile, 'id')}",
+                {
+                    "admin_hours_requirements": [
+                        {
+                            "category_id": category_id,
+                            "required_hours": required_hours,
+                            "frequency": "annual",
+                        }
+                    ]
+                },
+            )
+        return {"created": created, "profile": pick(profile, "name")}
+
+    # Guide 19's seal marker wants two sealed compartments in one frame: one
+    # whose tag matches the last count, so the clearing shortcut is offered,
+    # and one whose number differs, so the reader sees "Record seal" and a hand
+    # count instead. Only the *previous* count is seeded -- the differing
+    # number is typed during the capture, which is what a crew reading a
+    # changed tag actually does.
+    SEALED_TEMPLATE_NAME = "Medic 3 Supply Check"
+    SEALED_COMPARTMENTS = {"Drug Bag": "M3-40817", "Trauma Bag": "M3-40822"}
+
+    def seed_sealed_compartments(self) -> dict[str, Any]:
+        """Mark two bags sealed, and file a check that records their tags.
+
+        A seal panel only offers to clear the contents when it can compare
+        against an *intact* prior seal carrying the same number, so the fixture
+        is worthless without a completed check behind it: with no history the
+        panel reads "No seal recorded at the last count" and both bags look
+        alike, which is the one thing the marker says must not happen.
+        """
+        template = next(
+            (
+                t
+                for t in items(
+                    self.api.get("/equipment-checks/templates"), "templates"
+                )
+                if pick(t, "name") == self.SEALED_TEMPLATE_NAME
+            ),
+            None,
+        )
+        if not template:
+            return {"blocked": f"no {self.SEALED_TEMPLATE_NAME} template"}
+        template_id = pick(template, "id")
+        detail = self.api.get(f"/equipment-checks/templates/{template_id}")
+
+        sealed = []
+        for compartment in items(detail, "compartments"):
+            name = str(pick(compartment, "name") or "")
+            if name not in self.SEALED_COMPARTMENTS:
+                continue
+            if not pick(compartment, "is_sealed"):
+                self.api.put(
+                    f"/equipment-checks/compartments/{pick(compartment, 'id')}",
+                    {"is_sealed": True},
+                )
+            sealed.append((pick(compartment, "id"), name))
+        if len(sealed) < 2:
+            return {"blocked": "expected two named compartments to seal"}
+
+        # A prior count carrying both tags. Guarded on the seal history rather
+        # than on the check list: the point of the fixture is that
+        # /last-seals answers, and a completed check that recorded no seals
+        # (one filed before the compartments were marked) would satisfy a
+        # check-count guard while leaving the panel with nothing to compare.
+        apparatus_id = pick(template, "apparatus_id") or pick(
+            template, "apparatusId"
+        )
+        last = self.api.get(
+            f"/equipment-checks/templates/{template_id}/last-seals"
+            + (f"?apparatus_id={apparatus_id}" if apparatus_id else "")
+        )
+        if isinstance(last, dict) and len(last) >= 2:
+            return {"sealed": len(sealed), "seals": "already recorded"}
+
+        rows = self._checkable_rows(detail)
+        if not rows:
+            return {"blocked": "template has no checkable rows"}
+        check = self.api.post(
+            "/equipment-checks/checks",
+            {
+                "template_id": template_id,
+                "apparatus_id": apparatus_id,
+                "check_timing": "start_of_shift",
+                "items": rows,
+            },
+        )
+        check_id = pick(check, "id")
+        if not check_id:
+            return {"blocked": "check was not created"}
+        self.api.put(
+            f"/equipment-checks/checks/{check_id}/complete",
+            {
+                "items": rows,
+                "seals": [
+                    {
+                        "template_compartment_id": comp_id,
+                        "compartment_name": name,
+                        "seal_number": self.SEALED_COMPARTMENTS[name],
+                        "intact": True,
+                        "cleared_item_count": 0,
+                    }
+                    for comp_id, name in sealed
+                ],
+            },
+        )
+        return {"sealed": len(sealed), "check": check_id}
+
+    # The board's fourth chip state. `shiftCapacity` falls back from the
+    # position list to `min_staffing` and then stops: there is deliberately no
+    # third fallback, so a shift naming neither has never said how many people
+    # it takes and reads grey rather than inventing a shortage. The demo
+    # department configures both on every other shift, so without this fixture
+    # the state guide 19 devotes a paragraph to cannot be photographed at all.
+    UNSIZED_SHIFT_NOTES = "Community parade detail — crew size to be confirmed"
+
+    def seed_unsized_shift(self) -> dict | None:
+        """One shift that names neither positions nor a minimum staffing level.
+
+        Placed on a day that already carries a claimable shift, so the day
+        panel behind the marker's "crew panel and the claim button both in
+        frame" shows something to act on beside the grey one.
+        """
+        target_date = (NOW + timedelta(days=4)).date().isoformat()
+        existing = [
+            shift
+            for shift in items(
+                self.api.get(
+                    f"/scheduling/shifts?start_date={target_date}"
+                    f"&end_date={target_date}"
+                ),
+                "shifts",
+            )
+            if str(pick(shift, "notes") or "") == self.UNSIZED_SHIFT_NOTES
+        ]
+        if existing:
+            return existing[0]
+        return self.api.post(
+            "/scheduling/shifts",
+            {
+                "shift_date": target_date,
+                "start_time": f"{target_date}T13:00:00Z",
+                "end_time": f"{target_date}T17:00:00Z",
+                # No positions, no min_staffing, and no apparatus -- an
+                # apparatus would supply apparatus_positions and size it.
+                "notes": self.UNSIZED_SHIFT_NOTES,
+            },
+        )
+
+    NFC_INTEGRATION_TYPE = "nfc-id-cards"
+    # Fabricated serials in the shape a real reader emits (14 hex characters,
+    # a 7-byte NXP UID). Not copied from any physical card.
+    NFC_ACTIVE_TAG = "04A2245B7C1180"
+    NFC_REVOKED_TAG = "04B71E9930A254"
+
+    def seed_id_cards(self) -> dict[str, Any]:
+        """Turn ID cards on, and issue one active and one revoked card.
+
+        Guide 19 wants both statuses on one member so the difference and the
+        four-character preview are visible together, and it says to use demo
+        data rather than a real member's card record -- which is what this is.
+
+        The integration switch comes first and is not optional: `/nfc-tags`
+        refuses outright while it is off, so without this every card shot is a
+        403 and the profile panel hides itself entirely.
+        """
+        integration = next(
+            (
+                i
+                for i in items(self.api.get("/integrations"), "integrations")
+                if pick(i, "integration_type") == self.NFC_INTEGRATION_TYPE
+            ),
+            None,
+        )
+        if not integration:
+            return {"blocked": "no nfc-id-cards integration row"}
+        if not pick(integration, "enabled"):
+            self.api.post(
+                f"/integrations/{pick(integration, 'id')}/connect", {"config": {}}
+            )
+
+        member_id = next(
+            (
+                pick(u, "id")
+                for u in items(self.api.get("/users?limit=200"), "users")
+                if pick(u, "username") == DEMO_MEMBER_USERNAME
+            ),
+            None,
+        )
+        if not member_id:
+            return {"blocked": "demo member not found"}
+
+        existing = {
+            str(pick(card, "tag_uid") or ""): card
+            for card in items(
+                self.api.get(f"/nfc-tags?user_id={member_id}"), "cards"
+            )
+        }
+        issued = 0
+        for tag, label in (
+            (self.NFC_ACTIVE_TAG, "Duty wallet"),
+            (self.NFC_REVOKED_TAG, "Old station badge"),
+        ):
+            if tag in existing:
+                continue
+            self.api.post(
+                "/nfc-tags",
+                {"user_id": member_id, "tag_uid": tag, "label": label},
+            )
+            issued += 1
+
+        # Revoke the second one. Revocation is permanent by design, so this is
+        # guarded on the status rather than on whether the card was just
+        # created -- a re-seed must not try to revoke an already-revoked card.
+        cards = {
+            str(pick(card, "tag_uid") or ""): card
+            for card in items(
+                self.api.get(f"/nfc-tags?user_id={member_id}"), "cards"
+            )
+        }
+        revoked_card = cards.get(self.NFC_REVOKED_TAG)
+        if revoked_card and str(pick(revoked_card, "status") or "") != "revoked":
+            self.api.patch(
+                f"/nfc-tags/{pick(revoked_card, 'id')}",
+                {"status": "revoked", "revoked_reason": "Card not returned"},
+            )
+        return {"issued": issued, "member_id": member_id}
+
     def seed_label_printers(self) -> int:
         """Two registered printers, one per command language, one default.
 
@@ -14131,6 +14474,10 @@ class Seeder:
             lambda: self.seed_call_tracking_closeout(members),
         )
         self.step("label printers", self.seed_label_printers)
+        self.step("id cards", self.seed_id_cards)
+        self.step("unsized shift", self.seed_unsized_shift)
+        self.step("sealed compartments", self.seed_sealed_compartments)
+        self.step("member admin hours", self.seed_member_admin_hours)
 
         print(f"\nMembers on file: {len(members)}")
         if self.blocked:
