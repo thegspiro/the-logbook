@@ -81,6 +81,17 @@ export interface StopBodyProps {
    * to hand the unit to. The tooltip does.
    */
   canSwap?: boolean | undefined;
+  /**
+   * Whether this member may deploy stock beyond an expired-unit replacement.
+   *
+   * `swap_item_lot` applies submitter limits to anyone below manage: a swap
+   * carrying a disposition is allowed up to the expired units aboard, and one
+   * without is allowed only up to `required_quantity or expected_quantity`
+   * minus what is on the truck. An expiry-only position has neither quantity,
+   * so that shortfall is zero and a submitter's in-window top-up is refused
+   * with a 403. Expired is unaffected — it goes through the disposition path.
+   */
+  canManageSwap?: boolean | undefined;
   disabled?: boolean | undefined;
 }
 
@@ -388,12 +399,25 @@ const ExpiryRow: React.FC<{
   today: Date;
   onSwap?: ((itemId: string) => void) | undefined;
   canSwap?: boolean | undefined;
-}> = ({ item, answer, onAnswer, disabled, today, onSwap, canSwap }) => {
+  canManageSwap?: boolean | undefined;
+}> = ({ item, answer, onAnswer, disabled, today, onSwap, canSwap, canManageSwap }) => {
   const days = daysUntil(item.expirationDate, today);
   const pullAt = item.expirationWarningDays ?? 30;
   const expired = days !== null && days < 0;
   const inWindow = days !== null && days >= 0 && days <= pullAt;
   const confirmed = answer?.expiryConfirmed === true;
+  // Mirrors the submitter limit `swap_item_lot` enforces. An in-window swap
+  // sends no disposition, so for anyone below manage the server allows it only
+  // up to this position's count shortfall — which an expiry-only row cannot
+  // have. Offering the tap anyway spends a crew's attention on a 403.
+  const par = item.expectedQuantity ?? null;
+  // Falls back to par, not zero, exactly as `_on_truck` does: a position with
+  // no live count and no lots aboard has not been counted since it was
+  // defined, which is not the same as an empty bracket. Reading it as zero
+  // invents a shortfall the server will not find, and the swap it enables
+  // comes back 403.
+  const shortfall = par !== null && (item.carriedQuantity ?? par) < par;
+  const swapRefused = canSwap === false || (!expired && canManageSwap === false && !shortfall);
 
   return (
     <div
@@ -430,9 +454,15 @@ const ExpiryRow: React.FC<{
         {onSwap && (expired || inWindow) && item.inventoryItemId ? (
           <button
             type="button"
-            disabled={disabled || canSwap === false}
+            disabled={disabled || swapRefused}
             onClick={() => onSwap(item.id)}
-            title={canSwap === false ? 'Swaps from stock are recorded by a crew member on the check' : undefined}
+            title={
+              canSwap === false
+                ? 'Swaps from stock are recorded by a crew member on the check'
+                : swapRefused
+                  ? 'Only an officer can draw stock for an item that has not expired yet'
+                  : undefined
+            }
             className="border-theme-alert-danger-icon text-theme-alert-danger-title min-h-11 rounded-lg border px-3 text-[14px] font-bold disabled:cursor-not-allowed disabled:opacity-40"
           >
             {/* Only an expired unit is *replaced*. The server refuses to retire
@@ -480,6 +510,7 @@ const ItemGroups: React.FC<Omit<StopBodyProps, 'stop'> & { items: CheckItemSpec[
   today = new Date(),
   onSwap,
   canSwap,
+  canManageSwap,
 }) => {
   const of = (type: string) => items.filter((i) => normalizeCheckType(i.checkType) === type);
   const counts = of(CheckType.COUNT);
@@ -538,6 +569,7 @@ const ItemGroups: React.FC<Omit<StopBodyProps, 'stop'> & { items: CheckItemSpec[
               today={today}
               onSwap={onSwap}
               canSwap={canSwap}
+              canManageSwap={canManageSwap}
             />
           ))}
         </div>
@@ -756,6 +788,7 @@ export const CheckSweepStop: React.FC<StopBodyProps> = ({
   today = new Date(),
   onSwap,
   canSwap,
+  canManageSwap,
 }) => {
   // An intact tag answers the counting, so those rows come off the screen
   // rather than sitting there inviting a crew to count through a seal they
@@ -788,6 +821,7 @@ export const CheckSweepStop: React.FC<StopBodyProps> = ({
         today={today}
         onSwap={onSwap}
         canSwap={canSwap}
+        canManageSwap={canManageSwap}
       />
 
       {/* Pockets. A bag is one stop, not several — the crew is standing in front
@@ -817,6 +851,7 @@ export const CheckSweepStop: React.FC<StopBodyProps> = ({
             today={today}
             onSwap={onSwap}
             canSwap={canSwap}
+            canManageSwap={canManageSwap}
           />
         </section>
       ))}
