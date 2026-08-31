@@ -694,9 +694,15 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
           },
         }));
         // The inventory swap is now authoritative. Clear the previous
-        // auto-fail so the crew verifies the newly recorded stock.
+        // auto-fail so the crew verifies the newly recorded stock — and clear
+        // the confirmation with it. `expiryConfirmed` is what the sweep's
+        // expiry row paints its green "Read" state from, so leaving it set
+        // shows a unit as already read while the tally counts it unanswered:
+        // the crew is invited to walk past the physical box they have just put
+        // on the truck without looking at its date.
         updateResult(swapTarget.id, {
           status: 'not_checked',
+          expiryConfirmed: false,
         });
         toast.success(isReplacement ? 'Replaced with fresh stock' : 'Swapped in fresh stock');
         setSwapTarget(null);

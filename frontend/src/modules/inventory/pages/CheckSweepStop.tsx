@@ -130,10 +130,17 @@ const CountTally: React.FC<Omit<StopBodyProps, 'stop'> & { items: CheckItemSpec[
           // precisely so a crew cannot submit a full report having looked at
           // nothing — and the row has to say so, or the number reads as a check.
           const confirmed = answer?.status !== undefined && answer.status !== 'not_checked';
-          const found = answer?.quantityFound ?? item.carriedQuantity ?? undefined;
+          const notOnTruck = answer?.status === 'not_applicable';
+          // The carried figure is a *suggestion* — last check's number, shown
+          // until this crew answers. An item they have just said is not aboard
+          // has no suggestion left to make, and `not_applicable` counts as
+          // confirmed, so the fallback would repaint last month's count as a
+          // number somebody observed today. Submission already omits it; the
+          // row has to agree, or the screen and the record disagree.
+          const found =
+            (notOnTruck ? answer?.quantityFound : (answer?.quantityFound ?? item.carriedQuantity)) ?? undefined;
           const short = par !== null && found !== undefined && found < par;
           const carried = found !== undefined && !confirmed;
-          const notOnTruck = answer?.status === 'not_applicable';
           const set = (next: number) => onAnswer(item.id, countAnswer(item, next));
           return (
             <div
@@ -428,7 +435,14 @@ const ExpiryRow: React.FC<{
             title={canSwap === false ? 'Swaps from stock are recorded by a crew member on the check' : undefined}
             className="border-theme-alert-danger-icon text-theme-alert-danger-title min-h-11 rounded-lg border px-3 text-[14px] font-bold disabled:cursor-not-allowed disabled:opacity-40"
           >
-            Replace
+            {/* Only an expired unit is *replaced*. The server refuses to retire
+                a lot that is still in date — "That lot has not expired, so it
+                cannot be replaced" — because the disposition it would file
+                against it is an expired-stock one, and recording an in-date box
+                as disposed of is a false account of where the unit went. An
+                in-window swap is therefore a top-up, which is what the
+                accordion has always called it. */}
+            {expired ? 'Replace' : 'Swap'}
           </button>
         ) : null}
         <button

@@ -121,8 +121,11 @@ describe('EquipmentCheckForm in sweep mode', () => {
     mockCheckPermission.mockReturnValue(true);
     mockGetItemLots.mockReset();
     mockGetItemLots.mockResolvedValue([]);
+    mockGetLastCheckResults.mockReset();
     mockGetLastCheckResults.mockResolvedValue({});
+    mockGetLastCheckSeals.mockReset();
     mockGetLastCheckSeals.mockResolvedValue({});
+    mockSubmitCheck.mockReset();
     mockSubmitCheck.mockResolvedValue({ id: 'check-1' });
   });
 
@@ -205,8 +208,11 @@ describe('replacing expiring stock from inside the sweep', () => {
     ]);
     mockSwapItemLot.mockReset();
     mockSwapItemLot.mockResolvedValue({ lotNumber: 'L-99', expirationDate: '2099-12-31' });
+    mockGetLastCheckResults.mockReset();
     mockGetLastCheckResults.mockResolvedValue({});
+    mockGetLastCheckSeals.mockReset();
     mockGetLastCheckSeals.mockResolvedValue({});
+    mockSubmitCheck.mockReset();
     mockSubmitCheck.mockResolvedValue({ id: 'check-1' });
   });
 
@@ -274,6 +280,32 @@ describe('replacing expiring stock from inside the sweep', () => {
     );
     await user.click(await screen.findByRole('button', { name: 'Replace' }));
     expect(await screen.findByRole('heading', { name: 'Replace from ready stock' })).toBeVisible();
+  });
+
+  it('un-reads a row whose unit has just been swapped', async () => {
+    // The swap clears `status` so the crew verifies the new stock, but the
+    // green "Read" chip is painted from `expiryConfirmed`. Left set, the row
+    // says already-read while the tally counts it unanswered — inviting the
+    // crew past the physical box they have just put on the truck.
+    const user = userEvent.setup();
+    renderWithRouter(
+      <EquipmentCheckForm
+        shiftId="shift-1"
+        template={expiringTemplate() as never}
+        experience="sweep"
+        onBack={vi.fn()}
+      />
+    );
+    await user.click(await screen.findByRole('button', { name: 'Confirm' }));
+    expect(await screen.findByRole('button', { name: 'Read' })).toBeVisible();
+
+    await user.click(within(screen.getByTestId('expiry-epi')).getByRole('button', { name: 'Replace' }));
+    const modal = within(await screen.findByTestId('swap-modal'));
+    await user.click(modal.getByRole('button', { name: 'Disposed of' }));
+    await user.click(modal.getByRole('button', { name: 'Replace' }));
+
+    await waitFor(() => expect(mockSwapItemLot).toHaveBeenCalled());
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Confirm' })).toBeVisible());
   });
 
   it('disables Replace for a member the swap endpoint would refuse', async () => {

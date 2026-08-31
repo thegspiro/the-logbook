@@ -207,13 +207,29 @@ describe('replacing what is expiring', () => {
     return onSwap;
   };
 
-  it('offers the replacement the expiry rule is asking for', async () => {
+  it('offers the swap the expiry rule is asking for', async () => {
     // The seal rule tells the crew to open the container and replace what is
     // expiring. Without this they have to leave the walk to act on it.
     const user = userEvent.setup();
     const onSwap = mount(epi());
-    await user.click(screen.getByRole('button', { name: 'Replace' }));
+    await user.click(screen.getByRole('button', { name: 'Swap' }));
     expect(onSwap).toHaveBeenCalledWith('epi');
+  });
+
+  it('calls an in-window swap a swap, not a replacement', () => {
+    // Only an expired unit is *replaced*. `swap_item_lot` refuses to retire a
+    // lot that is still in date — the disposition it files says the unit was
+    // disposed of as expired, and that is untrue of a box with weeks left on
+    // it. So an in-window swap is a top-up, and calling it "Replace" would
+    // promise a retirement the crew cannot get.
+    mount(epi());
+    expect(screen.getByRole('button', { name: 'Swap' })).toBeVisible();
+    expect(screen.queryByRole('button', { name: 'Replace' })).not.toBeInTheDocument();
+  });
+
+  it('calls an expired swap a replacement, because that one does retire stock', () => {
+    mount(epi({ expirationDate: YESTERDAY }));
+    expect(screen.getByRole('button', { name: 'Replace' })).toBeVisible();
   });
 
   it('offers nothing where there is no ready stock to draw from', () => {
@@ -661,5 +677,25 @@ describe('marking a count not applicable', () => {
     // count in place, which is the bug. Only an explicit undefined clears it,
     // and `toHaveBeenCalledWith` treats the two as equal.
     expect(onAnswer.mock.calls[0]).toStrictEqual(['gauze', { status: 'not_applicable', quantityFound: undefined }]);
+  });
+
+  it('shows no number at all once the item is not aboard', () => {
+    // The carried figure is last check's count, shown as a suggestion until
+    // this crew answers. `not_applicable` counts as confirmed, so falling back
+    // to it here repaints last month's number as one somebody observed today —
+    // while submission omits the quantity entirely.
+    render(
+      <CheckSweepStop
+        stop={stop([{ ...gauze, carriedQuantity: 7 }])}
+        answers={{ gauze: { status: 'not_applicable' } }}
+        onAnswer={vi.fn()}
+      />
+    );
+    expect(screen.getByTestId('tally-value-gauze')).toHaveTextContent('—');
+  });
+
+  it('still offers the carried figure while the item is on the truck', () => {
+    render(<CheckSweepStop stop={stop([{ ...gauze, carriedQuantity: 7 }])} answers={{}} onAnswer={vi.fn()} />);
+    expect(screen.getByTestId('tally-value-gauze')).toHaveTextContent('7');
   });
 });
