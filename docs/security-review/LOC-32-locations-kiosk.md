@@ -153,6 +153,18 @@ tests: `test_race_is_swallowed_only_when_the_link_actually_exists`,
 `test_race_is_swallowed_when_the_link_exists_after_the_failure`,
 `test_deleted_prospect_race_still_records_attendance`.
 
+**Revised again after Codex review (this PR):** the recheck above used a
+plain `SELECT`, which under this app's default MySQL/InnoDB REPEATABLE
+READ isolation answers from the snapshot taken at the transaction's first
+statement — long before the concurrent transaction committed its insert.
+That means the recheck would see _no row_ and wrongly re-raise even in the
+ordinary, successful race this handler exists to swallow, exactly the
+`SELECT` vs. locking-read distinction CLAUDE.md Pitfall #27 already
+documents for this codebase's capacity checks. The failed INSERT's own
+unique-index check already proved a row exists in the _current_ committed
+state; the recheck has to look there too. Fixed by adding
+`.with_for_update()` to the recheck query.
+
 ### LOC-32-2 — MED — Kiosk display codes kept working after the organization was deactivated — ✅ FIXED
 
 **What:** `LocationService.get_location_by_display_code` filtered only

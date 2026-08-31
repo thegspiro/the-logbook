@@ -287,11 +287,23 @@ class GuestCheckInService:
             # exists to protect. Re-check the link actually exists before
             # treating the failure as harmless; otherwise re-raise so
             # _link_prospect's handler logs it and returns no prospect.
+            #
+            # Must be a locking read (FOR UPDATE): under this app's default
+            # REPEATABLE READ, a plain SELECT answers from the snapshot
+            # taken at this transaction's first statement — long before the
+            # concurrent transaction committed its insert — so it would see
+            # no row and wrongly re-raise even in the ordinary, successful
+            # race this except exists to swallow (CLAUDE.md Pitfall #27).
+            # The INSERT's own unique-index check already proved a row
+            # exists in the *current* committed state; the recheck has to
+            # look there too, not at a stale snapshot.
             recheck = await self.db.execute(
-                select(ProspectEventLink).where(
+                select(ProspectEventLink)
+                .where(
                     ProspectEventLink.prospect_id == str(prospect_id),
                     ProspectEventLink.event_id == str(event.id),
                 )
+                .with_for_update()
             )
             if recheck.scalars().first() is None:
                 raise

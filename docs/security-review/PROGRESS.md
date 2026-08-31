@@ -132,6 +132,17 @@ failure, and re-raising (rather than swallowing) when it doesn't — the
 caller's existing broad handler then logs it and leaves the attendee
 correctly unlinked. Three more guard tests added.
 
+**Round 5 (Codex-caught, on round 4's own fix):** the recheck round 4 added
+used a plain `SELECT`, which under this app's default MySQL/InnoDB
+REPEATABLE READ isolation answers from the transaction's original snapshot
+— taken well before the concurrent transaction committed its insert — so
+it would see no row and wrongly re-raise even in the ordinary, successful
+race this handler exists to swallow. Same `SELECT`-vs-locking-read gap
+CLAUDE.md Pitfall #27 already documents for this codebase's capacity
+checks. Fixed by adding `.with_for_update()` to the recheck, so it reads
+the current committed state the failed INSERT's own unique-index check
+already proved exists.
+
 Every fix has a guard test independently verified against the new code:
 `tests/test_guest_check_in.py::TestGuestProspectCreation` (7 tests across
 LOC-32-1 and its round-4 revision), `tests/test_location_display_code.py::
