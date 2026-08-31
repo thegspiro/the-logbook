@@ -16,10 +16,157 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-None. Feature 31 (Scheduled tasks) is fully closed — see log entry below.
-Next: feature 32, Locations & kiosk.
+Feature 32 (Locations & kiosk), pass 2 — PR
+[#2098](https://github.com/thegspiro/the-logbook/pull/2098), branch
+`claude/security-review-locations-kiosk-pass2`. Round 1 read every backend
+file in the feature's surface in full and reported zero findings (correctly
+noting the surface is byte-for-byte unchanged since pass 1, PR #1916 — but
+citing an unreachable commit, `1b7be79a`, for that diff). **Round 2
+(Codex-caught):** five real, independently verified findings the full read
+missed — LOC-32-1 (a lost prospect-link race could cost the guest their
+whole attendance record, not just the pipeline link), LOC-32-2 (kiosk
+display codes kept working after the owning organization was deactivated),
+LOC-32-3 (the location-uniqueness check skipped a building-only change),
+LOC-32-4 (the guest-check-in daily cap was reserved before the window-open
+and attendance-finalized rejection gates, letting refused traffic exhaust
+it), LOC-32-5 (an explicit `null` for `name`/`is_active` reached a NOT NULL
+column as a 500 instead of a validation error) — plus the commit-hash
+correction (`1a0a35c8` is the actual, reachable squash-merge commit). All
+five fixed with guard tests. **Round 3 (Codex-caught, on the LOC-32-3
+fix):** the effective-building calculation couldn't tell an explicit
+`building: null` (clearing it) apart from an omitted `building`, so a
+clear skipped the dup-check against the new null scope — fixed by reading
+`model_fields_set` instead of an `is not None` check. See log entry below
+and `docs/security-review/LOC-32-locations-kiosk.md`.
+
+**Note on branch naming:** pass 1's PR (#1916) used the branch name
+`claude/security-review-locations-kiosk` — reusing it for this pass would
+violate CLAUDE.md Pitfall #24, so this pass uses `-pass2` appended, matching
+the convention the CRON-31 and ONB-30 pass-2 iterations used for the same
+collision.
 
 ---
+
+### 2026-08-31 — Feature 32 (Locations & kiosk), pass 2 — round 2: 5 fixed (Codex-caught), 1 doc correction — PR #2098
+
+No security-review PR was open (feature 31 fully merged via PR #2095, closed
+out via PR #2097 earlier this iteration), so the rotation continued to
+feature 32. Loaded `CHECKLIST.md`, `SEC-00-cross-cutting-baseline.md`, and
+`docs/security-review/LOC2-32-locations-kiosk.md` (pass 1, PR #1916, 3
+findings + LOC-3 flagged) before reading any code.
+
+**Round 1** read every backend file in the feature's surface in full —
+`locations.py`, `admin_hub.py`, `location_service.py`, `public/display.py`,
+`admin_hub_service.py` (1,841 L), `guest_check_in_service.py`, models,
+schemas — and confirmed a diff against what it believed was pass 1's merge
+commit came back empty. Re-verified LOC2-32-1/2/3 and LOC-1/2/4 all hold.
+Reported zero new findings and opened PR #2098 on that basis.
+
+**Round 2 (Codex-caught), all verified against actual code before fixing:**
+
+1. **Commit-hash correction.** The diff commit `1b7be79a` cited in round 1
+   is the last commit of pass 1's source branch before it was
+   squash-merged, and is not reachable from `main` — it only resolved
+   locally because this session had fetched it by exact SHA earlier. The
+   actual, reachable squash-merge commit is `1a0a35c8`. Confirmed it diffs
+   identically to `1b7be79a` for every file in the surface — round 1's
+   zero-diff conclusion was correct, only its citation was not
+   reproducible by anyone who hadn't done that SHA-targeted fetch.
+2. **LOC-32-1 (MED)** — `guest_check_in_service.py`'s `_link_prospect`
+   catches a broad exception on the reasoning that a pipeline failure must
+   not cost the guest their attendance, but `link_prospect_to_event`'s
+   insert ran with no SAVEPOINT — a lost duplicate-key race left the whole
+   session needing a rollback it never got, so `check_in_guest`'s own
+   commit (the attendance record itself) failed too. Fixed by wrapping the
+   insert in `begin_nested()`, matching `MembershipPipelineService.
+create_prospect`'s own established pattern for the identical race
+   shape.
+3. **LOC-32-2 (MED)** — `get_location_by_display_code` filtered only
+   `Location.is_active`, never `Organization.active` — a deactivated
+   org's kiosk codes and guest sign-in path kept working indefinitely.
+   Other public intake surfaces (`event_requests.py`, `auth.py`) already
+   gate on `Organization.active`; this one didn't. Fixed with a join.
+4. **LOC-32-3 (LOW/MED)** — `update_location`'s duplicate check only ran
+   on a `name` change, even though the uniqueness scope is `(name,
+building)` together — a building-only PATCH could merge two
+   legitimately-separate same-named locations into one building
+   undetected. Fixed by computing the effective `(name, building)` pair and
+   checking whenever either changes.
+5. **LOC-32-4 (MED)** — the guest-check-in daily cap (`daily_cap_exceeded`,
+   an atomic Redis INCR) was checked before the check-in-window-open and
+   attendance-finalized rejection gates, so refused traffic before the
+   window opens could exhaust the 300/day allowance and deny legitimate
+   guests once it does — the exact ordering bug `event_requests.py`'s
+   EV-19 fix already documents and avoids for the identical cap shape.
+   Fixed by moving both rejection checks above the cap.
+6. **LOC-32-5 (LOW)** — `LocationUpdate.name`/`.is_active` are typed
+   `Optional[...] = None` to make them omittable on a PATCH, which also
+   admits an explicit `null` — `model_dump(exclude_unset=True)` preserves
+   it and `setattr` writes it straight into a NOT NULL column, 500ing
+   instead of 422ing. Fixed with a `model_validator` that rejects an
+   explicit null for either field while still allowing omission.
+
+**Round 3 (Codex-caught, on LOC-32-3's own fix):** the effective-building
+calculation used `location_data.building is not None` to mean "supplied,"
+which cannot tell an explicit `PATCH {"building": null}` (clearing it)
+apart from an omitted `building` — both read as `None`. A clear therefore
+fell back to the location's _current_ building for the dup-check while
+still persisting `null`, missing a conflict with an existing same-named,
+no-building location. Fixed by reading `location_data.model_fields_set`
+instead, which correctly distinguishes omission from an explicit null for
+both fields (`name` cannot be explicitly null since LOC-32-5, so only
+`building` was actually exposed). Two more guard tests added.
+
+**Round 4 (Codex-caught, on LOC-32-1's own fix):** the `except
+IntegrityError: pass` added for LOC-32-1 swallowed _every_ integrity
+failure as the expected duplicate-link race — but `ProspectEventLink.
+prospect_id` is a CASCADE-deleting FK, so a prospect deleted concurrently
+(between the lookup and this insert) raises the same exception type for a
+genuinely different reason: no link exists, the prospect is simply gone.
+Swallowing it left `_link_prospect` returning the stale prospect anyway,
+so `check_in_guest` would still set `attendee.prospect_id` to a
+now-nonexistent row and fail the same FK check on its own commit — losing
+the attendance via a different race window than the one LOC-32-1 closed.
+Fixed by re-querying whether the expected link actually exists after the
+failure, and re-raising (rather than swallowing) when it doesn't — the
+caller's existing broad handler then logs it and leaves the attendee
+correctly unlinked. Three more guard tests added.
+
+**Round 5 (Codex-caught, on round 4's own fix):** the recheck round 4 added
+used a plain `SELECT`, which under this app's default MySQL/InnoDB
+REPEATABLE READ isolation answers from the transaction's original snapshot
+— taken well before the concurrent transaction committed its insert — so
+it would see no row and wrongly re-raise even in the ordinary, successful
+race this handler exists to swallow. Same `SELECT`-vs-locking-read gap
+CLAUDE.md Pitfall #27 already documents for this codebase's capacity
+checks. Fixed by adding `.with_for_update()` to the recheck, so it reads
+the current committed state the failed INSERT's own unique-index check
+already proved exists.
+
+Every fix has a guard test independently verified against the new code:
+`tests/test_guest_check_in.py::TestGuestProspectCreation` (7 tests across
+LOC-32-1 and its round-4 revision), `tests/test_location_display_code.py::
+TestGetLocationByDisplayCode`, `tests/test_location_uniqueness.py` (new
+file, 9 tests across three findings), and `tests/test_public_display.py::
+TestGuestCheckInDailyCapOrdering` (3 tests).
+
+**LOC-3** (`GET /locations/{id}/display`, the dead authenticated display
+endpoint) remains unchanged and flagged, not fixed, for the same reason as
+pass 1 — already tracked in `docs/KNOWN_LIMITATIONS.md`.
+
+**Completion gate:** `flake8`/`isort` clean; `black --check` required
+reformatting two files (`location_service.py`,
+`tests/test_location_uniqueness.py`), applied. Scoped tests
+(`-k "location or admin_hub or guest_check_in or public_display"`) —
+**316 passed** (was 290), 1 skipped (pre-existing). Full backend suite —
+**9371 passed** (was 9353), 22 skipped, 0 failed.
+`validate_migrations.py --strict` — 394 revisions, single head (no schema
+change). No frontend file touched. Findings doc:
+`docs/security-review/LOC-32-locations-kiosk.md`. PR #2098 opened and
+subscribed. Next: 33 core infrastructure, once #2098 merges.
+
+Feature 32 marked 🔄 (not ✅ yet — that happens on the closing PR after
+merge, per the rotation's own rule).
 
 ### 2026-08-31 — Feature 31 (Scheduled tasks), pass 2 ✅ PR #2095 merged (`8254875a`)
 
@@ -3910,7 +4057,7 @@ each row's prior PR is recorded in the Log, not repeated here.
 | 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                              | ✅     |
 | 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (24 unauth bootstrap routes)                                                                                             | ✅     |
 | 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                   | ✅     |
-| 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                  | ⬜     |
+| 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                  | 🔄     |
 | 33  | Core infrastructure       | CORE   | `core/security_middleware.py`, `core/database.py`, `core/config.py`                                                                             | ⬜     |
 | 34  | Frontend shared           | FE     | `utils/apiCache.ts`, module axios instances, `ProtectedRoute`, global stores                                                                    | ⬜     |
 

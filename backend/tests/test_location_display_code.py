@@ -61,6 +61,42 @@ class TestRegenerateDisplayCode:
         db.commit.assert_not_awaited()
 
 
+class TestGetLocationByDisplayCode:
+    """The kiosk lookup must fail closed once the owning org is deactivated.
+
+    A deactivated department's Location rows are never touched, so without
+    an explicit Organization.active filter here, an old printed QR code or
+    bookmarked kiosk URL keeps serving event data and accepting guest
+    sign-ins indefinitely — the same class of gap other public intake
+    surfaces (event_requests.py, auth.py) already close.
+    """
+
+    async def test_query_also_filters_organization_active(self):
+        location = SimpleNamespace(id=str(uuid4()), display_code="ABC12345")
+        db = RecordingSession([_one(location)])
+        svc = LocationService(db)
+
+        result = await svc.get_location_by_display_code("ABC12345")
+
+        assert result is location
+        statement = str(db.statements[0])
+        assert "organizations" in statement.lower()
+        assert "active" in statement.lower()
+
+    async def test_returns_none_when_result_is_filtered_out(self):
+        # Simulates the deactivated-org case: the join+filter excludes the
+        # row, so the query answers exactly as it does for no match at all —
+        # the caller (the public display/guest-checkin endpoints) already
+        # treats that as a generic 404, so a deactivated org's kiosk code is
+        # indistinguishable from one that never existed.
+        db = RecordingSession([_one(None)])
+        svc = LocationService(db)
+
+        result = await svc.get_location_by_display_code("ABC12345")
+
+        assert result is None
+
+
 class TestAttachDisplayCodes:
     async def test_attaches_codes_from_linked_locations(self):
         room_with_code = SimpleNamespace(id="room-1")
