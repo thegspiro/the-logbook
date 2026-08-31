@@ -230,8 +230,15 @@ def _find_offenders(sources: dict[str, str], create_all_only: set[str]) -> list[
 # `op.rename_table` destinations — see that function's docstring. The
 # detector itself is still worth keeping as a ratchet against a real future
 # instance of this shape.)
+# Tolerates the call shapes the exact-spelling version above missed: a bare
+# (directly-imported) `Table(`, extra/reordered positional args before
+# `autoload_with` (e.g. `extend_existing=True`), and one level of nested
+# parens in an argument (`sa.MetaData()`) — but not more than one level,
+# which every real usage in this repo stays within.
 _AUTOLOAD_TABLE = re.compile(
-    r"sa\.Table\(\s*[\"']([a-z0-9_]+)[\"']\s*,\s*\w+\s*,\s*autoload_with="
+    r"\b(?:\w+\.)?Table\(\s*[\"']([a-z0-9_]+)[\"']"
+    r"(?:[^()]|\([^()]*\))*?"
+    r"autoload_with\s*="
 )
 
 
@@ -441,6 +448,55 @@ class TestTheDetectionItself:
                 "        return\n"
                 "    meta = sa.MetaData()\n"
                 '    positions = sa.Table("positions", meta, autoload_with=bind)\n'
+            )
+        }
+
+        assert _find_autoload_offenders(sources, {"positions"}) == []
+
+    def test_an_unguarded_bare_table_import_is_flagged(self):
+        """`from sqlalchemy import Table` then `Table(...)`, no `sa.` prefix —
+        the exact-spelling version of this detector missed this."""
+        sources = {
+            "0001_backfill.py": (
+                "def upgrade():\n"
+                "    bind = op.get_bind()\n"
+                "    meta = MetaData()\n"
+                '    positions = Table("positions", meta, autoload_with=bind)\n'
+            )
+        }
+
+        offenders = _find_autoload_offenders(sources, {"positions"})
+
+        assert len(offenders) == 1
+        assert "positions" in offenders[0]
+
+    def test_an_unguarded_reflection_with_reordered_and_nested_args_is_flagged(self):
+        """`autoload_with` need not be the third positional argument, and an
+        argument can itself contain a call (`sa.MetaData()`)."""
+        sources = {
+            "0001_backfill.py": (
+                "def upgrade():\n"
+                "    bind = op.get_bind()\n"
+                "    positions = sa.Table(\n"
+                '        "positions", sa.MetaData(), extend_existing=True,\n'
+                "        autoload_with=bind,\n"
+                "    )\n"
+            )
+        }
+
+        offenders = _find_autoload_offenders(sources, {"positions"})
+
+        assert len(offenders) == 1
+        assert "positions" in offenders[0]
+
+    def test_a_table_name_embedded_in_a_longer_identifier_is_not_matched(self):
+        """`MyTable(...)` is not `Table(...)` — the word boundary must hold
+        even though the wider regex no longer requires an `sa.` prefix."""
+        sources = {
+            "0001_backfill.py": (
+                "def upgrade():\n"
+                "    bind = op.get_bind()\n"
+                '    x = MyTable("positions", meta, autoload_with=bind)\n'
             )
         }
 
