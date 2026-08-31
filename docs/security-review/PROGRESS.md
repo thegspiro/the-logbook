@@ -120,15 +120,10 @@ No frontend file touched.
 Feature 31 marked 🔄 (not ✅ yet — that happens on the closing PR after
 merge, per the rotation's own rule).
 
-### 2026-08-31 — Feature 30 (Onboarding) merged — PR #2093
+### 2026-08-31 — Feature 30 (Onboarding), pass 2 ✅ PR #2093 merged (`e6a1eb45`)
 
-PR #2093 (pass 2, 2 fixed / 1 flagged) merged (`27a05f78`). Feature 30 marked
-✅. Verified via `mcp__github__pull_request_read` (`merged: true`,
-`merged_by: thegspiro`) before starting the next feature, per the
-"no starting a new feature while a PR is open" rule. Rotation continues to
-feature 31 (Scheduled tasks).
-
-### 2026-08-31 — Feature 30 (Onboarding), pass 2 — 2 fixed, 1 new flagged — PR #2093
+Round 1: 2 fixed, 1 new flagged. Round 2 (Codex-caught): 1 more fixed — see
+below.
 
 No security-review PR was open (feature 29 fully merged via PR #2091 earlier
 this iteration), so the rotation continued to feature 30. Loaded
