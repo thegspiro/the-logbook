@@ -301,10 +301,12 @@ editor/preview/scheduler), `frontend/src/modules/notifications/`,
 usePushNotifications.ts`, `frontend/src/components/NotificationCard.tsx`, and
 `frontend/src/services/communicationsServices.ts`.
 
-**Migrations:** none new. `20260826_1700_d4e5f6a7b8c9_message_recipients.py`
-(the `DepartmentMessageRecipient` backfill, part of PR #1938) and its
+**Migrations:** none new, but one existing migration fixed —
+`20260826_1700_d4e5f6a7b8c9_message_recipients.py` (the
+`DepartmentMessageRecipient` backfill, part of PR #1938) and its
 `merge_heads` companion predate this pass and were reviewed as part of the
-architecture change above, not written by it.
+architecture change above; that review found a real defect (**MSG-11**,
+below) in the migration itself, not merely in code written on top of it.
 
 ### Pass-1 fixes re-verified intact
 
@@ -402,6 +404,107 @@ the compiled `WHERE` clause of all three count queries and fails if
 pre-fix code (reintroducing the bug locally and re-running the test reproduces
 the failure), then reverted to the fix.
 
+### MSG-11 — HIGH — the recipient-materialization backfill migration reflects two create_all-only tables with no existence guard; `alembic upgrade head` crashes on any fresh database — ✅ FIXED
+
+**What:** `20260826_1700_d4e5f6a7b8c9_message_recipients.py`'s backfill step
+(part of the same PR #1938 architecture change reviewed above) reflected
+five tables with raw SQLAlchemy Core (`sa.Table(name, meta,
+autoload_with=bind)`) to seed `department_message_recipients` from data that
+predates the migration. Two of those five — `positions` and
+`user_positions` — are **model-only tables**: no migration in the 394-revision
+chain creates them (confirmed by grepping every `op.create_table(...)` call
+across `alembic/versions/`); they come into existence only when `main.py`'s
+`_fast_path_init()` runs `Base.metadata.create_all()` at application
+startup, _after_ `alembic upgrade head` completes — exactly the deployment
+model CLAUDE.md Pitfall #26 documents, and the same class of bug that broke
+`event_requests` migrations on 2026-08-24. This migration had no
+`if "t" not in sa.inspect(bind).get_table_names(): return`-style guard, the
+established idiom already used in fifteen other migrations in this repo
+(e.g. `20260824_2140_31e2816df7c3_revoke_member_compliance_view.py`). The
+"New architecture reviewed" section above traced this same migration for a
+different question (whether its role-match logic uses the right tables —
+confirmed via the `Role = Position` alias) without noticing the reflection
+itself has no existence guard; the two checks are independent and this one
+was missed.
+**Where:** `backend/alembic/versions/20260826_1700_d4e5f6a7b8c9_message_recipients.py:59-66`.
+**Failure scenario:** CI's integration and contract jobs run `alembic
+upgrade head` against an **empty** database, before anything calls
+`create_all()` — this is explicitly how CI is structured, per
+`test_migration_create_all_tables.py`'s own docstring. `sa.Table("positions",
+meta, autoload_with=bind)` against such a database raises
+`NoSuchTableError`, and because this is one `upgrade()` step among many, the
+entire migration chain fails — not just this revision's own backfill. Every
+fresh install (a new department standing up the platform for the first
+time) and both CI matrix legs (MySQL 8.0 and MariaDB 10.11 ×
+integration/contract, four jobs) hit this on the next full-chain run against
+an empty database. `validate_migrations.py --strict` — the check this
+rotation's completion gate runs — only parses the revision graph statically
+and does not execute `upgrade()`, so it reports clean while this fails at
+runtime.
+**Impact:** HIGH — not a data-confidentiality or tenant-isolation bug, but a
+guaranteed-red CI / guaranteed-broken fresh install once exercised against
+an empty database.
+**Fix:** added the guard, in the codebase's established form:
+
+```python
+existing_tables = set(sa.inspect(bind).get_table_names())
+if "positions" not in existing_tables or "user_positions" not in existing_tables:
+    return
+```
+
+placed before the five `sa.Table(...)` reflections. Skipping is correct, not
+merely safe: a database that has never run `create_all()` has never had the
+application running against it, so it has no `department_messages` rows to
+backfill either — there is nothing to migrate, and the live application
+will materialize recipients going forward through the normal
+`create_message`/`update_message`/scheduled-sweep paths once it starts.
+Guard test added: the existing `test_migration_create_all_tables.py` ratchet
+only recognized `op.add_column`/`op.create_index`/etc. — it could not have
+caught this, since `sa.Table(..., autoload_with=bind)` is a raw SQLAlchemy
+Core call, not an `op.*` operation. Added a second, narrower detector
+(`_find_autoload_offenders`/`_AUTOLOAD_TABLE`) plus pinning tests proving it
+flags the pre-fix shape and clears the fixed one.
+
+### MSG-12 — LOW-MED — a worker crash between claiming and finishing a channel delivery permanently strands that recipient's message — FLAGGED (needs a product decision)
+
+**What:** `_claim_delivery` commits a `DepartmentMessageDelivery` row with
+`status="pending"` _before_ the actual `send_email`/`send_bulk_sms` call —
+this is what makes a raced or retried `deliver()` call safe (a second
+attempt hits the row's unique `(message_id, recipient_id, channel)`
+constraint and skips, the mechanism the "New architecture reviewed" section
+above documents as defense-in-depth on top of MSG-4). If the process is
+killed, OOM-killed, or loses its DB connection between that commit and
+`_finish_delivery`'s follow-up commit, the row is left `status="pending"`
+permanently: nothing scans for stale pending claims, and the same unique
+constraint that makes retries safe also means no future `deliver()` call for
+that message will ever re-attempt it — a department message is published
+exactly once, so there is no second chance for the claim to resolve itself.
+**Where:** `app/services/message_delivery_service.py`
+(`_claim_delivery`/`_finish_delivery`, `_send_email`, `_send_sms`).
+**Failure scenario:** a background worker is killed (deploy restart, OOM,
+container eviction) at the exact moment between `_claim_delivery`'s commit
+and `send_email`/`send_bulk_sms` returning. That one recipient's copy of
+that one department message is now permanently un-sent on that channel —
+worst case, email, the channel this feature's own module docstring calls
+"the record of notice" — with no error surfaced anywhere and no automatic
+recovery. The blast radius is one recipient/one channel/one message per
+crash.
+**Why flagged, not fixed:** correcting this needs a policy decision this
+pass should not make unilaterally: what counts as "stale" (a fixed TTL on
+`attempted_at`?), whether a stale claim should be retried automatically by a
+new scheduled task or surfaced to an admin instead, and — since a crash
+could land either before or after the provider actually accepted the send —
+whether the department would rather risk an occasional duplicate delivery
+(retry unconditionally) or an occasional silent miss (leave it and alert).
+Mirrored into `docs/KNOWN_LIMITATIONS.md`.
+**Recommendation:** a scheduled task (mirroring
+`run_publish_scheduled_messages`'s cadence) that finds
+`DepartmentMessageDelivery` rows with `status="pending"` and `attempted_at`
+older than some threshold, and either re-attempts the send or flips them to
+a distinct `"orphaned"` status an admin view can surface. Left for a future
+iteration with product input on which tradeoff (silently-never-sent vs.
+possibly-duplicate) the department would prefer.
+
 ### Doc correction — MAIL-3 (attachment magic-byte validation) was already fixed, `docs/app-review/email-templates.md` still said OPEN
 
 Not a code finding — `upload_attachment` (`email_templates.py:595-634`) already
@@ -424,11 +527,13 @@ unchanged from pass 1 and not re-flagged. `email_service.py`'s F4 (no SSRF
 guard on an org-configured SMTP host) remains a deliberate, unchanged policy
 call for the same reason pass 1 recorded it.
 
-### New flagged item — see `docs/KNOWN_LIMITATIONS.md`
+### New flagged items — see `docs/KNOWN_LIMITATIONS.md`
 
 **MSG-9** in this doc is the org-scoping defense-in-depth fix above (FIXED).
-**MSG-10**, a second and unrelated finding from this pass, needed a product
-decision rather than a mechanical fix and is recorded only in
+**MSG-12** (above) is also flagged, not fixed, and mirrored into
+`docs/KNOWN_LIMITATIONS.md` in its own right. **MSG-10**, a third and
+unrelated finding from this pass, needed a product decision rather than a
+mechanical fix and is recorded only in
 `docs/KNOWN_LIMITATIONS.md`: **narrowing a published message's audience
 (`reconcile_recipients`) hard-deletes the `DepartmentMessageRecipient` row —
 including `read_at`/`acknowledged_at` — for any member the new audience no
@@ -504,20 +609,39 @@ email-templates` requires `settings.manage` (13/13 backend endpoints in
   `test_read_and_ack_counts_are_org_scoped` — asserts `organization_id` appears
   in the compiled `WHERE` clause of all three count queries `get_message_stats`
   issues. Verified to fail on reintroduction (reproduced locally, restored).
+- `backend/tests/test_migration_create_all_tables.py` (MSG-11): a second
+  detector, `_find_autoload_offenders`/`_AUTOLOAD_TABLE`, extending the
+  file's existing create_all-only-table ratchet to `sa.Table(...,
+autoload_with=...)` reflection — the shape the original `op.*`-only
+  detector could not see — plus the real-migrations assertion
+  (`test_migrations_reflecting_a_create_all_table_guard_on_its_existence`)
+  and two pinning tests (`test_an_unguarded_reflection_is_flagged`,
+  `test_a_guarded_reflection_is_not_flagged`). Verified to fail on
+  reintroduction: re-running the detector against the pre-fix migration
+  source reports `20260826_1700_d4e5f6a7b8c9_message_recipients.py ->
+positions, user_positions`; passes clean against the fixed file.
 
 ## Completion gate (pass 2)
 
-| Check                                                      | Result                                                                      |
-| ---------------------------------------------------------- | --------------------------------------------------------------------------- |
-| `flake8 app/ tests/ alembic/`                              | clean                                                                       |
-| `black --check app/ tests/ alembic/`                       | clean — 1337 files unchanged                                                |
-| `isort --check-only app/ tests/ alembic/` (CI's 8.0.1 pin) | clean                                                                       |
-| `python3 scripts/validate_migrations.py --strict`          | PASSED — 394 revisions, single head                                         |
-| backend tests, scope (messaging/notifications/email files) | 1100 passed, 1 skipped                                                      |
-| backend tests, full suite                                  | 9288 passed, 22 skipped, 0 failed                                           |
-| `npx tsc --noEmit` (frontend)                              | 0 errors                                                                    |
-| `npx eslint .` (frontend)                                  | 0 errors, 8 pre-existing warnings (max-warnings 10; none in reviewed files) |
+Re-run in full against current `main` (which already includes PR #2081's
+MSG-9 fix) after adding the MSG-11/MSG-12 follow-up — two concurrent
+security-review sessions independently reached feature 25, pass 2, at the
+same time; see `PROGRESS.md`'s log for the full sequence. The gate below
+covers the combined change set: the MSG-9 org-scoping fix (already merged),
+the MSG-11 migration guard fix (this follow-up), and both sets of guard
+tests.
 
-No frontend file was modified this pass (findings there were "verified good" —
-no fix required), so `tsc`/`eslint` establish that the backend changes did not
-regress the frontend build, not that new frontend code was checked.
+| Check                                                      | Result                                                    |
+| ---------------------------------------------------------- | --------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                              | clean                                                     |
+| `black --check app/ tests/ alembic/`                       | clean — 1337 files unchanged                              |
+| `isort --check-only app/ tests/ alembic/` (CI's 8.0.1 pin) | clean                                                     |
+| `python3 scripts/validate_migrations.py --strict`          | PASSED — 394 revisions, single head                       |
+| backend tests, scope (messaging/notifications/email files) | 1036 passed, 1 skipped                                    |
+| backend tests, full suite                                  | 9291 passed, 22 skipped, 0 failed                         |
+| `npx tsc --noEmit` (frontend)                              | 0 errors                                                  |
+| `npx eslint .` (frontend)                                  | 0 errors, 8 pre-existing warnings (none in touched files) |
+
+No frontend file was modified by either half of this pass (MSG-9's fix is a
+backend query filter; MSG-11's is a migration guard), so `tsc`/`eslint`
+establish that neither backend change regressed the frontend build.

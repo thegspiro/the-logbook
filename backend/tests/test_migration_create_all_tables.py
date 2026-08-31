@@ -184,6 +184,33 @@ def _find_offenders(sources: dict[str, str], create_all_only: set[str]) -> list[
     return offenders
 
 
+# A data-backfill migration reflects a table with raw SQLAlchemy Core instead
+# of an `op.*` operation — `sa.Table("t", meta, autoload_with=bind)` — which
+# _TABLE_FIRST/_TABLE_SECOND never match (those only recognize `op.*` calls).
+# `20260826_1700_d4e5f6a7b8c9_message_recipients.py` reflected `positions` and
+# `user_positions` this way with no existence guard, which raises the same
+# NoSuchTableError on a fresh database as an unguarded `op.add_column` would —
+# `_TABLE_FIRST`/`_TABLE_SECOND` is exactly the wrong tool for a reflection
+# call, so this is a second, narrower detector rather than an extension of it.
+_AUTOLOAD_TABLE = re.compile(
+    r"sa\.Table\(\s*[\"']([a-z0-9_]+)[\"']\s*,\s*\w+\s*,\s*autoload_with="
+)
+
+
+def _find_autoload_offenders(
+    sources: dict[str, str], create_all_only: set[str]
+) -> list[str]:
+    offenders = []
+    for name, text in sorted(sources.items()):
+        touched = set(_AUTOLOAD_TABLE.findall(text)) & create_all_only
+        if _returns_early_when_a_model_only_table_is_absent(text, create_all_only):
+            continue
+        unguarded = touched - _guarded_tables(text)
+        if unguarded:
+            offenders.append(f"  {name} -> {', '.join(sorted(unguarded))}")
+    return offenders
+
+
 def test_migrations_touching_a_create_all_table_guard_on_its_existence():
     sources = _migration_sources()
     create_all_only = set(Base.metadata.tables) - _tables_created_by_migrations(sources)
@@ -198,6 +225,25 @@ def test_migrations_touching_a_create_all_table_guard_on_its_existence():
         + "\n\nGuard the step:\n"
         "    def _has_table(table):\n"
         "        return table in sa.inspect(op.get_bind()).get_table_names()\n"
+    )
+
+
+def test_migrations_reflecting_a_create_all_table_guard_on_its_existence():
+    sources = _migration_sources()
+    create_all_only = set(Base.metadata.tables) - _tables_created_by_migrations(sources)
+
+    offenders = _find_autoload_offenders(sources, create_all_only)
+
+    assert offenders == [], (
+        "Migration(s) reflecting (`sa.Table(..., autoload_with=...)`) a table "
+        "that no migration creates, without checking the table exists first. "
+        "`alembic upgrade head` on a fresh database raises NoSuchTableError "
+        "here and the whole upgrade fails:\n"
+        + "\n".join(offenders)
+        + "\n\nGuard the reflection:\n"
+        "    existing_tables = set(sa.inspect(bind).get_table_names())\n"
+        '    if "positions" not in existing_tables:\n'
+        "        return\n"
     )
 
 
@@ -329,6 +375,39 @@ class TestTheDetectionItself:
         }
 
         assert _find_offenders(sources, self.CREATE_ALL_ONLY) == []
+
+    def test_an_unguarded_reflection_is_flagged(self):
+        """The exact shape `20260826_1700_d4e5f6a7b8c9_message_recipients.py`
+        had before it was fixed: a raw `sa.Table(..., autoload_with=bind)` on
+        a create_all-only table, which `_TABLE_FIRST`/`_TABLE_SECOND` (built
+        for `op.*` calls) never see."""
+        sources = {
+            "0001_backfill.py": (
+                "def upgrade():\n"
+                "    bind = op.get_bind()\n"
+                "    meta = sa.MetaData()\n"
+                '    positions = sa.Table("positions", meta, autoload_with=bind)\n'
+            )
+        }
+
+        offenders = _find_autoload_offenders(sources, {"positions"})
+
+        assert len(offenders) == 1
+        assert "positions" in offenders[0]
+
+    def test_a_guarded_reflection_is_not_flagged(self):
+        sources = {
+            "0001_backfill.py": (
+                "def upgrade():\n"
+                "    bind = op.get_bind()\n"
+                '    if "positions" not in sa.inspect(bind).get_table_names():\n'
+                "        return\n"
+                "    meta = sa.MetaData()\n"
+                '    positions = sa.Table("positions", meta, autoload_with=bind)\n'
+            )
+        }
+
+        assert _find_autoload_offenders(sources, {"positions"}) == []
 
     def test_a_column_named_like_a_table_is_not_mistaken_for_one(self):
         """`op.add_column("shifts", sa.Column("positions", ...))` touches

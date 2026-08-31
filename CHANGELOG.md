@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fresh database setup could fail while backfilling department message recipients (2026-08-31)
+
+**Fixed**
+
+- A new database going through its first migration could fail entirely at
+  the department-messages recipient backfill step, because it looked up two
+  tables (`positions`, `user_positions`) that don't exist until the
+  application finishes its own first-run setup. New installs now skip that
+  backfill (there is nothing to migrate on a database that has never run the
+  app yet) instead of failing.
+
 ### Meetings and minutes fixes (2026-08-31)
 
 **Fixed**

@@ -16,14 +16,89 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-[#2081](https://github.com/thegspiro/the-logbook/pull/2081) — feature 25
-(Messaging & notifications), pass 2. Branch
-`claude/security-review-messaging-notifications-pass2`. Subscribed via
-`subscribe_pr_activity`; awaiting CI/review.
+Branch `claude/security-review-messaging-notifications-pass2-migration-fix`
+— feature 25 (Messaging & notifications), pass 2 follow-up. PR #2081 (the
+main pass-2 review, MSG-9 fixed + MSG-10 flagged) merged to `main` before
+this iteration's independent finding could be added to it (see log entry
+below for the full sequence). This follow-up branch carries the finding
+that did not make it into #2081: **MSG-11** (HIGH — a migration
+existence-guard gap, fixed) and **MSG-12** (LOW-MED, flagged). Opening
+against current `main` (which already includes #2081). PR number to follow
+in a small update commit once opened.
 
 ---
 
-### 2026-08-31 — Feature 25 (Messaging & notifications), pass 2 — 1 fixed (LOW-MED), 1 flagged (LOW-MED) — PR #2081
+### 2026-08-31 — Feature 25 (Messaging & notifications), pass 2 follow-up — 1 fixed (HIGH), 1 flagged (LOW-MED)
+
+A second, independent security-review iteration reached feature 25 pass 2 at
+essentially the same moment as the entry directly below — both found no open
+PR at Step 0, both reviewed the same PR #1938 recipient-materialization
+architecture, and both pushed to the same conventional branch name
+(`claude/security-review-messaging-notifications-pass2`) within minutes of
+each other. Discovered the collision at push time (`git push` rejected,
+`git ls-remote` showed the branch already existed with PR #2081 open), and
+discovered it a second time when a first merge-onto-their-branch attempt was
+itself rejected — the other session had pushed an additional commit
+(Codex's review of PR #2081 catching an id collision in that session's own
+write-up) in the interval. Rebased a second time onto that tip, renumbered
+this session's findings to MSG-11/MSG-12 to stay clear of the ids already in
+use, and was about to push the combined branch when PR #2081 merged to
+`main` out from under it (`git fetch` came back with "couldn't find remote
+ref" — the branch was deleted on merge). Per CLAUDE.md Pitfall #24, that
+branch name is not reused. This finding — a real, unaddressed HIGH-severity
+migration bug the other session's PR did not touch — is instead delivered as
+a small follow-up PR against current `main` (which already contains #2081)
+rather than silently dropped.
+
+**MSG-11 (HIGH, fixed)** — `20260826_1700_d4e5f6a7b8c9_message_recipients.py`
+(the same PR #1938 backfill migration PR #2081's "New architecture reviewed"
+section had already read for a different question) reflects `positions` and
+`user_positions` with raw `sa.Table(..., autoload_with=bind)` and had no
+existence guard. Both tables are model-only (`Base.metadata.create_all()`-only,
+CLAUDE.md Pitfall #26) — no migration in the 394-revision chain creates
+them — so `alembic upgrade head` against any fresh/empty database (exactly
+what CI's integration/contract jobs run, and what every new department's
+first deploy does) raises `NoSuchTableError` and fails the entire migration
+chain. `validate_migrations.py --strict` (this rotation's own
+completion-gate check) only parses the revision graph statically and does
+not execute `upgrade()`, so it reported clean while this would fail at
+runtime — the same way the `event_requests` incident on 2026-08-24 was
+missed until it actually hit CI. Fixed with the codebase's established
+guard idiom; skipping the backfill on a database that has never run
+`create_all()` is correct, not just safe, since such a database has no
+`department_messages` rows to backfill either.
+
+**MSG-12 (LOW-MED, flagged)** — a worker crash between
+`MessageDeliveryService._claim_delivery`'s commit and
+`_finish_delivery`'s follow-up commit leaves a `DepartmentMessageDelivery`
+row permanently `status="pending"`: the same unique
+`(message_id, recipient_id, channel)` constraint that makes retries safe
+also means nothing ever retries a stranded claim, and no sweep exists to
+detect or expire stale pending rows. Narrow blast radius (needs a crash in
+an exact window) but affects whichever channel strands, including email —
+this feature's own "record of notice." Needs a product decision on
+stale-claim policy (TTL, automatic retry vs. admin alert, duplicate-send
+risk tradeoff); mirrored into `KNOWN_LIMITATIONS.md`.
+
+New guard tests: `backend/tests/test_migration_create_all_tables.py` gained
+a second detector (`_find_autoload_offenders`/`_AUTOLOAD_TABLE`) — the
+existing ratchet only recognized `op.*` calls and could not have caught
+MSG-11, since `sa.Table(..., autoload_with=bind)` is a raw SQLAlchemy Core
+call — plus the real-migrations assertion and two pinning tests. Full local
+completion gate re-verified green against current `main` (which already
+includes #2081): flake8/black/isort (8.0.1, CI's pin) clean, migrations
+validated (394 revisions, single head), 1036/1036
+messaging+notifications+email-scoped and 9291/9291 full backend suite pass
+(22 pre-existing skips), `tsc --noEmit` 0 errors, `eslint .` 0 errors (8
+pre-existing warnings, none touched). Findings appended to
+`docs/security-review/MSG-25-messaging-notifications.md`'s existing Pass 2
+section (MSG-11/MSG-12, continuing #2081's own MSG-9/MSG-10). Rotation row
+25 stays `⏳` — a HIGH-severity, CI-breaking fix is still outstanding, so
+the feature is not fully closed until this follow-up PR merges too. Opening
+a new PR (never reusing #2081's now-merged branch name, per Pitfall #24) and
+subscribing. Next: 26 Forms, once this merges.
+
+### 2026-08-31 — Feature 25 (Messaging & notifications), pass 2 — 1 fixed (LOW-MED), 1 flagged (LOW-MED) — PR #2081 ✅ merged
 
 No security-review PR was open (feature 24/Meetings & minutes pass 2 fully
 merged via PR #2080), so the rotation continued directly to feature 25.

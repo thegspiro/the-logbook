@@ -57,6 +57,16 @@ def upgrade():
     )
 
     bind = op.get_bind()
+    # `positions` and `user_positions` are model-only tables that a fresh
+    # database does not yet have when this runs — Base.metadata.create_all()
+    # builds them at application startup, after `alembic upgrade head`
+    # (CLAUDE.md Pitfall #26). Reflecting them with autoload_with on such a
+    # database raises NoSuchTableError and takes the whole upgrade down. A
+    # database that has never run the app also has no department_messages
+    # rows to backfill, so skipping here loses nothing.
+    existing_tables = set(sa.inspect(bind).get_table_names())
+    if "positions" not in existing_tables or "user_positions" not in existing_tables:
+        return
     meta = sa.MetaData()
     messages = sa.Table("department_messages", meta, autoload_with=bind)
     users = sa.Table("users", meta, autoload_with=bind)

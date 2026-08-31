@@ -2490,6 +2490,39 @@ recipients within the message's own org — and requires an admin
 this is a data-integrity/compliance-record risk rather than a security
 vulnerability in the access-control sense.
 
+## MSG-12 — A Stranded Department-Message Delivery Claim Is Never Retried (2026-08-31)
+
+`MessageDeliveryService._claim_delivery` commits a
+`DepartmentMessageDelivery` row with `status="pending"` before calling out to
+the email/SMS provider — this is what makes a raced or retried `deliver()`
+call safe (a second attempt hits the row's unique
+`(message_id, recipient_id, channel)` constraint and skips). If the worker
+process is killed, OOM-killed, or loses its DB connection between that
+commit and `_finish_delivery`'s follow-up commit, the row is left in
+`status="pending"` permanently: nothing scans for stale pending claims, and
+the same unique constraint that makes retries safe also means no future
+`deliver()` call for that message will ever re-attempt the send — a
+department message is published exactly once, so there is no second chance
+for the claim to resolve itself.
+
+The blast radius is narrow (one recipient, one channel, one message, and
+only if a crash lands in an exact window), but the channel affected is
+whichever one strands — and email is the "record of notice" this feature's
+own module docstring says a member must not be able to miss.
+
+Closing this needs a product decision, not a mechanical patch: what counts
+as "stale" (a fixed TTL against `attempted_at`? some other signal?), whether
+a stale claim should be retried automatically by a new scheduled task or
+surfaced to an admin instead, and — since a crash could land either before
+or after the provider actually accepted the send — whether the department
+would rather risk an occasional duplicate delivery (retry unconditionally)
+or an occasional silent miss (leave it and alert). Neither was chosen here.
+
+Found by `docs/security-review/MSG-25-messaging-notifications.md` (feature
+25, pass 2, MSG-12). No `SMSService`/`EmailService` allowlist or org-scoping
+gap involved — this is a reliability gap in an otherwise-correct idempotency
+mechanism, not an access-control defect.
+
 ## Process
 
 The review loop (see [review-log.md](./review-log.md)) advances through one area
