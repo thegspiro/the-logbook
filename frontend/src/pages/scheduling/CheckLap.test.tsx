@@ -21,6 +21,11 @@ import {
 } from './checkLapModel';
 import type { CheckItemSpec } from './CheckItemControls';
 
+/** Well clear of any pull window. */
+const FAR_OFF = new Date(Date.now() + 400 * 86_400_000).toISOString().slice(0, 10);
+/** Inside the default 30-day pull window. */
+const DUE_SOON = new Date(Date.now() + 5 * 86_400_000).toISOString().slice(0, 10);
+
 const fn = (id: string, name: string): CheckItemSpec => ({ id, name, checkType: 'function' });
 const count = (id: string, name: string, par = 2): CheckItemSpec => ({
   id,
@@ -268,7 +273,11 @@ describe('seals', () => {
       children: [
         pocket('p1', 'Front pocket · airways', [count('a1', 'i-gel size 4', 2)]),
         pocket('pd', 'Drug pocket', [
-          { id: 'epi', name: 'Epinephrine 1:1000', checkType: 'expiry', expirationDate: '2026-09-02' },
+          // Far out on purpose: this test is about the seal not clearing a
+          // date, not about the date being close. A fixed date drifts into
+          // the pull window as the calendar moves and starts failing for the
+          // unrelated reason below.
+          { id: 'epi', name: 'Epinephrine 1:1000', checkType: 'expiry', expirationDate: FAR_OFF },
         ]),
       ],
     });
@@ -276,6 +285,25 @@ describe('seals', () => {
     // an intact tag is the one thing this rule exists to prevent.
     expect(isStopComplete(withDrug, { tag: { status: 'pass' } })).toBe(false);
     expect(isStopComplete(withDrug, { tag: { status: 'pass' }, epi: { status: 'pass' } })).toBe(true);
+  });
+
+  it('an intact seal stops clearing anything once something inside is due to be pulled', () => {
+    const withDueDrug = bag({
+      seal: { status: 'intact', tagNumber: 'M2-40871' },
+      children: [
+        pocket('p1', 'Front pocket · airways', [count('a1', 'i-gel size 4', 2)]),
+        pocket('pd', 'Drug pocket', [
+          { id: 'epi', name: 'Epinephrine 1:1000', checkType: 'expiry', expirationDate: DUE_SOON },
+        ]),
+      ],
+    });
+    // The crew has to open this bag to swap the drug, so the tag has stopped
+    // being evidence of anything: the counts inside come back with it. Answering
+    // the tag and the date is no longer enough.
+    expect(isStopComplete(withDueDrug, { tag: { status: 'pass' }, epi: { status: 'pass' } })).toBe(false);
+    expect(
+      isStopComplete(withDueDrug, { tag: { status: 'pass' }, epi: { status: 'pass' }, a1: { status: 'pass' } })
+    ).toBe(true);
   });
 
   it('an intact seal does NOT clear a pressure reading inside', () => {

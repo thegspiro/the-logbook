@@ -59,6 +59,12 @@ export interface CheckItemSpec {
 
   // Count
   expectedQuantity?: number | null | undefined;
+  /**
+   * What the last check recorded, or the truck's running count if that is
+   * newer. The number the crew opens on — 12 found against a par of 10 stays
+   * 12 for the next crew rather than resetting to par.
+   */
+  carriedQuantity?: number | null | undefined;
 
   // Expiry
   expirationDate?: string | null | undefined;

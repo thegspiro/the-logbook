@@ -7,7 +7,7 @@
  * refresh.
  */
 
-import { CheckType, normalizeCheckType } from '@/modules/scheduling/types/equipmentCheck';
+import { CheckType, daysUntil, normalizeCheckType } from '@/modules/scheduling/types/equipmentCheck';
 
 import type { CheckItemAnswer, CheckItemSpec } from './CheckItemControls';
 
@@ -62,15 +62,57 @@ export interface LapStop {
  * expiry dates and pressure readings move on their own while the bag sits
  * shut, so those are still asked for. A seal proves unchanged, not full.
  *
- * (This mirrors `sealClearableIn` in EquipmentCheckForm, which is the reviewed
- * rule on main. An earlier version of this file skipped the whole container,
- * which would have hidden an expiring drug behind an intact tag.)
+ * And it stops standing in entirely once something inside has to come out —
+ * see `sealBlockers`.
+ *
+ * (The clearing rule mirrors `sealClearableIn` in EquipmentCheckForm, which is
+ * the reviewed rule on main. An earlier version of this file skipped the whole
+ * container, which would have hidden an expiring drug behind an intact tag.)
  */
-export function contentsAreSealed(stop: LapStop): boolean {
+export function contentsAreSealed(stop: LapStop, today: Date = new Date()): boolean {
   // `=== 'intact'`, not `!== 'broken'`: an absent seal means nobody has read
   // the tag yet, and the earlier form cleared the counting for a crew that had
   // not looked at it — the one thing a seal is supposed to be evidence of.
-  return Boolean(stop.isSealed) && stop.seal?.status === 'intact';
+  if (!stop.isSealed || stop.seal?.status !== 'intact') return false;
+  // An intact tag stops standing in for the contents the moment something
+  // inside has to come out: the crew is going in regardless, and once the
+  // container is open the seal is no longer evidence of anything.
+  return sealBlockers(stop, today).length === 0;
+}
+
+/**
+ * How close an item is to being unusable.
+ *
+ * `expirationWarningDays` is the department's own pull window for that item —
+ * 30 days where it is not set. Owned here because the same three-way was
+ * already written out at two call sites and is about to be needed at a third.
+ */
+export type ExpiryUrgency = 'none' | 'ok' | 'due' | 'expired';
+
+export function expiryUrgency(item: CheckItemSpec, today: Date = new Date()): ExpiryUrgency {
+  const days = daysUntil(item.expirationDate, today);
+  if (days === null) return 'none';
+  if (days < 0) return 'expired';
+  return days <= (item.expirationWarningDays ?? 30) ? 'due' : 'ok';
+}
+
+/**
+ * What forces a sealed container open, tag or no tag.
+ *
+ * A seal is evidence that nothing was *taken*. It is no evidence at all that
+ * what is inside is still usable — a drug expires on schedule behind an intact
+ * tag, and a crew that reads "seal intact, all good" carries an expired drug
+ * to a call. So an expiring or expired item inside overrides the tag: the
+ * container has to be opened, the item replaced, and the seal renewed.
+ *
+ * Recurses, because a sealed bag's pockets are inside the same seal.
+ */
+export function sealBlockers(stop: LapStop, today: Date = new Date()): CheckItemSpec[] {
+  if (!stop.isSealed) return [];
+  return stopItems(stop).filter((item) => {
+    const urgency = expiryUrgency(item, today);
+    return urgency === 'due' || urgency === 'expired';
+  });
 }
 
 /**
@@ -116,11 +158,11 @@ export function ownAnswerableItems(stop: LapStop): CheckItemSpec[] {
   });
 }
 
-export function isStopComplete(stop: LapStop, answers: AnswerMap): boolean {
+export function isStopComplete(stop: LapStop, answers: AnswerMap, today: Date = new Date()): boolean {
   // An intact seal clears the counting inside, but not the expiry dates and
   // readings that move while the bag sits shut — so those still have to be
   // answered before the stop is finished.
-  const items = contentsAreSealed(stop)
+  const items = contentsAreSealed(stop, today)
     ? [...ownAnswerableItems(stop), ...sealCannotClear(answerableItems(stop))]
     : answerableItems(stop);
   if (items.length === 0) return true;
@@ -182,6 +224,26 @@ export interface BulkClaim {
   /** Exactly the items the button answers. */
   items: CheckItemSpec[];
   label: string;
+  /**
+   * The quantity the claim asserts, per count item.
+   *
+   * Carried where a number carried forward, par otherwise. Spelled out rather
+   * than left for the caller to re-derive, because the two are not the same
+   * claim: writing par over a carried 12 quietly destroys a surplus the last
+   * crew counted, and it would do it behind a button captioned "at par".
+   */
+  quantities: Record<string, number>;
+}
+
+/**
+ * The number the crew is shown for a count before they touch anything.
+ *
+ * Carried outranks par: par is what the truck is *supposed* to hold, the
+ * carried figure is what was last actually counted, and the second is the one
+ * the next crew is looking at when they open the door.
+ */
+export function shownQuantity(item: CheckItemSpec): number | null {
+  return item.carriedQuantity ?? item.expectedQuantity ?? null;
 }
 
 export function bulkClaim(items: CheckItemSpec[]): BulkClaim | null {
@@ -196,13 +258,24 @@ export function bulkClaim(items: CheckItemSpec[]): BulkClaim | null {
   if (claimable.length === 0) return null;
   const n = claimable.length;
   const types = new Set(claimable.map((i) => normalizeCheckType(i.checkType)));
-  const label =
-    types.size === 1
-      ? [...types][0] === CheckType.COUNT
-        ? `All ${n} count${n === 1 ? '' : 's'} at par`
-        : `All ${n} work`
-      : `All ${n} good`;
-  return { items: claimable, label };
+
+  const quantities: Record<string, number> = {};
+  let anyOffPar = false;
+  for (const item of claimable) {
+    if (normalizeCheckType(item.checkType) !== CheckType.COUNT) continue;
+    const shown = shownQuantity(item);
+    if (shown === null) continue;
+    quantities[item.id] = shown;
+    if (item.expectedQuantity != null && shown !== item.expectedQuantity) anyOffPar = true;
+  }
+
+  // "At par" is only true while every shown number *is* par. Once a carried
+  // figure differs, the claim being made is that the carried numbers still
+  // hold — which is a different sentence, and the one the crew can actually
+  // check from where they are standing.
+  const countLabel = anyOffPar ? `All ${n} counts as carried` : `All ${n} count${n === 1 ? '' : 's'} at par`;
+  const label = types.size === 1 ? ([...types][0] === CheckType.COUNT ? countLabel : `All ${n} work`) : `All ${n} good`;
+  return { items: claimable, label, quantities };
 }
 
 /**
@@ -250,8 +323,8 @@ export function unreadGauges(stop: LapStop, answers: AnswerMap): CheckItemSpec[]
  * pockets, is the case the two disagree on, and it is the case the design's
  * sealed drug box is made of.
  */
-export function stillAsked(stop: LapStop): CheckItemSpec[] {
-  return contentsAreSealed(stop) ? sealCannotClear(answerableItems(stop)) : answerableItems(stop);
+export function stillAsked(stop: LapStop, today: Date = new Date()): CheckItemSpec[] {
+  return contentsAreSealed(stop, today) ? sealCannotClear(answerableItems(stop)) : answerableItems(stop);
 }
 
 /** `isStopComplete` for the sweep, over the set the sweep actually asks. */

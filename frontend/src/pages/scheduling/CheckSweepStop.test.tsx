@@ -325,3 +325,114 @@ describe('a sealed container', () => {
     expect(screen.queryByTestId('seal-cab')).not.toBeInTheDocument();
   });
 });
+
+describe('counts carried forward from the last check', () => {
+  // 12 found against a par of 10 is the case that matters: the surplus is real
+  // and the next crew opens on it, so anything that "resets to par" is losing
+  // a number somebody actually counted.
+  const gauze: CheckItemSpec = {
+    id: 'gauze',
+    name: 'Roller gauze',
+    checkType: 'count',
+    expectedQuantity: 10,
+    carriedQuantity: 12,
+  };
+
+  it('opens on what was last recorded, not on par', () => {
+    setup([gauze]);
+    expect(screen.getByTestId('tally-value-gauze')).toHaveTextContent('12');
+  });
+
+  it('does not read as answered, because nobody has looked yet', () => {
+    // The number being on screen is not a check. Left indistinguishable from a
+    // confirmed value, a crew could submit a full report having opened nothing
+    // and the progress counter would agree with them.
+    setup([gauze]);
+    expect(screen.getByTestId('tally-value-gauze').className).toContain('text-theme-text-muted');
+    expect(screen.getByTestId('tally-carried-note')).toBeVisible();
+  });
+
+  it('reads as answered once the crew touches it', () => {
+    setup([gauze], { gauze: { status: 'pass', quantityFound: 12 } });
+    expect(screen.getByTestId('tally-value-gauze').className).toContain('text-theme-alert-success-text');
+    expect(screen.queryByTestId('tally-carried-note')).not.toBeInTheDocument();
+  });
+
+  it('counts up from the carried number, not from par', async () => {
+    const user = userEvent.setup();
+    const onAnswer = setup([gauze]);
+    await user.click(screen.getByRole('button', { name: 'One more Roller gauze' }));
+    expect(onAnswer).toHaveBeenCalledWith('gauze', expect.objectContaining({ quantityFound: 13 }));
+  });
+
+  it('says nothing about carrying when there is nothing carried', () => {
+    setup([{ id: 'tape', name: 'Tape', checkType: 'count', expectedQuantity: 4 }]);
+    expect(screen.queryByTestId('tally-carried-note')).not.toBeInTheDocument();
+  });
+});
+
+describe('a seal over something that is expiring', () => {
+  const soon = new Date(Date.now() + 5 * 86_400_000).toISOString().slice(0, 10);
+  const morphine: CheckItemSpec = { id: 'morphine', name: 'Morphine', checkType: 'count', expectedQuantity: 2 };
+
+  const tray = (expiry: string, status?: 'intact' | 'broken'): LapStop => ({
+    id: 'tray',
+    name: 'Medication tray',
+    isSealed: true,
+    seal: { ...(status ? { status } : {}), tagNumber: 'M2-40871', replacementTagNumber: 'M2-40872' },
+    items: [morphine, { id: 'epi', name: 'Epi 1:1000', checkType: 'expiry', expirationDate: expiry }],
+  });
+
+  const mount = (stop: LapStop) => {
+    const onSeal = vi.fn();
+    render(<CheckSweepStop stop={stop} answers={{}} onAnswer={vi.fn()} onSeal={onSeal} />);
+    return onSeal;
+  };
+
+  it('leaves an intact seal alone while nothing inside is close', () => {
+    mount(tray(FAR, 'intact'));
+    expect(screen.getByTestId('seal-tray')).toHaveTextContent('Seal intact');
+    expect(screen.queryByTestId('seal-blocker-epi')).not.toBeInTheDocument();
+  });
+
+  it('tells the crew to open it when a drug inside is inside the pull window', () => {
+    mount(tray(soon, 'intact'));
+    expect(screen.getByTestId('seal-tray')).toHaveTextContent('Break the seal');
+    expect(screen.getByTestId('seal-blocker-epi')).toHaveTextContent('is inside the pull window');
+  });
+
+  it('says so for an expired drug, and names it', () => {
+    mount(tray(YESTERDAY, 'intact'));
+    expect(screen.getByTestId('seal-blocker-epi')).toHaveTextContent('has expired');
+    expect(screen.getByTestId('seal-tray')).toHaveTextContent('Epi 1:1000');
+  });
+
+  it('never shows the calm banner over a tray that has to be opened', () => {
+    // The failure this guards against is the quiet one: "seal intact, all
+    // good" over a tray holding an expired drug, and a crew that carries it.
+    mount(tray(YESTERDAY, 'intact'));
+    expect(screen.getByTestId('seal-tray')).not.toHaveTextContent('Seal intact');
+  });
+
+  it('brings the counting back, because an opened container vouches for nothing', () => {
+    mount(tray(YESTERDAY, 'intact'));
+    expect(screen.getByTestId('tally-row-morphine')).toBeVisible();
+  });
+
+  it('names the replacement tag so the re-seal comes off the record', () => {
+    mount(tray(YESTERDAY, 'intact'));
+    expect(screen.getByTestId('seal-tray')).toHaveTextContent('M2-40872');
+  });
+
+  it('warns before the tag is read, since the tag was never going to change the answer', () => {
+    mount(tray(YESTERDAY));
+    expect(screen.getByTestId('seal-tray')).toHaveTextContent('Break the seal');
+  });
+
+  it('records the crew breaking it', async () => {
+    const user = userEvent.setup();
+    const onSeal = mount(tray(YESTERDAY, 'intact'));
+    await user.click(screen.getByRole('button', { name: 'I have broken the seal' }));
+    expect(onSeal).toHaveBeenCalledWith('tray', { status: 'broken' });
+  });
+});

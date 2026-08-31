@@ -21,7 +21,15 @@ import { CheckType, daysUntil, normalizeCheckType } from '@/modules/scheduling/t
 
 import { countAnswer, expiryAnswer, levelAnswer } from './checkAnswers';
 import { FaultDetail, type CheckItemAnswer, type CheckItemSpec } from './CheckItemControls';
-import { contentsAreSealed, sealCannotClear, type AnswerMap, type LapStop, type SealState } from './checkLapModel';
+import {
+  contentsAreSealed,
+  expiryUrgency,
+  sealBlockers,
+  sealCannotClear,
+  type AnswerMap,
+  type LapStop,
+  type SealState,
+} from './checkLapModel';
 
 export interface StopBodyProps {
   stop: LapStop;
@@ -50,72 +58,99 @@ const CountTally: React.FC<Omit<StopBodyProps, 'stop'> & { items: CheckItemSpec[
   answers,
   onAnswer,
   disabled,
-}) => (
-  <div className="border-theme-surface-border overflow-hidden rounded-lg border">
-    <div className="border-theme-surface-border bg-theme-surface-secondary text-theme-text-muted flex items-center gap-2 border-b px-3 py-2 text-[11px] font-bold tracking-[.06em] uppercase">
-      <span className="flex-1">Item</span>
-      <span className="w-10 text-center">Par</span>
-      <span className="w-[132px] text-center">Found</span>
-    </div>
-    {items.map((item) => {
-      const par = item.expectedQuantity ?? null;
-      const found = answers[item.id]?.quantityFound;
-      const short = par !== null && found !== undefined && found < par;
-      const set = (next: number) => onAnswer(item.id, countAnswer(item, next));
-      return (
-        <div
-          key={item.id}
-          data-testid={`tally-row-${item.id}`}
-          // The short row is tinted, not just its number recoloured. In
-          // high-contrast every `--alert-*-text` is #f0f0f0 — the theme puts
-          // severity on the ground and the border and keeps text white — so a
-          // colour-only distinction between "at par" and "short" disappears
-          // exactly where legibility matters most.
-          className={`border-theme-surface-border flex items-center gap-2 border-b px-3 py-2 last:border-b-0 ${
-            short ? 'bg-theme-alert-warning-bg' : ''
-          }`}
-        >
-          <p className="text-theme-text-primary min-w-0 flex-1 text-[16px] font-semibold">{item.name}</p>
-          <span className="text-theme-text-secondary w-10 text-center font-mono text-[16px] tabular-nums">
-            {par ?? '—'}
-          </span>
-          <div className="flex w-[132px] items-center justify-end gap-1.5">
-            <button
-              type="button"
-              disabled={disabled}
-              onClick={() => set((found ?? par ?? 0) - 1)}
-              aria-label={`One fewer ${item.name}`}
-              className="border-theme-input-border text-theme-text-secondary hover:bg-theme-surface-hover h-11 w-11 shrink-0 rounded-lg border text-[20px] font-bold disabled:opacity-50"
-            >
-              −
-            </button>
-            <span
-              data-testid={`tally-value-${item.id}`}
-              className={`w-10 text-center font-mono text-[19px] font-bold tabular-nums ${
-                found === undefined
-                  ? 'text-theme-text-muted'
-                  : short
-                    ? 'text-theme-alert-warning-text'
-                    : 'text-theme-alert-success-text'
+}) => {
+  // One line under the table rather than a caption on every carried row: the
+  // tally is built to be scanned down, and a repeated sub-label in each row is
+  // the thing that stops it being scannable.
+  const anyCarried = items.some((item) => {
+    const answer = answers[item.id];
+    const unconfirmed = answer?.status === undefined || answer.status === 'not_checked';
+    return unconfirmed && (answer?.quantityFound ?? item.carriedQuantity) != null;
+  });
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      <div className="border-theme-surface-border overflow-hidden rounded-lg border">
+        <div className="border-theme-surface-border bg-theme-surface-secondary text-theme-text-muted flex items-center gap-2 border-b px-3 py-2 text-[11px] font-bold tracking-[.06em] uppercase">
+          <span className="flex-1">Item</span>
+          <span className="w-10 text-center">Par</span>
+          <span className="w-[132px] text-center">Found</span>
+        </div>
+        {items.map((item) => {
+          const par = item.expectedQuantity ?? null;
+          const answer = answers[item.id];
+          // A carried number is on the screen before anybody looks at the shelf, so
+          // the value shown and the value confirmed are two different things. The
+          // status is what separates them: the seed is written `not_checked`
+          // precisely so a crew cannot submit a full report having looked at
+          // nothing — and the row has to say so, or the number reads as a check.
+          const confirmed = answer?.status !== undefined && answer.status !== 'not_checked';
+          const found = answer?.quantityFound ?? item.carriedQuantity ?? undefined;
+          const short = par !== null && found !== undefined && found < par;
+          const carried = found !== undefined && !confirmed;
+          const set = (next: number) => onAnswer(item.id, countAnswer(item, next));
+          return (
+            <div
+              key={item.id}
+              data-testid={`tally-row-${item.id}`}
+              // The short row is tinted, not just its number recoloured. In
+              // high-contrast every `--alert-*-text` is #f0f0f0 — the theme puts
+              // severity on the ground and the border and keeps text white — so a
+              // colour-only distinction between "at par" and "short" disappears
+              // exactly where legibility matters most.
+              className={`border-theme-surface-border flex items-center gap-2 border-b px-3 py-2 last:border-b-0 ${
+                short && !carried ? 'bg-theme-alert-warning-bg' : ''
               }`}
             >
-              {found ?? '—'}
-            </span>
-            <button
-              type="button"
-              disabled={disabled}
-              onClick={() => set((found ?? par ?? 0) + 1)}
-              aria-label={`One more ${item.name}`}
-              className="border-theme-input-border text-theme-text-secondary hover:bg-theme-surface-hover h-11 w-11 shrink-0 rounded-lg border text-[20px] font-bold disabled:opacity-50"
-            >
-              +
-            </button>
-          </div>
-        </div>
-      );
-    })}
-  </div>
-);
+              <p className="text-theme-text-primary min-w-0 flex-1 text-[16px] font-semibold">{item.name}</p>
+              <span className="text-theme-text-secondary w-10 text-center font-mono text-[16px] tabular-nums">
+                {par ?? '—'}
+              </span>
+              <div className="flex w-[132px] items-center justify-end gap-1.5">
+                <button
+                  type="button"
+                  disabled={disabled}
+                  onClick={() => set((found ?? par ?? 0) - 1)}
+                  aria-label={`One fewer ${item.name}`}
+                  className="border-theme-input-border text-theme-text-secondary hover:bg-theme-surface-hover h-11 w-11 shrink-0 rounded-lg border text-[20px] font-bold disabled:opacity-50"
+                >
+                  −
+                </button>
+                <span
+                  data-testid={`tally-value-${item.id}`}
+                  className={`w-10 text-center font-mono text-[19px] font-bold tabular-nums ${
+                    found === undefined || carried
+                      ? 'text-theme-text-muted'
+                      : short
+                        ? 'text-theme-alert-warning-text'
+                        : 'text-theme-alert-success-text'
+                  }`}
+                >
+                  {found ?? '—'}
+                </span>
+                <button
+                  type="button"
+                  disabled={disabled}
+                  onClick={() => set((found ?? par ?? 0) + 1)}
+                  aria-label={`One more ${item.name}`}
+                  className="border-theme-input-border text-theme-text-secondary hover:bg-theme-surface-hover h-11 w-11 shrink-0 rounded-lg border text-[20px] font-bold disabled:opacity-50"
+                >
+                  +
+                </button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {anyCarried && (
+        <p data-testid="tally-carried-note" className="text-theme-text-muted text-[12px]">
+          Grey numbers are carried from the last check. Change what is different — the rest still needs confirming.
+        </p>
+      )}
+    </div>
+  );
+};
 
 // ============================================================================
 // Level — the one type that keeps a card
@@ -420,6 +455,51 @@ const SealCard: React.FC<{
   const seal = stop.seal;
   const status = seal?.status;
   const tag = seal?.tagNumber;
+  const blockers = sealBlockers(stop);
+
+  // An intact tag does not survive contact with a drug that is expiring. The
+  // crew is going in whatever the tag says, so this branch is checked first
+  // and the calm green banner never renders over it.
+  if (blockers.length > 0 && status !== 'broken') {
+    return (
+      <div data-testid={`seal-${stop.id}`} className="alert-danger p-3">
+        <p className="text-theme-alert-danger-title flex items-center gap-1.5 text-[15px] font-bold">
+          <ShieldAlert className="h-4 w-4 shrink-0" aria-hidden="true" />
+          Break the seal — something inside has to come out
+        </p>
+        <ul className="text-theme-text-secondary mt-1 flex flex-col gap-0.5 text-[13px]">
+          {blockers.map((item) => (
+            <li key={item.id} data-testid={`seal-blocker-${item.id}`}>
+              <span className="font-semibold">{item.name}</span>{' '}
+              {expiryUrgency(item) === 'expired' ? 'has expired' : 'is inside the pull window'}
+              {item.expirationDate ? <span className="font-mono"> · {item.expirationDate}</span> : null}
+            </li>
+          ))}
+        </ul>
+        <p className="text-theme-text-secondary mt-1.5 text-[13px]">
+          The tag is only evidence that nothing was taken — it says nothing about what is still usable. Open it, replace
+          {blockers.length === 1 ? ' it' : ' them'}, and re-seal
+          {seal?.replacementTagNumber ? (
+            <>
+              {' '}
+              with <span className="font-mono font-bold">{seal.replacementTagNumber}</span>
+            </>
+          ) : null}
+          . The full count is below, because once it is open the seal vouches for nothing.
+        </p>
+        {onSeal && (
+          <button
+            type="button"
+            disabled={disabled}
+            onClick={() => onSeal(stop.id, { status: 'broken' })}
+            className="border-theme-alert-danger-icon text-theme-alert-danger-title bg-theme-surface mt-2.5 min-h-12 w-full rounded-lg border text-[15px] font-bold"
+          >
+            I have broken the seal
+          </button>
+        )}
+      </div>
+    );
+  }
 
   if (status === 'intact') {
     return (

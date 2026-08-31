@@ -3,6 +3,9 @@ import { describe, expect, it } from 'vitest';
 import {
   bulkClaim,
   contentsAreSealed,
+  expiryUrgency,
+  sealBlockers,
+  shownQuantity,
   stopMapState,
   stopRestocks,
   sweepSummary,
@@ -162,5 +165,83 @@ describe('contentsAreSealed', () => {
   it('is false on a broken tag, and on a container that is not sealed at all', () => {
     expect(contentsAreSealed(box({ status: 'broken' }))).toBe(false);
     expect(contentsAreSealed({ id: 'cab', name: 'Cab', items: [] })).toBe(false);
+  });
+});
+
+describe('carried counts', () => {
+  const carried = (over: Partial<CheckItemSpec> = {}): CheckItemSpec => ({
+    id: 'gauze',
+    name: 'Roller gauze',
+    checkType: 'count',
+    expectedQuantity: 10,
+    ...over,
+  });
+
+  it('shows what was last counted, because par is what the truck should hold and this is what it did', () => {
+    expect(shownQuantity(carried({ carriedQuantity: 12 }))).toBe(12);
+    expect(shownQuantity(carried())).toBe(10);
+    expect(shownQuantity({ id: 'x', name: 'x', checkType: 'count' })).toBeNull();
+  });
+
+  it('stops claiming "at par" once a carried number is not par', () => {
+    // The label is the claim. "All 1 count at par" over a carried 12 would be
+    // a button that says one thing and writes another.
+    expect(bulkClaim([carried({ carriedQuantity: 12 })])?.label).toBe('All 1 counts as carried');
+    expect(bulkClaim([carried({ carriedQuantity: 10 })])?.label).toBe('All 1 count at par');
+    expect(bulkClaim([carried()])?.label).toBe('All 1 count at par');
+  });
+
+  it('spells out the quantity it is claiming, so par cannot be written over a surplus', () => {
+    expect(bulkClaim([carried({ carriedQuantity: 12 })])?.quantities).toEqual({ gauze: 12 });
+    expect(bulkClaim([carried()])?.quantities).toEqual({ gauze: 10 });
+  });
+});
+
+describe('sealBlockers', () => {
+  const today = new Date('2026-06-01T12:00:00');
+  const dated = (id: string, date: string, over: Partial<CheckItemSpec> = {}): CheckItemSpec => ({
+    id,
+    name: id,
+    checkType: 'expiry',
+    expirationDate: date,
+    ...over,
+  });
+
+  const tray = (items: CheckItemSpec[], children?: LapStop[]): LapStop => ({
+    id: 'tray',
+    name: 'Medication tray',
+    isSealed: true,
+    seal: { status: 'intact' },
+    items,
+    ...(children ? { children } : {}),
+  });
+
+  it('grades an expiry against the pull window the item itself sets', () => {
+    expect(expiryUrgency(dated('a', '2026-05-30'), today)).toBe('expired');
+    expect(expiryUrgency(dated('b', '2026-06-20'), today)).toBe('due');
+    expect(expiryUrgency(dated('c', '2026-09-01'), today)).toBe('ok');
+    expect(expiryUrgency(dated('d', '2026-06-20', { expirationWarningDays: 5 }), today)).toBe('ok');
+    expect(expiryUrgency({ id: 'e', name: 'e', checkType: 'function' }, today)).toBe('none');
+  });
+
+  it('names what forces the container open', () => {
+    expect(sealBlockers(tray([dated('epi', '2026-05-30')]), today).map((i) => i.id)).toEqual(['epi']);
+    expect(sealBlockers(tray([dated('epi', '2026-09-01')]), today)).toEqual([]);
+  });
+
+  it('looks inside the pockets, which are behind the same seal', () => {
+    const stop = tray([], [{ id: 'sleeve', name: 'Sleeve', items: [dated('midaz', '2026-05-01')] }]);
+    expect(sealBlockers(stop, today).map((i) => i.id)).toEqual(['midaz']);
+  });
+
+  it('ignores a container that is not sealed at all', () => {
+    expect(sealBlockers({ id: 'cab', name: 'Cab', items: [dated('epi', '2026-05-30')] }, today)).toEqual([]);
+  });
+
+  it('stops an intact tag standing in for contents that have to come out', () => {
+    // This is the whole rule: the tag proves nothing was taken, and proves
+    // nothing at all about whether what is left is still usable.
+    expect(contentsAreSealed(tray([dated('epi', '2026-09-01')]), today)).toBe(true);
+    expect(contentsAreSealed(tray([dated('epi', '2026-05-30')]), today)).toBe(false);
   });
 });
