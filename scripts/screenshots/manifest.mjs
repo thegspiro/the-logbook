@@ -1095,15 +1095,73 @@ async function selectClaimableBoardDay(page) {
       hasText: /^(Take a seat on this shift|Join this shift)$/,
     })
     .first();
-  const days = page.locator("[role='gridcell']");
+  // Visible cells only. The board renders its month twice -- PhoneMonth under
+  // `md:hidden` and MonthGrid under `md:grid` -- and the phone copy comes
+  // first in the DOM, so `.first()` is a hidden element and waitFor(), which
+  // waits for visibility by default, waits for something that never becomes
+  // visible. 62 gridcells on the page, 31 of them visible. Same trap
+  // clickByName documents for the duplicated nav.
+  // Open the month that holds the unsized shift, rather than whichever month
+  // today falls in. The board opens on the current month, and in the last week
+  // of one almost every shift in it has already run -- closed shifts render
+  // struck through and offer nothing, so the month reads as a wall of grey
+  // with none of the four states the marker is about, and the seeded unsized
+  // shift is next month anyway. Its date is discovered rather than hardcoded,
+  // because the seeder places it a few days out from whenever it ran.
+  const greyDate = await page.evaluate(async () => {
+    const res = await fetch("/api/v1/scheduling/shifts?limit=200", {
+      credentials: "include",
+    });
+    if (!res.ok) return null;
+    const body = await res.json();
+    const rows = Array.isArray(body) ? body : (body.shifts ?? []);
+    const unsized = rows.find(
+      (s) =>
+        !(s.positions ?? s.apparatus_positions ?? []).length && !s.min_staffing,
+    );
+    return unsized?.shift_date ?? null;
+  });
+  if (greyDate) {
+    const url = new URL(page.url());
+    url.searchParams.set("date", greyDate);
+    await page.goto(url.toString(), { waitUntil: "networkidle" });
+    await page.waitForTimeout(800);
+  }
+
+  const days = page.locator("[role='gridcell']").locator("visible=true");
   await days.first().waitFor({ timeout: 25_000 });
+  // Select the day carrying the unsized shift, so the grey chip and the crew
+  // panel are pictured together.
+  //
+  // The marker also asks for the claim button in frame, and that half cannot
+  // be honoured from this data: no account -- not the demo member, not the
+  // administrator -- is eligible for a single open seat anywhere in the month,
+  // so every crew renders "these seats need a qualification you do not hold
+  // yet" where the button would be. Selecting a day on the strength of a
+  // claim button that is merely *present* put the shot on a day whose visible
+  // panel said exactly that, under a caption promising the opposite. Better to
+  // picture the panel honestly and say so in the guide than to hunt for a
+  // frame that does not exist.
   const total = await days.count();
   for (let i = 0; i < total; i += 1) {
-    await days.nth(i).click({ timeout: 5_000 }).catch(() => {});
-    await page.waitForTimeout(200);
+    const cell = days.nth(i);
+    const text = (await cell.innerText().catch(() => "")) ?? "";
+    if (!/\bon\b/.test(text)) continue;
+    await cell.click({ timeout: 5_000 }).catch(() => {});
+    await page.waitForTimeout(250);
     if (await claim.count()) return;
   }
-  throw new Error("no day on this month offers a claimable seat");
+  // Nothing claimable anywhere: settle on the first day that has any shift, so
+  // the crew panel still has something to show.
+  for (let i = 0; i < total; i += 1) {
+    const cell = days.nth(i);
+    const text = (await cell.innerText().catch(() => "")) ?? "";
+    if (!/open|on\b/.test(text)) continue;
+    await cell.click({ timeout: 5_000 }).catch(() => {});
+    await page.waitForTimeout(250);
+    return;
+  }
+  throw new Error("no day in this month carries a shift at all");
 }
 
 /**
@@ -1168,7 +1226,13 @@ async function openSealPanels(page) {
     { timeout: 20_000 },
   );
   await page.locator("#seal-trauma-bag").fill("M3-41190");
-  await page.waitForTimeout(400);
+  // Both panels in one frame, which is what the marker requires. They sit
+  // about 1300px apart, so the shot uses a tall viewport rather than fullPage:
+  // this form has a sticky submit bar, and a stitched full-page capture paints
+  // it at the scroll offset in force -- landing "Overall Notes" and "Submit
+  // Report" across the middle of the checklist, which reads as a broken page.
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await page.waitForTimeout(500);
 }
 
 async function armStationAndTap(page) {
@@ -1213,7 +1277,9 @@ async function openStandingShiftDialog(page) {
     .first();
   // Walk the month's days until one carries the control. Which Tuesday is open
   // depends on the seeded roster, and hardcoding a date makes the shot expire.
-  const days = page.locator("[role='gridcell']");
+  // Visible cells only -- see selectClaimableBoardDay. This loop swallowed the
+  // click failures on the hidden phone copy and worked by accident.
+  const days = page.locator("[role='gridcell']").locator("visible=true");
   const total = await days.count();
   for (let i = 0; i < total && !(await tuesday.count()); i += 1) {
     await days.nth(i).click({ timeout: 5_000 }).catch(() => {});
@@ -12074,8 +12140,23 @@ export const SHOTS = [
     line: 1150,
     anchor: "the Schedule board, desktop",
     alt: "The month board with all four chip states: a red shift with open seats, a green full one, a blue one the member is already on, and a grey one that names neither positions nor a minimum",
-    route: "/scheduling?tab=schedule",
+    // `view=month` is not decoration: SchedulingPage defaults viewMode to
+    // "week", so MonthGrid -- and with it every gridcell this shot's prepare
+    // walks, and the four chip states the marker is about -- is not rendered
+    // at all without it.
+    route: "/scheduling?tab=schedule&view=month",
     auth: "member",
+    // Shot as the member: "You're on it" is a statement about the viewer, so
+    // the blue chips are hers, and the shifts she is not on keep their own
+    // colours -- the administrator's board turned the one green "Full 3/3"
+    // into a blue "You + 2/3" and cost the frame a state.
+    //
+    // The claim button the marker also asks for is not in this picture and
+    // cannot be: no account, member or administrator, is eligible for a single
+    // open seat anywhere in the month, so every crew renders "these seats need
+    // a qualification you do not hold yet" where the button would be. Guide 19
+    // says so beside the image rather than the image implying otherwise.
+    viewport: { width: 1440, height: 1200 },
     prepare: selectClaimableBoardDay,
     fullPage: false,
   },
@@ -12088,7 +12169,7 @@ export const SHOTS = [
     line: 1156,
     anchor: "the Schedule board, phone",
     alt: "The same month on a phone: the bar grid with a day sheet open over it, and no bottom navigation while the sheet is up",
-    route: "/scheduling?tab=schedule",
+    route: "/scheduling?tab=schedule&view=month",
     auth: "member",
     viewport: { width: 390, height: 844 },
     prepare: selectClaimableBoardDay,
@@ -12100,7 +12181,7 @@ export const SHOTS = [
     line: 1189,
     anchor: "the standing shift dialog",
     alt: "The standing-shift dialog on a Tuesday night shift: a biweekly pattern with the horizon left at its default a year out, and the dialog's own action row in frame",
-    route: "/scheduling?tab=schedule",
+    route: "/scheduling?tab=schedule&view=month",
     auth: "member",
     prepare: openStandingShiftDialog,
     selector: "div[role='dialog']",
@@ -12159,11 +12240,12 @@ export const SHOTS = [
     doc: "19-august-2026-release-changes.md",
     line: 1478,
     anchor: "the seal panel on a check",
-    alt: "Two sealed bags side by side: one whose tag matches the last count and offers to clear the contents, and one whose number differs and offers only Record seal with a hand count",
+    alt: "Two sealed bags in one frame: the Drug Bag's tag matches the last count and offers Seal intact — clear 1 check, while the Trauma Bag's differs and offers only Record seal with a hand count",
     route: "/scheduling?tab=equipment-checks",
     auth: "member",
+    viewport: { width: 1440, height: 2200 },
     prepare: openSealPanels,
-    fullPage: true,
+    fullPage: false,
   },
   {
     // The member's own page, necessarily: the administrator has hours in all
@@ -12177,6 +12259,13 @@ export const SHOTS = [
     route: "/admin-hours",
     auth: "member",
     fullPage: true,
+    allowEmptyState:
+      'The empty-state text here IS the feature. "No hours yet for: ' +
+      'Administrative Work, Volunteer Hours" is the muted line the marker asks ' +
+      "for by name -- the page naming the categories with nothing in the period " +
+      "instead of rendering a tile reading zero for each. The member has hours " +
+      "in four of the six categories, which is what the four ranked share bars " +
+      "above that line are.",
   },
   {
     // The healthy status line the marker asked for cannot be produced here,

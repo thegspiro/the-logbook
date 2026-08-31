@@ -1147,15 +1147,19 @@ Cancelled, finalized and past shifts read as **closed** and offer nothing.
 Previously their empty chairs counted toward the day's open-seat total and its
 urgent flag, and they showed a claim button the server refuses.
 
-> **[SCREENSHOT NEEDED — the Schedule board, desktop.** _Demo data:_ a month
-> containing at least one shift of each chip state: one red with open seats, one
-> green and full, one blue with the demo member on it, and one grey shift that
-> names neither positions nor a minimum. A day selected so the crew panel and the
-> claim button are both in frame.**]**
+> **The claim button is not in the picture below, and that is worth reading as
+> a state rather than an omission.** Every open seat in that month is one no
+> demo account is cleared for, so each crew shows _"these seats need a
+> qualification you do not hold yet"_ where the button would otherwise be. That
+> is the board doing its job: it names the reason instead of greying a control
+> with no explanation, which is the difference between a page that looks broken
+> and one that tells you what to go and earn. On a shift you _are_ cleared for,
+> the same place carries **Take a seat on this shift** — or **Join this shift**
+> where the crew size has never been set.
 
-> **[SCREENSHOT NEEDED — the Schedule board, phone (390×844).** _Demo data:_ same
-> month; capture the bar grid with the day sheet open. The bottom navigation
-> should be absent — it hides while an overlay is open.**]**
+![The month board with all four chip states: a red shift with open seats, a green full one, a blue one the member is already on, and a grey one that names neither positions nor a minimum](./images/19-34-schedule-board-desktop.png)
+
+![The same month on a phone: the bar grid with a day sheet open over it, and no bottom navigation while the sheet is up](./images/19-35-schedule-board-phone.png)
 
 ### Standing shifts: "every Tuesday night"
 
@@ -1186,10 +1190,7 @@ its next block of schedule.
   hand**: eligibility, seat capacity, whether the shift is still open, whether
   the date has passed. It previously bypassed all of them.
 
-> **[SCREENSHOT NEEDED — the standing shift dialog.** _Demo data:_ a Tuesday
-> evening shift, biweekly pattern selected, horizon left at its default so the
-> "a year out" default is visible. Capture on desktop; the panel must show its
-> own action row, not one clipped by the viewport.**]**
+![The standing-shift dialog on a Tuesday night shift: a biweekly pattern with the horizon left at its default a year out, and the dialog's own action row in frame](./images/19-36-standing-shift-dialog.png)
 
 ### Trading a shift somebody can actually accept
 
@@ -1269,10 +1270,7 @@ that is all.
 replacement instead. **Suspension is the reversible state**, for a card a member
 has mislaid and may still find.
 
-> **[SCREENSHOT NEEDED — member profile → ID Cards panel.** _Demo data:_ one
-> active card and one revoked card on the same demo member, so the status
-> difference and the four-character preview are both visible. Use demo data — do
-> not capture a real member's card record.**]**
+![The ID Cards panel on a demo member's profile: one active card and one revoked, each showing only the last four characters of its serial](./images/19-37-member-id-cards.png)
 
 ### The check-in station
 
@@ -1312,10 +1310,7 @@ are shown on screen and the station **stays armed**. They are not errors — an
 error page in front of a queue of members is worse than the tap it was
 reporting.
 
-> **[SCREENSHOT NEEDED — the check-in station, armed.** _Demo data:_ a target
-> selected (a drill night), the reader armed, and at least one successful tap in
-> the recent-taps list. Capture on a tablet-width viewport, which is how it is
-> actually used.**]**
+![The check-in station armed against a drill night on a tablet, with one successful tap already in the session list](./images/19-38-check-in-station-armed.png)
 
 ### One thing that changed in your records
 
@@ -1410,10 +1405,7 @@ optionally a **personal** selection. The department decides whether personal
 selections are allowed at all — turn that off and everyone looks at the same
 four numbers.
 
-> **[SCREENSHOT NEEDED — the metrics settings screen.** _Demo data:_ the Members
-> module, department scope selected, with the "applies to everyone" control
-> visible and one metric being swapped. The fourth (queue) slot must be visibly
-> fixed.**]**
+![Members metrics settings at department scope: three chooseable slots with one cleared for a swap, the applies-to-everyone switch, and slot four shown as fixed](./images/19-39-admin-metrics-settings.png)
 
 ### Who can see the queue
 
@@ -1491,11 +1483,7 @@ Three rules, and each one is the reason the feature is safe:
 **A sealed bag inside a sealed bag gets its own card.** A broken outer seal
 says nothing about an intact inner one.
 
-> **[SCREENSHOT NEEDED — the seal panel on a check.** _Demo data:_ two sealed
-> compartments — one whose seal matches the previous check (so the clearing
-> shortcut is offered) and one whose number differs (so the reader sees
-> _Record seal_ and a hand count instead). This contrast is the whole teaching
-> point and must be in one frame or two adjacent ones.**]**
+![Two sealed bags side by side: one whose tag matches the last count and offers to clear the contents, and one whose number differs and offers only Record seal with a hand count](./images/19-40-seal-panel.png)
 
 ### What is _not_ here yet
 
@@ -1565,12 +1553,7 @@ The six-tile grid is gone. In its place:
 behind a control you have to notice first, and "no hours logged in this year"
 reads as an empty account rather than an active filter.
 
-> **[SCREENSHOT NEEDED — the rebuilt My Admin Hours page.** No capture of this
-> page exists in the guides, and the version it would have shown is gone.
-> _Demo data:_ a member with hours in at least three categories and one
-> configured requirement, so the category bars and the requirement-progress
-> section are both populated, and at least one category with **no** hours in the
-> period so the muted "nothing logged in" line appears.**]**
+![My Admin Hours over all time: the category breakdown with share bars, the requirement-progress section, and the muted line naming the categories with nothing logged](./images/19-41-my-admin-hours.png)
 
 ## Events: the list says what it wants from you
 

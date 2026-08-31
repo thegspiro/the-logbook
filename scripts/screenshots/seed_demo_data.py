@@ -13951,7 +13951,13 @@ class Seeder:
         ("Meetings & Governance", 2, "Monthly membership meeting"),
         ("Fundraising", 4, "Pancake breakfast prep and service"),
     ]
-    MEMBER_HOURS_REQUIREMENT = ("Community Outreach", 8)
+    # Deliberately a category the member has *approved* hours in, and a target
+    # roughly double them. Only approved hours count against a requirement, so
+    # pointing this at Community Outreach -- where the member's single entry is
+    # the pending one -- resolved to 0.0 of 8: a progress section reading "not
+    # started", which teaches nothing about how progress is shown. Fundraising
+    # carries 4 approved hours, so the bar sits at half.
+    MEMBER_HOURS_REQUIREMENT = ("Fundraising", 8)
 
     def seed_member_admin_hours(self) -> dict[str, Any]:
         """Give the demo member a spread of approved hours and a requirement.
@@ -14031,10 +14037,17 @@ class Seeder:
         # The requirement the progress section renders. Attached to the
         # highest-priority active profile that admits this member's membership
         # type, which is how the resolver picks one.
+        # Two conventions in one method, which is the trap here: `/users`
+        # answers in snake_case and `/compliance/config` in camelCase, so the
+        # member's membership_type and the profile's isActive cannot be read
+        # the same way. Reading the profile in snake_case selected nothing at
+        # all, silently, and the requirement was never attached -- the page
+        # then rendered its category bars without the progress section the
+        # marker is half about.
         config = self.api.get("/compliance/config")
         category_name, required_hours = self.MEMBER_HOURS_REQUIREMENT
         category_id = categories.get(category_name)
-        membership = str(pick(member, "membership_type") or "active")
+        membership = str(pick(member, "membership_type", "membershipType") or "active")
         profile = next(
             (
                 pr
@@ -14043,25 +14056,37 @@ class Seeder:
                     key=lambda pr: pick(pr, "priority") or 0,
                     reverse=True,
                 )
-                if pick(pr, "is_active")
-                and membership in (pick(pr, "membership_types") or [membership])
+                if pick(pr, "is_active", "isActive")
+                and membership
+                in (
+                    pick(pr, "membership_types", "membershipTypes") or [membership]
+                )
             ),
             None,
         )
         if not profile or not category_id:
             return {"created": created, "blocked": "no profile to carry it"}
-        if not pick(profile, "admin_hours_requirements"):
+        # Compared against the intended requirement rather than merely tested
+        # for presence: a run that stored the wrong category could otherwise
+        # never correct itself, which is how this fixture first shipped
+        # pointing at a category whose only entry was pending.
+        wanted_requirement = {
+            "category_id": category_id,
+            "required_hours": required_hours,
+            "frequency": "annual",
+        }
+        stored = (
+            pick(profile, "admin_hours_requirements", "adminHoursRequirements") or []
+        )
+        matches = any(
+            str(pick(r, "category_id", "categoryId")) == category_id
+            and float(pick(r, "required_hours", "requiredHours") or 0) == required_hours
+            for r in stored
+        )
+        if not matches:
             self.api.put(
                 f"/compliance/config/profiles/{pick(profile, 'id')}",
-                {
-                    "admin_hours_requirements": [
-                        {
-                            "category_id": category_id,
-                            "required_hours": required_hours,
-                            "frequency": "annual",
-                        }
-                    ]
-                },
+                {"admin_hours_requirements": [wanted_requirement]},
             )
         return {"created": created, "profile": pick(profile, "name")}
 

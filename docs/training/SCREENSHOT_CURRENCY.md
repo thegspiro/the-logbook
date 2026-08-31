@@ -1,5 +1,94 @@
 # Screenshot currency
 
+## Captured 2026-08-25 (twenty-third) — the last nine markers, and two more defects
+
+**514 of 514. No markers outstanding.** The nine that arrived with this
+release's own guide additions: the schedule board at both widths, the standing
+shift dialog, the ID cards panel, the check-in station (shared with guide 10),
+metrics settings, the seal panel, and My Admin Hours.
+
+### Two product defects, both found by failing to photograph a feature
+
+**The tamper-seal shortcut had never worked.** `/last-seals` returns a bare
+dict keyed by compartment id, so it carries none of the camelCase aliasing the
+schema-backed responses get: it answered `seal_number`, the check form types it
+`LastSealRecord { sealNumber }`, and the service casts without mapping. Every
+lookup was `undefined`, so the tag never prefilled and `canClear` stayed false
+at any number a crew typed. The panel told them "No seal recorded at the last
+count" over a bag whose seal *had* been recorded, and the one-tap clear — the
+reason to read a seal at all — was unreachable. Nothing looked broken; the bag
+was simply counted by hand every time. Fixed at the boundary; the service keeps
+snake_case, which its own 15 tests assert.
+
+**Requirement progress crashed for anyone who had logged hours.** `func.sum`
+returns a `Decimal` on MySQL and the requirement's stored JSON a float, so the
+percentage raised `TypeError`. With *no* hours the `or 0` fallback keeps
+everything float and it answers normally — so the endpoint worked for every
+member it had nothing to report about and 500ed for every member it did. The
+first fixture hid this by pointing at a category whose only entry was pending,
+returning a tidy 0.0 of 8.
+
+### The seal shot is the one to look at twice
+
+Both bags in one frame: the Drug Bag prefilled `M3-40817` with **Seal intact —
+clear 1 check**, the Trauma Bag carrying `M3-41190` with **Record seal** and
+"Different from the last count (M3-40822)". Only the *previous* count is
+seeded; the mismatching tag is typed during capture, because that is where a
+mismatch comes from — a number on a bag, not a value anything stores.
+
+Framed at 1440x2200 with `fullPage: false`. A stitched full-page capture paints
+this form's sticky footer at the scroll offset in force, dropping "Overall
+Notes" and "Submit Report" across the middle of the checklist; and at 1500 or
+1900 the second panel fell behind that footer, which always owns the bottom of
+the viewport.
+
+### What the board shot cannot show, and why that is a state
+
+All five chip colours are in one frame — `1 open` amber, `3 open` red,
+`Full 3/3` green, `You + 1/4` blue, `0 on` grey — plus the legend, whose
+"Crew size not set" entry only renders when an unsized shift exists.
+
+The marker also asks for the claim button, and **no account can produce one**:
+not the demo member, not the administrator. Every open seat that month needs a
+qualification nobody holds, so each crew renders "these seats need a
+qualification you do not hold yet" where the button would be. An earlier
+attempt selected a day on the strength of a claim button that merely *existed*
+in the DOM, and landed on a panel saying exactly that under a caption promising
+the opposite. The guide now names the state beside the image.
+
+Worth someone's attention separately: `ea47d4ab` tightened
+`get_eligible_positions` to close an offer bypass, and the seeded department
+now has 56 open seats in September that nobody at all may claim.
+
+### Four selectors, four wrong guesses
+
+Every one caught by reading source rather than by a timeout: the station's
+target is a native `<select>`; `MonthGrid` renders days as `role="gridcell"`;
+there is no "Claim" label, it is "Take a seat on this shift" or "Join this
+shift" on an unsized one — which is the grey fixture, so a "Claim" matcher
+would have skipped the day that matters.
+
+And one caught only by probing the live page: the board renders its month
+**twice**, `PhoneMonth` under `md:hidden` and `MonthGrid` under `md:grid`, with
+the phone copy first in the DOM. 62 gridcells, 31 visible. `first().waitFor()`
+waits for visibility, so it waited on an element that never becomes visible —
+the same trap `clickByName` documents a few hundred lines above it. The
+standing-shift helper had the identical bug and passed by accident, its
+`.catch()` swallowing a click failure per hidden cell until it reached a real
+one.
+
+### Fixture bugs, all mine, all invisible without executing
+
+Seals sent to `/complete` after a create that had already completed the check;
+an ID-card guard keyed on `tag_uid`, which `/nfc-tags` never returns (it gives
+`uidPreview`, four characters, under `items` not `cards`); a reopen guard
+reading `attendance_finalized_at` off a list that carries no such field; a
+profile selector reading snake_case off `/compliance/config`, which is
+camelCase — while `/users`, in the same method, is snake_case.
+
+That is four instances of one mistake: assuming a response's shape instead of
+printing it.
+
 ## Re-captured 2026-08-25 — 470 images refreshed, and 35 shots that no longer reach their screen
 
 The pass planned in the entry below. Verified before committing, which is where
