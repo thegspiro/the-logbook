@@ -269,6 +269,72 @@ class TestProfileUpdate:
         assert target.member_class == "social"
         assert target.member_status == "junior"
 
+    async def test_a_status_only_write_is_refused_for_a_tier_member(self):
+        """The pair is one statement; half of it cannot invent the other.
+
+        `_reconcile_membership` fills the unwritten half with the column
+        default and re-derives `membership_type` from the pair. A member on an
+        org-configured tier is stored as `membership_type='senior'` with both
+        columns NULL, and `split_membership_type` refuses to guess a class for
+        an id it does not know — so a status-only write invented
+        `member_class='operational'` and rewrote the tier to 'active',
+        enrolling them in the operational body. Confirmed against the live
+        schema: ('senior', None, None) flushes to
+        ('active', 'operational', 'regular'), and the audit event names only
+        `member_status`, so the loss is unrecorded.
+        """
+        caller = _caller()
+        target = _target(membership_type="senior")
+        db = self._db(caller, target)
+
+        with pytest.raises(HTTPException) as exc:
+            await self._run(caller, target, db, UserUpdate(member_status="regular"))
+
+        assert exc.value.status_code == 400
+        assert "membership tier" in str(exc.value.detail)
+        assert target.member_status is None
+        assert target.membership_type == "senior"
+        db.commit.assert_not_awaited()
+
+    async def test_both_halves_together_are_accepted_for_a_tier_member(self):
+        """Refused for being incomplete, not for touching a tier member."""
+        caller = _caller()
+        target = _target(membership_type="senior")
+        db = self._db(caller, target)
+
+        await self._run(
+            caller,
+            target,
+            db,
+            UserUpdate(member_class="operational", member_status="regular"),
+        )
+
+        assert target.member_class == "operational"
+        assert target.member_status == "regular"
+        db.commit.assert_awaited()
+
+    async def test_a_status_only_write_is_allowed_when_the_class_is_on_file(self):
+        """Nothing is invented: the stored class completes the pair."""
+        caller = _caller()
+        target = _target(member_class="operational", membership_type="active")
+        db = self._db(caller, target)
+
+        await self._run(caller, target, db, UserUpdate(member_status="life"))
+
+        assert target.member_status == "life"
+        db.commit.assert_awaited()
+
+    async def test_a_class_only_write_still_works_for_a_legacy_member(self):
+        """`split_membership_type('active')` supplies the missing status."""
+        caller = _caller()
+        target = _target(membership_type="active")
+        db = self._db(caller, target)
+
+        await self._run(caller, target, db, UserUpdate(member_class="social"))
+
+        assert target.member_class == "social"
+        db.commit.assert_awaited()
+
     async def test_an_explicit_null_class_is_judged_as_the_resulting_default(self):
         """USR-07 pass 2 (Codex): an explicit ``member_class: null`` clears
         the class, and _reconcile_membership resolves that to DEFAULT_CLASS
