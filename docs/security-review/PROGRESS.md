@@ -16,13 +16,14 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-PR #TBD (`claude/security-review-meetings-minutes-pass2`) — feature 24
-(Meetings & minutes), pass 2. 3 fixed (1 LOW-MED backend audit-trail gap, 1
-LOW backend error-sanitization gap, 1 MED frontend silent-no-op bug), 1
-flagged (LOW-MED, `approve_meeting`'s missing state-machine guard/separation
-of duties — needs a product decision). Findings doc:
-`docs/security-review/MM-24-meetings-minutes.md` → Pass 2. Awaiting PR open
-and CI.
+PR [#2079](https://github.com/thegspiro/the-logbook/pull/2079)
+(`claude/security-review-meetings-minutes-pass2`) — feature 24 (Meetings &
+minutes), pass 2. 3 fixed (1 LOW-MED backend audit-trail gap, 1 LOW backend
+error-sanitization gap, 1 MED frontend silent-no-op bug), 1 flagged (LOW-MED,
+`approve_meeting`'s missing state-machine guard/separation of duties — needs
+a product decision). Findings doc:
+`docs/security-review/MM-24-meetings-minutes.md` → Pass 2. Opened and
+subscribed; awaiting CI.
 
 ---
 
@@ -105,9 +106,10 @@ meetings+minutes+quorum-scoped and 9287/9287 full backend suite pass (22
 pre-existing skips), `tsc --noEmit` 0 errors, `eslint .` 0 errors (8
 pre-existing warnings, none in touched files), `vitest run
 src/modules/minutes` 23/23 passed. Findings doc:
-`docs/security-review/MM-24-meetings-minutes.md` → Pass 2. Rotation row 24 →
-⏳ (awaiting PR merge). Next: 25 Messaging & notifications, once this PR
-merges.
+`docs/security-review/MM-24-meetings-minutes.md` → Pass 2. PR
+[#2079](https://github.com/thegspiro/the-logbook/pull/2079) opened and
+subscribed. Rotation row 24 → ⏳ (awaiting PR merge). Next: 25 Messaging &
+notifications, once this PR merges.
 
 ---
 
