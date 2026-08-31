@@ -69,9 +69,44 @@ def _migration_sources() -> dict[str, str]:
     }
 
 
+def _function_body(text: str, name: str) -> str:
+    """The text of one module-level ``def name(...):``, up to the next
+    module-level ``def``."""
+    match = re.search(
+        rf"^def {re.escape(name)}\([^)]*\)[^:]*:\n(.*?)(?=\ndef \w|\Z)",
+        text,
+        re.DOTALL | re.MULTILINE,
+    )
+    return match.group(1) if match else ""
+
+
+def _helper_functions(text: str) -> dict[str, str]:
+    """Every module-level function in a migration file except
+    ``upgrade``/``downgrade``, name -> body text."""
+    return {
+        m.group(1): _function_body(text, m.group(1))
+        for m in re.finditer(r"^def (\w+)\([^)]*\)[^:]*:\n", text, re.MULTILINE)
+        if m.group(1) not in ("upgrade", "downgrade")
+    }
+
+
 def _upgrade_body(text: str) -> str:
-    """The text of a migration's ``upgrade()`` function, excluding whatever
-    follows it (``downgrade()``, or a private helper defined after it).
+    """The *reachable* text of a migration's ``upgrade()``: its own body,
+    plus the body of any locally-defined helper function upgrade() invokes
+    by name — directly, or indirectly (a lambda, a dispatch dict) — since
+    this is a text scan, not an evaluator, and a helper's name appearing
+    literally in upgrade()'s text is what "invokes" means here. Excludes a
+    helper reachable only from ``downgrade()``.
+
+    Two real shapes in this codebase need this: ``upgrade()`` calling a
+    later-defined ``_create_organization_officers()`` directly
+    (``20260807_0002_add_push_subscriptions.py``), and ``upgrade()``
+    dispatching through a ``{name: lambda: helper()}`` table
+    (``20260206_0301_add_missing_training_tables.py``). Scanning
+    ``upgrade()``'s own text only would miss the ``op.create_table`` calls
+    both delegate to, misclassifying their tables as create_all-only and
+    making the ratchet reject the migration's own valid, already-guarded
+    touches of them elsewhere.
 
     A ``rename_table`` destination that appears only in ``downgrade()`` —
     e.g. renaming back to a table dropped in ``upgrade()`` — does not exist
@@ -82,7 +117,10 @@ def _upgrade_body(text: str) -> str:
     ``20260312_0200_rename_meeting_action_items_table.py``'s ``downgrade()``
     renames ``minutes_action_items`` back to ``meeting_action_items`` for
     exactly this shape (harmless today only because that table is also
-    genuinely migration-created elsewhere).
+    genuinely migration-created elsewhere). A helper reachable only from
+    ``downgrade()`` is excluded the same way: it is never in ``included``
+    unless its name is found inside something already in ``included``,
+    and ``downgrade()`` itself never seeds that set.
 
     The signature match tolerates a return-type annotation
     (``def upgrade() -> None:``, used throughout this codebase) — an earlier,
@@ -90,10 +128,20 @@ def _upgrade_body(text: str) -> str:
     caught before it shipped by comparing its output against the unscoped
     scan on the real migration chain.
     """
-    match = re.search(
-        r"def upgrade\([^)]*\)[^:]*:\n(.*?)(?=\ndef \w|\Z)", text, re.DOTALL
-    )
-    return match.group(1) if match else ""
+    body = _function_body(text, "upgrade")
+    helpers = _helper_functions(text)
+    included = [body]
+    pending = set(helpers)
+    changed = True
+    while changed:
+        changed = False
+        combined = "\n".join(included)
+        for name in list(pending):
+            if re.search(rf"\b{re.escape(name)}\b", combined):
+                included.append(helpers[name])
+                pending.discard(name)
+                changed = True
+    return "\n".join(included)
 
 
 def _tables_created_by_migrations(sources: dict[str, str]) -> set[str]:
@@ -468,6 +516,70 @@ class TestTheDetectionItself:
 
         assert "event_requests" not in _tables_created_by_migrations(sources)
         assert "renamed_requests" in _tables_created_by_migrations(sources)
+
+    def test_a_table_created_by_a_directly_called_helper_counts(self):
+        """`upgrade()` calling a helper defined later in the same file —
+        `20260807_0002_add_push_subscriptions.py`'s real shape — must not
+        hide that helper's `op.create_table` from the created set."""
+        sources = {
+            "0001_delegates.py": (
+                "def upgrade() -> None:\n"
+                "    op.create_table('push_subscriptions', ...)\n"
+                "    _create_organization_officers()\n"
+                "\n"
+                "def _create_organization_officers() -> None:\n"
+                "    op.create_table('organization_officers', ...)\n"
+                "\n"
+                "def downgrade() -> None:\n"
+                "    pass\n"
+            )
+        }
+
+        created = _tables_created_by_migrations(sources)
+
+        assert "organization_officers" in created
+        assert "push_subscriptions" in created
+
+    def test_a_table_created_by_a_dispatch_table_helper_counts(self):
+        """`upgrade()` referencing a helper only inside a lambda stored in a
+        dispatch dict — `20260206_0301_add_missing_training_tables.py`'s
+        real shape — must still count; the helper's name appears as literal
+        text in `upgrade()` even though it is never called directly."""
+        sources = {
+            "0001_dispatch.py": (
+                "def upgrade() -> None:\n"
+                "    table_name = 'skill_evaluations'\n"
+                "    creators = {table_name: lambda: create_skill_evaluations_table()}\n"
+                "    creators[table_name]()\n"
+                "\n"
+                "def create_skill_evaluations_table() -> None:\n"
+                "    op.create_table('skill_evaluations', ...)\n"
+                "\n"
+                "def downgrade() -> None:\n"
+                "    pass\n"
+            )
+        }
+
+        assert "skill_evaluations" in _tables_created_by_migrations(sources)
+
+    def test_a_helper_reachable_only_from_downgrade_does_not_count(self):
+        """The mirror image of the two tests above: a helper `downgrade()`
+        calls but `upgrade()` never mentions must not be credited — that
+        table does not exist on the fresh-upgrade path."""
+        sources = {
+            "0001_downgrade_only_helper.py": (
+                "def upgrade() -> None:\n"
+                "    pass\n"
+                "\n"
+                "def _recreate_legacy_table() -> None:\n"
+                "    op.create_table('legacy_table', ...)\n"
+                "\n"
+                "def downgrade() -> None:\n"
+                "    _recreate_legacy_table()\n"
+            )
+        }
+
+        assert "legacy_table" not in _tables_created_by_migrations(sources)
 
     def test_an_unguarded_reflection_is_flagged(self):
         """A raw `sa.Table(..., autoload_with=bind)` on a genuinely

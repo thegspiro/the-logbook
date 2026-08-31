@@ -31,7 +31,7 @@ correctness fix/ratchet. **MSG-12** (LOW-MED, flagged) stands. Rotation row
 
 ---
 
-### 2026-08-31 — Feature 25 (Messaging & notifications), pass 2 follow-up — 1 fixed (HIGH), 1 flagged (LOW-MED)
+### 2026-08-31 — Feature 25 (Messaging & notifications), pass 2 follow-up — initial assessment (0 fixed, 1 flagged; see corrections below for the retracted HIGH finding)
 
 A second, independent security-review iteration reached feature 25 pass 2 at
 essentially the same moment as the entry directly below — both found no open
