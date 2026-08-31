@@ -7,6 +7,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### A new crew experience for the equipment check (2026-08-31)
+
+**Added**
+
+- Crews can walk an equipment check one stop at a time instead of scrolling a
+  list of compartments. Each stop carries a map of the truck across the top
+  showing what is done, what has a fault and where you are; a single claim for
+  the whole stop where one is honest ("All 4 counts at par"); and a jump sheet
+  to reach any stop out of order, or read every item as one list. The check
+  finishes on the exceptions — the faults, the gaps and the restock lines —
+  rather than on 130 lines to scroll past. Not yet switched on for crews: the
+  template builder's preview shows it so departments can see it against their
+  own templates first.
+- A bag is now walked as a bag. Its pockets are a strip of numbered chips with
+  one pocket open at a time, and the claim, the restock line and the "read n
+  more gauges" hold all speak for the pocket in front of you rather than the
+  whole bag.
+- Counts carry forward from the last check. Twelve found against a par of ten
+  stays twelve for the next crew rather than resetting to par, and a carried
+  number is shown greyed until somebody confirms it, so a check cannot be
+  submitted complete on numbers nobody looked at.
+
+**Fixed**
+
+- A sealed container whose tag nobody had read yet had its contents counted as
+  already answered. A seal is evidence only once a crew has looked at it, so
+  the counting now waits for the tag to be confirmed.
+- An intact tamper seal no longer vouches for a container holding something
+  expired or due to be pulled. The check says which item, whether it has
+  expired or is inside its pull window, and which tag to re-seal with — a seal
+  proves nothing was taken, not that what is left is still usable.
+- On the equipment check, the "Out of service" and "Pass" buttons did not have
+  enough contrast against their labels to be read comfortably in sunlight or by
+  members with low vision, while "Fail" beside them did. All three now meet the
+  same standard, along with the submit button and the expiry and status badges.
+  The check also follows the high-contrast theme properly, which it previously
+  ignored.
+
 ### Grants & fundraising report and permission fixes (2026-08-30)
 
 **Fixed**
