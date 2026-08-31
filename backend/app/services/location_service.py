@@ -123,14 +123,16 @@ class LocationService:
         # The uniqueness scope is (name, building) together, so a PATCH that
         # changes only building must re-check it too — otherwise two
         # same-named locations that were valid in separate buildings can be
-        # moved into the same one undetected.
-        effective_name = (
-            location_data.name if location_data.name is not None else location.name
-        )
+        # moved into the same one undetected. `building` is nullable, so an
+        # explicit `PATCH {"building": null}` (clearing it) and an omitted
+        # `building` both read as `location_data.building is None` — only
+        # `model_fields_set` tells them apart. `name` cannot be explicitly
+        # null (LocationUpdate rejects it), so the same check is safe for it
+        # too and keeps both fields on one rule.
+        provided = location_data.model_fields_set
+        effective_name = location_data.name if "name" in provided else location.name
         effective_building = (
-            location_data.building
-            if location_data.building is not None
-            else location.building
+            location_data.building if "building" in provided else location.building
         )
         if effective_name != location.name or effective_building != location.building:
             dup_query = (

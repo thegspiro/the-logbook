@@ -74,6 +74,41 @@ async def test_building_only_change_with_no_conflict_succeeds():
     db.commit.assert_awaited_once()
 
 
+async def test_explicit_null_building_is_checked_for_duplicates():
+    """Clearing building must be checked against the no-building scope.
+
+    Before this fix, an explicit ``PATCH {"building": null}`` and an
+    omitted ``building`` both read as ``location_data.building is None``,
+    so the dup-check fell back to the location's *current* building instead
+    of the new (null) one it was about to persist — missing a conflict with
+    an existing same-named, no-building location.
+    """
+    location = _location(name="Bunk Room", building="Station 2")
+    duplicate = MagicMock()  # a no-building "Bunk Room" already exists
+    service, db = _service_with(location, duplicate)
+
+    with pytest.raises(ValueError, match="already exists"):
+        await service.update_location(uuid4(), LocationUpdate(building=None), "org-1")
+
+    db.commit.assert_not_awaited()
+    # The query must have checked the *new* (null) scope, not the old one.
+    dup_query = str(db.execute.await_args.args[0])
+    assert "building IS NULL" in dup_query
+
+
+async def test_explicit_null_building_with_no_conflict_clears_it():
+    location = _location(name="Bunk Room", building="Station 2")
+    service, db = _service_with(location, None)
+
+    result = await service.update_location(
+        uuid4(), LocationUpdate(building=None), "org-1"
+    )
+
+    assert result is location
+    assert location.building is None
+    db.commit.assert_awaited_once()
+
+
 async def test_unrelated_field_change_skips_the_duplicate_query():
     """Changing neither name nor building must not pay for a dup check."""
     location = _location(name="Bunk Room", building="Station 2")

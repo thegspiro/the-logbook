@@ -32,8 +32,12 @@ and attendance-finalized rejection gates, letting refused traffic exhaust
 it), LOC-32-5 (an explicit `null` for `name`/`is_active` reached a NOT NULL
 column as a 500 instead of a validation error) — plus the commit-hash
 correction (`1a0a35c8` is the actual, reachable squash-merge commit). All
-five fixed with guard tests. See log entry below and
-`docs/security-review/LOC-32-locations-kiosk.md`.
+five fixed with guard tests. **Round 3 (Codex-caught, on the LOC-32-3
+fix):** the effective-building calculation couldn't tell an explicit
+`building: null` (clearing it) apart from an omitted `building`, so a
+clear skipped the dup-check against the new null scope — fixed by reading
+`model_fields_set` instead of an `is not None` check. See log entry below
+and `docs/security-review/LOC-32-locations-kiosk.md`.
 
 **Note on branch naming:** pass 1's PR (#1916) used the branch name
 `claude/security-review-locations-kiosk` — reusing it for this pass would
@@ -102,11 +106,22 @@ building)` together — a building-only PATCH could merge two
    instead of 422ing. Fixed with a `model_validator` that rejects an
    explicit null for either field while still allowing omission.
 
+**Round 3 (Codex-caught, on LOC-32-3's own fix):** the effective-building
+calculation used `location_data.building is not None` to mean "supplied,"
+which cannot tell an explicit `PATCH {"building": null}` (clearing it)
+apart from an omitted `building` — both read as `None`. A clear therefore
+fell back to the location's _current_ building for the dup-check while
+still persisting `null`, missing a conflict with an existing same-named,
+no-building location. Fixed by reading `location_data.model_fields_set`
+instead, which correctly distinguishes omission from an explicit null for
+both fields (`name` cannot be explicitly null since LOC-32-5, so only
+`building` was actually exposed). Two more guard tests added.
+
 Every fix has a guard test independently verified against the new code:
 `tests/test_guest_check_in.py::TestGuestProspectCreation::
 test_link_race_is_scoped_to_a_savepoint_not_the_whole_commit`,
 `tests/test_location_display_code.py::TestGetLocationByDisplayCode`,
-`tests/test_location_uniqueness.py` (new file, 7 tests across both
+`tests/test_location_uniqueness.py` (new file, 9 tests across three
 findings), and `tests/test_public_display.py::
 TestGuestCheckInDailyCapOrdering` (3 tests).
 
@@ -115,10 +130,11 @@ endpoint) remains unchanged and flagged, not fixed, for the same reason as
 pass 1 — already tracked in `docs/KNOWN_LIMITATIONS.md`.
 
 **Completion gate:** `flake8`/`isort` clean; `black --check` required
-reformatting one file (`location_service.py`), applied. Scoped tests
+reformatting two files (`location_service.py`,
+`tests/test_location_uniqueness.py`), applied. Scoped tests
 (`-k "location or admin_hub or guest_check_in or public_display"`) —
-**311 passed** (was 290), 1 skipped (pre-existing). Full backend suite —
-**9366 passed** (was 9353), 22 skipped, 0 failed.
+**313 passed** (was 290), 1 skipped (pre-existing). Full backend suite —
+**9368 passed** (was 9353), 22 skipped, 0 failed.
 `validate_migrations.py --strict` — 394 revisions, single head (no schema
 change). No frontend file touched. Findings doc:
 `docs/security-review/LOC-32-locations-kiosk.md`. PR #2098 opened and

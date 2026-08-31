@@ -190,6 +190,21 @@ supplied, else the location's current value) and run the duplicate check
 whenever either component differs from the current row — not only when
 `name` is supplied. Guard tests: `tests/test_location_uniqueness.py`.
 
+**Revised after Codex review (this PR):** the first fix computed
+"supplied" as `location_data.building is not None`, which cannot tell an
+explicit `PATCH {"building": null}` (clearing it) apart from an omitted
+`building` — both read as `None`. So a clear fell back to the location's
+_current_ building for the dup-check while still persisting `None` via
+`model_dump(exclude_unset=True)`, missing a conflict with an existing
+same-named, no-building location. `name` cannot be explicitly null
+(LocationUpdate rejects it as of LOC-32-5), so this only bit `building`.
+Fixed by reading `location_data.model_fields_set` instead of an `is not
+None` check, so "omitted" and "explicitly null" are told apart correctly
+for both fields. Guard tests added:
+`test_explicit_null_building_is_checked_for_duplicates` (asserts the
+generated query checks `building IS NULL`, not the old value) and
+`test_explicit_null_building_with_no_conflict_clears_it`.
+
 ### LOC-32-4 — MED — The guest-check-in daily cap was reserved before every rejection gate — ✅ FIXED
 
 **What:** `POST .../guest-check-in` called `daily_cap_exceeded()` — an
@@ -280,7 +295,9 @@ test_link_race_is_scoped_to_a_savepoint_not_the_whole_commit` — LOC-32-1:
 - `tests/test_location_uniqueness.py` — LOC-32-3: a building-only change
   against a same-named location in the target building is rejected; a
   building-only change with no conflict succeeds; a change touching neither
-  name nor building skips the query entirely.
+  name nor building skips the query entirely; an explicit
+  `building: null` clear is checked against the no-building scope (not the
+  location's old building) and succeeds when there is no conflict.
 - `tests/test_public_display.py::TestGuestCheckInDailyCapOrdering` —
   LOC-32-4: a window-not-open rejection and a finalized-attendance rejection
   never call `daily_cap_exceeded`; a genuinely open request still does.
@@ -297,6 +314,6 @@ TestLocationUpdateRejectsNullForNonNullableFields` — LOC-32-5: an explicit
 | `black --check app/ tests/ alembic/`                                            | ✅ clean (after formatting one file)                |
 | `isort --check-only app/ tests/ alembic/`                                       | ✅ clean                                            |
 | `python3 scripts/validate_migrations.py --strict`                               | ✅ 394 revisions, single head                       |
-| Scoped tests (`-k "location or admin_hub or guest_check_in or public_display"`) | ✅ 311 passed, 1 skipped (pre-existing)             |
-| Full backend suite (`pytest tests/`)                                            | ✅ 9366 passed, 22 skipped (pre-existing), 0 failed |
+| Scoped tests (`-k "location or admin_hub or guest_check_in or public_display"`) | ✅ 313 passed, 1 skipped (pre-existing)             |
+| Full backend suite (`pytest tests/`)                                            | ✅ 9368 passed, 22 skipped (pre-existing), 0 failed |
 | `tsc --noEmit` / `eslint .`                                                     | n/a — no frontend file changed                      |
