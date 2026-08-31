@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Forms fix (2026-08-31)
+
+**Fixed**
+
+- If a form's cross-module integration (assigning equipment, registering
+  for an event, or creating an event request from a form submission) hit
+  an unexpected internal error, the submission's integration results could
+  show a raw internal error message instead of a clean explanation. Errors
+  now show a generic message while the details are still logged for
+  troubleshooting.
+
 ### Meetings and minutes fixes (2026-08-31)
 
 **Fixed**

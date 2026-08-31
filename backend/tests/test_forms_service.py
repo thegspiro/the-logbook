@@ -7,7 +7,7 @@ merely by the key being present.
 """
 
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -273,3 +273,94 @@ class TestUpdateIntegration:
         assert result is None
         assert error is not None
         db.rollback.assert_awaited_once()
+
+
+class TestIntegrationProcessorsSanitizeErrors:
+    """An integration-processor exception is stored on
+    submission.integration_result, and FormSubmissionResponse serializes
+    that column straight back to the caller of submit_form (any
+    authenticated member — submit_form carries no elevated permission
+    requirement) and to forms.manage admins via get_submission/
+    list_submissions/reprocess_submission_integrations. Raw ``str(e)`` here
+    is the same leak class FORM-7 fixed on the (result, error) tuple path,
+    just reached through a different field — every processor must route the
+    exception through safe_error_detail() instead of interpolating it
+    directly."""
+
+    async def test_equipment_assignment_processor_sanitizes_db_error(self):
+        submission = SimpleNamespace(
+            data={"f-member": "user-1", "f-item": "item-1"},
+            organization_id="org-1",
+            submitted_by="user-1",
+        )
+        form = SimpleNamespace(fields=[])
+        integration = SimpleNamespace(
+            field_mappings={"f-member": "member_id", "f-item": "item_id"}
+        )
+        # _entity_in_org: any by-id lookup resolves to a row in-org.
+        db = _db_returning("found")
+        service = FormsService(db)
+
+        sensitive = "Unknown column 'assigned_by_fk' in 'field list'"
+        with patch("app.services.inventory_service.InventoryService") as mock_inv:
+            mock_inv.return_value.assign_item_to_user = AsyncMock(
+                side_effect=RuntimeError(sensitive)
+            )
+            result = await service._process_equipment_assignment(
+                submission, integration=integration, form=form
+            )
+
+        assert result["success"] is False
+        assert sensitive not in result["error"]
+        assert "field list" not in result["error"]
+
+    async def test_process_integrations_direct_path_sanitizes_error(self):
+        """The aggregator's own except (form.integration_type set, no
+        FormIntegration row) must not leak a processor's raw exception."""
+        submission = SimpleNamespace(
+            id="sub-1",
+            integration_processed=False,
+            integration_result=None,
+        )
+        form = SimpleNamespace(integration_type="equipment_assignment", integrations=[])
+        db = AsyncMock()
+        service = FormsService(db)
+
+        sensitive = 'OperationalError: (2003, "Can\'t connect to MySQL server")'
+        service._process_equipment_assignment = AsyncMock(
+            side_effect=RuntimeError(sensitive)
+        )
+        service._auto_advance_pipeline_step = AsyncMock()
+
+        await service._process_integrations(submission, form)
+
+        error_text = submission.integration_result["equipment_assignment"]["error"]
+        assert sensitive not in error_text
+        assert "MySQL" not in error_text
+
+    async def test_process_integrations_legacy_path_sanitizes_error(self):
+        """Same aggregator except, taken via the legacy FormIntegration-row
+        path (form.integration_type unset)."""
+        submission = SimpleNamespace(
+            id="sub-2",
+            integration_processed=False,
+            integration_result=None,
+        )
+        legacy_integration = SimpleNamespace(
+            integration_type=IntegrationType.EVENT_REGISTRATION, is_active=True
+        )
+        form = SimpleNamespace(integration_type=None, integrations=[legacy_integration])
+        db = AsyncMock()
+        service = FormsService(db)
+
+        sensitive = "IntegrityError: duplicate entry for key 'events.pk'"
+        service._process_event_registration = AsyncMock(
+            side_effect=RuntimeError(sensitive)
+        )
+        service._auto_advance_pipeline_step = AsyncMock()
+
+        await service._process_integrations(submission, form)
+
+        error_text = submission.integration_result["event_registration"]["error"]
+        assert sensitive not in error_text
+        assert "IntegrityError" not in error_text

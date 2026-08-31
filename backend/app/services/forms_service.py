@@ -1385,9 +1385,15 @@ class FormsService:
                         )
                         results["event_request"] = result
                 except Exception as e:
+                    # This dict is persisted to submission.integration_result and
+                    # serialized back to the client on submit_form/get_submission/
+                    # list_submissions/reprocess (FormSubmissionResponse carries the
+                    # column) — raw exception text here is the same leak class FORM-7
+                    # fixed on the (result, error) tuple path, reached through a
+                    # different field.
                     results[int_type] = {
                         "success": False,
-                        "error": str(e),
+                        "error": safe_error_detail(e),
                     }
             handled_types.add(int_type)
 
@@ -1425,7 +1431,7 @@ class FormsService:
             except Exception as e:
                 results[it] = {
                     "success": False,
-                    "error": str(e),
+                    "error": safe_error_detail(e),
                 }
 
         if results:
@@ -1851,7 +1857,7 @@ class FormsService:
                 "success": False,
                 "mapped_data": mapped_data,
                 "prospect_id": None,
-                "message": f"Prospect creation failed: {e}",
+                "message": f"Prospect creation failed: {safe_error_detail(e)}",
             }
 
     async def _resolve_pipeline_for_form(
@@ -2184,7 +2190,7 @@ class FormsService:
                 "error": "Inventory service not available",
             }
         except Exception as e:
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": safe_error_detail(e)}
 
     async def _process_event_registration(
         self,
@@ -2298,7 +2304,7 @@ class FormsService:
                     "message": "Member RSVP created via form registration",
                 }
             except Exception as e:
-                return {"success": False, "error": str(e)}
+                return {"success": False, "error": safe_error_detail(e)}
         else:
             # Public/anonymous submission — store for admin review
             return {
@@ -2482,7 +2488,7 @@ class FormsService:
                 "message": "Event request created for coordinator review",
             }
         except Exception as e:
-            return {"success": False, "error": str(e)}
+            return {"success": False, "error": safe_error_detail(e)}
 
     # ============================================
     # Member Lookup
