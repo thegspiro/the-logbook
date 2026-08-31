@@ -96,13 +96,16 @@ added that inspects the compiled `WHERE` clause and fails on reintroduction
 **Flagged (MSG-10, not fixed, recorded in `docs/KNOWN_LIMITATIONS.md`)** —
 `reconcile_recipients` hard-deletes a member's `DepartmentMessageRecipient`
 row, including `read_at`/`acknowledged_at`, the moment an audience edit no
-longer targets them — erasing that member's record from
-`get_acknowledgment_report` (an independent `message_acknowledged` audit-log
-entry survives, per Codex's review of PR #2081, so this is a report/inbox-
-visibility loss, not a total loss of evidence), which the same file's own
-`delete_message` docstring calls "compliance evidence." Not mechanically
-fixable like MSG-9 (the org-scoping fix above): keeping resolved rows would also keep the
-message visible in that member's inbox (visibility is a join on the same
+longer targets them — reliably erasing that member's record from
+`get_acknowledgment_report` (which the same file's own `delete_message`
+docstring calls "compliance evidence"). An independent `message_acknowledged`
+audit-log entry may also exist, but that write is best-effort, not
+guaranteed — `AuditLogger.create_log_entry` is deliberately fail-open and
+`acknowledge_message` never checks its return, per Codex's review of the
+closing PR #2082 — so whether any evidence survives beyond the report/inbox
+depends on whether that write happened to succeed. Not mechanically fixable
+like MSG-9 (the org-scoping fix above): keeping resolved rows would also keep
+the message visible in that member's inbox (visibility is a join on the same
 table), which is a product decision, not a bug fix. Not cross-tenant.
 
 Also corrected a stale doc: `docs/app-review/email-templates.md` still marked
