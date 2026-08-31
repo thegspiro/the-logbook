@@ -13,8 +13,9 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import require_permission
+from app.core.audit import log_audit_event
 from app.core.database import get_db
-from app.core.utils import safe_error_detail
+from app.core.utils import safe_error_detail, sanitize_error_message
 from app.models.user import User
 from app.schemas.meetings import (
     ActionItemCreate,
@@ -92,6 +93,17 @@ async def create_meeting(
         raise HTTPException(
             status_code=400, detail=safe_error_detail(ValueError(error))
         )
+
+    await log_audit_event(
+        db=db,
+        event_type="meeting_created",
+        event_category="meetings",
+        severity="info",
+        event_data={"meeting_id": result.id, "title": result.title},
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
     return result
 
 
@@ -130,6 +142,20 @@ async def update_meeting(
         raise HTTPException(
             status_code=400, detail=safe_error_detail(ValueError(error))
         )
+
+    await log_audit_event(
+        db=db,
+        event_type="meeting_updated",
+        event_category="meetings",
+        severity="info",
+        event_data={
+            "meeting_id": str(meeting_id),
+            "changed_fields": sorted(update_data.keys()),
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
     return result
 
 
@@ -149,6 +175,16 @@ async def delete_meeting(
             status_code=400, detail=safe_error_detail(ValueError(error))
         )
 
+    await log_audit_event(
+        db=db,
+        event_type="meeting_deleted",
+        event_category="meetings",
+        severity="warning",
+        event_data={"meeting_id": str(meeting_id)},
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
 
 @router.post("/{meeting_id}/approve", response_model=MeetingResponse)
 async def approve_meeting(
@@ -165,6 +201,17 @@ async def approve_meeting(
         raise HTTPException(
             status_code=400, detail=safe_error_detail(ValueError(error))
         )
+
+    await log_audit_event(
+        db=db,
+        event_type="meeting_approved",
+        event_category="meetings",
+        severity="info",
+        event_data={"meeting_id": str(meeting_id), "title": result.title},
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
     return result
 
 
@@ -193,6 +240,20 @@ async def add_attendee(
         raise HTTPException(
             status_code=400, detail=safe_error_detail(ValueError(error))
         )
+
+    await log_audit_event(
+        db=db,
+        event_type="meeting_attendee_added",
+        event_category="meetings",
+        severity="info",
+        event_data={
+            "meeting_id": str(meeting_id),
+            "attendee_user_id": str(attendee.user_id),
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
     return result
 
 
@@ -214,6 +275,19 @@ async def remove_attendee(
         raise HTTPException(
             status_code=400, detail=safe_error_detail(ValueError(error))
         )
+
+    await log_audit_event(
+        db=db,
+        event_type="meeting_attendee_removed",
+        event_category="meetings",
+        severity="warning",
+        event_data={
+            "meeting_id": str(meeting_id),
+            "attendee_id": str(attendee_id),
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
 
 
 # ============================================
@@ -241,6 +315,17 @@ async def create_action_item(
         raise HTTPException(
             status_code=400, detail=safe_error_detail(ValueError(error))
         )
+
+    await log_audit_event(
+        db=db,
+        event_type="meeting_action_item_created",
+        event_category="meetings",
+        severity="info",
+        event_data={"meeting_id": str(meeting_id), "action_item_id": str(result.id)},
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
     return result
 
 
@@ -253,13 +338,28 @@ async def update_action_item(
 ):
     """Update an action item"""
     service = MeetingsService(db)
+    update_data = item.model_dump(exclude_unset=True)
     result, error = await service.update_action_item(
-        item_id, current_user.organization_id, item.model_dump(exclude_unset=True)
+        item_id, current_user.organization_id, update_data
     )
     if error:
         raise HTTPException(
             status_code=400, detail=safe_error_detail(ValueError(error))
         )
+
+    await log_audit_event(
+        db=db,
+        event_type="meeting_action_item_updated",
+        event_category="meetings",
+        severity="info",
+        event_data={
+            "action_item_id": str(item_id),
+            "changed_fields": sorted(update_data.keys()),
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
     return result
 
 
@@ -278,6 +378,16 @@ async def delete_action_item(
         raise HTTPException(
             status_code=400, detail=safe_error_detail(ValueError(error))
         )
+
+    await log_audit_event(
+        db=db,
+        event_type="meeting_action_item_deleted",
+        event_category="meetings",
+        severity="warning",
+        event_data={"action_item_id": str(item_id)},
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
 
 
 @router.get("/action-items/open", response_model=list[ActionItemResponse])
@@ -363,8 +473,6 @@ async def grant_attendance_waiver(
 
     **Requires permission: meetings.manage**
     """
-    from app.core.audit import log_audit_event
-
     # Verify the meeting belongs to this org
     from app.models.meeting import Meeting
     from app.services.attendance_dashboard_service import AttendanceDashboardService
@@ -475,10 +583,30 @@ async def create_meeting_from_event(
         created_by=current_user.id,
     )
     if error:
+        # MM-10: `error` here can be the service's own bare str(exception) —
+        # not a ValueError instance safe_error_detail() can pattern-check —
+        # so it must go through sanitize_error_message() (the helper built
+        # for exactly this "raw service-layer string" shape, already used by
+        # inventory.py/medical_supplies.py) rather than reach the client raw.
         raise HTTPException(
             status_code=400 if "already exists" in error else 404,
-            detail=error,
+            detail=sanitize_error_message(error),
         )
+
+    await log_audit_event(
+        db=db,
+        event_type="meeting_created_from_event",
+        event_category="meetings",
+        severity="info",
+        event_data={
+            "meeting_id": meeting.id,
+            "event_id": str(event_id),
+            "title": meeting.title,
+        },
+        user_id=str(current_user.id),
+        username=current_user.username,
+    )
+
     return {
         "id": meeting.id,
         "title": meeting.title,

@@ -155,10 +155,13 @@ describe('EquipmentCheckForm quantity seeding', () => {
         />
       );
 
-      const context = screen.getByRole('group', { name: 'Checklist context' });
+      const context = screen.getByRole('group', {
+        name: `Checklist context: ${apparatusName}, Fri, Aug 28, 2026, Start of shift`,
+      });
       expect(within(context).getByTitle(apparatusName)).toHaveClass('min-w-0', 'truncate');
       expect(within(context).getByText('Fri, Aug 28, 2026')).toHaveClass('shrink-0');
-      expect(within(context).getByText('Start of shift')).toHaveClass('shrink-0');
+      expect(within(context).getByText('Start of shift')).toHaveClass('sr-only');
+      expect(within(context).getByText('START')).toHaveClass('shrink-0');
       expect(screen.getByText('0/1')).toHaveClass('shrink-0');
       expect(screen.getByRole('heading')).toHaveClass('min-w-0', 'truncate');
     });
@@ -172,17 +175,17 @@ describe('EquipmentCheckForm quantity seeding', () => {
         />
       );
 
-      const context = screen.getByRole('group', { name: 'Checklist context' });
+      const context = screen.getByRole('group', { name: 'Checklist context: Engine 4' });
       expect(context).toHaveTextContent('Engine 4');
       expect(context).not.toHaveTextContent('·');
       expect(context).not.toHaveTextContent(/undefined|invalid|N\/A/i);
-      expect(screen.queryByText(/Start of shift|End of shift/)).not.toBeInTheDocument();
+      expect(screen.queryByText(/START|END/)).not.toBeInTheDocument();
     });
 
     it.each([
-      ['start_of_shift', 'Start of shift'],
-      ['end_of_shift', 'End of shift'],
-    ])('renders the %s timing in the single metadata row', (checkTiming, label) => {
+      ['start_of_shift', 'Start of shift', 'START'],
+      ['end_of_shift', 'End of shift', 'END'],
+    ])('renders the %s timing in the single metadata row', (checkTiming, label, badgeLabel) => {
       renderWithRouter(
         <EquipmentCheckForm
           shiftId="shift-1"
@@ -191,15 +194,19 @@ describe('EquipmentCheckForm quantity seeding', () => {
         />
       );
 
-      const context = screen.getByRole('group', { name: 'Checklist context' });
-      expect(within(context).getByText(label)).toBeInTheDocument();
+      const context = screen.getByRole('group', {
+        name: `Checklist context: Engine 4, Fri, Aug 28, 2026, ${label}`,
+      });
+      expect(within(context).getByText(badgeLabel)).toBeInTheDocument();
       expect(screen.getAllByText(label)).toHaveLength(1);
       expect(within(context).getByText('Fri, Aug 28, 2026')).toBeInTheDocument();
     });
   });
 
-  const render = (itemOverrides = {}) =>
-    renderWithRouter(<EquipmentCheckForm shiftId="shift-1" template={template(itemOverrides) as never} />);
+  const render = (itemOverrides = {}, onComplete?: () => void) =>
+    renderWithRouter(
+      <EquipmentCheckForm shiftId="shift-1" template={template(itemOverrides) as never} onComplete={onComplete} />
+    );
 
   const completeWithPhoto = async (fileName = 'gauze.jpg') => {
     const user = userEvent.setup();
@@ -229,12 +236,13 @@ describe('EquipmentCheckForm quantity seeding', () => {
   });
 
   it('retains a failed online photo upload without claiming unconditional success', async () => {
+    const onComplete = vi.fn();
     mockSubmitCheck.mockResolvedValue({
       id: 'check-1',
       items: [{ id: 'check-item-77', templateItemId: 'ti-1', itemName: '4x4 Gauze' }],
     });
     mockUploadCheckItemPhotos.mockRejectedValueOnce(new Error('upload interrupted'));
-    render({ quantityOnTruck: 4 });
+    render({ quantityOnTruck: 4 }, onComplete);
 
     await completeWithPhoto();
 
@@ -250,20 +258,37 @@ describe('EquipmentCheckForm quantity seeding', () => {
       'ti-1': 'check-item-77',
     });
     expect(mockDequeueCheck).not.toHaveBeenCalledWith('queued-check-1');
+    expect(onComplete).not.toHaveBeenCalled();
   });
 
   it('removes successful photos from the pending set before completing', async () => {
+    const onComplete = vi.fn();
     mockSubmitCheck.mockResolvedValue({
       id: 'check-1',
       items: [{ id: 'check-item-77', templateItemId: 'ti-1', itemName: '4x4 Gauze' }],
     });
-    render({ quantityOnTruck: 4 });
+    render({ quantityOnTruck: 4 }, onComplete);
 
     await completeWithPhoto();
 
     await waitFor(() => expect(mockMarkPhotosUploaded).toHaveBeenCalledWith('queued-check-1', 'ti-1'));
     expect(mockDequeueCheck).toHaveBeenCalledWith('queued-check-1');
     expect(await screen.findByText('1 photo attached')).toBeInTheDocument();
+    expect(onComplete).toHaveBeenCalledOnce();
+  });
+
+  it('distinguishes a rejected check submission from retained evidence', async () => {
+    mockSubmitCheck.mockRejectedValueOnce({ response: { status: 422, data: { detail: 'Check already submitted' } } });
+    const onComplete = vi.fn();
+    render({ quantityOnTruck: 4 }, onComplete);
+
+    await completeWithPhoto();
+
+    expect(await screen.findByText('Check submission failed')).toBeInTheDocument();
+    expect(screen.getByText('Check already submitted')).toBeInTheDocument();
+    expect(screen.queryByText(/saved for retry/)).not.toBeInTheDocument();
+    expect(mockEnqueueCheck).not.toHaveBeenCalled();
+    expect(onComplete).not.toHaveBeenCalled();
   });
 
   it('retries retained evidence with the returned check-item ID and does not resubmit the check', async () => {

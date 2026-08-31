@@ -68,6 +68,26 @@ export function createApiClient(baseURL = '/api/v1'): AxiosInstance {
   api.interceptors.response.use(
     (response) => response,
     async (error: AxiosError) => {
+      // A request made with `responseType: 'blob'` (CSV/file exports) still
+      // gets `error.response.data` decoded as a Blob even when the server
+      // returned a JSON error body (403/500) instead of the expected file —
+      // axios applies the configured responseType to error responses too.
+      // Every downstream reader (toAppError/getErrorMessage, reportApiError's
+      // support-code extraction) expects parsed JSON, so an undecoded Blob
+      // silently loses the backend's detail message and support code behind
+      // a generic fallback. Decode it once here so every blob-response caller
+      // in the app is covered, not just the one that happened to trigger this.
+      if (error.response?.data instanceof Blob && error.response.data.type.includes('json')) {
+        try {
+          const text = await error.response.data.text();
+          error.response.data = JSON.parse(text) as unknown;
+        } catch {
+          // Not decodable JSON (e.g. an HTML error page from a proxy) — leave
+          // the Blob as is; downstream code already falls back to
+          // statusText/error.message rather than throwing on it.
+        }
+      }
+
       const originalRequest = error.config;
       if (error.response?.status === 401 && originalRequest && !originalRequest._retry) {
         originalRequest._retry = true;

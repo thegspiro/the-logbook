@@ -71,6 +71,7 @@ const sealedTemplate = () => ({
   apparatusId: 'app-1',
   isActive: true,
   sortOrder: 0,
+  contentRevision: 1,
   compartments: [
     {
       id: 'bag-1',
@@ -214,7 +215,7 @@ describe('EquipmentCheckForm tamper seals', () => {
         userId: 'user-1',
         shiftId: 'shift-1',
         templateId: 'tmpl-1',
-        templateRevision: 'content-revision',
+        templateRevision: '1',
       });
       expect(draft?.contents.seals['bag-1']).toMatchObject({ sealNumber: 'M2-40817', cleared: true });
     });

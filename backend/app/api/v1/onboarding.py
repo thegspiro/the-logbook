@@ -71,6 +71,24 @@ router = APIRouter(prefix="/onboarding", tags=["onboarding"])
 # used for admin password resets (users.py's _rate_limit_admin_reset).
 
 
+async def _rate_limit_onboarding_status(request: Request) -> None:
+    # ONB-30-1 addendum, Codex-caught: this is a cheap, read-only routing
+    # check the frontend calls on every LoginPage/OnboardingCheck mount (and
+    # twice under React StrictMode in dev) — the 5-per-60s/30-minute-lockout
+    # auth defaults would 429 (or, on the Redis-down fallback, lock out) a
+    # legitimate user after a handful of page loads or tab switches. It gates
+    # no sensitive action and, once onboarding is complete, returns a fixed
+    # non-sensitive response, so a much looser budget and a short lockout are
+    # enough to still blunt scripted hammering.
+    await check_rate_limit(
+        request,
+        max_requests=60,
+        window_seconds=60,
+        lockout_seconds=60,
+        scope="onboarding_status",
+    )
+
+
 async def _rate_limit_onboarding_start(request: Request) -> None:
     await check_rate_limit(request, scope="onboarding_start")
 
@@ -807,7 +825,11 @@ async def _persist_session_data_to_org(
 # ============================================
 
 
-@router.get("/status", response_model=OnboardingStatusResponse)
+@router.get(
+    "/status",
+    response_model=OnboardingStatusResponse,
+    dependencies=[Depends(_rate_limit_onboarding_status)],
+)
 async def get_onboarding_status(db: AsyncSession = Depends(get_db)):
     """
     Check if onboarding is needed and get current status

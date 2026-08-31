@@ -1080,3 +1080,26 @@ Validate — the refusal appears]**
 **[SCREEN: one point-deduction result; resume-conflict state; member result; export field summary. Never show private notes.]**
 
 **EDITOR:** Add 2:00, re-time Chapters 3 onward and shorts references. Update Short 15E narration to say resume is per-test and conflict requires refresh, not automatic retry.
+
+---
+
+## ADD TO THE VOID / RELEASE CHAPTER (ADDED 2026-08-31)
+
+**[SCREEN: An officer opening their own scored result; Void and Return are
+absent]**
+
+> "One boundary that wasn't there before, and it's the sort you only notice the
+> day it matters: **an officer can no longer void or return their own result.**"
+
+> "Nothing about voiding changes otherwise — same tool, same reason for it, same
+> audit trail. But the person whose result it is isn't the person who decides it
+> shouldn't stand. If you're an evaluator who also tests, somebody else handles
+> yours."
+
+**[CALLOUT: "Not your own result."]**
+
+> "Same release closed a race on the attempt cap — two attempts submitted at the
+> same instant could both slip past a limit of one. They can't now."
+
+**Production:** shoot this with an evaluator account opening its own result, so
+the absence of the controls is visible rather than asserted.

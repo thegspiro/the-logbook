@@ -13,6 +13,7 @@ import type { Donor, DonorType } from '../types';
 import { formatDate } from '../../../utils/dateFormatting';
 import { formatCurrency } from '@/utils/currencyFormatting';
 import { useTimezone } from '../../../hooks/useTimezone';
+import { useAuthStore } from '../../../stores/authStore';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -89,6 +90,10 @@ const labelClass = 'form-label';
 
 export const DonorsPage: React.FC = () => {
   const tz = useTimezone();
+  // Route is gated at fundraising.view; create_donor requires
+  // fundraising.manage. Hide the create affordance for view-only viewers
+  // rather than let the submit 403.
+  const canManage = useAuthStore((s) => s.checkPermission)('fundraising.manage');
   const [donors, setDonors] = useState<Donor[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -194,26 +199,28 @@ export const DonorsPage: React.FC = () => {
           <h1 className="text-theme-text-primary text-2xl font-bold">Donors</h1>
           <p className="text-theme-text-secondary mt-1 text-sm">Manage your donor directory and relationships</p>
         </div>
-        <button
-          onClick={() => setShowForm((prev) => !prev)}
-          className="inline-flex items-center gap-2 rounded-lg bg-red-800 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-900"
-        >
-          {showForm ? (
-            <>
-              <X className="h-4 w-4" />
-              Cancel
-            </>
-          ) : (
-            <>
-              <Plus className="h-4 w-4" />
-              Add Donor
-            </>
-          )}
-        </button>
+        {canManage && (
+          <button
+            onClick={() => setShowForm((prev) => !prev)}
+            className="inline-flex items-center gap-2 rounded-lg bg-red-800 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-900"
+          >
+            {showForm ? (
+              <>
+                <X className="h-4 w-4" />
+                Cancel
+              </>
+            ) : (
+              <>
+                <Plus className="h-4 w-4" />
+                Add Donor
+              </>
+            )}
+          </button>
+        )}
       </div>
 
       {/* Inline Add Donor Form */}
-      {showForm && (
+      {canManage && showForm && (
         <form onSubmit={(e) => void handleSubmit(e)} className="card space-y-4 p-6">
           <h2 className="text-theme-text-primary text-lg font-semibold">New Donor</h2>
 

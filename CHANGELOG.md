@@ -7,6 +7,275 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Locations & kiosk guest check-in hardening (2026-08-31)
+
+**Fixed**
+
+- A guest check-in racing another sign-in for the same person and event
+  could, in rare cases, fail entirely instead of just skipping the
+  duplicate pipeline link — the guest's attendance now always records.
+- A deactivated organization's kiosk display codes and guest sign-in links
+  kept working indefinitely; they now stop resolving along with the rest
+  of the organization's public surface.
+- Moving a location to a different building without renaming it could
+  create an ambiguous duplicate with an existing location of the same name
+  in the target building — the uniqueness check now covers this case.
+- The guest-check-in daily sign-in limit could be exhausted by requests
+  sent before an event's check-in window opened (or after attendance was
+  finalized), denying legitimate guests later that day — those requests no
+  longer count against the limit.
+- Explicitly clearing a location's name or active status to null returned
+  a server error instead of a clear validation message; it's now rejected
+  up front.
+
+### Scheduled-task reliability fixes (2026-08-31)
+
+**Fixed**
+
+- A department message scheduled to publish could, in a batch with other
+  due messages, silently vanish forever if a different message in the same
+  batch failed to process first — the failed message no longer costs the
+  rest of the batch its delivery.
+- Reminders for overdue meeting-minutes action items were silently failing
+  every single time, with no error visible anywhere — they now send
+  correctly.
+- A shift with no currently-active assigned members was permanently marked
+  as "reminded" even though nobody was actually notified, so a member added
+  or reactivated later in the same window never received the pre-shift
+  reminder — fixed to match the equivalent end-of-shift-checklist behavior.
+- Extending recurring event series to their rolling 12-month horizon could,
+  on one series' failure, silently discard other series' already-generated
+  occurrences from the same run.
+- An external training-provider sync failure could cascade into every
+  provider synced after it in the same run being misreported as failed too.
+
+### Onboarding hardening and setup docs cleanup (2026-08-31)
+
+**Fixed**
+
+- The unauthenticated setup-status check (`GET /onboarding/status`), used by
+  the login page to detect a not-yet-configured instance, now has the same
+  per-route rate limiting as every other onboarding bootstrap endpoint —
+  it was the one anonymous route without one.
+- `frontend/.env.example`, `frontend/setup.sh`, and the setup documentation
+  no longer instruct operators to set a `VITE_SESSION_KEY` "for production" —
+  that variable has not been read by any code since onboarding data stopped
+  being encrypted client-side; the real protection is the backend's own
+  `ENCRYPTION_KEY`. Following the old instruction had no security effect
+  either way, but told operators otherwise.
+
+### Integrations fix (2026-08-31)
+
+**Fixed**
+
+- Testing an integration's connection, or checking Salesforce sync
+  readiness, could show a raw internal/connection error message instead of
+  a clean explanation if the underlying network call failed unexpectedly.
+  Errors now show a generic message while the details are still logged for
+  troubleshooting; the specific, intentional messages (e.g. "Salesforce
+  rejected these credentials") are unaffected.
+
+### Forms fix (2026-08-31)
+
+**Fixed**
+
+- If a form's cross-module integration (assigning equipment, registering
+  for an event, or creating an event request from a form submission) hit
+  an unexpected internal error, the submission's integration results could
+  show a raw internal error message instead of a clean explanation. Errors
+  now show a generic message while the details are still logged for
+  troubleshooting.
+
+### Meetings and minutes fixes (2026-08-31)
+
+**Fixed**
+
+- Clicking "Unlink" on a meeting minutes record's linked event showed an
+  "Event unlinked" success message, but the link was never actually
+  removed — it would reappear on the next page load. Unlinking now takes
+  effect immediately and persists.
+- Creating, editing, deleting, or approving a meeting record (or adding,
+  removing, or editing its attendees and action items) left no record of
+  who made the change or when. Meeting minutes already recorded this; the
+  meeting scheduling records now do too.
+- A rare failure while creating a meeting record from a calendar event
+  could surface an internal error message instead of a clean explanation.
+
+### Editing a medical supply category or item left no audit trail (2026-08-30)
+
+**Fixed**
+
+- Creating a medical supply category or item was recorded in the audit
+  trail; editing one afterward was not. Both edits are now recorded,
+  matching the general inventory page's own category and item edits.
+
+### Medical supplies summary fix (2026-08-30)
+
+**Fixed**
+
+- The medical supplies summary's "Low Stock" count only checked the first
+  500 active items, so a department with more than 500 active medical items
+  could have a low-stock item that never showed up in the headline count
+  even though it was correctly listed in the table below. The count now
+  covers the department's full medical supply catalog.
+
+### Grants & fundraising report and permission fixes (2026-08-30)
+
+**Fixed**
+
+- A grant or fundraising report covering a date range that included today
+  (the default) silently dropped every application or donation recorded
+  later that same day, understating the report's totals. The report now
+  includes the entire end date.
+- On the fundraising report, the percentage breakdown by payment method
+  showed 0.0% for every method as soon as two or more payment methods had
+  donations, with no error. Percentages now calculate correctly.
+- A member with view-only access to Grants & Fundraising could open the
+  campaigns, donors, dashboard, or an individual grant application's detail
+  page and see "New Campaign," "Add Donor," "New Application," "Add Item,"
+  "Record Expenditure," "Add Task," and "Add Note" buttons that failed when
+  clicked, with no explanation of why. Those controls are now hidden for
+  members who don't have permission to use them.
+- The dashboard's "Active Applications," "Pending Applications," and
+  "Active Campaigns" cards linked to a pre-filtered list, but the list page
+  ignored the filter and always showed everything. The link now filters
+  correctly.
+- The dashboard's "View Campaign" link on a recent donation went to a page
+  that doesn't exist and silently sent you back to the dashboard home. It
+  now goes to the campaigns list.
+- The Grants & Fundraising reports page could default to showing just one
+  day instead of the whole current year, depending on your department's
+  timezone and the exact time you opened it (most noticeable right around
+  New Year's). It now always defaults to your department's full current
+  year.
+- A grant applications or campaigns link with an old or mistyped status in
+  the URL showed a confusing empty list. It now shows the full unfiltered
+  list instead.
+- For departments with more than 100 grant applications, a status filter
+  on the applications page (including the dashboard's "Active"/"Pending"
+  links) only searched the newest 100 and could miss older matches. It now
+  searches up to the newest 1,000 (departments with more than 1,000
+  applications, or more than 1,000 sharing one status, can still miss
+  older ones — full pagination is tracked as a known limitation).
+- Changing the applications page's status filter again before the previous
+  filter's results had loaded could, in rare timing, leave the page
+  showing results for the filter you'd already changed away from. Fixed.
+- If the applications page's status filter failed to load (a network
+  error), it could keep showing applications from whichever filter was
+  selected before, alongside the error message. It now shows an empty
+  list until the filter loads successfully.
+
+### Admin hours CSV export now recovers from an expired session (2026-08-30)
+
+**Fixed**
+
+- Exporting the admin-hours entries CSV bypassed the app's usual
+  session-refresh handling, so if your session needed a refresh at the exact
+  moment you clicked Export CSV, the export failed with a generic error
+  instead of quietly refreshing and continuing like every other action on
+  the page. It now goes through the same handling as the rest of the app.
+- That same fix moved the export onto the app's standard 30-second request
+  timeout, which could have newly cut off a large department's unfiltered
+  export part-way through. The export no longer has a client-side timeout,
+  matching its previous behavior.
+- A failed export (e.g. a server error) showed a generic error message
+  instead of the specific reason, and lost the support code an
+  administrator could use to look it up — an app-wide gap in how a
+  file-download request decodes an error response, now fixed for every
+  export in the app, not just this one.
+
+### Bulk edits to a saved checklist now save every selected item (2026-08-30)
+
+**Fixed**
+
+- Selecting several items on a saved equipment-check template and applying a
+  bulk action — Set type, or Required/Optional — saved only the last item in
+  the selection. Every row updated on screen and the toast reported the full
+  count, so nothing looked wrong until the template was reloaded and the rest
+  reverted. All selected items are now saved.
+- Editing two different fields of the same item within about a second and a
+  half of each other kept only the field edited second. Both are now saved.
+
+### The equipment check template builder is one canvas (2026-08-30)
+
+**Changed**
+
+- Building an equipment check template no longer spreads the work across a
+  metadata sidebar, a three-step progress strip, a "Template readiness" card
+  and the location list. Sections, locations and items are now rows in a
+  single list, in the order a crew walks them.
+- An item's name, the kind of answer it asks for (Works / Count / Level /
+  Date) and the one number that answer is graded against are edited in the
+  row itself. Description, serial and lot numbers, image, critical minimum
+  and the inventory link moved behind a per-row disclosure, so opening
+  anything is no longer a prerequisite for a complete item.
+- Nesting a location inside another is now an indent button on the row
+  rather than a "Reparent: stored inside" dropdown listing every other
+  location. The dropdown is still available from the row's overflow menu.
+- Adding items is one box per location: type one and press Enter, or paste a
+  whole list and confirm a preview that names every line and lets you set
+  the check type for all of them at once. The separate Quick Add / Bulk
+  Add mode toggle is gone.
+- The reason Publish is unavailable is now a list of the specific things to
+  fix, beside the checklist. Each one says where the problem is and jumps to
+  the row that causes it, opening its location and putting the cursor in the
+  field that is empty.
+- The mobile preview is docked beside the checklist on laptops and tablets
+  and updates as you edit, instead of opening as a modal. On phones it is
+  still a modal, from the Tools menu.
+- Template details — description, timing, template type, who completes it
+  and which apparatus it applies to — moved into a panel opened from the
+  title bar, summarised as chips under the template name.
+- Phones keep the compact rows, the full-height item editor and the search
+  inventory add sheet; the new side-by-side row controls are a laptop and
+  tablet layout.
+- An item row keeps its name, answer type and grading numbers on one line at
+  every laptop width, including a 1280px screen with the side navigation
+  open. The row previously wrapped its controls onto a second line as soon
+  as the preview was docked beside it. Each number stays labelled once it
+  holds a value — "par 4" and "min 2" on a count, "30 days" on an expiry
+  warning — so a saved checklist never shows two adjacent numbers with no
+  way to tell which threshold is which.
+- Tablets and small laptops (below 1440px) now have the same "Before
+  publishing" list as wider screens, in a bar along the bottom of the
+  checklist that opens the list as a sheet. It was previously only reachable
+  by widening the window.
+- The vehicle-layout picker and the "How would you like to start?" card on an
+  empty template now match the rest of the checklist, and the picker replaces
+  that card rather than appearing above it. Each vehicle layout says how many
+  locations and items it brings in before you choose it.
+- On a brand-new template, adding the first location left it collapsed with
+  nowhere to type its items. It now opens ready for them.
+- The checklist preview no longer shows an answer left over from an item that
+  was since deleted, and resets when the questions themselves change.
+
+### Clearing a compliance setting on save now actually clears it (2026-08-30)
+
+**Fixed**
+
+- The compliance requirements configuration page (email report recipients,
+  reminder-days list, a profile's description, its threshold overrides, and
+  its membership-type/requirement selections) previously left the old value
+  in place if you cleared the field and saved — the page showed a success
+  toast, but the save was silently dropped for that field. Clearing and
+  saving now actually clears it.
+- The "Notify members when they become non-compliant" panel is now labelled
+  as not yet active — the setting is saved but nothing sends the
+  notification yet, so the page no longer implies it does.
+- A compliance profile whose officer had unchecked every required training
+  requirement (leaving it with none required) was graded against every
+  active org-wide requirement instead of none, once the fix above let that
+  empty selection actually reach the database — org-wide compliance
+  percentages and per-profile grading could be materially wrong for any
+  group meant to have no required certifications. A profile whose only
+  customization was a lenient or strict compliance-threshold override (with
+  no required-requirement override) also never had that override applied.
+  Both now compute correctly.
+- After clearing "Reminder Days Before Deadline" and saving, the compliance
+  configuration page immediately showed the old "30, 14, 7" suggested value
+  again on reload, even though the database correctly held no reminder
+  schedule. The field now reflects what was actually saved.
+
 ### A training-effectiveness evaluation list could briefly cache member feedback (2026-08-29)
 
 **Fixed**
@@ -967,13 +1236,41 @@ the "kept in lockstep with the frontend" comment that nothing had been enforcing
   no way to record a _probationary treasurer_, and nothing said whether a _life
   member_ still rides.
 
-  The clearest symptom was in elections. `ElectionService` could only answer
-  "is this member operational" as `membership_type == "active"`, because that
-  was the one value that meant it — so a bylaws question put to the operational
-  members never reached anyone who had earned life membership, or anyone still
-  on probation. It now reads the member's **class**, and every operational
-  standing counts. "regular", "life" and "probationary" stay **status** checks,
-  because they name a status.
+  Elections is where the fused field showed most. `ElectionService` could only
+  answer "is this member operational" as `membership_type == "active"`.
+
+  **Correction (2026-08-31).** This entry originally said the `operational`
+  category now "reads the member's class, and every operational standing
+  counts". That was true of `7204f9134` and **false ninety minutes later**:
+  `f65e4e7ae` ("Fix election voter category authorization", the same day)
+  reverted the widening because it was a disclosure — reading class alone
+  admitted probationary and retired members to a restricted ballot. The entry
+  was never updated, and the claim was propagated into the training guides,
+  the wiki and two video scripts before being caught on PR #2096.
+
+  **What the shipped code does**, per
+  `ElectionService._user_has_role_type`:
+
+  | Category         | Requires                                        |
+  | ---------------- | ----------------------------------------------- |
+  | `operational`    | operational class **and** regular status        |
+  | `regular`        | operational class **and** (regular **or** life) |
+  | `life`           | operational class **and** life status           |
+  | `probationary`   | operational class **and** probationary status   |
+  | `administrative` | administrative class                            |
+  | `social`         | social class                                    |
+
+  So the built-in categories **keep their legacy meaning**, and the real
+  changes are narrower than first written, one of them a tightening:
+
+  - **A life member now receives a `regular` ballot.** With one fused field
+    `life` and `regular` were mutually exclusive values, so they could not.
+  - **Every status category now also requires the operational class**, so an
+    administrative member with regular standing no longer receives ballots
+    restricted to active/life members. That is a **tightening**, and it is the
+    reason the widening was reverted.
+  - `administrative` and `social` are answered by class rather than by a value
+    that had to mean both things at once.
 
   `membership_type` is kept and kept correct: ~160 call sites read it, and it
   is now derived from the pair by `app/utils/membership.py`, reconciled on
@@ -1579,6 +1876,43 @@ check the consent itself.
   rotation (35 iterations, ordered by risk) with a per-iteration checklist,
   findings template, and a `/security-review` command that opens one pull
   request per feature and tends it to green before starting the next.
+
+### Governance: the department's organizational chart (2026-08-24)
+
+**Added**
+
+- **`/governance/org-chart`** — the department's chain of command, as an
+  outline or as a diagram. New tables `org_chart_nodes` and
+  `org_chart_node_holders`; `GET /org-chart`, `POST /org-chart/nodes`,
+  `PUT /org-chart/nodes/{id}`, `POST /org-chart/nodes/{id}/move`,
+  `DELETE /org-chart/nodes/{id}`.
+
+- **Reading is gated on authentication alone, deliberately.** The chart exists
+  so any member can work out who is in charge of an area without asking around;
+  a permission here would leave the general membership — the audience — outside
+  the one screen built for them. Editing is `orgchart.manage` OR
+  `settings.manage`, enforced server-side, and the page renders read-only
+  without either rather than offering controls that fail.
+
+- **A seat holds several people.** `org_chart_node_holders` is a separate
+  table for exactly this: a department with two deputy chiefs puts both in one
+  box instead of inventing two boxes that mean the same thing.
+
+- **A holder need not be a member.** `user_id` is nullable and `display_name`
+  carries a name with no account behind it, for the town attorney, a
+  mutual-aid liaison or a county fire marshal. Nothing else about that person
+  is stored and they gain no access.
+
+- **`position_id` assists a seat rather than defining it.** Linking a seat to a
+  position fills its holders from that position's assignees; **unlinking leaves
+  them in place.** An earlier draft made the position the seat's definition,
+  which meant a seat could not hold anyone the position did not — and a
+  department whose org chart differs from its permission structure, which is
+  most of them, could not draw its real chain of command.
+
+- **The chart starts empty and nothing is inferred.** A permission structure is
+  not an org chart. A guessed diagram is one nobody recognises, and correcting
+  it costs more than drawing it.
 
 ### Attendance finalization: the lock is atomic, and reopening reconciles what it undoes (2026-08-24)
 

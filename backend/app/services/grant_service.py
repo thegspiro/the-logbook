@@ -6,7 +6,7 @@ budget management, expenditure logging, compliance task tracking,
 and grant reporting.
 """
 
-from datetime import date
+from datetime import date, datetime, timezone
 from decimal import Decimal
 from typing import Any, Dict, List, Optional
 
@@ -1123,9 +1123,20 @@ class GrantService:
             GrantApplication.organization_id == organization_id
         )
         if start_date:
-            query = query.where(GrantApplication.created_at >= start_date)
+            query = query.where(
+                GrantApplication.created_at
+                >= datetime.combine(
+                    start_date, datetime.min.time(), tzinfo=timezone.utc
+                )
+            )
         if end_date:
-            query = query.where(GrantApplication.created_at <= end_date)
+            # created_at is DateTime; a bare date compares as that date's
+            # midnight, silently excluding everything created later the same
+            # day. Match reports_service.py's end-of-day boundary pattern.
+            query = query.where(
+                GrantApplication.created_at
+                <= datetime.combine(end_date, datetime.max.time(), tzinfo=timezone.utc)
+            )
 
         result = await self.db.execute(
             query.options(

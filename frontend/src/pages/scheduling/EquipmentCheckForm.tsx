@@ -540,6 +540,13 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
       : shiftContext?.checkTiming === 'end_of_shift'
         ? 'End of shift'
         : null;
+  const timingBadgeLabel =
+    shiftContext?.checkTiming === 'start_of_shift'
+      ? 'START'
+      : shiftContext?.checkTiming === 'end_of_shift'
+        ? 'END'
+        : null;
+  const checklistContextLabel = [shiftContext?.apparatusName, shiftDateLabel, timingLabel].filter(Boolean).join(', ');
 
   // --------------------------------------------------------------------------
   // Handlers
@@ -757,11 +764,9 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
       userId: user.id,
       shiftId: shiftId ?? 'standalone',
       templateId: template.id,
-      // Draft reconciliation handles content changes item by item. Keeping this
-      // identity stable lets a new revision find the preceding revision's draft.
-      templateRevision: 'content-revision',
+      templateRevision: String(template.contentRevision),
     };
-  }, [shiftId, template.id, user]);
+  }, [shiftId, template.contentRevision, template.id, user]);
   const [draftReady, setDraftReady] = useState(false);
   const draftSaveWarningShown = useRef(false);
 
@@ -2589,7 +2594,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
           <div
             className={`text-theme-text-muted flex min-w-0 items-center gap-1.5 text-xs ${onBack ? 'pl-11' : ''}`}
             role="group"
-            aria-label="Checklist context"
+            aria-label={`Checklist context: ${checklistContextLabel}`}
           >
             {shiftContext?.apparatusName && (
               <span className="min-w-0 truncate" title={shiftContext.apparatusName}>
@@ -2598,7 +2603,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
             )}
             {shiftContext?.apparatusName && shiftDateLabel && <span aria-hidden="true">·</span>}
             {shiftDateLabel && <span className="shrink-0">{shiftDateLabel}</span>}
-            {timingLabel && (
+            {timingLabel && timingBadgeLabel && (
               <span
                 className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold ${
                   shiftContext?.checkTiming === 'start_of_shift'
@@ -2606,7 +2611,10 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
                     : 'border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-400'
                 }`}
               >
-                {timingLabel}
+                <span className="shrink-0" aria-hidden="true">
+                  {timingBadgeLabel}
+                </span>
+                <span className="sr-only">{timingLabel}</span>
               </span>
             )}
           </div>

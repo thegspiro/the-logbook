@@ -86,3 +86,41 @@ class TestLabelPresetPrinterScoping:
         get_printer.assert_awaited_once_with("printer-2", ORG)
         assert set_preset.await_args.kwargs["printer_id"] == "printer-2"
         assert result["printer_id"] == "printer-2"
+
+
+class TestExtraLinesLengthBound:
+    """LBL-29-3: bounding the list length alone still let a single
+    ``custom:`` entry carry an unbounded string, so a caller could join up
+    to 20 huge values per label spec across up to 2000 ids."""
+
+    def test_generate_body_rejects_an_overlong_custom_line(self):
+        from pydantic import ValidationError
+
+        from app.api.v1.endpoints.labels import LabelGenerateBody
+
+        with pytest.raises(ValidationError):
+            LabelGenerateBody(
+                module="apparatus",
+                ids=["a-1"],
+                extra_lines=["custom:" + "x" * 200],
+            )
+
+    def test_print_body_rejects_an_overlong_custom_line(self):
+        from pydantic import ValidationError
+
+        from app.api.v1.endpoints.labels import LabelPrintBody
+
+        with pytest.raises(ValidationError):
+            LabelPrintBody(
+                module="apparatus",
+                ids=["a-1"],
+                extra_lines=["custom:" + "x" * 200],
+            )
+
+    def test_generate_body_accepts_a_normal_custom_line(self):
+        from app.api.v1.endpoints.labels import LabelGenerateBody
+
+        body = LabelGenerateBody(
+            module="apparatus", ids=["a-1"], extra_lines=["location", "custom:Bay 3"]
+        )
+        assert body.extra_lines == ["location", "custom:Bay 3"]

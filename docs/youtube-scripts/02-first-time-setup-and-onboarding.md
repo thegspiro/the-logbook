@@ -353,11 +353,26 @@ positions with permission toggles.]**
 > Fire Chief, Captain, President, Secretary, Training Officer, IT Manager. A
 > member can hold multiple positions."
 
-> "**Membership Types** are classifications like Active, Retired, Honorary,
-> Administrative. Membership types do _not_ carry permissions — they're just
-> labels for categorization."
+> "**Membership standing** is a classification, and it is **two facts, not
+> one**: a member's **class** — operational, administrative or social — and
+> their **status** on the membership ladder — prospective, probationary,
+> regular, life, retired. Neither carries permissions. They're labels for
+> categorization."
 
-**[CALLOUT: "Positions = permissions. Membership Types = classification only."]**
+**[CALLOUT: "Positions = permissions. Class + status = classification only."]**
+
+> "Two, not one, because they're independent. A **probationary treasurer** is
+> an ordinary thing for a department to have, and until the end of August there
+> was nowhere to write it down — the two facts shared a field, so recording one
+> erased the other."
+
+**[PRODUCTION NOTE — 2026-08-31. Rewritten for the class/status split. The
+previous take listed "Active, Retired, Honorary, Administrative" as one flat
+set of membership types; those values mixed a class (administrative) with
+statuses (retired) and a value that is now the social class (honorary). Do not
+restore the flat list. **Honorary maps to the social class** — that is not a new
+judgement, it is what the system already did with honorary members when
+deciding shift access.]**
 
 ### DEFAULT POSITIONS (13:00 – 14:00)
 

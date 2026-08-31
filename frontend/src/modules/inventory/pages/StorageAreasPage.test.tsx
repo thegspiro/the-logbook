@@ -5,6 +5,32 @@ import { renderWithRouter } from '../../../test/utils';
 import StorageAreasPage from './StorageAreasPage';
 import type { StorageAreaResponse, Location } from '../types';
 
+const setViewportWidth = (width: number) => {
+  vi.mocked(window.matchMedia).mockImplementation((query: string) => ({
+    matches: query === '(min-width: 768px)' ? width >= 768 : false,
+    media: query,
+    onchange: null,
+    addListener: vi.fn(),
+    removeListener: vi.fn(),
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    dispatchEvent: vi.fn(),
+  }));
+};
+
+const hierarchySnapshot = () => {
+  const tree = screen.getByTestId('storage-area-tree');
+  return {
+    backLabel: tree.querySelector(':scope > button')?.getAttribute('aria-label') ?? null,
+    rows: [...tree.querySelectorAll<HTMLElement>('[data-storage-area-row]')].map((row) => ({
+      id: row.dataset.storageAreaRow,
+      path: row.querySelector('[title]')?.getAttribute('title'),
+      paddingLeft: row.style.paddingLeft,
+      hasMobileIndicator: row.classList.contains('border-l-2'),
+    })),
+  };
+};
+
 const mockGetLocations = vi.fn();
 const mockGetFacilities = vi.fn();
 const mockGetStorageAreas = vi.fn();
@@ -74,6 +100,44 @@ describe('StorageAreasPage', () => {
     mockCreateStorageArea.mockResolvedValue({});
     mockUpdateStorageArea.mockResolvedValue({});
     mockDeleteStorageArea.mockResolvedValue({});
+    setViewportWidth(1024);
+  });
+
+  it.each([320, 375])('matches the mobile three-level hierarchy snapshot at %ipx', async (width) => {
+    setViewportWidth(width);
+    mockGetStorageAreas.mockResolvedValue([
+      makeArea({ id: 'cab', name: 'Cab', item_count: 4 }),
+      makeArea({ id: 'medical', name: 'Medical bag', parent_id: 'cab', item_count: 12 }),
+      makeArea({ id: 'airway', name: 'Airway pouch', parent_id: 'medical', item_count: 3 }),
+    ]);
+    const user = userEvent.setup();
+    renderWithRouter(<StorageAreasPage />);
+    await screen.findByText('Cab');
+
+    await user.click(screen.getByRole('button', { name: 'Open Cab' }));
+    await user.click(screen.getByRole('button', { name: 'Open Medical bag' }));
+    expect(screen.getByLabelText('Cab › Medical bag › Airway pouch')).toBeInTheDocument();
+    expect(screen.queryByText('Cab', { selector: '[aria-hidden="true"]' })).not.toBeInTheDocument();
+
+    expect(hierarchySnapshot()).toMatchSnapshot();
+  });
+
+  it.each([768, 1024])('matches the desktop three-level hierarchy snapshot at %ipx', async (width) => {
+    setViewportWidth(width);
+    mockGetStorageAreas.mockResolvedValue([
+      makeArea({ id: 'cab', name: 'Cab', item_count: 4 }),
+      makeArea({ id: 'medical', name: 'Medical bag', parent_id: 'cab', item_count: 12 }),
+      makeArea({ id: 'airway', name: 'Airway pouch', parent_id: 'medical', item_count: 3 }),
+    ]);
+    const user = userEvent.setup();
+    renderWithRouter(<StorageAreasPage />);
+    await screen.findByText('Cab');
+
+    await user.click(screen.getByRole('button', { name: 'Expand' }));
+    await user.click(screen.getAllByRole('button', { name: 'Expand' })[0] as HTMLElement);
+    expect(screen.getByLabelText('Cab › Medical bag › Airway pouch')).toBeInTheDocument();
+
+    expect(hierarchySnapshot()).toMatchSnapshot();
   });
 
   it('shows every storage area when no facility or room is selected', async () => {

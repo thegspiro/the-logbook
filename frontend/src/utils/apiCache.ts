@@ -83,6 +83,7 @@ const UNCACHEABLE_PREFIXES = [
   '/events/missed-mandatory', // caller's own missed mandatory attendance (per-member compliance)
   '/forms', // form defs carry admin notification emails + creator id; no trailing slash so GET /forms list is covered too
   '/inventory/users/', // member-specific inventory, issuances & history (PII)
+  '/dashboard/action-items', // unified meeting/minutes action items: assignee_name + free-text description (RPT-29)
   '/inventory/checkout/', // GET active/overdue: who currently holds equipment (PII)
   '/inventory/members-summary', // per-member inventory roster (names, membership numbers)
   '/inventory/members/', // member size preferences — body measurements (PII)

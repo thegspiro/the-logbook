@@ -16,9 +16,1789 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-None.
+None. Feature 32 (Locations & kiosk) is fully closed — see log entry below.
+Next: feature 33, Core infrastructure.
 
 ---
+
+### 2026-08-31 — Feature 32 (Locations & kiosk), pass 2 ✅ PR #2098 merged (`5e382921`)
+
+Nine Codex-caught fixes across five review rounds — see the prior log entry
+below for the full account. Two "CI Success" checks reported failure
+mid-review (commits `58002f19`, `8fb906dc`); both were runs cancelled by a
+rapid next push, not real failures, confirmed via each run's
+`conclusion: "cancelled"`. Final head (`3e8626e3`) ran CI to completion
+clean, all nine review threads resolved, no unresolved comments. Findings
+doc: `docs/security-review/LOC-32-locations-kiosk.md`. Next: 33 core
+infrastructure.
+
+### 2026-08-31 — Feature 32 (Locations & kiosk), pass 2 — round 2: 5 fixed (Codex-caught), 1 doc correction — PR #2098
+
+No security-review PR was open (feature 31 fully merged via PR #2095, closed
+out via PR #2097 earlier this iteration), so the rotation continued to
+feature 32. Loaded `CHECKLIST.md`, `SEC-00-cross-cutting-baseline.md`, and
+`docs/security-review/LOC2-32-locations-kiosk.md` (pass 1, PR #1916, 3
+findings + LOC-3 flagged) before reading any code.
+
+**Round 1** read every backend file in the feature's surface in full —
+`locations.py`, `admin_hub.py`, `location_service.py`, `public/display.py`,
+`admin_hub_service.py` (1,841 L), `guest_check_in_service.py`, models,
+schemas — and confirmed a diff against what it believed was pass 1's merge
+commit came back empty. Re-verified LOC2-32-1/2/3 and LOC-1/2/4 all hold.
+Reported zero new findings and opened PR #2098 on that basis.
+
+**Round 2 (Codex-caught), all verified against actual code before fixing:**
+
+1. **Commit-hash correction.** The diff commit `1b7be79a` cited in round 1
+   is the last commit of pass 1's source branch before it was
+   squash-merged, and is not reachable from `main` — it only resolved
+   locally because this session had fetched it by exact SHA earlier. The
+   actual, reachable squash-merge commit is `1a0a35c8`. Confirmed it diffs
+   identically to `1b7be79a` for every file in the surface — round 1's
+   zero-diff conclusion was correct, only its citation was not
+   reproducible by anyone who hadn't done that SHA-targeted fetch.
+2. **LOC-32-1 (MED)** — `guest_check_in_service.py`'s `_link_prospect`
+   catches a broad exception on the reasoning that a pipeline failure must
+   not cost the guest their attendance, but `link_prospect_to_event`'s
+   insert ran with no SAVEPOINT — a lost duplicate-key race left the whole
+   session needing a rollback it never got, so `check_in_guest`'s own
+   commit (the attendance record itself) failed too. Fixed by wrapping the
+   insert in `begin_nested()`, matching `MembershipPipelineService.
+create_prospect`'s own established pattern for the identical race
+   shape.
+3. **LOC-32-2 (MED)** — `get_location_by_display_code` filtered only
+   `Location.is_active`, never `Organization.active` — a deactivated
+   org's kiosk codes and guest sign-in path kept working indefinitely.
+   Other public intake surfaces (`event_requests.py`, `auth.py`) already
+   gate on `Organization.active`; this one didn't. Fixed with a join.
+4. **LOC-32-3 (LOW/MED)** — `update_location`'s duplicate check only ran
+   on a `name` change, even though the uniqueness scope is `(name,
+building)` together — a building-only PATCH could merge two
+   legitimately-separate same-named locations into one building
+   undetected. Fixed by computing the effective `(name, building)` pair and
+   checking whenever either changes.
+5. **LOC-32-4 (MED)** — the guest-check-in daily cap (`daily_cap_exceeded`,
+   an atomic Redis INCR) was checked before the check-in-window-open and
+   attendance-finalized rejection gates, so refused traffic before the
+   window opens could exhaust the 300/day allowance and deny legitimate
+   guests once it does — the exact ordering bug `event_requests.py`'s
+   EV-19 fix already documents and avoids for the identical cap shape.
+   Fixed by moving both rejection checks above the cap.
+6. **LOC-32-5 (LOW)** — `LocationUpdate.name`/`.is_active` are typed
+   `Optional[...] = None` to make them omittable on a PATCH, which also
+   admits an explicit `null` — `model_dump(exclude_unset=True)` preserves
+   it and `setattr` writes it straight into a NOT NULL column, 500ing
+   instead of 422ing. Fixed with a `model_validator` that rejects an
+   explicit null for either field while still allowing omission.
+
+**Round 3 (Codex-caught, on LOC-32-3's own fix):** the effective-building
+calculation used `location_data.building is not None` to mean "supplied,"
+which cannot tell an explicit `PATCH {"building": null}` (clearing it)
+apart from an omitted `building` — both read as `None`. A clear therefore
+fell back to the location's _current_ building for the dup-check while
+still persisting `null`, missing a conflict with an existing same-named,
+no-building location. Fixed by reading `location_data.model_fields_set`
+instead, which correctly distinguishes omission from an explicit null for
+both fields (`name` cannot be explicitly null since LOC-32-5, so only
+`building` was actually exposed). Two more guard tests added.
+
+**Round 4 (Codex-caught, on LOC-32-1's own fix):** the `except
+IntegrityError: pass` added for LOC-32-1 swallowed _every_ integrity
+failure as the expected duplicate-link race — but `ProspectEventLink.
+prospect_id` is a CASCADE-deleting FK, so a prospect deleted concurrently
+(between the lookup and this insert) raises the same exception type for a
+genuinely different reason: no link exists, the prospect is simply gone.
+Swallowing it left `_link_prospect` returning the stale prospect anyway,
+so `check_in_guest` would still set `attendee.prospect_id` to a
+now-nonexistent row and fail the same FK check on its own commit — losing
+the attendance via a different race window than the one LOC-32-1 closed.
+Fixed by re-querying whether the expected link actually exists after the
+failure, and re-raising (rather than swallowing) when it doesn't — the
+caller's existing broad handler then logs it and leaves the attendee
+correctly unlinked. Three more guard tests added.
+
+**Round 5 (Codex-caught, on round 4's own fix):** the recheck round 4 added
+used a plain `SELECT`, which under this app's default MySQL/InnoDB
+REPEATABLE READ isolation answers from the transaction's original snapshot
+— taken well before the concurrent transaction committed its insert — so
+it would see no row and wrongly re-raise even in the ordinary, successful
+race this handler exists to swallow. Same `SELECT`-vs-locking-read gap
+CLAUDE.md Pitfall #27 already documents for this codebase's capacity
+checks. Fixed by adding `.with_for_update()` to the recheck, so it reads
+the current committed state the failed INSERT's own unique-index check
+already proved exists.
+
+Every fix has a guard test independently verified against the new code:
+`tests/test_guest_check_in.py::TestGuestProspectCreation` (7 tests across
+LOC-32-1 and its round-4 revision), `tests/test_location_display_code.py::
+TestGetLocationByDisplayCode`, `tests/test_location_uniqueness.py` (new
+file, 9 tests across three findings), and `tests/test_public_display.py::
+TestGuestCheckInDailyCapOrdering` (3 tests).
+
+**LOC-3** (`GET /locations/{id}/display`, the dead authenticated display
+endpoint) remains unchanged and flagged, not fixed, for the same reason as
+pass 1 — already tracked in `docs/KNOWN_LIMITATIONS.md`.
+
+**Completion gate:** `flake8`/`isort` clean; `black --check` required
+reformatting two files (`location_service.py`,
+`tests/test_location_uniqueness.py`), applied. Scoped tests
+(`-k "location or admin_hub or guest_check_in or public_display"`) —
+**316 passed** (was 290), 1 skipped (pre-existing). Full backend suite —
+**9371 passed** (was 9353), 22 skipped, 0 failed.
+`validate_migrations.py --strict` — 394 revisions, single head (no schema
+change). No frontend file touched. Findings doc:
+`docs/security-review/LOC-32-locations-kiosk.md`. PR #2098 opened and
+subscribed. Next: 33 core infrastructure, once #2098 merges.
+
+Feature 32 marked 🔄 (not ✅ yet — that happens on the closing PR after
+merge, per the rotation's own rule).
+
+### 2026-08-31 — Feature 31 (Scheduled tasks), pass 2 ✅ PR #2095 merged (`8254875a`)
+
+Round 1: 6 fixed, 3 new flagged. Round 2 (Codex-caught): 3 more corrected —
+see below.
+
+No security-review PR was open (feature 30 fully merged via PR #2093 earlier
+this iteration), so the rotation continued to feature 31. Loaded
+`CHECKLIST.md`, `SEC-00-cross-cutting-baseline.md`,
+`docs/app-review/scheduled-tasks.md` (A3, 2 passes), and
+`docs/security-review/CRON2-31-scheduled-tasks.md` (pass 1, PR #1915 + its
+Codex round, 13 findings) before reading any code.
+
+Read `scheduled.py` (58 L, 2 routes) and `scheduled_tasks.py` (5,600 L, 43
+task runners) end to end — not diffed against pass 1, per the rotation's
+"enumerate, don't spot-check" rule — plus the in-process scheduler in
+`main.py` (`_scheduled_task_loop`, `_scheduled_email_loop`,
+`_try_claim_background_task`), which drives every `TASK_RUNNERS` entry in a
+default deployment but was outside pass 1's stated scope. Diffed pass 1's
+merged head against current `HEAD` for the two named files: one real change
+landed since pass 1 (a `run_publish_scheduled_messages` rewrite adding
+row-locking and message-expiry handling), which is where CRON-31-1 was
+found.
+
+Re-verified all 13 pass-1 findings (CRON2-31-1 through -13) hold with no
+regressions, each re-checked against current `file.py:line`, not assumed
+from the prior doc.
+
+**6 new fixes:**
+
+1. **CRON-31-1 (MED)** — `run_publish_scheduled_messages` (the new code
+   since pass 1) had no per-message isolation: one message's failure
+   propagated an unhandled exception, permanently orphaning every other
+   due message in the same batch (their `scheduled_at` claim was already
+   committed, so the "due" query would never select them again). Fixed with
+   the same try/except + `needs_refresh` pattern CRON2-31-1/5/6 established.
+2. **CRON-31-2 (MED)** — `run_action_item_reminders`'s minutes-action-item
+   branch has raised `MissingGreenlet` on every single invocation since the
+   day it was written (verified against a real MariaDB connection via
+   `async_session_factory()`, not the `db_session` test fixture — a naive
+   version of the guard test using that fixture passes even with the bug
+   present, since SQLAlchemy's identity-map short-circuit for many-to-one
+   lazy loads masks it when the same session already holds the parent row).
+   Fixed with `selectinload(MinutesActionItem.minutes)`.
+3. **CRON-31-3 (MED)** — `run_shift_reminders` never got the "empty
+   member_ids after the active-user filter" guard CRON2-31-3's Codex round
+   added to its sibling `run_end_of_shift_checklist_reminders` — stamped its
+   dedup flag even when every assigned member was inactive and zero
+   reminders were sent. Fixed with the matching guard.
+4. **CRON-31-4 (LOW)** — `run_rolling_recurrence_extend` had no per-parent
+   commit/rollback isolation (a single deferred trailing commit — the
+   "worst" shape CRON2-31-1 found in `run_shift_auto_checkout`) and no
+   rollback in its except at all. Fell outside the structural test's
+   `"select(Organization)"` heuristic since it iterates `Event` parents.
+   Fixed: commit per parent, rollback on failure.
+5. **CRON-31-5 (LOW, latent)** — same function, no `Organization.active`
+   filter at all (not even the original CRON-2's bare form). Fixed with a
+   join, same pattern as CRON2-31-11.
+6. **CRON-31-6 (LOW)** — `run_external_training_auto_sync` had no rollback
+   in its per-provider except, even though the delegated service's own
+   pre-try `flush()` can fail and poison the session for every later
+   provider. Fixed.
+
+**3 new flagged (not fixed):**
+
+- **CRON-31-7 (LOW)** — `run_end_of_shift_summary` can mark a member "sent"
+  if both channels fail for them, same shape as CRON2-31-3 but much lower
+  exposure (the in-app half never reaches the DB before the org-level
+  commit) — reversing it is a product decision about cross-channel delivery
+  semantics.
+- **CRON-31-8 (LOW)** — `run_event_reminders` stamps a reminder interval
+  sent when zero recipients exist yet, by explicit documented design
+  ("avoid re-processing"), not an oversight.
+- **In-process scheduler's Redis-down fallback** (`main.py`) runs on every
+  worker unguarded when Redis is unavailable — the alternative (fail closed,
+  run on no worker) is worse for this feature. Mirrors the CLAUDE.md
+  breached-password fail-open trade-off.
+
+Every fix has a guard test independently verified to fail against the
+pre-fix code and pass against the post-fix code (not merely written and
+assumed correct) — full list in `docs/security-review/
+CRON-31-scheduled-tasks.md`'s "Guard tests added" section.
+
+**Completion gate:** `flake8`/`black --check`/`isort --check-only` clean on
+`app/ tests/ alembic/`; `validate_migrations.py --strict` — 394 revisions,
+single head; the full backend suite — **9351 passed, 22 skipped, 0 failed**
+(all skips pre-existing Docker/optional-dependency/contract-suite skips).
+No frontend file touched.
+
+**Round 2 (Codex-caught, all verified against actual code — and, where the
+claim was about async session behavior, against a real connection — before
+fixing):**
+
+1. **CRON-31-1 addendum.** The except block still read
+   `getattr(message, "id", "?")` for its log line before calling
+   `db.rollback()`. Verified empirically against a real connection: once
+   `db.commit()` itself fails (not just `materialize_recipients()` raising),
+   _any_ attribute read on _any_ loaded object — not only an expired one —
+   raises `PendingRollbackError` until the rollback runs; `getattr`'s default
+   only catches `AttributeError`, so the read itself aborted the exception
+   handler, crashing the whole batch — exactly the bug this finding exists
+   to fix. Moved the `id` capture to before any further DB operation.
+2. **CRON-31-4/5 addendum, two gaps.** `total_created`/`series_extended`
+   were incremented before the commit that could still fail, so a failed
+   parent's counts survived its own rollback; moved both increments to after
+   the commit succeeds. The fix also never refreshed the parent processed
+   right after a failed one (the same `parents`-list session-poisoning gap
+   CRON-31-1 had) — added the same `needs_refresh` + `db.refresh(parent)`
+   pattern.
+3. **CRON-31-6 addendum.** Same `providers`-list gap as above — added
+   `needs_refresh` + `db.refresh(provider)`, and captured `provider.id`/
+   `provider.name` before the risky call instead of reading them in the
+   except block.
+
+New/strengthened guard tests: a real-`db_session` test forcing a genuine
+FK-violation `IntegrityError` on the commit itself (CRON-31-1), a mocked test
+forcing the failure specifically at `db.commit()` after what the pre-fix code
+would already have counted (CRON-31-4/5), and an added
+`db.refresh.assert_awaited_once_with(...)` assertion (CRON-31-6). Every one
+verified to fail against the pre-fix/pre-correction code and pass with the
+correction restored. `pytest tests/ -k "scheduled_task or rolling_recurrence
+or ..."` — **143 passed** (was 141); full suite — **9353 passed, 22 skipped,
+0 failed** (was 9351); `flake8`/`black --check`/`isort --check-only` clean.
+
+Feature 31 marked 🔄 (not ✅ yet — that happens on the closing PR after
+merge, per the rotation's own rule).
+
+### 2026-08-31 — Feature 30 (Onboarding), pass 2 ✅ PR #2093 merged (`e6a1eb45`)
+
+Round 1: 2 fixed, 1 new flagged. Round 2 (Codex-caught): 1 more fixed — see
+below.
+
+No security-review PR was open (feature 29 fully merged via PR #2091 earlier
+this iteration), so the rotation continued to feature 30. Loaded
+`CHECKLIST.md`, `SEC-00-cross-cutting-baseline.md`, `docs/module-audit/
+onboarding.md` (iteration 25), `docs/app-review/onboarding.md` (B25, 4
+passes), and `docs/security-review/ONB2-30-onboarding.md` (pass 1, PR #1913 +
+same-day follow-up) before reading any code — re-verified their findings
+rather than re-deriving them.
+
+Read `onboarding.py` (2,386 L), `services/onboarding.py` (1,465 L),
+`models/onboarding.py`, `utils/onboarding_security.py`, `template_service.py`
+in full, plus the SMTP/OAuth test helper (`email_test_helper.py`) for a new
+angle this pass adds. Enumerated all 24 unauthenticated bootstrap routes and
+their compensating controls (table in the findings doc). Re-verified every
+prior finding across all three review layers (ONB-1 through ONB-9, ONB2-30-1
+through ONB2-30-8, the E712/template-mass-assignment fixes) line-by-line — all
+hold, no regressions.
+
+**Two fixes, both low-risk and verified:**
+
+1. **ONB-30-1 (LOW)** — `GET /status` was the one anonymous onboarding route
+   with no rate limit (noted, not fixed, in app-review pass 2). Added the same
+   scoped-wrapper pattern the other 7 routes already use. Guard test extended
+   from 7 to 8 wrappers; verified to fail with the fix reverted.
+2. **ONB-30-2 (LOW)** — `VITE_SESSION_KEY` is declared in
+   `frontend/.env.example`/`setup.sh` and documented in `CLAUDE.md` as a
+   security-critical "Onboarding session encryption key" that "MUST be
+   changed for production," but has had zero readers anywhere in the code
+   since a client-side XOR obfuscate/deobfuscate pair was removed (confirmed
+   by a trailing comment in `onboarding/utils/security.ts` explaining exactly
+   that removal, and by `onboarding/utils/storage.ts`'s current no-client-
+   secrets design). Removed the dead variable and its "must change" guidance
+   from `.env.example`, `setup.sh` (3 places), `CLAUDE.md`'s env var table,
+   and `docs/ONBOARDING_FLOW.md`'s production checklist.
+
+**One new finding, flagged not fixed:**
+
+- **ONB-30-3 (MED)** — `POST /onboarding/test/email`'s self-hosted-SMTP path
+  (`email_test_helper.test_smtp_connection`) connects to a fully
+  client-supplied `smtpHost`/`smtpPort` via raw `smtplib` with no SSRF/
+  private-IP protection — the only client-directed outbound connection in the
+  codebase that doesn't route through `app.utils.url_validator`. Reachable
+  pre-auth during the bootstrap window (anyone can mint a rate-limited
+  onboarding session via `/start` until the first org exists); differentiated
+  error messages let a caller fingerprint internal `host:port` reachability.
+  Not fixed: the obvious mitigation (block private IPs) would break the
+  legitimate, common case of an on-prem SMTP relay reachable only from a fire
+  department's internal network — a genuine product-policy tradeoff, not a
+  drive-by-fixable bug. Mirrored in `KNOWN_LIMITATIONS.md`.
+
+All still-flagged items from prior passes (ONB-7 role editor, ONB-8 residual
+audit-transaction durability, ONB2-30-8 session sliding TTL, role/position
+dedup, `/organization`'s missing `except Exception`, `ITTeamMemberRequest`'s
+loose `email: str`) re-confirmed unchanged by direct code read, not
+re-applied.
+
+**Completion gate:** `flake8`/`black --check`/`isort --check-only` (pinned
+8.0.1) clean across `app/ tests/ alembic/`; `validate_migrations.py --strict`
+— 394 revisions, single head; `pytest tests/ -k "onboard or template_service"`
+— 109 passed, 1 skipped; `test_onboarding_rate_limit_scopes.py` — 9 passed
+(was 7), verified to fail with the fix reverted; `test_security_middleware.py`
+— 80 passed; `tsc --noEmit` — 0 errors; `eslint .` — 0 errors, 8 pre-existing
+warnings in unrelated files. Full writeup:
+`docs/security-review/ONB-30-onboarding.md`.
+
+**Round 2 (Codex-caught, verified before fixing):** ONB-30-1's own fix gave
+`GET /status` `check_rate_limit`'s bare auth defaults (5 requests/60s,
+1800s lockout on the Redis-unavailable fallback). Unlike its siblings,
+`/status` isn't gated behind a deliberate user action — `LoginPage.tsx` and
+`OnboardingCheck` call it from a `useEffect` on every mount, twice under
+React StrictMode — so a handful of page loads exhausts the budget and the
+fallback lockout could leave a legitimate admin locked out of even learning
+whether onboarding is needed for up to 30 minutes. Fixed by giving
+`_rate_limit_onboarding_status` its own explicit budget
+(`max_requests=60, window_seconds=60, lockout_seconds=60`) instead of the
+auth defaults; every other onboarding route keeps the tight defaults since
+each gates a one-shot action. Guard tests added:
+`test_status_wrapper_uses_a_read_appropriate_budget_not_auth_defaults` and
+`test_action_wrappers_keep_the_auth_defaults` (confirms the loosening stays
+confined to `/status`). `pytest tests/ -k "onboard or template_service"` —
+**117 passed, 1 skipped** (was 109); `test_onboarding_rate_limit_scopes.py`
+— **17 passed** (was 9); `flake8`/`black --check`/`isort --check-only` clean.
+
+---
+
+### 2026-08-31 — Feature 29 (Reports & analytics), pass 3 ✅ PR #2091 merged (`b6c283a7`)
+
+Round 1: 0 fixed, 0 new flagged (claim did not hold). Round 2 (Codex-caught):
+6 fixed — see below.
+
+No security-review PR was open (feature 28/Security-audit-IP fully merged via
+PR #2089), so the rotation continued to feature 29. Loaded `CHECKLIST.md`,
+`SEC-00-cross-cutting-baseline.md`, and both prior findings docs
+(`docs/security-review/RPT2-29-reports-analytics.md`, PR #1912;
+`docs/module-audit/reports-analytics.md`; `docs/app-review/reports-analytics.md`;
+`docs/app-review/dashboard.md`) — re-verified their open items rather than
+re-deriving them.
+
+Diffed all ten files (`reports.py`, `analytics.py`, `platform_analytics.py`,
+`dashboard.py`, `labels.py`, `reports_service.py`,
+`dashboard_widget_service.py`, `attendance_dashboard_service.py`,
+`label_service.py`, `label_printer_service.py`) against the commit pass 2
+merged as: the only change since is one small commit adding a `printer_id`
+field to the label preset, which validates the client-supplied printer id
+against the caller's org before storage (correct pitfall-14c pattern) —
+verified good, no finding.
+
+Read every endpoint and service in full (not just the diff), enumerated all
+29 routes' auth/permission dependencies (table in the findings doc), and
+re-verified every prior fix line-by-line: RPT2-29-1, RPT2-29-3, DASH-29-1,
+DASH-29-2, DASH-29-3, LBL-29-1, LBL-29-3 (security-review pass 2) and DASH-3,
+RPT-1, RPT-4, RPT-5a, RPT-5b (module-audit/app-review) all hold exactly as
+recorded, no regressions. Every still-flagged policy item (RPT2-29-2 saved-
+report scheduler, LBL-29-2 label-printer permission gate, LBL-29-4 PDF label
+count cap, RPT-3 PII-tier permission, RPT-5c/RPT-6/RPT-7, DASH-2 dead
+`/dashboard/stats` endpoint) re-confirmed unchanged by grep/re-read, not
+re-applied.
+
+Also checked dimensions the pass-2 writeup didn't fully re-derive: zero
+`.like()`/`.ilike()` calls in this feature (n/a); the frontend's client-side
+CSV export (`modules/reports/utils/export.ts`) routes every cell through
+`escapeCsvCell`, which neutralizes formula-injection triggers the same way
+`SafeCsvWriter` does server-side (verified good); `platform_analytics.py`'s
+error-log aggregate projects only `error_type` + count, never
+`error_message`/`context` (verified good); the one `ondelete="SET NULL"` FK
+in this feature's models (`LabelPrinter.created_by_id`) is `nullable=True`.
+
+Noted in passing, not fixed (dead code, not exploitable): the frontend's
+`modules/reports/services/api.ts` exports a `reportExportService.exportReport`
+that calls a `POST /reports/export` backend route which does not exist, and
+has zero callers anywhere in the frontend.
+
+**Round 1 claimed no new findings, no code changes.** That claim did not
+survive Codex's review of the doc itself. Full writeup:
+`docs/security-review/RPT-29-reports-analytics-pass3.md`.
+
+**Round 2 (Codex-caught, all six verified against actual code before fixing):**
+
+1. **LBL-29-3 addendum (P1).** `extra_lines` was bounded on list length
+   (`max_length=20`) but not per-element string length; `_build_extra_lines`
+   passes a `custom:<text>` entry through unbounded, joined into every label
+   spec. Fixed with a per-element `max_length=100` on both
+   `LabelGenerateBody.extra_lines` and `LabelPrintBody.extra_lines`.
+2. **RPT-3, real authorization bypass (P1).** `PII_REPORT_PERMISSIONS`
+   covered only `member_roster`/`pipeline_overview`. `training_summary`,
+   `training_progress`, `annual_training`, `certification_expiration`, and
+   `compliance_status` all return per-member training/compliance detail
+   gated behind `training.manage` at their source; `admin_hours` returns
+   per-member hours gated behind `admin_hours.manage` at its source. A
+   `reports.view`-only caller could reach all six via `/reports/generate` and
+   `/reports/saved/{id}/run`. Fixed by adding all six to the map — this
+   supersedes round 1's "still flagged, policy call" characterization of the
+   `certification_expiration` gap, which was a real bug, not a policy choice.
+3. **Dashboard action-items caching (P2).** `/dashboard/action-items`
+   (assignee names + free-text descriptions) was missing from
+   `UNCACHEABLE_PREFIXES`, so a revoked grant could still be served from the
+   90s stale-while-revalidate cache. Fixed.
+4. **Unbounded saved-report listing (P2).** `GET /reports/saved` has no
+   pagination; capped creation at 200 active rows per org to bound it.
+5. **Saved-report field widths unvalidated (P2).** `name`/`report_type`/
+   `schedule_frequency` had no length bounds against their `VARCHAR`
+   columns, risking an uncaught `DataError` under MySQL strict mode. Fixed
+   with matching `Field(max_length=...)` bounds.
+6. **Analytics deviceType unvalidated (P2).** `metadata.deviceType` was
+   copied straight into a `VARCHAR(20)` column with no type/length check.
+   Fixed with a sanitizing extraction helper.
+
+Guard tests added: 3 (labels), 5 (report PII gate), 11 (saved-report caps/
+bounds + analytics), plus 1 frontend cache-exclusion test — 20 new tests, all
+passing. Completion gate: `flake8`/`black --check`/`isort --check-only`
+clean on all files touched; `pytest tests/ -k "reports or label or
+analytics"` — **368 passed, 1 skipped, 0 failed**; new/modified test files —
+**31 passed**; frontend `tsc --noEmit` clean, `eslint` clean on both changed
+files, `vitest run apiCache.test.ts` — **87 passed**.
+
+---
+
+### 2026-08-31 — Feature 28 (Security, audit & IP), pass 2 ✅ PR #2089 merged
+
+PR #2089 merged (`eca2825d`). No code finding fixed; two rounds of Codex
+correction on the findings writeup itself, plus one small frontend fix Codex
+caught along the way:
+
+1. **Scope-methodology error, caught round 1.** The pass's original "all
+   nine files byte-identical to pass 1" claim was false for one file —
+   `core/security_middleware.py` was rewritten by PR #1917 (an unrelated
+   feature, "core-infra," merged four days after pass 1) — the diff had been
+   run against the wrong baseline. #1917 actually fixed a real bug (session-
+   hijack/data-exfiltration detection read `user_id` before it existed on
+   the request, so those detectors never fired; also added a missing
+   `db.commit()`), which meant SEC2-28-7's wiring/severity claims needed
+   re-deriving against the corrected code, not the stale assumption.
+
+2. **SEC2-28-7 corrected across both rounds.** Original claim: all five
+   detector paths fire `ThreatLevel.CRITICAL` and are visible only via a
+   raw DB/API query. Actual: only `detect_session_hijack` and
+   `report_privilege_escalation_attempt` are unconditionally CRITICAL;
+   `detect_brute_force` is HIGH; `detect_data_exfiltration` is HIGH,
+   escalating to CRITICAL only on 5× cumulative volume (its
+   external-destination CRITICAL branch is dead code — the sole call site
+   never supplies `destination`). Three of the five detectors already write
+   an org-scoped audit-log row `AuditLogPage` displays — the real gap for
+   those three is a missing alert-specific ack/resolve UI, not
+   invisibility. Two findings widened instead: brute-force alerts carry
+   `user_id=None` on every failed login unconditionally, so they get
+   `organization_id=NULL` and are excluded by every org-scoped alert query
+   — no frontend fix alone closes this, it needs a platform-level
+   alert-viewing design; and `SecurityMonitoringMiddleware` only checks
+   exfiltration when the response has `Content-Length`, which
+   `StreamingResponse` never sets — confirmed at three of the fifteen
+   `EXPORT_ENDPOINTS` routes that build the full export in memory and still
+   never set it, so those exports create no alert at any size (a backend
+   gap, not a UI one). The remediation note also originally named only
+   `resolve` as needing `audit.export`; `acknowledge` requires the same
+   permission and was missing.
+
+3. **Small fix, both rounds.** `IPSecurityAdminPage`'s route required only
+   `security.manage` while `ip_security.py` accepts `security.manage` OR
+   `settings.manage`, refusing a `settings.manage`-only admin the page the
+   API would authorize. Fixed via `ProtectedRoute`'s `requiredAnyPermission`
+   — which immediately turned CI red via `testingRegistry.test.ts`'s route-
+   gate comparison test, since `testingRegistry.ts`'s own entry needed the
+   same update; fixed in a follow-up commit. The doc's first draft had
+   credited the wrong tests (`routeIntegrity.test.ts`, an unrelated store
+   test) with covering this change — corrected to credit the actual
+   gate-comparison test.
+
+CI green (17/17), all ten review threads across two rounds resolved, no
+merge conflict. See `docs/security-review/SEC2-28-security-audit-ip.md` for
+the full writeup.
+
+---
+
+### 2026-08-31 — Feature 28 (Security, audit & IP), pass 2 — 0 fixed, 1 flagged (HIGH-operational) — PR pending
+
+No security-review PR was open (feature 27/Integrations fully merged via PR
+#2088), so the rotation continued to feature 28. Loaded `CHECKLIST.md`,
+`SEC-00-cross-cutting-baseline.md`, pass 1's own findings doc
+(`SEC2-28-security-audit-ip.md`, PR #1911), `docs/module-audit/
+security-audit-ip.md`, and `docs/app-review/security-audit-ip.md`; re-verified
+their open items rather than re-deriving them.
+
+Diffed all nine backend files this feature covers against the commit pass 1's
+PR merged as, and originally reported **byte-identical, zero lines changed**
+across all nine — wrong for one: `core/security_middleware.py` changed by
+159 additions / 117 deletions in PR #1917 (feature 33, "core-infra," merged
+2026-08-27, four days after pass 1's #1911), which the diff was run against
+the wrong baseline and missed. Codex review caught it (see the full writeup
+in `SEC2-28-security-audit-ip.md` for what #1917 actually changed — mainly,
+it fixed session-hijack/data-exfiltration detection's user-id timing bug and
+a missing `db.commit()`, so those detectors are now genuinely wired where
+pass 1 had no way to know they weren't yet). All six pass-1 findings
+(SEC2-28-1 through SEC2-28-6) re-verified directly against current code: the
+four fixes are intact (129/129 scoped tests pass), and the two flagged items
+(SEC2-28-5 — approved IP-allowlist exceptions have no enforcement effect;
+SEC2-28-6 — TOCTOU on the duplicate-exception check) still reproduce exactly
+as described, unchanged — none of the six touch `security_middleware.py`'s
+IP-enforcement path, so this correction doesn't affect them.
+
+**Frontend reviewed for the first time this pass** (pass 1 was backend only):
+`modules/ip-security/` (admin page, store, service, components),
+`AuditLogPage.tsx`, `ErrorMonitoringPage.tsx`. No `window.confirm`/`alert`/
+`prompt`, no `dangerouslySetInnerHTML`, no banned date methods, all three
+`/security/`, `/audit-logs`, `/ip-security/` prefixes correctly excluded from
+the API cache, module axios auth inherited correctly. Route permission gates
+were originally reported as all matching their backend endpoints — wrong:
+`IPSecurityAdminPage`'s route required only `security.manage` while
+`ip_security.py` accepts `security.manage` OR `settings.manage`, refusing a
+`settings.manage`-only admin the page the API would authorize them for.
+Codex caught it; fixed by switching to `ProtectedRoute`'s
+`requiredAnyPermission`. That alone turned CI red: the actual test covering
+route permissions, `testingRegistry.test.ts`'s `repeats each route gate
+exactly` (a second Codex catch — the first fix's own summary had credited
+`routeIntegrity.test.ts` and the ip-security store test, neither of which
+touches permissions at all), diffs every route against `testingRegistry.ts`,
+which still declared the old single permission; updated to match. Verified
+with `tsc --noEmit`, `eslint`, and the full frontend suite (5520/5520).
+
+**SEC2-28-7 (HIGH — operational-security value, not an access-control bypass;
+flagged, not fixed) — corrected after Codex review.** The original writeup
+overstated severity (claimed all five detector paths fire
+`ThreatLevel.CRITICAL`; actually `detect_brute_force` is `HIGH`, and
+`detect_data_exfiltration` is `HIGH`, escalating to `CRITICAL` only when the
+24h cumulative total exceeds 5× the single-transfer threshold — it also
+accepts a `destination` argument that would escalate an external transfer,
+but the sole production call site never supplies it, so that branch is
+unreachable as currently wired (a third Codex catch) — only
+`detect_session_hijack`/`report_privilege_escalation_attempt` are
+unconditionally `CRITICAL`) and overstated the visibility gap (claimed
+"only a direct DB/API query surfaces one" for all five; actually
+`detect_session_hijack`/`detect_data_exfiltration`/
+`report_privilege_escalation_attempt` each write an org-scoped
+`log_audit_event` call already visible via the existing `AuditLogPage` — the
+real gap for those three is narrower: no alert-specific ack/resolve UI).
+Two corrections _widen_ the finding instead: brute-force alerts are called
+with `user_id=None` on every failed login (unconditionally — `user` is
+`None` on both an unknown username and a wrong password), so
+`_add_alert` stamps `organization_id=NULL` and every org-scoped query
+(`get_recent_alerts`/`acknowledge_alert`/`resolve_alert`) excludes them
+structurally — no realistic frontend fix closes this without a new
+platform-level alert-viewing design, a bigger question than a UI build; and
+`SecurityMonitoringMiddleware` only checks exfiltration when the response
+carries `Content-Length`, which `StreamingResponse` (confirmed at three of
+the fifteen `EXPORT_ENDPOINTS` routes: `admin_hours.py`,
+`equipment_check.py`, `finance.py`) never sets even though the full export
+is already built in memory first — bulk CSV exports through at least those
+three routes create no exfiltration alert at any size, a backend gap, not a
+missing UI. `security_monitoring.py`'s 13-endpoint alert-management surface
+genuinely has zero frontend consumers either way (`securityService` in
+`adminServices.ts` wraps five of them but is called from nowhere, confirmed
+by exhaustive grep; the other eight have no wrapper at all), and this
+feature's other three backend files (`audit_logs.py`, `error_logs.py`,
+`ip_security.py`) do have working, permission-gated admin screens — that
+part of the original finding holds. See
+`docs/security-review/SEC2-28-security-audit-ip.md` for the full,
+corrected writeup. Mirrored into `docs/KNOWN_LIMITATIONS.md`.
+
+Also noted (not fixed, low severity, fails safe both directions): the
+`/admin/errors` route gates on `settings.manage` while its `error_logs.py`
+endpoints require `audit.view`/`audit.export`/`audit.manage` — a
+permission-string mismatch, not a bypass in either direction.
+
+Full local completion gate: flake8/black/isort clean on the 9 backend files
+this feature covers (no backend code changed); 129/129 scoped backend tests
+pass; `tsc --noEmit` 0 errors; `eslint` 0 errors/warnings on the files
+reviewed; full frontend suite (`npx vitest run`) 5520/5520 pass, including
+the route-permission fix and its `testingRegistry.ts` update. Findings
+appended to `docs/security-review/SEC2-28-security-audit-ip.md`'s existing
+Pass 1 doc as a new Pass 2 section, corrected across two rounds of Codex
+review on this PR. Rotation row 28 → ⏳ pending this PR's merge.
+
+---
+
+### 2026-08-31 — Feature 27 (Integrations), pass 2 ✅ PR #2087 merged
+
+PR #2087 merged (`53ebd0ac`). One finding, one Codex correction round:
+
+1. **INT-6 (LOW-MED, fixed).** `test_integration_connection()`'s per-connector
+   implementations mostly raise hand-authored, safe messages on their
+   expected failure paths, but several don't wrap every outbound call, so an
+   unhandled infra-level exception (DNS, TLS, timeout) could still reach two
+   client-facing sites unsanitized — `POST /integrations/{id}/test-connection`
+   and `GET /integrations/salesforce/readiness`. Fixed by routing both
+   through `sanitize_error_message()`.
+
+2. **Codex correction, same commit round.** `sanitize_error_message()`'s
+   pattern blacklist doesn't cover generic DNS/TLS/timeout text (e.g.
+   `[Errno -2] Name or service not known` matches none of its SQL/path/
+   traceback patterns), so the exact scenario INT-6 was written to close
+   still leaked. Fixed by adding `sanitize_connector_error()`
+   (`app/core/utils.py`), which checks the exception's _type_ instead: only
+   an exact-type `Exception` (or the one named trusted subclass,
+   `PayPalError`) is treated as a connector's own hand-authored message —
+   anything else always gets the generic fallback regardless of content.
+   That investigation also surfaced a sharper instance of the same root
+   problem: three connectors (`google_calendar_service.py`,
+   `outlook_calendar_service.py`, `weather_service.py`) caught broadly and
+   re-raised as `Exception(f"...: {e}")`, interpolating the raw caught
+   exception into a message that _is_ exact-type `Exception` — exactly what
+   a type check (correctly) trusts. Fixed by dropping the interpolation in
+   all three; they now log the real exception server-side and raise a
+   static message instead. Also caught a second, previously-unfixed
+   `check_readiness` catch site (the per-sObject `get_field_names` lookup)
+   with the same defect as the two named in the original finding.
+
+CI green (17/17), one review thread resolved, no merge conflict. See
+`docs/security-review/INT-27-integrations.md` for the full writeup.
+
+---
+
+### 2026-08-31 — Feature 27 (Integrations), pass 2 ⏳ PR #2087 opened
+
+Re-read all five backend files in full (`integrations.py`, `salesforce_sync.py`,
+`salesforce_service.py`, `salesforce_oauth_service.py`,
+`salesforce_sync_service.py`) plus `schemas/integration.py`. File sizes
+essentially unchanged since pass 1 (PR #1910); re-verified INT-1 through
+INT-5 all still hold, INT-5 still an open owner decision. Enumerated all 16
+routes across both endpoint files with their auth dependency, permission,
+and org-scoping — no gap.
+
+1. **INT-6 (LOW-MED, fixed).** Prompted by FORM-9 landing one file over in
+   the same feature 26 pass, checked every `except Exception` in this
+   feature's files against where its message ends up. Two sites returned
+   an unhandled connector exception's raw `str(e)`/`str(exc)` straight to
+   the client: `POST /integrations/{id}/test-connection` and
+   `GET /integrations/salesforce/readiness`. Most connector failure paths
+   raise a safe, hand-authored message, but not every outbound call inside
+   them is individually wrapped, so an unhandled infra-level exception
+   (DNS, TLS, timeout) could still reach the client unsanitized. Fixed by
+   routing both through `sanitize_error_message()` — not
+   `safe_error_detail()`, which only passes through `ValueError`/
+   `PermissionError` and would have replaced every intentional connector
+   message with the generic fallback, since these connectors raise bare
+   `Exception`. Two guard tests per site (leak case + hand-authored-message
+   passthrough case), all verified to fail on reintroduction.
+
+Full local completion gate green: flake8/black/isort clean across
+`app/ tests/ alembic/`, `validate_migrations.py --strict` passed (394
+revisions, single head), 1561/1561 integration/salesforce-scoped tests pass
+(21 skipped, all environment-only). No frontend file changed —
+`tsc`/`eslint` n/a. Findings doc: `docs/security-review/INT-27-integrations.md`.
+
+---
+
+### 2026-08-31 — Feature 26 (Forms), pass 2 ✅ PR #2085 merged
+
+PR #2085 merged (`8f42de4d`). One finding, one Codex correction round:
+
+1. **FORM-9 (LOW-MED, fixed).** Three prior review passes (module-audit
+   iteration 13, app-review pass 1, this doc's own pass 1) had misjudged six
+   `except Exception as e:` sites in `forms_service.py`'s integration
+   processors as "internal, never returned to the client" — the dict those
+   blocks build is persisted to `submission.integration_result`, which
+   `FormSubmissionResponse` serializes straight back on
+   `submit_form`/`get_submission`/`list_submissions`/
+   `reprocess_submission_integrations`, and `SubmissionViewer.tsx` renders
+   it verbatim. Fixed by routing all six through `safe_error_detail(e)`,
+   matching the existing FORM-7 pattern.
+
+2. **Codex correction, same commit round.** A seventh site had the same
+   shape but not the same fix: `InventoryService.assign_item_to_user()`
+   never raises on failure, it returns `(None, str(e))`, so
+   `_process_equipment_assignment`'s `if error: return {"success": False,
+"error": error}` branch returned that raw string untouched — no
+   exception ever reaches the `except`-block sanitizer. `error` here is
+   already a plain string, not an `Exception`, so `safe_error_detail`
+   doesn't apply; fixed by routing it through `sanitize_error_message()`
+   instead (the sibling helper `inventory.py`'s own caller already uses for
+   this exact tuple shape). Both sites now have dedicated guard tests,
+   each verified to fail on reintroduction.
+
+CI green (17/17), one review thread resolved, no merge conflict. See
+`docs/security-review/FORM-26-forms.md` for the full writeup.
+
+---
+
+### 2026-08-31 — Feature 25 (Messaging & notifications), pass 2 follow-up ✅ PR #2083 fully merged
+
+PR #2083 merged (`7ce4c24e`). What started as a HIGH-severity migration fix
+(MSG-11) turned into six rounds of Codex review, all real, all resolved:
+
+1. **The premise itself was false.** `positions`/`user_positions` are not
+   create_all-only — `20260805_0008_rename_roles_to_positions.py` renames
+   `roles`/`user_roles` (created by the initial schema migration) to those
+   names, and is a required upgrade-path ancestor of the message-recipients
+   migration. Verified empirically with a real `alembic upgrade head`
+   against a fresh, correctly-collated database: the full 394-revision
+   chain completes with no `NoSuchTableError`. Reverted the guard entirely
+   — its early-return path was untested dead code that, per a second
+   Codex finding, would have silently dropped the recipient backfill (and
+   permanently hidden existing messages from inboxes) had it ever actually
+   triggered.
+2. **The real fix:** `_tables_created_by_migrations` in
+   `test_migration_create_all_tables.py` now recognizes `op.rename_table`
+   destinations, the actual root cause of the false positive.
+3. **Four more rounds hardened that fix and its sibling detector,
+   `_find_autoload_offenders`** (kept as an independent ratchet against a
+   real future unguarded-reflection bug): scoping both to `upgrade()` only
+   via a new `_upgrade_body` helper (a downgrade-only rename or
+   downgrade-only helper must not count — the dangerous direction, since
+   either hides a real create_all-only table from the ratchet); including
+   helper functions `upgrade()` delegates to, directly or via a
+   lambda/dispatch table (two real migrations use this shape); running the
+   reachability check against a comment/string-stripped view of the text
+   (via the stdlib tokenizer) so a helper named only in a comment doesn't
+   count; and broadening `_AUTOLOAD_TABLE`'s regex to match a bare
+   `Table(...)` import, reordered arguments, and one level of nested
+   parens. Twelve review threads total, every one addressed with a fix and
+   a pinning test, not just a reply.
+4. **MSG-12 grew from one crash-window scenario to three** as two separate
+   Codex findings pointed out that an ordinary provider failure
+   (`status="failed"`) and a throttled send (no row created at all) hit the
+   same permanent-non-retry wall as the originally-reported stranded
+   `pending` claim — the throttled path needs no crash or outage at all,
+   arguably making it the most likely of the three in practice.
+5. Also fixed the same stale "positions is create_all-only" claim in
+   CLAUDE.md's own Pitfall #26 (which had misled the original MSG-11
+   report) and in this test file's own module docstring.
+
+Full local gate green throughout (22 tests in the migration file, up from
+13; 1175 scoped + 9300 full backend tests by the final commit); CI green on
+the final head (17/17 checks), no merge conflict. Rotation row 25 → ✅.
+Next: 26 Forms.
+
+---
+
+### 2026-08-31 — Feature 25 (Messaging & notifications), pass 2 follow-up — initial assessment (0 fixed, 1 flagged; see corrections below for the retracted HIGH finding)
+
+A second, independent security-review iteration reached feature 25 pass 2 at
+essentially the same moment as the entry directly below — both found no open
+PR at Step 0, both reviewed the same PR #1938 recipient-materialization
+architecture, and both pushed to the same conventional branch name
+(`claude/security-review-messaging-notifications-pass2`) within minutes of
+each other. Discovered the collision at push time (`git push` rejected,
+`git ls-remote` showed the branch already existed with PR #2081 open), and
+discovered it a second time when a first merge-onto-their-branch attempt was
+itself rejected — the other session had pushed an additional commit
+(Codex's review of PR #2081 catching an id collision in that session's own
+write-up) in the interval. Rebased a second time onto that tip, renumbered
+this session's findings to MSG-11/MSG-12 to stay clear of the ids already in
+use, and was about to push the combined branch when PR #2081 merged to
+`main` out from under it (`git fetch` came back with "couldn't find remote
+ref" — the branch was deleted on merge). Per CLAUDE.md Pitfall #24, that
+branch name is not reused. This finding — a real, unaddressed HIGH-severity
+migration bug the other session's PR did not touch — is instead delivered as
+a small follow-up PR against current `main` (which already contains #2081)
+rather than silently dropped.
+
+**MSG-11 (initially reported HIGH/fixed; corrected below to not
+reproducible)** — `20260826_1700_d4e5f6a7b8c9_message_recipients.py`
+(the same PR #1938 backfill migration PR #2081's "New architecture reviewed"
+section had already read for a different question) reflects `positions` and
+`user_positions` with raw `sa.Table(..., autoload_with=bind)` and, at the
+time this was written, had no existence guard. This paragraph pattern-matched
+CLAUDE.md Pitfall #26 (`positions` is one of that section's own listed
+examples) and concluded `alembic upgrade head` against a fresh/empty
+database would raise `NoSuchTableError` on this reflection and fail the
+whole migration chain, the same way the `event_requests` incident on
+2026-08-24 did. **This was not verified against a real fresh-database run at
+the time, and turned out to be wrong** — see the correction entry directly
+below, written the same day after Codex's review of this PR caught it.
+
+**MSG-12 (LOW-MED, flagged)** — a worker crash between
+`MessageDeliveryService._claim_delivery`'s commit and
+`_finish_delivery`'s follow-up commit leaves a `DepartmentMessageDelivery`
+row permanently `status="pending"`: the same unique
+`(message_id, recipient_id, channel)` constraint that makes retries safe
+also means nothing ever retries a stranded claim, and no sweep exists to
+detect or expire stale pending rows. Narrow blast radius (needs a crash in
+an exact window) but affects whichever channel strands, including email —
+this feature's own "record of notice." Needs a product decision on
+stale-claim policy (TTL, automatic retry vs. admin alert, duplicate-send
+risk tradeoff); mirrored into `KNOWN_LIMITATIONS.md`.
+
+New guard tests: `backend/tests/test_migration_create_all_tables.py` gained
+a second detector (`_find_autoload_offenders`/`_AUTOLOAD_TABLE`) — the
+existing ratchet only recognized `op.*` calls and could not have caught
+MSG-11, since `sa.Table(..., autoload_with=bind)` is a raw SQLAlchemy Core
+call — plus the real-migrations assertion and two pinning tests. Full local
+completion gate re-verified green against current `main` (which already
+includes #2081): flake8/black/isort (8.0.1, CI's pin) clean, migrations
+validated (394 revisions, single head), 1036/1036
+messaging+notifications+email-scoped and 9291/9291 full backend suite pass
+(22 pre-existing skips), `tsc --noEmit` 0 errors, `eslint .` 0 errors (8
+pre-existing warnings, none touched). Findings appended to
+`docs/security-review/MSG-25-messaging-notifications.md`'s existing Pass 2
+section (MSG-11/MSG-12, continuing #2081's own MSG-9/MSG-10). Rotation row
+25 stays `⏳` — a HIGH-severity, CI-breaking fix is still outstanding, so
+the feature is not fully closed until this follow-up PR merges too. PR
+[#2083](https://github.com/thegspiro/the-logbook/pull/2083) opened (never
+reusing #2081's now-merged branch name, per Pitfall #24) and subscribed.
+Next: 26 Forms, once this merges.
+
+**Correction (2026-08-31, on this same PR #2083):** Codex's review of PR
+#2083 raised four findings on the MSG-11 guard, the most serious (P1) being
+that on any real (non-CI-ephemeral) database that had already hit the
+crash MSG-11 described, the guard's own `CREATE TABLE`/`CREATE INDEX`
+statements would already have implicitly committed (MySQL DDL auto-commits
+per statement) without Alembic stamping the revision, so a retry after
+deploying the guard would fail again — this time on "table already exists."
+Investigating that finding surfaced a second Codex comment questioning
+MSG-11's premise entirely: `positions`/`user_positions` are not actually
+create_all-only, because `20260805_0008_rename_roles_to_positions.py`
+renames `roles`/`user_roles` (created by the initial schema migration) to
+those names, and is a required upgrade-path ancestor of the message-
+recipients migration. Verified this empirically rather than trusting the
+re-reading: created a fresh, correctly-collated MySQL database and ran
+`alembic upgrade head` against it from `base` — the full 394-revision chain,
+including the message-recipients migration, completed with no
+`NoSuchTableError`, and `positions`/`user_positions` existed while
+`roles`/`user_roles` did not (confirming the rename had run). Also confirmed
+via `ScriptDirectory.walk_revisions` that the rename migration is a required
+DAG ancestor, not merely an artifact of this run's ordering. **MSG-11 does
+not reproduce.** Reverted the guard (its early-return path was untested
+dead code resting on a false premise, and per Codex's fourth finding, had it
+ever triggered on a database missing exactly one of the two tables, it would
+have silently skipped the backfill and stamped success — permanently
+dropping existing messages from members' inboxes on any installation that
+already had real data, since inbox visibility now derives from the
+`DepartmentMessageRecipient` join). Fixed the actual root cause instead:
+`_tables_created_by_migrations` in `test_migration_create_all_tables.py`
+only recognized `op.create_table`, not `op.rename_table` destinations —
+now it does. Kept the new `_find_autoload_offenders`/`_AUTOLOAD_TABLE`
+detector as a ratchet with independent value against a real future instance
+of this reflection-without-guard shape; it now correctly reports zero
+offenders for the current chain. Left open, not addressed: Codex's third
+finding that `_guarded_tables` scans whole-file text rather than being
+scoped to `upgrade()` — a pre-existing limitation of the whole detector
+family, not introduced by this PR, out of scope for this pass. Full local
+gate re-verified green (flake8/black/isort/migrations/1166 scoped +
+9291 full backend tests), plus the fresh-database empirical check above
+that no static gate would have caught either the original false alarm or
+this correction. See MSG-11 in the findings doc for the complete writeup.
+Rotation row 25 still `⏳` pending this PR's merge; MSG-12 unaffected. Next:
+26 Forms, once this merges.
+
+**Second correction (2026-08-31, same PR):** two further rounds of Codex
+review, both on code this correction had just added, both real. (1)
+`_AUTOLOAD_TABLE`'s regex matched only one exact call spelling and missed a
+bare `Table(...)` import, reordered/extra arguments, and a nested-call
+argument (`sa.MetaData()`) — broadened it, with pinning tests per shape
+plus a negative test. (2) The `op.rename_table` recognition just added to
+`_tables_created_by_migrations` scanned whole files, so a rename
+destination appearing only in a migration's `downgrade()` (undoing an
+`upgrade()`-side rename) would be wrongly credited as migration-created —
+the dangerous direction, since it removes a real create_all-only table from
+that set. Added `_upgrade_body` to scope both the `create_table` and
+`rename_table` scans to `upgrade()` only; its first version (matching only
+an unannotated `def upgrade():`) matched nothing against this codebase's
+`def upgrade() -> None:` convention and was caught before shipping by
+diffing its output against the unscoped scan on the real chain, not by
+review. Re-verified `positions`/`user_positions` still correctly excluded
+from create_all-only after the fix (40-table set, unchanged). Full local
+gate green again (17 tests in this file, up from 13; 1170 scoped +
+9291 full backend). See MSG-11 in the findings doc for the complete writeup.
+
+### 2026-08-31 — Feature 25 (Messaging & notifications), pass 2 ✅ PR #2081 fully merged (PR #2082 closed the tracker)
+
+PR #2081 merged (`7d4c8fda`). Codex's review flagged two real issues on the
+first commit: a finding-id collision (the flagged `reconcile_recipients`
+item in `KNOWN_LIMITATIONS.md` reused `MSG-9`, already assigned to the fixed
+`get_message_stats` org-scoping issue) and an overstated claim that
+narrowing a message's audience "destroys acknowledgment history" — it
+overlooked the independent, tamper-evident `message_acknowledged` audit-log
+entry `reconcile_recipients` never touches. Fixed by renaming the
+limitation to MSG-10 (with cross-references updated in the findings doc and
+this tracker) and rewording the claim to distinguish the acknowledgment
+report's/inbox's lost record from the surviving audit trail. A third Codex
+comment (stale `## Open PR` header) was already addressed by the prior
+commit. All three review threads resolved; CI green on the final head
+(17/17 checks), no merge conflict.
+
+**Correction (2026-08-31, on the closing PR #2082):** Codex's review there
+caught that the "surviving audit trail" framing above overstated it too —
+`AuditLogger.create_log_entry` (`app/core/audit.py:265-270`) is deliberately
+fail-open and `acknowledge_message` never checks its return value, so the
+`message_acknowledged` audit-log write is best-effort, not guaranteed. Fixed
+across three separate spots Codex caught one at a time (the `KNOWN_LIMITATIONS.md`
+body, its own heading, and this tracker's original PR #2081 summary below) to
+say the report/inbox loss is reliable while the audit-trail survival is
+conditional on that write having succeeded. PR #2082 merged (`c71913ec`),
+marking rotation row 25 ✅ — **before** a second, independent security-review
+session's PR #2083 (see entry above) surfaced the still-outstanding
+HIGH-severity MSG-11 migration bug, which reopened row 25 to `⏳`. Next: 26
+Forms, once #2083 merges.
+
+### 2026-08-31 — Feature 25 (Messaging & notifications), pass 2 — 1 fixed (LOW-MED), 1 flagged (LOW-MED) — PR #2081 ✅ merged
+
+No security-review PR was open (feature 24/Meetings & minutes pass 2 fully
+merged via PR #2080), so the rotation continued directly to feature 25.
+Loaded `CHECKLIST.md`, `SEC-00-cross-cutting-baseline.md`, pass 1's own
+findings doc (`MSG-25-messaging-notifications.md`, PR #1907), the module-audit
+docs (`docs/module-audit/messaging.md`, `docs/module-audit/notifications.md`),
+and the 4-5-pass app-review docs (`docs/app-review/messaging.md`,
+`docs/app-review/notifications.md`, `docs/app-review/email-templates.md`).
+
+Messaging's architecture changed materially since pass 1: PR #1938 (merged
+2026-08-27, after pass 1 closed) replaced live in-Python audience
+re-evaluation with a durable `DepartmentMessageRecipient` table, materialized
+at publish time and reconciled on an audience edit. Re-read
+`messaging_service.py` (now 1047 L), `messages.py`, and `message_history.py`
+in full against that change; confirmed `notifications.py`/
+`notifications_service.py`/`push_service.py`/`notification_rules.py`/
+`notification_channels.py`/`integration_services/notification_dispatch.py`
+and the whole email-templates surface unchanged since pass 1 (git history
+shows only a no-op merge touching those files) and spot-checked each pass-1
+fix directly against current code rather than re-deriving. All eight pass-1
+fixes (MSG-4 through MSG-8, the Codex-round `cc_emails` legacy-read fix)
+confirmed intact.
+
+**Frontend reviewed for the first time this rotation** (pass 1 was backend
+only): `modules/communications/` (messaging admin/inbox, email-template
+editor/preview/scheduler), `modules/notifications/`, `NotificationsPage.tsx`,
+`usePushNotifications.ts`. All verified good — no `window.confirm`/`alert`/
+`prompt`, no `dangerouslySetInnerHTML` (department-message bodies render via
+the script-safe `LinkifiedText` component), the email-template preview iframe
+is `sandbox="allow-same-origin"` with no `allow-scripts` (blocks script
+execution regardless of template content), no direct `fetch(`, no banned
+date-formatting methods, update payloads send explicit nulls correctly on
+edit, `UNCACHEABLE_PREFIXES` coverage current, and route permission gates
+match all enumerated backend permission strings.
+
+**MSG-9 (LOW-MED, fixed)** — `get_message_stats`'s `read_count`/`ack_count`
+queries filtered only by `message_id`, not `organization_id`, unlike
+`targeted_count` three lines below and every other by-id query in the file.
+Not currently exploitable (`message_id` is always pre-resolved through an
+org-scoped `get_message_by_id` call one line above), but one refactor away
+from a real cross-tenant read. Fixed by adding the missing filter; guard test
+added that inspects the compiled `WHERE` clause and fails on reintroduction
+(verified by reproducing the bug locally and confirming the test catches it).
+
+**Flagged (MSG-10, not fixed, recorded in `docs/KNOWN_LIMITATIONS.md`)** —
+`reconcile_recipients` hard-deletes a member's `DepartmentMessageRecipient`
+row, including `read_at`/`acknowledged_at`, the moment an audience edit no
+longer targets them — reliably erasing that member's record from
+`get_acknowledgment_report` (which the same file's own `delete_message`
+docstring calls "compliance evidence"). An independent `message_acknowledged`
+audit-log entry may also exist, but that write is best-effort, not
+guaranteed — `AuditLogger.create_log_entry` is deliberately fail-open and
+`acknowledge_message` never checks its return, per Codex's review of the
+closing PR #2082 — so whether any evidence survives beyond the report/inbox
+depends on whether that write happened to succeed. Not mechanically fixable
+like MSG-9 (the org-scoping fix above): keeping resolved rows would also keep
+the message visible in that member's inbox (visibility is a join on the same
+table), which is a product decision, not a bug fix. Not cross-tenant.
+
+Also corrected a stale doc: `docs/app-review/email-templates.md` still marked
+MAIL-3 (attachment magic-byte validation) as OPEN; the code already fixes it
+(fails closed with a 503 when libmagic is unavailable) — pass 1's own
+"Verified good" section had already confirmed this but never corrected the
+doc it was re-checking against.
+
+Full local completion gate green: flake8/black/isort (CI's 8.0.1 pin)
+clean across `app/ tests/ alembic/`, `validate_migrations.py --strict` passed
+(394 revisions, single head), 1100/1100 messaging+notifications+email-template
+scoped tests and 9288/9288 full backend suite passed, `tsc --noEmit` 0 errors,
+`eslint .` 0 errors (8 pre-existing warnings, none in touched/reviewed files).
+PR #2081 opened and subscribed. Next: 26 forms, once this PR merges.
+
+### 2026-08-31 — Feature 24 (Meetings & minutes), pass 2 ✅ fully merged — PR #2079
+
+PR #2079 merged (`6b33538c`). Codex's review flagged one real issue on the
+new guard test (`MinutesDetailPage.unlinkEvent.test.tsx`): a `vi.clearAllMocks()`
+in `beforeEach` that CLAUDE.md Pitfall #28 already documents as leaving stale
+implementations behind — fixed by resetting each mock explicitly before
+installing its default, verified against the actual test and eslint, and
+pushed. Thread resolved; no further findings on the re-review. CI green on
+the final head (17/17 checks), no merge conflict. Rotation row 24 → ✅.
+Next: 25 messaging & notifications.
+
+### 2026-08-31 — Feature 24 (Meetings & minutes), pass 2 — 3 fixed (LOW-MED, LOW, MED), 1 flagged (LOW-MED)
+
+No security-review PR was open (feature 23/Medical supplies pass 2 fully
+merged via PR #2078), so the rotation continued directly to feature 24.
+Loaded pass 1's findings doc (`MM-24-meetings-minutes.md`, PR #1906), the
+module-audit and app-review docs (`docs/module-audit/meetings-minutes.md`,
+`docs/app-review/meetings-minutes.md`, 4 passes), and re-checked CLAUDE.md's
+pitfalls against the code rather than re-deriving anything those already
+settled.
+
+Scoped to the full backend surface since pass 1's merge: `quorum_service.py`
+is the only file that moved (+1 line, `populate_existing=True`), landed by
+the **elections** module's own ELEC-06 pass-2 review since `quorum_service.py`
+is shared between meetings and elections quorum math — re-read directly and
+confirmed correct, no regression to MM-4's own fix. Re-verified all seven
+pass-1 fixes (MM-1 through MM-7) by reading the current code, and re-ran a
+route enumeration from scratch: 17/17 `meetings.py` and 25/25 `minutes.py`
+routes, matching pass 1 exactly, all `require_permission`-gated. Every by-id
+query in both services re-swept for a missing `organization_id` filter — no
+gap.
+
+**Frontend scope established for the first time this pass** (pass 1 was
+backend-only): `frontend/src/modules/minutes/` (3,166 L) plus
+`frontend/src/services/meetingsServices.ts` (the `Meeting` client). Swept for
+`window.confirm`/`alert`/`prompt` (0 — `useConfirm()` used throughout),
+`dangerouslySetInnerHTML` (0), banned `.toLocale*`/`date-fns` (0), and direct
+`fetch(` (0 — both the module's own `createApiClient()` instance and the
+global `apiClient` carry auth interceptors, Pitfall #7 satisfied). Confirmed
+`/meetings` and `/minutes-records` (the real mount prefix for `minutes.py`'s
+router — not `/minutes`) are both already covered in `UNCACHEABLE_PREFIXES`.
+
+**MM-8 (LOW-MED, fixed)** — `meetings.py` had audit logging on exactly one
+of its ten mutating routes (`grant_attendance_waiver`); the other nine
+(create/update/delete/approve on `Meeting`, attendee add/remove, action-item
+CRUD, and the event-bridge create) left no trace at all, despite `Meeting`
+carrying the same governance-content shape (`agenda`/`notes`/`motions` text,
+an approval workflow) `minutes.py` already audits on every write. Not a dead
+API surface — `MinutesPage.tsx`'s "New Meeting" flow calls
+`meetingsService.createMeeting()` directly. Fixed by adding `log_audit_event`
+to all nine routes, matching this file's own established convention.
+
+**MM-9 (LOW-MED, flagged, not fixed)** — `approve_meeting` has neither an
+approval state-machine guard (it sets `APPROVED` unconditionally from any
+status) nor a separation-of-duties check, unlike its sibling
+`approve_minutes`. Not mechanically fixable like MM-5 was: `Meeting` has no
+`submitted_by` field or submit step, so there's no natural "the submitter
+can't also approve" comparison to apply — only `created_by`, and blocking
+self-approval against that would block the common single-secretary
+create-and-approve workflow, a product decision rather than a bug fix.
+Mirrored into `KNOWN_LIMITATIONS.md`.
+
+**MM-10 (LOW, fixed)** — `create_meeting_from_event` was the one error path
+in `meetings.py` that forwarded a raw service-layer error string via
+`detail=error` with no `safe_error_detail`/`sanitize_error_message` pass;
+`create_from_event`'s own `except Exception: return None, str(e)` branch
+means that string is not always one of the two hand-written messages. Fixed
+by routing through `sanitize_error_message()`, the established convention
+for this exact "raw string, not an exception object" shape.
+
+**MM-11 (MED, fixed, frontend)** — `MinutesDetailPage.tsx`'s "Unlink event"
+button sent `{ event_id: undefined }`, which `JSON.stringify` drops
+entirely — the PUT body was `{}`, so the backend's `exclude_unset=True` read
+it as "field not touched" and never cleared the link, despite an "Event
+unlinked" success toast (CLAUDE.md Pitfall #1's own update-vs-create
+mirror-image). Fixed by sending an explicit `{ event_id: null }`. Swept the
+rest of the module for the same shape — no other instance found (the
+remaining `: undefined` sites are create-form `useState` defaults, correct
+as-is).
+
+New guard tests: `backend/tests/test_meetings_audit_trail.py` (14 tests, one
+per newly-audited route plus MM-10's sanitization cases) and
+`frontend/src/modules/minutes/pages/MinutesDetailPage.unlinkEvent.test.tsx`
+(1 test, confirmed to fail on the pre-fix `undefined` payload). Full local
+completion gate green: flake8/black/isort (8.0.1, CI's pin) clean, migrations
+validated (394 revisions, single head, no schema change), 219/219
+meetings+minutes+quorum-scoped and 9287/9287 full backend suite pass (22
+pre-existing skips), `tsc --noEmit` 0 errors, `eslint .` 0 errors (8
+pre-existing warnings, none in touched files), `vitest run
+src/modules/minutes` 23/23 passed. Findings doc:
+`docs/security-review/MM-24-meetings-minutes.md` → Pass 2. PR
+[#2079](https://github.com/thegspiro/the-logbook/pull/2079) opened and
+subscribed. Rotation row 24 → ⏳ (awaiting PR merge). Next: 25 Messaging &
+notifications, once this PR merges.
+
+---
+
+### 2026-08-30 — Feature 23 (Medical supplies), pass 2 ✅ fully merged — PR #2076 (audit-trail follow-up, MSUP-5/MSUP-6)
+
+PR #2076 merged (`6567828e`). This was a second, independent pass-2 session
+that started from the same pass-1 baseline as PR #2075 (log entry below)
+and found a different finding — MSUP-5, the missing audit trail on
+category/item updates — resolved as a merge conflict against #2075's
+already-merged changes (see the tend-pass log entry above this one).
+Codex's review of the merge caught a real bug in the MSUP-5 fix itself
+(MSUP-6: the audit event could report the DB column name `extra_data`
+instead of `metadata`, the field the caller actually changed) and two doc
+accuracy issues (a reused `MSUP-2` identifier, a stale "no changes since
+pass 1" baseline claim once this branch picked up #2075's merged work) —
+all three fixed and their review threads resolved before merge. CI green
+on the final head; no merge conflict remained after the earlier tend pass.
+Rotation row 23 → ✅. Next: 24 meetings & minutes.
+
+### 2026-08-30 — Feature 23 (Medical supplies), pass 2 ✅ merged — PR #2075
+
+PR #2075 merged. 2 findings fixed (MSUP-2: N+1 domain-check loop in bulk
+delivery validation; MSUP-3: `low_stock` tile undercounting past a page
+cap — fixed across two rounds, ending on the existing
+`get_low_stock_items_for_alerts` alert-scan method rather than a raised
+cap), 1 flagged (MSUP-4: `get_expiring_lots` has no row cap, a product
+decision spanning shared callers), and 1 write-up self-correction (baseline
+members do already get medical-supply view access via the broad
+`inventory.view` OR-gate — intentional, documented, no PHI). Codex's
+review converged after MSUP-3's second fix; a third round asking for a
+bare aggregate/count-only query was logged as a possible future
+optimization rather than chased further, per this rotation's own
+convergence-stop precedent (GF-27→GF-27a). Rotation row 23 → ✅. Next: 24
+meetings & minutes.
+
+### 2026-08-30 — Feature 23 (Medical supplies), pass 2 — 2 fixed (LOW, LOW/MED), 1 flagged (LOW); 1 doc self-correction
+
+No prior module-audit or app-review pass exists for this feature (pass 1's
+own scope note); this is the second security-review pass over it. The
+endpoint file (`medical_supplies.py`) grew by only 3 lines since pass 1
+(667 L → 670 L, no route added or removed) — the growth is
+`medical_supply_summary`'s pre-existing `_on_hand` low-stock calc, not new
+and not security-relevant. `inventory_service.py`, this router's only
+dependency, grew substantially in the interim (~7,450 L → 8,200 L) from
+other features' reviews touching it, so every method this router actually
+calls was re-read directly rather than trusted from pass 1's summary.
+Re-verified against current code: MSUP-1's `apply_updates` fix still holds
+in `update_category`/`update_item`/`update_lot`; `item_in_domain`/
+`category_in_domain`/`lot_in_domain` still org-scope both sides of their
+joins and fail closed; `get_items`'s domain filter and its
+`_category_ids_of_type` subquery are still org-scoped inside the subquery;
+`add_lots_bulk`'s XC-1 check still resolves every client-supplied
+`inventory_item_id` in one org-scoped query before writing any lot; the
+free-text search in `get_items` still uses `like_pattern` +
+`escape=LIKE_ESCAPE_CHAR` (Pitfall #25).
+
+The PR's first commit also claimed baseline grants restrict medical-supply
+visibility (`_LINE_MEMBER_PERMISSIONS` grants only the broad
+`inventory.view`, never `inventory.view_medical`) — **Codex correctly
+caught this as a false conclusion**: every medical-view route OR-gates
+`inventory.view_medical` against that same broad `inventory.view`, which
+every firefighter/EMT holds by baseline, so every rank-and-file member can
+already view medical-supply stock. This is the router's own stated design
+(the split governs _manage_ authority, not view) and involves no PHI (this
+is equipment stock, not the separate `medical_screening` PHI domain, row 09) — corrected the write-up, no code change needed for this one.
+
+Codex's review of the same commit also caught two real bugs, both fixed:
+**MSUP-2 (LOW)** `receive_medical_delivery` validated each delivery line's
+domain membership with its own query (`_require_medical_item` in a loop) —
+up to 200 sequential queries for a delivery near the schema's entry cap.
+Fixed with a new bulk `InventoryService.items_in_domain`, resolving every
+line in one query (Checklist §6, "no N+1 loop issuing a query per row").
+**MSUP-3 (LOW/MED)** `medical_supply_summary`'s `low_stock` tile walked a
+500-row-capped `get_items` page while `total_items` used the query's
+separate, uncapped count — a department with more than 500 active medical
+items got a `low_stock` number that silently excluded every low-stock item
+past the 500th. First fix raised the internal cap to 10000 (matching the
+CSV export's "whole org, one page" convention in `inventory.py`); Codex
+correctly flagged that as still materializing up to 10000 full ORM rows
+with eager loads just to derive a count, and still inexact above the new
+cap. Replaced it instead with the existing (already used by the low-stock
+alert email) `get_low_stock_items_for_alerts`, which filters on
+`reorder_point IS NOT NULL` before loading any rows — given a new optional
+`item_types` parameter to scope it to `MEDICAL_ITEM_TYPES`, `low_stock` is
+now `len()` of that result with no page and no cap at any org size; no
+`KNOWN_LIMITATIONS.md` entry needed. **MSUP-4 (LOW, flagged, not fixed)** —
+`get_expiring_lots` (backs `/lots/expiring` and this same summary) has no
+row cap; not a mechanical fix because it's a method shared with the main
+inventory router and the low-stock/expiring alert email, so a cap changes
+those callers' contracts too — needs a page-size decision per caller,
+mirrored into `KNOWN_LIMITATIONS.md`. New guard tests:
+`test_a_delivery_checks_domain_in_one_query_not_one_per_line`,
+`test_low_stock_comes_from_the_uncapped_domain_scoped_scan`,
+`test_total_items_does_not_depend_on_the_low_stock_scan`. Full local
+completion gate green: flake8/black/isort clean, migrations validated (no
+schema change), 112/112 inventory+medical_supplies-scoped and 9270/9270
+full backend suite pass. Findings doc:
+`docs/security-review/MSUP-23-medical-supplies.md`. PR #2075 opened and
+subscribed. Next: 24 meetings & minutes, once merged.
+
+---
+
+### 2026-08-30 — Feature 23 (Medical supplies), pass 2 — 1 fixed, 0 flagged
+
+This session's pass 2 review began independently and concurrently with the
+session that opened PR #2075 (log entry above), from the same pass-1
+baseline (PR #1905, 2026-08-26) — at the time this review started, neither
+`medical_supplies.py` nor the `InventoryService` methods it calls had
+changed since pass 1, so it began as a fresh re-verification rather than a
+diff review. PR #2075 has since merged with its own additional fixes
+(MSUP-2/MSUP-3, MSUP-4 flagged); this entry covers only the audit-trail
+gap this session found independently, not a re-review of #2075's changes
+— see MSUP-5 below (renumbered from this session's own draft "MSUP-2" in
+the findings doc to avoid colliding with #2075's already-claimed MSUP-2).
+Re-read all 14 endpoints directly (pass 1's "15" was a miscount) and
+re-checked every pass-1 claim against the current code rather than
+trusting the summary forward: domain pinning, the MSUP-1 `apply_updates`
+fix, XC-1 FK validation on create/update, and LIKE-escaping on the shared
+search — all confirmed still correct.
+
+**MSUP-5 (new, LOW-MED, fixed)** — `update_medical_category` and
+`update_medical_item` were the only writes on this router with no audit
+trail: this file's own create routes audit, and `inventory.py`'s general
+`update_category`/`update_item` audit their updates too, so the
+medical-scoped router — arguably the higher-sensitivity path — was the one
+place a category/item edit left no record. Both routes now call
+`log_audit_event`, mirroring the exact pattern already used elsewhere in
+this file and in `inventory.py`. Lot endpoints (add/receive/update/delete)
+were left alone — they don't audit either, but neither do their exact
+`inventory.py` equivalents, so that's a pre-existing cross-cutting gap, not
+a medical-specific asymmetry. New guard tests (fail before/pass after) in
+`tests/test_medical_supplies_domain.py`. Full gate green: flake8/black/isort
+clean, migrations validated (no schema change), 577/578 scoped tests
+(1 pre-existing skip), 9273/9295 full backend suite (22 pre-existing
+skips). Findings doc: `docs/security-review/MSUP-23-medical-supplies.md`
+→ "Pass 2" section. PR #2076 opened and subscribed.
+
+**Tend pass (same day):** after PR #2076 was rebased onto #2075's merged
+`main` to resolve the merge conflict between the two concurrent sessions'
+work, Codex reviewed the merge commit and caught a real bug in the MSUP-5
+fix itself: **MSUP-6 (new, LOW, fixed)** — `InventoryService.update_category`
+renames a `"metadata"` key to the DB column name `"extra_data"` inside the
+same dict `update_medical_category` passed it, in place, so the audit
+event's `fields_updated` reported `extra_data` instead of what the caller
+actually changed. Fixed by snapshotting `fields_updated` before the service
+call; `update_medical_item` checked for the same shape and isn't affected
+(`update_item` renames no keys). New guard test (fails before/passes
+after). Full gate re-run green (577 scoped, 9273 full backend suite). Both
+Codex threads on this PR addressed and resolved. Next: 24 meetings &
+minutes, once #2076 merges.
+
+### 2026-08-30 — Feature 22 (Grants & fundraising), pass 2 ✅ fully merged — PR #2073 (round-5 tend); duplicate PR #2072 closed
+
+**Two concurrent sessions independently tended the same round-5 findings
+(GF-30/GF-27a, then GF-31/GF-32/GF-33) after PR #2070 merged mid-review,**
+each cherry-picking the orphaned post-merge commits onto its own fresh
+branch per CLAUDE.md Pitfall #24: this session opened PR #2072
+(`claude/security-review-grants-fundraising-pass2-r5`), another opened PR
+#2073 (`claude/security-review-grants-fundraising-pass2-tend2`), off the
+same `main` base (`71c1563b`). Both independently found and applied
+identical fixes for GF-32 (a stale out-of-order response overwriting the
+current filter) and GF-34 (a failed refetch leaving the previous filter's
+rows on screen). Both also raised GF-31's 100-row fetch cap to 1,000
+rather than closing it — that residual gap is GF-33 in the doc below,
+**flagged, not fixed**: an org with more than 1,000 applications in one
+status still silently truncates, recorded in `KNOWN_LIMITATIONS.md` rather
+than claimed as resolved. PR #2073
+reached a superset state first (it also included a fixture-typing nit from
+Codex, fixed in `b513ce2e`) and was merged (`d7a0c456`); PR #2072 was
+closed as a duplicate rather than merged, per the standing "never reuse or
+re-open a closed PR" rule — no unique fix was lost, since everything in
+#2072 is present in #2073's merged diff. All review threads on #2073 were
+resolved before merge; nothing outstanding. Rotation row 22 → ✅. Next: 23
+medical supplies.
+
+### 2026-08-30 — Feature 22 (Grants & fundraising), pass 2 ✅ merged — PR #2070; round-5 tend continues in PR #2073
+
+PR #2070 merged (`e6cf9b5b`) while its round-5 Codex review was still in
+flight — the same shape as the #2069 → #2070 transition above. Two
+commits fixing that round's 3 comments (GF-27a/GF-30, then GF-31) were
+pushed to the branch after the merge and never reached `main`. Per
+CLAUDE.md Pitfall #24, both commits were cherry-picked onto a fresh branch
+(`claude/security-review-grants-fundraising-pass2-tend2`) off current
+`main` and opened as PR #2073 — a clean cherry-pick, no conflicts, gate
+re-run green (`tsc --noEmit` 0 errors, `eslint src/modules/grants-fundraising`
+0/0, `vitest run src/modules/grants-fundraising` 3 files/5 passed).
+Rotation row 22 stays ⏳. Next: 23 medical supplies, once #2073 merges.
+
+**PR #2073 tend, round 6 (Codex review of the GF-31 commit, 2 comments):**
+**GF-32 (new, MED, fixed)** — GF-31's own refetch-on-`statusFilter`-change
+introduced a request race: `fetchApplications` unconditionally overwrote
+`applications` with whatever response arrived, so a slower response from a
+filter the user had already changed away from could clobber a newer one.
+Fixed with a monotonic request-id guard in `grantsStore.ts` — a response is
+only committed if no later call has started since. New guard test
+`grantsStore.fetchApplications.test.ts` (fails before/passes after).
+**GF-33 (new, LOW-MED, partially fixed/flagged)** — GF-31 fixed "the filter
+runs after an unfiltered, 100-capped fetch" but not "the filtered fetch is
+itself still capped at 100." This page has no pagination UI in either view
+(it's built to show the org's full set at once), so a full fix means
+building pagination, out of scope here; raised the fetch's `limit` to
+1000 (the backend's own declared ceiling) as a partial mitigation for both
+the filtered and unfiltered case, and mirrored the remaining >1000 gap
+into `KNOWN_LIMITATIONS.md`. Gate re-run: `tsc --noEmit` 0 errors, `eslint
+src/modules/grants-fundraising` 0/0, `vitest run src/modules/grants-fundraising`
+4 files/6 passed. Full write-up in `GF-22-grants-fundraising.md` →
+GF-32/GF-33.
+
+**PR #2073 tend, round 7 (Codex review of the GF-32/GF-33 commit, 1
+comment):** **GF-34 (new, MED, fixed)** — GF-31 removed the client-side
+status check on `filteredApplications` (the match now happens
+server-side), but `fetchApplications`'s `catch` branch left the previous
+fetch's `applications` untouched on failure — so a failed status-filtered
+fetch left rows from whatever filter was active _before_ on screen,
+mismatched with the dropdown's new selection, alongside the error banner.
+Fixed by clearing `applications` in the `catch` branch. New guard-test
+case in `grantsStore.fetchApplications.test.ts` (fails before/passes
+after). Gate re-run: `tsc --noEmit` 0 errors, `eslint
+src/modules/grants-fundraising` 0/0, `vitest run src/modules/grants-fundraising`
+4 files/7 passed. Full write-up in `GF-22-grants-fundraising.md` → GF-34.
+
+**PR #2073 tend, round 8 (Codex review of the GF-34 commit, 2 comments):**
+one re-raise, one new non-security finding. **GF-33 re-raised** — Codex
+flagged the round-6 `limit: 1000` bump as evidence the pagination gap is
+still open, which is exactly GF-33's own already-recorded disposition
+(partial mitigation, full pagination flagged in `KNOWN_LIMITATIONS.md`,
+not built). No further code pushed; replied on the PR pointing to the
+existing GF-33 entry — this thread's convergence-stop point, same shape as
+GF-27a earlier in this PR chain. **Fixture cast (P1, fixed, no GF id)** —
+the `application()` test helper added in round 6 used
+`as unknown as GrantApplication`, the exact broad-cast pattern AGENTS.md
+prohibits; rewritten as a fully, honestly-typed fixture with every field
+given a concrete default. No behavior change; both existing tests still
+pass. Gate re-run: `tsc --noEmit` 0 errors, `eslint
+src/modules/grants-fundraising` 0/0, `vitest run src/modules/grants-fundraising`
+4 files/7 passed.
+
+### 2026-08-30 — Feature 22 (Grants & fundraising), pass 2 ✅ merged — PR #2069; round-4 tend continues in PR #2070
+
+PR #2069 merged (`9608aea9`) while its 4th round of Codex review was still
+in flight — 3 more real bugs (GF-27/GF-28/GF-29, all below) were found and
+fixed in a commit pushed to the branch _after_ the merge, so that commit
+never reached `main`. Per CLAUDE.md Pitfall #24 (never reuse a branch name
+after its PR merges — a closed PR cannot track further commits, and reusing
+the branch risks CI not triggering at all), that commit was cherry-picked
+onto a fresh branch (`claude/security-review-grants-fundraising-pass2-tend`)
+off current `main` and opened as PR #2070. Rotation row 22 stays ⏳ — the
+feature isn't fully done until #2070 also merges. Next: 23 medical
+supplies, once #2070 merges.
+
+**PR #2070 tend, round 1 (CI fix):** the new date-range test's direct DOM
+queries tripped `eslint --max-warnings 10` (3 new warnings, 8→11). Fixed
+by adding real `aria-label`s to the two date inputs and switching the test
+to `getByLabelText`; back to 8 warnings.
+
+**PR #2070 tend, round 2 (Codex round 5):** GF-27's own fix drew 2 more
+comments. **GF-27a (new, LOW-MED, FLAGGED not fixed)** — the dashboard's
+KPI cards count multiple statuses per card (`get_dashboard_data()`:
+"Active Grants" = `active`+`reporting`) but link with only one status, so
+GF-27's single-value filter now under-shows what the card counted.
+Fixing it needs a filter-UI decision (a grouped option, or restyling the
+cards as non-filtering summaries), not a mechanical patch — flagged,
+mirrored into `KNOWN_LIMITATIONS.md`. This is the rotation's own
+convergence-stop point: GF-27→GF-27a is the third straight round where a
+fix drew a reshape in the same code; not chasing a fourth variant.
+**GF-30 (new, LOW, fixed)** — a stale or mistyped `?status=` value was
+applied silently instead of falling back to unfiltered, producing an
+unexplained empty list. Both pages now validate against their own
+existing status whitelist first; new test case (fails before/passes
+after). Full gate re-run green.
+
+**PR #2070 tend, round 3 (Codex round 5, 3rd comment):** **GF-31 (new,
+MED, fixed)** — `GrantApplicationsPage.tsx`'s mount effect fetched an
+unfiltered, 100-record-capped page and applied `statusFilter`
+client-side to that already-capped set, so a deep-linked status filter
+(including the dashboard's KPI/pipeline links) could silently miss any
+matching application past the newest 100 for a department with more than
+100 on file. Fixed by passing `statusFilter` to `fetchApplications` and
+refetching on change, so the backend applies the match before the cap
+rather than the frontend after it; `priorityFilter` has the same latent
+shape but wasn't raised and is left alone. `CampaignsPage.tsx` was
+unaffected (already server-side since GF-27). No guard test added
+(reproducing the >100-row edge is out of proportion for this fix; noted
+as a coverage gap). Gate re-run scoped to the frontend diff: `tsc
+--noEmit` 0 errors, `eslint src/modules/grants-fundraising` 0/0,
+`vitest run src/modules/grants-fundraising` 3 files/5 passed. Full
+write-up in `GF-22-grants-fundraising.md` → GF-31.
+
+### 2026-08-30 — Feature 22 (Grants & fundraising), pass 2 — 0 fixed, 0 new findings; re-verification only
+
+No security-review PR was open (PR #2065/feature 21 admin-hours pass 2 had
+already merged as `991c04d2`; its own record-only follow-up PR #2067 was
+still open at the time this iteration started, but per this rotation's
+established convention a record-only PR does not block the next feature —
+confirmed via `mcp__github__list_pull_requests`, not assumed from a stale
+local `Open PR` row, which this iteration also corrects above and in the Log
+below). Continued directly to feature 22 per the pass-2 order.
+
+Scoped to the full backend surface since pass 1's merge (`520978c4`, PR
+#1904): all five declared/adjacent files (`grants.py`, `grant_service.py`,
+`fundraising_service.py`, `grant.py`, `schemas/grant.py`) came back
+**byte-identical** (`git diff --stat`, not assumed) — zero backend drift, so
+this pass independently re-verified all of GF-1 through GF-18 by reading the
+current code directly rather than re-citing the pass-1 doc. Re-ran a route
+enumeration from scratch: 45/45 routes in `grants.py` carry
+`require_permission("fundraising.view"/"fundraising.manage")`, matching pass
+1 exactly; neither permission string is in the `member`/`firefighter`
+baseline grant set. Every by-id query in both services re-swept mechanically
+for a missing `organization_id` filter — no gap. Re-checked GF-13's
+ORM-cascade-vs-FK-`ondelete` class against every other relationship in the
+model file: `FundraisingCampaign.donations`/`.pledges`/
+`.fundraising_events` have the same mismatch on paper, but `delete_campaign`
+is a soft delete and no code path hard-deletes a campaign, donor, or pledge —
+confirmed by grep, not assumed, so the class exists nowhere reachable beyond
+the one instance GF-13 already fixed.
+
+**Frontend scope established for the first time** (pass 1 was backend-only):
+the real module is `frontend/src/modules/grants-fundraising/`, ~6,900 lines
+across 14 files. Full reads of `services/api.ts`, `routes.tsx`,
+`store/grantsStore.ts`, `GrantApplicationFormPage.tsx`, `DonationsPage.tsx`,
+and `GrantDetailPage.tsx` (the module's largest file); the remaining four
+pages swept by targeted grep rather than read line-by-line (noted as
+partial-scope). Confirmed: `createApiClient()` auth wiring present (Pitfall
+#7); all 9 frontend routes gate on `fundraising.view`/`.manage` matching the
+backend; `/grants` is in `apiCache.ts`'s `UNCACHEABLE_PREFIXES` (though moot
+in practice — this module's axios instance never consults that cache at
+all, since only the separate global instance wires it); zero hits for
+`window.confirm`/`alert`/`prompt`, `dangerouslySetInnerHTML`, banned
+`.toLocale*`, `date-fns`, `localStorage`, or direct `fetch(`; every form's
+`|| null` payload construction is correct on **both** create and update
+paths (the backend accepts an explicit `null` as equivalent-to-omitted on
+create and as the intentional clear signal on update, so there is no
+create/update asymmetry to fix here, unlike the general Pitfall #1 shape);
+external links (`receiptUrl`, `applicationUrl`) are gated behind
+`isSafeExternalUrl()` in addition to the backend's own
+`validate_external_http_url` write-time validator. No new frontend findings.
+Zero `*.test.ts(x)` files exist for this module — noted, not filed as a
+security finding.
+
+**GF-19/GF-20 (NIT, doc-accuracy, fixed):** pass 1's doc overstated a
+`SafeCsvWriter`-based export that does not exist in this module (no CSV
+export exists at all — confirmed by grep, not assumed) and named a
+`delete_donation` method that was never built (`Donation` has no delete
+path). Both corrected in `GF-22-grants-fundraising.md`'s Pass 1 section.
+
+GF-7/GF-8/GF-9 re-confirmed unchanged and still flagged as product
+decisions, per every prior pass. GF-9 was missing from `KNOWN_LIMITATIONS.md`
+(GF-7/GF-8 were already there) — added this pass.
+
+Full local completion gate green: flake8/black/isort clean; migrations
+validated (394 revisions, single head); 307/307 grant+fundraising-scoped and
+9268/9268 full backend suite pass (22 pre-existing skips, 0 failed); `tsc
+--noEmit`/`npm run typecheck` 0 errors; `eslint .` 0 errors (8 pre-existing
+warnings, none in touched files — no frontend files were touched, since no
+frontend fix was needed). Findings doc: `docs/security-review/GF-22-grants-fundraising.md`
+→ **Pass 2**. PR #2069 opened and subscribed. Rotation row 22 → ⏳ (awaiting
+merge). Next: 23 medical supplies, once this PR merges.
+
+**Tend pass (same day):** Codex posted 6 review comments on PR #2069, all
+independently verified against the actual code and addressed. Two were real,
+previously-undetected bugs, not just doc gaps: **GF-24 (MED)** — three
+report/list query sites (`get_grant_report`, `get_fundraising_report`,
+`list_donations`) filtered a `DateTime` column with `<= end_date` against a
+bare date, which MySQL coerces to that day's midnight — silently dropping
+every record created later the same day, understating totals whenever
+"today" falls inside the range (the common case, not an edge case). Fixed
+with an explicit UTC end-of-day boundary, matching `reports_service.py`'s
+existing pattern; new real-DB test added (fails before/passes after).
+**GF-26 (MED)** — `donations_by_method` amounts serialize as JSON strings
+(Pydantic's default `Decimal` behavior), but `GrantsReportsPage.tsx` typed
+them as numbers and summed with `+`, silently string-concatenating instead
+of adding (`0 + "10.10" + "20.20"` → `"010.1020.20"`, which then made every
+percentage render `0.0%`). Fixed at the frontend boundary with `Number(...)`,
+matching `DonationsPage.tsx`'s existing convention; new test added (the
+module's first, fails before/passes after). **GF-23 (real UX bug, not a
+security hole — backend enforcement was already correct)** — no page in the
+module checked the caller's permission before rendering a mutation control,
+so a `fundraising.view`-only user saw Edit/Add/Record/Mark-Complete buttons
+that would 403 on click. Fixed 4 files (`CampaignsPage`, `DonorsPage`,
+`GrantDetailPage`, `GrantsDashboardPage`) with the app's established
+`checkPermission('fundraising.manage')` pattern; two lower-severity
+variants and one unrelated dead-route bug flagged, not fixed. **GF-21/GF-22
+(doc-only)** — the backend scope statement omitted `dashboard_widget_service.py`
+(verified clean: org-scoped, permission-gated) and the frontend page
+inventory omitted `GrantsDashboardPage.tsx` (verified clean); both corrected.
+**GF-25 (doc-only)** — `KNOWN_LIMITATIONS.md`'s GF-7 row still described a
+duplicate-compliance-task bug this same doc's own GF-14 re-verification
+had already confirmed fixed; corrected to keep only the still-open
+state-machine/overspend items. Full completion gate re-run green (backend
+full suite 9271/9271, frontend full vitest 5498/5498, tsc/eslint clean).
+CI re-verified on the follow-up commit; merge conflict against `main`
+(from PR #2067's concurrent merge touching the same `Open PR` section)
+resolved by this check-in.
+
+**Tend pass, round 2 (same day):** Codex posted 2 more review comments on
+the round-1 commit. **GF-24a (new, LOW-MED, cross-cutting, FLAGGED not
+fixed)** — GF-24's fix hard-codes the report date-range boundary as UTC,
+but a non-UTC organization's "June 15" report should mean June 15 in the
+department's own timezone. Confirmed real, but not a regression and not
+unique to this PR: `reports_service.py` has the identical hard-coded-UTC
+boundary at 5 other call sites, and GF-24's fix matched that established
+(if imperfect) pattern rather than inventing a one-off — it's strictly
+better than the bug it replaced (silently dropping the entire end date, in
+every timezone) for every organization regardless of timezone. Doing the
+org-timezone conversion correctly needs a coordinated fix across every
+report date-range filter in the app, not a 3-line patch scoped to this
+PR's own files — `org_timezone.py`'s `resolve_scheduling_timezone` isn't a
+drop-in answer either, since its own docstring ties its fallback
+specifically to scheduling's historical behavior. Flagged in the findings
+doc (GF-24a) and mirrored into `KNOWN_LIMITATIONS.md` as a new cross-cutting
+item. **The other comment (stale PROGRESS.md entry) was about this doc's
+own pre-round-1-fix state and was already resolved by round 1's check-in
+above** — replied confirming no further action needed. Local gate: docs-only
+change, no code touched, so no re-run needed beyond the markdown itself.
+
+**Tend pass, round 3 (same day):** Codex posted 1 more comment — round 1's
+GF-21 correction fixed the "Backend:" scope line's stale claim about
+`dashboard.py` aggregating already-gated `/grants` figures, but missed the
+parallel "Frontend:" paragraph's identical stale claim just below it.
+Fixed: that paragraph now names `DashboardWidgetService.fundraising`
+explicitly and matches GF-21's own accurate description instead of
+contradicting it. Docs-only.
+
+**Tend pass, round 4 (same day):** Codex posted 3 more comments, all real
+bugs found by continued deeper reading of `GrantsDashboardPage.tsx` (added
+to scope in round 1) rather than reshapes of earlier fixes. **GF-27 (new,
+LOW)** — the dashboard's KPI/pipeline cards link to
+`/grants/applications?status=active` etc., but `GrantApplicationsPage.tsx`/
+`CampaignsPage.tsx` never read the URL's `status` param, so the links
+silently landed on the unfiltered list. Fixed both by seeding
+`statusFilter` from `useSearchParams()`, matching the app's existing
+`?tab=`-reading convention; new guard test
+(`CampaignsPage.statusFilter.test.tsx`, fails before/passes after).
+**GF-28 (new, LOW)** — the dashboard's "View Campaign" link pointed at
+`/grants/campaigns/${id}`, a route that doesn't exist (only the list route
+is registered), silently redirecting to `/` via the app's catch-all. Fixed
+by pointing at the list route instead; building a real per-campaign detail
+view is a separate, larger feature gap, flagged not fixed. **GF-29 (new,
+MED)** — `GrantsReportsPage.tsx`'s `getDefaultDateRange` derived its
+start-of-year bound from the test/browser runtime's own local year instead
+of the organization's, so near midnight UTC on New Year's an org behind UTC
+could get a 1-day default range instead of its full current year — distinct
+from GF-24a (the backend's report-query boundary). Fixed by deriving the
+year from the org's own local "today" directly; new guard test
+(`GrantsReportsPage.defaultRange.test.tsx`, fakes only `Date` to avoid
+starving `waitFor`, fails before/passes after). Full gate re-run green
+(tsc, eslint 0 errors, full grants-fundraising vitest suite 4/4 passing
+across 3 files).
+
+---
+
+### 2026-08-30 — Feature 21 (Admin hours), pass 2 ✅ merged — PR #2065
+
+Merged (`991c04d2`). Two Codex review rounds on this PR, both independently
+verified against the actual code and addressed rather than taken on the
+bot's say-so: round 1 (AH21-2 doc-accuracy gap, AH21-1's first timeout
+mitigation) in commit `34761461`; round 2, after Codex correctly rejected
+round 1's finite-timeout fix as still a regression, in commit `fc0aaafc` —
+switched to `timeout: 0` (true no-timeout), and fixed a real MEDIUM
+correctness bug (AH21-3: a JSON error body from a `blob`-typed request was
+silently undecoded, losing the detail message and support code) centrally
+in `utils/createApiClient.ts` so it also covers `reportExportService` and
+the storefront export, not just this PR's new call site. Also strengthened
+the guard test to catch `window.fetch`/`globalThis.fetch`/direct-`axios`
+bypasses and added a real behavioral test of `exportCsv` (AH21-4). CI green
+on the final head; no merge conflict. All 6 review threads resolved.
+Confirmed on `origin/main` by ancestry check. Rotation row 21 -> done.
+Next: 22 grants & fundraising.
+
+### 2026-08-30 — Feature 21 (Admin hours), pass 2 — 1 fixed (LOW), 0 flagged (new); 0 regressions in pass-1 fixes
+
+No security-review PR was open, so the rotation continued directly to
+feature 21 per the pass-2 order. Scoped to the full surface since pass 1's
+merge (`598a8063`, PR #1903): of the four backend files, only
+`admin_hours_service.py` changed (+24/-7), and it's an unrelated
+pre-existing-bug fix (an eager-load for `positions` on `get_user_hours_
+compliance`'s cross-user fetch, fixing a `MissingGreenlet` crash — the AH-7
+org-scoping filter it sits inside is untouched). `event_service.py`'s change
+is EV-17's already-reviewed fix (feature 16). No migration touches an
+admin-hours table since pass 1.
+
+Independently re-verified all 8 pass-1 fixes (AH-7 through AH-14) by reading
+the current code, not re-citing the doc — all intact, including AH-11's
+Codex-caught deadlock fix (locks the complete source set, target row
+included) and AH-10's two-part locking (User-row lock + locking active-
+session read). Re-ran an AST route enumeration from scratch: 27/27 routes,
+matching pass 1 exactly, all carrying `get_current_user` or
+`require_permission("admin_hours.manage")`. Freshly swept every `select(...)`
+call site in the service (~60 sites) for a missing org filter — none found;
+the two by-id `User` lookups with no visible org filter resolve through an
+already-org-scoped `AdminHoursEntry` fetched two lines above, the checklist's
+named exception.
+
+**Frontend scope established for the first time this pass** (pass 1 was
+backend-only): the 21-file `modules/admin-hours/` module plus 6 outside
+consumers (`AdminHoursSection.tsx`, `HourTrackingSection.tsx`,
+`Dashboard.tsx`, `MemberProfilePage.tsx`, `ComplianceRequirementsConfigPage.tsx`,
+`CheckInStationPage.tsx` — see AH21-2 below; a first pass at this list named
+only 3 and wrongly included `AdminHoursRenderer.tsx`, which does not import
+the module). Swept for `window.confirm`/`alert`/`prompt` (0 —
+destructive actions go through `useConfirm()`), `dangerouslySetInnerHTML` (0),
+banned `.toLocale*`/`date-fns` (0 — `formatDate`/`formatForDateTimeInput`/
+`localToUTC` + `useTimezone()` used throughout), and direct `fetch(` (1 hit —
+**AH21-1**, below). Confirmed `/admin-hours/` is already a full-prefix
+`UNCACHEABLE_PREFIXES` entry. Checked the category-edit form against Pitfall
+#1's create-vs-update semantics: `handleUpdate` sends every field the form
+owns on every save with an explicit `null` (not an omitted key) to clear the
+description field — correct, even without calling the shared `blankToNull`
+helper by name.
+
+**AH21-1 (LOW, robustness, FIXED):** `AllEntriesTab.tsx`'s CSV export used a
+hand-rolled `fetch()` with manually-set `credentials: 'include'` instead of
+the module's shared axios client — the only such call site in the module,
+and one of only 3 in the whole frontend (the other two run before a session
+exists). It worked (cookies were sent, GET needs no CSRF header) but
+bypassed the 401-refresh-and-retry interceptor and error-reporting
+integration every other request gets, unlike every comparable export
+elsewhere in the codebase (`reportExportService.exportReport`, storefront),
+which route through the shared client with `responseType: 'blob'`. Fixed by
+replacing the URL-builder + raw-fetch pair with an
+`adminHoursEntryService.exportCsv(...)` method on the existing service,
+matching the established pattern. Guard test added
+(`modules/admin-hours/moduleFetchIntegrity.test.ts`, source-walks the module
+for a reintroduced `fetch(` call), confirmed to fail on reintroduction.
+
+Both items pass 1 flagged as open product decisions (the per-org SoD toggle;
+`credit_event_attendance`'s resync-can-grow-a-decided-entry gap) re-read
+against the current code — unchanged, still deliberate per their own
+docstrings.
+
+Full local completion gate green: flake8/black/isort clean (isort 8.0.1,
+already installed), migrations validated (394 revisions, single head),
+`pytest -k admin_hours` 67 passed/1 pre-existing skip, `tsc --noEmit` 0
+errors, `eslint .` 0 errors (8 pre-existing warnings, none in touched files),
+`vitest run` 67 passed (admin-hours module) + 7 passed (adjacent compliance/
+member-profile suites). Findings doc:
+`docs/security-review/AH-21-admin-hours.md` → Pass 2. Next: 22 grants &
+fundraising, once this PR merges.
+
+**Tend pass (same day):** Codex posted 3 review comments on PR #2065, all
+independently verified against the actual code and addressed in a follow-up
+commit. **AH21-2 (new, LOW, doc accuracy)** — the "3 outside consumers" list
+above was incomplete: a repo-wide import search found 6, not 3
+(`AdminHoursRenderer.tsx` doesn't import the module at all; `Dashboard.tsx`,
+`MemberProfilePage.tsx`, `ComplianceRequirementsConfigPage.tsx`, and
+`CheckInStationPage.tsx` were missing). The 4 newly-found files were swept
+against the same checklist items — 0 hits, all read-only service calls.
+**AH21-1 follow-up** — the CSV export's raw `fetch()` had no timeout;
+routing it through the shared axios client's default `API_TIMEOUT_MS` (30s)
+could newly abort a large department's unfiltered export. Added
+`EXPORT_TIMEOUT_MS` (120s) and applied it to this one call site — the same
+unbounded-query shape exists in `reportExportService.exportReport` and the
+storefront order export, both pre-existing and out of this PR's scope.
+**Rotation-table row** — the same tend pass also caught this PR's PROGRESS.md
+update marking row 21 ✅ before merge, contradicting the legend; corrected to
+⏳. CI re-verified green on the follow-up commit; no merge conflict.
+
+**Tend pass, round 2 (same day):** Codex posted 3 more review comments on
+the follow-up commit — findings kept converging (each fix drew a reshaped
+or new one) rather than repeating, so all three were investigated rather
+than treated as noise. **AH21-1 round 2** — round 1's `EXPORT_TIMEOUT_MS`
+(120s) was correctly called out as still a finite cap that can abort a
+download the old unbounded `fetch()` would have finished; changed to
+`timeout: 0` (axios's actual no-timeout value) instead of guessing a
+bigger number. **AH21-3 (new, MEDIUM)** — `responseType: 'blob'` applies
+to axios error responses too, so a JSON 403/500 body arrived at
+`error.response.data` as an undecoded `Blob`; `toAppError`/`reportApiError`
+both read `.detail`/`.code` directly off it, so a failed export lost its
+error detail and `LB-*` support code behind a generic fallback. Not
+admin-hours-specific — `reportExportService.exportReport` and the
+storefront export share the same latent bug — so fixed once in
+`utils/createApiClient.ts`'s response interceptor (decodes a JSON blob
+body before the 401-retry/reporting logic runs), covering all three call
+sites. **AH21-4 (new, LOW)** — the guard test's regex missed
+`window.fetch(`/`globalThis.fetch(` bypasses (excluded by its own
+dot-exclusion), and no test actually invoked `exportCsv()` to prove the
+fix's real behavior rather than the fix's absence of one string in the
+source. Broadened the guard test (also catches a direct `axios` import)
+and added `services/exportCsv.behavior.test.ts`, which mocks only
+`createApiClient` and asserts the real request shape and failure
+propagation. Full gate re-run green (tsc, eslint, and the admin-hours +
+createApiClient vitest suites); CI re-verified on the new commit.
+
+---
+
+### 2026-08-30 — Feature 20 (Compliance), pass 2 ✅ merged — PR #2059
+
+Merged (`9e212c13`). Codex posted 4 review comments on the first version of
+the PR (CMP2-2-A, CMP2-3, CMP2-4, CMP2-B); all four independently verified
+against the actual code and addressed in follow-up commit `ef882c98`,
+including CMP2-3 (HIGH) — a real, previously-latent org-wide compliance
+grading bug made reachable by CMP2-2's own fix. CI green on the final head;
+no merge conflict (base was current `main`). Confirmed on `origin/main` by
+ancestry check. Rotation row 20 -> done. Next: 21 admin hours.
+
+### 2026-08-30 — Feature 20 (Compliance), pass 2 — 3 fixed (1 HIGH, 2 MED), 1 partially fixed/flagged (MED)
+
+Resumed the rotation directly at feature 20 per the pass-2 order (no
+security-review PR was open; the previous `/security-review` loop had
+stalled with no PR opened in ~24h). Scoped to the full backend surface since
+pass 1's merge (`bf63018b`, PR #1902): all seven declared files
+(`compliance_officer.py`, `compliance_config.py`, both service files,
+`training_compliance.py`, the model, the schema) came back **byte-identical**
+(`git diff --stat`, not assumed) — zero backend diff, so this pass
+re-verified all seven pass-1 fixes (CMP-1 through CMP-7) and re-confirmed
+CS-8/CS-9's still-open-by-design status by reading the current code directly,
+rather than re-deriving anything. Re-ran an AST route enumeration from
+scratch: 20/20 routes (8 in `compliance_officer.py`, 12 in
+`compliance_config.py`) carry `require_permission(...)`, matching pass 1's
+route-for-route inventory. Org-scoping re-swept mechanically across every
+by-id query in both endpoint files — no gap.
+
+**Frontend scope established for the first time** (pass 1 was backend-only):
+traced every file importing `complianceOfficerService`/
+`complianceConfigService` — `trainingServices.ts`'s compliance sections,
+`ComplianceOfficerDashboard.tsx`, `ComplianceRequirementsConfigPage.tsx`, and
+their four test files. Swept for `window.confirm`/`alert`/`prompt` (none —
+both destructive actions go through `useConfirm()`), `dangerouslySetInnerHTML`
+(none), banned `.toLocale*`/`date-fns` (none — both pages use
+`formatDate`/`formatDateCustom` + `useTimezone()`), direct `fetch(` (none —
+shared `api` client, so Pitfall #7 doesn't apply), and confirmed `/compliance/`
+is already a full-prefix `UNCACHEABLE_PREFIXES` entry covering all 20 routes
+including the two that return per-member names + hours
+(`/compliance/annual-report`, `/compliance/contributed-hours`).
+
+**CMP2-2 (MED, FIXED):** the frontend mirror of CMP-1/CMP-2's bug, on the same
+two forms — pass 1 fixed the backend's `exclude_unset` + `apply_updates`
+handling of an explicit `null` clearing a nullable column, but the frontend
+was never updated to send one. Eight fields across the config and profile save
+handlers coerced a cleared field to `undefined` (dropped from the JSON body
+entirely) instead of `null`, so clearing "Email Recipients," a profile's
+threshold override, or its membership-type/requirement selections and saving
+silently kept the old value behind a success toast. Fixed on both the config
+and profile forms; guard test added
+(`ComplianceRequirementsConfigPage.clearFields.test.tsx`).
+
+**CMP2-1 (MED, partially fixed/flagged):** `notify_non_compliant_members` and
+`notify_days_before_deadline` are set from the Configuration page's
+Notifications panel and persisted, but read by no scheduled task or sender
+anywhere in the backend (Pitfall #19 — a second instance of the
+`notification_rules` dead-switch shape, on a different module). Wiring a
+sender is a real feature (cadence, message content) and was flagged rather
+than built; the panel now carries an explicit "Not yet active" notice so it
+stops implying the toggle does anything, per the pitfall's own sanctioned
+partial remedy. Mirrored into `KNOWN_LIMITATIONS.md`.
+
+**Codex follow-up on the first version of this PR surfaced four issues, all
+investigated and addressed in commit `ef882c98`:**
+
+**CMP2-3 (HIGH, FIXED, new this pass):** `compute_org_compliance_pct` guarded
+both the requirement-list substitution and the threshold overrides behind one
+truthy check (`if profile and profile.required_requirement_ids:`), so a
+profile with an explicitly empty required-requirement list (`[]` — "this
+group requires nothing," only reachable after CMP2-2's own fix) was treated
+the same as `None` ("no override") and graded against every org requirement
+instead of none; the same guard silently skipped both threshold overrides for
+any profile that didn't also override the requirement list. Fixed by checking
+`is not None` for the list substitution and moving the threshold overrides out
+from under that guard entirely. New test:
+`backend/tests/test_compute_org_compliance_pct_profile_overrides.py` (3
+integration tests against a real database).
+
+**CMP2-4 (MED, FIXED, new this pass):** the read-path mirror of CMP2-2 —
+`loadConfig` mapped a loaded config's `null` `notifyDaysBeforeDeadline` back
+to the pre-save placeholder `'30, 14, 7'`, so a cleared-and-saved reminder
+schedule reappeared as the old default immediately on reload even though the
+database correctly held nothing. Fixed the loaded-config fallback to `''`;
+the placeholder now only shows before a config has ever been saved. Swept
+every other loaded field on both the config and profile forms for the same
+class of bug — none found.
+
+**CMP2-2-A (guard test rigor, FIXED):** the original CMP2-2 guard test
+(`ComplianceRequirementsConfigPage.clearFields.test.tsx`) only scanned the
+page's source text for `null`/`undefined` substrings, so it would keep
+passing even if the Save button stopped calling the service. Rewritten to
+render the real page with all five services mocked, drive an actual field
+clear through `@testing-library/user-event`, click Save, and assert the exact
+request body the mocked service methods received — verified by reverting the
+CMP2-2 fix locally and confirming the rewritten tests fail.
+
+**CMP2-B (previously "escalated," now FIXED):** the pre-existing
+`EquipmentCheckTemplateBuilder.test.tsx` failure found in the first version of
+this pass turned out not to be a genuine CLAUDE.md Hard Stop —
+its bar is a fix that "genuinely exceeds the current scope," which a five-line
+test-only change does not. Root cause: the failing `describe` block never
+overrode `window.matchMedia` to simulate a laptop viewport, unlike two sibling
+blocks in the same file, so the component's `isLaptop` flag was permanently
+false and the accessible name the test waits for could never appear. Fixed by
+copying the existing override pattern into that block's `beforeEach`. All 32
+tests in the file now pass. See `docs/security-review/CMP-20-compliance.md`
+Pass 2 completion-gate section for the full writeup, including a correction to
+that doc's own CMP2-2 entry: it had claimed `[]` and `None` are read
+identically everywhere, true for `membership_types`/`report_email_recipients`
+but not for `required_requirement_ids` — the wrong generalization that let
+CMP2-3 ship reachable in the first place.
+
+Full gate (final, commit `ef882c98`): flake8/black/isort clean; migrations
+valid (394 revisions, single head); backend compliance-scoped tests 290
+passed, 1 skipped; full backend suite 9268 passed, 22 skipped; frontend
+`tsc --noEmit` 0 errors; `eslint .` 0 errors (10 pre-existing warnings, none
+in touched files); frontend `vitest run` 5458/5458 passed, 415/415 files (no
+outstanding escalation). Rotation row 20 -> ⏳ (awaiting PR merge). Next: 21
+(Admin hours), once this PR merges.
 
 ### 2026-08-29 — Feature 19 (Skills testing), pass 2 ✅ merged — PR #2017
 
@@ -2250,19 +4030,19 @@ each row's prior PR is recorded in the Log, not repeated here.
 | 17  | Training core             | TR     | `training.py`, `training_programs.py`, `training_sessions.py`                                                                                   | ✅     |
 | 18  | Training extended         | TRX    | `training_submissions.py`, `training_enhancements.py`, `training_waivers.py`, `external_training.py`, `course_cohorts.py`, `course_syllabus.py` | ✅     |
 | 19  | Skills testing            | SKT    | `endpoints/skills_testing.py` (3723 L)                                                                                                          | ✅     |
-| 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ⬜     |
-| 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ⬜     |
-| 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ⬜     |
-| 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ⬜     |
-| 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ⬜     |
-| 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ⬜     |
-| 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                         | ⬜     |
-| 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                         | ⬜     |
-| 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`                                                                    | ⬜     |
-| 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                              | ⬜     |
-| 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (24 unauth bootstrap routes)                                                                                             | ⬜     |
-| 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                   | ⬜     |
-| 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                  | ⬜     |
+| 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ✅     |
+| 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ✅     |
+| 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ✅     |
+| 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ✅     |
+| 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ✅     |
+| 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ✅     |
+| 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                         | ✅     |
+| 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                         | ✅     |
+| 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`                                                                    | ✅     |
+| 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                              | ✅     |
+| 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (24 unauth bootstrap routes)                                                                                             | ✅     |
+| 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                   | ✅     |
+| 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                  | ✅     |
 | 33  | Core infrastructure       | CORE   | `core/security_middleware.py`, `core/database.py`, `core/config.py`                                                                             | ⬜     |
 | 34  | Frontend shared           | FE     | `utils/apiCache.ts`, module axios instances, `ProtectedRoute`, global stores                                                                    | ⬜     |
 

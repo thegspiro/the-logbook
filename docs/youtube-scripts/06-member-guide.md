@@ -875,3 +875,58 @@ My Account > Notifications, showing the Push notifications toggle.]**
 > recall a file you already downloaded."
 
 **EDITOR:** Add 1:30 and re-time Chapters 2, 6, 7 and the clip table.
+
+---
+
+## NEW CHAPTER — "WHO DO I ASK?": THE ORGANIZATIONAL CHART (ADDED 2026-08-31)
+
+**Placement:** early — this belongs beside "finding your way around", not in
+an officer section. ~1:15.
+
+**[SCREEN: Governance → Organizational Chart, outline view]**
+
+> "Here is the one I wish had existed when I joined. Governance,
+> Organizational Chart."
+
+> "It's your department's chain of command, drawn out. Who runs training. Who
+> runs the trucks. Who you take a uniform problem to. **Every member can open
+> it** — you don't need a permission and you don't need to ask."
+
+**[SCREEN: Toggle to diagram view; expand a seat with two people in it]**
+
+> "Read it as a list or as a diagram, whichever you prefer. Tap a seat and you
+> get what that seat is responsible for and how to reach whoever holds it — and
+> a seat can hold more than one person, so if your department runs two deputy
+> chiefs, you'll see both."
+
+> "If it's empty, nobody has drawn it yet. That's a nudge for your officers,
+> not a fault."
+
+---
+
+## ADD TO "YOUR PROFILE" (ADDED 2026-08-31)
+
+**[SCREEN: The member profile header **as it is today** — a single Membership
+Type value. Do not stage a two-field header; none exists. The change this beat
+describes has no UI surface, so narrate it over the current screen.]**
+
+> "Your profile now says two things where it used to say one. **Class** is what
+> kind of member you are — operational, administrative or social. **Status** is
+> where you are on the membership ladder — probationary, regular, life,
+> retired."
+
+> "That sounds like paperwork, and for most of you it is — **you won't see a
+> new field to fill in.** The screens still show one Membership Type selector;
+> the two facts are worked out from it."
+
+> "Where it shows up is voting. If you're a **life member**, you now qualify
+> for ballots restricted to regular members — under the old single field, 'life'
+> and 'regular' were competing values, so you were quietly dropping out of
+> those. If you're **administrative**, the reverse: a ballot restricted to
+> regular members no longer reaches you, and your department can grant an
+> override if their bylaws intend otherwise."
+
+**PRODUCTION:** **do not re-shoot the profile header for this.** No screen
+renders class and status as separate fields — the member forms still show a
+single Membership Type selector and the pair is derived from it. The existing
+capture is current. Narrate this beat over it.

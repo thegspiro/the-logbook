@@ -1,5 +1,273 @@
 # Script currency
 
+## Editing incident, 2026-08-31 — a rewrite deleted two chapters of script 12
+
+**Recorded here permanently, because the failure was in the editing method and
+nothing else in this file would have caught it.**
+
+Correcting the `PER-ITEM ELIGIBILITY` beat in script 12 also deleted:
+
+- the `PER-ITEM OVERRIDES` section (per-item victory conditions),
+- **all of `CHAPTER 5: Candidates & Nominations`**, including its 2026-08-16
+  editor note on phase-scoped nomination visibility, and
+- the opening of `CHAPTER 6`, with its four-layer eligibility diagram.
+
+Forty-four lines, none of them related to the correction. The product still
+exposes Nominations, Candidates and Eligibility tabs, so a producer following
+the damaged script would simply have **omitted core election-management
+training** with nothing to signal the gap.
+
+**Cause:** the edit was applied as `text[:start] + new + text[end:]`, with
+`end` anchored on a string that occurred much further down the file than
+assumed. The replacement looked correct in isolation; everything between the
+two anchors vanished silently. No test, link check or lint covers prose
+deletion, and the diff was large enough that "+91 −44" did not look alarming.
+
+**Caught by:** PR review (Codex), not by this file and not by CI.
+
+**The rule, now applied to every edit in this pass:** an edit that replaces a
+_range_ must assert what it is about to remove, not just what it inserts.
+Prefer replacing an exact known block; where a range is unavoidable, check the
+removed slice against the sections it is expected to contain before writing.
+After any prose rewrite, read the deletion side of the diff — `git diff | grep
+'^-'` — and confirm every removed line was meant to go.
+
+The script was rebuilt from the pre-edit version with only the intended beat
+replaced; all fourteen chapters are present and the two smaller corrections
+(the roster screen note and the overrides wording) were re-applied on top.
+
+## Flagged by the 2026-08-24 → 08-31 changes
+
+Full reason/data-path context in
+[`../CHANGE_AUDIT_2026-08-24_TO_31.md`](../CHANGE_AUDIT_2026-08-24_TO_31.md#documentation-and-media-disposition).
+
+This window produced **five Wrong** — all five rewritten in-script — plus five
+new shorts, one new chapter in script 03, two new chapters (04 and 06), and a
+re-shoot list. As in every prior window, determinations were made by **reading
+the script files**, not by inferring from the change list; a script that was
+suspected and turned out clean is recorded as verified rather than left
+conditional.
+
+**Rewritten in-script this window** (per the standing rule that no behavioural
+content lives only in SCRIPT_CURRENCY):
+
+| Script      | Beat                                        | Was                                                                                                                                                                                                                              |
+| ----------- | ------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **12**      | `PER-ITEM ELIGIBILITY — THE IMPORTANT PART` | "**Eligible voter types** map to membership types — not roles. 'Operational' means active members. 'Regular' means active plus life members." One field that no longer exists, and — worse — a **defect narrated as the design** |
+| **12**      | `THE ELIGIBILITY ROSTER` screen note        | A per-item refusal reason reading "membership type not eligible (requires: regular; member has: probationary)". The reason string now names class and status separately                                                          |
+| **13**      | `PERSONALIZATION`                           | "For anything embroidered or engraved, turn on personalization" over a single "Name for embroidery" label. Embroidery and engraving are now different jobs asking different questions                                            |
+| **05 / 16** | Header permission line                      | "**Requires permission:** `training.manage`" — the module's org-level settings, including the member visibility panel, moved to the new `training.configure`                                                                     |
+| **02**      | `POSITIONS VS MEMBERSHIP TYPES`             | "**Membership Types** are classifications like Active, Retired, Honorary, Administrative." One flat list mixing a class, a status and a value that is now the social class                                                       |
+
+### 12 — Elections Deep Dive · **WRONG, then over-corrected, then fixed — the most instructive entry in this file**
+
+This beat has now been wrong in **both** directions inside one week. Read this
+before touching it a third time.
+
+**Round 1 — the original take, wrong by omission.** It said:
+
+> "'Operational' means active members. 'Regular' means active plus life
+> members."
+
+That accurately described the build. It also accurately described **a defect**:
+one fused `membership_type` field could not hold both what kind of member
+somebody was and where they sat on the ladder, so a life member's standing
+overwrote the value that put them in `regular`. The script had faithfully
+documented the behaviour and, in doing so, taught viewers to expect it.
+
+**A currency check that only asks "does the script match the build" would have
+marked this green every week it was misleading.**
+
+**Round 2 — the correction, wrong by over-reach.** The 2026-08-31 rewrite
+claimed the class/status split made **every operational standing** eligible for
+`operational` items, and told chiefs to expect a longer recipient list. That
+was true of commit `7204f9134` and **false ninety minutes later**: `f65e4e7ae`
+("Fix election voter category authorization") reverted the widening the same
+day, because reading class alone admitted probationary and retired members to a
+restricted ballot.
+
+**The rewrite was drawn from the CHANGELOG entry, which still carried the
+reverted claim five days after the revert.** That is the failure worth naming:
+the changelog is a record of what a commit intended, and a same-day revert does
+not necessarily reach back into it. Caught by review on PR #2096, not by this
+file.
+
+**Round 3 — what the shipped code does**, per
+`ElectionService._user_has_role_type`:
+
+| Category         | Requires                                        |
+| ---------------- | ----------------------------------------------- |
+| `operational`    | operational class **and** regular status        |
+| `regular`        | operational class **and** (regular **or** life) |
+| `life`           | operational class **and** life status           |
+| `probationary`   | operational class **and** probationary status   |
+| `administrative` | administrative class                            |
+| `social`         | social class                                    |
+
+The built-in categories **keep their legacy meaning**. The two real changes are
+that a **life member now satisfies `regular`** (with one fused field they were
+competing values), and that **every status category now also requires the
+operational class** — so an administrative regular no longer receives
+active/life ballots, a **tightening**.
+
+**The rules this argues for**, both now applied in this file:
+
+1. When a beat explains _why_ a rule is the way it is, and the explanation is
+   "because the field can only hold one value", that is a data-model limitation
+   narrated as a design decision. It carries an expiry the moment somebody
+   fixes the model.
+2. **Verify a behavioural correction against the code, not against the
+   changelog.** A changelog entry records an intent at a moment; a revert
+   ninety minutes later does not rewrite it.
+
+The beat now carries a production note stating the shipped contract and naming
+`_user_has_role_type` as the thing to check.
+
+**Also corrected:** the screen note asking for a re-shot eligibility roster. The
+refusal reason string is **unchanged** — `ElectionService` still emits
+"membership type not eligible … (requires: …; member has: …)" — so **the
+existing capture is current and needs no replacement.** An earlier draft of this
+entry said the reason now names class and status separately; it does not, and
+that would have generated an unreproducible re-shoot request.
+
+### 13 — Department Store · **WRONG — one control for two different jobs**
+
+`PERSONALIZATION` narrated a single field covering embroidery and engraving, on
+a screen whose label read "Name for embroidery". An engraved brass plate was
+therefore asked for a thread colour.
+
+Rewritten into two captures — method set to Embroidery with the thread swatch
+present, method set to Engraving with it absent — and a production note stating
+that **a single capture cannot show this change**, so a delivery pass that keeps
+one shot loses the point entirely.
+
+### 05 / 16 — Training Officer · **WRONG in the header, which is the worst place**
+
+Both scripts open with "**Requires permission:** `training.manage`". Since
+2026-08-25 the training module's org-level settings — chiefly the **member
+visibility panel**, which decides how much of an officer's written assessment
+the assessed member may read — are gated on the new `training.configure`.
+
+This matters beyond pedantry: the split exists precisely so a Membership
+Coordinator can configure training **without** also gaining the power to edit
+anybody's training records. A script that names the wrong permission sends a
+department to grant the wrong one, and the wrong one here is the broader one.
+
+Corrected in both headers, with the reason stated inline so a future edit
+cannot collapse them back together.
+
+### 03 — IT Manager / System Admin · **NEW CHAPTER, existing chapter left alone**
+
+Chapter 10, "The August 31 upgrade: forty-five migrations, and six that move
+permissions". Head `f6a7b8c9d0e1`.
+
+**The August 24 chapter is deliberately not revised.** It documents a different
+head and a different irreversible migration and remains correct for anybody
+upgrading across that window. Overwriting it would have destroyed a correct
+upgrade narration to avoid having two chapters.
+
+The two beats the chapter marks as uncuttable are both "a thing disappeared"
+support calls, which is exactly this script's audience:
+
+1. **Four permission revocations, plus two new grants** — `compliance.view` off
+   the Member position, `notifications.view` off the baseline member and junior
+   ranks, and `facilities.view` off regular members _and then_ off the shared
+   operational officer positions; `training.configure` and `users.view_consents`
+   granted. Nothing grants the four revoked ones back.
+2. **The Testing Checklist ships switched off.** `/testing` is gone until
+   Settings → Modules, and nobody will connect a missing page to a module they
+   did not know existed.
+
+Also covered: the administrative-rank clearing (does not reverse, and the
+reason it should not), and four no-op downgrades with their individual
+justifications.
+
+### 04 — Fire Chief / Leadership · **NEW CHAPTER + two inserts**
+
+New chapter, "Who runs what": the organizational chart. This is a chief's
+screen and it has never been shot. The load-bearing beat is **why reading it
+needs no permission** — the screen exists so a six-week member can find out who
+runs an area without asking three people, and a permission would lock out its
+own audience.
+
+Two inserts: the elections change above, in the chief's own words — the
+recipient list moves **in both directions**, so "check it against your roster"
+is the call to action rather than "expect more people" — and an administration
+note that line officers lose the Facilities workspace and the Testing Checklist
+page is off.
+
+### 06 — Member Guide · **NEW CHAPTER + one insert**
+
+New chapter, "Who do I ask?" — the same org chart, from the member's side and
+at a quarter of the length. Placed early, beside "finding your way around",
+because that is when a member needs it.
+
+Insert on the profile: what the split means for the member, which is a voting
+consequence and nothing else. **No re-shoot** — an earlier draft of this entry
+said the profile-header capture was wrong; it is not. No screen renders class
+and status as fields, the member forms still show a single Membership Type
+selector, and the existing capture is current.
+
+### 07 — Secretary / Administrative · **TWO INSERTS**
+
+- **Unlink now actually unlinks.** Pressing Unlink on a meeting record's linked
+  event reported success and removed nothing; the link returned on the next
+  load. Worth narrating because secretaries have been working around it without
+  realising it was a defect.
+- **Meeting records are audited now.** Minutes always were. The meeting record
+  itself — create, edit, delete, approve, attendees, action items — was not.
+- Plus the separation-of-duties fix: a secretary could submit **and** approve
+  their own minutes.
+
+### 02 — First-time setup · **WRONG — caught only because the file was read**
+
+This one is worth recording as a near-miss. The obvious reason to suspect
+script 02 in this window was the **Testing Checklist becoming a module**, and on
+that count the script is clean: the module is deliberately _not_ offered during
+onboarding, so there is nothing for this script to show.
+
+Reading it anyway turned up a different problem. The `POSITIONS VS MEMBERSHIP
+TYPES` beat listed "Active, Retired, Honorary, Administrative" as one flat set —
+a list that mixes a **class** (administrative), a **status** (retired), and a
+value that is now the **social class** (honorary). After the split it is not
+just incomplete, it teaches the wrong shape on the screen where a department
+sets this up for the first time.
+
+**Had the determination been made from the change list rather than the file, it
+would have been marked clean.** That is the argument for reading every
+suspected script even when the suspected reason turns out not to apply.
+
+### Verified clean this window
+
+Checked by reading the script, and found still accurate — recorded so the next
+pass does not re-check them:
+
+| Script                           | Why it was suspected                             | Verdict                                                                                                                                                                                                                                                                                                                         |
+| -------------------------------- | ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **01 — Installing**              | Forty-five migrations in the window              | **Clean.** It narrates the install path, not a specific head                                                                                                                                                                                                                                                                    |
+| **09 / 10 — Training pipelines** | The class/status split touches member records    | **Clean.** Pipelines read programs and requirements, not membership standing                                                                                                                                                                                                                                                    |
+| **11 — Building a pipeline**     | Same                                             | **Clean**                                                                                                                                                                                                                                                                                                                       |
+| **14 — Multi-class courses**     | Same                                             | **Clean**                                                                                                                                                                                                                                                                                                                       |
+| **15 — Skills testing**          | An officer could void or return their own result | **Clean, but extended.** No existing beat became false — the script never narrates an officer voiding their _own_ result — so this is an **addition, not a correction**. An insert was written anyway, because "you can no longer void your own" is the kind of boundary an evaluator meets on a bad day rather than a good one |
+
+### Five new shorts written in-script (8AM–8AQ)
+
+Who do I ask about this? (org chart) · The ballot that skipped the life members
+(class vs. status, and the only place a member can see it) · Where did /testing
+go? · Build a check template in one list · Thread colour on a brass plate.
+
+**Three carry production constraints that a scheduling pass must respect:**
+
+- **8AN** was rewritten: it originally claimed the split made life and
+  probationary members eligible for **operational** ballots, which is not what
+  shipped. It now shoots the **ballot recipient list**, which is the only place
+  the change is visible — there is no member-screen UI to capture, and a
+  reconstructed two-field profile screen would be a fabrication.
+- **8AP** opens on the old template builder, and **that state no longer exists
+  in any build.** Source it from an archived capture or drop the opening beat.
+- **8AQ** needs two captures, one per personalization method. One shot cannot
+  show the change.
+
 ## Flagged by the 2026-08-23 → 08-24 changes
 
 Full reason/data-path context in

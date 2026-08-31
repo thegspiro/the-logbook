@@ -282,7 +282,22 @@ jobs:
         # runner-image packages (pip/setuptools/wheel) don't fail the build.
         run: |
           pip install -r requirements.txt
-          pip-audit -r requirements.txt
+          # PyPI's advisory endpoint occasionally resets an otherwise healthy
+          # runner connection. Retry transport failures without weakening the
+          # gate: a real vulnerability still fails all three audit attempts.
+          #
+          # `pip-audit` has to stay the first token on its line.
+          # scripts/check_security_scan_policy.py anchors its match at the start
+          # of a line, which is what stops a comment or a quoted string from
+          # satisfying the policy — wrapping the call in `if ...; then` hides
+          # the invocation from that check and fails the gate.
+          for attempt in 1 2 3; do
+            pip-audit -r requirements.txt && exit 0
+            if [ "$attempt" -eq 3 ]; then
+              exit 1
+            fi
+            sleep $((attempt * 5))
+          done
 
       - name: Upload Bandit report
         if: always()
@@ -837,7 +852,12 @@ jobs:
   frontend-test:
     name: Frontend Tests
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    # Coverage instruments the entire 414-file source denominator and the
+    # current 5,447-test suite can take just over 25 minutes on a two-core
+    # runner. Keep a bounded timeout, but leave enough headroom for the test
+    # command to emit its JUnit and lcov reports instead of killing an otherwise
+    # passing run during coverage finalization.
+    timeout-minutes: 35
     defaults:
       run:
         working-directory: frontend

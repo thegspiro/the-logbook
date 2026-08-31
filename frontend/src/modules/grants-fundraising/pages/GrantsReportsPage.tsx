@@ -24,7 +24,7 @@ import type { GrantReport, FundraisingReport } from '../types';
 import { COMPLIANCE_STATUS_COLORS } from '../types';
 
 import { formatCurrencyWhole } from '@/utils/currencyFormatting';
-import { getTodayLocalDate, toLocalDateString } from '@/utils/dateFormatting';
+import { getTodayLocalDate } from '@/utils/dateFormatting';
 import { useTimezone } from '@/hooks/useTimezone';
 
 const formatPercent = (value: number): string =>
@@ -115,11 +115,17 @@ const HorizontalBarChart: React.FC<{
 // =============================================================================
 
 function getDefaultDateRange(tz: string): { start: string; end: string } {
-  const now = new Date();
-  const startOfYear = new Date(now.getFullYear(), 0, 1);
+  // Derive the year from the organization's own local "today" (a
+  // "YYYY-MM-DD" string) rather than the browser's `Date.getFullYear()`
+  // and a `Date` round-trip through `tz` — near midnight on New Year's,
+  // the browser's timezone and the org's can disagree on what year (or
+  // even day) it currently is there, producing a start date after the
+  // end date.
+  const today = getTodayLocalDate(tz);
+  const year = today.slice(0, 4);
   return {
-    start: toLocalDateString(startOfYear, tz),
-    end: getTodayLocalDate(tz),
+    start: `${year}-01-01`,
+    end: today,
   };
 }
 
@@ -185,7 +191,12 @@ const GrantsReportsPage: React.FC = () => {
     ? Object.entries(fundraisingReport.donationsByMethod)
     : [];
 
-  const donationsByMethodTotal = donationsByMethod.reduce((sum, [, v]) => sum + v, 0);
+  // Money fields serialize as JSON strings (backend `Decimal`, see
+  // currencyFormatting.ts's `Money` doc comment). `+` on two strings
+  // concatenates instead of adding, so this must coerce explicitly rather
+  // than rely on the declared `number` type — matching the same guard
+  // DonationsPage.tsx already uses for its own donation-amount total.
+  const donationsByMethodTotal = donationsByMethod.reduce((sum, [, v]) => sum + Number(v), 0);
 
   const monthlyTotals = fundraisingReport?.monthlyTotals ?? [];
 
@@ -217,12 +228,19 @@ const GrantsReportsPage: React.FC = () => {
           <span className="text-theme-text-secondary text-sm font-medium">Date Range</span>
           <input
             type="date"
+            aria-label="Start date"
             value={startDate}
             onChange={(e) => setStartDate(e.target.value)}
             className="form-input-sm"
           />
           <span className="text-theme-text-secondary text-sm">to</span>
-          <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="form-input-sm" />
+          <input
+            type="date"
+            aria-label="End date"
+            value={endDate}
+            onChange={(e) => setEndDate(e.target.value)}
+            className="form-input-sm"
+          />
         </div>
       </div>
 
@@ -402,7 +420,7 @@ const GrantsReportsPage: React.FC = () => {
                   <h3 className="text-theme-text-primary mb-4 font-semibold">Donations by Payment Method</h3>
                   <ul className="divide-theme-surface-border divide-y">
                     {donationsByMethod.map(([method, amount]) => {
-                      const pct = donationsByMethodTotal > 0 ? (amount / donationsByMethodTotal) * 100 : 0;
+                      const pct = donationsByMethodTotal > 0 ? (Number(amount) / donationsByMethodTotal) * 100 : 0;
 
                       return (
                         <li key={method} className="flex items-center justify-between py-2.5">

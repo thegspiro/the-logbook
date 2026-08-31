@@ -3045,3 +3045,114 @@ screenshot it, or promise it in this release.
 A crew member without `inventory.manage` could move **any** quantity from ready
 stock onto the truck, and dispose of lots that were never aboard it. A swap is
 now bounded by the lot it replaces, and that lot has to actually be on the item.
+
+---
+
+## Building a Check Template: One List You Scroll _(2026-08-30)_
+
+**The builder was rebuilt, not restyled.** If you learned this screen before
+August 30, the controls you are looking for are not where they were — most of
+them are not there at all.
+
+**What is gone:** the metadata sidebar, the three-step progress strip along the
+top, the "Template readiness" card, and the Quick Add / Bulk Add mode toggle.
+
+**What replaced all of it:** sections, locations and items are rows in **one
+list, in the order a crew walks the rig**.
+
+### The row is the editor
+
+An item's **name**, its **answer type** — Works / Count / Level / Date — and
+the **one number that answer is graded against** are edited directly in the
+row.
+
+Everything else — description, serial and lot numbers, image, critical minimum,
+the inventory link — sits behind a **disclosure on that row**. This is the
+change that decides how long a template takes to build: opening the disclosure
+is no longer a prerequisite for a complete item. Fill a whole rig's worth of
+names and answer types without opening anything.
+
+Numbers stay labelled once they hold a value — "par 4" and "min 2" on a count,
+"30 days" on an expiry warning — so a finished checklist never shows two
+adjacent numbers with no way to tell which threshold is which.
+
+### Adding items
+
+**One box per location.** Type an item and press **Enter**. Or paste a whole
+list and confirm a preview that names every line and lets you set the answer
+type for all of them at once.
+
+### Nesting a location
+
+**The indent button on the row.** It used to be a "Reparent: stored inside"
+dropdown listing every other location on the template; that is still available
+from the row's overflow menu for moving something a long way.
+
+### Publish tells you exactly what is wrong
+
+Instead of a readiness score, you get **a list of the specific things to fix**
+beside the checklist. Each entry names where the problem is, and clicking it
+**jumps to the row, opens its location, and puts your cursor in the empty
+field.**
+
+On tablets and smaller laptops (below 1440px) that list is a bar along the
+bottom of the checklist that opens as a sheet — it used to be reachable only by
+widening the window.
+
+### The preview
+
+**The preview docks only at 1440px and wider** (`isWideCanvas`). Below that —
+which includes tablets and a good many laptops, a 1366px screen among them —
+the Preview control opens the modal, exactly as it does on a phone. The rail
+costs 344px, and under 1440 that leaves a canvas too narrow to edit in.
+
+Where it docks, it updates as you edit rather than making you open and close a
+modal each time.
+
+**Phones keep the layout they had:** compact rows, the full-height item editor,
+and the search-inventory add sheet.
+
+### Starting from a vehicle layout
+
+The vehicle-layout picker and the "How would you like to start?" card on an
+empty template now match the rest of the checklist, and the picker **replaces**
+that card rather than appearing above it. Each layout says how many locations
+and items it brings in before you choose it.
+
+On a brand-new template, adding the first location now **opens it ready for
+items** — it used to arrive collapsed with nowhere to type.
+
+> **[SCREENSHOT — REPLACE the equipment check template builder capture, wide
+> canvas.** _Demo data:_ an engine template with three locations, one nested
+> inside another, at least one item of each answer type, and the "Before
+> publishing" list showing two outstanding items. **Set the viewport to at
+> least 1440px** — the preview does not dock below that, so a 1366px laptop
+> cannot produce this shot. **The old capture shows a sidebar, a progress strip
+> and a readiness card, none of which exist.**]**
+
+> **[SCREENSHOT — REPLACE the equipment check template builder capture, phone
+> (390×844).** _Demo data:_ the same template; capture the compact rows with
+> the blockers bar along the bottom.**]**
+
+### Bulk edits and bulk deletes
+
+- **A bulk edit now saves every item you selected**, not just the last one.
+- **A bulk delete is retry-safe.** If the request is sent twice — a flaky
+  connection, a double tap — the second one cannot delete whatever happens to
+  be occupying those positions by then. Before, an intervening edit meant a
+  retry deleted rows nobody had selected.
+- **Duplicating a location gives its items their own identities**, so editing
+  the copy no longer reaches back into the original.
+
+### Drafts survive a template edit
+
+A saved draft check is keyed to the template's **content revision**. If the
+template changes while somebody has a draft open, the draft is not replayed
+against a checklist that no longer matches it — the questions it answered are
+the questions it is scored against.
+
+### Still not here
+
+**Walking a check as a lap** remains built and unwired, unchanged by this
+rebuild. The builder is the *authoring* side; the live check screen still shows
+the flat compartment list. Do not teach it, screenshot it, or promise it.

@@ -2,21 +2,31 @@ import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { ArrowLeft, Loader2, Pencil, Plus, Trash2 } from 'lucide-react';
 import { useNavigate } from 'react-router';
 import toast from 'react-hot-toast';
+import { useConfirm } from '@/contexts/ConfirmContext';
 import { facilitiesService } from '../../../services/facilitiesServices';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import type { FacilityStatus, FacilityType, MaintenanceType } from '../types';
 type Lookup = FacilityType | FacilityStatus | MaintenanceType;
 type Kind = 'types' | 'statuses' | 'maintenance';
-const definitions: Record<Kind, { title: string; singular: string }> = {
-  types: { title: 'Facility Types', singular: 'facility type' },
-  statuses: { title: 'Facility Statuses', singular: 'facility status' },
-  maintenance: { title: 'Maintenance Types', singular: 'maintenance type' },
+const definitions: Record<Kind, { title: string; singular: string; offeredOn: string }> = {
+  types: { title: 'Facility Types', singular: 'facility type', offeredOn: 'when creating or editing a facility' },
+  statuses: {
+    title: 'Facility Statuses',
+    singular: 'facility status',
+    offeredOn: 'when creating or editing a facility',
+  },
+  maintenance: {
+    title: 'Maintenance Types',
+    singular: 'maintenance type',
+    offeredOn: 'when logging a maintenance record',
+  },
 };
 export default function FacilitiesSettingsPage() {
   const navigate = useNavigate(),
     [data, setData] = useState<Record<Kind, Lookup[]>>({ types: [], statuses: [], maintenance: [] }),
     [loading, setLoading] = useState(true),
     [editing, setEditing] = useState<{ kind: Kind; item?: Lookup } | null>(null);
+  const { confirm } = useConfirm();
   const load = useCallback(async () => {
     setLoading(true);
     try {
@@ -34,7 +44,17 @@ export default function FacilitiesSettingsPage() {
   }, []);
   useEffect(() => void load(), [load]);
   const remove = async (kind: Kind, item: Lookup) => {
-    if ((item.usageCount ?? 0) > 0 || item.isSystem || !window.confirm(`Delete ${item.name}?`)) return;
+    if ((item.usageCount ?? 0) > 0 || item.isSystem) return;
+    if (
+      !(await confirm({
+        title: `Delete this ${definitions[kind].singular}?`,
+        message: `“${item.name}” will no longer be offered ${definitions[kind].offeredOn}.`,
+        confirmLabel: 'Delete',
+        cancelLabel: 'Keep it',
+        variant: 'danger',
+      }))
+    )
+      return;
     try {
       if (kind === 'types') await facilitiesService.deleteType(item.id);
       else if (kind === 'statuses') await facilitiesService.deleteStatus(item.id);

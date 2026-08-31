@@ -181,21 +181,35 @@ export const adminHoursEntryService = {
     return response.data.count;
   },
 
-  getExportUrl(params?: {
+  // Routed through the shared axios client (responseType: 'blob') rather
+  // than a hand-rolled `fetch()`, so the export gets the same 401 refresh
+  // -and-retry and error-reporting handling as every other request in the
+  // app instead of failing outright the moment a session needs a refresh.
+  // `timeout: 0` (no timeout) rather than the default API_TIMEOUT_MS: an
+  // unfiltered export queries and serializes an org's entire admin-hours
+  // history in one shot with no row cap on the backend, which can take
+  // arbitrarily long for a long-tenured department. The raw `fetch()` this
+  // replaced had no timeout either — any finite override still aborts a
+  // download that used to finish, just at a higher row count.
+  async exportCsv(params?: {
     status?: string | undefined;
     categoryId?: string | undefined;
     userId?: string | undefined;
     startDate?: string | undefined;
     endDate?: string | undefined;
-  }): string {
-    const searchParams = new URLSearchParams();
-    if (params?.status) searchParams.set('status', params.status);
-    if (params?.categoryId) searchParams.set('category_id', params.categoryId);
-    if (params?.userId) searchParams.set('user_id', params.userId);
-    if (params?.startDate) searchParams.set('start_date', params.startDate);
-    if (params?.endDate) searchParams.set('end_date', params.endDate);
-    const qs = searchParams.toString();
-    return `/api/v1/admin-hours/entries/export${qs ? `?${qs}` : ''}`;
+  }): Promise<Blob> {
+    const response = await api.get('/admin-hours/entries/export', {
+      params: {
+        status: params?.status,
+        category_id: params?.categoryId,
+        user_id: params?.userId,
+        start_date: params?.startDate,
+        end_date: params?.endDate,
+      },
+      responseType: 'blob',
+      timeout: 0,
+    });
+    return response.data as Blob;
   },
 
   async closeStaleSessions(): Promise<{ closedCount: number }> {

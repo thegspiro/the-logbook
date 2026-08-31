@@ -45,16 +45,50 @@ The Elections module provides a complete election management system with ranked-
 
 ## Voter Eligibility
 
-Voter eligibility for each ballot item is determined by the member's **membership type** (`User.membership_type`), not by their assigned roles/positions. A member may hold multiple roles (e.g. EMT on the operational side and Quartermaster on the administrative side), but their membership type is a single classification that controls which ballot items they can vote on.
+Voter eligibility for each ballot item is determined by the member's **standing**, not by their assigned roles/positions. A member may hold multiple roles (e.g. EMT on the operational side and Quartermaster on the administrative side), but their standing is what controls which ballot items they can vote on.
 
-### Membership Type vs Roles
+### Standing is two fields, not one _(changed 2026-08-26)_
 
-| Concept             | Field                  | Purpose                                                  | Example                                    |
-| ------------------- | ---------------------- | -------------------------------------------------------- | ------------------------------------------ |
-| **Membership Type** | `User.membership_type` | Department classification; determines ballot eligibility | Active, Administrative, Life, Probationary |
-| **Role / Position** | `User.roles`           | Assigned positions; determines system permissions        | EMT, Quartermaster, Secretary, Chief       |
+Eligibility used to read `User.membership_type`, a single column that conflated two independent facts. It now reads the pair that replaced it:
 
-A member's role (e.g. EMT) does **not** make them eligible for "operational" ballot items. Their membership type (e.g. "active") does.
+| Concept             | Field                  | Purpose                                                                  | Example                                                             |
+| ------------------- | ---------------------- | ------------------------------------------------------------------------ | ------------------------------------------------------------------- |
+| **Member class**    | `User.member_class`    | What kind of member somebody is; decides `operational` eligibility       | operational, administrative, social                                 |
+| **Member status**   | `User.member_status`   | Where they sit on the membership ladder; decides `life` / `probationary` | prospective, probationary, regular, life, retired, honorary, junior |
+| **Membership type** | `User.membership_type` | Legacy single classification, now **derived** from the pair              | active, administrative, life, probationary                          |
+| **Role / Position** | `User.roles`           | Assigned positions; determines system permissions                        | EMT, Quartermaster, Secretary, Chief                                |
+
+**What each built-in category requires**, per `ElectionService._user_has_role_type`:
+
+| Category         | Requires                                        |
+| ---------------- | ----------------------------------------------- |
+| `operational`    | operational class **and** regular status        |
+| `regular`        | operational class **and** (regular **or** life) |
+| `life`           | operational class **and** life status           |
+| `probationary`   | operational class **and** probationary status   |
+| `administrative` | administrative class                            |
+| `social`         | social class                                    |
+
+**The built-in categories keep their legacy meaning**, deliberately. An earlier
+version of this change had `operational` read the class alone; that was
+reverted the same day (`f65e4e7ae`) because it admitted probationary and
+retired members to a restricted ballot.
+
+The real changes are narrower than the split first appears, and one of them is
+a **tightening**:
+
+- **A life member now receives a `regular` ballot.** With one fused field,
+  `life` and `regular` were mutually exclusive values, so a life member could
+  not satisfy `regular`.
+- **Every status category now also requires the operational class.** An
+  administrative member with regular standing no longer receives ballots
+  restricted to active/life members.
+- `administrative` and `social` are answered by class rather than by a single
+  value that had to carry both facts at once.
+
+`ElectionService` falls back to deriving the pair from `membership_type` when the new columns are unset, so a member whose record predates the change is still evaluated correctly.
+
+A member's role (e.g. EMT) does **not** make them eligible for "operational" ballot items. Their member class does.
 
 ### Eligible Voter Types
 
@@ -499,7 +533,7 @@ GET    /api/v1/elections/{id}/eligibility-roster    # Full member eligibility br
 
 ### Eligibility, Email Reliability & Meeting Integration
 
-- **Eligibility uses membership_type**: Voter eligibility now correctly uses `User.membership_type` instead of role slugs. A member's role (e.g., EMT) does not make them eligible for operational ballot items — their membership type (e.g., "active") does
+- **Eligibility uses standing, not role slugs**: Voter eligibility uses the member's standing rather than their roles. _(As of 2026-08-26 that standing is `member_class` / `member_status`; this entry described the earlier `membership_type` form.)_ A member's role (e.g., EMT) does not make them eligible for operational ballot items — their membership type (e.g., "active") does
 - **Email recipient tracking accuracy**: `email_recipients` now tracks only successfully sent ballots, not attempted sends
 - **Linked meeting filter**: Meeting dropdown shows only upcoming business meetings, not past ones
 - **Concurrent ballot sending**: Email dispatch uses concurrent sending with per-recipient error isolation
@@ -517,13 +551,17 @@ POST   /api/v1/elections/{id}/send-report-email      # Email election results re
 
 ### Edge Cases (2026-03-22)
 
-| Scenario                                                    | Behavior                                                |
-| ----------------------------------------------------------- | ------------------------------------------------------- |
-| Member with role `emt` but membership_type `administrative` | Not eligible for `operational` ballot items             |
-| Email fails for one recipient in batch                      | Loop continues; summary shows per-recipient status      |
-| Election linked to past meeting                             | Past meetings filtered out of dropdown                  |
-| No eligible voters after filtering                          | Descriptive error with reasons instead of false success |
-| Membership type not set on member                           | Falls back to "all" eligibility only                    |
+| Scenario                                                                                  | Behavior                                                                                                                                                                                                                             |
+| ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Member with role `emt` but member class `administrative`                                  | Not eligible for `operational` ballot items                                                                                                                                                                                          |
+| Email fails for one recipient in batch                                                    | Loop continues; summary shows per-recipient status                                                                                                                                                                                   |
+| Election linked to past meeting                                                           | Past meetings filtered out of dropdown                                                                                                                                                                                               |
+| No eligible voters after filtering                                                        | Descriptive error with reasons instead of false success                                                                                                                                                                              |
+| Neither class/status nor membership type set on member                                    | **Treated as operational + regular.** `split_membership_type(None)` returns the defaults, so an entirely blank standing qualifies for `operational` **and** `regular` — not just `all`. Verify before relying on a restricted ballot |
+| Member on an org-configured tier (e.g. the shipped `senior`)                              | Matches **no** class and no status — eligible for `all` only. This is the case that resolves to nothing, and it is deliberate: the tier satisfied neither category before the split                                                  |
+| Life member, on an `operational` ballot item                                              | **Not** eligible — `operational` requires regular status. They are eligible for `regular` and `life` items                                                                                                                           |
+| Life member, on a `regular` ballot item _(changed 2026-08-26)_                            | **Eligible.** With the old fused field, `life` and `regular` were mutually exclusive values and they were not                                                                                                                        |
+| Administrative member with regular standing, on a `regular` item _(tightened 2026-08-26)_ | **Not** eligible — status categories now also require the operational class                                                                                                                                                          |
 
 ---
 

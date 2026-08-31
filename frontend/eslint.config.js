@@ -7,6 +7,75 @@ import testingLibrary from 'eslint-plugin-testing-library';
 import eslintConfigPrettier from 'eslint-config-prettier';
 import globals from 'globals';
 
+/**
+ * Blocking browser dialogs, banned outright (CLAUDE.md pitfall #16).
+ *
+ * A browser may suppress `window.confirm` / `alert` / `prompt` — Chrome does it
+ * for repeated dialogs and cross-origin frames, and iOS and Firefox offer the
+ * user a "prevent this page from creating further dialogs" checkbox. Once
+ * suppressed, `confirm` returns `false` and `prompt` returns `null`: the exact
+ * values Cancel produces. The action then silently does nothing, with no error
+ * and no clue as to why, which is indistinguishable from the user declining.
+ *
+ * `useConfirm()` and `PromptDialog` are the replacements. This lives in the
+ * lint config rather than in review discipline because the ban held across 58
+ * call sites and then regressed anyway: `FacilitiesSettingsPage` reintroduced
+ * `window.confirm` on 2026-08-27 and nothing caught it, since — unlike the
+ * repo's other documented invariants — this one had no automated enforcement.
+ *
+ * It takes two rules, because the dialogs are reachable by two shapes of
+ * expression and a selector that matches one is blind to the other:
+ *
+ *   - `no-restricted-syntax` covers the qualified forms — `window.confirm`,
+ *     and equally `globalThis.confirm` and `self.confirm`, which are the same
+ *     function under different global aliases.
+ *   - `no-restricted-globals` covers the bare form, `confirm(...)`. A syntax
+ *     selector must NOT be used for this one: the correct pattern destructures
+ *     a local binding of the same name (`const { confirm } = useConfirm()`),
+ *     so a bare-identifier selector would flag all 58 legitimate call sites.
+ *     `no-restricted-globals` resolves scope, so it fires only when the name
+ *     is genuinely the browser global and stays silent on the local binding.
+ *
+ * WHAT THIS DOES NOT CATCH, so nobody reads it as airtight. ESLint matches
+ * syntax, so reaching a dialog through a *value* defeats both rules. All of
+ * these are verified to pass, and none is closable by a selector — the alias
+ * is a variable, not a shape:
+ *
+ *     const w = window; w.confirm('x');
+ *     const { confirm } = window; confirm('x');
+ *     window[someComputedKey]('x');
+ *     Reflect.get(window, 'confirm')('x');
+ *
+ * That is the accepted limit, not an oversight. This rule is a guardrail
+ * against reintroducing the pattern by writing the obvious thing — which is
+ * exactly how it came back on 2026-08-27 — and not a barrier against
+ * deliberate circumvention. Do not rely on it as one. Closing the semantic
+ * class needs a runtime guard (stubbing the three globals to throw in
+ * `src/test/setup.ts`), not a cleverer selector.
+ */
+const DIALOG_MESSAGE =
+  'A suppressed confirm/alert/prompt is indistinguishable from Cancel. Use useConfirm() from @/contexts/ConfirmContext, or PromptDialog from @/components/ux. See CLAUDE.md pitfall #16.';
+
+// MemberExpression rather than CallExpression: banning the *reference* also
+// covers `window.alert.bind(window)`, where the dialog is never the callee of
+// a call node. The second selector is the computed form, `window['confirm']`,
+// whose property is a Literal carrying `value` and no `name`.
+const noBlockingBrowserDialogs = [
+  {
+    selector: 'MemberExpression[object.name=/^(window|globalThis|self)$/][property.name=/^(confirm|alert|prompt)$/]',
+    message: DIALOG_MESSAGE,
+  },
+  {
+    selector: 'MemberExpression[object.name=/^(window|globalThis|self)$/][property.value=/^(confirm|alert|prompt)$/]',
+    message: DIALOG_MESSAGE,
+  },
+];
+
+const blockingDialogGlobals = ['confirm', 'alert', 'prompt'].map((name) => ({
+  name,
+  message: `A suppressed ${name}() is indistinguishable from Cancel. Use useConfirm() from @/contexts/ConfirmContext, or PromptDialog from @/components/ux. See CLAUDE.md pitfall #16.`,
+}));
+
 export default tseslint.config(
   // Global ignores (replaces ignorePatterns)
   {
@@ -124,7 +193,9 @@ export default tseslint.config(
           selector: "CallExpression[callee.property.name='toLocaleTimeString']",
           message: 'Use formatTime() from @/utils/dateFormatting instead of .toLocaleTimeString().',
         },
+        ...noBlockingBrowserDialogs,
       ],
+      'no-restricted-globals': ['error', ...blockingDialogGlobals],
       'no-restricted-imports': [
         'error',
         {
@@ -145,7 +216,7 @@ export default tseslint.config(
   {
     files: ['src/utils/dateFormatting.ts', 'src/hooks/useRelativeTime.ts'],
     rules: {
-      'no-restricted-syntax': 'off',
+      'no-restricted-syntax': ['error', ...noBlockingBrowserDialogs],
       'no-restricted-imports': 'off',
     },
   },
