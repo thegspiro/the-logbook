@@ -16,18 +16,58 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-PR [#2083](https://github.com/thegspiro/the-logbook/pull/2083)
-(`claude/security-review-messaging-notifications-pass2-migration-fix`) —
-feature 25 (Messaging & notifications), pass 2 follow-up. PR #2081 (the
-main pass-2 review, MSG-9 fixed + MSG-10 flagged) and its closing PR #2082
-(Codex doc-accuracy corrections) both merged to `main` before this
-iteration's independent finding could be added to either (see log entries
-below for the full sequence). This follow-up PR originally carried
-**MSG-11** as a HIGH-severity migration fix; a later correction on this same
-PR (see the correction log entry below) found MSG-11 does not actually
-reproduce and reverted the guard, keeping only a `test_migration_create_all_tables.py`
-correctness fix/ratchet. **MSG-12** (LOW-MED, flagged) stands. Rotation row
-25 stays `⏳` until this merges.
+None. Feature 25 (Messaging & notifications) is fully closed — see log entry
+below. Next: feature 26, Forms.
+
+---
+
+### 2026-08-31 — Feature 25 (Messaging & notifications), pass 2 follow-up ✅ PR #2083 fully merged
+
+PR #2083 merged (`7ce4c24e`). What started as a HIGH-severity migration fix
+(MSG-11) turned into six rounds of Codex review, all real, all resolved:
+
+1. **The premise itself was false.** `positions`/`user_positions` are not
+   create_all-only — `20260805_0008_rename_roles_to_positions.py` renames
+   `roles`/`user_roles` (created by the initial schema migration) to those
+   names, and is a required upgrade-path ancestor of the message-recipients
+   migration. Verified empirically with a real `alembic upgrade head`
+   against a fresh, correctly-collated database: the full 394-revision
+   chain completes with no `NoSuchTableError`. Reverted the guard entirely
+   — its early-return path was untested dead code that, per a second
+   Codex finding, would have silently dropped the recipient backfill (and
+   permanently hidden existing messages from inboxes) had it ever actually
+   triggered.
+2. **The real fix:** `_tables_created_by_migrations` in
+   `test_migration_create_all_tables.py` now recognizes `op.rename_table`
+   destinations, the actual root cause of the false positive.
+3. **Four more rounds hardened that fix and its sibling detector,
+   `_find_autoload_offenders`** (kept as an independent ratchet against a
+   real future unguarded-reflection bug): scoping both to `upgrade()` only
+   via a new `_upgrade_body` helper (a downgrade-only rename or
+   downgrade-only helper must not count — the dangerous direction, since
+   either hides a real create_all-only table from the ratchet); including
+   helper functions `upgrade()` delegates to, directly or via a
+   lambda/dispatch table (two real migrations use this shape); running the
+   reachability check against a comment/string-stripped view of the text
+   (via the stdlib tokenizer) so a helper named only in a comment doesn't
+   count; and broadening `_AUTOLOAD_TABLE`'s regex to match a bare
+   `Table(...)` import, reordered arguments, and one level of nested
+   parens. Twelve review threads total, every one addressed with a fix and
+   a pinning test, not just a reply.
+4. **MSG-12 grew from one crash-window scenario to three** as two separate
+   Codex findings pointed out that an ordinary provider failure
+   (`status="failed"`) and a throttled send (no row created at all) hit the
+   same permanent-non-retry wall as the originally-reported stranded
+   `pending` claim — the throttled path needs no crash or outage at all,
+   arguably making it the most likely of the three in practice.
+5. Also fixed the same stale "positions is create_all-only" claim in
+   CLAUDE.md's own Pitfall #26 (which had misled the original MSG-11
+   report) and in this test file's own module docstring.
+
+Full local gate green throughout (22 tests in the migration file, up from
+13; 1175 scoped + 9300 full backend tests by the final commit); CI green on
+the final head (17/17 checks), no merge conflict. Rotation row 25 → ✅.
+Next: 26 Forms.
 
 ---
 
@@ -3297,7 +3337,7 @@ each row's prior PR is recorded in the Log, not repeated here.
 | 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ✅     |
 | 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ✅     |
 | 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ✅     |
-| 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ⏳     |
+| 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ✅     |
 | 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                         | ⬜     |
 | 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                         | ⬜     |
 | 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`                                                                    | ⬜     |
