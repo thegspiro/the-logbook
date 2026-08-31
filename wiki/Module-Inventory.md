@@ -1,5 +1,25 @@
 # Inventory Module
 
+## Quartermaster vocabulary _(settled 2026-08-26)_
+
+The module used several names for the same operations. They are now fixed in
+one place (`frontend/src/modules/inventory/terminology.ts`), and the screens
+use these words and no others:
+
+| Term               | Means                                                                      |
+| ------------------ | -------------------------------------------------------------------------- |
+| **Assignment**     | Serialized gear held on an ongoing basis                                   |
+| **Temporary loan** | Serialized gear expected back by a date                                    |
+| **Issuance**       | Quantity-tracked stock given to a member                                   |
+| **Return**         | Physically receiving assigned or issued gear                               |
+| **Check-in**       | Closing a temporary loan when the gear is received                         |
+| **Transfer**       | Moving serialized gear between holders                                     |
+| **Distribution**   | One mixed batch that may create assignments, temporary loans and issuances |
+
+**"Checkout batch" is now "Item Distribution".** This is a label change only —
+the API payload values (`checkout`, `assignment`, `issuance`) are unchanged, so
+no integration needs updating.
+
 The Inventory module tracks department equipment, member assignments, pool/quantity items, batch operations, departure clearance, write-off approval, and thermal label printing.
 
 ---
@@ -422,14 +442,14 @@ Condition options are centralized in `frontend/src/constants/enums.ts`:
 
 ### Key Components
 
-| Component               | Purpose                                                                                                         |
-| ----------------------- | --------------------------------------------------------------------------------------------------------------- |
-| `InventoryPage`         | Main inventory management page with items/categories tabs                                                       |
-| `InventoryMembersTab`   | Per-member inventory view with sorting and expandable details                                                   |
-| `MemberIdScannerModal`  | Camera-based member ID scanning for quick member lookup                                                         |
-| `InventoryScanModal`    | Barcode/QR scanning + live search for batch checkout/return (native BarcodeDetector with html5-qrcode fallback) |
-| `ReturnItemsModal`      | List-based return workflow for a member's held items                                                            |
-| `useInventoryWebSocket` | Hook for real-time WebSocket updates with auto-reconnect                                                        |
+| Component               | Purpose                                                                                                                |
+| ----------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `InventoryPage`         | Main inventory management page with items/categories tabs                                                              |
+| `InventoryMembersTab`   | Per-member inventory view with sorting and expandable details                                                          |
+| `MemberIdScannerModal`  | Camera-based member ID scanning for quick member lookup                                                                |
+| `InventoryScanModal`    | Barcode/QR scanning + live search for item distribution and return (native BarcodeDetector with html5-qrcode fallback) |
+| `ReturnItemsModal`      | List-based return workflow for a member's held items                                                                   |
+| `useInventoryWebSocket` | Hook for real-time WebSocket updates with auto-reconnect                                                               |
 
 ### Test Coverage
 

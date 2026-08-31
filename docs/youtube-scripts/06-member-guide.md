@@ -875,3 +875,51 @@ My Account > Notifications, showing the Push notifications toggle.]**
 > recall a file you already downloaded."
 
 **EDITOR:** Add 1:30 and re-time Chapters 2, 6, 7 and the clip table.
+
+---
+
+## NEW CHAPTER — "WHO DO I ASK?": THE ORGANIZATIONAL CHART (ADDED 2026-08-31)
+
+**Placement:** early — this belongs beside "finding your way around", not in
+an officer section. ~1:15.
+
+**[SCREEN: Governance → Organizational Chart, outline view]**
+
+> "Here is the one I wish had existed when I joined. Governance,
+> Organizational Chart."
+
+> "It's your department's chain of command, drawn out. Who runs training. Who
+> runs the trucks. Who you take a uniform problem to. **Every member can open
+> it** — you don't need a permission and you don't need to ask."
+
+**[SCREEN: Toggle to diagram view; expand a seat with two people in it]**
+
+> "Read it as a list or as a diagram, whichever you prefer. Tap a seat and you
+> get what that seat is responsible for and how to reach whoever holds it — and
+> a seat can hold more than one person, so if your department runs two deputy
+> chiefs, you'll see both."
+
+> "If it's empty, nobody has drawn it yet. That's a nudge for your officers,
+> not a fault."
+
+---
+
+## ADD TO "YOUR PROFILE" (ADDED 2026-08-31)
+
+**[SCREEN: A member profile header showing class and status as separate fields]**
+
+> "Your profile now says two things where it used to say one. **Class** is what
+> kind of member you are — operational, administrative or social. **Status** is
+> where you are on the membership ladder — probationary, regular, life,
+> retired."
+
+> "That sounds like paperwork, and for most of you it is. But it fixed
+> something real: if you'd earned life membership, or you were still on
+> probation, **you were being left off ballots put to the operational
+> members** — because the old single field could only say one of those two
+> things at a time, and your standing had overwritten the one that got you the
+> ballot. If you ever wondered why a vote didn't reach you, that's likely why,
+> and it's fixed."
+
+**PRODUCTION:** re-shoot the profile header. The old capture shows one
+"Membership type" field and is now wrong, not merely dated.

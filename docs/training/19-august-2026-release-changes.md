@@ -1,4 +1,4 @@
-# August 12–24, 2026 workflow updates
+# August 12–31, 2026 workflow updates
 
 This lesson is the operator-facing companion to the
 [six-day change audit](../CHANGE_AUDIT_2026-08-10_TO_16.md), its
@@ -6,7 +6,8 @@ This lesson is the operator-facing companion to the
 [August 15–16 detail](../CHANGE_AUDIT_2026-08-15_TO_16.md), the
 [August 17–19 audit](../CHANGE_AUDIT_2026-08-17_TO_19.md), the
 [August 19–23 audit](../CHANGE_AUDIT_2026-08-19_TO_23.md), and the
-[August 23–24 audit](../CHANGE_AUDIT_2026-08-23_TO_24.md). It explains what
+[August 23–24 audit](../CHANGE_AUDIT_2026-08-23_TO_24.md), and the
+[August 24–31 audit](../CHANGE_AUDIT_2026-08-24_TO_31.md). It explains what
 members and administrators now do differently. Permission names are included
 because a control that is absent is usually a permission or module-state issue,
 not a rendering failure.
@@ -1695,3 +1696,598 @@ as a promise.**]**
 - **Expect scheduler assignments to start being refused** where a member is not
   cleared for the position. That rule now applies to schedulers, not only to
   members claiming their own seats.
+
+---
+
+# August 24–31, 2026
+
+The busiest week this project has recorded: 274 pull requests and 85 changelog
+entries. Four of them change how you work, and the rest are fixes you will
+notice mostly by things no longer going wrong.
+
+**The four:**
+
+1. **Your department now has an organizational chart**, and every member can
+   open it.
+2. **A member record now states two things where it stated one** — what kind
+   of member somebody is, and where they sit on the membership ladder.
+3. **The equipment check template builder is a different screen.** Not
+   restyled — rebuilt.
+4. **The Testing Checklist is now a module, and the upgrade switches it off.**
+
+Read the [upgrade notes](#upgrade-notes-for-administrators-august-2431) before
+you run this one. Five upgrade steps **take permissions away**, and one clears
+a field.
+
+## Governance → Organizational Chart: who runs what
+
+**This is new, it starts empty, and it is open to every member.**
+
+Find it at **Governance → Organizational Chart**. It draws your department's
+chain of command as a tree, which you can read as an **outline** or as a
+**diagram** — the same chart, two ways of looking at it.
+
+**Any signed-in member can read it.** That is deliberate, and it is the whole
+point of the screen: a new member should be able to work out who is in charge
+of an area without asking three people first. Editing needs
+`orgchart.manage` or `settings.manage`; without either, the page simply opens
+read-only and shows no edit controls.
+
+> **[SCREENSHOT NEEDED — the org chart, outline view.** _Demo data:_ a chart
+> four levels deep — Chief, two Deputy Chiefs sharing one seat, three Captains
+> under one of them, and one seat with a non-member holder. Expand the branch
+> that contains the shared seat so both names are visible.**]**
+
+> **[SCREENSHOT NEEDED — the org chart, diagram view.** _Demo data:_ the same
+> chart. The two views are not interchangeable and one capture cannot stand in
+> for the other.**]**
+
+### A seat can hold more than one person
+
+A box on the chart is a **seat**, and a seat holds however many people fill it.
+A department with two deputy chiefs puts both in one box rather than inventing
+two boxes that mean the same thing.
+
+### A holder does not have to be a member
+
+A seat can name somebody who has no account here at all — your town attorney, a
+mutual-aid liaison, the county fire marshal. Type the name and it appears on
+the chart. Nothing else about that person is stored, and they get no access.
+
+### Linking a seat to a position saves typing, and nothing more
+
+If a seat corresponds to a position you already maintain — Quartermaster, say —
+link it, and the chart **fills the holders in from that position's assignees**.
+You do not retype a roster you already keep.
+
+**Unlinking leaves those people in the seat.** The link is a convenience for
+filling the box, not the box's identity. This matters because most departments'
+org charts and permission structures do not match, and the chart has to be able
+to say what is actually true rather than what the permissions imply.
+
+> **[SCREENSHOT NEEDED — the org chart node modal.** _Demo data:_ a seat with
+> two member holders and one non-member holder, its responsibility text filled
+> in, and the position link visible. This is the screen that answers both
+> questions reviewers ask.**]**
+
+### It starts empty, and that is on purpose
+
+Nothing is inferred from your positions, ranks or member list. A permission
+structure is not an org chart, and a guessed diagram is one nobody recognises —
+you would spend longer correcting it than drawing it. Start with your top seat
+and work down.
+
+## A member is now two facts, not one
+
+**"Membership type" has become "class" and "status".**
+
+Until this release one field carried two independent facts, and you could only
+ever state one of them:
+
+- **What kind of member somebody is** — operational, administrative, social.
+- **Where they sit on the membership ladder** — prospective, probationary,
+  regular, life, retired.
+
+Because they shared a field, there was no way to record a **probationary
+treasurer**, and nothing said whether a **life member still rides**.
+
+### Where you were feeling this: elections
+
+This is the one that will have cost a department a vote. When the secretary put
+a bylaws question to "the operational members", the system could only work out
+who those were by looking for one specific value — the one that meant plain
+active member. **Anyone who had earned life membership, and anyone still on
+probation, was silently left off the ballot**, because their standing had
+overwritten the only value the check recognised.
+
+Operational eligibility now reads the member's **class**, so every operational
+standing counts. "Life members only" and "probationary members only" still read
+**status**, because those name a status.
+
+**Check your next ballot's recipient list against your roster.** It will be
+longer than it used to be, and that is the fix working.
+
+> **[SCREENSHOT — REPLACE the member profile capture.** The header shows class
+> and status as two fields where it showed one.**]**
+
+> **[SCREENSHOT — REPLACE the member create/edit form capture.** Same two
+> fields, plus the password, initial roles, welcome-email option, mailing
+> address and emergency-contact fields, which are back on the form.**]**
+
+> **[SCREENSHOT — REPLACE the Members administration list capture.** Class and
+> status are separate columns.**]**
+
+### Honorary members are now "social"
+
+That is not a new judgement about your honorary members. It is what the system
+was already doing with them — honorary has always been grouped with
+administrative and retired when deciding who gets shift access. Putting them
+anywhere else would have **widened** shift access on upgrade, which is not a
+change to make on somebody's behalf.
+
+### Rank and qualification are now different things
+
+A **rank** says where somebody sits in the chain of command. A
+**qualification** says what they are trained to do. They were the same field,
+so a **Captain who is also a Paramedic** — an entirely ordinary member of a
+volunteer department — had nowhere to be recorded as both.
+
+The standards already draw this line: Firefighter I/II is NFPA 1001, apparatus
+operator is NFPA 1002, the officer ladder is NFPA 1021, and EMT and Paramedic
+are EMS credentials on a separate track again.
+
+The other half of the reason: **qualifications expire and ranks do not.** Shift
+eligibility reads a qualification's expiry **as of the shift date**, not as of
+today — the same rule EVOC certifications already use for drivers, and for the
+same reason. A card that is current when the roster is built and expired when
+the truck rolls qualifies nobody to be on that truck.
+
+**`emt` is now both a rank code and a qualification code, meaning two different
+things on purpose.** If your agency uses EMT as a line rank, carry on. If you
+want to record who holds a current EMT card, that is the qualification. Neither
+implies the other, and you may use either or both.
+
+**Nothing was inferred from your existing records.** The qualification list
+starts empty. A department that recorded somebody as an EMT *rank* has said
+where they sit, not which card they hold or when it expires — and inventing an
+expiry date would be worse than having none.
+
+> **There is no screen for entering qualifications yet.** The records, the
+> rules and the shift-eligibility check all shipped; the officer-facing form
+> did not. Do not plan a training session around entering them this week.
+
+## Equipment check templates: one list you scroll
+
+**Every screenshot and every video of this screen is now wrong.** Not stale —
+wrong. The controls a viewer would be looking for are not on the screen.
+
+**What is gone:** the metadata sidebar, the three-step progress strip along the
+top, the "Template readiness" card, and the Quick Add / Bulk Add mode toggle.
+
+**What replaced all of it:** sections, locations and items are rows in **one
+list, in the order a crew walks the rig.**
+
+### Building an item
+
+An item's **name**, the **kind of answer** it asks for — Works / Count / Level /
+Date — and the **one number that answer is graded against** are all edited in
+the row itself.
+
+Everything else — description, serial and lot numbers, image, critical minimum,
+the inventory link — moved behind a **disclosure on the row**. This is the
+change that matters most for how long a template takes: opening that disclosure
+is no longer a prerequisite for a complete item. You can fill a whole rig's
+worth of names and answer types without opening anything.
+
+Each number stays labelled once it holds a value — "par 4" and "min 2" on a
+count, "30 days" on an expiry warning — so a saved checklist never shows two
+adjacent numbers with no way to tell which threshold is which.
+
+### Adding items is one box per location
+
+Type one and press **Enter**. Or paste a whole list, and confirm a preview that
+names every line and lets you set the check type for all of them at once.
+
+### Nesting a location is an indent button
+
+It was a "Reparent: stored inside" dropdown listing every other location on the
+template. It is now the indent button on the row. (The dropdown is still there,
+in the row's overflow menu, for when you want to move something a long way.)
+
+### When you cannot publish, the page tells you exactly why
+
+Instead of a readiness score, you get **a list of the specific things to fix**,
+beside the checklist. Each entry says where the problem is, and clicking it
+**jumps to the row, opens its location, and puts your cursor in the field that
+is empty.**
+
+On tablets and smaller laptops this list is a bar along the bottom of the
+checklist that opens as a sheet. It used to be reachable only by widening the
+window.
+
+### The preview is beside you now
+
+On a laptop or tablet, the mobile preview is **docked next to the checklist**
+and updates as you type, instead of opening as a modal you have to close again.
+
+**On a phone it is still a modal**, from the Tools menu — and the phone layout
+otherwise keeps what it had: compact rows, the full-height item editor, and the
+search-inventory add sheet. The side-by-side row controls are a laptop and
+tablet layout.
+
+> **[SCREENSHOT — REPLACE the equipment check template builder capture,
+> laptop.** _Demo data:_ an engine template with three locations, one nested
+> inside another, at least one item of each answer type, the preview docked at
+> the right, and the "Before publishing" list showing two outstanding items.
+> **The old capture shows a sidebar, a progress strip and a readiness card,
+> none of which exist.**]**
+
+> **[SCREENSHOT — REPLACE the equipment check template builder capture, phone
+> (390×844).** _Demo data:_ the same template; capture the compact rows with
+> the blockers bar visible along the bottom.**]**
+
+### One more thing, for crews who bulk-edit
+
+A bulk delete of template items is now **retry-safe**. If the request is sent
+twice — a flaky connection, a double tap — the second one cannot delete
+whatever happens to be sitting in those positions by then. Before, an
+intervening edit meant a retry deleted rows nobody selected.
+
+And **bulk edits to a saved checklist now save every item you selected**, not
+just the last one.
+
+## The Testing Checklist moved, and it is switched off
+
+**If `/testing` has disappeared, this is why.**
+
+The Testing Home — the page listing every screen in the application so you can
+walk them before going live — is now a **module of its own**, and the upgrade
+leaves it **off**.
+
+Turn it back on at **Settings → Modules → Testing Checklist**.
+
+**Nothing you recorded is lost.** Every mark and every note is still there and
+reappears the moment you switch the module on. While it is off, the navigation
+entry, the page and the data behind it all refuse, the same way every other
+switched-off module behaves.
+
+**It is not offered during first-time setup**, deliberately. It is a tool for
+checking an installation, not a decision a department needs to make while
+making every other one.
+
+> **[SCREENSHOT NEEDED — Settings → Modules with Testing Checklist off.**
+> _Demo data:_ the module list on a fresh install. This is the answer to "where
+> did /testing go", and it is the single most useful new capture in this
+> window.**]**
+
+### Testing now works in runs
+
+A **run** is one named pass over the application — "Pre-launch, build 1.4".
+
+- **Starting a new run archives the one before it.** The old marks stay
+  readable and exportable from the run picker instead of being cleared away, so
+  you can show what the second pass fixed.
+- **The first mark opens a run on its own**, so nobody has to remember to start
+  one.
+- **Marks record the build they were made against.** After a deployment, the
+  ones made on an earlier build are flagged, and **Needs re-test** filters to
+  exactly those.
+
+### Every mark is checked against what the app expected
+
+This is the part worth explaining to whoever signs off your testing.
+
+Each page in the checklist knows what *should* happen for the account doing the
+testing. When you mark it:
+
+- **A refusal that happened as predicted counts as a gate verified.** It is
+  positive evidence, not a hole in your coverage.
+- **A page that opened for an account that should have been refused is
+  flagged** right where you marked it, counted in the header, and listed in the
+  printed report as a **permissions defect**.
+
+That distinction is why this is more than a list of tickboxes: it separates
+"this screen is broken" from "this screen is visible to the wrong people".
+
+> **[SCREENSHOT NEEDED — Testing Home with a named run and the run picker
+> open.** _Demo data:_ a current run, one archived predecessor, a mix of pass /
+> fail / blocked marks, and at least one gate mismatch flagged.**]**
+
+### Getting it out of the app
+
+- **CSV** of every mark.
+- **Permission matrix** — page by tester, for the person who signs off.
+- **Printable report** at `/testing/report/print` — coverage, failures with
+  their notes, gate mismatches, and coverage by area. Save it as a PDF.
+- **Markdown**, unchanged.
+
+> **[SCREENSHOT NEEDED — the printable testing report.** _Demo data:_ the same
+> run, with at least one failure carrying a note and one gate mismatch, so both
+> sections of the report have content.**]**
+
+### Marking with the keyboard
+
+`j` and `k` move between boxes, `p` / `f` / `b` mark the focused one, and `n`
+jumps to the next page with no mark.
+
+## Facilities: a settings screen, and a much smaller audience
+
+### Your facility files were readable by the whole department
+
+**This is the one to tell your officers about.**
+
+A facility's Files section stores each upload in the shared **Documents**
+module and keeps a reference on the facility record. The facility *record* was
+properly restricted — but the *file* was not. Uploads landed outside any
+folder, and a file in no folder is treated as belonging to the whole
+organization.
+
+So anyone who could open the Documents module could list and download a
+facility's **insurance policies, leases, capital project files and inspection
+paperwork.**
+
+Fixed. Folders now carry the same three facility grants, a newly uploaded file
+is filed into its facility's own folder as soon as it is attached, and
+**existing facility folders are corrected for you on upgrade.** A documents
+administrator no longer sees facility files by virtue of that role alone.
+
+### Facilities is now a leadership and facility-manager workspace
+
+`facilities.view` has been **taken off the regular member position, and then
+off the shared operational officer positions.** If your line officers used to
+open Facilities, they will not be able to after this upgrade. Re-grant it on a
+position that is meant to carry it if that was your intent.
+
+### A settings screen for managers
+
+**`/facilities/settings`** is new, and needs `facilities.manage`. It holds the
+lookup configuration the module uses — the values you would otherwise have been
+editing in one-off dialogs.
+
+> **[SCREENSHOT NEEDED — `/facilities/settings`.** _Demo data:_ at least two
+> lookup categories populated, so the screen is not empty.**]**
+
+### Two officers, one new facility
+
+The first time anyone opened a facility's Files tab, the app built that
+facility's folder structure. Two officers doing that in the same moment — which
+happens the day a new station is added — could each build a **duplicate set**.
+That is serialized now.
+
+## Inventory: the words changed, and received stock finally works
+
+### "Checkout batch" is now "Item Distribution"
+
+The module had several names for the same operations. They are settled now, and
+the screens use these and no others:
+
+| Term               | Means                                                                       |
+| ------------------ | ---------------------------------------------------------------------------- |
+| **Assignment**     | Serialized gear held on an ongoing basis                                    |
+| **Temporary loan** | Serialized gear expected back by a date                                     |
+| **Issuance**       | Quantity-tracked stock given to a member                                    |
+| **Return**         | Physically receiving assigned or issued gear                                |
+| **Check-in**       | Closing a temporary loan when the gear is received                          |
+| **Transfer**       | Moving serialized gear between holders                                      |
+| **Distribution**   | One mixed batch that may create assignments, temporary loans and issuances |
+
+**Nothing about your data changed** — this is labels only. If you integrate
+with the API, the values on the wire are untouched.
+
+### Stock you received could not be issued
+
+**Receiving stock through the reorder workflow created a purchase record and
+never updated the item's on-hand count.** Newly received units could not be
+checked out or issued to anybody. Fixed — and if you have been wondering why
+your shelf count disagreed with your paperwork, this is likely why.
+
+### Damaged gear can no longer be returned to service
+
+Completing maintenance and recording the condition as **poor, damaged or out of
+service** no longer allows that item to go back into service. It stays out
+until a later inspection records a safe condition.
+
+### Also
+
+- **Two quartermasters reviewing the same return request** — one denying it,
+  one physically receiving it — could overwrite each other. Only one outcome is
+  recorded now.
+- **The return-review screen no longer carries a safety follow-up choice from
+  one request to the next.** A "send to write-off review" selected for a
+  damaged item was applying itself to the next request reviewed, even a
+  perfectly good one.
+- **The "Transfer is immediate" checkbox is gone.** Custody transfers have
+  always taken effect immediately; the checkbox implied a deferred option that
+  never existed.
+- **Custody-transfer audit entries now record who performed the transfer.**
+
+> **[SCREENSHOT — REPLACE the inventory item detail, return-request review and
+> transfer captures.** The vocabulary changed, and the transfer screen lost a
+> checkbox.**]**
+
+## Department Store: embroidery and engraving are different jobs
+
+They shared one "customization" field. So an **engraved brass plate asked you
+for a thread colour**, which means nothing, and there was no way to specify
+what an engraving should actually say separately from what an embroidery
+should.
+
+They are now separate, and the thread swatch appears only where thread is
+actually used.
+
+**Variant sizes also sort in garment order now.** `XL` no longer files between
+`L` and `XS`.
+
+> **[SCREENSHOT — REPLACE the store item detail and sizing request captures.**
+> Capture an embroidered item and an engraved one; the difference is the
+> point.**]**
+
+## Compliance: clearing a setting now actually clears it
+
+**Re-check your compliance percentages after upgrading.** They may move, and
+for some groups they may move a lot.
+
+On the compliance requirements configuration page, **clearing a field and
+saving left the old value in place.** You got a success toast; the save was
+silently dropped for that field. Email report recipients, the reminder-days
+list, a profile's description, its threshold overrides and its
+membership-type/requirement selections were all affected.
+
+The consequence is bigger than the bug sounds. **A compliance profile whose
+officer had unchecked every required training requirement — leaving it with
+none required — was being graded against every active org-wide requirement
+instead of none.** Org-wide compliance percentages and per-profile grading
+could be materially wrong for any group meant to have no required
+certifications. A profile whose only customization was a lenient or strict
+threshold override never had that override applied either. Both compute
+correctly now.
+
+Also: **the "Notify members when they become non-compliant" panel is now
+labelled as not yet active.** The setting saves, and nothing sends the
+notification yet. The page no longer implies otherwise.
+
+> **[SCREENSHOT — REPLACE the compliance requirements configuration capture.**
+> The non-compliance notification panel now carries a "not yet active"
+> label.**]**
+
+## Grants & fundraising
+
+- **A report covering a range that included today — the default — dropped
+  everything recorded later that same day.** Any report you ran and filed
+  understates its totals. Re-run anything you are relying on.
+- **The fundraising payment-method breakdown showed 0.0% for every method** as
+  soon as two or more methods had donations, with no error.
+- **View-only members were shown buttons that did not work.** New Campaign, Add
+  Donor, New Application, Add Item, Record Expenditure, Add Task and Add Note
+  all appeared, failed on click, and explained nothing. They are hidden now for
+  members without permission to use them.
+
+> **[SCREENSHOT — REPLACE the grants dashboard, campaigns, donors and
+> application detail captures**, and caption which grants the capturing account
+> holds — the action buttons are now permission-dependent.**]**
+
+## Medical supplies
+
+- **The Low Stock count on the summary only looked at the first 500 active
+  items.** A department with a larger medical catalog could have a low-stock
+  item missing from the headline number while it was listed correctly in the
+  table below. If your headline and your table have ever disagreed, this was
+  why.
+- **Editing a category or item left no audit trail.** Creating one was
+  recorded; editing it was not. Both are recorded now.
+
+## Meetings and minutes
+
+- **"Unlink" on a linked event never unlinked anything.** It showed *Event
+  unlinked* and the link came back on the next page load.
+- **Meeting records left no audit trail.** Minutes already recorded who changed
+  what. The meeting scheduling records — create, edit, delete, approve, and
+  their attendees and action items — recorded nothing. They do now.
+
+## Who could see what — the disclosure fixes
+
+Tell your officers about these. Each was live before this release:
+
+- **Facility files** — readable by the whole department through Documents.
+- **Notifications** — every member could read every other member's.
+- **Admin-hours progress** — an officer with compliance access could look up
+  any member's progress **in any department**, not just their own.
+- **The finance approvals queue** was scanning every organization's pending
+  steps.
+- **A membership applicant's file** could reach a signer who could not
+  otherwise view it.
+- **A member's audit history** could show unrelated actions performed on
+  somebody else.
+- **Six pages** could hold member-identifying data in the browser's short-lived
+  cache for up to 90 seconds — a training cohort's roster, a program's
+  enrollment-eligibility list, an external provider's member mappings, a
+  form-management page, a raw analytics export, and two training-officer
+  dashboards.
+
+And four **separation-of-duties** gaps: a storefront manager could settle their
+own order's payment, a finance approval token could approve its own requester's
+request, a **secretary could submit and approve their own meeting minutes**,
+and a skills-testing officer could void or return their own result.
+
+**One more, which is not a disclosure but belongs here:** the background
+security monitoring meant to detect session hijacking and unusual bulk
+downloads **was never running at all** — it looked for the signed-in user
+before the request had been authenticated, under a name nothing ever set. Both
+checks run now.
+
+## Also fixed
+
+- **Creating a new member was completely broken** — every attempt failed with a
+  server error.
+- **Two approvers acting at the same moment could double-charge a budget**, and
+  a budget's cap could be quietly bypassed.
+- **Two coordinators transferring the same prospect** — or one person
+  double-clicking — could create two accounts for one person.
+- **A voter with a stale browser session could be blocked from voting**, and a
+  recalculated quorum could read a stale attendee count.
+- **Deleting a grant opportunity could silently wipe out every application ever
+  linked to it.**
+- **The admin hours CSV export** now recovers from an expired session instead
+  of downloading a broken file.
+- **An already-sent department message could go out a second time**, and a send
+  that was reported as failed could be recorded as delivered.
+- **Editing a form, a form field, a medical supply, an item or a category**
+  could turn a cleared field into a confusing server error.
+- **The chief was missing from every notification meant to include them.**
+- **An EMS-only agency was being seeded a fire department's positions**, and an
+  EMT rank granted no permissions at all.
+
+## Upgrade notes for administrators (August 24–31)
+
+- **Forty-five migrations.** Back up, confirm `alembic heads` returns exactly
+  one, then `alembic upgrade head`. **The head is `f6a7b8c9d0e1`.**
+
+- **Five upgrade steps take permissions away from seeded positions**, and
+  nothing grants them back:
+  - `compliance.view` off the **Member** position.
+  - `notifications.view` off the **baseline member and junior rank** positions.
+  - `facilities.view` off **regular members**, then off the **shared
+    operational officer** positions.
+
+  Two new permissions are granted: `training.configure` to the positions that
+  configure training, and `users.view_consents` to the Historian and PIO.
+  Your department's own customized positions are left alone — only seeded ones
+  move.
+
+- **Every administrative member has had their operational rank cleared, and it
+  does not come back on downgrade.** An operational rank carries
+  chain-of-command permissions with it, so an administrative member holding one
+  held grants that role was never meant to have. Nothing recorded which ranks
+  were cleared — restoring them would also restore ranks an officer cleared
+  deliberately. If an administrative member genuinely holds an operational
+  rank, set it again after upgrading.
+
+- **Four migrations do not reverse**, and in three of them a downgrade that
+  *did* put the old values back would be the more destructive choice: the rank
+  clearing above; the recovery of membership standing out of membership
+  positions (nothing records which members it reclassified, so putting them all
+  back would flatten standings you set deliberately); and the crew seat name
+  canonicalization, where `EMT` and `EMS` really were one seat and splitting
+  them again would have to guess. The fourth — the administrative-seat flag on
+  stored seats — is a no-op downgrade because older readers accept the extra
+  field.
+
+- **Several migrations deliberately backfill nothing.** Member qualifications
+  start empty, the org chart starts empty, and testing runs start empty. An
+  empty result there is correct, not a failed upgrade.
+
+- **Turn the Testing Checklist back on** (Settings → Modules) if you were using
+  it.
+
+- **Re-check your compliance percentages.** The configuration fix can move
+  them, and for any group meant to have no required certifications it can move
+  them a lot.
+
+- **Re-run any grant or fundraising report you filed**, if its range ended
+  today. It understated its totals.
+
+- **Warn your quartermaster** that "checkout batch" is now Item Distribution,
+  and that stock received through the reorder workflow is finally issuable.
+
+- **Expect your next ballot to reach more people.** Life members and
+  probationary members were being left off operational ballots and now are not.

@@ -7,6 +7,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Governance: the department's organizational chart (2026-08-24)
+
+**Added**
+
+- **`/governance/org-chart`** — the department's chain of command, as an
+  outline or as a diagram. New tables `org_chart_nodes` and
+  `org_chart_node_holders`; `GET /org-chart`, `POST /org-chart/nodes`,
+  `PUT /org-chart/nodes/{id}`, `POST /org-chart/nodes/{id}/move`,
+  `DELETE /org-chart/nodes/{id}`.
+
+- **Reading is gated on authentication alone, deliberately.** The chart exists
+  so any member can work out who is in charge of an area without asking around;
+  a permission here would leave the general membership — the audience — outside
+  the one screen built for them. Editing is `orgchart.manage` OR
+  `settings.manage`, enforced server-side, and the page renders read-only
+  without either rather than offering controls that fail.
+
+- **A seat holds several people.** `org_chart_node_holders` is a separate
+  table for exactly this: a department with two deputy chiefs puts both in one
+  box instead of inventing two boxes that mean the same thing.
+
+- **A holder need not be a member.** `user_id` is nullable and `display_name`
+  carries a name with no account behind it, for the town attorney, a
+  mutual-aid liaison or a county fire marshal. Nothing else about that person
+  is stored and they gain no access.
+
+- **`position_id` assists a seat rather than defining it.** Linking a seat to a
+  position fills its holders from that position's assignees; **unlinking leaves
+  them in place.** An earlier draft made the position the seat's definition,
+  which meant a seat could not hold anyone the position did not — and a
+  department whose org chart differs from its permission structure, which is
+  most of them, could not draw its real chain of command.
+
+- **The chart starts empty and nothing is inferred.** A permission structure is
+  not an org chart. A guessed diagram is one nobody recognises, and correcting
+  it costs more than drawing it.
+
 ### Meetings and minutes fixes (2026-08-31)
 
 **Fixed**

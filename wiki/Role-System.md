@@ -123,6 +123,34 @@ Each module has view and manage permissions:
 - Fundraising (`fundraising.view`, `fundraising.manage`)
 - Audit (`audit.view`, `audit.export`)
 
+### Grant movements on seeded positions _(2026-08-24 → 08-31)_
+
+Five upgrade steps in this window **move grants on seeded (`is_system`)
+positions**. A department's own customized positions are left alone. Nothing
+revoked here is granted back automatically — re-grant it on a position that is
+meant to carry it.
+
+| Permission            | Movement                                                                             | Why                                                                                                                                                                                                                                                                                                                                              |
+| --------------------- | ------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `compliance.view`     | **Revoked** from the system **Member** position                                      | It reads as an innocuous view grant, but it is an accepted alternative on two officer-grade checks, including `GET /compliance-officer/contributed-hours`                                                                                                                                                                                        |
+| `notifications.view`  | **Revoked** from the baseline member and junior-rank positions                       | It gates three admin tabs on the Notifications screen, one of which is the Send Log — filtered on `organization_id` and nothing else                                                                                                                                                                                                             |
+| `facilities.view`     | **Revoked** from regular members, then from the shared operational officer positions | The facilities workspace is leadership and facility managers. Line officers who used it will lose it                                                                                                                                                                                                                                             |
+| `training.configure`  | **New**, granted to the positions that configure training                            | It gates the training module's org-level settings — chiefly the member visibility panel, which decides how much of an officer's written assessment the assessed member may read. That was behind `training.manage`, which also carries the power to edit anybody's training records; a Membership Coordinator needs the first without the second |
+| `users.view_consents` | **New**, granted to the Historian and PIO positions                                  | Accepted by the photo-use consent roster. Registry changes only reach organizations onboarded _after_ a deploy, so a migration covers the rows already stored                                                                                                                                                                                    |
+
+**Separately:** `User.rank` is **cleared on every administrative member**. An
+operational rank is a chain-of-command position and
+`_collect_user_permissions` unions its default permissions into a member's
+effective set, so an administrative member holding one held grants that role
+was never meant to have. This does not reverse — nothing records which ranks
+were cleared, so restoring them would also restore ranks an officer cleared
+deliberately.
+
+> **Changing a seeded grant needs a migration, not just a registry edit.**
+> Onboarding copies the registry's permission list into a stored `positions`
+> row, so an installation already past onboarding keeps whatever was copied on
+> the day it ran. See Pitfall #23 in `CLAUDE.md`.
+
 ## Using the System
 
 ### Accessing Admin Pages

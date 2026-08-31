@@ -1375,3 +1375,164 @@ on the shift roster; paper comes out of the watch-desk printer.]**
 **Production:** show **RFC 5737 documentation addresses** (`192.0.2.x`) on
 screen. Never a real department's printer address — that is an internal network
 detail and this video is public.
+
+---
+
+## SHORT 8AM: Who Do I Ask About This?
+
+**Length:** 40 seconds
+**Extracted From:** Script 4, "Who runs what"; Script 6, "Who do I ask?"
+**Added:** 2026-08-31
+
+**[0:00 — SCREEN: A new member holding a uniform problem, scrolling a member
+directory of two hundred names, giving up.]**
+
+> "Six weeks in, something goes wrong with your gear, and you have no idea who
+> to take it to. So you ask whoever you happen to see, and they don't know
+> either."
+
+**[0:12 — SCREEN: Governance → Organizational Chart. The outline expanding.]**
+
+> "Governance, Organizational Chart. Your department's chain of command, drawn
+> out — who runs training, who runs the trucks, who owns uniforms."
+
+**[0:22 — SCREEN: Tap a seat; the responsibility text and contact details.]**
+
+> "Tap a seat and you get what it's responsible for and how to reach whoever
+> holds it. And a seat can hold more than one person, so two deputy chiefs
+> share one box instead of you guessing which one to email."
+
+**[0:32 — CALLOUT: "No permission needed. That's the point."]**
+
+> "Every member can open it. If it's empty, nobody's drawn it yet — go nudge
+> your officers."
+
+**Production:** the demo chart needs a shared seat visible. Shoot the outline
+view; the diagram view is a separate short if you want one.
+
+---
+
+## SHORT 8AN: One Member, Two Facts
+
+**Length:** 40 seconds
+**Extracted From:** Script 6, "Your profile"; Script 12, per-item eligibility
+**Added:** 2026-08-31
+
+**[0:00 — SCREEN: An old profile showing a single "Membership type: Life".]**
+
+> "This used to be one field, and it was quietly costing people a vote."
+
+**[0:08 — SCREEN: The same profile now — Class: Operational. Status: Life.]**
+
+> "It's two now. **Class** is what kind of member you are — operational,
+> administrative, social. **Status** is where you are on the ladder —
+> probationary, regular, life, retired."
+
+**[0:20 — SCREEN: A ballot dispatch summary, before and after, with a longer
+recipient list.]**
+
+> "Here's why it matters. A bylaws question put to 'the operational members'
+> **never reached your life members, or anyone on probation** — because one
+> field could only say one of those two things, and their standing had
+> overwritten the one that got them the ballot."
+
+**[0:32 — CALLOUT: "Check your next ballot's recipient list."]**
+
+> "Operational now reads the class, so all of them count. Your next ballot goes
+> to more people, and that's the fix."
+
+**Production:** this short needs a genuine before/after. If the "before"
+capture is not available, narrate it over the after-state rather than
+reconstructing a fake old screen.
+
+---
+
+## SHORT 8AO: Where Did /testing Go?
+
+**Length:** 35 seconds
+**Extracted From:** Script 3, Chapter 10
+**Added:** 2026-08-31
+
+**[0:00 — SCREEN: Somebody typing `/testing`, getting a refusal, checking their
+permissions, finding nothing wrong.]**
+
+> "You were halfway through walking every screen before go-live. You upgrade.
+> The page is gone. And your permissions haven't changed, so you go looking in
+> entirely the wrong place."
+
+**[0:14 — SCREEN: Settings → Modules. Testing Checklist, switched off.]**
+
+> "It's a module now, and the upgrade leaves it off. Settings, Modules, Testing
+> Checklist."
+
+**[0:24 — SCREEN: `/testing` back, with every previous mark still in place.]**
+
+> "**Nothing you recorded is lost.** Every mark, every note — still there, back
+> the moment you switch it on."
+
+**[0:31 — CALLOUT: "Off by default. Not gone."]**
+
+---
+
+## SHORT 8AP: Build a Check Template in One List
+
+**Length:** 45 seconds
+**Extracted From:** Script 3 / Script 5, template builder
+**Added:** 2026-08-31
+
+**[0:00 — SCREEN: The old builder — sidebar, three-step progress strip,
+"Template readiness" card, mode toggle.]**
+
+> "Building a check template used to mean four places at once. A sidebar for
+> the details, a progress strip along the top, a readiness score, and a mode
+> toggle you had to get right before you could type."
+
+**[0:14 — SCREEN: The new canvas — one list, sections, locations and items in
+walking order.]**
+
+> "It's one list now, in the order the crew walks the rig. Name, answer type,
+> and the number it's graded against — all on the row."
+
+**[0:26 — SCREEN: Type an item, press Enter. Paste a list; the preview names
+every line.]**
+
+> "One box per location. Type and press Enter, or paste the whole list and
+> confirm a preview."
+
+**[0:36 — SCREEN: Publish greyed out; the blockers list; clicking one jumps to
+the row and puts the cursor in the empty field.]**
+
+> "And when you can't publish, it doesn't give you a score — it gives you the
+> list. Click one, and it takes you to the row, opens the location, and puts
+> your cursor in the field that's empty."
+
+**Production:** **the "before" state no longer exists in any build.** Either
+source it from an archived capture or drop the opening beat and start on the
+canvas — do not reconstruct the old screen.
+
+---
+
+## SHORT 8AQ: Thread Colour on a Brass Plate
+
+**Length:** 30 seconds
+**Extracted From:** Script 13, personalization
+**Added:** 2026-08-31
+
+**[0:00 — SCREEN: An engraved award plaque in the store, asking the member to
+choose a thread colour.]**
+
+> "This is an engraved brass plate. It's asking what colour thread you'd like."
+
+**[0:10 — SCREEN: The personalization panel, method selector: Embroidery /
+Engraving.]**
+
+> "Embroidery and engraving shared one field, so every personalized item asked
+> the same questions whether they made sense or not."
+
+**[0:20 — SCREEN: Embroidery selected — thread swatch present. Engraving
+selected — swatch gone.]**
+
+> "They're separate now. Thread colour only where there's actually thread."
+
+**Production:** two captures, one per method. A single capture cannot show the
+change.

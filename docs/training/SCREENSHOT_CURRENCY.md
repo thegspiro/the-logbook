@@ -1,5 +1,95 @@
 # Screenshot currency
 
+## Disposition for the 2026-08-24 → 08-31 window (recorded 2026-08-31)
+
+Reason and data-path context in
+[`../CHANGE_AUDIT_2026-08-24_TO_31.md`](../CHANGE_AUDIT_2026-08-24_TO_31.md#documentation-and-media-disposition).
+
+**This is a disposition, not a capture pass.** It records what the week's
+changes did to the existing library and what new markers were written into the
+guides. Nothing below has been shot yet. `status_report.py` now counts **528
+placeholders, 505 filled, 23 remaining** — the twenty-three are the **fourteen
+new markers** written this window plus the nine that were already outstanding.
+The library was 514 placeholders before it.
+
+### Two changes invalidate captures in bulk rather than one at a time
+
+**1. The equipment check template builder.** Every existing capture of that
+screen shows a **metadata sidebar, a three-step progress strip, a "Template
+readiness" card and a Quick Add / Bulk Add toggle — none of which exist**. This
+is the distinction that matters for scheduling the re-shoot: it is not a
+restyle, so a viewer working from an old capture cannot locate the control they
+are being told to press. Treat these as **wrong**, ahead of the merely dated.
+
+Two captures are needed, not one. The docked preview and the side-by-side row
+controls are a **laptop and tablet** layout; the phone keeps compact rows, the
+full-height item editor and a modal preview. A single laptop shot leaves the
+phone experience undocumented, and a single phone shot makes the rebuild look
+like it did not happen.
+
+**2. Anything showing a member's membership type.** The member profile header,
+the Members administration list, the member create/edit form and the elections
+eligibility panel now show **class and status as two separate fields**. A
+capture showing one "Membership type" dropdown is wrong.
+
+The elections eligibility roster is the subtle one: its per-item refusal reason
+changed shape too, from `membership type not eligible (requires: regular;
+member has: probationary)` to a reason naming class and status separately. A
+capture of that expanded red row is wrong even though nothing about the layout
+moved.
+
+### Replace
+
+| Image area | Why |
+| --- | --- |
+| Equipment check **template builder** — laptop | Rebuilt as one canvas; sidebar, progress strip, readiness card and mode toggle all gone |
+| Equipment check **template builder** — phone (390×844) | Compact rows, full-height item editor, blockers in a bottom bar |
+| Member **profile** header | Class and status are separate fields |
+| Member **create / edit** form | Same, plus the restored password / roles / welcome-email / address / emergency-contact fields |
+| **Members administration** list | Class and status columns |
+| Elections **eligibility roster**, expanded red row | The refusal reason names class and status separately |
+| **Compliance requirements configuration** | The non-compliance notification panel now carries a "not yet active" label |
+| **Grants** dashboard, campaigns, donors, application detail | Action buttons are hidden for view-only members — **caption the capturing account's grants**, or the shot is unreproducible |
+| **Inventory** item detail, return-request review, transfer | "Checkout batch" is Item Distribution; the "Transfer is immediate" checkbox is gone |
+| **Store** item detail and sizing request | Embroidery and engraving are separate; the thread swatch appears only on embroidery; sizes sort in garment order |
+| **Facility detail → Files** | Folder structure, and a much smaller audience |
+| Any **navigation** capture showing Facilities to a regular member | `facilities.view` was revoked from the regular-member and operational-officer positions |
+
+### New markers written into the guides
+
+| Marker | Guide | Note |
+| --- | --- | --- |
+| Org chart — **outline** view | 08, 19 | Four levels, a shared seat, a non-member holder |
+| Org chart — **diagram** view | 08, 19 | **Not interchangeable with the outline.** One capture cannot stand in for both |
+| Org chart — **node modal** | 08, 19 | Multi-holder seat + non-member holder + position link. The two things reviewers ask about |
+| **`/facilities/settings`** | 06, 19 | Two lookup categories populated so it is not empty |
+| Settings → **Modules**, Testing Checklist **off** | 08, 19 | The single most useful capture in this window — it is the answer to "where did /testing go" |
+| **Testing Home** with a named run and the run picker | 08, 19 | Current run, one archived predecessor, mixed marks, **one gate mismatch flagged** |
+| **Printable testing report** | 08, 19 | A failure carrying a note *and* a gate mismatch, so both report sections have content |
+
+### Do not capture
+
+| Area | Why |
+| --- | --- |
+| **Member qualifications entry** | The model, the service and the shift-eligibility reader all shipped. **There is no officer-facing screen.** The table is reachable only by direct write — there is nothing to photograph, and photographing a hand-built form would document something no department can reach |
+| Live equipment **check screen** as "new" | The lap is still built and unwired, unchanged by this window. The template builder rebuild is the *authoring* side; the check screen still renders the flat compartment list |
+
+### One capture that cannot be taken honestly, and what to do instead
+
+The **Modules screen with Testing Checklist off** is the exception worth
+planning around: it is only true on a **fresh install or an install that has
+just upgraded and not yet re-enabled the module**. The seeded demo environment
+turns modules on so the rest of the library can be captured.
+
+Do not toggle the module off, shoot, and toggle it back on in a live demo
+database — the marks recorded against it are what make the Testing Home
+captures possible, and a half-completed toggle leaves the environment in a
+state the next capture pass will not recognise. **Shoot it during a
+bootstrap**, before demo seeding runs, or on a throwaway instance.
+
+This is the same class of constraint as the label-printer status line recorded
+below: a shot that is trivial to fake and worth nothing faked.
+
 ## Captured 2026-08-25 (twenty-second) — label printers, and a marker that asked for two incompatible things
 
 `19-33-label-printers`. 505 of 514.

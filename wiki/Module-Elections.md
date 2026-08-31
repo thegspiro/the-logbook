@@ -45,16 +45,24 @@ The Elections module provides a complete election management system with ranked-
 
 ## Voter Eligibility
 
-Voter eligibility for each ballot item is determined by the member's **membership type** (`User.membership_type`), not by their assigned roles/positions. A member may hold multiple roles (e.g. EMT on the operational side and Quartermaster on the administrative side), but their membership type is a single classification that controls which ballot items they can vote on.
+Voter eligibility for each ballot item is determined by the member's **standing**, not by their assigned roles/positions. A member may hold multiple roles (e.g. EMT on the operational side and Quartermaster on the administrative side), but their standing is what controls which ballot items they can vote on.
 
-### Membership Type vs Roles
+### Standing is two fields, not one _(changed 2026-08-26)_
 
-| Concept             | Field                  | Purpose                                                  | Example                                    |
-| ------------------- | ---------------------- | -------------------------------------------------------- | ------------------------------------------ |
-| **Membership Type** | `User.membership_type` | Department classification; determines ballot eligibility | Active, Administrative, Life, Probationary |
-| **Role / Position** | `User.roles`           | Assigned positions; determines system permissions        | EMT, Quartermaster, Secretary, Chief       |
+Eligibility used to read `User.membership_type`, a single column that conflated two independent facts. It now reads the pair that replaced it:
 
-A member's role (e.g. EMT) does **not** make them eligible for "operational" ballot items. Their membership type (e.g. "active") does.
+| Concept             | Field                  | Purpose                                                                  | Example                                           |
+| ------------------- | ---------------------- | ------------------------------------------------------------------------ | ------------------------------------------------- |
+| **Member class**    | `User.member_class`    | What kind of member somebody is; decides `operational` eligibility       | operational, administrative, social               |
+| **Member status**   | `User.member_status`   | Where they sit on the membership ladder; decides `life` / `probationary` | prospective, probationary, regular, life, retired |
+| **Membership type** | `User.membership_type` | Legacy single classification, now **derived** from the pair              | active, administrative, life, probationary        |
+| **Role / Position** | `User.roles`           | Assigned positions; determines system permissions                        | EMT, Quartermaster, Secretary, Chief              |
+
+**Why this mattered here more than anywhere else.** `ElectionService` could only answer "is this member operational" as `membership_type == "active"`, because that was the one value that meant it. So **a bylaws question put to the operational members never reached a life member, or anyone still on probation** — they had earned a standing that overwrote the only value the check recognised. Operational eligibility now reads the member's **class**, and every operational standing counts. `life` and `probationary` remain **status** checks, because they name a status.
+
+`ElectionService` falls back to deriving the pair from `membership_type` when the new columns are unset, so a member whose record predates the change is still evaluated correctly.
+
+A member's role (e.g. EMT) does **not** make them eligible for "operational" ballot items. Their member class does.
 
 ### Eligible Voter Types
 
@@ -499,7 +507,7 @@ GET    /api/v1/elections/{id}/eligibility-roster    # Full member eligibility br
 
 ### Eligibility, Email Reliability & Meeting Integration
 
-- **Eligibility uses membership_type**: Voter eligibility now correctly uses `User.membership_type` instead of role slugs. A member's role (e.g., EMT) does not make them eligible for operational ballot items — their membership type (e.g., "active") does
+- **Eligibility uses standing, not role slugs**: Voter eligibility uses the member's standing rather than their roles. _(As of 2026-08-26 that standing is `member_class` / `member_status`; this entry described the earlier `membership_type` form.)_ A member's role (e.g., EMT) does not make them eligible for operational ballot items — their membership type (e.g., "active") does
 - **Email recipient tracking accuracy**: `email_recipients` now tracks only successfully sent ballots, not attempted sends
 - **Linked meeting filter**: Meeting dropdown shows only upcoming business meetings, not past ones
 - **Concurrent ballot sending**: Email dispatch uses concurrent sending with per-recipient error isolation
@@ -517,13 +525,14 @@ POST   /api/v1/elections/{id}/send-report-email      # Email election results re
 
 ### Edge Cases (2026-03-22)
 
-| Scenario                                                    | Behavior                                                |
-| ----------------------------------------------------------- | ------------------------------------------------------- |
-| Member with role `emt` but membership_type `administrative` | Not eligible for `operational` ballot items             |
-| Email fails for one recipient in batch                      | Loop continues; summary shows per-recipient status      |
-| Election linked to past meeting                             | Past meetings filtered out of dropdown                  |
-| No eligible voters after filtering                          | Descriptive error with reasons instead of false success |
-| Membership type not set on member                           | Falls back to "all" eligibility only                    |
+| Scenario                                                       | Behavior                                                                                                                            |
+| -------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| Member with role `emt` but member class `administrative`       | Not eligible for `operational` ballot items                                                                                         |
+| Email fails for one recipient in batch                         | Loop continues; summary shows per-recipient status                                                                                  |
+| Election linked to past meeting                                | Past meetings filtered out of dropdown                                                                                              |
+| No eligible voters after filtering                             | Descriptive error with reasons instead of false success                                                                             |
+| Neither class/status nor membership type set on member         | Falls back to "all" eligibility only                                                                                                |
+| Life member, or member still on probation _(fixed 2026-08-26)_ | **Eligible** for `operational` ballot items — their class is operational. Before the class/status split they were silently excluded |
 
 ---
 

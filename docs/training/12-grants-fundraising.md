@@ -590,3 +590,40 @@ Lt. Walsh files the final closeout report:
 ---
 
 **Previous:** [Finance](./11-finance.md) | **Next:** [Medical Screening](./13-medical-screening.md)
+
+---
+
+## Report and Permission Fixes _(2026-08-30)_
+
+### Re-run any report whose range ended today
+
+**A grant or fundraising report covering a date range that included today — the
+default — silently dropped every application or donation recorded later that
+same day.** Its totals were understated, with no warning. The report now
+includes the entire end date.
+
+**If you filed a report and are relying on its numbers, run it again.**
+
+### The payment-method breakdown showed 0.0% for everything
+
+On the fundraising report, the percentage breakdown by payment method showed
+**0.0% for every method** as soon as two or more methods had donations — with
+no error to suggest anything was wrong. Percentages calculate correctly now.
+
+### View-only members were shown buttons that did not work
+
+A member with view-only access to Grants & Fundraising could open the
+campaigns, donors and dashboard pages, or an individual application's detail
+page, and see **New Campaign, Add Donor, New Application, Add Item, Record
+Expenditure, Add Task and Add Note** — all of which failed on click and
+explained nothing. Those controls are hidden now for members without permission
+to use them.
+
+> **[SCREENSHOT — REPLACE the dashboard, campaigns, donors and application
+> detail captures**, and caption which grants the capturing account holds — the
+> action buttons are permission-dependent now.**]**
+
+### Deleting an opportunity no longer takes its applications with it
+
+**Deleting a grant opportunity could silently wipe out every application ever
+linked to it.** Fixed.

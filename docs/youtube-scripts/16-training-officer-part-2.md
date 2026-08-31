@@ -5,7 +5,7 @@
 **Target Audience:** Training Officers, Safety Officers, Compliance Officers
 **Roles Covered:** training_officer, safety_officer
 **Chapters:** 4 (each designed as a standalone clip)
-**Requires permission:** `training.manage`
+**Requires permission:** `training.manage` — **and, since 2026-08-25, `training.configure` for the training module's org-level settings.** The two are deliberately separate: `training.configure` gates the settings — chiefly the **member visibility panel**, which decides how much of an officer's written assessment the member being assessed may read — while `training.manage` carries the power to create and edit anybody's training records. A membership coordinator needs the first without the second. **Any take that says the visibility panel is behind "training management" is now wrong.**
 
 > **This is Part 2 of two.** [Part 1](./05-training-officer-guide.md) covers the
 > dashboard, building programs and requirements, and recording completions —

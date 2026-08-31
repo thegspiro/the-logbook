@@ -2566,6 +2566,60 @@ originally reported. No `SMSService`/`EmailService` allowlist or
 org-scoping gap involved — this is a reliability gap in an otherwise-correct
 idempotency mechanism, not an access-control defect.
 
+## QUAL-1 — `member_qualifications` Ships With No Officer-Facing Entry Screen (2026-08-26)
+
+`member_qualifications` (`app/models/qualification.py`), `QualificationService`
+and the shift-eligibility reader that consumes it all shipped on 2026-08-26.
+**No screen writes to the table.** There is no create/edit form on the member
+profile, none in Members administration, and no bulk import path — the only way
+a row gets there today is a direct database write or a hand-crafted API call.
+
+This is not the same shape as Pitfall #19 (a setting stored with no reader):
+the reader is real and load-bearing. Shift eligibility genuinely consults a
+qualification's `expires_on` **as of the shift date**, so once rows exist the
+feature works end to end. The gap is purely on the write side.
+
+The consequence is a documentation trap rather than a functional one, which is
+why it is recorded here: everything about the feature reads as complete —
+model, service, tests, eligibility integration, changelog entry — so the
+natural next step is to document, screenshot and narrate qualification entry as
+something an officer can do. **It is not.**
+`docs/CHANGE_AUDIT_2026-08-24_TO_31.md`, `docs/training/01-membership.md` and
+`docs/training/SCREENSHOT_CURRENCY.md` each carry an explicit do-not-capture
+note for this reason.
+
+Closing it is an ordinary piece of UI work — a panel on the member profile
+gated on `members.manage`, plus the CSV import path departments will ask for
+within a week of getting the panel. It was deliberately out of scope of the
+change that added the model.
+
+## MIG-1 — Nothing Prevents Two Open Branches From Claiming the Same `down_revision` (2026-08-31)
+
+The week to 2026-08-31 produced **seven forked Alembic heads** — the highest
+this project has recorded — every one caused by two branches that were open
+simultaneously choosing the same `down_revision`. They were resolved by seven
+merge revisions (`cff6124cbb3f`, `b272a5d5535c`, `4b71d80aa2c1`,
+`d5e6f7a8b9c0`, `5128feb36dd2`, `5b165386cc5f`, `a0af87c3904a`), the chain
+validates to a single head, and no department is affected.
+
+The limitation is in the tooling, not the schema.
+`backend/scripts/validate_migrations.py` detects multiple heads **after both
+branches have merged** — which is the correct time to fail CI, and far too late
+to be cheap. Each fork cost a CI cycle to surface and a follow-up PR to repair,
+and one of them (`a0af87c3904a`) had to clean up after two earlier ones.
+
+Nothing warns an author at the point the mistake is made. A branch opened
+against head `X` has no way to know another open branch has already claimed
+`X` as its parent, because the competing revision does not exist on `main`
+yet. Options, none chosen here: a pre-push hook that queries open PRs for
+`down_revision` collisions; a convention that a migration's `down_revision` is
+rewritten at merge time rather than authoring time; or accepting the merge
+revisions as a normal cost of parallel work and simply not treating them as
+defects — which is, in practice, what currently happens.
+
+Recorded because the _rate_ is new. Seven in seven days is a signal about how
+many branches are open at once, not about anybody's care with Alembic.
+
 ## Process
 
 The review loop (see [review-log.md](./review-log.md)) advances through one area

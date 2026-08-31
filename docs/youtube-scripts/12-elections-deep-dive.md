@@ -167,12 +167,32 @@ dropdown showing org ranks with type-ahead]**
 eligible-voter-types selector and the attendance toggle.]**
 
 > "Each item carries its own eligibility rules, and this is where The Logbook
-> is more precise than a paper ballot. **Eligible voter types** map to
-> membership types — not roles. 'Operational' means active members.
-> 'Regular' means active plus life members. 'Life' means life members only.
-> A member who holds the EMT role but is classified administrative is _not_
-> operational — classification controls the ballot, positions control system
+> is more precise than a paper ballot. **Eligible voter types** read a member's
+> **standing** — not their roles. And standing is two things, which matters
+> more than it sounds: a member's **class** — operational, administrative or
+> social — and their **status** on the membership ladder: probationary,
+> regular, life, retired."
+
+**[CALLOUT: "Class = what kind of member. Status = where on the ladder."]**
+
+> "'Operational' reads the **class**. So a life member who still rides is
+> operational. So is somebody still on probation. **All of them get the
+> operational ballot.** 'Life' and 'probationary' read the **status**, because
+> those name a status."
+
+> "A member who holds the EMT position but is classified administrative is
+> _not_ operational — class controls the ballot, positions control system
 > permissions."
+
+**[PRODUCTION NOTE — 2026-08-26. This beat was rewritten because the previous
+take was made true-and-then-false by the class/status split. It said
+"'Operational' means active members. 'Regular' means active plus life
+members." That described a single membership-type field that no longer exists,
+and it described a real defect as if it were the design: a bylaws question put
+to the operational members **never reached a life member or anyone on
+probation**, because their standing overwrote the one value the check
+recognised. Do not restore the old wording, and do not shorten this beat to
+"operational means active" in a delivery pass — that sentence is the bug.]**
 
 > "So your officer election item might be open to operational members, while
 > the bylaw amendment right below it is restricted to regular members. Same
@@ -267,8 +287,10 @@ the pending entry absent.]**
 > already voted. Search, filter, and expand any member to see exactly which
 > items they'll receive and why."
 
-**[SCREEN: Expand a red row — show per-item reasons like "membership type not
-eligible (requires: regular; member has: probationary)"]**
+**[SCREEN: Expand a red row — show per-item reasons naming the member's class
+and status, e.g. "requires status: regular; member has: probationary". Shoot
+this against a build dated 2026-08-26 or later: an older capture shows a single
+"membership type" reason, which is the wrong shape.]**
 
 > "This kills the number-one election headache: 'why can't I vote?' The
 > answer is right here, before it becomes a meeting-night argument."
@@ -286,7 +308,7 @@ eligible (requires: regular; member has: probationary)"]**
 
 **[SCREEN: Grant an override on an ineligible member; the row turns blue]**
 
-> "Overrides are the escape hatch. A member whose tier was set wrong, an
+> "Overrides are the escape hatch. A member whose standing was set wrong, an
 > excused absence your bylaws allow — grant an override with a reason, and
 > that member is eligible for everything, bypassing every layer. Overrides
 > are logged with who granted them and when, they're visible in the roster,

@@ -923,6 +923,99 @@ types collapsing to four]**
 > assignments. And a department with no metric preferences gets the built-in
 > defaults, not a blank administration page."
 
+---
+
+### THE AUGUST 31 UPGRADE: FORTY-FIVE MIGRATIONS, AND FIVE THAT TAKE PERMISSIONS AWAY (ADDED 2026-08-31)
+
+**[SCREEN: Terminal — backup, `alembic heads`, `alembic upgrade head`]**
+
+> "The week to August 31 carries **forty-five** migrations. Same drill: back
+> up, run `alembic heads`, confirm you get exactly one, then upgrade. The head
+> you should land on is `f6a7b8c9d0e1`."
+
+**[CALLOUT: "Head: f6a7b8c9d0e1 — confirm it, don't assume it"]**
+
+> "But the migration count is not the thing to brief your chief on. **Five of
+> them take permissions away from seeded positions**, and nothing grants them
+> back. This is the upgrade where somebody opens a screen on Monday morning and
+> it isn't there."
+
+**[SCREEN: The permissions table — the five movements, side by side]**
+
+> "`compliance.view` comes off the Member position — it reads like an innocuous
+> view grant, but it's an accepted alternative on two officer-grade checks.
+> `notifications.view` comes off the baseline member and junior ranks, because
+> one of the tabs it gates is the Send Log. And `facilities.view` comes off
+> regular members, and then off the shared operational officer positions — so
+> **if your line officers open the Facilities workspace today, they won't
+> tomorrow**."
+
+> "Two new ones are granted rather than taken: `training.configure`, which
+> splits the training visibility panel away from `training.manage` so a
+> membership coordinator can configure training without being able to edit
+> anybody's records; and `users.view_consents`, for the photo-use consent
+> roster."
+
+**[CALLOUT: "Only seeded positions move. Your own customized positions are
+untouched."]**
+
+**[SCREEN: A member record with an administrative class and a cleared rank]**
+
+> "Separately, and this one is not reversible: **every administrative member
+> has their operational rank cleared**. An operational rank isn't decoration —
+> the permission resolver unions its default grants into the member's effective
+> permissions, so an administrative member holding one held chain-of-command
+> access that role was never meant to have."
+
+> "Nothing recorded which ranks it cleared. So the downgrade leaves them
+> cleared, deliberately — putting them back would also restore ranks an officer
+> cleared on purpose. If one of your administrative members genuinely holds an
+> operational rank, set it again after you upgrade."
+
+**[SCREEN: Settings → Modules, with Testing Checklist switched off]**
+
+> "One more thing that will generate a support call. The Testing Checklist —
+> the page at `/testing` that lists every screen so you can walk them before go
+> live — is now a **module**, and this upgrade leaves it **off**. Nothing
+> recorded is lost; every mark is still in the database and comes back the
+> moment you switch it on. But the page is gone until you do, and nobody will
+> connect that to a module they didn't know existed."
+
+**[CALLOUT: "/testing missing? Settings → Modules → Testing Checklist."]**
+
+**[SCREEN: Four migration docstrings, each with a no-op downgrade]**
+
+> "**Four migrations don't reverse**, and in three of them a downgrade that
+> _did_ put the old values back would be the more destructive choice. The rank
+> clearing you just heard. The recovery of membership standing out of
+> membership positions — nothing records which members it reclassified, so
+> putting them all back would flatten standings your officers set deliberately.
+> And the crew-seat name canonicalization, where EMT and EMS really were one
+> seat and splitting them again would have to guess."
+
+> "The fourth is a no-op for the opposite reason: it adds a field to every
+> stored seat object, and older readers accept the extra field. There's nothing
+> to undo."
+
+**[SCREEN: Empty columns again — qualifications, org chart nodes, testing runs]**
+
+> "And the same rule as last time about empty columns. Member qualifications
+> start empty — nothing is inferred from rank, because a department that
+> recorded somebody as an EMT _rank_ said where they sit, not which card they
+> hold or when it expires. The org chart starts empty because you draw your
+> own. Testing runs start empty. **An empty result there is the upgrade
+> working.**"
+
+**[PRODUCTION NOTE — 2026-08-31. This is a new chapter, not a revision of the
+August 24 one, which stays as it is: it documents a different head and a
+different irreversible migration and is still correct for anyone upgrading
+across that window. The load-bearing beats here are the **five permission
+revocations** and the **Testing Checklist being off** — both are "a thing
+disappeared" support calls, which is squarely this script's audience. A
+delivery pass that compresses this chapter must not drop either.]**
+
+---
+
 **[CALLOUT: "Empty is a decision here, not a failure"]**
 
 > "Three things to do after the upgrade, none of which the upgrade does for
@@ -1357,6 +1450,14 @@ Two new sections are in the script body above:
   reverse"** (~2:30). Head `e7a41b6d09c2`; the check-type collapse is
   irreversible by design; seven migrations backfill nothing **on purpose**, and
   an empty column is a decision rather than a failure.
+- **Chapter 10, "The August 31 upgrade: forty-five migrations, and five that
+  take permissions away"** (~3:30). Head `f6a7b8c9d0e1`. The two beats that
+  cannot be cut are the **five permission revocations** — `compliance.view`,
+  `notifications.view`, and `facilities.view` twice — and the **Testing
+  Checklist shipping switched off**, because both present to the department as
+  "a screen disappeared" and neither is self-explanatory. Also: the
+  administrative-rank clearing, which does not reverse, and four no-op
+  downgrades with their reasons.
 
 **EDITOR:** ~4:30 total on top of everything above. Chapter 7's addition
 re-times Chapters 8 and 9 and the clip table; Chapter 9's re-times only its own

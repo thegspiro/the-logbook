@@ -272,9 +272,28 @@ that they become management records.
 
 By default, all active members in the organization are eligible to vote. Eligibility can be restricted by:
 
-- **Membership tier** — Only certain tiers can vote (e.g., Active and Life members, not Honorary)
+- **Membership standing** — Only certain standings can vote (e.g. operational members, or life members only)
 - **Meeting attendance** — Must be present at the associated meeting
 - **Specific voter list** — Manually defined list of eligible voter IDs
+
+> **Life members and probationary members were being left off operational
+> ballots** _(fixed 2026-08-26)_. A member's standing used to be one field, and
+> "is this member operational" could only be answered by looking for the single
+> value that meant _plain active member_. Anyone who had earned life
+> membership, and anyone still on probation, had that value overwritten by
+> their standing — so a bylaws question put to the operational members never
+> reached them, silently and with no warning on the dispatch summary.
+>
+> Standing is now two facts: a member's **class** (operational,
+> administrative, social) and their **status** (prospective, probationary,
+> regular, life, retired). An **operational** restriction reads the class, so
+> **every operational standing counts**. "Life members only" and "probationary
+> only" still read the status, because those name a status.
+>
+> **Check your next ballot's recipient list against your roster.** It will be
+> longer than it was, and that is the fix working. Members whose records
+> predate the change are evaluated correctly too — the pair is derived from the
+> old field when it has not been set.
 
 ### Voter Overrides
 
@@ -299,11 +318,14 @@ When a member is excluded from voting but should be allowed (e.g., absent member
 
 ### Edge Cases
 
-| Scenario                                     | Behavior                                           |
-| -------------------------------------------- | -------------------------------------------------- |
-| Member not on attendance list                | Ineligible unless override granted                 |
-| Override granted, then member's tier changes | Override persists regardless                       |
-| Bulk override for remote voters              | Use bulk override endpoint to add multiple members |
+| Scenario                                          | Behavior                                                                                 |
+| ------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| Member not on attendance list                     | Ineligible unless override granted                                                       |
+| Override granted, then member's standing changes  | Override persists regardless                                                             |
+| Bulk override for remote voters                   | Use bulk override endpoint to add multiple members                                       |
+| Life member, on an **operational** ballot item    | **Eligible** — their class is operational. Before 2026-08-26 they were silently excluded |
+| Probationary member, on an **operational** item   | **Eligible**, same reason                                                                |
+| Administrative member holding an operational role | **Not** eligible for operational items — the class decides, not the role                 |
 
 ---
 
