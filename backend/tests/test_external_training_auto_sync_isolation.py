@@ -35,6 +35,7 @@ class TestExternalTrainingAutoSyncIsolation:
         db = MagicMock()
         db.execute = AsyncMock(return_value=result)
         db.rollback = AsyncMock()
+        db.refresh = AsyncMock()
 
         async def _sync(provider, sync_type="incremental"):
             if provider.id == "p1":
@@ -58,6 +59,13 @@ class TestExternalTrainingAutoSyncIsolation:
         assert db.rollback.await_count == 1
         # HTTP client is always closed, success or failure.
         assert service.close.await_count == 2
+        # CRON-31-6 addendum (Codex-caught): the rollback above expires
+        # every persistent object pre-fetched into `providers`, not just
+        # p1 — p2 must be refreshed before sync_training_records reads its
+        # attributes, or it raises MissingGreenlet the same way an unrefreshed
+        # message/parent does elsewhere in this file (real-connection proof
+        # in test_message_delivery_service.py's commit-failure test).
+        db.refresh.assert_awaited_once_with(providers[1])
 
 
 if __name__ == "__main__":  # pragma: no cover

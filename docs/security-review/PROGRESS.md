@@ -22,8 +22,12 @@ Feature 31 (Scheduled tasks), pass 2 — PR
 from `docs/security-review/CRON2-31-scheduled-tasks.md` (pass 1) hold, no
 regressions. Read `scheduled.py` and `scheduled_tasks.py` (43 runners) end to
 end, plus the in-process scheduler in `main.py` (new territory, out of pass
-1's stated scope). Six new fixes, three new flagged findings. See log entry
-below and `docs/security-review/CRON-31-scheduled-tasks.md`.
+1's stated scope). Six new fixes, three new flagged findings. **Round 2
+(Codex-caught):** three of round 1's own fixes (CRON-31-1/4/5/6) still read a
+now-poisoned session's attributes inside their except blocks or counted a
+parent's work before its commit succeeded — corrected, empirically verified
+against a real connection. See log entry below and
+`docs/security-review/CRON-31-scheduled-tasks.md`.
 
 **Note on branch naming:** pass 1's PR (#1915) used the branch name
 `claude/security-review-scheduled-tasks` — reusing it for this pass would
@@ -117,6 +121,41 @@ CRON-31-scheduled-tasks.md`'s "Guard tests added" section.
 single head; the full backend suite — **9351 passed, 22 skipped, 0 failed**
 (all skips pre-existing Docker/optional-dependency/contract-suite skips).
 No frontend file touched.
+
+**Round 2 (Codex-caught, all verified against actual code — and, where the
+claim was about async session behavior, against a real connection — before
+fixing):**
+
+1. **CRON-31-1 addendum.** The except block still read
+   `getattr(message, "id", "?")` for its log line before calling
+   `db.rollback()`. Verified empirically against a real connection: once
+   `db.commit()` itself fails (not just `materialize_recipients()` raising),
+   _any_ attribute read on _any_ loaded object — not only an expired one —
+   raises `PendingRollbackError` until the rollback runs; `getattr`'s default
+   only catches `AttributeError`, so the read itself aborted the exception
+   handler, crashing the whole batch — exactly the bug this finding exists
+   to fix. Moved the `id` capture to before any further DB operation.
+2. **CRON-31-4/5 addendum, two gaps.** `total_created`/`series_extended`
+   were incremented before the commit that could still fail, so a failed
+   parent's counts survived its own rollback; moved both increments to after
+   the commit succeeds. The fix also never refreshed the parent processed
+   right after a failed one (the same `parents`-list session-poisoning gap
+   CRON-31-1 had) — added the same `needs_refresh` + `db.refresh(parent)`
+   pattern.
+3. **CRON-31-6 addendum.** Same `providers`-list gap as above — added
+   `needs_refresh` + `db.refresh(provider)`, and captured `provider.id`/
+   `provider.name` before the risky call instead of reading them in the
+   except block.
+
+New/strengthened guard tests: a real-`db_session` test forcing a genuine
+FK-violation `IntegrityError` on the commit itself (CRON-31-1), a mocked test
+forcing the failure specifically at `db.commit()` after what the pre-fix code
+would already have counted (CRON-31-4/5), and an added
+`db.refresh.assert_awaited_once_with(...)` assertion (CRON-31-6). Every one
+verified to fail against the pre-fix/pre-correction code and pass with the
+correction restored. `pytest tests/ -k "scheduled_task or rolling_recurrence
+or ..."` — **143 passed** (was 141); full suite — **9353 passed, 22 skipped,
+0 failed** (was 9351); `flake8`/`black --check`/`isort --check-only` clean.
 
 Feature 31 marked 🔄 (not ✅ yet — that happens on the closing PR after
 merge, per the rotation's own rule).

@@ -167,6 +167,29 @@ needs refreshing before its attributes are touched again. Added a `"failed"`
 key to the return payload (also updated the one existing test asserting the
 full dict).
 
+**Correction (round 2, Codex-caught):** the fix above still read
+`getattr(message, "id", "?")` inside the except block, for the log line.
+Codex correctly identified that when the failure is `db.commit()` itself
+failing (not `materialize_recipients()` raising a plain exception), the
+session enters a state requiring an explicit rollback — and empirically
+verified against a real connection (not assumed), _any_ attribute read on
+_any_ loaded object, not just an expired one, raises `PendingRollbackError`
+until that rollback runs. `getattr(message, "id", "?")`'s default only
+catches `AttributeError`; `PendingRollbackError` propagates through it
+unchanged, so the read itself raised, aborting this exception handler before
+it reached its own `db.rollback()` — the exact class of bug this finding
+exists to fix, reintroduced by the fix. Moved the `id` capture (via the same
+`getattr(..., "?")`, which also still needs to tolerate a test double lacking
+`.id`) to happen immediately after any needed `db.refresh()` but before any
+further DB operation in the try block, so it is captured while the session is
+still known-good. New guard test
+(`TestPublishScheduledMessagesCommitFailureIsSurvivable`, real `db_session`,
+forces a genuine FK-violation `IntegrityError` on the commit right after
+`materialize_recipients()`) reproduces this against a real connection;
+verified to fail with the fix reverted (`PendingRollbackError` propagates out
+of the whole function, taking the fixture's own teardown down with it) and
+pass with it restored.
+
 ### CRON-31-2 — MED — `run_action_item_reminders`'s minutes-action-item branch always raised `MissingGreenlet`, silently, every single time — ✅ FIXED
 
 **What:** `minutes_action_items` (`app/models/minute.py`'s `ActionItem`)
@@ -283,6 +306,35 @@ parent) and 1 rollback.
 (inside the same `try`), removed the trailing conditional commit, and added
 `await db.rollback()` in the except block.
 
+**Correction (round 2, Codex-caught, two distinct gaps in the fix above):**
+
+1. **Counters incremented before the commit that could still fail.**
+   `total_created`/`series_extended` were bumped _before_ `await db.commit()`,
+   not after — a parent whose commit itself failed (not just
+   `_generate_recurrence_dates`) still had its counts included in the
+   totals, alongside its own entry in `errors`: the task reported and logged
+   occurrences that were never persisted. Fixed by moving both increments to
+   after the commit succeeds.
+2. **The same `parents`-list session-poisoning gap CRON-31-1 had.** This
+   loop pre-fetches every parent into one list up front, exactly like
+   `run_publish_scheduled_messages`'s `due` list — so the same
+   `needs_refresh` + `db.refresh(parent)` pattern was required here too, and
+   was missing. Without it, the parent processed immediately after a failed
+   one raises `MissingGreenlet` reading its own now-expired attributes (or,
+   per CRON-31-1's correction above, `PendingRollbackError` if that read
+   happens before the rollback rather than after). Also moved the `parent.id`
+   capture (via `getattr(parent, "id", "?")`, same reasoning as CRON-31-1) to
+   before any further DB operation in the try, for the same reason.
+
+New guard test
+(`test_a_commit_failure_does_not_inflate_counts_or_crash_the_next_parent`,
+mocked `db.commit` raising specifically on the second of three parents, after
+what the pre-fix code would already have counted) catches both: verified to
+fail against the pre-fix code (`series_extended: 3` instead of `2`, one
+too many) and pass with the fix restored, including an explicit
+`db.refresh.assert_awaited_once_with(parents[2])` proving the third parent
+was refreshed before use.
+
 ### CRON-31-5 — LOW (latent) — `run_rolling_recurrence_extend` had no `Organization.active` filter at all — ✅ FIXED
 
 **What:** same shape as CRON2-31-11/CRON2-31-13 — this loop is keyed on
@@ -331,6 +383,17 @@ asserted 0 `db.rollback()` calls; after the fix, 1.
 
 **Fix:** added `await db.rollback()` in the except block, matching the
 pattern used everywhere else in this file.
+
+**Correction (round 2, Codex-caught):** same `providers`-list session-
+poisoning gap as CRON-31-1/CRON-31-4's addendum — this loop also pre-fetches
+every provider into one list up front, so the rollback above expires every
+provider still left in it, not just the one that failed. The fix added the
+rollback but not a `needs_refresh` + `db.refresh(provider)` step for the
+provider processed next, and read `provider.name`/`provider.id` for the log
+line without capturing them first. Fixed the same way as the other two
+findings. Strengthened the existing guard test with
+`db.refresh.assert_awaited_once_with(providers[1])`; verified to fail against
+the pre-fix code (refresh never called) and pass with the fix restored.
 
 ## Findings — flagged, not fixed
 
@@ -433,6 +496,12 @@ No model or migration touched this pass. n/a.
 - `tests/test_message_delivery_service.py::TestPublishScheduledMessages::test_one_message_failure_does_not_lose_the_rest_of_the_batch` —
   CRON-31-1. Verified to fail (unhandled `RuntimeError` propagating out of
   the function) with the fix reverted.
+- `tests/test_message_delivery_service.py::TestPublishScheduledMessagesCommitFailureIsSurvivable::test_a_commit_failure_on_one_message_does_not_abort_the_batch` —
+  CRON-31-1's round-2 correction. Real `db_session`, forces a genuine
+  FK-violation `IntegrityError` specifically on `db.commit()` (not a plain
+  Python exception) to exercise the exact `PendingRollbackError` mechanism
+  Codex identified. Verified to fail (`PendingRollbackError` propagates out
+  of the whole function) with the correction reverted.
 - `tests/test_action_item_reminders.py::TestMinutesActionItemReminder::test_due_minutes_action_item_sends_a_reminder` —
   CRON-31-2. Uses `db_session.expunge()` on both the parent and child rows
   so the test actually exercises the lazy-load path production hits (see
@@ -448,9 +517,15 @@ No model or migration touched this pass. n/a.
 - `tests/test_rolling_recurrence_extend_isolation.py::TestRollingRecurrenceExtendIsolation::test_one_parents_failure_does_not_lose_an_earlier_parents_commit` —
   CRON-31-4. Verified to fail (1 commit instead of 2, 0 rollbacks instead of
   1. with the fix reverted.
-- `tests/test_external_training_auto_sync_isolation.py::TestExternalTrainingAutoSyncIsolation::test_one_providers_failure_does_not_abort_the_run` —
-  CRON-31-6. Verified to fail (0 rollbacks instead of 1) with the fix
+- `tests/test_rolling_recurrence_extend_isolation.py::TestRollingRecurrenceExtendIsolation::test_a_commit_failure_does_not_inflate_counts_or_crash_the_next_parent` —
+  CRON-31-4/5's round-2 correction. Failure forced specifically at
+  `db.commit()`, after what the pre-fix code would already have counted.
+  Verified to fail (`series_extended: 3` instead of `2`) with the correction
   reverted.
+- `tests/test_external_training_auto_sync_isolation.py::TestExternalTrainingAutoSyncIsolation::test_one_providers_failure_does_not_abort_the_run` —
+  CRON-31-6, strengthened in round 2 with
+  `db.refresh.assert_awaited_once_with(providers[1])`. Verified to fail
+  (refresh never called) with the correction reverted.
 
 Every guard test above was independently verified to fail against the
 pre-fix code and pass against the post-fix code — not merely written and
@@ -464,6 +539,6 @@ assumed correct.
 | `black --check app/ tests/ alembic/`                                                                                                                                                                                        | ✅ clean (1 file auto-reformatted during the iteration, re-verified clean after)                                                                            |
 | `isort --check-only app/ tests/ alembic/`                                                                                                                                                                                   | ✅ clean                                                                                                                                                    |
 | `python3 scripts/validate_migrations.py --strict`                                                                                                                                                                           | ✅ 394 revisions, single head `f6a7b8c9d0e1`                                                                                                                |
-| `pytest tests/ -k "scheduled_task or rolling_recurrence or shift_scheduled or action_item_reminder or message_delivery or cron_org_loop or retention_service or inventory_notification or salesforce or external_training"` | ✅ 141 passed, 1 skipped (pre-existing, missing optional `py_vapid` dep), 0 failed                                                                          |
-| `pytest tests/` (full suite)                                                                                                                                                                                                | ✅ **9351 passed, 22 skipped, 0 failed** — all skips are the same pre-existing Docker/optional-dependency/contract-suite skips this codebase always reports |
+| `pytest tests/ -k "scheduled_task or rolling_recurrence or shift_scheduled or action_item_reminder or message_delivery or cron_org_loop or retention_service or inventory_notification or salesforce or external_training"` | ✅ 143 passed, 1 skipped (pre-existing, missing optional `py_vapid` dep), 0 failed (round 2: +2 tests)                                                      |
+| `pytest tests/` (full suite)                                                                                                                                                                                                | ✅ **9353 passed, 22 skipped, 0 failed** — all skips are the same pre-existing Docker/optional-dependency/contract-suite skips this codebase always reports |
 | `tsc --noEmit` / `eslint .`                                                                                                                                                                                                 | n/a — no frontend file changed this pass                                                                                                                    |

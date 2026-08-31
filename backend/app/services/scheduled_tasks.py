@@ -3681,15 +3681,31 @@ async def run_publish_scheduled_messages(db: AsyncSession) -> Dict[str, Any]:
     failed = 0
     needs_refresh = False
     for message in due:
+        # Fallback in case even the refresh/id-read below fails; never
+        # touches the ORM object, so it is always safe to log.
+        msg_id = "?"
         try:
             if needs_refresh:
-                # A prior message's rollback (below) expires every
-                # persistent object in the session, including this
-                # pre-fetched message — reading an attribute without
-                # refreshing first would trigger an implicit lazy load
-                # outside the async greenlet bridge and raise
-                # MissingGreenlet (same shape as CRON2-31-1/5/6).
+                # A prior message's rollback expires every persistent
+                # object in the session, including this pre-fetched
+                # message — reading an attribute without refreshing
+                # first would trigger an implicit lazy load outside the
+                # async greenlet bridge and raise MissingGreenlet (same
+                # shape as CRON2-31-1/5/6).
                 await db.refresh(message)
+            # Captured as a plain string, immediately after any needed
+            # refresh above but still inside the try: a failed
+            # commit/flush further down leaves the session needing an
+            # explicit rollback, and *any* attribute read on *any*
+            # loaded object — not just an expired one — raises
+            # PendingRollbackError until that rollback runs (verified
+            # against a real connection; this is stronger than mere
+            # attribute-expiry). Reading message.id from inside the
+            # except block below would therefore itself raise, aborting
+            # this exception handler before it reaches its own
+            # db.rollback() and crashing the whole batch — exactly what
+            # CRON-31-1 exists to prevent.
+            msg_id = getattr(message, "id", "?")
             # A message that expired before its send time came due goes live for
             # nobody and must not be escalated. The claim above already cleared
             # scheduled_at for the whole batch, so deactivation is all that is left
@@ -3719,7 +3735,7 @@ async def run_publish_scheduled_messages(db: AsyncSession) -> Dict[str, Any]:
             # would never be picked up again. Log and move on instead.
             logger.error(
                 "Failed to publish scheduled message {}: {}",
-                getattr(message, "id", "?"),
+                msg_id,
                 e,
             )
             failed += 1
@@ -4675,11 +4691,36 @@ async def run_rolling_recurrence_extend(db: AsyncSession) -> Dict[str, Any]:
     total_created = 0
     series_extended = 0
     errors = []
+    needs_refresh = False
 
     service = EventService(db)
 
     for parent in parents:
+        # Fallback in case even the refresh/id-read below fails; never
+        # touches the ORM object, so it is always safe to log.
+        parent_id = "?"
         try:
+            if needs_refresh:
+                # A prior parent's rollback (below) expires every
+                # persistent object in the session, including every
+                # other pre-fetched parent still left in this list —
+                # not just the one that failed. Reading an attribute
+                # without refreshing first would trigger an implicit
+                # lazy load outside the async greenlet bridge and raise
+                # MissingGreenlet (Codex-caught, same shape as
+                # run_publish_scheduled_messages' own needs_refresh
+                # handling).
+                await db.refresh(parent)
+            # Captured as a plain string before any further DB operation
+            # below: a failed commit/flush later in this block leaves the
+            # session needing an explicit rollback, and *any* attribute
+            # read on *any* loaded object — not just an expired one —
+            # raises PendingRollbackError until that rollback runs
+            # (verified against a real connection). Reading parent.id
+            # from inside the except block would therefore itself raise,
+            # aborting this exception handler before it reaches its own
+            # db.rollback() and crashing the whole batch.
+            parent_id = getattr(parent, "id", "?")
             # Find the latest occurrence in this series
             latest_result = await db.execute(
                 select(Event.start_datetime, Event.end_datetime)
@@ -4781,12 +4822,9 @@ async def run_rolling_recurrence_extend(db: AsyncSession) -> Dict[str, Any]:
                     **child_fields,
                 )
                 db.add(child)
-                total_created += 1
 
             # Update the parent's recurrence_end_date to the new horizon
             parent.recurrence_end_date = twelve_months
-
-            series_extended += 1
 
             # Commit per parent rather than deferring to a single trailing
             # commit — the same deferred-tail-commit shape CRON2-31-1 found
@@ -4796,14 +4834,24 @@ async def run_rolling_recurrence_extend(db: AsyncSession) -> Dict[str, Any]:
             # update on the next rollback.
             await db.commit()
 
+            # Counted only after the commit actually succeeds (Codex-caught):
+            # incrementing before commit() double-counted a parent whose
+            # flush then failed — the except below rolls back the insert and
+            # the recurrence_end_date update, but nothing restored these
+            # totals, so the task reported occurrences that were never
+            # persisted alongside a logged error for the same parent.
+            total_created += len(new_occurrences)
+            series_extended += 1
+
         except Exception as e:
-            logger.error(f"Failed to extend rolling series {parent.id}: {e}")
-            errors.append({"event_id": parent.id, "error": str(e)})
+            logger.error(f"Failed to extend rolling series {parent_id}: {e}")
+            errors.append({"event_id": parent_id, "error": str(e)})
             # Without this, a failed flush leaves the session in a failed
             # transaction state and every later parent's own `select()` call
             # raises PendingRollbackError.
             try:
                 await db.rollback()
+                needs_refresh = True
             except Exception:
                 pass
 
@@ -5044,7 +5092,28 @@ async def run_external_training_auto_sync(db: AsyncSession) -> dict:
 
     synced = 0
     failed = 0
+    needs_refresh = False
     for provider in providers:
+        if needs_refresh:
+            # A prior provider's rollback (below) expires every
+            # persistent object in the session, including every other
+            # pre-fetched provider still left in this list — not just
+            # the one that failed. Reading an attribute without
+            # refreshing first would trigger an implicit lazy load
+            # outside the async greenlet bridge and raise MissingGreenlet
+            # (Codex-caught; same shape as run_publish_scheduled_messages'
+            # and run_rolling_recurrence_extend's needs_refresh handling).
+            await db.refresh(provider)
+        # Captured as plain strings before sync_training_records runs: if
+        # it fails on a DB-level error, the session needs an explicit
+        # rollback and *any* attribute read on *any* loaded object — not
+        # just an expired one — raises PendingRollbackError until that
+        # rollback runs (verified against a real connection). Reading
+        # provider.name/provider.id in the except block below would
+        # therefore itself raise, aborting this exception handler before
+        # it reaches its own db.rollback() and crashing the whole batch.
+        provider_id = getattr(provider, "id", "?")
+        provider_name = getattr(provider, "name", "?")
         sync_service = ExternalTrainingSyncService(db)
         try:
             await sync_service.sync_training_records(provider, sync_type="incremental")
@@ -5052,8 +5121,8 @@ async def run_external_training_auto_sync(db: AsyncSession) -> dict:
         except Exception:
             logger.opt(exception=True).warning(
                 "Auto-sync failed for provider {} ({})",
-                provider.name,
-                provider.id,
+                provider_name,
+                provider_id,
             )
             failed += 1
             # sync_training_records commits its own outcome internally
@@ -5067,6 +5136,7 @@ async def run_external_training_auto_sync(db: AsyncSession) -> dict:
             # keyed on ExternalTrainingProvider, not a direct org select).
             try:
                 await db.rollback()
+                needs_refresh = True
             except Exception:
                 pass
         finally:

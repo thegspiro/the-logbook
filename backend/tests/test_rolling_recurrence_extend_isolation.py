@@ -66,6 +66,7 @@ class TestRollingRecurrenceExtendIsolation:
         db.add = MagicMock()
         db.commit = AsyncMock()
         db.rollback = AsyncMock()
+        db.refresh = AsyncMock()
 
         call_count = {"n": 0}
 
@@ -88,6 +89,71 @@ class TestRollingRecurrenceExtendIsolation:
         # occurrences on a shared, still-pending transaction.
         assert db.commit.await_count == 2
         assert db.rollback.await_count == 1
+
+    async def test_a_commit_failure_does_not_inflate_counts_or_crash_the_next_parent(
+        self,
+    ):
+        """CRON-31-4/5 addendum (Codex-caught): the test above only exercises
+        a failure in `_generate_recurrence_dates`, which happens *before*
+        `total_created`/`series_extended` are touched and before
+        `db.commit()` — it can't distinguish counting on success from
+        counting unconditionally. This forces the failure at db.commit()
+        itself, after the pre-fix code would already have incremented both
+        counters, and checks two things the pre-fix code got wrong: (1) a
+        failed parent's counts must not survive its own rollback, and
+        (2) the parent processed right after it must be refreshed before
+        its own attributes are read (a rollback expires every object
+        pre-fetched into `parents`, not just the one that failed — see
+        `test_a_commit_failure_on_one_message_does_not_abort_the_batch` in
+        test_message_delivery_service.py for the real-connection proof that
+        skipping this raises PendingRollbackError, not just MissingGreenlet,
+        if it happens before the object is even touched again)."""
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        latest_start = now + timedelta(days=1)
+        latest_end = latest_start + timedelta(hours=2)
+
+        parents = [_parent("A"), _parent("B"), _parent("C")]
+
+        parents_result = MagicMock()
+        parents_result.scalars.return_value.all.return_value = parents
+
+        def _latest_result():
+            r = MagicMock()
+            r.first.return_value = (latest_start, latest_end)
+            return r
+
+        db = MagicMock()
+        db.execute = AsyncMock(
+            side_effect=[
+                parents_result,
+                _latest_result(),
+                _latest_result(),
+                _latest_result(),
+            ]
+        )
+        db.add = MagicMock()
+        db.commit = AsyncMock(side_effect=[None, RuntimeError("boom on B"), None])
+        db.rollback = AsyncMock()
+        db.refresh = AsyncMock()
+
+        service = SimpleNamespace(
+            _generate_recurrence_dates=lambda **kwargs: [
+                (latest_start + timedelta(days=7), latest_end + timedelta(days=7))
+            ]
+        )
+        with patch("app.services.event_service.EventService", return_value=service):
+            result = await scheduled_tasks.run_rolling_recurrence_extend(db)
+
+        # A and C extended and counted; B's commit failed, so neither of its
+        # counts (1 series, 1 occurrence) may appear in the totals.
+        assert result["series_extended"] == 2
+        assert result["total_created"] == 2
+        assert result["errors"] == [{"event_id": "B", "error": "boom on B"}]
+        # B's own id is still resolvable in the error (captured before the
+        # failing commit, not read from a session already poisoned by it).
+        # C, fetched in the same original batch as B, must be refreshed
+        # before its own attributes are read again.
+        db.refresh.assert_awaited_once_with(parents[2])
 
 
 if __name__ == "__main__":  # pragma: no cover
