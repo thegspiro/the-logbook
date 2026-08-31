@@ -1,5 +1,79 @@
 # Screenshot currency
 
+## Reviewed 2026-08-25 — the primary button changed colour, and 80% of the library predates it
+
+Not a marker pass. A review of what merged in the week to 2026-08-25 turned up
+one change that invalidates most of the library at once, and the honest
+response was to re-shoot rather than to patch a list of screens.
+
+**`btn-primary` moved to `red-800` app-wide on 2026-08-23**, in `32627ceb`.
+`styles/index.css` says why, and says it was deliberately done everywhere at
+once: "a primary button that is one red on the store and another everywhere
+else reads as two different actions". **408 of the 510 committed images predate
+that commit**, so four in five pictured a red the application no longer draws.
+`ConfirmDialog.tsx` carried the same `red-600` -> `red-800` change separately,
+which put every confirmation dialog in the same position.
+
+Measured, not assumed. `18-01-member-storefront` re-captured against the same
+seed:
+
+| | dominant red | height |
+| --- | --- | --- |
+| committed 2026-08-16 | `(231, 0, 11)` | 1866px |
+| re-captured | `(159, 7, 18)` | 1770px |
+
+Colour and layout both. That shot was restored to its committed bytes at the
+time and re-taken properly as part of this pass.
+
+Underneath the palette, eight screens were also substantially rewritten in the
+same week and gain new content rather than only a new button colour: the email
+template editor (10 shots), the equipment-check builder and form with the new
+seal panel (5), the inventory admin hub (6), the settings shell and its label
+printers section (5), `SubmitTrainingPage`, `StorefrontPage` / `MyOrdersPage`,
+`ElectionsSettingsPage` and the label print page.
+
+Two shared-chrome changes worth separating from the noise: `Modal.tsx` gained
+the `modal-content` / `modal-footer` class hooks, and `modal-footer` makes
+dialog buttons full-width and 44px **on phones** — so mobile dialog shots
+change shape and desktop ones move by a few pixels of padding.
+`PageTransition.tsx` only touched document titles and changes nothing visible.
+
+### The seeder aborted first, and the guard was the reason
+
+The first seed of this pass failed the scheduling step outright:
+
+    Unable to create assignment. Member is no longer eligible for this shift
+
+`_validate_assignment` reports two sentences from one gate — "eligible for this
+shift" when a member may hold no seat at all, and "eligible for the X position"
+when they may hold some seat but not that one. `POSITION_NOT_ELIGIBLE` matched
+only the second. The first branch arrived on 2026-08-24 in `ea47d4ab`, closing
+an eligibility bypass on unscoped shift offers, and the matcher predated it.
+
+`is_expected_seat_refusal`'s own docstring already calls this class of refusal
+ordinary — it leaves a shift a seat short, which is what the Open Shifts tab
+exists to show — and warns that treating one as fatal "aborted the whole
+scheduling step", taking the close-out fixture, the batch report trainee, the
+shift reminder inbox and every downstream guide-03 capture with it. That is the
+fourth time this failure has arrived by a different door. The matcher now takes
+both sentences, and is asserted against both plus three refusals it must not
+swallow.
+
+Capturing on the failed seed would have produced exactly the outcome the
+discipline warns about: fresh images that are worse than the committed ones
+because data is missing rather than because code changed.
+
+### Status
+
+The re-capture itself is running as this is written; its results are recorded
+in the entry above this one once the pass has been verified. Verification is
+not optional on a change this size and is not a glance at a few images: the
+capture report carries a per-shot empty-state, ErrorBoundary, page-error and
+horizontal-overflow verdict, every one of the 511 committed images was
+snapshotted beforehand for a byte-and-dimension diff, and anything that shrank
+by more than 45% gets opened and checked against the API — that is the
+signature of a shot that lost its *data*, which no palette change can explain.
+
 ## Captured 2026-08-25 (twenty-second) — label printers, and a marker that asked for two incompatible things
 
 `19-33-label-printers`. 505 of 514.
