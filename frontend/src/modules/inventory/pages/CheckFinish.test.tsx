@@ -105,3 +105,20 @@ describe('CheckFinish', () => {
     expect(screen.getByTestId('finish-tally')).toHaveTextContent('2 stops need a look');
   });
 });
+
+describe('the note about the whole truck', () => {
+  it('can be written, and a restored one is visible before it is filed', async () => {
+    const user = userEvent.setup();
+    const onOverallNotesChange = vi.fn();
+    setup(ALL_GOOD, { overallNotes: 'Nearside step still loose', onOverallNotesChange });
+    const field = screen.getByTestId('sweep-overall-notes');
+    expect(field).toHaveValue('Nearside step still loose');
+    await user.type(field, '.');
+    expect(onOverallNotesChange).toHaveBeenCalled();
+  });
+
+  it('is absent where nothing can receive it', () => {
+    setup(ALL_GOOD);
+    expect(screen.queryByTestId('sweep-overall-notes')).not.toBeInTheDocument();
+  });
+});

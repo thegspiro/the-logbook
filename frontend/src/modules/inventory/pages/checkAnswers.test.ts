@@ -33,13 +33,15 @@ describe('countAnswer', () => {
     });
   });
 
-  it('treats short of par as a restock line, NOT a failure', () => {
-    // A truck three bandages light is not a truck that failed its check, and
-    // filing it as one teaches crews that failures are routine — which is how
-    // a real failure gets missed.
+  it('records short of par as a failure, because that is what gets stored', () => {
+    // The server rewrites any quantity under the required one to `fail`
+    // whatever is sent, and the accordion stores `fail` too. Storing `pass`
+    // here told a crew the truck had no fault immediately before the saved
+    // report gave it one. The restock/fault distinction is kept in what the
+    // sweep reports — see stopFailures and stopRestocks.
     expect(countAnswer(item({ expectedQuantity: 24 }), 23)).toEqual({
       quantityFound: 23,
-      status: 'pass',
+      status: 'fail',
       restockNeeded: true,
     });
   });

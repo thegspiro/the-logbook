@@ -50,6 +50,25 @@ describe('FaultDetail', () => {
     expect(patch.photoFiles.map((f) => f.name)).toEqual(['first.jpg', 'second.jpg']);
   });
 
+  it('caps the selection at what the upload endpoint accepts', async () => {
+    // Beyond three, the check is filed and its evidence is rejected out of the
+    // retry queue afterwards — the one failure the crew never sees.
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    const photo = (n: number) => new File(['x'], `p${n}.jpg`, { type: 'image/jpeg' });
+    render(<FaultDetail item={item} answer={{ photoFiles: [photo(1), photo(2)] }} onChange={onChange} />);
+
+    await user.upload(screen.getByTestId('function-photo-i1'), [photo(3), photo(4)]);
+
+    const patch = onChange.mock.calls[0]?.[0] as { photoFiles: File[] };
+    expect(patch.photoFiles.map((f) => f.name)).toEqual(['p1.jpg', 'p2.jpg', 'p3.jpg']);
+  });
+
+  it('asks for the formats the endpoint takes, not every image', () => {
+    render(<FaultDetail item={item} answer={undefined} onChange={vi.fn()} />);
+    expect(screen.getByTestId('function-photo-i1')).toHaveAttribute('accept', 'image/jpeg,image/png,image/webp');
+  });
+
   it('says how many are attached, so a crew knows the tap landed', () => {
     const photo = new File(['a'], 'a.jpg', { type: 'image/jpeg' });
     render(<FaultDetail item={item} answer={{ photoFiles: [photo, photo] }} onChange={vi.fn()} />);

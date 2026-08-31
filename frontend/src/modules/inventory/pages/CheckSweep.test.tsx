@@ -145,6 +145,18 @@ describe('a bag with pockets', () => {
     expect(screen.queryByRole('listitem', { name: /Pocket 3, Airway roll, done/ })).not.toBeInTheDocument();
   });
 
+  it('starts a different bag at its first pocket', async () => {
+    // Tapping another stop in the truck map leaves the pocket index behind
+    // otherwise: clamped for rendering but stale everywhere else, so a
+    // two-pocket bag reads "Pocket 6 of 2" and the primary leaves it without
+    // ever showing pockets 1 to 5.
+    const user = userEvent.setup();
+    const props = openBag({ pocketIndex: 2 });
+    await user.click(screen.getByRole('listitem', { name: /^Stop 1, Cab/ }));
+    expect(props.onPocketIndexChange).toHaveBeenCalledWith(0);
+    expect(props.onStopIndexChange).toHaveBeenCalledWith(0);
+  });
+
   it('lets a pocket be opened out of order — the numbering is a route, not a lock', async () => {
     const user = userEvent.setup();
     const props = openBag();
@@ -196,5 +208,17 @@ describe('a bag with pockets', () => {
   it('says where you are inside the bag as well as along the truck', () => {
     openBag({ pocketIndex: 1 });
     expect(screen.getByText('Pocket 2 of 3')).toBeVisible();
+  });
+});
+
+describe('what the save chip is reporting', () => {
+  it('says the walk is not saved when the draft write failed, over anything else', () => {
+    // The offline banner promises the walk is held on this phone. That is the
+    // exact claim a rejected IndexedDB write breaks, so it must not be what
+    // the crew is looking at.
+    setup({ saveState: 'failed' });
+    expect(screen.getByText('Not saved')).toBeVisible();
+    expect(screen.getByText(/closing it will lose what you have answered/)).toBeVisible();
+    expect(screen.queryByText(/held on this phone/)).not.toBeInTheDocument();
   });
 });

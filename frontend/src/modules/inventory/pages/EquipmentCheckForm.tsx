@@ -91,6 +91,7 @@ import { toLapStops } from './checkSweepAdapter';
 import { toAnswerMap, toItemResult } from './checkSweepBridge';
 import { countAnswer } from './checkAnswers';
 import { bulkClaim, stillAsked, type LapStop, type SealState as SweepSealState } from './checkLapModel';
+import type { SweepSaveState } from './CheckSweep';
 import type { CheckItemAnswer } from './CheckItemControls';
 import {
   deleteEquipmentCheckDraft,
@@ -783,6 +784,11 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
     };
   }, [shiftId, template.contentRevision, template.id, user]);
   const [draftReady, setDraftReady] = useState(false);
+  // What the last draft write actually did. The sweep's save chip reports this
+  // rather than connectivity: the draft goes to IndexedDB, which can be
+  // pending or reject while the network is perfectly fine, and "held on this
+  // phone" is exactly the claim that breaks when the write fails.
+  const [draftWriteState, setDraftWriteState] = useState<'idle' | 'saving' | 'saved' | 'failed'>('idle');
   const draftSaveWarningShown = useRef(false);
 
   const activeItemDefinitions = useMemo(
@@ -915,6 +921,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
     const durableResults = Object.fromEntries(
       Object.entries(results).map(([id, { photoFiles: _photoFiles, photoUrls: _photoUrls, ...result }]) => [id, result])
     );
+    setDraftWriteState('saving');
     void saveEquipmentCheckDraft(draftIdentity, {
       results: durableResults,
       overallNotes,
@@ -922,12 +929,15 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
       contentRevision: template.contentRevision,
       itemDefinitions: activeItemDefinitions,
       sealDefinitions: activeSealDefinitions,
-    }).catch(() => {
-      if (!draftSaveWarningShown.current) {
-        draftSaveWarningShown.current = true;
-        toast.error('Draft could not be saved on this device. You can continue, but keep this page open.');
-      }
-    });
+    })
+      .then(() => setDraftWriteState('saved'))
+      .catch(() => {
+        setDraftWriteState('failed');
+        if (!draftSaveWarningShown.current) {
+          draftSaveWarningShown.current = true;
+          toast.error('Draft could not be saved on this device. You can continue, but keep this page open.');
+        }
+      });
   }, [
     activeItemDefinitions,
     activeSealDefinitions,
@@ -1395,6 +1405,15 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
   // --------------------------------------------------------------------------
 
   const [sweepStopIndex, setSweepStopIndex] = useState(0);
+  /**
+   * What the save chip says, in the order that matters to a crew.
+   *
+   * A failed draft write outranks everything: "held on this phone" is the
+   * reassurance the offline state offers, and it is false once the write has
+   * rejected. Otherwise offline, then whatever the write is doing.
+   */
+  const sweepSaveState: SweepSaveState =
+    draftWriteState === 'failed' ? 'failed' : !isOnline ? 'offline' : draftWriteState === 'saving' ? 'saving' : 'saved';
   // Which pocket of the current stop is open. Lives beside the stop index
   // rather than inside the body, because the primary button's label and the
   // bulk claim both depend on it and both belong to the frame.
@@ -2538,6 +2557,119 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
   // Main Render
   // --------------------------------------------------------------------------
 
+  /**
+   * The lot-swap dialog, rendered by whichever experience is on screen.
+   *
+   * A variable rather than JSX inside one branch: the sweep's seal rule
+   * tells a crew to open a container and replace what is expiring, and
+   * without this that instruction has nowhere to go.
+   */
+  const swapModal = swapTarget ? (
+    <div className="modal-overlay z-[60] flex items-end justify-center p-0 sm:items-center sm:p-4">
+      <div className="bg-theme-surface border-theme-surface-border flex max-h-[85dvh] w-full flex-col overflow-hidden rounded-t-2xl border shadow-xl sm:max-w-md sm:rounded-2xl">
+        <div className="border-theme-surface-border flex items-center justify-between border-b px-4 py-3">
+          <div className="min-w-0">
+            <h3 className="text-theme-text-primary truncate text-sm font-semibold">Replace from ready stock</h3>
+            <p className="text-theme-text-muted truncate text-xs">{swapTarget.name}</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setSwapTarget(null)}
+            className="text-theme-text-muted hover:text-theme-text-primary p-1.5"
+            aria-label="Close"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+        <div className="pb-safe space-y-2 overflow-auto px-4 py-3 sm:pb-3">
+          {/*
+                  A replacement takes the expired box off the truck, and where it
+                  goes next differs by department: destroyed here, straight back
+                  to the supplying pharmacy there, pulled for somebody to
+                  exchange days later somewhere else. Only the crew standing at
+                  the compartment knows which happened, and for the third the
+                  changelog entry is the only record that a unit is off the
+                  apparatus and owed back — so the swap will not go without it.
+                */}
+          {isReplacement && (
+            <div className="border-theme-surface-border mb-1 rounded-lg border p-3">
+              <p className="text-theme-text-primary text-xs font-medium">
+                Taking off {replacedLot?.lotNumber || swapTarget.lotNumber || 'the expired unit'}
+                {(replacedLot?.expirationDate ?? swapTarget.expirationDate)
+                  ? ` · expired ${formatCalendarDate(replacedLot?.expirationDate ?? swapTarget.expirationDate, { year: 'numeric', month: 'numeric', day: 'numeric' })}`
+                  : ''}
+              </p>
+              <fieldset className="mt-2">
+                <legend className="text-theme-text-muted mb-2 text-xs">What happens to it?</legend>
+                <div className="flex flex-wrap gap-2">
+                  {(
+                    [
+                      [ExpiredStockDisposition.DISCARDED, 'Disposed of'],
+                      [ExpiredStockDisposition.RETURNED_FOR_EXCHANGE, 'Exchanged now'],
+                      [ExpiredStockDisposition.AWAITING_EXCHANGE, 'Exchange later'],
+                    ] as const
+                  ).map(([value, label]) => (
+                    <button
+                      key={value}
+                      type="button"
+                      aria-pressed={disposition === value}
+                      onClick={() => setDisposition(value)}
+                      className={`mobile-touch-target focus:ring-theme-focus-ring rounded-md border px-3 py-2 text-xs font-medium transition-colors focus:ring-2 focus:outline-hidden ${
+                        disposition === value
+                          ? 'border-red-500 bg-red-800 text-white'
+                          : 'border-theme-surface-border text-theme-text-primary hover:bg-theme-surface-hover'
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </fieldset>
+            </div>
+          )}
+          {swapLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="text-theme-text-muted h-6 w-6 animate-spin" />
+            </div>
+          ) : swapLots.length === 0 ? (
+            <p className="text-theme-text-muted py-8 text-center text-sm">
+              No ready stock on hand. Ask the supply officer to add stock for this item.
+            </p>
+          ) : (
+            swapLots.map((lot) => (
+              <div
+                key={lot.id}
+                className="border-theme-surface-border flex items-center justify-between gap-3 rounded-lg border p-3"
+              >
+                <div className="min-w-0">
+                  <p className="text-theme-text-primary truncate text-sm font-medium">{lot.lot_number || 'No lot #'}</p>
+                  <p className="text-theme-text-muted text-xs">
+                    {lot.expiration_date
+                      ? `Exp ${formatCalendarDate(lot.expiration_date, { year: 'numeric', month: 'numeric', day: 'numeric' })}`
+                      : 'No expiration'}{' '}
+                    · {lot.quantity} ready
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  disabled={swapping || (isReplacement && !disposition)}
+                  title={isReplacement && !disposition ? 'Say what happens to the expired unit first' : undefined}
+                  onClick={() => {
+                    void doSwap(lot);
+                  }}
+                  className="btn-primary btn-sm inline-flex shrink-0 items-center gap-1 disabled:opacity-50"
+                >
+                  {swapping ? <Loader2 className="h-4 w-4 animate-spin" /> : <PackageCheck className="h-4 w-4" />}
+                  {isReplacement ? 'Replace' : 'Swap in'}
+                </button>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+    </div>
+  ) : null;
+
   if (experience === 'sweep') {
     const goTo = (index: number) => {
       setSweepStopIndex(index);
@@ -2546,19 +2678,33 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
       setSweepPocketIndex(0);
       setSweepScreen('walk');
     };
-    // The walk is one screen at a time, so it takes the viewport rather than
-    // scrolling inside the page the accordion lives on.
+    // A submitted check must not be submitted twice. `submitting` goes false in
+    // handleSubmit's `finally` even when the POST succeeded and only the photo
+    // upload failed, so the button would re-enable on an accepted check and a
+    // second tap would file a duplicate under a fresh client_submission_id.
+    const alreadyFiled =
+      submissionOutcome?.status === 'evidence_pending' || submissionOutcome?.status === 'evidence_failed';
+
+    // Absolute inside the builder's phone frame, fixed for the real walk. The
+    // preview is a 268px device mock inside a page: positioned against the
+    // viewport it covers the builder it is meant to sit inside, and its close
+    // button reaches for an `onBack` the preview never passes.
     return (
-      <div className="fixed inset-0 z-40 flex flex-col">
+      <div className={`${previewMode ? 'absolute' : 'fixed'} inset-0 z-40 flex flex-col`}>
         {sweepScreen === 'finish' ? (
           <CheckFinish
             stops={sweepStops}
             answers={sweepAnswers}
             onJump={goTo}
-            onSubmit={() => void handleSubmit()}
+            // previewMode promises nothing is submitted, and both builder
+            // previews pass shiftId="preview" — a real POST from here files
+            // against a shift that does not exist.
+            onSubmit={previewMode ? () => undefined : () => void handleSubmit()}
             onBack={() => setSweepScreen('walk')}
             submittingAs={user?.first_name ? `${user.first_name} ${user.last_name ?? ''}`.trim() : 'you'}
-            submitting={submitting}
+            submitting={submitting || alreadyFiled}
+            overallNotes={overallNotes}
+            onOverallNotesChange={setOverallNotes}
           />
         ) : (
           <CheckSweep
@@ -2574,7 +2720,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
             onClose={() => onBack?.()}
             unitName={shiftContext?.apparatusName ?? ''}
             templateName={template.name}
-            saveState={isOnline ? 'saved' : 'offline'}
+            saveState={sweepSaveState}
             disabled={submitting}
             renderStop={(current, openPocketIndex) => (
               <CheckSweepStop
@@ -2584,6 +2730,17 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
                 onSeal={previewMode ? undefined : handleSweepSeal}
                 disabled={submitting}
                 openPocketIndex={openPocketIndex}
+                onSwap={
+                  previewMode
+                    ? undefined
+                    : (itemId) => {
+                        const raw = compartments.flatMap((c) => c.items).find((i) => i.id === itemId);
+                        if (raw) void openSwap(applyOverride(raw));
+                      }
+                }
+                // The organization's calendar day, so an expiry verdict does
+                // not move with the phone's timezone.
+                today={new Date(`${today}T00:00:00`)}
               />
             )}
           />
@@ -2827,114 +2984,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
       {/* Content */}
       {renderFlatView()}
 
-      {/* Lot swap modal — pick a ready replacement to put on the apparatus */}
-      {swapTarget && (
-        <div className="modal-overlay z-[60] flex items-end justify-center p-0 sm:items-center sm:p-4">
-          <div className="bg-theme-surface border-theme-surface-border flex max-h-[85dvh] w-full flex-col overflow-hidden rounded-t-2xl border shadow-xl sm:max-w-md sm:rounded-2xl">
-            <div className="border-theme-surface-border flex items-center justify-between border-b px-4 py-3">
-              <div className="min-w-0">
-                <h3 className="text-theme-text-primary truncate text-sm font-semibold">Replace from ready stock</h3>
-                <p className="text-theme-text-muted truncate text-xs">{swapTarget.name}</p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setSwapTarget(null)}
-                className="text-theme-text-muted hover:text-theme-text-primary p-1.5"
-                aria-label="Close"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-            <div className="pb-safe space-y-2 overflow-auto px-4 py-3 sm:pb-3">
-              {/*
-                A replacement takes the expired box off the truck, and where it
-                goes next differs by department: destroyed here, straight back
-                to the supplying pharmacy there, pulled for somebody to
-                exchange days later somewhere else. Only the crew standing at
-                the compartment knows which happened, and for the third the
-                changelog entry is the only record that a unit is off the
-                apparatus and owed back — so the swap will not go without it.
-              */}
-              {isReplacement && (
-                <div className="border-theme-surface-border mb-1 rounded-lg border p-3">
-                  <p className="text-theme-text-primary text-xs font-medium">
-                    Taking off {replacedLot?.lotNumber || swapTarget.lotNumber || 'the expired unit'}
-                    {(replacedLot?.expirationDate ?? swapTarget.expirationDate)
-                      ? ` · expired ${formatCalendarDate(replacedLot?.expirationDate ?? swapTarget.expirationDate, { year: 'numeric', month: 'numeric', day: 'numeric' })}`
-                      : ''}
-                  </p>
-                  <fieldset className="mt-2">
-                    <legend className="text-theme-text-muted mb-2 text-xs">What happens to it?</legend>
-                    <div className="flex flex-wrap gap-2">
-                      {(
-                        [
-                          [ExpiredStockDisposition.DISCARDED, 'Disposed of'],
-                          [ExpiredStockDisposition.RETURNED_FOR_EXCHANGE, 'Exchanged now'],
-                          [ExpiredStockDisposition.AWAITING_EXCHANGE, 'Exchange later'],
-                        ] as const
-                      ).map(([value, label]) => (
-                        <button
-                          key={value}
-                          type="button"
-                          aria-pressed={disposition === value}
-                          onClick={() => setDisposition(value)}
-                          className={`mobile-touch-target focus:ring-theme-focus-ring rounded-md border px-3 py-2 text-xs font-medium transition-colors focus:ring-2 focus:outline-hidden ${
-                            disposition === value
-                              ? 'border-red-500 bg-red-800 text-white'
-                              : 'border-theme-surface-border text-theme-text-primary hover:bg-theme-surface-hover'
-                          }`}
-                        >
-                          {label}
-                        </button>
-                      ))}
-                    </div>
-                  </fieldset>
-                </div>
-              )}
-              {swapLoading ? (
-                <div className="flex items-center justify-center py-8">
-                  <Loader2 className="text-theme-text-muted h-6 w-6 animate-spin" />
-                </div>
-              ) : swapLots.length === 0 ? (
-                <p className="text-theme-text-muted py-8 text-center text-sm">
-                  No ready stock on hand. Ask the supply officer to add stock for this item.
-                </p>
-              ) : (
-                swapLots.map((lot) => (
-                  <div
-                    key={lot.id}
-                    className="border-theme-surface-border flex items-center justify-between gap-3 rounded-lg border p-3"
-                  >
-                    <div className="min-w-0">
-                      <p className="text-theme-text-primary truncate text-sm font-medium">
-                        {lot.lot_number || 'No lot #'}
-                      </p>
-                      <p className="text-theme-text-muted text-xs">
-                        {lot.expiration_date
-                          ? `Exp ${formatCalendarDate(lot.expiration_date, { year: 'numeric', month: 'numeric', day: 'numeric' })}`
-                          : 'No expiration'}{' '}
-                        · {lot.quantity} ready
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      disabled={swapping || (isReplacement && !disposition)}
-                      title={isReplacement && !disposition ? 'Say what happens to the expired unit first' : undefined}
-                      onClick={() => {
-                        void doSwap(lot);
-                      }}
-                      className="btn-primary btn-sm inline-flex shrink-0 items-center gap-1 disabled:opacity-50"
-                    >
-                      {swapping ? <Loader2 className="h-4 w-4 animate-spin" /> : <PackageCheck className="h-4 w-4" />}
-                      {isReplacement ? 'Replace' : 'Swap in'}
-                    </button>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-        </div>
-      )}
+      {swapModal}
     </div>
   );
 };

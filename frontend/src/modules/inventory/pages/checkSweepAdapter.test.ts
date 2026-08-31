@@ -160,6 +160,13 @@ describe('toLapStops — items', () => {
     expect(stops[0]?.items[0]?.expirationDate).toBeUndefined();
   });
 
+  it('carries the catalog link, so a screen can offer the replacement', () => {
+    const stops = toLapStops({
+      compartments: [comp({ id: 'c', items: [item({ id: 'epi', inventoryItemId: 'inv-1' })] })],
+    });
+    expect(stops[0]?.items[0]?.inventoryItemId).toBe('inv-1');
+  });
+
   it('normalizes a legacy check type on the way through', () => {
     const stops = toLapStops({
       compartments: [comp({ id: 'c', items: [item({ id: 'siren', checkType: 'pass_fail' as never })] })],

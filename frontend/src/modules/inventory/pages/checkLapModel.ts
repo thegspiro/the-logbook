@@ -45,6 +45,16 @@ export interface SealState {
   cleared?: boolean | undefined;
   /** The tag currently on the seal. */
   tagNumber?: string | null | undefined;
+  /**
+   * Whether the last recorded check found this seal intact.
+   *
+   * Only a tag matching an *intact* prior seal is evidence the container
+   * stayed shut. A container with no tag on record has nothing to match
+   * against, and one whose last check recorded a broken seal was open since —
+   * in both cases the crew can still say the tag in their hand is intact, and
+   * it still clears nothing.
+   */
+  priorIntact?: boolean | undefined;
   /** Displayed, never parsed — "02:41" or a full timestamp, as recorded. */
   brokenAt?: string | null | undefined;
   /** Where it was broken — "run 26-1188". */
@@ -170,12 +180,47 @@ export function ownAnswerableItems(stop: LapStop): CheckItemSpec[] {
   });
 }
 
+/**
+ * The items one container's own tag can speak for.
+ *
+ * Traversal stops at a descendant carrying its own tag. A pouch sealed inside
+ * a bag is a separate claim about a separate container: the outer tag being
+ * intact says only that nobody reached past it, never that the inner pouch was
+ * not opened before it went in. Clearing its contents from out here would call
+ * the bag complete with the inner seal — and everything behind it — unanswered
+ * on the submitted record, which is also the opposite of what the sweep draws:
+ * an inner seal gets its own card and its own counts.
+ */
+export function itemsUnderOwnSeal(stop: LapStop): CheckItemSpec[] {
+  const nested = (stop.children ?? []).filter((child) => !child.isSealed).flatMap(itemsUnderOwnSeal);
+  return [...ownAnswerableItems(stop), ...nested];
+}
+
+/** Everything a separately-sealed descendant still asks, on its own terms. */
+function sealedDescendantAsks(stop: LapStop, today: Date): CheckItemSpec[] {
+  return (stop.children ?? []).flatMap((child) =>
+    child.isSealed
+      ? // Its own tag decides what it asks, whatever the outer one says. Its
+        // own sealed descendants are the same story one level further down.
+        [...askedWithin(child, today), ...sealedDescendantAsks(child, today)]
+      : sealedDescendantAsks(child, today)
+  );
+}
+
+/** What a container asks once its own tag has had its say. */
+function askedWithin(stop: LapStop, today: Date): CheckItemSpec[] {
+  return contentsAreSealed(stop, today)
+    ? [...ownAnswerableItems(stop), ...sealCannotClear(itemsUnderOwnSeal(stop))]
+    : answerableItems(stop);
+}
+
 export function isStopComplete(stop: LapStop, answers: AnswerMap, today: Date = new Date()): boolean {
   // An intact seal clears the counting inside, but not the expiry dates and
   // readings that move while the bag sits shut — so those still have to be
-  // answered before the stop is finished.
+  // answered before the stop is finished. And not anything behind a seal of
+  // its own: see `itemsUnderOwnSeal`.
   const items = contentsAreSealed(stop, today)
-    ? [...ownAnswerableItems(stop), ...sealCannotClear(answerableItems(stop))]
+    ? [...ownAnswerableItems(stop), ...sealCannotClear(itemsUnderOwnSeal(stop)), ...sealedDescendantAsks(stop, today)]
     : answerableItems(stop);
   if (items.length === 0) return true;
   return items.every((i) => {
@@ -185,9 +230,23 @@ export function isStopComplete(stop: LapStop, answers: AnswerMap, today: Date = 
 }
 
 export function stopFailures(stop: LapStop, answers: AnswerMap): CheckItemSpec[] {
-  return answerableItems(stop).filter(
-    (i) => answers[i.id]?.status === 'fail' || answers[i.id]?.status === 'out_of_service'
-  );
+  return answerableItems(stop).filter((item) => {
+    const answer = answers[item.id];
+    if (answer?.status !== 'fail' && answer?.status !== 'out_of_service') return false;
+    // A count short of par is *stored* as a failure — the server rewrites it
+    // to one anyway, and the truck's out-of-service verdict is built on that —
+    // but it is *reported* as a restock line, which is a different queue with
+    // a different urgency. `stopRestocks` derives the same rows from the
+    // number and the par, so counting them here too would show one shortfall
+    // twice: once as a fault the crew has to act on now, once as a supply
+    // order.
+    if (normalizeCheckType(item.checkType) === CheckType.COUNT) {
+      const found = answer.quantityFound;
+      const par = item.expectedQuantity;
+      if (typeof par === 'number' && found !== undefined && found < par) return false;
+    }
+    return true;
+  });
 }
 
 /**
@@ -322,7 +381,13 @@ export function unreadGauges(stop: LapStop, answers: AnswerMap): CheckItemSpec[]
  * sealed drug box is made of.
  */
 export function stillAsked(stop: LapStop, today: Date = new Date()): CheckItemSpec[] {
-  return contentsAreSealed(stop, today) ? sealCannotClear(answerableItems(stop)) : answerableItems(stop);
+  if (!contentsAreSealed(stop, today)) return answerableItems(stop);
+  // What this tag clears, plus everything behind a tag of its own, which it
+  // does not clear — mirroring what the stop body actually draws.
+  const sealedInside = (stop.children ?? []).flatMap(function inner(child): CheckItemSpec[] {
+    return child.isSealed ? stillAsked(child, today) : (child.children ?? []).flatMap(inner);
+  });
+  return [...sealCannotClear(itemsUnderOwnSeal(stop)), ...sealedInside];
 }
 
 /** `isStopComplete` for the sweep, over the set the sweep actually asks. */

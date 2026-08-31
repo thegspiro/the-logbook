@@ -168,6 +168,36 @@ describe('how far the word of a seal extends', () => {
     expect(isStopComplete(withCylinder, { tag: { status: 'pass' } })).toBe(false);
   });
 
+  it('does not speak for a pouch sealed inside it', () => {
+    // An outer tag being intact says only that nobody reached past it. It is
+    // no evidence the inner pouch was not opened before it went in — and the
+    // sweep draws that pouch with its own tag and its own counts, so clearing
+    // them from out here would call the bag complete with the inner seal and
+    // everything behind it unanswered on the submitted record.
+    const withPouch = bag({
+      seal: { status: 'intact', tagNumber: 'M2-40871' },
+      children: [
+        pocket('p1', 'Front pocket', [count('a1', 'i-gel size 4', 2)]),
+        {
+          id: 'pouch',
+          name: 'Narcotics pouch',
+          isSealed: true,
+          items: [fn('pouch-tag', 'Pouch tag matches'), count('morphine', 'Morphine', 2)],
+        },
+      ],
+    });
+
+    // The outer tag clears p1's count. It does not clear the pouch.
+    expect(isStopComplete(withPouch, { tag: { status: 'pass' } })).toBe(false);
+    expect(
+      isStopComplete(withPouch, {
+        tag: { status: 'pass' },
+        'pouch-tag': { status: 'pass' },
+        morphine: { status: 'pass' },
+      })
+    ).toBe(true);
+  });
+
   it('makes every pocket count again once it is broken', () => {
     const b = bag({ seal: { status: 'broken', tagNumber: 'M2-40871' } });
     expect(isStopComplete(b, { tag: { status: 'pass' } })).toBe(false);

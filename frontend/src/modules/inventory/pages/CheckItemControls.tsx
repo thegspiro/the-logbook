@@ -65,6 +65,14 @@ export interface CheckItemSpec {
 
   // Expiry
   expirationDate?: string | null | undefined;
+  /**
+   * The catalog item this position draws from, where it has one.
+   *
+   * Carried so a screen can offer the replacement the expiry rule asks for.
+   * Absent on a position that is not linked to inventory — there is no ready
+   * stock to swap in, and the crew restocks it another way.
+   */
+  inventoryItemId?: string | null | undefined;
   expirationWarningDays?: number | null | undefined;
 }
 
@@ -79,6 +87,9 @@ interface ControlProps {
 }
 
 const TOUCH = 'min-h-[48px]';
+
+/** What the upload endpoint accepts. Mirrors the accordion's own cap. */
+const MAX_FAULT_PHOTOS = 3;
 
 /**
  * What a fault needs said about it, wherever the fault was recorded.
@@ -114,14 +125,20 @@ export const FaultDetail: React.FC<ControlProps> = ({ item, answer, onChange, di
       Photo
       <input
         type="file"
-        accept="image/*"
+        // The upload endpoint takes JPEG, PNG or WebP, at most three. Accepting
+        // more here does not widen it — the check is filed and its evidence is
+        // rejected out of the retry queue afterwards, which is the one failure
+        // the crew never sees.
+        accept="image/jpeg,image/png,image/webp"
         multiple
         className="hidden"
         disabled={disabled}
         data-testid={`function-photo-${item.id}`}
         onChange={(e) => {
           const files = Array.from(e.target.files ?? []);
-          if (files.length > 0) onChange({ photoFiles: [...(answer?.photoFiles ?? []), ...files] });
+          if (files.length > 0) {
+            onChange({ photoFiles: [...(answer?.photoFiles ?? []), ...files].slice(0, MAX_FAULT_PHOTOS) });
+          }
         }}
       />
     </label>

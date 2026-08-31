@@ -36,11 +36,12 @@ describe('the count tally', () => {
     expect(onAnswer).toHaveBeenCalledWith('gauze', expect.objectContaining({ quantityFound: 9 }));
   });
 
-  it('keeps short of par a restock rather than a failure', async () => {
+  it('reports short of par as a restock, whatever it stores', async () => {
     const user = userEvent.setup();
     const onAnswer = setup([gauze]);
     await user.click(screen.getByRole('button', { name: 'One fewer 4×4 gauze' }));
-    expect(onAnswer).toHaveBeenCalledWith('gauze', { quantityFound: 9, status: 'pass', restockNeeded: true });
+    // Stored as a failure, because that is what the record holds either way.
+    expect(onAnswer).toHaveBeenCalledWith('gauze', { quantityFound: 9, status: 'fail', restockNeeded: true });
   });
 
   it('never counts below zero', async () => {
@@ -182,6 +183,80 @@ describe('a switch that fails', () => {
   });
 });
 
+describe('replacing what is expiring', () => {
+  const soon = new Date(Date.now() + 5 * 86_400_000).toISOString().slice(0, 10);
+  const epi = (over: Partial<CheckItemSpec> = {}): CheckItemSpec => ({
+    id: 'epi',
+    name: 'Epi 1:1000',
+    checkType: 'expiry',
+    expirationDate: soon,
+    inventoryItemId: 'inv-1',
+    ...over,
+  });
+
+  const mount = (item: CheckItemSpec) => {
+    const onSwap = vi.fn();
+    render(
+      <CheckSweepStop
+        stop={{ id: 's', name: 'Drug box', items: [item] }}
+        answers={{}}
+        onAnswer={vi.fn()}
+        onSwap={onSwap}
+      />
+    );
+    return onSwap;
+  };
+
+  it('offers the replacement the expiry rule is asking for', async () => {
+    // The seal rule tells the crew to open the container and replace what is
+    // expiring. Without this they have to leave the walk to act on it.
+    const user = userEvent.setup();
+    const onSwap = mount(epi());
+    await user.click(screen.getByRole('button', { name: 'Replace' }));
+    expect(onSwap).toHaveBeenCalledWith('epi');
+  });
+
+  it('offers nothing where there is no ready stock to draw from', () => {
+    mount(epi({ inventoryItemId: null }));
+    expect(screen.queryByRole('button', { name: 'Replace' })).not.toBeInTheDocument();
+  });
+
+  it('offers nothing on a date that is nowhere near', () => {
+    mount(epi({ expirationDate: FAR }));
+    expect(screen.queryByRole('button', { name: 'Replace' })).not.toBeInTheDocument();
+  });
+});
+
+describe('an item this truck does not carry', () => {
+  const gauze: CheckItemSpec = { id: 'gauze', name: 'Roller gauze', checkType: 'count', expectedQuantity: 10 };
+
+  it('can be answered without counting it to zero', async () => {
+    // Zero is a shortage, which the server turns into a failure; leaving it
+    // alone files the check incomplete. Neither is true of an item the
+    // apparatus simply does not carry.
+    const user = userEvent.setup();
+    const onAnswer = setup([gauze]);
+    await user.click(screen.getByRole('button', { name: 'Roller gauze is not on this truck' }));
+    expect(onAnswer).toHaveBeenCalledWith('gauze', { status: 'not_applicable' });
+  });
+
+  it('stops offering a count once it is marked not carried', () => {
+    setup([gauze], { gauze: { status: 'not_applicable' } });
+    expect(screen.getByRole('button', { name: 'One more Roller gauze' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Roller gauze is not on this truck' })).toHaveAttribute(
+      'aria-pressed',
+      'true'
+    );
+  });
+
+  it('can be taken back', async () => {
+    const user = userEvent.setup();
+    const onAnswer = setup([gauze], { gauze: { status: 'not_applicable' } });
+    await user.click(screen.getByRole('button', { name: 'Roller gauze is not on this truck' }));
+    expect(onAnswer).toHaveBeenCalledWith('gauze', { status: 'not_checked' });
+  });
+});
+
 describe('a bag with pockets', () => {
   const bag = (): LapStop => ({
     id: 'bag',
@@ -279,15 +354,33 @@ describe('a sealed container', () => {
     expect(screen.getByTestId('tally-row-gauze')).toBeVisible();
   });
 
-  it('records the crew reading the tag', async () => {
+  it('records the crew reading the tag, and clears on evidence', async () => {
     const user = userEvent.setup();
-    const onSeal = mount({ tagNumber: 'M2-40871' });
+    const onSeal = mount({ tagNumber: 'M2-40871', priorIntact: true });
     await user.click(screen.getByRole('button', { name: 'Tag matches' }));
-    expect(onSeal).toHaveBeenCalledWith('drugs', { status: 'intact' });
+    expect(onSeal).toHaveBeenCalledWith('drugs', { status: 'intact', cleared: true });
+  });
+
+  it('clears nothing when the last check found the seal broken', async () => {
+    // A matching number proves nothing about the time since a seal that was
+    // already open. The crew can still say the tag in their hand is intact.
+    const user = userEvent.setup();
+    const onSeal = mount({ tagNumber: 'M2-40871', priorIntact: false });
+    expect(screen.getByTestId('seal-no-evidence-drugs')).toHaveTextContent('found this seal broken');
+    await user.click(screen.getByRole('button', { name: 'Tag matches' }));
+    expect(onSeal).toHaveBeenCalledWith('drugs', { status: 'intact', cleared: false });
+  });
+
+  it('clears nothing when there is no tag on record to match against', async () => {
+    const user = userEvent.setup();
+    const onSeal = mount();
+    expect(screen.getByTestId('seal-no-evidence-drugs')).toHaveTextContent('Nothing on record to match against');
+    await user.click(screen.getByRole('button', { name: 'Tag matches' }));
+    expect(onSeal).toHaveBeenCalledWith('drugs', { status: 'intact', cleared: false });
   });
 
   it('takes the counting off the screen once the tag matches', () => {
-    mount({ status: 'intact', tagNumber: 'M2-40871' });
+    mount({ status: 'intact', tagNumber: 'M2-40871', priorIntact: true });
     expect(screen.queryByTestId('tally-row-morphine')).not.toBeInTheDocument();
     expect(screen.queryByTestId('tally-row-gauze')).not.toBeInTheDocument();
   });
@@ -295,7 +388,7 @@ describe('a sealed container', () => {
   it('still asks the dates and the readings, because a seal proves unchanged, not full', () => {
     // These move while the box sits shut, which is the entire reason they are
     // exempt from what an intact tag answers for.
-    mount({ status: 'intact', tagNumber: 'M2-40871' });
+    mount({ status: 'intact', tagNumber: 'M2-40871', priorIntact: true });
     expect(screen.getByTestId('gauge-o2')).toBeVisible();
     expect(screen.getByTestId('expiry-epi')).toBeVisible();
   });
@@ -315,7 +408,7 @@ describe('a sealed container', () => {
 
   it('lets the crew take back a reading they got wrong', async () => {
     const user = userEvent.setup();
-    const onSeal = mount({ status: 'intact', tagNumber: 'M2-40871' });
+    const onSeal = mount({ status: 'intact', tagNumber: 'M2-40871', priorIntact: true });
     await user.click(screen.getByRole('button', { name: /the tag is broken or wrong/ }));
     expect(onSeal).toHaveBeenCalledWith('drugs', { status: 'broken' });
   });
@@ -484,5 +577,25 @@ describe('a sealed bag with pockets', () => {
     render(<CheckSweepStop stop={broken} answers={{}} onAnswer={vi.fn()} onSeal={vi.fn()} />);
     expect(screen.getByTestId('tally-row-gauze')).toBeVisible();
     expect(screen.getByTestId('tally-row-igel')).toBeVisible();
+  });
+});
+
+describe('which day an expiry is judged against', () => {
+  it('uses the day it is given, not the device clock', () => {
+    // Expiry is the one verdict that comes from the department's record rather
+    // than the crew, so a phone an hour the wrong side of midnight must not
+    // move it. The accordion derives the day from the org timezone; the sweep
+    // is handed the same one.
+    const item: CheckItemSpec = { id: 'epi', name: 'Epi', checkType: 'expiry', expirationDate: '2026-06-10' };
+    const stop: LapStop = { id: 's', name: 'Drug box', items: [item] };
+
+    const { unmount } = render(
+      <CheckSweepStop stop={stop} answers={{}} onAnswer={vi.fn()} today={new Date(2026, 5, 20)} />
+    );
+    expect(screen.getByTestId('expiry-epi')).toHaveTextContent('10 days ago');
+    unmount();
+
+    render(<CheckSweepStop stop={stop} answers={{}} onAnswer={vi.fn()} today={new Date(2026, 5, 1)} />);
+    expect(screen.getByTestId('expiry-epi')).toHaveTextContent('9 days');
   });
 });
