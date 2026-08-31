@@ -8,8 +8,11 @@
 (169 L), `app/api/v1/endpoints/error_logs.py` (342 L), `app/services/security_monitoring.py`
 (1,073 L), `app/services/ip_security_service.py` (722 L), `app/core/audit.py`
 (939 L), the IP-enforcement path of `app/core/security_middleware.py`,
-`app/core/geoip.py`. Confirmed byte-identical to pass 1's merged state as of
-pass 2 (2026-08-31).
+`app/core/geoip.py`. Eight of the nine files are byte-identical to pass 1's
+merged state; `core/security_middleware.py` is not — PR #1917 (feature 33,
+core-infra, merged 2026-08-27, four days after pass 1's #1911) rewrote its
+`SecurityMonitoringMiddleware` substantially. See "Scope check first" under
+Pass 2 below for what changed and why it matters to this feature's findings.
 **Frontend:** not reviewed in pass 1 (backend only, per rotation scope);
 reviewed for the first time in pass 2 — `modules/ip-security/` (admin page,
 store, service, components), `pages/AuditLogPage.tsx`,
@@ -251,13 +254,42 @@ column change, no migration. `BlockedAccessAttempt` (SEC2-28-3) and
 
 ## Pass 2 (2026-08-31)
 
-**Scope check first:** diffed all nine files this doc covers
-(`security_monitoring.py` × endpoint + service, `ip_security.py` × endpoint +
-service, `audit_logs.py`, `error_logs.py`, `core/audit.py`,
-`core/security_middleware.py`, `core/geoip.py`) against the commit pass 1's
-PR (#1911) merged as — **byte-identical, zero lines changed**. So this pass
-re-verifies pass 1 against unchanged code and reviews the **frontend** for the
-first time (pass 1 was explicitly backend-only).
+**Scope check first — corrected mid-pass by Codex review.** This pass
+originally diffed all nine files this doc covers against the commit pass 1's
+PR (#1911) merged as and reported **byte-identical, zero lines changed**
+across all nine, treating the pass as pure re-verification plus a
+frontend-only review. That was wrong for one file: `core/security_middleware.py`
+changed by 159 additions / 117 deletions in PR #1917 (`5a1f859c`, feature 33 —
+"core-infra," merged 2026-08-27, four days after pass 1's #1911 merged),
+which this pass's diff was run against the wrong baseline and missed
+entirely — a real methodology failure, not a rounding error, since it made
+every downstream claim about `SecurityMonitoringMiddleware`'s wiring and
+severity stale.
+
+**What #1917 actually changed, and why it matters here:** before it,
+`SecurityMonitoringMiddleware` read `request.state.user` for the acting
+user's id — before `self.app()` had run, and under the wrong attribute name
+(the real one is `.authenticated_user`) — so `user_id` was _always_ `None`
+and session-hijack/data-exfiltration detection **never fired for any
+authenticated request**, silently, since the code path is wrapped in a bare
+`except Exception: pass`. #1917 fixed the timing (read
+`request.state.authenticated_user` _after_ `self.app()` returns), fixed
+`session_id` (previously read from an `X-Session-ID` header no regular
+client ever sends — only onboarding does — so hijack detection still never
+ran even after the timing fix; now derived by hashing the session's own
+auth token), added the `db.commit()` both detectors were missing (their
+`SecurityAlertRecord`/audit-log writes were silently rolled back on scope
+exit before this), and replaced `EXPORT_ENDPOINTS`'s four entries — none of
+which matched a real route — with fifteen that do. Net effect: as of this
+pass, session-hijack and data-exfiltration detection for authenticated
+requests are _actually wired_ for the first time, where pass 1 (reviewing
+`security_monitoring.py`'s detector logic in isolation, without reading the
+middleware that calls it) had no way to know they weren't. This pass
+re-verified pass 1's five findings against the current code (unaffected by
+#1917 — none touch `security_middleware.py`'s IP-enforcement path this doc
+also covers) and reviewed the **frontend** for the first time (pass 1 was
+explicitly backend-only), but SEC2-28-7 below had to be substantially
+rewritten once the corrected baseline was in hand.
 
 ### Re-verified — all still hold
 
@@ -302,58 +334,148 @@ path" claim, re-confirmed rather than re-derived), no banned
 `.toLocaleString()`-family date methods, `/security/`, `/audit-logs`, and
 `/ip-security/` are all present in `UNCACHEABLE_PREFIXES`
 (`frontend/src/utils/apiCache.ts`), and `/errors` is separately covered.
-`IPSecurityAdminPage`/`AuditLogPage`/`ErrorMonitoringPage` routes all carry a
-`ProtectedRoute` permission gate matching (or a reasonable superset of) their
-backend endpoints' `require_permission`.
+`AuditLogPage`/`ErrorMonitoringPage` routes carry a `ProtectedRoute`
+permission gate matching (or a reasonable superset of) their backend
+endpoints' `require_permission` — `IPSecurityAdminPage`'s did not
+(`security.manage` only, where the backend accepts `security.manage` OR
+`settings.manage`); this pass's original claim that all three matched was
+wrong and is fixed below, not just corrected in the writeup.
 
-### SEC2-28-7 — HIGH (operational-security value, not an access-control bypass) — `security_monitoring.py`'s entire endpoint surface has no admin UI — CRITICAL alerts fire and are never seen
+### SEC2-28-7 — HIGH (operational-security value, not an access-control bypass) — `security_monitoring.py`'s alert surface has no admin UI, and two of its four detectors have a deeper visibility gap than "missing UI" alone
 
-**What:** none of `security_monitoring.py`'s 13 endpoints (`/security/status`,
-`/alerts`, `/alerts/{id}/acknowledge`, `/alerts/{id}/resolve`,
-`/audit-log/integrity`, `/audit-log/status`, `/audit-log/checkpoint`,
-`/audit-log/rehash`, `/audit-log/entries`, `/audit-log/export`,
-`/intrusion-detection/status`, `/data-exfiltration/status`, `/manual-check`)
-has a working frontend consumer. `frontend/src/services/adminServices.ts`
-does define a `securityService` wrapper for five of them (`getStatus`,
-`getAlerts`, `acknowledgeAlert`, `verifyAuditIntegrity`,
-`triggerManualCheck`), but confirmed by exhaustive grep
-(`grep -rn "'/security/` and `grep -rn securityService` across
-`frontend/src`) that **nothing calls it** — it is exported from
-`adminServices.ts`, re-exported from `services/api.ts`, and consumed by
-zero components, pages, or stores. The other eight endpoints
-(`resolve`/`status`/`checkpoint`/`rehash`/`entries`/`export`/
-`intrusion-detection`/`data-exfiltration`) have no frontend wrapper method
-at all.
+**Corrected after Codex review** (five findings across this section were
+wrong or overstated in the original writeup — severity, visibility, and the
+underlying wiring status — all now verified directly against the code
+rather than assumed):
 
-This is real detective capability going unseen, not dead scaffolding for a
-feature that never fires: `security_monitor.detect_brute_force` is called
-from `endpoints/auth.py` (twice) on login, `detect_session_hijack` and
-`detect_data_exfiltration` are called from `core/security_middleware.py`
-per-request, and `report_privilege_escalation_attempt` is called from
-`users.py` (×3) and `roles.py` (×2) — including the exact SEC2-28-1 scenario
-this doc's pass 1 fixed. All five paths create `ThreatLevel.CRITICAL` rows in
-`security_alerts`. **An active brute-force run, a hijacked session, a bulk
-data-exfiltration pattern, or a privilege-escalation attempt all fire a
-CRITICAL alert that is durably recorded and then invisible to every admin in
-the product** — the only way to see one is a direct DB query or a raw API
-call, which is not a workflow any of this app's admin users have.
+**What actually fires, and at what severity** (`app/services/
+security_monitoring.py`): `detect_brute_force` (called from `endpoints/
+auth.py`, twice, on every login attempt) creates a `ThreatLevel.HIGH` alert
+once the per-IP/per-user hourly failed-attempt threshold is crossed — never
+CRITICAL. `detect_data_exfiltration` (called from
+`core/security_middleware.py`'s `SecurityMonitoringMiddleware`, post-response,
+on export endpoints) creates a `HIGH` alert for a single large transfer, and
+only escalates to `CRITICAL` if the destination is external
+(`AlertType.EXTERNAL_DATA_TRANSFER`) or the user's rolling 24h total exceeds
+5× the single-transfer threshold. `detect_session_hijack` and
+`report_privilege_escalation_attempt`/`detect_privilege_escalation` are the
+only two that are unconditionally `CRITICAL`. The original finding's "all
+five paths create `ThreatLevel.CRITICAL` rows" was wrong for three of the
+five; the audit-log calls in the hijack/exfiltration paths pass
+`severity="critical"`, but that is the _audit event's_ severity label, a
+separate field from the persisted alert's `threat_level` — the two were
+conflated.
 
-By contrast, this is not a "the whole feature has no UI" gap: `AuditLogPage`
-(`audit_logs.py`), `ErrorMonitoringPage` (`error_logs.py`), and
-`IPSecurityAdminPage` (`ip_security.py`) all exist, are routed, and are
-permission-gated correctly — three of this feature's four backend files have
-a working admin screen. `security_monitoring.py` specifically does not.
+**The authenticated-path detectors already have a visibility path — just
+not the one being asked for.** `detect_session_hijack`,
+`detect_data_exfiltration`, and `report_privilege_escalation_attempt` each
+call `log_audit_event(..., user_id=user_id, ...)`, and
+`AuditLogger.create_log_entry` (`core/audit.py`) resolves `organization_id`
+from that `user_id` when the caller doesn't pass one explicitly — so these
+three land as org-scoped rows in `audit_logs`, and `AuditLogPage`
+(`/audit-logs`, already routed and permission-gated) already lists and
+filters them. The real, narrower gap for these three: there is no
+dedicated _alert_-specific view with acknowledge/resolve actions — an admin
+combing the audit log can find "session_hijack_suspected," but nothing
+tells them a security alert exists and is unresolved, and
+`acknowledge_alert`/`resolve_alert` (which mutate the separate
+`SecurityAlertRecord` table, not `audit_logs`) have no UI caller at all.
+
+**Brute-force alerts are a distinct, more severe gap: no view can show
+them, not just the missing one.** `auth.py`'s login handler calls
+`detect_brute_force(db, ip=login_ip, user_id=None, success=False)` on
+_every_ failed login — unconditionally, since `authenticate_user` returns
+`user=None` on both an unknown username and a wrong password for a known
+account, so there is no branch where a failed-login brute-force alert ever
+carries a `user_id`. `_add_alert`'s `organization_id` is derived from
+`alert.user_id` (`None` → `organization_id=None`, "platform-level" per its
+own comment), and `get_recent_alerts`/`acknowledge_alert`/`resolve_alert`
+all filter `SecurityAlertRecord.organization_id == organization_id` — a
+brute-force alert with `organization_id=NULL` is excluded by every one of
+them, unconditionally. This is not something a straightforward "add the
+missing admin screen" fix closes: even a hypothetical
+`security_monitoring.py` frontend calling the existing endpoints as-is could
+never surface a single brute-force alert, because no org-scoped query
+matches a `NULL` row and there is no platform-level/cross-org alert view in
+this codebase at all. Closing it requires deciding who is authorized to see
+a platform-wide alert (every org's admin? a new platform-operator role?)
+without weakening the tenant isolation `get_recent_alerts` et al. currently
+enforce correctly for every other alert type — a genuine access-control
+design question, not a drive-by fix, and out of scope for this pass.
+
+**The data-exfiltration detector also has a real backend gap, not just a
+missing frontend:** `SecurityMonitoringMiddleware` only calls
+`detect_data_exfiltration` when the response carries a `Content-Length`
+header (`if content_length_value:`). `StreamingResponse` — Starlette's type
+for a response whose body isn't fully known upfront — never gets one
+computed automatically, and confirmed by reading three of
+`EXPORT_ENDPOINTS`' fifteen routes (`admin_hours.py::export_entries`,
+`equipment_check.py::export_csv`, `finance.py`'s CSV export) that each
+returns `StreamingResponse(iter([csv_content]), ...)` with no `Content-Length`
+in its `headers=`, even though the full CSV is already built in memory
+before the response is constructed — nothing here is a true incremental
+stream. So bulk exports through at least these three routes (likely more of
+the fifteen; not exhaustively audited every route this pass) create no
+data-exfiltration alert at any size, regardless of how much data leaves.
+This needs a backend fix (compute and attach `Content-Length` for these
+routes, or a size-tracking approach in the middleware that doesn't depend on
+that header) rather than a frontend one, and is flagged rather than fixed
+here since it touches the export handlers themselves, not just the
+monitoring/alerting layer this doc's scope covers.
+
+**What is still accurately "detected but has no UI at all":** the
+`security_monitoring.py` endpoint surface itself. None of its 13 endpoints
+(`/security/status`, `/alerts`, `/alerts/{id}/acknowledge`,
+`/alerts/{id}/resolve`, `/audit-log/integrity`, `/audit-log/status`,
+`/audit-log/checkpoint`, `/audit-log/rehash`, `/audit-log/entries`,
+`/audit-log/export`, `/intrusion-detection/status`,
+`/data-exfiltration/status`, `/manual-check`) has a working frontend
+consumer. `frontend/src/services/adminServices.ts` does define a
+`securityService` wrapper for five of them (`getStatus`, `getAlerts`,
+`acknowledgeAlert`, `verifyAuditIntegrity`, `triggerManualCheck`), but
+confirmed by exhaustive grep (`grep -rn "'/security/` and
+`grep -rn securityService` across `frontend/src`) that nothing calls it —
+exported from `adminServices.ts`, re-exported from `services/api.ts`,
+consumed by zero components, pages, or stores. The other eight endpoints
+have no frontend wrapper method at all. `AuditLogPage` (`audit_logs.py`),
+`ErrorMonitoringPage` (`error_logs.py`), and `IPSecurityAdminPage`
+(`ip_security.py`) all exist, are routed, and are permission-gated
+correctly — three of this feature's four backend files have a working admin
+screen; `security_monitoring.py` specifically does not.
 
 **Where:** `backend/app/api/v1/endpoints/security_monitoring.py` (all
-routes); no corresponding file under `frontend/src/modules/` or
-`frontend/src/pages/` reads any of them.
+routes, no frontend consumer); `backend/app/services/security_monitoring.py`
+(`_add_alert`, org-NULL platform alerts); `backend/app/core/
+security_middleware.py` (`Content-Length`-gated exfiltration check);
+`admin_hours.py`/`equipment_check.py`/`finance.py` (confirmed
+`StreamingResponse` exports with no `Content-Length`).
 
-**Why not fixed:** this needs a new admin screen — a route, a permission-gate
-decision (`audit.view` for the read endpoints matches the backend; `resolve`
-and the destructive `/audit-log/rehash`/`checkpoint` ops already require
-`audit.export` server-side), an alert list/detail view, and
-acknowledge/resolve actions — a genuine feature build, not a drive-by fix.
-Flagged; mirrored into `docs/KNOWN_LIMITATIONS.md`.
+**Why not fixed:** three distinct pieces of real work, none a drive-by fix —
+a new admin screen with an alert list/detail view and acknowledge/resolve
+actions (permission decision: `audit.view` for the read endpoints matches
+the backend; `resolve` and the destructive `/audit-log/rehash`/`checkpoint`
+ops already require `audit.export` server-side); a platform-level alert
+ownership/viewing design for `organization_id=NULL` rows that does not
+weaken existing tenant isolation; and a `Content-Length` fix across however
+many of the fifteen `EXPORT_ENDPOINTS` routes turn out to use
+`StreamingResponse` without one. All three flagged; mirrored into
+`docs/KNOWN_LIMITATIONS.md`.
+
+### Small fix applied this pass — IP-security route permission gate
+
+**What:** `frontend/src/modules/ip-security/routes.tsx`'s `/ip-security`
+route required only `security.manage`, while every administrative mutation
+in `ip_security.py` accepts `security.manage` **or** `settings.manage` (the
+file's own module docstring documents the OR) — a `settings.manage`-only
+admin was authorized by the API but refused the page. Caught by Codex
+review of this doc's original (incorrect) claim that the two already
+matched.
+**Fix:** `requiredPermission="security.manage"` →
+`requiredAnyPermission={['security.manage', 'settings.manage']}`, using
+`ProtectedRoute`'s existing any-of support (already used by
+`communications`/`scheduling` routes elsewhere in the codebase).
+`npx eslint`, `tsc --noEmit`, and `vitest run src/modules/ip-security
+src/routeIntegrity.test.ts` (39/39) all pass.
 
 ### Minor note — `/admin/errors` route permission doesn't match its API's
 
@@ -372,15 +494,22 @@ flagged observation rather than fixed inline.
 
 ## Guard tests added (Pass 2)
 
-None — pass 2 made no code change (all backend files confirmed
-byte-identical to pass 1's merged state; SEC2-28-7 is a missing-feature
-finding, not a regression with a reproducible code path to pin).
+None new. The one code change this pass (the `IPSecurityAdminPage` route
+permission fix) is covered by existing tests —
+`src/routeIntegrity.test.ts` and `vitest run src/modules/ip-security`
+(39/39, both re-run after the fix) — rather than a dedicated new test, since
+no other route file in the codebase carries a per-route permission-gate
+regression test either; SEC2-28-7's three corrected/expanded findings
+(brute-force platform-alert visibility, the exfiltration `Content-Length`
+gap, and the missing alert UI) are all flagged, not fixed, so none has a
+reproducible code path to pin.
 
 ## Completion gate (Pass 2)
 
-No code was changed this pass (findings-only: re-verification + one flagged
-UI gap). Ran the gate against the nine backend files and the frontend files
-reviewed this pass, rather than skipping it as "n/a," per CLAUDE.md.
+One small frontend fix this pass (the route permission gate); everything
+else is findings-only. Ran the gate against the nine backend files and the
+frontend files reviewed this pass, rather than skipping it as "n/a," per
+CLAUDE.md.
 
 | Check                                                                                                               | Result                     |
 | ------------------------------------------------------------------------------------------------------------------- | -------------------------- |
@@ -391,4 +520,4 @@ reviewed this pass, rather than skipping it as "n/a," per CLAUDE.md.
 | backend tests, scope (privilege_ceiling/audit_hash_chain/audit_org_scoping/security_middleware/ip_security_service) | 129/129 passed             |
 | `node scripts/tsc-native.mjs --noEmit` (full project, per the wrapper CLAUDE.md documents)                          | 0 errors                   |
 | `npx eslint` (ip-security module + AuditLogPage/ErrorMonitoringPage/adminServices.ts, the files reviewed this pass) | 0 errors/warnings          |
-| `vitest run src/modules/ip-security`                                                                                | 35/35 passed               |
+| `vitest run src/modules/ip-security src/routeIntegrity.test.ts`                                                     | 39/39 passed               |
