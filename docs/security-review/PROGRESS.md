@@ -16,10 +16,78 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-None. Feature 31 (Scheduled tasks) is fully closed — see log entry below.
-Next: feature 32, Locations & kiosk.
+Feature 32 (Locations & kiosk), pass 2 — PR (this PR), branch
+`claude/security-review-locations-kiosk-pass2`. Zero-diff re-verification:
+every backend file in this feature's surface (`locations.py`,
+`admin_hub.py`, `location_service.py`, `public/display.py`,
+`admin_hub_service.py`, `guest_check_in_service.py`, models, schemas) is
+byte-for-byte unchanged since pass 1's merge (PR #1916, `1b7be79a`), but was
+still read in full rather than skipped on the strength of that diff. All
+three pass-1 fixes (LOC2-32-1/2/3, including the Codex-caught session-
+refresh correction) re-verified intact; LOC-1/2/4 (pre-pass-1) re-confirmed;
+LOC-3 (dead endpoint) still open, unchanged. No new findings. See log entry
+below and `docs/security-review/LOC-32-locations-kiosk.md`.
+
+**Note on branch naming:** pass 1's PR (#1916) used the branch name
+`claude/security-review-locations-kiosk` — reusing it for this pass would
+violate CLAUDE.md Pitfall #24, so this pass uses `-pass2` appended, matching
+the convention the CRON-31 and ONB-30 pass-2 iterations used for the same
+collision.
 
 ---
+
+### 2026-08-31 — Feature 32 (Locations & kiosk), pass 2 — 0 fixed, 0 flagged (new); LOC-3 still open — PR pending
+
+No security-review PR was open (feature 31 fully merged via PR #2095, closed
+out via PR #2097 earlier this iteration), so the rotation continued to
+feature 32. Loaded `CHECKLIST.md`, `SEC-00-cross-cutting-baseline.md`, and
+`docs/security-review/LOC2-32-locations-kiosk.md` (pass 1, PR #1916, 3
+findings + LOC-3 flagged) before reading any code.
+
+A diff against pass 1's merge commit (`1b7be79a`) across every backend file
+in the feature's surface — `locations.py`, `admin_hub.py`,
+`location_service.py`, `public/display.py`, `admin_hub_service.py` (1,841
+L), `guest_check_in_service.py`, `models/location.py`, `models/admin_hub.py`,
+`schemas/location.py`, `schemas/admin_hub.py` — came back completely empty,
+and the four frontend pages pass 1 covered do not appear in a `git diff
+--stat` against `frontend/src` either. Per the rotation's "read the real
+code, don't trust a diff" rule, every one of those backend files was still
+read in full this pass (not diffed, not sampled) rather than skipped on the
+strength of that result.
+
+Re-verified all three pass-1 fixes hold with no regression: LOC2-32-1
+(`_events_attendance_rate`'s independent `Event.organization_id` filter),
+LOC2-32-2 (`_sanitize`'s shared `_permitted()` gate across both the primary
+and padding loops), and LOC2-32-3 (the bounded first-insert retry in
+`save_settings`, including the Codex-caught `db.refresh(ctx.user)` correction
+after rollback). Also re-confirmed LOC-1, LOC-2 and LOC-4 (pre-pass-1
+findings) all still hold, and that the guest check-in surface
+(`guest_check_in_service.py`, read in full — not explicitly re-verified
+line-by-line in pass 1's own writeup beyond the route level) has no
+injection or tenant-isolation surface: `organization_id` is always resolved
+server-side from the room's `display_code`, never taken from the client, and
+its one lookup query matches on `func.lower(...)` equality rather than
+`.like()`/`.ilike()`, so `LIKE_ESCAPE_CHAR` does not apply.
+
+**No new findings.** LOC-3 (`GET /locations/{id}/display`, the dead
+authenticated display endpoint) is unchanged from pass 1 — still zero
+frontend callers, still hardcodes `is_valid`/omits `timezone`, still fails
+to redact `event_description`. Not fixed, for the same reason as before
+(deleting or wiring up a dead endpoint is an API-surface decision). Already
+tracked in `docs/KNOWN_LIMITATIONS.md`; no change needed there.
+
+**Completion gate:** scoped backend tests
+(`-k "location or admin_hub or guest_check_in"`) — **290 passed, 1 skipped**
+(pre-existing, missing optional dependency); `validate_migrations.py
+--strict` — 394 revisions, single head. Linters/typecheck not re-run — no
+file in this feature's surface changed for them to check, and the full
+suite already ran clean on this exact `HEAD` as part of PR #2095's gate one
+iteration ago. Findings doc:
+`docs/security-review/LOC-32-locations-kiosk.md`. PR pending. Next: 33 core
+infrastructure, once this PR merges.
+
+Feature 32 marked 🔄 (not ✅ yet — that happens on the closing PR after
+merge, per the rotation's own rule).
 
 ### 2026-08-31 — Feature 31 (Scheduled tasks), pass 2 ✅ PR #2095 merged (`8254875a`)
 
@@ -3910,7 +3978,7 @@ each row's prior PR is recorded in the Log, not repeated here.
 | 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                              | ✅     |
 | 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (24 unauth bootstrap routes)                                                                                             | ✅     |
 | 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                   | ✅     |
-| 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                  | ⬜     |
+| 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                  | 🔄     |
 | 33  | Core infrastructure       | CORE   | `core/security_middleware.py`, `core/database.py`, `core/config.py`                                                                             | ⬜     |
 | 34  | Frontend shared           | FE     | `utils/apiCache.ts`, module axios instances, `ProtectedRoute`, global stores                                                                    | ⬜     |
 
