@@ -16,15 +16,15 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-Branch `claude/security-review-messaging-notifications-pass2-migration-fix`
-— feature 25 (Messaging & notifications), pass 2 follow-up. PR #2081 (the
+PR [#2083](https://github.com/thegspiro/the-logbook/pull/2083)
+(`claude/security-review-messaging-notifications-pass2-migration-fix`) —
+feature 25 (Messaging & notifications), pass 2 follow-up. PR #2081 (the
 main pass-2 review, MSG-9 fixed + MSG-10 flagged) merged to `main` before
 this iteration's independent finding could be added to it (see log entry
-below for the full sequence). This follow-up branch carries the finding
-that did not make it into #2081: **MSG-11** (HIGH — a migration
-existence-guard gap, fixed) and **MSG-12** (LOW-MED, flagged). Opening
-against current `main` (which already includes #2081). PR number to follow
-in a small update commit once opened.
+below for the full sequence). This follow-up PR carries the finding that
+did not make it into #2081: **MSG-11** (HIGH — a migration existence-guard
+gap, fixed) and **MSG-12** (LOW-MED, flagged). Opened against current
+`main` (which already includes #2081). Opened and subscribed; awaiting CI.
 
 ---
 
@@ -94,9 +94,10 @@ pre-existing warnings, none touched). Findings appended to
 `docs/security-review/MSG-25-messaging-notifications.md`'s existing Pass 2
 section (MSG-11/MSG-12, continuing #2081's own MSG-9/MSG-10). Rotation row
 25 stays `⏳` — a HIGH-severity, CI-breaking fix is still outstanding, so
-the feature is not fully closed until this follow-up PR merges too. Opening
-a new PR (never reusing #2081's now-merged branch name, per Pitfall #24) and
-subscribing. Next: 26 Forms, once this merges.
+the feature is not fully closed until this follow-up PR merges too. PR
+[#2083](https://github.com/thegspiro/the-logbook/pull/2083) opened (never
+reusing #2081's now-merged branch name, per Pitfall #24) and subscribed.
+Next: 26 Forms, once this merges.
 
 ### 2026-08-31 — Feature 25 (Messaging & notifications), pass 2 — 1 fixed (LOW-MED), 1 flagged (LOW-MED) — PR #2081 ✅ merged
 
