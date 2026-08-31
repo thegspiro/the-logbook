@@ -2602,6 +2602,73 @@ originally reported. No `SMSService`/`EmailService` allowlist or
 org-scoping gap involved — this is a reliability gap in an otherwise-correct
 idempotency mechanism, not an access-control defect.
 
+## QUAL-1 — Qualifications Can Only Be Written Through a Course, Never Entered Directly (2026-08-26)
+
+`member_qualifications` (`app/models/qualification.py`) **does** have a
+supported officer workflow, and an earlier version of this entry wrongly said
+it had none. The Course Library exposes a **Certifies** selector
+(`CourseLibraryPage.tsx`, `course.grants_qualification`), and recording a
+member's completion calls `_sync_qualifications`
+(`api/v1/endpoints/training.py:510`) to create or renew the row — from a single
+record, a bulk create, an update, and both historical-import paths.
+
+The real gap is narrower: **a qualification cannot be entered, edited or
+expired on its own.** There is no panel on the member profile, nothing in
+Members administration, and no direct import. Every row has to arrive as a
+side effect of a training record against a course whose `grants_qualification`
+was set before that record was filed.
+
+That has three practical consequences worth recording:
+
+- **A pre-existing card cannot be recorded without inventing a course
+  completion.** A member who has held a Paramedic licence for a decade needs a
+  training record dated to match, against a course that certifies it.
+- **An expiry is corrected on the record that produced it, not on the
+  qualification.** `PATCH /training/records/{record_id}` accepts
+  `expiration_date` and re-runs `_sync_qualifications`, which recomputes
+  `expires_on` from the supporting records — so a typo is fixed by editing that
+  record. **Filing a second completion for a correction would invent training
+  history that never happened**; a new record is for a genuine renewal. What is
+  missing is any way to reach `expires_on` without going through a training
+  record at all.
+- **Setting `grants_qualification` on a course is not retroactive.** Records
+  filed against that course _before_ the selector was set wrote no
+  qualification, and nothing backfills them.
+
+Because shift eligibility reads `expires_on` **as of the shift date**, a stale
+or missing row is not cosmetic — it decides who may be rostered.
+
+Closing this is an ordinary piece of UI work: a qualifications panel on the
+member profile gated on `members.manage`, plus a CSV import. It was
+deliberately out of scope of the change that added the model.
+
+## MIG-1 — Nothing Prevents Two Open Branches From Claiming the Same `down_revision` (2026-08-31)
+
+The week to 2026-08-31 produced **seven forked Alembic heads** — the highest
+this project has recorded — every one caused by two branches that were open
+simultaneously choosing the same `down_revision`. They were resolved by seven
+merge revisions (`cff6124cbb3f`, `b272a5d5535c`, `4b71d80aa2c1`,
+`d5e6f7a8b9c0`, `5128feb36dd2`, `5b165386cc5f`, `a0af87c3904a`), the chain
+validates to a single head, and no department is affected.
+
+The limitation is in the tooling, not the schema.
+`backend/scripts/validate_migrations.py` detects multiple heads **after both
+branches have merged** — which is the correct time to fail CI, and far too late
+to be cheap. Each fork cost a CI cycle to surface and a follow-up PR to repair,
+and one of them (`a0af87c3904a`) had to clean up after two earlier ones.
+
+Nothing warns an author at the point the mistake is made. A branch opened
+against head `X` has no way to know another open branch has already claimed
+`X` as its parent, because the competing revision does not exist on `main`
+yet. Options, none chosen here: a pre-push hook that queries open PRs for
+`down_revision` collisions; a convention that a migration's `down_revision` is
+rewritten at merge time rather than authoring time; or accepting the merge
+revisions as a normal cost of parallel work and simply not treating them as
+defects — which is, in practice, what currently happens.
+
+Recorded because the _rate_ is new. Seven in seven days is a signal about how
+many branches are open at once, not about anybody's care with Alembic.
+
 ## Process
 
 The review loop (see [review-log.md](./review-log.md)) advances through one area

@@ -8,7 +8,7 @@ relative to the repository root and are rewritten to `../../` here.
 
 | Month                             | Sections | Notes                                         |
 | --------------------------------- | -------: | --------------------------------------------- |
-| [August 2026](../../CHANGELOG.md) |      142 | **Current** — still in `CHANGELOG.md`         |
+| [August 2026](../../CHANGELOG.md) |      584 | **Current** — still in `CHANGELOG.md`         |
 | [July 2026](2026-07.md)           |       28 | ISO alignment, module security audit          |
 | [June 2026](2026-06.md)           |       12 | OAuth, MFA, platoon rotations                 |
 | [May 2026](2026-05.md)            |        4 | Client IP resolution, GeoIP                   |
