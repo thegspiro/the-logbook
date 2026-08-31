@@ -128,7 +128,11 @@ export function soonestExpiration(item: CheckTemplateItem): string | undefined {
  * pitfall #1 draws for form values, on a number rather than a string.
  */
 export function targetQuantity(item: CheckTemplateItem): number | null {
-  return item.requiredQuantity || item.expectedQuantity || null;
+  // `||` between the two operands and `??` after it. A third truthiness step
+  // would discard a target deliberately configured at 0 — `0 or 0` is 0 in
+  // Python, not None — and report a counted position as having no target.
+  const target = item.requiredQuantity || item.expectedQuantity;
+  return target ?? null;
 }
 
 /**

@@ -240,11 +240,16 @@ describe('replacing expiring stock from inside the sweep', () => {
   });
 
   it('submits the same target it counted against', async () => {
-    // The sweep evaluates the shortfall against the resolved par. If the
-    // payload carried the raw `requiredQuantity` instead, a zero-minimum
-    // position would file quantity 1 against required 0 with status fail —
-    // and the server only ever upgrades a status, so the contradiction sticks
-    // to the record.
+    // The sweep evaluates its shortfall against the resolved par, so the
+    // payload should not disagree with the screen that produced it.
+    //
+    // This asserts the request, not the record: `_snapshot_from_template`
+    // overwrites `required_quantity` with the template's raw column before
+    // `_compute_check_status` reads it, so today the persisted value is the
+    // unresolved one whatever the client sends. Sending the resolved target is
+    // still right — a request that contradicts its own screen is worse — but
+    // closing the gap end-to-end needs the server to snapshot
+    // `_target_quantity` rather than the raw column.
     const user = userEvent.setup();
     renderWithRouter(
       <EquipmentCheckForm

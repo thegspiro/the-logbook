@@ -120,9 +120,15 @@ describe('targetQuantity', () => {
     expect(targetQuantity(item({ requiredQuantity: 0, expectedQuantity: 4 }))).toBe(4);
   });
 
-  it('reports null when the position is not counted at all', () => {
+  it('reports null only when neither quantity is set', () => {
     expect(targetQuantity(item({}))).toBeNull();
-    expect(targetQuantity(item({ requiredQuantity: 0, expectedQuantity: 0 }))).toBeNull();
+  });
+
+  it('keeps a target configured at zero, which Python returns rather than None', () => {
+    // `0 or 0` is 0. Collapsing it to null would report a position somebody
+    // deliberately set to hold nothing as having no target at all, and the
+    // sweep would render a blank par for it.
+    expect(targetQuantity(item({ requiredQuantity: 0, expectedQuantity: 0 }))).toBe(0);
   });
 });
 
