@@ -153,7 +153,7 @@ const PocketChips: React.FC<{
 // Header
 // ============================================================================
 
-export type SweepSaveState = 'saved' | 'saving' | 'offline';
+export type SweepSaveState = 'saved' | 'saving' | 'offline' | 'failed';
 
 /**
  * Save state is on screen at all times, because the fear the brief names is
@@ -162,6 +162,16 @@ export type SweepSaveState = 'saved' | 'saving' | 'offline';
  * chip alone does not say it.
  */
 const SaveChip: React.FC<{ state: SweepSaveState }> = ({ state }) => {
+  // A rejected draft write outranks the rest. The offline chip's whole promise
+  // is that the walk is held on the phone, and that is what has just failed.
+  if (state === 'failed') {
+    return (
+      <span className="flex items-center gap-1 rounded-full bg-white/10 px-2 py-0.5 text-[12px] font-bold text-red-300">
+        <AlertTriangle className="h-3 w-3" aria-hidden="true" />
+        Not saved
+      </span>
+    );
+  }
   if (state === 'offline') {
     return (
       <span className="flex items-center gap-1 rounded-full bg-white/10 px-2 py-0.5 text-[12px] font-bold text-amber-300">
@@ -325,7 +335,20 @@ export const CheckSweep: React.FC<CheckSweepProps> = ({
           <SaveChip state={saveState} />
         </div>
 
-        <TruckMap stops={stops} answers={answers} current={index} onJump={onStopIndexChange} />
+        {/* Tapping a different stop here has to reset the pocket, or a second
+            bag opens at whatever pocket the last one was left on — clamped for
+            rendering but stale everywhere else, so a two-pocket bag can read
+            "Pocket 6 of 2" and the primary action leaves it without ever
+            showing pockets 1 to 5. */}
+        <TruckMap
+          stops={stops}
+          answers={answers}
+          current={index}
+          onJump={(next) => {
+            onPocketIndexChange?.(0);
+            onStopIndexChange(next);
+          }}
+        />
 
         <div className="flex items-center justify-between text-[12px] text-slate-300">
           <span>
@@ -339,6 +362,12 @@ export const CheckSweep: React.FC<CheckSweepProps> = ({
           </span>
         </div>
       </div>
+
+      {saveState === 'failed' && (
+        <p className="bg-theme-alert-danger-bg border-theme-alert-danger-border text-theme-alert-danger-title border-b px-3.5 py-2 text-[13px]">
+          This phone would not store the walk. Keep this page open — closing it will lose what you have answered.
+        </p>
+      )}
 
       {saveState === 'offline' && (
         <p className="bg-theme-alert-warning-bg border-theme-alert-warning-border text-theme-alert-warning-text border-b px-3.5 py-2 text-[13px]">

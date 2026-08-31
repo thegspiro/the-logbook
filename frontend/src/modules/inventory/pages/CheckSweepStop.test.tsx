@@ -486,3 +486,23 @@ describe('a sealed bag with pockets', () => {
     expect(screen.getByTestId('tally-row-igel')).toBeVisible();
   });
 });
+
+describe('which day an expiry is judged against', () => {
+  it('uses the day it is given, not the device clock', () => {
+    // Expiry is the one verdict that comes from the department's record rather
+    // than the crew, so a phone an hour the wrong side of midnight must not
+    // move it. The accordion derives the day from the org timezone; the sweep
+    // is handed the same one.
+    const item: CheckItemSpec = { id: 'epi', name: 'Epi', checkType: 'expiry', expirationDate: '2026-06-10' };
+    const stop: LapStop = { id: 's', name: 'Drug box', items: [item] };
+
+    const { unmount } = render(
+      <CheckSweepStop stop={stop} answers={{}} onAnswer={vi.fn()} today={new Date(2026, 5, 20)} />
+    );
+    expect(screen.getByTestId('expiry-epi')).toHaveTextContent('10 days ago');
+    unmount();
+
+    render(<CheckSweepStop stop={stop} answers={{}} onAnswer={vi.fn()} today={new Date(2026, 5, 1)} />);
+    expect(screen.getByTestId('expiry-epi')).toHaveTextContent('9 days');
+  });
+});

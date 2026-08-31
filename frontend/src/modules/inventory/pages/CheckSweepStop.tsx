@@ -55,6 +55,15 @@ export interface StopBodyProps {
    * there is nothing to drive the strip.
    */
   openPocketIndex?: number | undefined;
+  /**
+   * The calendar day every expiry here is judged against.
+   *
+   * The organization's day, not the device's. A phone in another timezone an
+   * hour either side of midnight lands on a different date, and expiry is the
+   * one verdict that comes from the department's own record rather than from
+   * the crew — so the sweep and the accordion have to agree on which day it is.
+   */
+  today?: Date | undefined;
   disabled?: boolean | undefined;
 }
 
@@ -320,8 +329,9 @@ const ExpiryRow: React.FC<{
   answer: CheckItemAnswer | undefined;
   onAnswer: (patch: Partial<CheckItemAnswer>) => void;
   disabled?: boolean | undefined;
-}> = ({ item, answer, onAnswer, disabled }) => {
-  const days = daysUntil(item.expirationDate, new Date());
+  today: Date;
+}> = ({ item, answer, onAnswer, disabled, today }) => {
+  const days = daysUntil(item.expirationDate, today);
   const pullAt = item.expirationWarningDays ?? 30;
   const expired = days !== null && days < 0;
   const inWindow = days !== null && days >= 0 && days <= pullAt;
@@ -385,6 +395,7 @@ const ItemGroups: React.FC<Omit<StopBodyProps, 'stop'> & { items: CheckItemSpec[
   answers,
   onAnswer,
   disabled,
+  today = new Date(),
 }) => {
   const of = (type: string) => items.filter((i) => normalizeCheckType(i.checkType) === type);
   const counts = of(CheckType.COUNT);
@@ -440,6 +451,7 @@ const ItemGroups: React.FC<Omit<StopBodyProps, 'stop'> & { items: CheckItemSpec[
               answer={answers[item.id]}
               onAnswer={(patch) => onAnswer(item.id, patch)}
               disabled={disabled}
+              today={today}
             />
           ))}
         </div>
@@ -470,11 +482,12 @@ const SealCard: React.FC<{
   stop: LapStop;
   onSeal: ((stopId: string, patch: Partial<SealState>) => void) | undefined;
   disabled?: boolean | undefined;
-}> = ({ stop, onSeal, disabled }) => {
+  today: Date;
+}> = ({ stop, onSeal, disabled, today }) => {
   const seal = stop.seal;
   const status = seal?.status;
   const tag = seal?.tagNumber;
-  const blockers = sealBlockers(stop);
+  const blockers = sealBlockers(stop, today);
 
   // An intact tag does not survive contact with a drug that is expiring. The
   // crew is going in whatever the tag says, so this branch is checked first
@@ -490,7 +503,7 @@ const SealCard: React.FC<{
           {blockers.map((item) => (
             <li key={item.id} data-testid={`seal-blocker-${item.id}`}>
               <span className="font-semibold">{item.name}</span>{' '}
-              {expiryUrgency(item) === 'expired' ? 'has expired' : 'is inside the pull window'}
+              {expiryUrgency(item, today) === 'expired' ? 'has expired' : 'is inside the pull window'}
               {item.expirationDate ? <span className="font-mono"> · {item.expirationDate}</span> : null}
             </li>
           ))}
@@ -641,6 +654,7 @@ export const CheckSweepStop: React.FC<StopBodyProps> = ({
   disabled,
   clearedByAncestorSeal,
   openPocketIndex,
+  today = new Date(),
 }) => {
   // An intact tag answers the counting, so those rows come off the screen
   // rather than sitting there inviting a crew to count through a seal they
@@ -651,7 +665,7 @@ export const CheckSweepStop: React.FC<StopBodyProps> = ({
   // seal is a claim about one container and needs a group of its own. Here the
   // nesting gives it that group, so an inner seal is answered on its own card
   // and an outer one clearing says nothing about it.
-  const sealed = clearedByAncestorSeal === true || contentsAreSealed(stop);
+  const sealed = clearedByAncestorSeal === true || contentsAreSealed(stop, today);
   const own = sealed ? sealCannotClear(stop.items) : stop.items;
 
   // One pocket while the sweep is driving the strip, all of them when nothing
@@ -663,9 +677,9 @@ export const CheckSweepStop: React.FC<StopBodyProps> = ({
 
   return (
     <div className="flex flex-col gap-3">
-      {stop.isSealed && <SealCard stop={stop} onSeal={onSeal} disabled={disabled} />}
+      {stop.isSealed && <SealCard stop={stop} onSeal={onSeal} disabled={disabled} today={today} />}
 
-      <ItemGroups items={own} answers={answers} onAnswer={onAnswer} disabled={disabled} />
+      <ItemGroups items={own} answers={answers} onAnswer={onAnswer} disabled={disabled} today={today} />
 
       {/* Pockets. A bag is one stop, not several — the crew is standing in front
         of the whole thing — so its pockets are sections inside this screen
@@ -691,6 +705,7 @@ export const CheckSweepStop: React.FC<StopBodyProps> = ({
             // A pocket with its own tag answers for itself; otherwise it is
             // inside whatever the bag's tag has already settled.
             clearedByAncestorSeal={pocket.isSealed ? false : sealed}
+            today={today}
           />
         </section>
       ))}

@@ -91,6 +91,7 @@ import { toLapStops } from './checkSweepAdapter';
 import { toAnswerMap, toItemResult } from './checkSweepBridge';
 import { countAnswer } from './checkAnswers';
 import { bulkClaim, stillAsked, type LapStop, type SealState as SweepSealState } from './checkLapModel';
+import type { SweepSaveState } from './CheckSweep';
 import type { CheckItemAnswer } from './CheckItemControls';
 import {
   deleteEquipmentCheckDraft,
@@ -783,6 +784,11 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
     };
   }, [shiftId, template.contentRevision, template.id, user]);
   const [draftReady, setDraftReady] = useState(false);
+  // What the last draft write actually did. The sweep's save chip reports this
+  // rather than connectivity: the draft goes to IndexedDB, which can be
+  // pending or reject while the network is perfectly fine, and "held on this
+  // phone" is exactly the claim that breaks when the write fails.
+  const [draftWriteState, setDraftWriteState] = useState<'idle' | 'saving' | 'saved' | 'failed'>('idle');
   const draftSaveWarningShown = useRef(false);
 
   const activeItemDefinitions = useMemo(
@@ -915,6 +921,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
     const durableResults = Object.fromEntries(
       Object.entries(results).map(([id, { photoFiles: _photoFiles, photoUrls: _photoUrls, ...result }]) => [id, result])
     );
+    setDraftWriteState('saving');
     void saveEquipmentCheckDraft(draftIdentity, {
       results: durableResults,
       overallNotes,
@@ -922,12 +929,15 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
       contentRevision: template.contentRevision,
       itemDefinitions: activeItemDefinitions,
       sealDefinitions: activeSealDefinitions,
-    }).catch(() => {
-      if (!draftSaveWarningShown.current) {
-        draftSaveWarningShown.current = true;
-        toast.error('Draft could not be saved on this device. You can continue, but keep this page open.');
-      }
-    });
+    })
+      .then(() => setDraftWriteState('saved'))
+      .catch(() => {
+        setDraftWriteState('failed');
+        if (!draftSaveWarningShown.current) {
+          draftSaveWarningShown.current = true;
+          toast.error('Draft could not be saved on this device. You can continue, but keep this page open.');
+        }
+      });
   }, [
     activeItemDefinitions,
     activeSealDefinitions,
@@ -1395,6 +1405,15 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
   // --------------------------------------------------------------------------
 
   const [sweepStopIndex, setSweepStopIndex] = useState(0);
+  /**
+   * What the save chip says, in the order that matters to a crew.
+   *
+   * A failed draft write outranks everything: "held on this phone" is the
+   * reassurance the offline state offers, and it is false once the write has
+   * rejected. Otherwise offline, then whatever the write is doing.
+   */
+  const sweepSaveState: SweepSaveState =
+    draftWriteState === 'failed' ? 'failed' : !isOnline ? 'offline' : draftWriteState === 'saving' ? 'saving' : 'saved';
   // Which pocket of the current stop is open. Lives beside the stop index
   // rather than inside the body, because the primary button's label and the
   // bulk claim both depend on it and both belong to the frame.
@@ -2546,19 +2565,31 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
       setSweepPocketIndex(0);
       setSweepScreen('walk');
     };
-    // The walk is one screen at a time, so it takes the viewport rather than
-    // scrolling inside the page the accordion lives on.
+    // A submitted check must not be submitted twice. `submitting` goes false in
+    // handleSubmit's `finally` even when the POST succeeded and only the photo
+    // upload failed, so the button would re-enable on an accepted check and a
+    // second tap would file a duplicate under a fresh client_submission_id.
+    const alreadyFiled =
+      submissionOutcome?.status === 'evidence_pending' || submissionOutcome?.status === 'evidence_failed';
+
+    // Absolute inside the builder's phone frame, fixed for the real walk. The
+    // preview is a 268px device mock inside a page: positioned against the
+    // viewport it covers the builder it is meant to sit inside, and its close
+    // button reaches for an `onBack` the preview never passes.
     return (
-      <div className="fixed inset-0 z-40 flex flex-col">
+      <div className={`${previewMode ? 'absolute' : 'fixed'} inset-0 z-40 flex flex-col`}>
         {sweepScreen === 'finish' ? (
           <CheckFinish
             stops={sweepStops}
             answers={sweepAnswers}
             onJump={goTo}
-            onSubmit={() => void handleSubmit()}
+            // previewMode promises nothing is submitted, and both builder
+            // previews pass shiftId="preview" — a real POST from here files
+            // against a shift that does not exist.
+            onSubmit={previewMode ? () => undefined : () => void handleSubmit()}
             onBack={() => setSweepScreen('walk')}
             submittingAs={user?.first_name ? `${user.first_name} ${user.last_name ?? ''}`.trim() : 'you'}
-            submitting={submitting}
+            submitting={submitting || alreadyFiled}
           />
         ) : (
           <CheckSweep
@@ -2574,7 +2605,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
             onClose={() => onBack?.()}
             unitName={shiftContext?.apparatusName ?? ''}
             templateName={template.name}
-            saveState={isOnline ? 'saved' : 'offline'}
+            saveState={sweepSaveState}
             disabled={submitting}
             renderStop={(current, openPocketIndex) => (
               <CheckSweepStop
@@ -2584,6 +2615,9 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
                 onSeal={previewMode ? undefined : handleSweepSeal}
                 disabled={submitting}
                 openPocketIndex={openPocketIndex}
+                // The organization's calendar day, so an expiry verdict does
+                // not move with the phone's timezone.
+                today={new Date(`${today}T00:00:00`)}
               />
             )}
           />
