@@ -85,7 +85,12 @@ const linkedEvent = {
 
 describe('MinutesDetailPage — unlink event', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    mockGetMinutes.mockReset();
+    mockUpdateMinutes.mockReset();
+    mockGetEvent.mockReset();
+    mockGetElectionsByEvent.mockReset();
+    mockCheckPermission.mockReset();
+
     mockCheckPermission.mockReturnValue(true);
     mockGetMinutes.mockResolvedValue(minutes);
     mockGetEvent.mockResolvedValue(linkedEvent);
