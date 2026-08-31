@@ -706,6 +706,10 @@ class ShiftTemplateCreate(BaseModel):
     apparatus_id: Optional[str] = None
     is_default: bool = False
     open_to_all_members: bool = False
+    # The equipment checklists shifts from this template carry. Naming any
+    # replaces apparatus-based resolution; leaving it empty or omitted keeps
+    # it. Every id is verified to be in the caller's org before it is stored.
+    equipment_check_template_ids: Optional[List[str]] = None
 
 
 class ShiftTemplateUpdate(BaseModel):
@@ -724,6 +728,11 @@ class ShiftTemplateUpdate(BaseModel):
     apparatus_id: Optional[str] = None
     is_default: Optional[bool] = None
     open_to_all_members: Optional[bool] = None
+    # Omitting the key leaves the links alone; sending [] clears them. The
+    # form owns this field, so it sends it on every save — an omitted key on
+    # an update means "leave this alone" (CLAUDE.md pitfall #1), which would
+    # silently keep checklists the officer had just unticked.
+    equipment_check_template_ids: Optional[List[str]] = None
 
 
 class ShiftTemplateResponse(UTCResponseBase):
@@ -745,6 +754,9 @@ class ShiftTemplateResponse(UTCResponseBase):
     is_default: bool = False
     is_active: bool = True
     open_to_all_members: bool = False
+    # Read off the ShiftTemplate.equipment_check_template_ids property, in the
+    # order an officer arranged them.
+    equipment_check_template_ids: List[str] = []
     created_at: datetime
     updated_at: datetime
     created_by: Optional[UUID] = None

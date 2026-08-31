@@ -548,16 +548,65 @@ async def _for_each_org(
 async def resolve_check_templates(
     db: AsyncSession,
     organization_id: str,
-    apparatus_id: str,
+    apparatus_id: Optional[str],
     check_timing: str,
+    shift_template_id: Optional[str] = None,
 ) -> list:
-    """Resolve equipment check templates for an apparatus with type fallback.
+    """Resolve equipment check templates for a shift, with apparatus fallback.
 
-    First looks for templates assigned directly to the apparatus. If none
-    are found, falls back to templates matching the apparatus's type code
-    that have no specific apparatus assigned.
+    The batch counterpart of ``EquipmentCheckService._resolve_templates`` and
+    it must agree with it, or a reminder names a different set of checklists
+    than the crew is actually shown.
+
+    If the shift came from a ``ShiftTemplate`` that names checklists, those are
+    the checklists — the explicit link replaces apparatus resolution rather
+    than adding to it. Otherwise fall back to templates assigned directly to
+    the apparatus, and then to ones matching its type code.
+
+    ``check_timing`` still filters an explicitly linked set: the link carries
+    no timing, ``EquipmentCheckTemplate`` does, so an end-of-shift reminder
+    names only the linked checklists that are end-of-shift ones.
     """
     from app.models.apparatus import Apparatus, ApparatusType, EquipmentCheckTemplate
+    from app.models.training import ShiftTemplateEquipmentCheck
+
+    if shift_template_id:
+        linked_result = await db.execute(
+            select(EquipmentCheckTemplate)
+            .join(
+                ShiftTemplateEquipmentCheck,
+                ShiftTemplateEquipmentCheck.equipment_check_template_id
+                == EquipmentCheckTemplate.id,
+            )
+            .where(
+                ShiftTemplateEquipmentCheck.shift_template_id == str(shift_template_id),
+                ShiftTemplateEquipmentCheck.organization_id == str(organization_id),
+                EquipmentCheckTemplate.organization_id == str(organization_id),
+                EquipmentCheckTemplate.check_timing == check_timing,
+                EquipmentCheckTemplate.is_active == True,  # noqa: E712
+            )
+            .order_by(ShiftTemplateEquipmentCheck.sort_order)
+        )
+        linked = list(linked_result.scalars().all())
+        if linked:
+            return linked
+        # An explicit link set that yields nothing for *this timing* is not a
+        # reason to fall back: the officer named the checklists, and the
+        # apparatus default is not a substitute for them. Only a template with
+        # no links at all falls through.
+        has_any = await db.execute(
+            select(ShiftTemplateEquipmentCheck.id)
+            .where(
+                ShiftTemplateEquipmentCheck.shift_template_id == str(shift_template_id),
+                ShiftTemplateEquipmentCheck.organization_id == str(organization_id),
+            )
+            .limit(1)
+        )
+        if has_any.scalar_one_or_none() is not None:
+            return []
+
+    if not apparatus_id:
+        return []
 
     tmpl_result = await db.execute(
         select(EquipmentCheckTemplate)
@@ -1527,7 +1576,7 @@ async def run_post_shift_validation(db: AsyncSession) -> Dict[str, Any]:
 
             # Many shifts share an apparatus; resolve end-of-shift templates
             # once per apparatus rather than once per shift.
-            eos_template_cache: dict[str, list] = {}
+            eos_template_cache: dict[tuple[str, str], list] = {}
 
             for shift in shifts:
                 activities = shift.activities or {}
@@ -1547,16 +1596,28 @@ async def run_post_shift_validation(db: AsyncSession) -> Dict[str, Any]:
 
                 # Check for outstanding end-of-shift checklists
                 pending_checklists: list[str] = []
-                if shift.apparatus_id:
-                    aid = str(shift.apparatus_id)
-                    if aid not in eos_template_cache:
-                        eos_template_cache[aid] = await resolve_check_templates(
+                if shift.apparatus_id or getattr(shift, "template_id", None):
+                    aid = str(shift.apparatus_id) if shift.apparatus_id else ""
+                    stid = (
+                        str(shift.template_id)
+                        if getattr(shift, "template_id", None)
+                        else ""
+                    )
+                    # Keyed on (apparatus, shift template), not apparatus alone:
+                    # resolution now depends on which template the shift came from,
+                    # so two shifts on the same rig from different templates have
+                    # different checklists. An apparatus-only key would serve the
+                    # first one's answer to the second.
+                    key = (aid, stid)
+                    if key not in eos_template_cache:
+                        eos_template_cache[key] = await resolve_check_templates(
                             db,
                             str(org.id),
-                            aid,
+                            aid or None,
                             "end_of_shift",
+                            shift_template_id=stid or None,
                         )
-                    eos_templates = eos_template_cache[aid]
+                    eos_templates = eos_template_cache[key]
 
                     if eos_templates:
                         done_ids = checks_done_map.get(str(shift.id), set())
@@ -1867,7 +1928,7 @@ async def run_shift_reminders(db: AsyncSession) -> Dict[str, Any]:
 
             # Shifts frequently share an apparatus; resolve each apparatus's
             # start-of-shift templates once instead of once per shift.
-            sos_template_cache: dict[str, list] = {}
+            sos_template_cache: dict[tuple[str, str], list] = {}
 
             for shift in shifts:
                 activities = shift.activities or {}
@@ -1935,16 +1996,27 @@ async def run_shift_reminders(db: AsyncSession) -> Dict[str, Any]:
 
                 # Fetch equipment check templates for the apparatus
                 checklist_names: list[str] = []
-                if shift.apparatus_id and start_checklists_enabled:
-                    aid = str(shift.apparatus_id)
-                    if aid not in sos_template_cache:
-                        sos_template_cache[aid] = await resolve_check_templates(
+                if (
+                    shift.apparatus_id or getattr(shift, "template_id", None)
+                ) and start_checklists_enabled:
+                    aid = str(shift.apparatus_id) if shift.apparatus_id else ""
+                    stid = (
+                        str(shift.template_id)
+                        if getattr(shift, "template_id", None)
+                        else ""
+                    )
+                    # Keyed on (apparatus, shift template) — see the
+                    # end-of-shift cache for why apparatus alone is not enough.
+                    key = (aid, stid)
+                    if key not in sos_template_cache:
+                        sos_template_cache[key] = await resolve_check_templates(
                             db,
                             str(org.id),
-                            aid,
+                            aid or None,
                             "start_of_shift",
+                            shift_template_id=stid or None,
                         )
-                    checklist_names = [t.name for t in sos_template_cache[aid]]
+                    checklist_names = [t.name for t in sos_template_cache[key]]
 
                 shift_date_str = (
                     shift.shift_date.strftime("%b %d, %Y")
@@ -2291,7 +2363,7 @@ async def run_end_of_shift_checklist_reminders(
             )
             for sid, uid in asres.all():
                 assigned_map.setdefault(str(sid), []).append(str(uid))
-        eos_template_cache: dict[str, list] = {}
+        eos_template_cache: dict[tuple[str, str], list] = {}
 
         org_notifications = 0
 
@@ -2300,22 +2372,30 @@ async def run_end_of_shift_checklist_reminders(
             if activities.get("eos_checklist_reminder_sent"):
                 continue
 
-            if not shift.apparatus_id:
+            if not shift.apparatus_id and not getattr(shift, "template_id", None):
                 # Don't stamp the dedup flag — no reminder was sent, only
                 # skipped because no apparatus is assigned yet. Stamping here
                 # would permanently silence the reminder even if an apparatus
                 # is assigned later in the same window (CRON2-31-4).
+                #
+                # A shift whose template names checklists needs no apparatus to
+                # have them, so the guard admits that case too.
                 continue
 
-            aid = str(shift.apparatus_id)
-            if aid not in eos_template_cache:
-                eos_template_cache[aid] = await resolve_check_templates(
+            aid = str(shift.apparatus_id) if shift.apparatus_id else ""
+            stid = str(shift.template_id) if getattr(shift, "template_id", None) else ""
+            # Keyed on (apparatus, shift template) — see the reminder cache
+            # above for why apparatus alone is not enough.
+            key = (aid, stid)
+            if key not in eos_template_cache:
+                eos_template_cache[key] = await resolve_check_templates(
                     db_session,
                     str(org.id),
-                    aid,
+                    aid or None,
                     "end_of_shift",
+                    shift_template_id=stid or None,
                 )
-            eos_templates = eos_template_cache[aid]
+            eos_templates = eos_template_cache[key]
 
             if not eos_templates:
                 # Same reasoning: no templates resolved yet is not "reminder
