@@ -247,7 +247,9 @@ describe('EquipmentCheckTemplateBuilder responsive actions', () => {
     fireEvent.change(within(actionBar).getByLabelText('Set type for selected items'), {
       target: { value: 'count' },
     });
-    expect(within(screen.getByRole('button', { name: 'Deselect Radio' })).getByText(/Count/)).toBeInTheDocument();
+    expect(
+      within(screen.getByRole('button', { name: 'Deselect Radio' })).getByText('Needs quantity')
+    ).toBeInTheDocument();
 
     fireEvent.click(within(actionBar).getByRole('button', { name: 'Optional' }));
     expect(within(actionBar).getByRole('button', { name: 'Required' })).toBeInTheDocument();

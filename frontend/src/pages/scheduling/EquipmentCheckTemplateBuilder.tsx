@@ -121,6 +121,7 @@ import {
 } from './equipmentCheckPresets';
 import { useOverlaySurface } from '../../hooks/useOverlaySurface';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
+import { formatItemSummary } from './itemSummary';
 
 /** Sentinel anchor for blockers that live in the details drawer, not on a row. */
 const DETAILS_ANCHOR = '__details__';
@@ -3011,7 +3012,6 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     const itemKey = item.id ?? item.clientKey;
     const anchorId = `item-row-${itemKey}`;
     const isItemExpanded = expandedItems.has(itemKey);
-    const checkTypeLabel = CHECK_TYPES.find((ct) => ct.value === item.checkType)?.label ?? item.checkType;
     const compKey = getCompKey(compIdx);
     const isSelected = selectedItems[compKey]?.has(itemIdx) ?? false;
     const isMobileSelectionMode = !isLaptop && mobileSelectionLocations.has(compKey);
@@ -3067,6 +3067,8 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
         </div>
       );
     }
+
+    const itemSummary = formatItemSummary(item);
 
     const itemActionsMenu = (
       <RowActionMenu label={`Actions for ${item.name.trim() || 'item'}`}>
@@ -3212,13 +3214,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                   {item.name.trim() || (isHeader ? 'Untitled Header' : 'Untitled Item')}
                 </span>
                 <span className="text-theme-text-muted mt-0.5 block truncate text-xs font-normal">
-                  {checkTypeLabel}
-                  {item.checkType === 'count' && item.expectedQuantity ? ` · Par ${item.expectedQuantity}` : ''}
-                  {item.checkType === 'level' && item.minLevel
-                    ? ` · Minimum ${item.minLevel}${item.levelUnit ? ` ${item.levelUnit}` : ''}`
-                    : ''}
-                  {item.isRequired ? ' · Required' : ''}
-                  {item.hasExpiration ? ' · Expiration tracked' : ''}
+                  {itemSummary.map(({ text }) => text).join(' · ')}
                 </span>
               </button>
             )}
@@ -3299,6 +3295,24 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             value={item.name}
             onChange={(e) => updateItemFieldWithAutoSave(compIdx, itemIdx, { name: e.target.value })}
           />
+
+          <div className="flex shrink-0 items-center gap-1.5" aria-label="Item summary">
+            {itemSummary.map((summary) => (
+              <span
+                key={summary.text}
+                className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                  summary.tone === 'problem'
+                    ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
+                    : summary.tone === 'important'
+                      ? 'bg-theme-surface-secondary text-theme-text-secondary'
+                      : 'bg-theme-surface-secondary text-theme-text-muted'
+                }`}
+              >
+                {summary.tone === 'problem' && <AlertTriangle className="h-3 w-3" aria-hidden="true" />}
+                {summary.text}
+              </span>
+            ))}
+          </div>
 
           {isStructural ? (
             <span className="bg-theme-surface-secondary text-theme-text-muted rounded-full px-2 py-0.5 text-[11px] font-medium">
