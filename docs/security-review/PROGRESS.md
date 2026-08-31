@@ -16,14 +16,17 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-Feature 34 (Frontend shared, pass 3) —
-[#2112](https://github.com/thegspiro/the-logbook/pull/2112), subscribed.
-Round 1 (diff-based re-verification of FE2-34 + first full read of
-`components/ux/*`) concluded 0 findings; Codex's review caught 4 real
-defects round 1's methodology wasn't shaped to catch — 2 fixed
+Feature 34 (Frontend shared, pass 3), round 2 — PR opening this iteration.
+Round 1 ([#2112](https://github.com/thegspiro/the-logbook/pull/2112))
+merged before Codex's review of its commit landed, carrying only the
+"0 findings" content; Codex then caught 4 real defects in the auth/cache
+core that round 1's methodology (diff-based cache-risk sweep + first full
+read of `components/ux/*`) wasn't aimed at. Round 2 carries the fix as a
+fresh PR off current `main` (round 1's branch had already merged — never
+reuse a branch whose PR has merged, CLAUDE.md Pitfall #24): 2 fixed
 (FE3-34-1/3), 2 flagged (FE3-34-2/4, mirrored into `KNOWN_LIMITATIONS.md`).
-Once merged, every row (00-34) is ✅ and the rotation wraps to 00 for the
-next full pass.
+Once round 2 merges, every row (00-34) is ✅ and the rotation wraps to 00
+for the next full pass.
 
 ---
 
@@ -4231,7 +4234,7 @@ each row's prior PR is recorded in the Log, not repeated here.
 | 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                   | ✅     |
 | 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                  | ✅     |
 | 33  | Core infrastructure       | CORE   | `core/security_middleware.py`, `core/database.py`, `core/config.py`                                                                             | ✅     |
-| 34  | Frontend shared           | FE     | `utils/apiCache.ts`, module axios instances, `ProtectedRoute`, global stores                                                                    | ⏳     |
+| 34  | Frontend shared           | FE     | `utils/apiCache.ts`, module axios instances, `ProtectedRoute`, global stores                                                                    | ✅     |
 
 **35 iterations per full pass.** After 34 the rotation wraps to 00, which
 re-runs the whole-codebase sweeps against whatever has landed since.
