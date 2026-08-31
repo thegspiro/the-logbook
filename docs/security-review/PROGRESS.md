@@ -16,16 +16,21 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-PR [#2079](https://github.com/thegspiro/the-logbook/pull/2079)
-(`claude/security-review-meetings-minutes-pass2`) — feature 24 (Meetings &
-minutes), pass 2. 3 fixed (1 LOW-MED backend audit-trail gap, 1 LOW backend
-error-sanitization gap, 1 MED frontend silent-no-op bug), 1 flagged (LOW-MED,
-`approve_meeting`'s missing state-machine guard/separation of duties — needs
-a product decision). Findings doc:
-`docs/security-review/MM-24-meetings-minutes.md` → Pass 2. Opened and
-subscribed; awaiting CI.
+None. Feature 24 (Meetings & minutes), pass 2, is fully merged — see log
+entry below. Next: feature 25, Messaging & notifications.
 
 ---
+
+### 2026-08-31 — Feature 24 (Meetings & minutes), pass 2 ✅ fully merged — PR #2079
+
+PR #2079 merged (`6b33538c`). Codex's review flagged one real issue on the
+new guard test (`MinutesDetailPage.unlinkEvent.test.tsx`): a `vi.clearAllMocks()`
+in `beforeEach` that CLAUDE.md Pitfall #28 already documents as leaving stale
+implementations behind — fixed by resetting each mock explicitly before
+installing its default, verified against the actual test and eslint, and
+pushed. Thread resolved; no further findings on the re-review. CI green on
+the final head (17/17 checks), no merge conflict. Rotation row 24 → ✅.
+Next: 25 messaging & notifications.
 
 ### 2026-08-31 — Feature 24 (Meetings & minutes), pass 2 — 3 fixed (LOW-MED, LOW, MED), 1 flagged (LOW-MED)
 
@@ -3048,7 +3053,7 @@ each row's prior PR is recorded in the Log, not repeated here.
 | 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ✅     |
 | 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ✅     |
 | 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ✅     |
-| 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ⏳     |
+| 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ✅     |
 | 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ⬜     |
 | 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                         | ⬜     |
 | 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                         | ⬜     |
