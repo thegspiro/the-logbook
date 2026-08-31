@@ -19,7 +19,7 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.services.inventory_service import InventoryService
+from app.services.inventory_service import InventoryService, is_pool_without_stock
 
 pytestmark = [pytest.mark.integration]
 from app.models.inventory import (
@@ -1063,6 +1063,48 @@ class TestPoolItemValidation:
         assert item is None
         assert err is not None
         assert "negative" in err.lower()
+
+
+class TestPoolWithoutStockRule:
+    """The rule the list-oriented create paths keep, and single create does not.
+
+    Relaxing ``create_item`` so a checklist can add an out-of-stock catalog row
+    silently removed the CSV import's only quantity guard — that endpoint was
+    relying on it. The rule now lives in one predicate with two callers, and
+    these pin down which side of the line each case falls on.
+    """
+
+    def test_a_pool_row_with_no_count_is_a_misparsed_column(self):
+        assert is_pool_without_stock({"tracking_type": "pool", "quantity": 0}) is True
+
+    def test_a_negative_count_is_caught_too(self):
+        assert is_pool_without_stock({"tracking_type": "pool", "quantity": -3}) is True
+
+    def test_a_stocked_pool_row_is_fine(self):
+        assert is_pool_without_stock({"tracking_type": "pool", "quantity": 12}) is False
+
+    def test_an_omitted_count_defaults_to_stocked(self):
+        """The schema default is 1, so an absent column is not an empty one."""
+        assert is_pool_without_stock({"tracking_type": "pool"}) is False
+
+    def test_an_individual_row_is_out_of_scope(self):
+        assert (
+            is_pool_without_stock({"tracking_type": "individual", "quantity": 0})
+            is False
+        )
+
+    @pytest.mark.asyncio
+    async def test_the_bulk_path_still_refuses_it(self, db_session, setup_org_and_user):
+        """create_items_bulk keeps the rule even though create_item dropped it."""
+        org_id, user_id, _ = setup_org_and_user
+        svc = InventoryService(db_session)
+
+        with pytest.raises(ValueError, match="quantity of 1 or more"):
+            await svc.create_items_bulk(
+                org_id,
+                [{"name": "Gauze", "tracking_type": "pool", "quantity": 0}],
+                user_id,
+            )
 
 
 class TestItemNameExists:

@@ -1635,7 +1635,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
   // ---------------------------------------------------------------------------
 
   const scheduleAutoSaveItem = useCallback(
-    (itemId: string, patch: Record<string, unknown>) => {
+    (itemId: string, patch: Record<string, unknown>, options?: { immediate?: boolean }) => {
       if (!isEditing || !itemId) return;
 
       const pending = autoSavePendingRef.current.get(itemId);
@@ -1652,26 +1652,29 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       }
       setAutoSaveStatus('saving');
 
-      const timer = setTimeout(() => {
-        autoSavePendingRef.current.delete(itemId);
-        const request: Promise<void> = ensureDraftBeforeStructureEdit()
-          .then(() => equipmentCheckService.updateCheckItem(itemId, merged))
-          .then(() => undefined)
-          .catch(() => {
-            autoSaveErrorRef.current = true;
-          })
-          .finally(() => {
-            autoSaveInFlightRef.current.delete(request);
-            // Report only once the whole batch has settled; a per-item "saved"
-            // would flicker through every row a bulk action touched.
-            if (autoSaveInFlightRef.current.size === 0 && autoSavePendingRef.current.size === 0) {
-              const failed = autoSaveErrorRef.current;
-              setAutoSaveStatus(failed ? 'error' : 'saved');
-              autoSaveFadeRef.current = setTimeout(() => setAutoSaveStatus('idle'), failed ? 4000 : 2000);
-            }
-          });
-        autoSaveInFlightRef.current.add(request);
-      }, 1500);
+      const timer = setTimeout(
+        () => {
+          autoSavePendingRef.current.delete(itemId);
+          const request: Promise<void> = ensureDraftBeforeStructureEdit()
+            .then(() => equipmentCheckService.updateCheckItem(itemId, merged))
+            .then(() => undefined)
+            .catch(() => {
+              autoSaveErrorRef.current = true;
+            })
+            .finally(() => {
+              autoSaveInFlightRef.current.delete(request);
+              // Report only once the whole batch has settled; a per-item "saved"
+              // would flicker through every row a bulk action touched.
+              if (autoSaveInFlightRef.current.size === 0 && autoSavePendingRef.current.size === 0) {
+                const failed = autoSaveErrorRef.current;
+                setAutoSaveStatus(failed ? 'error' : 'saved');
+                autoSaveFadeRef.current = setTimeout(() => setAutoSaveStatus('idle'), failed ? 4000 : 2000);
+              }
+            });
+          autoSaveInFlightRef.current.add(request);
+        },
+        options?.immediate ? 0 : 1500
+      );
 
       autoSavePendingRef.current.set(itemId, { timer, patch: merged });
     },
@@ -1713,7 +1716,13 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       if (patch.imageUrl !== undefined) apiPatch.image_url = blankToNull(patch.imageUrl);
 
       if (Object.keys(apiPatch).length > 0) {
-        scheduleAutoSaveItem(item.id, apiPatch);
+        // A catalog link is one deliberate click, not typing, so it has nothing
+        // to gain from the debounce and something to lose: creating the item
+        // and linking it are two writes, and a window between them is a window
+        // in which the page can close leaving a catalog row nothing points at.
+        scheduleAutoSaveItem(item.id, apiPatch, {
+          immediate: patch.inventoryItemId !== undefined,
+        });
       }
     }
   };

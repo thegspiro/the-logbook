@@ -351,6 +351,22 @@ def _build_extra_lines(item, extra_lines: Optional[List[str]]) -> str:
     return " | ".join(parts)
 
 
+def is_pool_without_stock(item_data: Dict[str, Any]) -> bool:
+    """Whether this row is pool-tracked and carries no usable count.
+
+    The rule the *list-oriented* create paths keep and the single-item create
+    deliberately does not. Pasting or importing a stock list is an act of
+    entering counts, so a pool line reading zero is a mis-parsed spreadsheet
+    column; creating one catalog row by hand — from a checklist position, say —
+    knows the item exists and nothing about what is on the shelf.
+
+    One definition, because ``create_items_bulk`` and the CSV import are two
+    callers of the same rule and drifting them apart is how the CSV path
+    silently lost it once already.
+    """
+    return item_data.get("tracking_type") == "pool" and item_data.get("quantity", 1) < 1
+
+
 class InventoryService:
     """Service for inventory management"""
 
@@ -5861,7 +5877,7 @@ class InventoryService:
             # client on every row of the paste, not just the first.
             await self._assert_item_fks_in_org(data, organization_id)
 
-            if data.get("tracking_type") == "pool" and data.get("quantity", 1) < 1:
+            if is_pool_without_stock(data):
                 raise ValueError(
                     f"{name}: pool items must have a quantity of 1 or more"
                 )

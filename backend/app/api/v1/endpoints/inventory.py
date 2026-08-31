@@ -180,7 +180,7 @@ from app.schemas.inventory import (
     WriteOffReview,
 )
 from app.services.departure_clearance_service import DepartureClearanceService
-from app.services.inventory_service import InventoryService
+from app.services.inventory_service import InventoryService, is_pool_without_stock
 from app.services.label_service import LabelService
 from app.services.organization_service import OrganizationService
 from app.utils import label_renderer
@@ -1410,6 +1410,23 @@ async def import_items_csv(
                 unmatched_key = vendor_raw.lower()
 
         item_data.pop("barcode", None)
+
+        # A stock list entering counts is a different contract from a single
+        # catalog row created by hand: a pool line with no quantity is a
+        # mis-parsed spreadsheet, not an out-of-stock item. `create_item` used
+        # to enforce this for every caller and no longer does, so the rule
+        # lives with the callers that want it — here and in
+        # `create_items_bulk`, the two list-oriented paths.
+        if is_pool_without_stock(item_data):
+            errors.append(
+                {
+                    "row": row_num,
+                    "error": "Pool items must have a quantity of 1 or more",
+                }
+            )
+            failed += 1
+            continue
+
         new_item, error = await service.create_item(
             organization_id=current_user.organization_id,
             item_data=item_data,
@@ -1421,10 +1438,11 @@ async def import_items_csv(
             failed += 1
         else:
             imported += 1
-            # Recorded only now. create_item still rejects rows the CSV parse
-            # accepted — a duplicate serial, a pool item with no quantity — and
-            # a name banked before that is known would send the reader to
-            # Attach for rows that were never written.
+            # Recorded only now. Rows the CSV parse accepted are still
+            # rejected after it — a duplicate serial by create_item, a pool
+            # item with no quantity by the check just above — and a name
+            # banked before that is known would send the reader to Attach for
+            # rows that were never written.
             if unmatched_key:
                 unmatched_vendors.setdefault(unmatched_key, vendor_raw)
 
