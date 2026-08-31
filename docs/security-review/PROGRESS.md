@@ -117,12 +117,26 @@ instead, which correctly distinguishes omission from an explicit null for
 both fields (`name` cannot be explicitly null since LOC-32-5, so only
 `building` was actually exposed). Two more guard tests added.
 
+**Round 4 (Codex-caught, on LOC-32-1's own fix):** the `except
+IntegrityError: pass` added for LOC-32-1 swallowed _every_ integrity
+failure as the expected duplicate-link race — but `ProspectEventLink.
+prospect_id` is a CASCADE-deleting FK, so a prospect deleted concurrently
+(between the lookup and this insert) raises the same exception type for a
+genuinely different reason: no link exists, the prospect is simply gone.
+Swallowing it left `_link_prospect` returning the stale prospect anyway,
+so `check_in_guest` would still set `attendee.prospect_id` to a
+now-nonexistent row and fail the same FK check on its own commit — losing
+the attendance via a different race window than the one LOC-32-1 closed.
+Fixed by re-querying whether the expected link actually exists after the
+failure, and re-raising (rather than swallowing) when it doesn't — the
+caller's existing broad handler then logs it and leaves the attendee
+correctly unlinked. Three more guard tests added.
+
 Every fix has a guard test independently verified against the new code:
-`tests/test_guest_check_in.py::TestGuestProspectCreation::
-test_link_race_is_scoped_to_a_savepoint_not_the_whole_commit`,
-`tests/test_location_display_code.py::TestGetLocationByDisplayCode`,
-`tests/test_location_uniqueness.py` (new file, 9 tests across three
-findings), and `tests/test_public_display.py::
+`tests/test_guest_check_in.py::TestGuestProspectCreation` (7 tests across
+LOC-32-1 and its round-4 revision), `tests/test_location_display_code.py::
+TestGetLocationByDisplayCode`, `tests/test_location_uniqueness.py` (new
+file, 9 tests across three findings), and `tests/test_public_display.py::
 TestGuestCheckInDailyCapOrdering` (3 tests).
 
 **LOC-3** (`GET /locations/{id}/display`, the dead authenticated display
@@ -133,8 +147,8 @@ pass 1 — already tracked in `docs/KNOWN_LIMITATIONS.md`.
 reformatting two files (`location_service.py`,
 `tests/test_location_uniqueness.py`), applied. Scoped tests
 (`-k "location or admin_hub or guest_check_in or public_display"`) —
-**313 passed** (was 290), 1 skipped (pre-existing). Full backend suite —
-**9368 passed** (was 9353), 22 skipped, 0 failed.
+**316 passed** (was 290), 1 skipped (pre-existing). Full backend suite —
+**9371 passed** (was 9353), 22 skipped, 0 failed.
 `validate_migrations.py --strict` — 394 revisions, single head (no schema
 change). No frontend file touched. Findings doc:
 `docs/security-review/LOC-32-locations-kiosk.md`. PR #2098 opened and

@@ -277,10 +277,24 @@ class GuestCheckInService:
                 )
                 await self.db.flush()
         except IntegrityError:
-            # Lost the race — a concurrent sign-in already created the link
-            # we wanted. The SAVEPOINT rollback undoes only this insert, and
-            # the outer transaction (the attendee record) is unaffected.
-            pass
+            # Not every IntegrityError here is the duplicate-link race this
+            # was written for — the prospect could instead have been deleted
+            # concurrently (a real FK violation, not a harmless re-insert).
+            # Swallowing that one too would let the caller keep treating a
+            # since-deleted prospect as linked: check_in_guest would still
+            # set attendee.prospect_id to it, and its own commit would then
+            # fail the same FK check, losing the attendance this SAVEPOINT
+            # exists to protect. Re-check the link actually exists before
+            # treating the failure as harmless; otherwise re-raise so
+            # _link_prospect's handler logs it and returns no prospect.
+            recheck = await self.db.execute(
+                select(ProspectEventLink).where(
+                    ProspectEventLink.prospect_id == str(prospect_id),
+                    ProspectEventLink.event_id == str(event.id),
+                )
+            )
+            if recheck.scalars().first() is None:
+                raise
 
     @staticmethod
     def _meeting_config_matches_event(config: dict, event: Event) -> bool:

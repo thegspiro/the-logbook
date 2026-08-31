@@ -511,6 +511,90 @@ class TestGuestProspectCreation:
         )
         assert "via room QR code" in link.notes
 
+    async def test_race_is_swallowed_only_when_the_link_actually_exists(self):
+        """An IntegrityError is not automatically the expected duplicate.
+
+        The prospect could instead have been deleted concurrently — a real
+        FK violation, not a harmless re-insert of the same link. Swallowing
+        it unconditionally would leave the caller believing the link
+        succeeded.
+        """
+        event = _make_event()
+        prospect = _make_prospect()
+        mock_db = _mock_db()  # no existing link on the pre-check OR recheck
+        mock_db.flush = AsyncMock(side_effect=IntegrityError("insert", {}, Exception()))
+
+        with pytest.raises(IntegrityError):
+            await GuestCheckInService(mock_db).link_prospect_to_event(
+                prospect.id, event
+            )
+
+    async def test_race_is_swallowed_when_the_link_exists_after_the_failure(
+        self, monkeypatch
+    ):
+        """The expected race: swallowed once the recheck confirms the link."""
+        event = _make_event()
+        prospect = _make_prospect()
+        mock_db = _mock_db()
+        mock_db.flush = AsyncMock(side_effect=IntegrityError("insert", {}, Exception()))
+
+        # First SELECT (pre-check): no link yet. Recheck after the failed
+        # flush: the concurrent request's link is now there.
+        calls = {"n": 0}
+
+        async def mock_execute(statement, *args, **kwargs):
+            result = MagicMock()
+            calls["n"] += 1
+            row = MagicMock() if calls["n"] > 1 else None
+            scalars = MagicMock()
+            scalars.first.return_value = row
+            result.scalars.return_value = scalars
+            return result
+
+        mock_db.execute = mock_execute
+
+        # Must not raise.
+        await GuestCheckInService(mock_db).link_prospect_to_event(prospect.id, event)
+
+    async def test_deleted_prospect_race_still_records_attendance(self, monkeypatch):
+        """The real-FK-violation case end to end: attendance still commits.
+
+        Same shape as test_link_race_is_scoped_to_a_savepoint_not_the_whole_commit,
+        but here the re-raised IntegrityError must reach _link_prospect's
+        outer handler (not be silently swallowed at the link level), which
+        then leaves the attendee unlinked rather than pointed at a prospect
+        that no longer exists.
+        """
+        event = _make_event(guest_check_in_creates_prospect=True)
+        prospect = _make_prospect()
+        mock_db = _mock_db()
+        service = GuestCheckInService(mock_db)
+        _patch_pipeline(service, monkeypatch, existing=prospect)
+
+        async def flaky_flush():
+            if mock_db.added and mock_db.added[-1].__class__.__name__ == (
+                "ProspectEventLink"
+            ):
+                raise IntegrityError("insert", {}, Exception("prospect gone"))
+
+        mock_db.flush = AsyncMock(side_effect=flaky_flush)
+        # Both the pre-check and the post-failure recheck find no link —
+        # this was a real failure, not the duplicate-link race.
+
+        attendee, error, created = await service.check_in_guest(
+            event=event,
+            organization_id=event.organization_id,
+            first_name="Dana",
+            last_name="Reyes",
+            email="dana.reyes@example.com",
+        )
+
+        assert error is None
+        assert attendee is not None
+        assert attendee.checked_in is True
+        assert attendee.prospect_id is None  # not linked to the vanished prospect
+        mock_db.commit.assert_awaited()
+
     async def test_the_shared_linker_still_refuses_to_double_insert(self):
         event = _make_event()
         prospect = _make_prospect()

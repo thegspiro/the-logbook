@@ -132,6 +132,27 @@ insert; the outer transaction (the attendee record) is untouched. Guard
 test: `tests/test_guest_check_in.py::TestGuestProspectCreation::
 test_link_race_is_scoped_to_a_savepoint_not_the_whole_commit`.
 
+**Revised after Codex review (this PR):** the `except IntegrityError: pass`
+above swallowed _every_ integrity failure as if it were the expected
+duplicate-link race — but `ProspectEventLink.prospect_id` has
+`ForeignKey("prospective_members.id", ondelete="CASCADE")`. If the prospect
+is instead deleted concurrently (by an admin merging/removing it) between
+`find_active_prospect_by_email()` returning it and this insert, the flush
+fails with the _same_ `IntegrityError` type for a genuinely different
+reason — no link was created, the prospect is simply gone. Blindly
+swallowing it let `_link_prospect` return the stale prospect anyway,
+`check_in_guest` would set `attendee.prospect_id` to a now-nonexistent id,
+and the outer commit would fail the same FK check — losing the attendance
+this SAVEPOINT exists to protect, via a different race window than
+LOC-32-1's original one. Fixed by re-querying whether the expected link
+actually exists after the failure: only swallow the exception if it does
+(the real race); otherwise re-raise, so `_link_prospect`'s existing
+broad handler logs the failure and returns no prospect, leaving the
+attendee correctly unlinked rather than pointed at a vanished row. Guard
+tests: `test_race_is_swallowed_only_when_the_link_actually_exists`,
+`test_race_is_swallowed_when_the_link_exists_after_the_failure`,
+`test_deleted_prospect_race_still_records_attendance`.
+
 ### LOC-32-2 — MED — Kiosk display codes kept working after the organization was deactivated — ✅ FIXED
 
 **What:** `LocationService.get_location_by_display_code` filtered only
@@ -290,6 +311,13 @@ revisions, single head.
 test_link_race_is_scoped_to_a_savepoint_not_the_whole_commit` — LOC-32-1:
   asserts `begin_nested()` wraps the link insert and a lost race still lets
   the attendee commit succeed.
+- `tests/test_guest_check_in.py::TestGuestProspectCreation::
+test_race_is_swallowed_only_when_the_link_actually_exists`,
+  `test_race_is_swallowed_when_the_link_exists_after_the_failure`,
+  `test_deleted_prospect_race_still_records_attendance` — LOC-32-1 revised:
+  an `IntegrityError` with no matching link afterward re-raises rather than
+  being swallowed; one that resolves to an existing link is swallowed; the
+  end-to-end case still commits the attendance with no prospect linked.
 - `tests/test_location_display_code.py::TestGetLocationByDisplayCode` —
   LOC-32-2: asserts the query joins `organizations` and filters `active`.
 - `tests/test_location_uniqueness.py` — LOC-32-3: a building-only change
@@ -314,6 +342,6 @@ TestLocationUpdateRejectsNullForNonNullableFields` — LOC-32-5: an explicit
 | `black --check app/ tests/ alembic/`                                            | ✅ clean (after formatting one file)                |
 | `isort --check-only app/ tests/ alembic/`                                       | ✅ clean                                            |
 | `python3 scripts/validate_migrations.py --strict`                               | ✅ 394 revisions, single head                       |
-| Scoped tests (`-k "location or admin_hub or guest_check_in or public_display"`) | ✅ 313 passed, 1 skipped (pre-existing)             |
-| Full backend suite (`pytest tests/`)                                            | ✅ 9368 passed, 22 skipped (pre-existing), 0 failed |
+| Scoped tests (`-k "location or admin_hub or guest_check_in or public_display"`) | ✅ 316 passed, 1 skipped (pre-existing)             |
+| Full backend suite (`pytest tests/`)                                            | ✅ 9371 passed, 22 skipped (pre-existing), 0 failed |
 | `tsc --noEmit` / `eslint .`                                                     | n/a — no frontend file changed                      |
