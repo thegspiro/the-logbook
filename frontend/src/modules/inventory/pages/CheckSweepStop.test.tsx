@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event';
 
 import { CheckSweepStop } from './CheckSweepStop';
 
-import type { CheckItemSpec } from './CheckItemControls';
+import type { CheckItemAnswer, CheckItemSpec } from './CheckItemControls';
 import type { AnswerMap, LapStop } from './checkLapModel';
 
 const stop = (items: CheckItemSpec[]): LapStop => ({ id: 's', name: 'EMS cabinet', items });
@@ -207,13 +207,29 @@ describe('replacing what is expiring', () => {
     return onSwap;
   };
 
-  it('offers the replacement the expiry rule is asking for', async () => {
+  it('offers the swap the expiry rule is asking for', async () => {
     // The seal rule tells the crew to open the container and replace what is
     // expiring. Without this they have to leave the walk to act on it.
     const user = userEvent.setup();
     const onSwap = mount(epi());
-    await user.click(screen.getByRole('button', { name: 'Replace' }));
+    await user.click(screen.getByRole('button', { name: 'Swap' }));
     expect(onSwap).toHaveBeenCalledWith('epi');
+  });
+
+  it('calls an in-window swap a swap, not a replacement', () => {
+    // Only an expired unit is *replaced*. `swap_item_lot` refuses to retire a
+    // lot that is still in date — the disposition it files says the unit was
+    // disposed of as expired, and that is untrue of a box with weeks left on
+    // it. So an in-window swap is a top-up, and calling it "Replace" would
+    // promise a retirement the crew cannot get.
+    mount(epi());
+    expect(screen.getByRole('button', { name: 'Swap' })).toBeVisible();
+    expect(screen.queryByRole('button', { name: 'Replace' })).not.toBeInTheDocument();
+  });
+
+  it('calls an expired swap a replacement, because that one does retire stock', () => {
+    mount(epi({ expirationDate: YESTERDAY }));
+    expect(screen.getByRole('button', { name: 'Replace' })).toBeVisible();
   });
 
   it('offers nothing where there is no ready stock to draw from', () => {
@@ -413,6 +429,23 @@ describe('a sealed container', () => {
     expect(onSeal).toHaveBeenCalledWith('drugs', { status: 'broken' });
   });
 
+  it('undoing a broken reading clears no more than the first reading would have', async () => {
+    // The undo path is a second way into `intact`, so it needs the same
+    // evidence test the front door applies — otherwise a crew taps Broken,
+    // taps Undo, and the counts they never performed come off the screen.
+    const user = userEvent.setup();
+    const onSeal = mount({ status: 'broken', tagNumber: 'M2-40871', priorIntact: false });
+    await user.click(screen.getByRole('button', { name: /the tag matches after all/ }));
+    expect(onSeal).toHaveBeenCalledWith('drugs', { status: 'intact', cleared: false });
+  });
+
+  it('undoing a broken reading still clears where the evidence holds', async () => {
+    const user = userEvent.setup();
+    const onSeal = mount({ status: 'broken', tagNumber: 'M2-40871', priorIntact: true });
+    await user.click(screen.getByRole('button', { name: /the tag matches after all/ }));
+    expect(onSeal).toHaveBeenCalledWith('drugs', { status: 'intact', cleared: true });
+  });
+
   it('shows no seal surface on a container that is not sealed', () => {
     render(<CheckSweepStop stop={{ id: 'cab', name: 'Cab', items: [gauze] }} answers={{}} onAnswer={vi.fn()} />);
     expect(screen.queryByTestId('seal-cab')).not.toBeInTheDocument();
@@ -597,5 +630,72 @@ describe('which day an expiry is judged against', () => {
 
     render(<CheckSweepStop stop={stop} answers={{}} onAnswer={vi.fn()} today={new Date(2026, 5, 1)} />);
     expect(screen.getByTestId('expiry-epi')).toHaveTextContent('9 days');
+  });
+
+  it('judges Confirm against that same day, not the phone', async () => {
+    // Rendering against the org's day and storing against the device's is the
+    // one combination that produces a record disagreeing with the screen the
+    // crew read — an item shown expired, filed as a pass.
+    const user = userEvent.setup();
+    // Dated past the supplied day and well ahead of any clock this suite runs
+    // on, so the two verdicts genuinely disagree.
+    const item: CheckItemSpec = { id: 'epi', name: 'Epi', checkType: 'expiry', expirationDate: '2099-06-10' };
+    const onAnswer = vi.fn();
+    render(
+      <CheckSweepStop
+        stop={{ id: 's', name: 'Drug box', items: [item] }}
+        answers={{}}
+        onAnswer={onAnswer}
+        today={new Date(2099, 5, 20)}
+      />
+    );
+    expect(screen.getByTestId('expiry-epi')).toHaveTextContent('10 days ago');
+    await user.click(screen.getByRole('button', { name: 'Confirm' }));
+    expect(onAnswer).toHaveBeenCalledWith('epi', expect.objectContaining({ status: 'fail' }));
+  });
+});
+
+describe('marking a count not applicable', () => {
+  const gauze: CheckItemSpec = { id: 'gauze', name: '4×4 gauze', checkType: 'count', expectedQuantity: 10 };
+
+  it('clears the number along with the status', async () => {
+    // Patches are merged, and the server reconciles any non-null observation
+    // into the apparatus inventory whatever status sits beside it — so a count
+    // left behind by an earlier tap rewrites the stock for an item the crew
+    // has just said is not aboard.
+    const user = userEvent.setup();
+    const onAnswer = vi.fn<(id: string, patch: Partial<CheckItemAnswer>) => void>();
+    render(
+      <CheckSweepStop
+        stop={stop([gauze])}
+        answers={{ gauze: { status: 'fail', quantityFound: 4 } }}
+        onAnswer={onAnswer}
+      />
+    );
+    await user.click(screen.getByRole('button', { name: '4×4 gauze is not on this truck' }));
+    // Strict, because the patch is merged: omitting the key leaves the old
+    // count in place, which is the bug. Only an explicit undefined clears it,
+    // and `toHaveBeenCalledWith` treats the two as equal.
+    expect(onAnswer.mock.calls[0]).toStrictEqual(['gauze', { status: 'not_applicable', quantityFound: undefined }]);
+  });
+
+  it('shows no number at all once the item is not aboard', () => {
+    // The carried figure is last check's count, shown as a suggestion until
+    // this crew answers. `not_applicable` counts as confirmed, so falling back
+    // to it here repaints last month's number as one somebody observed today —
+    // while submission omits the quantity entirely.
+    render(
+      <CheckSweepStop
+        stop={stop([{ ...gauze, carriedQuantity: 7 }])}
+        answers={{ gauze: { status: 'not_applicable' } }}
+        onAnswer={vi.fn()}
+      />
+    );
+    expect(screen.getByTestId('tally-value-gauze')).toHaveTextContent('—');
+  });
+
+  it('still offers the carried figure while the item is on the truck', () => {
+    render(<CheckSweepStop stop={stop([{ ...gauze, carriedQuantity: 7 }])} answers={{}} onAnswer={vi.fn()} />);
+    expect(screen.getByTestId('tally-value-gauze')).toHaveTextContent('7');
   });
 });

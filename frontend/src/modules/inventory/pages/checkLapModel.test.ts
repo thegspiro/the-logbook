@@ -92,6 +92,16 @@ describe('what counts as a question', () => {
     expect(stopFailures(WALL, { i2: { status: 'out_of_service' } }).map((i) => i.id)).toEqual(['i2']);
   });
 
+  it('keeps an out-of-service count as a fault even when it is also short', () => {
+    // A short count is reported as a restock rather than a fault, so it is not
+    // shown twice. That suppression is about the shortfall — an item the crew
+    // marked out of service is broken, and demoting it to a supply order on
+    // the map and the finish screen is how a safety fault gets walked past.
+    const s = stop('bay', 'Bay', [count('c', 'Gauze', 10)]);
+    expect(stopFailures(s, { c: { status: 'out_of_service', quantityFound: 4 } }).map((i) => i.id)).toEqual(['c']);
+    expect(stopFailures(s, { c: { status: 'fail', quantityFound: 4 } })).toEqual([]);
+  });
+
   it('excludes levels from a bulk claim', () => {
     // Inventing a gauge reading is a fabricated record on the one type whose
     // whole purpose is the stored value.

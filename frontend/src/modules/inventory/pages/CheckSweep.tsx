@@ -40,6 +40,7 @@ import {
   type AnswerMap,
   type LapStop,
   type StopMapState,
+  type SweepSaveState,
 } from './checkLapModel';
 
 // ============================================================================
@@ -152,8 +153,6 @@ const PocketChips: React.FC<{
 // ============================================================================
 // Header
 // ============================================================================
-
-export type SweepSaveState = 'saved' | 'saving' | 'offline' | 'failed';
 
 /**
  * Save state is on screen at all times, because the fear the brief names is
