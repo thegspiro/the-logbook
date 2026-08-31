@@ -578,7 +578,13 @@ class InventoryService:
         """Determine item status after return based on condition.
 
         Items returned in poor/damaged/out-of-service condition are
-        auto-quarantined to IN_MAINTENANCE; all others go to AVAILABLE.
+        auto-quarantined to IN_MAINTENANCE; a retired one goes to RETIRED;
+        all others go to AVAILABLE.
+
+        This is the single mapping from condition to a safe status, and every
+        write path that sets one from the other uses it. Omitting RETIRED here
+        produced AVAILABLE + retired — a pair _VALID_STATE_COMBOS rejects, so
+        the row became uneditable by the very validator meant to prevent it.
         """
         if return_condition and return_condition in (
             ItemCondition.POOR,
@@ -586,6 +592,8 @@ class InventoryService:
             ItemCondition.OUT_OF_SERVICE,
         ):
             return ItemStatus.IN_MAINTENANCE
+        if return_condition == ItemCondition.RETIRED:
+            return ItemStatus.RETIRED
         return ItemStatus.AVAILABLE
 
     @staticmethod
@@ -610,10 +618,24 @@ class InventoryService:
 
     @staticmethod
     def _validate_item_state(
-        status_val: ItemStatus, condition_val: ItemCondition, assigned_to_user_id=None
+        status_val: ItemStatus,
+        condition_val: ItemCondition,
+        assigned_to_user_id=None,
+        *,
+        check_combination: bool = True,
     ) -> Optional[str]:
-        """Return an error string if the status/condition combination is invalid."""
-        allowed = _VALID_STATE_COMBOS.get(status_val)
+        """Return an error string if the status/condition combination is invalid.
+
+        ``check_combination=False`` skips only the status/condition pair rule,
+        for an update that does not touch either field. The pair rule was
+        introduced after rows carrying the forbidden combinations already
+        existed, so applying it to the *resulting* state of every partial
+        update made those rows permanently unsaveable — a quartermaster
+        changing an item's storage location got "Invalid state" naming two
+        fields the edit was not touching. The assigned-user rule always
+        applies: it is about the resulting state, not about a transition.
+        """
+        allowed = _VALID_STATE_COMBOS.get(status_val) if check_combination else None
         if allowed is not None and condition_val not in allowed:
             return (
                 f"Invalid state: status '{status_val.value}' requires condition "
@@ -622,6 +644,19 @@ class InventoryService:
         if status_val in _REQUIRES_ASSIGNED_USER and not assigned_to_user_id:
             return f"Status '{status_val.value}' requires an assigned user"
         return None
+
+    @classmethod
+    def _enforce_state_invariant(cls, item) -> None:
+        """Quarantine an item whose stored status/condition pair is illegal.
+
+        Write paths that set a condition without touching status can otherwise
+        manufacture exactly the pair the validator forbids — AVAILABLE plus
+        poor/damaged/out-of-service. That is not merely inconsistent: assign
+        and checkout gate on status alone, so the item stays distributable
+        while recorded as unsafe, and the item edit form can no longer save it.
+        """
+        if cls._validate_item_state(item.status, item.condition):
+            item.status = cls._status_from_condition(item.condition)
 
     async def _validate_category_requirements(
         self, item_data: Dict[str, Any], organization_id
@@ -1778,8 +1813,17 @@ class InventoryService:
             assigned_user = update_data.get(
                 "assigned_to_user_id", item.assigned_to_user_id
             )
+            # Enforce the pair rule only when this update actually changes the
+            # pair. A row stored with a combination that predates the rule must
+            # stay editable for every unrelated field; the migration that
+            # normalizes those rows is the place that fixes them, not a 400 on
+            # a location change.
+            pair_changed = (new_status, new_condition) != (item.status, item.condition)
             state_err = self._validate_item_state(
-                new_status, new_condition, assigned_user
+                new_status,
+                new_condition,
+                assigned_user,
+                check_combination=pair_changed,
             )
             if state_err:
                 return None, state_err
@@ -1994,7 +2038,12 @@ class InventoryService:
             if return_condition:
                 item.condition = return_condition
 
-            item.status = self._status_from_condition(return_condition)
+            # From the condition the item actually ends up with, not the one
+            # supplied. Unassign is reachable from the UI with no body at all,
+            # so `return_condition` is routinely None while the stored
+            # condition is damaged — which wrote AVAILABLE + damaged and put a
+            # damaged coat straight back in the assignable pool.
+            item.status = self._status_from_condition(item.condition)
 
             # Queue notification
             await self._queue_inventory_notification(
@@ -2408,7 +2457,7 @@ class InventoryService:
                 return False, "Associated item not found"
             item.condition = return_condition
 
-            item.status = self._status_from_condition(return_condition)
+            item.status = self._status_from_condition(item.condition)
 
             # Queue notification
             await self._queue_inventory_notification(
@@ -2653,6 +2702,10 @@ class InventoryService:
                     if maintenance_data.get("passed") is False:
                         item.status = ItemStatus.IN_MAINTENANCE
                         item.condition = ItemCondition.OUT_OF_SERVICE
+                    # `passed` is absent on a plain repair log, so the branch
+                    # above does not fire and an unsafe condition_after would
+                    # otherwise be written against an AVAILABLE item.
+                    self._enforce_state_invariant(item)
             elif maintenance_data.get("maintenance_type") == "repair":
                 item = await self._get_item_locked(item_id, organization_id)
                 if item:
@@ -2728,6 +2781,7 @@ class InventoryService:
                             item.next_inspection_due = (
                                 safe_data.get("next_due_date") or record.next_due_date
                             )
+                    self._enforce_state_invariant(item)
 
             await self.db.commit()
             await self.db.refresh(record)
