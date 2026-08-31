@@ -16,10 +16,35 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-[#2081](https://github.com/thegspiro/the-logbook/pull/2081) — feature 25
-(Messaging & notifications), pass 2. Branch
-`claude/security-review-messaging-notifications-pass2`. Subscribed via
-`subscribe_pr_activity`; awaiting CI/review.
+None. Feature 25 (Messaging & notifications), pass 2, is fully merged — see
+log entry below. Next: feature 26, Forms.
+
+---
+
+### 2026-08-31 — Feature 25 (Messaging & notifications), pass 2 ✅ fully merged — PR #2081
+
+PR #2081 merged (`7d4c8fda`). Codex's review flagged two real issues on the
+first commit: a finding-id collision (the flagged `reconcile_recipients`
+item in `KNOWN_LIMITATIONS.md` reused `MSG-9`, already assigned to the fixed
+`get_message_stats` org-scoping issue) and an overstated claim that
+narrowing a message's audience "destroys acknowledgment history" — it
+overlooked the independent, tamper-evident `message_acknowledged` audit-log
+entry `reconcile_recipients` never touches. Fixed by renaming the
+limitation to MSG-10 (with cross-references updated in the findings doc and
+this tracker) and rewording the claim to distinguish the acknowledgment
+report's/inbox's lost record from the surviving audit trail. A third Codex
+comment (stale `## Open PR` header) was already addressed by the prior
+commit. All three review threads resolved; CI green on the final head
+(17/17 checks), no merge conflict. Rotation row 25 → ✅. Next: 26 Forms.
+
+**Correction (2026-08-31, on this closing PR #2082):** Codex's review here
+caught that the "surviving audit trail" framing above overstated it too —
+`AuditLogger.create_log_entry` (`app/core/audit.py:265-270`) is deliberately
+fail-open and `acknowledge_message` never checks its return value, so the
+`message_acknowledged` audit-log write is best-effort, not guaranteed. Reworded
+in `KNOWN_LIMITATIONS.md` (MSG-10) and `MSG-25-messaging-notifications.md` to
+say the report/inbox loss is reliable while the audit-trail survival is
+conditional on that write having succeeded.
 
 ---
 
@@ -71,13 +96,16 @@ added that inspects the compiled `WHERE` clause and fails on reintroduction
 **Flagged (MSG-10, not fixed, recorded in `docs/KNOWN_LIMITATIONS.md`)** —
 `reconcile_recipients` hard-deletes a member's `DepartmentMessageRecipient`
 row, including `read_at`/`acknowledged_at`, the moment an audience edit no
-longer targets them — erasing that member's record from
-`get_acknowledgment_report` (an independent `message_acknowledged` audit-log
-entry survives, per Codex's review of PR #2081, so this is a report/inbox-
-visibility loss, not a total loss of evidence), which the same file's own
-`delete_message` docstring calls "compliance evidence." Not mechanically
-fixable like MSG-9 (the org-scoping fix above): keeping resolved rows would also keep the
-message visible in that member's inbox (visibility is a join on the same
+longer targets them — reliably erasing that member's record from
+`get_acknowledgment_report` (which the same file's own `delete_message`
+docstring calls "compliance evidence"). An independent `message_acknowledged`
+audit-log entry may also exist, but that write is best-effort, not
+guaranteed — `AuditLogger.create_log_entry` is deliberately fail-open and
+`acknowledge_message` never checks its return, per Codex's review of the
+closing PR #2082 — so whether any evidence survives beyond the report/inbox
+depends on whether that write happened to succeed. Not mechanically fixable
+like MSG-9 (the org-scoping fix above): keeping resolved rows would also keep
+the message visible in that member's inbox (visibility is a join on the same
 table), which is a product decision, not a bug fix. Not cross-tenant.
 
 Also corrected a stale doc: `docs/app-review/email-templates.md` still marked
@@ -3126,7 +3154,7 @@ each row's prior PR is recorded in the Log, not repeated here.
 | 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ✅     |
 | 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ✅     |
 | 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ✅     |
-| 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ⏳     |
+| 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ✅     |
 | 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                         | ⬜     |
 | 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                         | ⬜     |
 | 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`                                                                    | ⬜     |
