@@ -2669,6 +2669,63 @@ defects — which is, in practice, what currently happens.
 Recorded because the _rate_ is new. Seven in seven days is a signal about how
 many branches are open at once, not about anybody's care with Alembic.
 
+## FE3-34-2 — A Failed Client-Side Logout Presents an Unauthenticated UI While the Session Cookies Stay Live (2026-08-31)
+
+`authStore.logout()`'s `try { await authService.logout() } catch { /* Logout
+errors are non-critical; cookies are cleared by the backend */ }` proceeds
+unconditionally to clear local state and show the login screen. The
+comment's premise only holds on the success path: `POST /auth/logout`
+(`backend/app/api/v1/endpoints/auth.py:1197-1235`) calls
+`_clear_auth_cookies()` only after `AuthService.logout_user()` has deleted
+the session row, and on any failure — a network drop, a 5xx, or the
+endpoint's own pre-cookie-clear 400 when `logout_user()` returns `False`
+(e.g. its `except Exception: return False` on a transient DB error) — the
+httpOnly access/refresh cookies are left exactly as they were.
+
+On a shared station computer, this means: Sign Out fails silently, the
+screen shows Login, and the previous member's session remains fully valid
+and reusable until the tokens naturally expire — the opposite of what the
+UI communicates, on the exact threat model this same `logout()` function's
+`purgeLocalMemberData()` call two lines below exists to defend.
+
+Not fixed because the safe remediation is a product decision, not a
+drive-by patch: retry the server call automatically (how many times, what
+backoff, before giving up?), block the UI with an explicit "couldn't
+confirm sign-out — please close your browser" message matching the
+backend's own 400 copy, or something else. Found in
+`docs/security-review/FE3-34-frontend-shared.md` (feature 34, pass 3,
+FE3-34-2).
+
+## FE3-34-4 — A Stale In-Flight Cacheable GET Can Write Into the Shared Cache After a Session-Boundary `clearCache()` (2026-08-31)
+
+`clearCache()` (called on login and logout) empties the in-memory response
+cache, and `clearInFlight()` (`utils/inFlight.ts`) only clears
+_de-duplication_ bookkeeping — its own comment says the old request is
+deliberately left to keep running: "never let the old request remove that
+one." Nothing cancels an axios request already in flight at a session
+boundary, and the response interceptor's `setCache(key, response.data)`
+writes unconditionally whenever that request eventually settles. Cache keys
+carry no session or user identity — only URL + params.
+
+On a shared kiosk: member A's slow cacheable GET (e.g. `/analytics/metrics`)
+is still in flight when they log out and member B logs in (both transitions
+call `clearCache()`). A's response arrives afterward and populates the
+now-shared cache under an identity-free key. B's next request for the same
+URL+params, within the 30-90s fresh/stale window, is served A's data as a
+synthetic response with no network round trip — so B's own authorization
+for it is never checked.
+
+Requires an in-flight request straddling exactly a login/logout boundary, so
+it is a narrow race, but the mechanism is real and unconditional once the
+timing lines up. Not fixed because a correct close needs either a
+session-generation counter threaded through every `setCache` call site or
+`AbortController`-based cancellation of in-flight requests at the session
+boundary — both change the cache module's public API and interact with the
+existing stale-while-revalidate contract `apiCache.test.ts` locks in, which
+is a deliberate design change, not a same-pass patch. Found in
+`docs/security-review/FE3-34-frontend-shared.md` (feature 34, pass 3,
+FE3-34-4).
+
 ## Process
 
 The review loop (see [review-log.md](./review-log.md)) advances through one area

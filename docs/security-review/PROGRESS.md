@@ -18,13 +18,71 @@ feature. The rotation cannot outrun its own review queue.
 
 Feature 34 (Frontend shared, pass 3) —
 [#2112](https://github.com/thegspiro/the-logbook/pull/2112), subscribed.
-Docs-only, 0 findings (diff-based re-verification of FE2-34 + first full read
-of `components/ux/*`). Once merged, every row (00-34) is ✅ and the rotation
-wraps to 00 for the next full pass.
+Round 1 (diff-based re-verification of FE2-34 + first full read of
+`components/ux/*`) concluded 0 findings; Codex's review caught 4 real
+defects round 1's methodology wasn't shaped to catch — 2 fixed
+(FE3-34-1/3), 2 flagged (FE3-34-2/4, mirrored into `KNOWN_LIMITATIONS.md`).
+Once merged, every row (00-34) is ✅ and the rotation wraps to 00 for the
+next full pass.
 
 ---
 
-### 2026-08-31 — Feature 34 (Frontend shared, pass 3) — 0 new findings, PR opening
+### 2026-08-31 — Feature 34 (Frontend shared, pass 3), round 2: 2 fixed, 2 flagged (Codex-caught)
+
+Round 1 (below) concluded "0 new findings" from a diff-based cache-risk
+sweep and a first full read of `components/ux/*` — both mechanisms this
+feature's prior findings came from. Codex's review of round 1's commit
+caught 4 real defects in the auth/cache core neither mechanism was aimed at,
+plus corrected the round-1 sweep's file/line miscount and its scope gap
+(the sweep ran before `main` was merged into this branch, missing the 19
+`api.get` calls PR #2110's equipment-checklists move added in
+`modules/inventory/services/equipmentCheckApi.ts` — re-run against the
+post-merge tree, still zero cache-exclusion gap since that file uses
+`createApiClient()`, which has no caching logic).
+
+**FE3-34-1 (MEDIUM, fixed)** — `authStore.ts`'s `loadUser()` purged local
+member data (offline shift-report drafts, equipment-check queues) on _any_
+`getCurrentUser()` rejection, not only a confirmed 401/403 — a network
+blip or backend 500 while loading the profile silently destroyed unsynced
+work with no loss notice. Fixed by gating the purge on
+`appError.status === 401 || 403`.
+
+**FE3-34-3 (MEDIUM-HIGH, fixed)** — the global client's `isAuthEndpoint`
+list omitted `/auth/mfa/login`, which intentionally 401s on a wrong/expired
+MFA code. The interceptor treated that as an expired session, attempted a
+refresh (which also fails — no session exists yet mid-challenge), and
+purged local data + hard-redirected to `/login` instead of showing "invalid
+code." Fixed by adding the path to the list.
+
+**Flagged, not fixed — both mirrored into `KNOWN_LIMITATIONS.md`:**
+
+**FE3-34-2 (HIGH by-name, needs an owner decision)** — `authStore.logout()`
+presents an unauthenticated UI even when the server-side `/auth/logout`
+call fails; the httpOnly session cookies are only cleared on that call's
+success path (`backend/app/api/v1/endpoints/auth.py:1197-1235`), so a failed
+logout on a shared station leaves the previous member's session fully live
+while the UI shows Login. Needs a decision on the safe client-side
+remediation (retry? block with an explicit message?) rather than a
+same-pass patch to the logout flow.
+
+**FE3-34-4 (MEDIUM, needs a design change)** — a slow, cacheable GET still
+in flight when a session boundary calls `clearCache()` can write its
+response into the now-shared cache afterward (cache keys carry no
+session/user identity); on a shared kiosk this is a narrow but real
+race-window cross-session data leak. Closing it needs a session-generation
+counter or `AbortController`-based cancellation threaded through the cache
+module's write paths — a deliberate API change, not a drive-by fix.
+
+Two new guard tests added: `services/apiClient.test.ts` (new file — this
+axios singleton had no direct unit test before) covers FE3-34-3 and pins the
+surrounding refresh/redirect behavior; `stores/authStore.test.ts` gained 4
+`loadUser` cases for FE3-34-1. All new tests verified to fail against the
+pre-fix code. Completion gate green: `tsc --noEmit` 0 errors, `eslint` 0
+errors/9 pre-existing warnings, scoped tests 154/154,
+`scripts/check_docs_links.py` 0 broken links. CHANGELOG entry added for the
+two user-visible fixes.
+
+### 2026-08-31 — Feature 34 (Frontend shared, pass 3), round 1 — 0 new findings (superseded by round 2 above)
 
 Re-verified FE2-34 (2026-08-27, PR #1918) against 103 non-test frontend files
 changed since (+20,407/-4,266 across ~30 other rotation iterations) rather
