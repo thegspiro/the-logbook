@@ -2264,40 +2264,51 @@ class SchedulingService:
         # Not a column — popped before the model is constructed, then written
         # as link rows once the template has an id.
         check_ids = template_data.pop("equipment_check_template_ids", None)
+
+        # Validated BEFORE the template is created, because _crud_create
+        # commits. Validating after it meant a bad checklist id returned
+        # "Equipment checklist not found" with the template already committed:
+        # the officer saw a failure, retried, and left a duplicate row behind
+        # on every attempt.
+        validated_ids: Optional[List[str]] = None
+        if check_ids is not None:
+            validated_ids, id_error = await self._validated_check_ids(
+                check_ids, organization_id
+            )
+            if id_error:
+                return None, id_error
+
         template, error = await self._crud_create(
             ShiftTemplate, template_data, organization_id, created_by
         )
         if error or template is None:
             return template, error
-        if check_ids is not None:
-            link_error = await self._replace_equipment_check_links(
-                template, organization_id, check_ids
+        if validated_ids is not None:
+            await self._replace_equipment_check_links(
+                template, organization_id, validated_ids
             )
-            if link_error:
-                return None, link_error
             await self.db.commit()
             await self.db.refresh(template)
         return template, None
 
-    async def _replace_equipment_check_links(
+    async def _validated_check_ids(
         self,
-        template: ShiftTemplate,
-        organization_id: UUID,
         check_template_ids: List[str],
-    ) -> Optional[str]:
-        """Make the template's checklist links exactly *check_template_ids*.
+        organization_id: UUID,
+    ) -> Tuple[List[str], Optional[str]]:
+        """Dedupe *check_template_ids* and verify every one is in the org.
 
-        Returns an error message, or None on success.
+        Returns ``(ids, None)`` in the officer's order, or ``([], message)``.
 
-        Every id is a client-supplied foreign key, so each is verified to be a
-        checklist in the caller's org before it is stored (pitfall #14c). This
-        one is not merely a dangling-reference risk: the link decides which
-        checklists a crew is shown, so a foreign id would point them at another
+        Separate from the write below so a caller can check the ids *before*
+        it creates anything — the create path commits the template first, so
+        validating inside the writer left an orphan row behind whenever an id
+        turned out to be bad.
+
+        Every id is a client-supplied foreign key (pitfall #14c). This one is
+        not merely a dangling-reference risk: the link decides which checklists
+        a crew is shown, so a foreign id would point them at another
         department's.
-
-        The set is replaced rather than merged. An empty list means the officer
-        cleared them, which restores apparatus-based resolution — that is a
-        real choice, not a no-op.
         """
         wanted: List[str] = []
         for raw in check_template_ids:
@@ -2313,10 +2324,26 @@ class SchedulingService:
                 )
             )
             found = {str(row) for row in owned.scalars().all()}
-            missing = [value for value in wanted if value not in found]
-            if missing:
-                return "Equipment checklist not found"
+            if any(value not in found for value in wanted):
+                return [], "Equipment checklist not found"
 
+        return wanted, None
+
+    async def _replace_equipment_check_links(
+        self,
+        template: ShiftTemplate,
+        organization_id: UUID,
+        wanted: List[str],
+    ) -> None:
+        """Make the template's checklist links exactly *wanted*.
+
+        *wanted* must already have been through ``_validated_check_ids`` — this
+        writes the rows and does not re-check them.
+
+        The set is replaced rather than merged. An empty list means the officer
+        cleared them, which restores apparatus-based resolution — that is a
+        real choice, not a no-op.
+        """
         existing = await self.db.execute(
             select(ShiftTemplateEquipmentCheck).where(
                 ShiftTemplateEquipmentCheck.shift_template_id == str(template.id),
@@ -2345,8 +2372,6 @@ class SchedulingService:
         # Whatever is left was unticked.
         for row in by_check_id.values():
             await self.db.delete(row)
-
-        return None
 
     async def get_templates(
         self, organization_id: UUID, active_only: bool = True
@@ -2394,11 +2419,14 @@ class SchedulingService:
         # not a column and _crud_update is a bare setattr loop.
         check_ids = update_data.pop("equipment_check_template_ids", None)
         if check_ids is not None:
-            link_error = await self._replace_equipment_check_links(
-                template, organization_id, check_ids
+            validated_ids, id_error = await self._validated_check_ids(
+                check_ids, organization_id
             )
-            if link_error:
-                return None, link_error
+            if id_error:
+                return None, id_error
+            await self._replace_equipment_check_links(
+                template, organization_id, validated_ids
+            )
         return await self._crud_update(template, update_data)
 
     async def delete_template(

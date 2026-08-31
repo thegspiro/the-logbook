@@ -4085,9 +4085,19 @@ class EquipmentCheckService:
             )
             if linked_ids:
                 explicit = True
-                templates = await self.list_templates(
+                fetched = await self.list_templates(
                     organization_id, template_ids=linked_ids
                 )
+                # Back into the officer's order. list_templates sorts by the
+                # checklist's own sort_order, which is the right answer when
+                # it is listing a catalogue and the wrong one here: the link
+                # rows carry the order an officer arranged, and the reminder
+                # resolver already honours it. Disagreeing would show the crew
+                # a different running order than the reminder named.
+                by_id = {str(t.id): t for t in fetched}
+                templates = [
+                    by_id[linked_id] for linked_id in linked_ids if linked_id in by_id
+                ]
 
         if not explicit and shift.apparatus_id:
             ref = await resolve_apparatus_ref(
