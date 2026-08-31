@@ -22,12 +22,12 @@ feature 25 (Messaging & notifications), pass 2 follow-up. PR #2081 (the
 main pass-2 review, MSG-9 fixed + MSG-10 flagged) and its closing PR #2082
 (Codex doc-accuracy corrections) both merged to `main` before this
 iteration's independent finding could be added to either (see log entries
-below for the full sequence). This follow-up PR carries the finding that
-did not make it into #2081: **MSG-11** (HIGH — a migration existence-guard
-gap, fixed) and **MSG-12** (LOW-MED, flagged). Opened against current
-`main` (which already includes #2081 and #2082). Opened and subscribed;
-awaiting CI. Rotation row 25 stays `⏳` until this merges — the HIGH-severity
-migration fix is still outstanding.
+below for the full sequence). This follow-up PR originally carried
+**MSG-11** as a HIGH-severity migration fix; a later correction on this same
+PR (see the correction log entry below) found MSG-11 does not actually
+reproduce and reverted the guard, keeping only a `test_migration_create_all_tables.py`
+correctness fix/ratchet. **MSG-12** (LOW-MED, flagged) stands. Rotation row
+25 stays `⏳` until this merges.
 
 ---
 
@@ -53,23 +53,19 @@ migration bug the other session's PR did not touch — is instead delivered as
 a small follow-up PR against current `main` (which already contains #2081)
 rather than silently dropped.
 
-**MSG-11 (HIGH, fixed)** — `20260826_1700_d4e5f6a7b8c9_message_recipients.py`
+**MSG-11 (initially reported HIGH/fixed; corrected below to not
+reproducible)** — `20260826_1700_d4e5f6a7b8c9_message_recipients.py`
 (the same PR #1938 backfill migration PR #2081's "New architecture reviewed"
 section had already read for a different question) reflects `positions` and
-`user_positions` with raw `sa.Table(..., autoload_with=bind)` and had no
-existence guard. Both tables are model-only (`Base.metadata.create_all()`-only,
-CLAUDE.md Pitfall #26) — no migration in the 394-revision chain creates
-them — so `alembic upgrade head` against any fresh/empty database (exactly
-what CI's integration/contract jobs run, and what every new department's
-first deploy does) raises `NoSuchTableError` and fails the entire migration
-chain. `validate_migrations.py --strict` (this rotation's own
-completion-gate check) only parses the revision graph statically and does
-not execute `upgrade()`, so it reported clean while this would fail at
-runtime — the same way the `event_requests` incident on 2026-08-24 was
-missed until it actually hit CI. Fixed with the codebase's established
-guard idiom; skipping the backfill on a database that has never run
-`create_all()` is correct, not just safe, since such a database has no
-`department_messages` rows to backfill either.
+`user_positions` with raw `sa.Table(..., autoload_with=bind)` and, at the
+time this was written, had no existence guard. This paragraph pattern-matched
+CLAUDE.md Pitfall #26 (`positions` is one of that section's own listed
+examples) and concluded `alembic upgrade head` against a fresh/empty
+database would raise `NoSuchTableError` on this reflection and fail the
+whole migration chain, the same way the `event_requests` incident on
+2026-08-24 did. **This was not verified against a real fresh-database run at
+the time, and turned out to be wrong** — see the correction entry directly
+below, written the same day after Codex's review of this PR caught it.
 
 **MSG-12 (LOW-MED, flagged)** — a worker crash between
 `MessageDeliveryService._claim_delivery`'s commit and
@@ -101,6 +97,49 @@ the feature is not fully closed until this follow-up PR merges too. PR
 [#2083](https://github.com/thegspiro/the-logbook/pull/2083) opened (never
 reusing #2081's now-merged branch name, per Pitfall #24) and subscribed.
 Next: 26 Forms, once this merges.
+
+**Correction (2026-08-31, on this same PR #2083):** Codex's review of PR
+#2083 raised four findings on the MSG-11 guard, the most serious (P1) being
+that on any real (non-CI-ephemeral) database that had already hit the
+crash MSG-11 described, the guard's own `CREATE TABLE`/`CREATE INDEX`
+statements would already have implicitly committed (MySQL DDL auto-commits
+per statement) without Alembic stamping the revision, so a retry after
+deploying the guard would fail again — this time on "table already exists."
+Investigating that finding surfaced a second Codex comment questioning
+MSG-11's premise entirely: `positions`/`user_positions` are not actually
+create_all-only, because `20260805_0008_rename_roles_to_positions.py`
+renames `roles`/`user_roles` (created by the initial schema migration) to
+those names, and is a required upgrade-path ancestor of the message-
+recipients migration. Verified this empirically rather than trusting the
+re-reading: created a fresh, correctly-collated MySQL database and ran
+`alembic upgrade head` against it from `base` — the full 394-revision chain,
+including the message-recipients migration, completed with no
+`NoSuchTableError`, and `positions`/`user_positions` existed while
+`roles`/`user_roles` did not (confirming the rename had run). Also confirmed
+via `ScriptDirectory.walk_revisions` that the rename migration is a required
+DAG ancestor, not merely an artifact of this run's ordering. **MSG-11 does
+not reproduce.** Reverted the guard (its early-return path was untested
+dead code resting on a false premise, and per Codex's fourth finding, had it
+ever triggered on a database missing exactly one of the two tables, it would
+have silently skipped the backfill and stamped success — permanently
+dropping existing messages from members' inboxes on any installation that
+already had real data, since inbox visibility now derives from the
+`DepartmentMessageRecipient` join). Fixed the actual root cause instead:
+`_tables_created_by_migrations` in `test_migration_create_all_tables.py`
+only recognized `op.create_table`, not `op.rename_table` destinations —
+now it does. Kept the new `_find_autoload_offenders`/`_AUTOLOAD_TABLE`
+detector as a ratchet with independent value against a real future instance
+of this reflection-without-guard shape; it now correctly reports zero
+offenders for the current chain. Left open, not addressed: Codex's third
+finding that `_guarded_tables` scans whole-file text rather than being
+scoped to `upgrade()` — a pre-existing limitation of the whole detector
+family, not introduced by this PR, out of scope for this pass. Full local
+gate re-verified green (flake8/black/isort/migrations/1166 scoped +
+9291 full backend tests), plus the fresh-database empirical check above
+that no static gate would have caught either the original false alarm or
+this correction. See MSG-11 in the findings doc for the complete writeup.
+Rotation row 25 still `⏳` pending this PR's merge; MSG-12 unaffected. Next:
+26 Forms, once this merges.
 
 ### 2026-08-31 — Feature 25 (Messaging & notifications), pass 2 ✅ PR #2081 fully merged (PR #2082 closed the tracker)
 

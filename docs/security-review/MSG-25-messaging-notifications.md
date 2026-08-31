@@ -301,12 +301,15 @@ editor/preview/scheduler), `frontend/src/modules/notifications/`,
 usePushNotifications.ts`, `frontend/src/components/NotificationCard.tsx`, and
 `frontend/src/services/communicationsServices.ts`.
 
-**Migrations:** none new, but one existing migration fixed —
-`20260826_1700_d4e5f6a7b8c9_message_recipients.py` (the
-`DepartmentMessageRecipient` backfill, part of PR #1938) and its
+**Migrations:** no net change — `20260826_1700_d4e5f6a7b8c9_message_recipients.py`
+(the `DepartmentMessageRecipient` backfill, part of PR #1938) and its
 `merge_heads` companion predate this pass and were reviewed as part of the
-architecture change above; that review found a real defect (**MSG-11**,
-below) in the migration itself, not merely in code written on top of it.
+architecture change above. An initial reading flagged a real-looking defect
+(**MSG-11**, below) and added a guard; a follow-up investigation on the same
+PR (prompted by Codex) found the guard unnecessary and reverted it. The test
+suite gained a general-purpose ratchet (`_find_autoload_offenders`) and a
+correctness fix (`_tables_created_by_migrations` now recognizes
+`op.rename_table`) either way.
 
 ### Pass-1 fixes re-verified intact
 
@@ -404,66 +407,84 @@ the compiled `WHERE` clause of all three count queries and fails if
 pre-fix code (reintroducing the bug locally and re-running the test reproduces
 the failure), then reverted to the fix.
 
-### MSG-11 — HIGH — the recipient-materialization backfill migration reflects two create_all-only tables with no existence guard; `alembic upgrade head` crashes on any fresh database — ✅ FIXED
+### MSG-11 — investigated, **not reproducible** — the recipient-materialization backfill migration's `positions`/`user_positions` reflection is unguarded, but both tables are guaranteed present when it runs
 
-**What:** `20260826_1700_d4e5f6a7b8c9_message_recipients.py`'s backfill step
-(part of the same PR #1938 architecture change reviewed above) reflected
-five tables with raw SQLAlchemy Core (`sa.Table(name, meta,
-autoload_with=bind)`) to seed `department_message_recipients` from data that
-predates the migration. Two of those five — `positions` and
-`user_positions` — are **model-only tables**: no migration in the 394-revision
-chain creates them (confirmed by grepping every `op.create_table(...)` call
-across `alembic/versions/`); they come into existence only when `main.py`'s
-`_fast_path_init()` runs `Base.metadata.create_all()` at application
-startup, _after_ `alembic upgrade head` completes — exactly the deployment
-model CLAUDE.md Pitfall #26 documents, and the same class of bug that broke
-`event_requests` migrations on 2026-08-24. This migration had no
-`if "t" not in sa.inspect(bind).get_table_names(): return`-style guard, the
-established idiom already used in fifteen other migrations in this repo
-(e.g. `20260824_2140_31e2816df7c3_revoke_member_compliance_view.py`). The
-"New architecture reviewed" section above traced this same migration for a
-different question (whether its role-match logic uses the right tables —
-confirmed via the `Role = Position` alias) without noticing the reflection
-itself has no existence guard; the two checks are independent and this one
-was missed.
-**Where:** `backend/alembic/versions/20260826_1700_d4e5f6a7b8c9_message_recipients.py:59-66`.
-**Failure scenario:** CI's integration and contract jobs run `alembic
-upgrade head` against an **empty** database, before anything calls
-`create_all()` — this is explicitly how CI is structured, per
-`test_migration_create_all_tables.py`'s own docstring. `sa.Table("positions",
-meta, autoload_with=bind)` against such a database raises
-`NoSuchTableError`, and because this is one `upgrade()` step among many, the
-entire migration chain fails — not just this revision's own backfill. Every
-fresh install (a new department standing up the platform for the first
-time) and both CI matrix legs (MySQL 8.0 and MariaDB 10.11 ×
-integration/contract, four jobs) hit this on the next full-chain run against
-an empty database. `validate_migrations.py --strict` — the check this
-rotation's completion gate runs — only parses the revision graph statically
-and does not execute `upgrade()`, so it reports clean while this fails at
-runtime.
-**Impact:** HIGH — not a data-confidentiality or tenant-isolation bug, but a
-guaranteed-red CI / guaranteed-broken fresh install once exercised against
-an empty database.
-**Fix:** added the guard, in the codebase's established form:
+**Original claim:** `20260826_1700_d4e5f6a7b8c9_message_recipients.py`'s
+backfill step reflects `positions`/`user_positions` with raw SQLAlchemy Core
+(`sa.Table(name, meta, autoload_with=bind)`) and, at the time this was
+opened as a separate follow-up PR (#2083), had no existence guard. The
+reasoning pattern-matched CLAUDE.md Pitfall #26 (`positions` is one of that
+section's own listed examples of a create_all-only table) and concluded
+`alembic upgrade head` against a fresh, empty database would raise
+`NoSuchTableError` on this reflection and fail the whole chain — the same
+class of bug that broke `event_requests` migrations on 2026-08-24.
 
-```python
-existing_tables = set(sa.inspect(bind).get_table_names())
-if "positions" not in existing_tables or "user_positions" not in existing_tables:
-    return
-```
+**Why it doesn't reproduce:** `positions`/`user_positions` are _not_
+create_all-only. `20260805_0008_rename_roles_to_positions.py` renames
+`roles`/`user_roles` — created outright by `op.create_table` in
+`20260118_0001_initial_schema.py` — to `positions`/`user_positions` on the
+fresh-chain path (its "Shape 1"). `20260805_0008` is a required
+upgrade-path ancestor of this migration (confirmed by walking the revision
+DAG with `ScriptDirectory.walk_revisions`, not just by date order), so on
+_every_ valid `alembic upgrade head` run, `positions`/`user_positions` exist
+by the time this migration's reflection runs — the rename has always
+already happened.
 
-placed before the five `sa.Table(...)` reflections. Skipping is correct, not
-merely safe: a database that has never run `create_all()` has never had the
-application running against it, so it has no `department_messages` rows to
-backfill either — there is nothing to migrate, and the live application
-will materialize recipients going forward through the normal
-`create_message`/`update_message`/scheduled-sweep paths once it starts.
-Guard test added: the existing `test_migration_create_all_tables.py` ratchet
-only recognized `op.add_column`/`op.create_index`/etc. — it could not have
-caught this, since `sa.Table(..., autoload_with=bind)` is a raw SQLAlchemy
-Core call, not an `op.*` operation. Added a second, narrower detector
-(`_find_autoload_offenders`/`_AUTOLOAD_TABLE`) plus pinning tests proving it
-flags the pre-fix shape and clears the fixed one.
+**Verified empirically, not just by re-reading the code:** created a fresh
+MySQL database with the same collation CI/production use
+(`utf8mb4_unicode_ci` — an earlier attempt with the server default
+`utf8mb4_general_ci` failed on an unrelated, pre-existing FK-collation issue
+in an unrelated early migration, which is why this needs stating explicitly)
+and ran `alembic upgrade head` against it from `base`. The full 394-revision
+chain, including this migration, completed with no error; `positions` and
+`user_positions` were present (and `roles`/`user_roles` were not, confirming
+the rename had run).
+
+**Root cause of the false positive:** `test_migration_create_all_tables.py`'s
+`_tables_created_by_migrations` (used to compute the create_all-only set
+these checks apply to) only recognized `op.create_table`, not
+`op.rename_table` destinations — so it already misclassified
+`positions`/`user_positions` as create_all-only before this pass, even
+though the pre-existing `op.*`-based detector never had occasion to flag it
+(nothing else in the chain touches those tables via `op.add_column` et al.
+without a guard). **Fixed:** `_tables_created_by_migrations` now also counts
+`op.rename_table(old, new)` destinations. `positions`/`user_positions`
+(and, incidentally, `minutes_action_items`/`meeting_action_items` via
+`20260312_0200_rename_meeting_action_items_table.py`'s round trip) now
+correctly count as migration-created.
+
+**Disposition:** the existence guard that had been added to
+`20260826_1700_d4e5f6a7b8c9_message_recipients.py` was **reverted**, for two
+reasons beyond simply being unneeded: (1) its early-return path was never
+exercised on any valid upgrade path, so it was untested dead code load-bearing
+on an incorrect belief; (2) had it ever been reached — e.g., on a database
+manually missing one of the two tables — it would have silently stamped the
+migration complete with **zero** recipient rows created, which on an
+installation that already had real `department_messages`/user data would
+have permanently dropped existing messages from every member's inbox (inbox
+visibility now derives from the `DepartmentMessageRecipient` join). Silently
+skipping is only correct for a genuinely empty database, and this migration
+never runs against one that isn't already guaranteed to have both tables.
+
+Kept, because it has independent value as a ratchet against a _real_ future
+instance of this shape: the new `_find_autoload_offenders`/`_AUTOLOAD_TABLE`
+detector for unguarded `sa.Table(..., autoload_with=...)` reflections of a
+genuinely create_all-only table (which `_TABLE_FIRST`/`_TABLE_SECOND` cannot
+see, since those only recognize `op.*` calls). With
+`_tables_created_by_migrations` fixed, it now correctly reports zero
+offenders for the current migration chain.
+
+**Not addressed:** Codex separately noted (on PR #2083, before this
+correction) that `_guarded_tables`'s guard-detection scans a migration's
+whole source text rather than being scoped to `upgrade()`, so a guard that
+only appears in `downgrade()` (or after the reflection it should protect)
+would be misread as covering it. This is a pre-existing limitation of the
+whole detector (predates this PR, applies equally to the original
+`op.*`-based check), not something newly introduced here, and a proper fix
+needs function/statement-order-aware analysis rather than the current
+regex-over-whole-file approach — out of scope for this pass. No migration in
+the current chain is known to rely on this gap for a false "clean" result;
+flagged here so a future pass doesn't have to rediscover it.
 
 ### MSG-12 — LOW-MED — a worker crash between claiming and finishing a channel delivery permanently strands that recipient's message — FLAGGED (needs a product decision)
 
@@ -615,27 +636,33 @@ email-templates` requires `settings.manage` (13/13 backend endpoints in
   `test_read_and_ack_counts_are_org_scoped` — asserts `organization_id` appears
   in the compiled `WHERE` clause of all three count queries `get_message_stats`
   issues. Verified to fail on reintroduction (reproduced locally, restored).
-- `backend/tests/test_migration_create_all_tables.py` (MSG-11): a second
-  detector, `_find_autoload_offenders`/`_AUTOLOAD_TABLE`, extending the
-  file's existing create_all-only-table ratchet to `sa.Table(...,
+- `backend/tests/test_migration_create_all_tables.py`: a second detector,
+  `_find_autoload_offenders`/`_AUTOLOAD_TABLE`, extending the file's
+  existing create_all-only-table ratchet to `sa.Table(...,
 autoload_with=...)` reflection — the shape the original `op.*`-only
   detector could not see — plus the real-migrations assertion
   (`test_migrations_reflecting_a_create_all_table_guard_on_its_existence`)
-  and two pinning tests (`test_an_unguarded_reflection_is_flagged`,
-  `test_a_guarded_reflection_is_not_flagged`). Verified to fail on
-  reintroduction: re-running the detector against the pre-fix migration
-  source reports `20260826_1700_d4e5f6a7b8c9_message_recipients.py ->
-positions, user_positions`; passes clean against the fixed file.
+  and two synthetic pinning tests (`test_an_unguarded_reflection_is_flagged`,
+  `test_a_guarded_reflection_is_not_flagged`) that exercise the detector
+  directly rather than through the real migration chain. Kept as a ratchet
+  against a real future instance of this shape even though the migration
+  that motivated it (MSG-11, below) turned out not to need a guard.
+  `_tables_created_by_migrations` was also fixed, independently of the
+  above, to recognize `op.rename_table` destinations — see MSG-11.
 
 ## Completion gate (pass 2)
 
 Re-run in full against current `main` (which already includes PR #2081's
 MSG-9 fix) after adding the MSG-11/MSG-12 follow-up — two concurrent
 security-review sessions independently reached feature 25, pass 2, at the
-same time; see `PROGRESS.md`'s log for the full sequence. The gate below
-covers the combined change set: the MSG-9 org-scoping fix (already merged),
-the MSG-11 migration guard fix (this follow-up), and both sets of guard
-tests.
+same time; see `PROGRESS.md`'s log for the full sequence. Re-run again after
+investigating Codex's review of this follow-up PR, which found MSG-11 to be
+a false positive (see MSG-11 above) — that pass reverted the migration guard,
+fixed `_tables_created_by_migrations`, and re-verified with a real fresh-
+database `alembic upgrade head` run, not just the static gate below. The
+table covers the final change set: the MSG-9 org-scoping fix (already
+merged), the `test_migration_create_all_tables.py` detector fix/addition,
+and both sets of guard tests.
 
 | Check                                                      | Result                                                    |
 | ---------------------------------------------------------- | --------------------------------------------------------- |
@@ -648,6 +675,7 @@ tests.
 | `npx tsc --noEmit` (frontend)                              | 0 errors                                                  |
 | `npx eslint .` (frontend)                                  | 0 errors, 8 pre-existing warnings (none in touched files) |
 
-No frontend file was modified by either half of this pass (MSG-9's fix is a
-backend query filter; MSG-11's is a migration guard), so `tsc`/`eslint`
-establish that neither backend change regressed the frontend build.
+No frontend file was modified by any part of this pass (MSG-9's fix is a
+backend query filter; MSG-11's investigation touched only a migration file
+and a backend test file), so `tsc`/`eslint` establish that no backend
+change regressed the frontend build.

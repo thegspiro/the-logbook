@@ -62,9 +62,32 @@ def _migration_sources() -> dict[str, str]:
 
 
 def _tables_created_by_migrations(sources: dict[str, str]) -> set[str]:
+    """Tables a migration brings into existence, by their current name.
+
+    ``op.create_table`` is the obvious case. ``op.rename_table(old, new)`` also
+    counts, and for the *destination* name: ``20260805_0008`` renames
+    ``roles``/``user_roles`` to ``positions``/``user_positions`` on the
+    fresh-chain path (an earlier migration created ``roles`` outright), so a
+    later migration reflecting ``positions`` is safe without its own guard —
+    a fresh database always has it by then, since ``20260805_0008`` is a
+    required upgrade-path ancestor of anything that reflects it. Missing this
+    made ``positions``/``user_positions`` look create_all-only when they are
+    not, which is what led a review to add an unnecessary (and, worse, a
+    silently-data-lossy) existence guard to
+    ``20260826_1700_d4e5f6a7b8c9_message_recipients.py`` — see that
+    migration's own comment and MSG-11 in
+    ``docs/security-review/MSG-25-messaging-notifications.md`` for the full
+    account.
+    """
     created: set[str] = set()
     for text in sources.values():
         created.update(re.findall(r"op\.create_table\(\s*[\"']([a-z0-9_]+)[\"']", text))
+        created.update(
+            re.findall(
+                r"op\.rename_table\(\s*[\"'][a-z0-9_]+[\"']\s*,\s*[\"']([a-z0-9_]+)[\"']",
+                text,
+            )
+        )
     return created
 
 
@@ -184,14 +207,21 @@ def _find_offenders(sources: dict[str, str], create_all_only: set[str]) -> list[
     return offenders
 
 
-# A data-backfill migration reflects a table with raw SQLAlchemy Core instead
-# of an `op.*` operation — `sa.Table("t", meta, autoload_with=bind)` — which
-# _TABLE_FIRST/_TABLE_SECOND never match (those only recognize `op.*` calls).
-# `20260826_1700_d4e5f6a7b8c9_message_recipients.py` reflected `positions` and
-# `user_positions` this way with no existence guard, which raises the same
-# NoSuchTableError on a fresh database as an unguarded `op.add_column` would —
-# `_TABLE_FIRST`/`_TABLE_SECOND` is exactly the wrong tool for a reflection
-# call, so this is a second, narrower detector rather than an extension of it.
+# A data-backfill migration can reflect a table with raw SQLAlchemy Core
+# instead of an `op.*` operation — `sa.Table("t", meta, autoload_with=bind)` —
+# which _TABLE_FIRST/_TABLE_SECOND never match (those only recognize `op.*`
+# calls). An unguarded reflection of a genuinely create_all-only table raises
+# the same NoSuchTableError on a fresh database as an unguarded
+# `op.add_column` would, so this is a second, narrower detector for that
+# specific shape rather than an extension of the `op.*` one.
+#
+# (`20260826_1700_d4e5f6a7b8c9_message_recipients.py`'s reflection of
+# `positions`/`user_positions` was the motivating example for adding this
+# detector, but turned out to be a false positive once
+# `_tables_created_by_migrations` above was taught to recognize
+# `op.rename_table` destinations — see that function's docstring. The
+# detector itself is still worth keeping as a ratchet against a real future
+# instance of this shape.)
 _AUTOLOAD_TABLE = re.compile(
     r"sa\.Table\(\s*[\"']([a-z0-9_]+)[\"']\s*,\s*\w+\s*,\s*autoload_with="
 )
@@ -377,9 +407,8 @@ class TestTheDetectionItself:
         assert _find_offenders(sources, self.CREATE_ALL_ONLY) == []
 
     def test_an_unguarded_reflection_is_flagged(self):
-        """The exact shape `20260826_1700_d4e5f6a7b8c9_message_recipients.py`
-        had before it was fixed: a raw `sa.Table(..., autoload_with=bind)` on
-        a create_all-only table, which `_TABLE_FIRST`/`_TABLE_SECOND` (built
+        """A raw `sa.Table(..., autoload_with=bind)` on a genuinely
+        create_all-only table, which `_TABLE_FIRST`/`_TABLE_SECOND` (built
         for `op.*` calls) never see."""
         sources = {
             "0001_backfill.py": (

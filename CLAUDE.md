@@ -1190,11 +1190,29 @@ the escaped form is how the inventory barcode search came to report the wrong
 
 ### 26. A Migration Must Tolerate a Table Only `create_all` Builds _(2026-08-25)_
 
-**39 of this schema's 254 tables are never created by any migration.**
-`event_requests`, `prospects`, `positions`, the whole finance-approval set and
-more come into being when `main.py`'s `_fast_path_init()` calls `create_all()`
-and stamps Alembic at head — the deployment model
+**40 of this schema's 254 tables are never created by any migration.**
+`event_requests`, `prospects`, the whole finance-approval set (`budgets`,
+`budget_categories`, `check_requests`, `expense_reports`, ...) and more come
+into being when `main.py`'s `_fast_path_init()` calls `create_all()` and
+stamps Alembic at head — the deployment model
 `app/utils/enum_normalization` documents.
+
+**A table renamed into existence by a migration does not belong on this
+list, even if no migration ever `create_table`s it under its current name.**
+`positions`/`user_positions` looked like textbook examples — no
+`op.create_table("positions", ...)` anywhere in the chain — until a
+2026-08-31 review (`docs/security-review/MSG-25-messaging-notifications.md`,
+MSG-11) added an unnecessary guard on exactly that reasoning, then had to
+revert it once empirical testing (a real `alembic upgrade head` against a
+fresh database, not just re-reading the migration source) showed the tables
+already exist by then: `20260805_0008_rename_roles_to_positions.py` renames
+`roles`/`user_roles` — created outright by the initial schema migration —
+to `positions`/`user_positions`, and is a required upgrade-path ancestor of
+every later migration that touches them. `backend/tests/
+test_migration_create_all_tables.py`'s `_tables_created_by_migrations` now
+credits `op.rename_table` destinations for exactly this reason — trust that
+function's output (or an empirical fresh-database run) over a manual grep
+for `create_table`.
 
 That is deliberate, and it is also a trap, because **CI runs `alembic upgrade
 head` against an empty database** in the integration and contract jobs, before
