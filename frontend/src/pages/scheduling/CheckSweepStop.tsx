@@ -58,7 +58,14 @@ const CountTally: React.FC<StopBodyProps & { items: CheckItemSpec[] }> = ({ item
         <div
           key={item.id}
           data-testid={`tally-row-${item.id}`}
-          className="border-theme-surface-border flex items-center gap-2 border-b px-3 py-2 last:border-b-0"
+          // The short row is tinted, not just its number recoloured. In
+          // high-contrast every `--alert-*-text` is #f0f0f0 — the theme puts
+          // severity on the ground and the border and keeps text white — so a
+          // colour-only distinction between "at par" and "short" disappears
+          // exactly where legibility matters most.
+          className={`border-theme-surface-border flex items-center gap-2 border-b px-3 py-2 last:border-b-0 ${
+            short ? 'bg-theme-alert-warning-bg' : ''
+          }`}
         >
           <p className="text-theme-text-primary min-w-0 flex-1 text-[16px] font-semibold">{item.name}</p>
           <span className="text-theme-text-secondary w-10 text-center font-mono text-[16px] tabular-nums">
@@ -80,8 +87,8 @@ const CountTally: React.FC<StopBodyProps & { items: CheckItemSpec[] }> = ({ item
                 found === undefined
                   ? 'text-theme-text-muted'
                   : short
-                    ? 'text-orange-700 dark:text-orange-400'
-                    : 'text-green-700 dark:text-green-400'
+                    ? 'text-theme-alert-warning-text'
+                    : 'text-theme-alert-success-text'
               }`}
             >
               {found ?? '—'}
@@ -130,7 +137,7 @@ const GaugeCard: React.FC<{
       data-testid={`gauge-${item.id}`}
       className={`rounded-lg border p-3 ${
         short
-          ? 'border-red-200 bg-red-50 dark:border-red-900/40 dark:bg-red-950/20'
+          ? 'bg-theme-alert-danger-bg border-theme-alert-danger-border'
           : 'border-theme-surface-border bg-theme-surface'
       }`}
     >
@@ -149,14 +156,14 @@ const GaugeCard: React.FC<{
           disabled={disabled}
           onChange={(e) => onAnswer(levelAnswer(item, e.target.value))}
           placeholder="—"
-          className={`form-input h-14 w-[118px] text-center font-mono text-[22px] tabular-nums ${short ? 'border-red-500' : ''}`}
+          className={`form-input h-14 w-[118px] text-center font-mono text-[22px] tabular-nums ${short ? 'border-theme-alert-danger-icon' : ''}`}
         />
         {unit ? <span className="text-theme-text-secondary text-[15px]">{unit}</span> : null}
       </div>
 
       <div className="text-theme-text-muted mt-2 flex flex-wrap justify-between gap-x-4 gap-y-1 text-[12px]">
         {threshold !== null && (
-          <span className={short ? 'font-bold text-red-700 dark:text-red-400' : undefined}>
+          <span className={short ? 'text-theme-alert-danger-title font-bold' : undefined}>
             Swap below {threshold}
             {unit ? ` ${unit}` : ''}
           </span>
@@ -170,7 +177,7 @@ const GaugeCard: React.FC<{
       </div>
 
       {short && (
-        <p className="mt-2 flex items-start gap-1.5 text-[13px] font-bold text-red-700 dark:text-red-400">
+        <p className="text-theme-alert-danger-title mt-2 flex items-start gap-1.5 text-[13px] font-bold">
           <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
           Under the swap threshold — this opens a swap task and shows as a fault on the finished check.
         </p>
@@ -209,8 +216,8 @@ const FunctionRow: React.FC<{
           aria-pressed={status === 'pass'}
           className={`flex h-11 w-12 items-center justify-center rounded-lg border transition-colors disabled:opacity-50 ${
             status === 'pass'
-              ? 'border-green-700 bg-green-700 text-white'
-              : 'border-theme-input-border text-theme-text-secondary hover:border-green-700'
+              ? 'border-green-800 bg-green-800 text-white'
+              : 'border-theme-input-border text-theme-text-secondary hover:border-green-800'
           }`}
         >
           <Check className="h-5 w-5" aria-hidden="true" />
@@ -255,9 +262,9 @@ const ExpiryRow: React.FC<{
       data-testid={`expiry-${item.id}`}
       className={`flex items-center gap-3 border-b px-3 py-2 last:border-b-0 ${
         expired
-          ? 'border-red-200 bg-red-50 dark:border-red-900/40 dark:bg-red-950/20'
+          ? 'bg-theme-alert-danger-bg border-theme-alert-danger-border'
           : inWindow
-            ? 'border-orange-200 bg-orange-50 dark:border-orange-900/40 dark:bg-orange-950/20'
+            ? 'bg-theme-alert-warning-bg border-theme-alert-warning-border'
             : 'border-theme-surface-border'
       }`}
     >
@@ -265,7 +272,11 @@ const ExpiryRow: React.FC<{
         <p className="text-theme-text-primary text-[16px] font-semibold">{item.name}</p>
         <p
           className={`font-mono text-[13px] ${
-            expired || inWindow ? 'font-bold text-orange-700 dark:text-orange-400' : 'text-theme-text-muted'
+            expired
+              ? 'text-theme-alert-danger-title font-bold'
+              : inWindow
+                ? 'text-theme-alert-warning-text font-bold'
+                : 'text-theme-text-muted'
           }`}
         >
           {item.expirationDate ? `Expires ${item.expirationDate}` : 'No date on record'}
@@ -279,8 +290,8 @@ const ExpiryRow: React.FC<{
         onClick={() => onAnswer(expiryAnswer(item))}
         className={`min-h-11 shrink-0 rounded-lg border px-3 text-[14px] font-bold transition-colors disabled:opacity-50 ${
           confirmed
-            ? 'border-green-700 bg-green-700 text-white'
-            : 'border-theme-input-border text-theme-text-secondary hover:border-green-700'
+            ? 'border-green-800 bg-green-800 text-white'
+            : 'border-theme-input-border text-theme-text-secondary hover:border-green-800'
         }`}
       >
         {confirmed ? 'Read' : 'Confirm'}

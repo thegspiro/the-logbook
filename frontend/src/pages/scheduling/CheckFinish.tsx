@@ -68,12 +68,8 @@ export const CheckFinish: React.FC<CheckFinishProps> = ({
         </p>
 
         {faults.map((e) => (
-          <div
-            key={e.item.id}
-            data-testid={`finish-fault-${e.item.id}`}
-            className="rounded-lg border-l-4 border-red-800 bg-red-50 p-3 dark:bg-red-950/20"
-          >
-            <p className="flex items-center gap-1.5 text-[15px] font-bold text-red-800 dark:text-red-400">
+          <div key={e.item.id} data-testid={`finish-fault-${e.item.id}`} className="alert-danger p-3">
+            <p className="text-theme-alert-danger-title flex items-center gap-1.5 text-[15px] font-bold">
               <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden="true" />
               Fault · {e.item.name}
             </p>
@@ -84,11 +80,8 @@ export const CheckFinish: React.FC<CheckFinishProps> = ({
         ))}
 
         {unanswered.length > 0 && (
-          <div
-            data-testid="finish-unanswered"
-            className="rounded-lg border-l-4 border-orange-700 bg-orange-50 p-3 dark:bg-orange-950/20"
-          >
-            <p className="text-[15px] font-bold text-orange-800 dark:text-orange-400">
+          <div data-testid="finish-unanswered" className="alert-warning p-3">
+            <p className="text-theme-alert-warning-text text-[15px] font-bold">
               {unanswered.length} item{unanswered.length === 1 ? '' : 's'} not answered
             </p>
             <p className="text-theme-text-secondary mt-0.5 text-[13px]">
@@ -107,7 +100,7 @@ export const CheckFinish: React.FC<CheckFinishProps> = ({
                   key={n}
                   type="button"
                   onClick={() => onJump(n - 1)}
-                  className="min-h-11 rounded-lg border border-orange-700 bg-white px-3 text-[14px] font-bold text-orange-800 dark:bg-transparent dark:text-orange-400"
+                  className="border-theme-alert-warning-icon text-theme-alert-warning-text bg-theme-surface min-h-11 rounded-lg border px-3 text-[14px] font-bold"
                 >
                   Go to stop {n}
                 </button>
@@ -117,11 +110,8 @@ export const CheckFinish: React.FC<CheckFinishProps> = ({
         )}
 
         {restocks.length > 0 && (
-          <div
-            data-testid="finish-restocks"
-            className="rounded-lg border-l-4 border-orange-600 bg-orange-50/60 p-3 dark:bg-orange-950/10"
-          >
-            <p className="flex items-center gap-1.5 text-[15px] font-bold text-orange-800 dark:text-orange-400">
+          <div data-testid="finish-restocks" className="alert-warning p-3">
+            <p className="text-theme-alert-warning-text flex items-center gap-1.5 text-[15px] font-bold">
               <PackageSearch className="h-4 w-4 shrink-0" aria-hidden="true" />
               {restocks.length} restock line{restocks.length === 1 ? '' : 's'}
             </p>
@@ -139,8 +129,8 @@ export const CheckFinish: React.FC<CheckFinishProps> = ({
         )}
 
         {goodCount > 0 && (
-          <div className="rounded-lg border-l-4 border-green-700 bg-green-50 p-3 dark:bg-green-950/20">
-            <p className="flex items-start gap-1.5 text-[14px] text-green-900 dark:text-green-300">
+          <div className="alert-success p-3">
+            <p className="text-theme-alert-success-title flex items-start gap-1.5 text-[14px]">
               <Check className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
               <span>
                 The other <strong>{goodCount}</strong> item{goodCount === 1 ? ' was' : 's were'} good. They are on the

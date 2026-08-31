@@ -51,11 +51,19 @@ import {
  * wider and holds its own name, so the strip says "you are here" without a
  * legend. Read at arm's length in sun or in the dark, which is why the states
  * are four flat fills rather than anything with a gradient or an icon in it.
+ *
+ * These are deliberately LIGHTER than the same three states elsewhere in the
+ * sweep, and the two must not be unified. A map segment is a graphical object
+ * on the fixed slate-900 header, so it is measured against that dark ground
+ * (3:1) — red-800 lands at 2.15:1 there, which hides the one segment the strip
+ * exists to make findable. A jump-sheet pip or a verdict button is white text
+ * on a fill over a light surface, measured the other way (7:1), where these
+ * shades give 2-3:1. Same three states, opposite grounds, opposite direction.
  */
 const MAP_FILL: Record<StopMapState, string> = {
-  complete: 'bg-green-700',
-  fault: 'bg-red-800',
-  restock: 'bg-orange-700',
+  complete: 'bg-green-600',
+  fault: 'bg-red-500',
+  restock: 'bg-orange-500',
   untouched: 'bg-white/20',
 };
 
@@ -238,7 +246,7 @@ export const CheckSweep: React.FC<CheckSweepProps> = ({
       </div>
 
       {saveState === 'offline' && (
-        <p className="border-b border-amber-200 bg-amber-50 px-3.5 py-2 text-[13px] text-amber-800 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-300">
+        <p className="bg-theme-alert-warning-bg border-theme-alert-warning-border text-theme-alert-warning-text border-b px-3.5 py-2 text-[13px]">
           No signal. The walk is held on this phone — nothing is sent until you submit.
         </p>
       )}
@@ -258,7 +266,7 @@ export const CheckSweep: React.FC<CheckSweepProps> = ({
             type="button"
             disabled={disabled}
             onClick={() => onBulkClaim(stop)}
-            className="min-h-14 rounded-lg border border-green-700 bg-green-50 text-[17px] font-bold text-green-800 transition-colors hover:bg-green-100 disabled:pointer-events-none disabled:opacity-50 dark:bg-green-950/30 dark:text-green-400"
+            className="bg-theme-alert-success-bg border-theme-alert-success-icon text-theme-alert-success-title min-h-14 rounded-lg border text-[17px] font-bold transition-opacity hover:opacity-90 disabled:pointer-events-none disabled:opacity-50"
           >
             ✓ {claim.label}
           </button>
@@ -268,7 +276,7 @@ export const CheckSweep: React.FC<CheckSweepProps> = ({
 
         {/* One consequence line, not a running commentary. */}
         {restocks.length > 0 && (
-          <p className="text-[13px] font-bold text-orange-700 dark:text-orange-400">
+          <p className="text-theme-alert-warning-text text-[13px] font-bold">
             {restocks.length} restock line{restocks.length === 1 ? '' : 's'} from this stop
           </p>
         )}

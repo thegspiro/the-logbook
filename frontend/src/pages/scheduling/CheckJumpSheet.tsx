@@ -101,18 +101,18 @@ export const CheckJumpSheet: React.FC<CheckJumpSheetProps> = ({
                       isCurrent
                         ? 'bg-theme-surface-secondary border-l-4 border-l-slate-900 dark:border-l-white'
                         : state === 'fault'
-                          ? 'bg-red-50 dark:bg-red-950/20'
+                          ? 'bg-theme-alert-danger-bg'
                           : 'hover:bg-theme-surface-hover'
                     }`}
                   >
                     <span
                       className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[13px] font-bold ${
                         state === 'complete'
-                          ? 'bg-green-700 text-white'
+                          ? 'bg-green-800 text-white'
                           : state === 'fault'
                             ? 'bg-red-800 text-white'
                             : state === 'restock'
-                              ? 'bg-orange-700 text-white'
+                              ? 'bg-orange-800 text-white'
                               : isCurrent
                                 ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900'
                                 : 'border-theme-surface-border text-theme-text-muted border'
@@ -127,19 +127,19 @@ export const CheckJumpSheet: React.FC<CheckJumpSheetProps> = ({
                         {index + 1} · {stop.name}
                       </span>
                       {faults.length > 0 && (
-                        <span className="block text-[13px] font-semibold text-red-700 dark:text-red-400">
+                        <span className="text-theme-alert-danger-title block text-[13px] font-semibold">
                           {faults[0]?.name}
                           {faults.length > 1 ? ` +${faults.length - 1} more` : ''}
                         </span>
                       )}
                       {faults.length === 0 && restocks.length > 0 && (
-                        <span className="block text-[13px] text-orange-700 dark:text-orange-400">
+                        <span className="text-theme-alert-warning-text block text-[13px]">
                           {restocks.length} restock line{restocks.length === 1 ? '' : 's'}
                         </span>
                       )}
                       {isCurrent && <span className="text-theme-text-muted block text-[13px]">You are here</span>}
                       {stop.isSealed && stop.seal?.status !== 'broken' && (
-                        <span className="block text-[13px] font-semibold text-green-700 dark:text-green-400">
+                        <span className="text-theme-alert-success-text block text-[13px] font-semibold">
                           Sealed{stop.seal?.tagNumber ? ` · tag ${stop.seal.tagNumber}` : ''}
                         </span>
                       )}
@@ -255,11 +255,11 @@ export const CheckFlatList: React.FC<{
                         >
                           {failed ? (
                             <AlertTriangle
-                              className="h-4 w-4 shrink-0 text-red-700 dark:text-red-400"
+                              className="text-theme-alert-danger-icon h-4 w-4 shrink-0"
                               aria-hidden="true"
                             />
-                          ) : answered ? (
-                            <Check className="h-4 w-4 shrink-0 text-green-700 dark:text-green-400" aria-hidden="true" />
+                          ) : answered || state === 'Sealed' ? (
+                            <Check className="text-theme-alert-success-icon h-4 w-4 shrink-0" aria-hidden="true" />
                           ) : (
                             <span
                               className="border-theme-surface-border h-4 w-4 shrink-0 rounded-full border"
