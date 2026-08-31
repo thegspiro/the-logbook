@@ -95,6 +95,59 @@ Three things change for existing departments:
   settings is now a signpost to Inventory and shows no Save button, because it
   has nothing left to save.
 
+### A new crew experience for the equipment check (2026-08-31)
+
+**Added**
+
+- Crews can walk an equipment check one stop at a time instead of scrolling a
+  list of compartments. Each stop carries a map of the truck across the top
+  showing what is done, what has a fault and where you are; a single claim for
+  the whole stop where one is honest ("All 4 counts at par"); and a jump sheet
+  to reach any stop out of order, or read every item as one list. The check
+  finishes on the exceptions — the faults, the gaps and the restock lines —
+  rather than on 130 lines to scroll past. Not yet switched on for crews: the
+  template builder's preview shows it so departments can see it against their
+  own templates first.
+- A bag is now walked as a bag. Its pockets are a strip of numbered chips with
+  one pocket open at a time, and the claim, the restock line and the "read n
+  more gauges" hold all speak for the pocket in front of you rather than the
+  whole bag.
+- Counts carry forward from the last check. Twelve found against a par of ten
+  stays twelve for the next crew rather than resetting to par, and a carried
+  number is shown greyed until somebody confirms it, so a check cannot be
+  submitted complete on numbers nobody looked at.
+
+**Fixed**
+
+- A sealed container whose tag nobody had read yet had its contents counted as
+  already answered. A seal is evidence only once a crew has looked at it, so
+  the counting now waits for the tag to be confirmed.
+- An intact tamper seal no longer vouches for a container holding something
+  expired or due to be pulled. The check says which item, whether it has
+  expired or is inside its pull window, and which tag to re-seal with — a seal
+  proves nothing was taken, not that what is left is still usable.
+- On the equipment check, the "Out of service" and "Pass" buttons did not have
+  enough contrast against their labels to be read comfortably in sunlight or by
+  members with low vision, while "Fail" beside them did. All three now meet the
+  same standard, along with the submit button and the expiry and status badges.
+  The check also follows the high-contrast theme properly, which it previously
+  ignored.
+
+### Core infrastructure re-verification fixes (2026-08-31)
+
+**Fixed**
+
+- Several unauthenticated public endpoints (calendar, legal, kiosk display,
+  finance-approval token lookups, and three inbound webhook receivers)
+  effectively lost their rate limiting during a Redis outage — the
+  in-memory fallback reset an attacker's full request allowance on almost
+  every over-limit request instead of actually limiting them.
+- A public form/event-request/guest-check-in daily submission cap could get
+  permanently stuck denying legitimate traffic (instead of resetting the
+  next day) if a transient Redis error hit at exactly the wrong moment.
+- A failed database-engine shutdown could leave the app reporting itself as
+  still connected to a database it had actually lost.
+
 ### Locations & kiosk guest check-in hardening (2026-08-31)
 
 **Fixed**

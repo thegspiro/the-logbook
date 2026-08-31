@@ -234,7 +234,7 @@ describe('EquipmentCheckForm quantity seeding', () => {
     expect(screen.getByRole('button', { name: 'Out of service' })).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: 'Out of service' }));
-    expect(screen.getByRole('button', { name: 'Out of service' })).toHaveClass('bg-amber-600');
+    expect(screen.getByRole('button', { name: 'Out of service' })).toHaveClass('bg-amber-800');
   });
 
   it('retains a failed online photo upload without claiming unconditional success', async () => {

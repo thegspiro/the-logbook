@@ -99,6 +99,24 @@ export function daysUntil(date: string | null | undefined, today: Date): number 
   return Math.round((target.getTime() - midnight.getTime()) / 86_400_000);
 }
 
+/**
+ * The soonest date actually aboard, falling back to the position's own column.
+ *
+ * A position holding three boxes holds three dates, and the truck is exposed
+ * by its oldest. Reading the column instead would report the date of whichever
+ * lot was restocked last.
+ */
+export function soonestExpiration(item: CheckTemplateItem): string | undefined {
+  const dated = (item.lotsAboard ?? []).filter((lot) => lot.expirationDate);
+  if (dated.length > 0) {
+    // The API sorts them, but a verdict that takes an apparatus out of service
+    // should not depend on the order a payload arrived in.
+    return dated.reduce((soonest, lot) => ((lot.expirationDate ?? '') < (soonest.expirationDate ?? '') ? lot : soonest))
+      .expirationDate;
+  }
+  return item.hasExpiration ? item.expirationDate : undefined;
+}
+
 /** True when the row is an actual check rather than layout. */
 export function isCheckType(value?: string | null): boolean {
   const normalized = normalizeCheckType(value);

@@ -69,16 +69,29 @@ import type {
   LastCheckItemResult,
   LastSealRecord,
   DeployedLot,
-} from '../../../modules/inventory/types/equipmentCheck';
-import { CHECK_TYPE_LABELS, ExpiredStockDisposition } from '../../../modules/inventory/types/equipmentCheck';
-import { flattenCompartmentTree } from '../../../modules/inventory/utils/compartmentTree';
-import LotsAboardPanel from '../../../modules/inventory/components/LotsAboardPanel';
+} from '../types/equipmentCheck';
+import { CHECK_TYPE_LABELS, ExpiredStockDisposition, soonestExpiration } from '../types/equipmentCheck';
+import { flattenCompartmentTree } from '../utils/compartmentTree';
+import LotsAboardPanel from '../components/LotsAboardPanel';
 import SealPanel from '../components/SealPanel';
 import type { SealState } from '../components/SealPanel';
 
 import { useConfirm } from '../../../contexts/ConfirmContext';
 import { useAuthStore } from '../../../stores/authStore';
 import { useOverlaySurface } from '../../../hooks/useOverlaySurface';
+// The crew-check sweep moved into Inventory with the form it belongs to. They
+// stay in one directory: checkSweepContrast.test.ts holds these files to an AAA
+// contrast bar by reading them as siblings, so splitting components from logic
+// would leave that guard reading nothing.
+import { CheckSweep } from './CheckSweep';
+import { CheckSweepStop } from './CheckSweepStop';
+import { CheckJumpSheet, CheckFlatList } from './CheckJumpSheet';
+import { CheckFinish } from './CheckFinish';
+import { toLapStops } from './checkSweepAdapter';
+import { toAnswerMap, toItemResult } from './checkSweepBridge';
+import { countAnswer } from './checkAnswers';
+import { bulkClaim, stillAsked, type LapStop, type SealState as SweepSealState } from './checkLapModel';
+import type { CheckItemAnswer } from './CheckItemControls';
 import {
   deleteEquipmentCheckDraft,
   loadEquipmentCheckDraft,
@@ -95,6 +108,16 @@ interface EquipmentCheckFormProps {
   onComplete?: () => void;
   onBack?: () => void;
   previewMode?: boolean;
+  /**
+   * Which crew experience to render.
+   *
+   * The sweep hands over one stop at a time with a truck map and an
+   * exceptions-first finish; the accordion is the compartment list that
+   * shipped. Both write the same `results` and `seals`, so a draft started in
+   * one opens in the other and submission is identical either way — the choice
+   * is only how the walk is presented.
+   */
+  experience?: 'accordion' | 'sweep' | undefined;
   existingCheckId?: string | undefined;
   /**
    * Which shift this check belongs to. Once the checklist was open the only
@@ -111,10 +134,19 @@ interface EquipmentCheckFormProps {
     | undefined;
 }
 
-interface ItemResult {
+export interface ItemResult {
   status: CheckItemStatus;
   quantityFound?: number | undefined;
   levelReading?: number | undefined;
+  /**
+   * The printed date was looked at and confirmed.
+   *
+   * Distinct from `status`, which an expiry sets from the date itself — an
+   * expired unit fails whatever the crew taps, so status alone cannot say
+   * whether anybody read it. The sweep's expiry row needs the difference to
+   * stop offering "Confirm" on a date that has already been confirmed.
+   */
+  expiryConfirmed?: boolean | undefined;
   photoUrls?: string[] | undefined;
   photoFiles?: File[] | undefined;
   notes?: string | undefined;
@@ -203,24 +235,6 @@ const ShortfallList: React.FC<{
  * UTC midnight and call an item expired on its own expiry day in any timezone
  * behind UTC — the badge would say EXPIRED while the server passed it.
  */
-/**
- * The soonest date actually aboard, falling back to the position's own column.
- *
- * A position holding three boxes holds three dates, and the truck is exposed
- * by its oldest. Reading the column instead would report the date of whichever
- * lot was restocked last.
- */
-function soonestExpiration(item: CheckTemplateItem): string | undefined {
-  const dated = (item.lotsAboard ?? []).filter((lot) => lot.expirationDate);
-  if (dated.length > 0) {
-    // The API sorts them, but a verdict that takes an apparatus out of service
-    // should not depend on the order a payload arrived in.
-    return dated.reduce((soonest, lot) => ((lot.expirationDate ?? '') < (soonest.expirationDate ?? '') ? lot : soonest))
-      .expirationDate;
-  }
-  return item.hasExpiration ? item.expirationDate : undefined;
-}
-
 function getExpirationStatus(item: CheckTemplateItem, today: string): 'ok' | 'expiring_soon' | 'expired' | null {
   const soonest = soonestExpiration(item);
   if (!soonest) return null;
@@ -279,12 +293,12 @@ function getCompartmentStatus(
 }
 
 const STATUS_COLORS = {
-  complete: 'border-green-500/30 bg-green-500/10 text-green-700 dark:text-green-400',
-  has_failures: 'border-red-500/30 bg-red-500/10 text-red-700 dark:text-red-400',
+  complete: 'border-theme-alert-success-border bg-theme-alert-success-bg text-theme-alert-success-title',
+  has_failures: 'border-theme-alert-danger-border bg-theme-alert-danger-bg text-theme-alert-danger-title',
   // Amber, matching the "Out of service" answer button: needs attention, but
   // distinct from a failed item.
-  has_out_of_service: 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-400',
-  in_progress: 'border-blue-500/30 bg-blue-500/10 text-blue-700 dark:text-blue-400',
+  has_out_of_service: 'border-theme-alert-warning-border bg-theme-alert-warning-bg text-theme-alert-warning-text',
+  in_progress: 'border-theme-alert-info-border bg-theme-alert-info-bg text-theme-alert-info-title',
   not_started: 'border-theme-surface-border bg-theme-surface text-theme-text-muted',
 } as const;
 
@@ -317,6 +331,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
   previewMode,
   existingCheckId,
   shiftContext,
+  experience = 'accordion',
 }) => {
   const { confirm } = useConfirm();
   const { checkPermission, user } = useAuthStore();
@@ -1376,6 +1391,90 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
   );
 
   // --------------------------------------------------------------------------
+  // The sweep — a second way to walk the same check
+  // --------------------------------------------------------------------------
+
+  const [sweepStopIndex, setSweepStopIndex] = useState(0);
+  // Which pocket of the current stop is open. Lives beside the stop index
+  // rather than inside the body, because the primary button's label and the
+  // bulk claim both depend on it and both belong to the frame.
+  const [sweepPocketIndex, setSweepPocketIndex] = useState(0);
+  const [sweepScreen, setSweepScreen] = useState<'walk' | 'jump' | 'flat' | 'finish'>('walk');
+
+  /**
+   * The walk, built from the raw template rather than the flattened list.
+   *
+   * `compartments` above has already been flattened for the accordion — pockets
+   * merged into their parent's card, sealed ones promoted beside it — and the
+   * sweep wants the tree that flattening was hiding. Both come from the same
+   * `template.compartments`, and submission still reads the flattened one, so
+   * where an item lives on the record is unaffected.
+   */
+  const sweepStops = useMemo(
+    () =>
+      toLapStops({
+        compartments: template.compartments ?? [],
+        seals,
+        lastSeals,
+        ...(lastCheckData ? { lastResults: lastCheckData } : {}),
+      }),
+    [template.compartments, seals, lastSeals, lastCheckData]
+  );
+
+  const sweepAnswers = useMemo(() => toAnswerMap(results), [results]);
+
+  const handleSweepAnswer = useCallback(
+    (itemId: string, patch: Partial<CheckItemAnswer>) => updateResult(itemId, toItemResult(patch)),
+    [updateResult]
+  );
+
+  /**
+   * Record a seal verdict, and move what it clears with it.
+   *
+   * Routed through the same handlers the accordion uses rather than setting
+   * `seals` directly: confirming a tag accepts the carried counts it vouches
+   * for, and taking that back has to un-answer them, or the check keeps a
+   * count nobody performed. Both rules already live in those callbacks.
+   */
+  const handleSweepSeal = useCallback(
+    (stopId: string, patch: Partial<SweepSealState>) => {
+      const compartment = compartments.find((c) => c.id === stopId);
+      if (!compartment) return;
+      const tag = lastSeals[stopId]?.sealNumber ?? '';
+      if (patch.status === 'intact') {
+        confirmSealIntact(compartment, tag, patch.cleared !== false);
+        return;
+      }
+      if (patch.status === 'broken') reportSealBroken(compartment, tag);
+    },
+    [compartments, lastSeals, confirmSealIntact, reportSealBroken]
+  );
+
+  /**
+   * Accept the stop's shown numbers in one tap.
+   *
+   * The claim asserts what is on screen, which is the carried figure where one
+   * carried and par otherwise — never par over a carried surplus, which would
+   * quietly write 12 found down to a par of 10 behind a button the crew read
+   * as agreement. `bulkClaim` states the quantity per item for exactly this.
+   */
+  const handleSweepBulkClaim = useCallback(
+    (stop: LapStop) => {
+      const claim = bulkClaim(stillAsked(stop));
+      if (!claim) return;
+      for (const specItem of claim.items) {
+        const quantity = claim.quantities[specItem.id];
+        if (quantity !== undefined) {
+          updateResult(specItem.id, toItemResult(countAnswer(specItem, quantity)));
+        } else {
+          updateResult(specItem.id, { status: 'pass' });
+        }
+      }
+    },
+    [updateResult]
+  );
+
+  // --------------------------------------------------------------------------
   // Submit
   // --------------------------------------------------------------------------
 
@@ -1618,7 +1717,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
 
     if (status === 'expired') {
       return (
-        <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700 dark:bg-red-900/30 dark:text-red-400">
+        <span className="bg-theme-alert-danger-bg text-theme-alert-danger-title inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium">
           <AlertTriangle className="h-3 w-3" />
           EXPIRED
         </span>
@@ -1627,7 +1726,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
 
     if (status === 'expiring_soon') {
       return (
-        <span className="inline-flex items-center gap-1 rounded-full bg-yellow-100 px-2 py-0.5 text-xs font-medium text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400">
+        <span className="bg-theme-alert-warning-bg text-theme-alert-warning-text inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium">
           <Clock className="h-3 w-3" />
           Expiring
         </span>
@@ -1690,8 +1789,8 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
           onClick={() => updateResultAndAdvance(item.id, { status: 'out_of_service' })}
           className={`flex min-h-[48px] shrink-0 items-center justify-center gap-1.5 rounded-lg px-3 py-3 text-sm font-medium transition-colors ${
             effectiveStatus === 'out_of_service'
-              ? 'bg-amber-600 text-white'
-              : 'border-theme-surface-border text-theme-text-muted border hover:border-amber-600 hover:text-amber-700'
+              ? 'bg-amber-800 text-white'
+              : 'border-theme-surface-border text-theme-text-muted border hover:border-amber-800 hover:text-amber-800'
           }`}
           title="On the truck but unusable — counts as a failed item"
         >
@@ -1709,8 +1808,8 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
           disabled={isExpired}
           className={`flex min-h-[48px] flex-1 items-center justify-center gap-1.5 rounded-lg px-4 py-3 text-sm font-medium transition-colors ${
             effectiveStatus === 'pass'
-              ? 'bg-green-600 text-white'
-              : 'border-theme-surface-border text-theme-text-muted border hover:border-green-500 hover:text-green-600'
+              ? 'bg-green-800 text-white'
+              : 'border-theme-surface-border text-theme-text-muted border hover:border-green-800 hover:text-green-800'
           } ${isExpired ? 'cursor-not-allowed opacity-50' : ''}`}
         >
           <CheckCircle className="h-4 w-4" />
@@ -1723,7 +1822,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
           className={`flex min-h-[48px] flex-1 items-center justify-center gap-1.5 rounded-lg px-4 py-3 text-sm font-medium transition-colors ${
             effectiveStatus === 'fail'
               ? 'bg-red-800 text-white'
-              : 'border-theme-surface-border text-theme-text-muted border hover:border-red-500 hover:text-red-600'
+              : 'border-theme-surface-border text-theme-text-muted border hover:border-red-800 hover:text-red-800'
           }`}
         >
           <XCircle className="h-4 w-4" />
@@ -1757,10 +1856,10 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
           // Expired outranks the count. Two of two expired units meet the
           // number and are still nothing the crew can use, so this must not
           // read as the healthy state.
-          if (isExpired) return 'text-red-600 dark:text-red-400 font-bold';
-          if (isCritical) return 'text-red-600 dark:text-red-400 font-bold';
-          if (!isAtPar) return 'text-orange-500 dark:text-orange-400 font-medium';
-          return 'text-green-600 dark:text-green-400 font-medium';
+          if (isExpired) return 'text-theme-alert-danger-title font-bold';
+          if (isCritical) return 'text-theme-alert-danger-title font-bold';
+          if (!isAtPar) return 'text-theme-alert-warning-text font-medium';
+          return 'text-theme-alert-success-title font-medium';
         };
 
         const setQuantity = (qty: number) => {
@@ -1782,12 +1881,12 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
               )}
 
               {hasBeenSet && isCritical && (
-                <span className="block text-[10px] font-semibold text-red-600 dark:text-red-400">
+                <span className="text-theme-alert-danger-title block text-[10px] font-semibold">
                   CRITICAL — below minimum ({criticalMin})
                 </span>
               )}
               {hasBeenSet && !isAtPar && !isCritical && required != null && (
-                <span className="block text-[10px] text-orange-500">Below required ({required})</span>
+                <span className="text-theme-alert-warning-text block text-[10px]">Below required ({required})</span>
               )}
               {prevQty != null && hasBeenSet && currentQty !== prevQty && (
                 <span className="text-theme-text-muted block text-[10px]">Last: {prevQty}</span>
@@ -1808,11 +1907,11 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
                 type="number"
                 min="0"
                 inputMode="numeric"
-                className={`bg-theme-surface h-11 w-14 [appearance:textfield] border-y text-center text-sm font-medium focus:ring-2 focus:ring-blue-500 focus:outline-none focus:ring-inset [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none ${
+                className={`bg-theme-surface focus:ring-theme-focus-ring h-11 w-14 [appearance:textfield] border-y text-center text-sm font-medium focus:ring-2 focus:outline-none focus:ring-inset [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none ${
                   hasBeenSet && isCritical
-                    ? 'border-2 border-red-600 text-red-600 dark:text-red-400'
+                    ? 'border-theme-alert-danger-icon text-theme-alert-danger-title border-2'
                     : hasBeenSet && !isAtPar
-                      ? 'border-orange-500 text-orange-600 dark:text-orange-400'
+                      ? 'border-theme-alert-warning-icon text-theme-alert-warning-text'
                       : 'border-theme-surface-border text-theme-text-primary'
                 }`}
                 value={hasBeenSet ? currentQty : ''}
@@ -1883,7 +1982,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
                 min="0"
                 step="0.1"
                 inputMode="decimal"
-                className={`form-input min-h-[48px] w-24 px-3 py-2.5 text-sm ${belowMin ? 'border-red-500 focus:ring-red-500' : 'border-theme-surface-border focus:ring-blue-500'}`}
+                className={`form-input min-h-[48px] w-24 px-3 py-2.5 text-sm ${belowMin ? 'border-theme-alert-danger-icon focus:ring-theme-alert-danger-icon' : 'border-theme-surface-border focus:ring-theme-focus-ring'}`}
                 value={result?.levelReading ?? ''}
                 onChange={(e) => {
                   const val = e.target.value;
@@ -1997,11 +2096,11 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
         }}
         className={`rounded-lg border p-4 transition-colors ${isQuantity ? 'space-y-1' : 'space-y-3'} ${
           effectiveStatus === 'pass'
-            ? 'border-green-500/30 bg-green-500/5'
+            ? 'border-theme-alert-success-border bg-theme-alert-success-bg'
             : effectiveStatus === 'fail'
-              ? 'border-red-500/30 bg-red-500/5'
+              ? 'border-theme-alert-danger-border bg-theme-alert-danger-bg'
               : effectiveStatus === 'out_of_service'
-                ? 'border-amber-500/30 bg-amber-500/5'
+                ? 'border-theme-alert-warning-border bg-theme-alert-warning-bg'
                 : effectiveStatus === 'not_applicable'
                   ? 'border-theme-surface-border bg-theme-surface-hover/40'
                   : 'border-theme-surface-border bg-theme-surface'
@@ -2020,7 +2119,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
               {renderExpirationBadge(item)}
             </div>
             {swapOverrides[item.id] && (
-              <p className="mt-1 flex items-center gap-1 text-[11px] font-medium text-green-700 dark:text-green-400">
+              <p className="text-theme-alert-success-title mt-1 flex items-center gap-1 text-[11px] font-medium">
                 <PackageCheck className="h-3 w-3" aria-hidden="true" />
                 Swapped in
                 {swapOverrides[item.id]?.lotNumber ? ` Lot ${swapOverrides[item.id]?.lotNumber}` : ' fresh stock'}
@@ -2075,7 +2174,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
             <MessageSquare className="h-3 w-3" aria-hidden="true" />
             {showNotesField ? 'Hide' : 'Note'}
             {(result?.photoFiles?.length ?? 0) > 0 && (
-              <span className="inline-flex items-center gap-0.5 font-medium text-blue-600">
+              <span className="text-theme-accent-blue inline-flex items-center gap-0.5 font-medium">
                 <Camera className="h-3 w-3" aria-hidden="true" />
                 {result?.photoFiles?.length}
               </span>
@@ -2099,7 +2198,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
               title={canSwapStock ? undefined : 'Swaps from stock are recorded by a crew member on the check'}
               className={`flex min-h-[36px] items-center gap-1 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
                 getExpirationStatus(item, today) === 'expired' || getExpirationStatus(item, today) === 'expiring_soon'
-                  ? 'text-blue-600 hover:text-blue-700'
+                  ? 'text-theme-accent-blue hover:opacity-80'
                   : 'text-theme-text-muted hover:text-theme-text-secondary'
               }`}
             >
@@ -2117,7 +2216,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
         {showNotesField && (
           <textarea
             rows={2}
-            className="form-input px-3 text-sm focus:ring-blue-500"
+            className="form-input focus:ring-theme-focus-ring px-3 text-sm"
             placeholder="Notes for this item..."
             aria-label={`Notes for ${item.name}`}
             value={result?.notes ?? ''}
@@ -2144,7 +2243,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
                     <button
                       type="button"
                       onClick={() => removePhoto(item.id, idx)}
-                      className="absolute -top-2 -right-2 flex h-7 w-7 items-center justify-center rounded-full bg-red-500 text-sm text-white opacity-100 transition-opacity focus:opacity-100 focus:ring-2 focus:ring-red-500 focus:ring-offset-1 focus:outline-none sm:h-6 sm:w-6 sm:opacity-0 sm:group-hover:opacity-100"
+                      className="absolute -top-2 -right-2 flex h-7 w-7 items-center justify-center rounded-full bg-red-800 text-sm text-white opacity-100 transition-opacity focus:opacity-100 focus:ring-2 focus:ring-red-800 focus:ring-offset-1 focus:outline-none sm:h-6 sm:w-6 sm:opacity-0 sm:group-hover:opacity-100"
                       aria-label={`Remove photo ${idx + 1}`}
                     >
                       &times;
@@ -2170,7 +2269,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
                 <button
                   type="button"
                   onClick={() => photoInputRefs.current[item.id]?.click()}
-                  className="border-theme-surface-border text-theme-text-muted flex min-h-[40px] items-center gap-1.5 rounded-lg border border-dashed px-3 py-2 text-xs transition-colors hover:border-blue-500 hover:text-blue-600"
+                  className="border-theme-surface-border text-theme-text-muted hover:border-theme-accent-blue hover:text-theme-accent-blue flex min-h-[40px] items-center gap-1.5 rounded-lg border border-dashed px-3 py-2 text-xs transition-colors"
                 >
                   <Camera className="h-3.5 w-3.5" aria-hidden="true" />
                   Add photo (max 3)
@@ -2316,7 +2415,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
                                 confirmCountsInCompartment(comp);
                               }}
                               aria-label={`Confirm the counts shown in ${comp.name}`}
-                              className="flex min-h-[40px] items-center gap-1.5 rounded-lg border border-green-500/30 bg-green-500/10 px-3 py-2 text-xs font-medium whitespace-nowrap text-green-700 transition-colors hover:bg-green-500/20 dark:text-green-400"
+                              className="border-theme-alert-success-border bg-theme-alert-success-bg text-theme-alert-success-title flex min-h-[40px] items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-medium whitespace-nowrap transition-opacity hover:opacity-90"
                             >
                               <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" />
                               Confirm Counts
@@ -2340,7 +2439,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
                             className={`flex min-h-[40px] items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-medium whitespace-nowrap transition-colors ${
                               hasQuantityItems(comp)
                                 ? 'border-theme-surface-border text-theme-text-secondary hover:bg-theme-surface-hover'
-                                : 'border-green-500/30 bg-green-500/10 text-green-700 hover:bg-green-500/20 dark:text-green-400'
+                                : 'border-theme-alert-success-border bg-theme-alert-success-bg text-theme-alert-success-title hover:opacity-90'
                             }`}
                           >
                             <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" />
@@ -2387,7 +2486,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
               <textarea
                 id="overall-notes"
                 rows={3}
-                className="form-input px-3 text-sm focus:ring-blue-500"
+                className="form-input focus:ring-theme-focus-ring px-3 text-sm"
                 placeholder="Any overall notes or observations..."
                 value={overallNotes}
                 onChange={(e) => setOverallNotes(e.target.value)}
@@ -2407,7 +2506,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
                   submissionOutcome?.status === 'evidence_pending' ||
                   submissionOutcome?.status === 'evidence_failed'
                 }
-                className="flex min-h-[52px] w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 py-3.5 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex min-h-[52px] w-full items-center justify-center gap-2 rounded-xl bg-blue-800 px-4 py-3.5 text-sm font-medium text-white transition-colors hover:bg-blue-900 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {submitting ? (
                   <>
@@ -2439,11 +2538,85 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
   // Main Render
   // --------------------------------------------------------------------------
 
+  if (experience === 'sweep') {
+    const goTo = (index: number) => {
+      setSweepStopIndex(index);
+      // Arriving at a bag from the jump sheet or the finish screen starts at
+      // its first pocket, not wherever the last visit left off.
+      setSweepPocketIndex(0);
+      setSweepScreen('walk');
+    };
+    // The walk is one screen at a time, so it takes the viewport rather than
+    // scrolling inside the page the accordion lives on.
+    return (
+      <div className="fixed inset-0 z-40 flex flex-col">
+        {sweepScreen === 'finish' ? (
+          <CheckFinish
+            stops={sweepStops}
+            answers={sweepAnswers}
+            onJump={goTo}
+            onSubmit={() => void handleSubmit()}
+            onBack={() => setSweepScreen('walk')}
+            submittingAs={user?.first_name ? `${user.first_name} ${user.last_name ?? ''}`.trim() : 'you'}
+            submitting={submitting}
+          />
+        ) : (
+          <CheckSweep
+            stops={sweepStops}
+            answers={sweepAnswers}
+            stopIndex={sweepStopIndex}
+            onStopIndexChange={setSweepStopIndex}
+            pocketIndex={sweepPocketIndex}
+            onPocketIndexChange={setSweepPocketIndex}
+            onBulkClaim={handleSweepBulkClaim}
+            onOpenJump={() => setSweepScreen('jump')}
+            onFinish={() => setSweepScreen('finish')}
+            onClose={() => onBack?.()}
+            unitName={shiftContext?.apparatusName ?? ''}
+            templateName={template.name}
+            saveState={isOnline ? 'saved' : 'offline'}
+            disabled={submitting}
+            renderStop={(current, openPocketIndex) => (
+              <CheckSweepStop
+                stop={current}
+                answers={sweepAnswers}
+                onAnswer={handleSweepAnswer}
+                onSeal={previewMode ? undefined : handleSweepSeal}
+                disabled={submitting}
+                openPocketIndex={openPocketIndex}
+              />
+            )}
+          />
+        )}
+
+        {sweepScreen === 'jump' && (
+          <CheckJumpSheet
+            stops={sweepStops}
+            answers={sweepAnswers}
+            current={sweepStopIndex}
+            onJump={goTo}
+            onShowFlatList={() => setSweepScreen('flat')}
+            onClose={() => setSweepScreen('walk')}
+          />
+        )}
+
+        {sweepScreen === 'flat' && (
+          <CheckFlatList
+            stops={sweepStops}
+            answers={sweepAnswers}
+            onJump={goTo}
+            onClose={() => setSweepScreen('walk')}
+          />
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="mx-auto max-w-lg space-y-4 px-3 pb-12">
       {revisionNotice && (
         <section
-          className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-4 text-sm text-amber-950 dark:text-amber-100"
+          className="border-theme-alert-warning-border bg-theme-alert-warning-bg text-theme-alert-warning-text rounded-xl border p-4 text-sm"
           aria-label="Checklist updated"
         >
           <div className="flex items-start gap-3">
@@ -2478,10 +2651,10 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
           role="status"
           className={`space-y-2 rounded-lg border px-3 py-3 text-sm ${
             submissionOutcome.status === 'failed' || submissionOutcome.status === 'evidence_failed'
-              ? 'border-red-500/30 bg-red-500/10 text-red-800 dark:text-red-300'
+              ? 'border-theme-alert-danger-border bg-theme-alert-danger-bg text-theme-alert-danger-title'
               : submissionOutcome.status === 'evidence_pending'
-                ? 'border-amber-500/30 bg-amber-500/10 text-amber-900 dark:text-amber-200'
-                : 'border-green-500/30 bg-green-500/10 text-green-800 dark:text-green-300'
+                ? 'border-theme-alert-warning-border bg-theme-alert-warning-bg text-theme-alert-warning-text'
+                : 'border-theme-alert-success-border bg-theme-alert-success-bg text-theme-alert-success-title'
           }`}
         >
           {submissionOutcome.status === 'failed' ? (
@@ -2522,7 +2695,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
                       type="button"
                       onClick={() => void syncPendingChecks()}
                       disabled={syncStatus === 'syncing'}
-                      className="font-medium text-amber-800 hover:underline disabled:opacity-50 dark:text-amber-200"
+                      className="text-theme-alert-warning-text font-medium hover:underline disabled:opacity-50"
                     >
                       Retry now
                     </button>
@@ -2535,7 +2708,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
       )}
       {/* Offline banner */}
       {!isOnline && !previewMode && (
-        <div className="flex items-center gap-2 rounded-lg border border-yellow-500/30 bg-yellow-500/10 px-3 py-2 text-sm text-yellow-800 dark:text-yellow-300">
+        <div className="border-theme-alert-warning-border bg-theme-alert-warning-bg text-theme-alert-warning-text flex items-center gap-2 rounded-lg border px-3 py-2 text-sm">
           <WifiOff className="h-4 w-4 flex-shrink-0" />
           <span className="flex-1">You&apos;re offline. Checks will be saved locally and synced when connected.</span>
         </div>
@@ -2543,7 +2716,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
 
       {/* Pending sync indicator */}
       {pendingQueueCount > 0 && !previewMode && (
-        <div className="flex items-center justify-between gap-2 rounded-lg border border-blue-500/30 bg-blue-500/10 px-3 py-2 text-sm text-blue-800 dark:text-blue-300">
+        <div className="border-theme-alert-info-border bg-theme-alert-info-bg text-theme-alert-info-title flex items-center justify-between gap-2 rounded-lg border px-3 py-2 text-sm">
           <span className="flex items-center gap-2">
             {syncStatus === 'syncing' ? (
               <RefreshCw className="h-4 w-4 flex-shrink-0 animate-spin" />
@@ -2556,7 +2729,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
             <button
               type="button"
               onClick={() => void syncPendingChecks()}
-              className="text-xs font-medium text-blue-600 hover:underline dark:text-blue-400"
+              className="text-theme-accent-blue text-xs font-medium hover:underline"
             >
               Sync now
             </button>
@@ -2607,8 +2780,8 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
               <span
                 className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold ${
                   shiftContext?.checkTiming === 'start_of_shift'
-                    ? 'border-blue-500/20 bg-blue-500/10 text-blue-700 dark:text-blue-400'
-                    : 'border-amber-500/20 bg-amber-500/10 text-amber-700 dark:text-amber-400'
+                    ? 'border-theme-alert-info-border bg-theme-alert-info-bg text-theme-alert-info-title'
+                    : 'border-theme-alert-warning-border bg-theme-alert-warning-bg text-theme-alert-warning-text'
                 }`}
               >
                 <span className="shrink-0" aria-hidden="true">
@@ -2643,7 +2816,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
           per item turned one sentence into sixty pieces of chrome. */}
       {hasCarriedCounts && (
         <div className="card-secondary text-theme-text-secondary mx-4 mt-3 flex items-start gap-2 p-3 text-xs">
-          <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-blue-600" aria-hidden="true" />
+          <Info className="text-theme-alert-info-icon mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
           <span>
             Counts are carried over from the last recorded count. Change what is different — anything you leave alone
             still needs a tap to confirm you looked.

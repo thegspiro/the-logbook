@@ -205,6 +205,29 @@ class TestRateLimiter:
         assert reason is None
 
     @pytest.mark.unit
+    def test_zero_lockout_does_not_reset_the_window(self):
+        """Codex, PR #2106: public_rate_limit's in-memory fallback calls with
+        lockout_seconds=0 for several unauthenticated public endpoints
+        (calendar, legal, display, finance-approval tokens, three webhook
+        receivers). A lockout of 0 reads as already-expired on the very next
+        call — if that also wiped the request history, an attacker would get
+        a full fresh allowance every max_requests+1'th request, defeating
+        the window almost entirely instead of just skipping the cool-down
+        period."""
+        limiter = RateLimiter()
+        key = "ip-zero-lockout"
+        results = [
+            limiter.is_rate_limited(
+                key, max_requests=5, window_seconds=60, lockout_seconds=0
+            )[0]
+            for _ in range(10)
+        ]
+        # Buggy behaviour resets on the very next call after tripping the
+        # limit: [F,F,F,F,F, T,F,F,F,F] — a full new allowance every 6th
+        # call. Fixed behaviour stays limited once the window is full.
+        assert results == [False] * 5 + [True] * 5
+
+    @pytest.mark.unit
     def test_different_keys_independent(self):
         """Rate limiting for one key should not affect another key."""
         limiter = RateLimiter()
@@ -376,6 +399,107 @@ class TestRateLimiter:
 
         assert "data-export:1.2.3.4" not in limiter.requests
         assert "data-export:1.2.3.4" not in limiter._key_windows
+
+
+# ---------------------------------------------------------------------------
+# daily_cap_exceeded
+# ---------------------------------------------------------------------------
+
+
+class TestDailyCapExceeded:
+
+    @pytest.mark.unit
+    async def test_self_heals_a_ttl_lost_to_a_transient_expire_failure(
+        self, monkeypatch
+    ):
+        """Codex, PR #2106: if a prior call's INCR succeeded but its EXPIRE
+        then failed (e.g. a transient Redis blip between the two commands),
+        the key is left counting with no TTL and would never reset on its
+        own — once count exceeds the limit the scope stays blocked past the
+        next UTC day instead of resetting. A later call must notice the
+        missing TTL (ttl() < 0) and repair it."""
+        from app.core.cache import cache_manager
+        from app.core.security_middleware import daily_cap_exceeded
+
+        class FakeRedis:
+            def __init__(self):
+                self.expire_calls: list[tuple[str, int]] = []
+
+            async def incr(self, key):
+                return 2  # not the first increment, so count == 1 is skipped
+
+            async def ttl(self, key):
+                return -1  # no TTL — the prior EXPIRE call is the one that failed
+
+            async def expire(self, key, seconds):
+                self.expire_calls.append((key, seconds))
+
+        fake_redis = FakeRedis()
+        monkeypatch.setattr(cache_manager, "redis_client", fake_redis)
+        monkeypatch.setattr(cache_manager, "_connected", True)
+
+        result = await daily_cap_exceeded("test_scope", limit=100)
+
+        assert result is False  # count=2 is under the limit
+        assert len(fake_redis.expire_calls) == 1
+        assert fake_redis.expire_calls[0][1] == 93600
+
+    @pytest.mark.unit
+    async def test_does_not_re_expire_a_key_that_already_has_a_ttl(self, monkeypatch):
+        from app.core.cache import cache_manager
+        from app.core.security_middleware import daily_cap_exceeded
+
+        class FakeRedis:
+            def __init__(self):
+                self.expire_calls: list[tuple[str, int]] = []
+
+            async def incr(self, key):
+                return 2
+
+            async def ttl(self, key):
+                return 3600  # already has a TTL — nothing to repair
+
+            async def expire(self, key, seconds):
+                self.expire_calls.append((key, seconds))
+
+        fake_redis = FakeRedis()
+        monkeypatch.setattr(cache_manager, "redis_client", fake_redis)
+        monkeypatch.setattr(cache_manager, "_connected", True)
+
+        await daily_cap_exceeded("test_scope", limit=100)
+
+        assert fake_redis.expire_calls == []
+
+    @pytest.mark.unit
+    async def test_first_increment_still_sets_the_ttl_directly(self, monkeypatch):
+        """count == 1 sets the TTL unconditionally, without a ttl() probe."""
+        from app.core.cache import cache_manager
+        from app.core.security_middleware import daily_cap_exceeded
+
+        class FakeRedis:
+            def __init__(self):
+                self.expire_calls: list[tuple[str, int]] = []
+                self.ttl_calls = 0
+
+            async def incr(self, key):
+                return 1
+
+            async def ttl(self, key):
+                self.ttl_calls += 1
+                return -1
+
+            async def expire(self, key, seconds):
+                self.expire_calls.append((key, seconds))
+
+        fake_redis = FakeRedis()
+        monkeypatch.setattr(cache_manager, "redis_client", fake_redis)
+        monkeypatch.setattr(cache_manager, "_connected", True)
+
+        await daily_cap_exceeded("test_scope", limit=100)
+
+        assert fake_redis.ttl_calls == 0
+        assert len(fake_redis.expire_calls) == 1
+        assert fake_redis.expire_calls[0][1] == 93600
 
 
 # ---------------------------------------------------------------------------

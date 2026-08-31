@@ -254,7 +254,9 @@ describe('EquipmentCheckTemplateBuilder responsive actions', () => {
     fireEvent.change(within(actionBar).getByLabelText('Set type for selected items'), {
       target: { value: 'count' },
     });
-    expect(within(screen.getByRole('button', { name: 'Deselect Radio' })).getByText(/Count/)).toBeInTheDocument();
+    expect(
+      within(screen.getByRole('button', { name: 'Deselect Radio' })).getByText('Needs quantity')
+    ).toBeInTheDocument();
 
     fireEvent.click(within(actionBar).getByRole('button', { name: 'Optional' }));
     expect(within(actionBar).getByRole('button', { name: 'Required' })).toBeInTheDocument();
@@ -1397,9 +1399,9 @@ describe('EquipmentCheckTemplateBuilder crew preview identity', () => {
     await user.type(composer, 'Second item{Enter}');
 
     await user.click(screen.getByRole('button', { name: 'Crew view' }));
-    const answers = within(screen.getByLabelText('Crew preview')).getAllByRole('button', { name: 'Pass' });
-    await user.click(answers[0] as HTMLElement);
-    expect(answers[0]).toHaveClass('bg-green-600');
+    const preview = () => within(screen.getByLabelText('Crew preview'));
+    await user.click(preview().getByRole('button', { name: 'First item works' }));
+    expect(preview().getByRole('button', { name: 'First item works' })).toHaveAttribute('aria-pressed', 'true');
 
     await user.click(screen.getByRole('button', { name: 'Delete First item' }));
     await confirm('Delete');
@@ -1408,9 +1410,8 @@ describe('EquipmentCheckTemplateBuilder crew preview identity', () => {
     // the surviving item inherits both the deleted one's preview id and the
     // answer recorded against it.
     await waitFor(() => expect(screen.queryByDisplayValue('First item')).not.toBeInTheDocument());
-    const remaining = within(screen.getByLabelText('Crew preview')).getAllByRole('button', { name: 'Pass' });
-    expect(remaining).toHaveLength(1);
-    expect(remaining[0]).not.toHaveClass('bg-green-600');
+    expect(preview().queryByRole('button', { name: 'First item works' })).not.toBeInTheDocument();
+    expect(preview().getByRole('button', { name: 'Second item works' })).toHaveAttribute('aria-pressed', 'false');
   }, 15_000);
 
   it('expands a location added to an unsaved template, so its composer is reachable', async () => {
@@ -1450,27 +1451,22 @@ describe('EquipmentCheckTemplateBuilder duplication identity', () => {
     await user.type(composer, 'First item{Enter}');
 
     await user.click(screen.getByRole('button', { name: 'Crew view' }));
-    const answered = within(screen.getByLabelText('Crew preview')).getByRole('button', { name: 'Pass' });
-    await user.click(answered);
-    expect(answered).toHaveClass('bg-green-600');
+    const preview = () => within(screen.getByLabelText('Crew preview'));
+    await user.click(preview().getByRole('button', { name: 'First item works' }));
+    expect(preview().getByRole('button', { name: 'First item works' })).toHaveAttribute('aria-pressed', 'true');
 
     // Adding an item cannot mis-assign an existing answer, so it must not
     // discard one the author was in the middle of looking at.
     await user.type(composer, 'Second item{Enter}');
     await waitFor(() => expect(screen.getAllByDisplayValue(/item$/)).toHaveLength(2));
-    expect(within(screen.getByLabelText('Crew preview')).getAllByRole('button', { name: 'Pass' })[0]).toHaveClass(
-      'bg-green-600'
-    );
+    expect(preview().getByRole('button', { name: 'First item works' })).toHaveAttribute('aria-pressed', 'true');
 
-    // Changing the type leaves a pass/fail recorded against a counter.
+    // Changing the type leaves a pass/fail recorded against a counter, so the
+    // answer goes with it — the verdict pair is replaced by a tally row.
     const firstRow = screen.getByDisplayValue('First item').closest('[id^="item-row-"]') as HTMLElement;
     await user.click(within(firstRow).getByRole('button', { name: 'Count' }));
-    await waitFor(() =>
-      expect(within(screen.getByLabelText('Crew preview')).queryAllByRole('button', { name: 'Pass' })).toHaveLength(1)
-    );
-    expect(within(screen.getByLabelText('Crew preview')).getByRole('button', { name: 'Pass' })).not.toHaveClass(
-      'bg-green-600'
-    );
+    await waitFor(() => expect(preview().queryByRole('button', { name: 'First item works' })).not.toBeInTheDocument());
+    expect(preview().getByRole('button', { name: 'Second item works' })).toHaveAttribute('aria-pressed', 'false');
   }, 20_000);
 
   it('gives a duplicated location its own item identities', async () => {

@@ -140,7 +140,22 @@ class RateLimiter:
             else:
                 # Lockout expired
                 del self.lockouts[key]
-                self.requests.pop(key, None)
+                # Only reset history for a lockout that actually cooled
+                # something down (Codex, PR #2106). A caller with
+                # lockout_seconds=0 — public_rate_limit's in-memory fallback,
+                # used by several unauthenticated public endpoints when Redis
+                # is down — sets self.lockouts[key] = current_time + 0, which
+                # reads as "expired" on the very next call. Popping
+                # unconditionally would then wipe the in-window request
+                # history on every single over-limit request, turning the
+                # sliding window into a free reset every max_requests+1'th
+                # hit and defeating the limit entirely. A real lockout
+                # (lockout_seconds >> window_seconds) still gets the same
+                # clean slate as before: every recorded timestamp is already
+                # older than window_seconds by the time it expires, so the
+                # window filter below would drop them regardless.
+                if lockout_seconds > 0:
+                    self.requests.pop(key, None)
 
         # Clean old requests outside window
         self.requests[key] = [
@@ -240,6 +255,19 @@ async def daily_cap_exceeded(scope: str, limit: int) -> bool:
         count = await cache_manager.redis_client.incr(key)
         if count == 1:
             await cache_manager.redis_client.expire(key, 93600)  # ~26h
+        else:
+            # Self-heal a missing TTL (Codex, PR #2106): if a prior call's
+            # INCR succeeded but its EXPIRE then failed (e.g. a transient
+            # Redis blip between the two commands), the key is left counting
+            # with no expiry. Without this, it would never reset — once count
+            # exceeds limit the scope stays blocked past the next UTC day
+            # instead of resetting, denying legitimate traffic indefinitely
+            # rather than just for the rest of the current day. ttl() < 0
+            # covers "no expiry" (-1); "key doesn't exist" (-2) can't happen
+            # here since incr() just created or touched it.
+            ttl = await cache_manager.redis_client.ttl(key)
+            if ttl < 0:
+                await cache_manager.redis_client.expire(key, 93600)
         return count > limit
     except Exception as exc:
         logger.warning("Daily-cap check failed (allowing): {}", exc)
