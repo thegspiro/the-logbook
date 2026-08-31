@@ -16,10 +16,45 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-None. Feature 32 (Locations & kiosk) is fully closed — see log entry below.
-Next: feature 33, Core infrastructure.
+Feature 33 (Core infrastructure), re-verification pass — branch
+`claude/friendly-babbage-ioea3m`, opening now. Zero code drift since
+CI2-33 (PR #1917); all 14 prior fixes re-verified, 0 new findings.
 
 ---
+
+### 2026-08-31 — Feature 33 (Core infrastructure), re-verification — 0 new findings
+
+No security-review PR was open (feature 32 fully merged and closed via PR
+#2099 earlier), so the rotation continued to feature 33. Loaded
+`CHECKLIST.md`, `SEC-00-cross-cutting-baseline.md`, and
+`docs/security-review/CI2-33-core-infra.md` (prior pass, PR #1917, 14
+findings, all fixed) before reading any code.
+
+`git diff` of the CI2-33 close-out commit (`e05991a8`) against current
+`main` is **empty** for all three in-scope files
+(`security_middleware.py`, `config.py`, `database.py`) and for the four
+adjacent files CI2-33 spot-checked (`security.py`, `cache.py`,
+`websocket_manager.py`, `encrypted_types.py`) — nothing in this feature's
+surface has changed since 2026-08-27. `main.py`'s middleware registration
+block is unchanged too.
+
+Read all three in-scope files in full anyway and re-verified each of
+CI2-33's 14 fixes against the live code (not the prior write-up) — all 14
+hold, plus the CI-9/CI-10 residual ops items remain accurate. No new
+findings. Findings doc: `docs/security-review/CI-33-core-infra.md`.
+
+**Completion gate:** flake8/black/isort clean across `app/ tests/
+alembic/`; `validate_migrations.py --strict` — 394 revisions, single head,
+no schema change; scoped tests (`test_security_middleware.py`,
+`test_core_infra_boot_checks.py`, `test_database_manager.py`,
+`test_database_url_encoding.py`, `test_onboarding_rate_limit_scopes.py`,
+`test_startup_diagnostics.py`, `test_tls_required_config.py`) — 166/166
+passed. No code changed, so no frontend gate applies. PR opening now,
+branch `claude/friendly-babbage-ioea3m`. Next: 34 frontend shared, once
+this PR merges.
+
+Feature 33 marked 🔄 (not ✅ yet — that happens on the closing PR after
+merge, per the rotation's own rule).
 
 ### 2026-08-31 — Feature 32 (Locations & kiosk), pass 2 ✅ PR #2098 merged (`5e382921`)
 
