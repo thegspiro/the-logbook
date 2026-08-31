@@ -193,6 +193,9 @@ const TestPageCardComponent: React.FC<TestPageCardProps> = ({
                 onChange={(event) => onParam(page.path, param, event.target.value)}
                 placeholder="paste an id"
                 aria-label={`Sample ${param} for ${page.label}`}
+                // Every other control on a read-only card is disabled; this one
+                // was not, and it writes through the same path they do.
+                disabled={readOnly}
               />
             </label>
           ))}

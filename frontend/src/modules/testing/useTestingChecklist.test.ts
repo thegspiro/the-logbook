@@ -386,6 +386,50 @@ describe('useTestingChecklist', () => {
     }
   });
 
+  it('does not re-send a note the next mark superseded', async () => {
+    // Cancelling the debounce timer left the entry in the map, and its flush
+    // closure still held the *pre-Pass* payload. Switching runs later re-sent
+    // it and reverted the pass on the server — with no error, and the screen
+    // reloaded on top of it.
+    vi.useFakeTimers();
+    try {
+      const hook = renderHook(() => useTestingChecklist({}));
+      await vi.waitFor(() => expect(hook.result.current.isLoading).toBe(false));
+
+      act(() => hook.result.current.setNote('/dashboard', 'looks off'));
+      act(() => hook.result.current.setStatus('/dashboard', 'pass'));
+      mockSaveEntry.mockClear();
+
+      act(() => hook.result.current.viewRun('run-0'));
+
+      expect(mockSaveEntry).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('refuses to write while an archived run is on screen', async () => {
+    // The endpoint only ever writes to the *current* run, so a mark made here
+    // copies the archived run's status and note into today's, attributed to
+    // today's tester. The cards disable their controls — except the `:param`
+    // input, which writes through the same path.
+    const archived = makeRun({ id: 'run-0', label: 'First pass', isCurrent: false });
+    mockGetRun.mockResolvedValue(
+      run([entry({ routePath: '/events/:id', status: 'fail', note: 'was broken' })], {
+        run: archived,
+        runs: [makeRun(), archived],
+      })
+    );
+    const { result } = await loaded();
+    expect(result.current.isViewingArchivedRun).toBe(true);
+
+    act(() => result.current.setParam('/events/:id', 'id', 'evt-1'));
+    act(() => result.current.setStatus('/events/:id', 'pass'));
+
+    expect(mockSaveEntry).not.toHaveBeenCalled();
+    expect(result.current.results['/events/:id']?.status).toBe('fail');
+  });
+
   it('drops the timestamp when a mark is taken back', async () => {
     mockGetRun.mockResolvedValue(run([entry({ routePath: '/dashboard', status: 'pass' })]));
     const { result } = await loaded();
