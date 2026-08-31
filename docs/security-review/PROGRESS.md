@@ -68,12 +68,15 @@ from a real cross-tenant read. Fixed by adding the missing filter; guard test
 added that inspects the compiled `WHERE` clause and fails on reintroduction
 (verified by reproducing the bug locally and confirming the test catches it).
 
-**Flagged (not fixed, recorded in `docs/KNOWN_LIMITATIONS.md`)** —
+**Flagged (MSG-10, not fixed, recorded in `docs/KNOWN_LIMITATIONS.md`)** —
 `reconcile_recipients` hard-deletes a member's `DepartmentMessageRecipient`
 row, including `read_at`/`acknowledged_at`, the moment an audience edit no
-longer targets them — silently destroying acknowledgment history the same
-file's own `delete_message` docstring calls "compliance evidence." Not
-mechanically fixable like MSG-9: keeping resolved rows would also keep the
+longer targets them — erasing that member's record from
+`get_acknowledgment_report` (an independent `message_acknowledged` audit-log
+entry survives, per Codex's review of PR #2081, so this is a report/inbox-
+visibility loss, not a total loss of evidence), which the same file's own
+`delete_message` docstring calls "compliance evidence." Not mechanically
+fixable like MSG-9 (the org-scoping fix above): keeping resolved rows would also keep the
 message visible in that member's inbox (visibility is a join on the same
 table), which is a product decision, not a bug fix. Not cross-tenant.
 

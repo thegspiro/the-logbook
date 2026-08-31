@@ -2436,7 +2436,7 @@ today), which lowers today's exploitability but does not change that the API
 itself grants any `meetings.manage` holder an unconditional, unaudited-before-
 this-pass, untracked approval with no self-check.
 
-## MSG-9 — Narrowing a Department Message's Audience Can Destroy Read/Acknowledgment History (2026-08-31)
+## MSG-10 — Narrowing a Department Message's Audience Erases the Acknowledgment Report's Record, Though an Independent Audit Entry Survives (2026-08-31)
 
 `MessagingService.reconcile_recipients` rebuilds a published message's audience
 when an admin edits its targeting (e.g. switches from "by role" to a corrected
@@ -2450,9 +2450,21 @@ avoid losing (`app/services/messaging_service.py`, `delete_message`) — but
 `reconcile_recipients` (same file) discards it via a plain audience edit, no
 confirmation, no message deletion involved. A message that "requires
 acknowledgment," gets acknowledged by everyone, and then has its role list
-tweaked to fix a typo silently loses every acknowledgment for anyone who falls
+tweaked to fix a typo loses every acknowledgment row for anyone who falls
 outside the corrected set — `get_acknowledgment_report` would then show them
-as never having acknowledged it at all.
+as never having acknowledged it at all, and they'd drop out of its
+denominator entirely.
+
+**This does not erase all compliance evidence.** `acknowledge_message`
+(`app/api/v1/endpoints/messages.py:425-436`) writes an independent
+`message_acknowledged` audit-log entry — user id, message id, timestamp —
+through the tamper-evident audit hash chain at the moment of acknowledgment,
+and `reconcile_recipients` never touches `audit_logs`. That record survives
+the recipient-row deletion and could be used during remediation to
+reconstruct who had acknowledged before the audience was narrowed. What is
+actually lost is the _report's_ live state (and, per the visibility
+mechanism below, the message's presence in that member's inbox) — not the
+underlying evidence that the acknowledgment happened.
 
 Closing this needs a product decision, not a mechanical patch: keeping the
 recipient row for anyone with `read_at`/`acknowledged_at` set would preserve

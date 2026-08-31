@@ -426,19 +426,25 @@ call for the same reason pass 1 recorded it.
 
 ### New flagged item — see `docs/KNOWN_LIMITATIONS.md`
 
-**MSG-9** in this doc is the org-scoping defense-in-depth fix above (FIXED). A
-second, unrelated finding from this pass needed a product decision rather than
-a mechanical fix and is recorded only in `docs/KNOWN_LIMITATIONS.md` to avoid a
-duplicate id: **narrowing a published message's audience
+**MSG-9** in this doc is the org-scoping defense-in-depth fix above (FIXED).
+**MSG-10**, a second and unrelated finding from this pass, needed a product
+decision rather than a mechanical fix and is recorded only in
+`docs/KNOWN_LIMITATIONS.md`: **narrowing a published message's audience
 (`reconcile_recipients`) hard-deletes the `DepartmentMessageRecipient` row —
 including `read_at`/`acknowledged_at` — for any member the new audience no
-longer includes**, silently destroying acknowledgment history the same file's
-own `delete_message` docstring calls "compliance evidence." Not cross-tenant,
-not fixed here (fixing it changes inbox-visibility semantics, since visibility
-is currently derived from the same row the fix would need to keep). See
-`docs/KNOWN_LIMITATIONS.md` → "MSG-9 — Narrowing a Department Message's
-Audience Can Destroy Read/Acknowledgment History" for the full write-up and
-options.
+longer includes**, erasing that member's row in `get_acknowledgment_report`
+and their inbox visibility for the message. This does not erase all
+compliance evidence — `acknowledge_message` (`messages.py:425-436`) writes an
+independent, tamper-evident `message_acknowledged` audit-log entry at
+acknowledgment time that `reconcile_recipients` never touches — but it does
+erase the _report's_ record, which the same file's `delete_message` docstring
+calls "compliance evidence" and specifically avoids losing on message
+deletion. Not cross-tenant, not fixed here (fixing it changes
+inbox-visibility semantics, since visibility is currently derived from the
+same row the fix would need to keep). See `docs/KNOWN_LIMITATIONS.md` →
+"MSG-10 — Narrowing a Department Message's Audience Erases the Acknowledgment
+Report's Record, Though an Independent Audit Entry Survives" for the full
+write-up and options.
 
 ### Frontend — verified good ✅
 
