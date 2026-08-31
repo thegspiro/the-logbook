@@ -16,11 +16,26 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-[#2076](https://github.com/thegspiro/the-logbook/pull/2076) —
-`claude/security-review-medical-supplies-pass2` — Feature 23 (Medical
-supplies), pass 2 audit-trail follow-up (MSUP-5).
+None. Feature 23 (Medical supplies), pass 2, is fully merged — see log
+entry below. Next: feature 24, Meetings & minutes.
 
 ---
+
+### 2026-08-30 — Feature 23 (Medical supplies), pass 2 ✅ fully merged — PR #2076 (audit-trail follow-up, MSUP-5/MSUP-6)
+
+PR #2076 merged (`6567828e`). This was a second, independent pass-2 session
+that started from the same pass-1 baseline as PR #2075 (log entry below)
+and found a different finding — MSUP-5, the missing audit trail on
+category/item updates — resolved as a merge conflict against #2075's
+already-merged changes (see the tend-pass log entry above this one).
+Codex's review of the merge caught a real bug in the MSUP-5 fix itself
+(MSUP-6: the audit event could report the DB column name `extra_data`
+instead of `metadata`, the field the caller actually changed) and two doc
+accuracy issues (a reused `MSUP-2` identifier, a stale "no changes since
+pass 1" baseline claim once this branch picked up #2075's merged work) —
+all three fixed and their review threads resolved before merge. CI green
+on the final head; no merge conflict remained after the earlier tend pass.
+Rotation row 23 → ✅. Next: 24 meetings & minutes.
 
 ### 2026-08-30 — Feature 23 (Medical supplies), pass 2 ✅ merged — PR #2075
 
@@ -2940,7 +2955,7 @@ each row's prior PR is recorded in the Log, not repeated here.
 | 20  | Compliance                | CMP    | `compliance_config.py`, `compliance_officer.py`                                                                                                 | ✅     |
 | 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ✅     |
 | 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ✅     |
-| 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ⏳     |
+| 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ✅     |
 | 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ⬜     |
 | 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ⬜     |
 | 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                         | ⬜     |
