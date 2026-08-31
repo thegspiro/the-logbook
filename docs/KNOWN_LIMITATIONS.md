@@ -2500,54 +2500,69 @@ recipients within the message's own org — and requires an admin
 this is a data-integrity/compliance-record risk rather than a security
 vulnerability in the access-control sense.
 
-## MSG-12 — A Failed or Stranded Department-Message Delivery Claim Is Never Retried (2026-08-31)
+## MSG-12 — A Failed, Stranded, or Throttled Department-Message Delivery Is Never Retried (2026-08-31)
 
 `MessageDeliveryService._claim_delivery` commits a
 `DepartmentMessageDelivery` row with `status="pending"` before calling out to
 the email/SMS provider — this is what makes a raced or retried `deliver()`
 call safe (a second attempt hits the row's unique
 `(message_id, recipient_id, channel)` constraint and skips). That same
-constraint means **no outcome for a claimed row is ever revisited**, and
-there are two distinct ways to reach one:
+constraint means **no outcome for a claimed row is ever revisited**, and a
+department message is published exactly once — no future `deliver()` call
+for that message will come back around. There are three distinct ways a
+member ends up not receiving a channel they should have:
 
 - **Stranded `pending`.** If the worker process is killed, OOM-killed, or
   loses its DB connection between the claim commit and `_finish_delivery`'s
   follow-up commit, the row is left in `status="pending"` permanently.
   Narrow blast radius: one recipient/channel/message, and only if a crash
   lands in that exact window.
-- **`failed`, from an ordinary provider error — the more likely path.**
-  `_finish_delivery(attempt, error)` commits the same row as
-  `status="failed"` whenever the provider raises, or reports zero
-  successes (`EmailService.send_email` returning `(sent, failed)`,
-  `SMSService.send_bulk_sms` returning a count) — no crash needed, just a
-  transient outage, a rate limit, or one rejected recipient. This is not
-  an edge case: it is the intended, working behavior of `_finish_delivery`,
-  hit every time a send legitimately fails.
+- **`failed`, from an ordinary provider error.** `_finish_delivery(attempt,
+error)` commits the same row as `status="failed"` whenever the provider
+  raises, or reports zero successes (`EmailService.send_email` returning
+  `(sent, failed)`, `SMSService.send_bulk_sms` returning a count) — no
+  crash needed, just a transient outage, a rate limit, or one rejected
+  recipient. This is not an edge case: it is the intended, working
+  behavior of `_finish_delivery`, hit every time a send legitimately
+  fails.
+- **Throttled — no row at all.** `_send_email`/`_send_sms` each check the
+  org's per-hour escalation limit (`is_rate_limited`, the 30/org/hour
+  email and 10/org/hour SMS caps) **before** the loop that calls
+  `_claim_delivery` — when the org is over the cap, the whole method
+  returns immediately, logs a warning, and never claims a single recipient
+  for that channel. No `pending` or `failed` row exists for any of them,
+  so a fix that only sweeps `DepartmentMessageDelivery` rows (the
+  recommendation below, as originally written) cannot recover this path —
+  there is nothing in that table to sweep. This is arguably the worst of
+  the three: it needs no crash and no provider outage, just a busy
+  message-volume hour, and leaves not even a `failed` row for an admin to
+  ever find later, only a log line.
 
-Either way, nothing scans for stale `pending` or `failed` claims, and the
-same unique constraint that makes a _duplicate_ attempt safe also means no
-future `deliver()` call for that message will ever re-attempt the send — a
-department message is published exactly once, so there is no second chance
-for the claim to resolve itself. The channel affected is whichever one
-fails or strands — and email is the "record of notice" this feature's own
-module docstring says a member must not be able to miss, so a routine SMTP
-hiccup during the one delivery attempt permanently and silently drops that
-member from the channel of record for that message.
+Whichever path a recipient falls into, the channel affected is whichever
+one fails, strands, or gets throttled — and email is the "record of
+notice" this feature's own module docstring says a member must not be able
+to miss, so any one of these three, on the one delivery attempt a message
+ever gets, permanently and silently drops that member from the channel of
+record for that message.
 
 Closing this needs a product decision, not a mechanical patch, and the
-decision has to cover both paths together (a fix for only `pending` leaves
-the more common `failed` case exactly as broken): what counts as eligible
-for retry (any `failed`/stale-`pending` row? a cap on attempts?), whether
-retry is automatic via a new scheduled task or surfaced to an admin
-instead, and — since a crash could land either before or after the
-provider actually accepted the send — whether the department would rather
-risk an occasional duplicate delivery (retry unconditionally) or an
-occasional silent miss (leave it and alert). Neither was chosen here.
+decision has to cover all three paths together — a fix scoped to
+`DepartmentMessageDelivery` rows alone (`pending`/`failed`) leaves the
+throttled path, which creates no row, completely unaddressed. Open
+questions: what counts as eligible for retry (any `failed`/stale-`pending`
+row? a cap on attempts?), whether a throttled batch should be recorded
+somewhere retriable rather than just logged, whether retry is automatic
+via a new scheduled task or surfaced to an admin instead, and — since a
+crash could land either before or after the provider actually accepted the
+send — whether the department would rather risk an occasional duplicate
+delivery (retry unconditionally) or an occasional silent miss (leave it
+and alert). None was chosen here.
 
 Found by `docs/security-review/MSG-25-messaging-notifications.md` (feature
-25, pass 2, MSG-12); the `failed`-status path was caught by Codex's review
-of the PR recording this finding, broadening it from the `pending`-only
-scenario originally reported. No `SMSService`/`EmailService` allowlist or
+25, pass 2, MSG-12); both the `failed`-status path and the throttled/
+no-row path were caught by two separate rounds of Codex's review of the PR
+recording this finding, broadening it from the `pending`-only scenario
+originally reported. No `SMSService`/`EmailService` allowlist or
 org-scoping gap involved — this is a reliability gap in an otherwise-correct
 idempotency mechanism, not an access-control defect.
 

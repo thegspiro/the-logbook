@@ -522,7 +522,7 @@ regex-over-whole-file approach — out of scope for this pass. No migration in
 the current chain is known to rely on this gap for a false "clean" result;
 flagged here so a future pass doesn't have to rediscover it.
 
-### MSG-12 — LOW-MED — a failed or stranded channel delivery claim is never retried — FLAGGED (needs a product decision)
+### MSG-12 — LOW-MED — a failed, stranded, or throttled channel delivery is never retried — FLAGGED (needs a product decision)
 
 **What:** `_claim_delivery` commits a `DepartmentMessageDelivery` row with
 `status="pending"` _before_ the actual `send_email`/`send_bulk_sms` call —
@@ -530,9 +530,11 @@ this is what makes a raced or retried `deliver()` call safe (a second
 attempt hits the row's unique `(message_id, recipient_id, channel)`
 constraint and skips, the mechanism the "New architecture reviewed" section
 above documents as defense-in-depth on top of MSG-4). That same constraint
-means no outcome for a claimed row is ever revisited, and there are two
-distinct ways to reach one — the second is a Codex-caught broadening of
-what this finding originally reported as a crash-only scenario:
+means no outcome for a claimed row is ever revisited, and a department
+message is published exactly once — no future `deliver()` call comes back
+around. Two rounds of Codex review on this same PR each broadened what
+this finding originally reported as a crash-only scenario; there are three
+distinct ways a recipient ends up missing a channel:
 
 - **Stranded `pending`** (the originally reported scenario) — if the
   process is killed, OOM-killed, or loses its DB connection between
@@ -549,37 +551,53 @@ what this finding originally reported as a crash-only scenario:
   `_claim_delivery` rejects a retry attempt on the unique constraint
   regardless of the existing row's status, so a `failed` row is exactly as
   permanently un-retriable as a stranded `pending` one.
-
-**Where:** `app/services/message_delivery_service.py`
-(`_claim_delivery`/`_finish_delivery` lines 87–129, `_send_email`, `_send_sms`).
-**Failure scenario:** either (a) a background worker is killed at the exact
-moment between `_claim_delivery`'s commit and the provider call returning,
-or (b) — far more likely in production — the email or SMS provider has a
-routine transient failure during the one delivery attempt a department
-message ever gets. Either way, that one recipient's copy of that one
-department message is now permanently un-sent on that channel — worst
-case, email, the channel this feature's own module docstring calls "the
-record of notice" — with no error surfaced anywhere and no automatic
-recovery. The blast radius is one recipient/one channel/one message per
-occurrence, but occurrence (b) needs no crash at all.
-**Why flagged, not fixed:** correcting this needs a policy decision this
-pass should not make unilaterally, and the decision has to cover both
-`pending` and `failed` together — fixing only the crash-only `pending`
-case leaves the more common `failed` case exactly as broken. Open
-questions: what counts as eligible for retry (any `failed` row? a
-stale-`pending` TTL? a cap on attempts?), whether retry is automatic via a
-new scheduled task or surfaced to an admin instead, and — since a crash
-could land either before or after the provider actually accepted the send —
-whether the department would rather risk an occasional duplicate delivery
-(retry unconditionally) or an occasional silent miss (leave it and alert).
-Mirrored into `docs/KNOWN_LIMITATIONS.md`.
-**Recommendation:** a scheduled task (mirroring
-`run_publish_scheduled_messages`'s cadence) that finds
-`DepartmentMessageDelivery` rows with `status="failed"` or `status="pending"`
-with `attempted_at` older than some threshold, and either re-attempts the
-send or flips them to a distinct `"orphaned"` status an admin view can
-surface. Left for a future iteration with product input on which tradeoff
-(silently-never-sent vs. possibly-duplicate) the department would prefer.
+- **Throttled — no row at all.** `_send_email`/`_send_sms` (lines
+  231–303/304+) each check `is_rate_limited` against the org's per-hour
+  escalation cap — the 30/org/hour email, 10/org/hour SMS limits MSG-4's
+  own write-up references — **before** the `for user in ... recipients`
+  loop that calls `_claim_delivery`. On a throttled org, the method
+  returns at that check, logging a warning, having claimed zero
+  recipients. There is no `DepartmentMessageDelivery` row for any of them
+  to later find or retry — the recommendation below, as originally
+  written, only sweeps that table, so it cannot recover this path at all.
+  **Where:** `app/services/message_delivery_service.py`
+  (`_claim_delivery`/`_finish_delivery` lines 87–129, `_send_email`, `_send_sms`).
+  **Failure scenario:** (a) a background worker is killed at the exact
+  moment between `_claim_delivery`'s commit and the provider call returning;
+  (b) the email or SMS provider has a routine transient failure during the
+  one delivery attempt a department message ever gets; or (c) the org's
+  message volume trips the per-hour escalation cap for that channel. Any of
+  the three leaves that recipient's copy of that department message
+  permanently un-sent on that channel — worst case, email, the channel this
+  feature's own module docstring calls "the record of notice" — with no
+  automatic recovery, and (c) leaves no error surfaced anywhere beyond a log
+  line. The blast radius is one recipient/one channel/one message for (a)
+  and (b), but a whole channel's worth of recipients at once for (c); (b)
+  and (c) both need no crash.
+  **Why flagged, not fixed:** correcting this needs a policy decision this
+  pass should not make unilaterally, and the decision has to cover all
+  three paths together — a fix scoped to `DepartmentMessageDelivery` rows
+  alone leaves the throttled path, which creates no row, completely
+  unaddressed. Open questions: what counts as eligible for retry (any
+  `failed`/stale-`pending` row? a cap on attempts?), whether a throttled
+  batch should be recorded somewhere retriable rather than only logged,
+  whether retry is automatic via a new scheduled task or surfaced to an
+  admin instead, and — since a crash could land either before or after the
+  provider actually accepted the send — whether the department would rather
+  risk an occasional duplicate delivery (retry unconditionally) or an
+  occasional silent miss (leave it and alert). Mirrored into
+  `docs/KNOWN_LIMITATIONS.md`.
+  **Recommendation:** a scheduled task (mirroring
+  `run_publish_scheduled_messages`'s cadence) that finds
+  `DepartmentMessageDelivery` rows with `status="failed"` or `status="pending"`
+  with `attempted_at` older than some threshold, and either re-attempts the
+  send or flips them to a distinct `"orphaned"` status an admin view can
+  surface — plus a separate mechanism for the throttled path, since it
+  creates no row for that sweep to find; recording a throttled batch
+  somewhere retriable is itself part of the open product decision, not a
+  settled design. Left for a future iteration with product input on which
+  tradeoff (silently-never-sent vs. possibly-duplicate) the department would
+  prefer.
 
 ### Doc correction — MAIL-3 (attachment magic-byte validation) was already fixed, `docs/app-review/email-templates.md` still said OPEN
 

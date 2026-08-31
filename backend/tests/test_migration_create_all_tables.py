@@ -38,7 +38,9 @@ later is built from the models, which already declare the new column.
 This test is a ratchet — it passed with zero offenders when it was written.
 """
 
+import io
 import re
+import tokenize
 from pathlib import Path
 
 import app.models  # noqa: F401 - importing registers every model on the metadata
@@ -90,6 +92,29 @@ def _helper_functions(text: str) -> dict[str, str]:
     }
 
 
+def _strip_comments_and_strings(text: str) -> str:
+    """``text`` with every comment and string-literal token dropped.
+
+    Used only to decide whether a helper's name is a real reference, not to
+    produce text fed to the ``op.*``/``sa.Table`` regexes elsewhere in this
+    file — those need the original formatting. Uses the stdlib tokenizer
+    rather than a regex: a regex cannot reliably tell a triple-quoted
+    docstring, an escaped quote, or an f-string from real code. Falls back
+    to the unstripped text if tokenization fails (e.g. a synthetic snippet
+    in a test that isn't valid standalone Python) — the same, already-
+    accepted behavior as before this existed, not a new risk.
+    """
+    try:
+        kept = [
+            tok.string
+            for tok in tokenize.generate_tokens(io.StringIO(text).readline)
+            if tok.type not in (tokenize.COMMENT, tokenize.STRING)
+        ]
+    except Exception:
+        return text
+    return " ".join(kept)
+
+
 def _upgrade_body(text: str) -> str:
     """The *reachable* text of a migration's ``upgrade()``: its own body,
     plus the body of any locally-defined helper function upgrade() invokes
@@ -127,6 +152,17 @@ def _upgrade_body(text: str) -> str:
     unannotated-only version of this pattern matched nothing at all and was
     caught before it shipped by comparing its output against the unscoped
     scan on the real migration chain.
+
+    The reachability decision (does a helper's name appear in text already
+    known reachable?) runs against ``_strip_comments_and_strings``'s output,
+    not the raw text: a helper named only in a comment or docstring — dead,
+    never actually called — would otherwise count as reachable and hide a
+    real create_all-only table behind it, in the same dangerous direction
+    every other guard in this function exists to prevent. This still is not
+    full soundness (a name could in principle appear as an f-string
+    expression segment, which the tokenizer treats as executable and does
+    not strip) — closing that gap needs AST-level call-graph analysis, out
+    of scope for what remains a text-based ratchet.
     """
     body = _function_body(text, "upgrade")
     helpers = _helper_functions(text)
@@ -135,9 +171,9 @@ def _upgrade_body(text: str) -> str:
     changed = True
     while changed:
         changed = False
-        combined = "\n".join(included)
+        haystack = _strip_comments_and_strings("\n".join(included))
         for name in list(pending):
-            if re.search(rf"\b{re.escape(name)}\b", combined):
+            if re.search(rf"\b{re.escape(name)}\b", haystack):
                 included.append(helpers[name])
                 pending.discard(name)
                 changed = True
@@ -586,6 +622,29 @@ class TestTheDetectionItself:
         }
 
         assert "legacy_table" not in _tables_created_by_migrations(sources)
+
+    def test_a_helper_named_only_in_a_comment_does_not_count(self):
+        """A helper `upgrade()` never actually calls, merely mentioned in a
+        comment or docstring, must not be credited — a dead reference is
+        not a real one. Reproduces the pre-fix bug directly: without
+        comment/string stripping, this table wrongly disappears from the
+        created set."""
+        sources = {
+            "0001_dead_reference.py": (
+                "def upgrade() -> None:\n"
+                "    # NOTE: unlike _dead_helper(), this migration does its\n"
+                "    # own work inline and never calls that helper.\n"
+                "    pass\n"
+                "\n"
+                "def _dead_helper() -> None:\n"
+                "    op.create_table('never_actually_created', ...)\n"
+                "\n"
+                "def downgrade() -> None:\n"
+                "    pass\n"
+            )
+        }
+
+        assert "never_actually_created" not in _tables_created_by_migrations(sources)
 
     def test_an_unguarded_reflection_is_flagged(self):
         """A raw `sa.Table(..., autoload_with=bind)` on a genuinely
