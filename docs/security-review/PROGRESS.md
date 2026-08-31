@@ -16,25 +16,15 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-Feature 30 (Onboarding), pass 2 — PR
-[#2093](https://github.com/thegspiro/the-logbook/pull/2093), branch
-`claude/security-review-onboarding`. Re-verified all fixes from module-audit
-iteration 25, app-review B25 (4 passes), and security-review pass 1
-(PR #1913 plus a same-day follow-up) hold with no regressions. Two low-risk
-fixes applied (rate limit on `GET /status`; removed a dead `VITE_SESSION_KEY`
-env var documented as security-critical but never read since a
-client-side-encryption code path was removed). One MED finding flagged, not
-fixed (`/test/email`'s self-hosted SMTP test has no SSRF/private-IP
-protection — a genuine product-policy tradeoff, not a drive-by-fixable bug,
-since this app's departments legitimately run on-prem SMTP relays). **Round
-2 (Codex-caught):** the `/status` rate-limit fix itself used the tight
-5-per-60s/30-minute-lockout auth defaults on a route the frontend calls on
-every page load — fixed with a read-appropriate budget instead. See log
-entry below and `docs/security-review/ONB-30-onboarding.md`.
+None. Feature 30 (Onboarding) is fully closed — see log entry below. Next:
+feature 31, Scheduled tasks.
 
 ---
 
-### 2026-08-31 — Feature 30 (Onboarding), pass 2 — 2 fixed, 1 new flagged — PR #2093
+### 2026-08-31 — Feature 30 (Onboarding), pass 2 ✅ PR #2093 merged (`e6a1eb45`)
+
+Round 1: 2 fixed, 1 new flagged. Round 2 (Codex-caught): 1 more fixed — see
+below.
 
 No security-review PR was open (feature 29 fully merged via PR #2091 earlier
 this iteration), so the rotation continued to feature 30. Loaded
@@ -3792,7 +3782,7 @@ each row's prior PR is recorded in the Log, not repeated here.
 | 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                         | ✅     |
 | 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`                                                                    | ✅     |
 | 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                              | ✅     |
-| 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (24 unauth bootstrap routes)                                                                                             | 🔄     |
+| 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (24 unauth bootstrap routes)                                                                                             | ✅     |
 | 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                   | ⬜     |
 | 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                  | ⬜     |
 | 33  | Core infrastructure       | CORE   | `core/security_middleware.py`, `core/database.py`, `core/config.py`                                                                             | ⬜     |
