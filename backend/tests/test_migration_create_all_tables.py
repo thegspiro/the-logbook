@@ -1,10 +1,18 @@
 """A migration must tolerate a table that only ``create_all`` builds.
 
-39 of this schema's 254 tables are never created by any migration —
-``event_requests``, ``prospects``, ``positions``, the whole finance-approval
-set and more. They come into being when ``main.py``'s ``_fast_path_init()``
-calls ``create_all()`` and stamps Alembic at head, which is the deployment
-model ``app/utils/enum_normalization`` documents.
+40 of this schema's 254 tables are never created by any migration —
+``event_requests``, ``prospects``, the whole finance-approval set and more.
+They come into being when ``main.py``'s ``_fast_path_init()`` calls
+``create_all()`` and stamps Alembic at head, which is the deployment model
+``app/utils/enum_normalization`` documents.
+
+A table a migration *renames* into existence (``op.rename_table``) does not
+belong on that list even if nothing ``create_table``s it under its current
+name — ``positions``/``user_positions`` looked like textbook examples until
+CLAUDE.md Pitfall #26 was corrected on 2026-08-31 after a false positive
+(``docs/security-review/MSG-25-messaging-notifications.md``, MSG-11).
+``_tables_created_by_migrations`` below credits ``op.rename_table``
+destinations for exactly this reason.
 
 That is a deliberate design, and it is also a trap, because CI's integration
 and contract jobs run ``alembic upgrade head`` against an **empty** database
