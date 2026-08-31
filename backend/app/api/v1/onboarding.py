@@ -10,7 +10,7 @@ import re
 import secrets
 from datetime import datetime, timedelta, timezone
 from functools import partial
-from typing import Any
+from typing import Any, Iterable
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from loguru import logger
@@ -1974,42 +1974,92 @@ def expand_module_checkboxes(submitted: dict[str, RolePermission]) -> list[str]:
 
 
 def _merge_default_permissions(
-    permission_list: list[str],
     submitted: dict[str, RolePermission],
     default_perms: list[str],
 ) -> list[str]:
-    """Merge a system position's default permissions into a rebuilt list.
+    """Rebuild a seeded system position's permission list from the editor.
 
-    The onboarding position editor models exactly two checkboxes per module
-    (view/manage), so a rebuilt permission list contains only ``module.view``,
-    ``module.manage``, and ``module.*``. Two classes of default permission
-    cannot be re-submitted through it and must be carried over from
-    DEFAULT_POSITIONS or a customized position silently loses them at save:
+    The editor models exactly two checkboxes per module, so a list rebuilt
+    from it contains only ``module.view``, ``module.manage`` and ``module.*``.
+    DEFAULT_POSITIONS says much more than that, which is why a rebuild is only
+    applied where the admin actually asked for one. Three cases:
 
-    1. Whole modules the frontend registry doesn't cover (audit, organization,
-       users, locations, meetings, ...) — keep all their defaults.
-    2. Sub-permissions within a submitted module that pair with baseline view
-       access rather than manage (facilities.view_sensitive, scheduling.swap,
-       storefront.order — members must keep shift-swap requests with scheduling
-       view alone, and store checkout with store view alone) — keep them while
-       the module retains view access. Other action permissions are
-       not representable by the editor and must not survive when an admin
-       clears Manage. A module saved with manage already carries the
-       ``module.*`` wildcard, which covers every sub-permission without
-       cluttering the list.
+    1. **A module the admin left alone** — its checkboxes still read exactly
+       what the registry seeded — keeps its seeded grants verbatim, rebuilt
+       from nothing. This is the common case by a wide margin: "Regular
+       Member" is preselected and the checkbox matrix is collapsed, so most
+       departments press Continue having edited no module at all, and that
+       must not change what was seeded.
+    2. **Whole modules the frontend registry doesn't cover** (audit,
+       organization, users, locations, meetings, ...) keep all their defaults;
+       there are no checkboxes to read.
+    3. **A module the admin changed** is rebuilt from the checkboxes, plus the
+       read-only sub-permissions in ``_CARRYOVER_SUBPERMISSIONS`` while the
+       module keeps view. Other action permissions are not representable by
+       the editor and must not survive an admin clearing Manage. A module
+       saved with manage carries the ``module.*`` wildcard, which covers every
+       sub-permission without cluttering the list.
     """
-    merged = list(permission_list)
+    untouched = _untouched_modules(submitted, default_perms)
+    merged = expand_module_checkboxes(
+        {
+            module_id: perms
+            for module_id, perms in submitted.items()
+            if module_id not in untouched
+        }
+    )
     for perm in default_perms:
         if "." not in perm:
             continue
         module_prefix = perm.partition(".")[0]
-        if module_prefix not in submitted:
+        if module_prefix not in submitted or module_prefix in untouched:
             merged.append(perm)
         elif perm in _CARRYOVER_SUBPERMISSIONS:
             module_perms = submitted[module_prefix]
             if module_perms.view and not module_perms.manage:
                 merged.append(perm)
-    return merged
+    seen: set[str] = set()
+    return [perm for perm in merged if not (perm in seen or seen.add(perm))]
+
+
+def registry_checkboxes(default_perms: Iterable[str], module_id: str) -> tuple:
+    """The (view, manage) pair the editor shows for a seeded module.
+
+    The wizard presents these — see
+    ``frontend/src/modules/onboarding/config/seededPositionGrants.ts``, which
+    is generated from ``DEFAULT_POSITIONS`` and checked against it by
+    ``tests/test_seeded_position_grants.py``. Recomputing them here is what
+    lets the backend tell "the admin left this module alone" from "the admin
+    set it to look like the default", without the wizard having to send a
+    baseline it could get wrong.
+    """
+    granted = set(default_perms)
+    wildcard = f"{module_id}.*" in granted
+    return (
+        wildcard or f"{module_id}.view" in granted,
+        wildcard or f"{module_id}.manage" in granted,
+    )
+
+
+def _untouched_modules(
+    submitted: dict[str, RolePermission],
+    default_perms: list[str],
+) -> set[str]:
+    """Modules whose checkboxes still say exactly what the registry seeded.
+
+    A module the admin did not touch keeps its seeded grants verbatim, because
+    two checkboxes cannot express what DEFAULT_POSITIONS says: rebuilding an
+    untouched module from them drops the action permissions that pair with
+    view (``apparatus.maintenance``, ``events.create``, ``facilities.maintenance``)
+    and, where Manage is ticked, replaces a curated list with the
+    ``module.*`` wildcard. Pressing Continue without editing anything must
+    leave a seeded position exactly as it was seeded.
+    """
+    return {
+        module_id
+        for module_id, perms in submitted.items()
+        if (perms.view, perms.manage) == registry_checkboxes(default_perms, module_id)
+    }
 
 
 @router.post("/session/roles", response_model=RolesSetupResponse)
@@ -2102,7 +2152,7 @@ async def save_session_roles(
     for role_data in data.roles:
         permission_list = expand_module_checkboxes(role_data.permissions)
 
-        # Check if this is an existing system role
+        # Check if this is an existing system position
         if role_data.id in existing_system_roles:
             # Update existing system role permissions
             existing_role = existing_system_roles[role_data.id]
@@ -2120,7 +2170,7 @@ async def save_session_roles(
                 permission_list = ["*"]
             else:
                 permission_list = _merge_default_permissions(
-                    permission_list, role_data.permissions, default_perms
+                    role_data.permissions, default_perms
                 )
 
             existing_role.permissions = permission_list
