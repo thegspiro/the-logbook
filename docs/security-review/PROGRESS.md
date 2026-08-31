@@ -16,13 +16,36 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-None. Feature 33 (Core infrastructure) is fully closed — round 1 merged as
-[#2106](https://github.com/thegspiro/the-logbook/pull/2106), round 2's 3
-Codex-caught fixes merged as
-[#2107](https://github.com/thegspiro/the-logbook/pull/2107). Next: feature
-34, Frontend shared.
+Feature 34 (Frontend shared, pass 3) — PR opening this iteration. Docs-only,
+0 findings (diff-based re-verification of FE2-34 + first full read of
+`components/ux/*`). Once merged, every row (00-34) is ✅ and the rotation
+wraps to 00 for the next full pass.
 
 ---
+
+### 2026-08-31 — Feature 34 (Frontend shared, pass 3) — 0 new findings, PR opening
+
+Re-verified FE2-34 (2026-08-27, PR #1918) against 103 non-test frontend files
+changed since (+20,407/-4,266 across ~30 other rotation iterations) rather
+than re-reading the whole surface a third time. Method: (1) a diff-based sweep
+for every `api.get(`/`api.get<` call added anywhere in the frontend since the
+FE2-34 commit — broader than the feature's own file list, since a new
+cache-exclusion gap (this feature's dominant recurring finding class) could
+just as easily appear in an unrelated page/hook as in the scoped files; (2)
+re-verified all 9 FE2-34 findings against current code; (3) read
+`components/ux/*` (20 files, ~3,466 L) in full — the one shared-UI directory
+no prior frontend-shared pass had explicitly scoped in. The sweep found one
+new module-level global-cache consumer (`modules/testing/services/api.ts`,
+new this rotation) — its one GET (`/testing-checklist`) was already correctly
+excluded in the same commit that introduced the endpoint. No XSS sinks or
+blocking-dialog violations in `components/ux/*`; `LinkifiedText.tsx` verified
+safe by construction (URL regex requires `https?://` at the match start, so a
+`javascript:` URI can never qualify). All 9 FE2-34 findings confirmed intact,
+zero regressions. Docs-only change (no source fix needed); completion gate
+green: `tsc --noEmit` 0 errors, `eslint` 0 errors/8 pre-existing warnings,
+scoped tests (`apiCache`/`authStore`/`createApiClient`) 147/147. Findings
+doc: `docs/security-review/FE3-34-frontend-shared.md`. Next: once this PR
+merges, the rotation wraps to 00 (cross-cutting baseline) for a fresh pass.
 
 ### 2026-08-31 — Feature 33 (Core infrastructure) ✅ PR #2107 merged (round 2, Codex-caught fixes)
 
@@ -4149,7 +4172,7 @@ each row's prior PR is recorded in the Log, not repeated here.
 | 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                   | ✅     |
 | 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                  | ✅     |
 | 33  | Core infrastructure       | CORE   | `core/security_middleware.py`, `core/database.py`, `core/config.py`                                                                             | ✅     |
-| 34  | Frontend shared           | FE     | `utils/apiCache.ts`, module axios instances, `ProtectedRoute`, global stores                                                                    | ⬜     |
+| 34  | Frontend shared           | FE     | `utils/apiCache.ts`, module axios instances, `ProtectedRoute`, global stores                                                                    | ⏳     |
 
 **35 iterations per full pass.** After 34 the rotation wraps to 00, which
 re-runs the whole-codebase sweeps against whatever has landed since.
