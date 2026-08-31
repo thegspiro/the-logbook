@@ -74,6 +74,27 @@ Three things change for existing departments:
   nothing changes until a department uses it. Edit them on the shift template,
   under the vehicle picker.
 
+- **Checklist settings now live with the checklists**, at Gear Admin >
+  Equipment Checklists > Checklist settings. These are the four that decide
+  when crews are prompted — start-of-shift and end-of-shift checklists, and how
+  early or late a member may still check in. They were edited from the shift
+  module's settings; the values themselves are unchanged and carried over
+  automatically, so nothing needs re-entering.
+
+**Removed**
+
+- **Four equipment-check settings that did nothing have been removed** —
+  "Enable equipment checks for shifts", "Require signature on completion",
+  "Block shift start when required items fail" and "Default expiration warning
+  (days)", all previously on Scheduling > Settings > Equipment. Every one of
+  them was stored, reported as saved, and read by no code anywhere: there is no
+  signature field on the check form to require, nothing consulted the warning
+  default (30 days was hardcoded), and a failed required item never blocked a
+  shift start. Switching any of them made no difference before and makes none
+  now, but the app no longer claims otherwise. The Equipment section of shift
+  settings is now a signpost to Inventory and shows no Save button, because it
+  has nothing left to save.
+
 ### Locations & kiosk guest check-in hardening (2026-08-31)
 
 **Fixed**

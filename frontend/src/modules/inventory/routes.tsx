@@ -51,6 +51,7 @@ const ApparatusDetailPage = lazyWithRetry(() => import('./pages/ApparatusDetailP
 const ApparatusInventoryPage = lazyWithRetry(() => import('./pages/ApparatusInventoryPage'));
 const MyChecklistsPage = lazyWithRetry(() => import('./pages/MyChecklistsPage'));
 const ChecklistsAdminPage = lazyWithRetry(() => import('./pages/ChecklistsAdminPage'));
+const ChecklistSettingsPage = lazyWithRetry(() => import('./pages/ChecklistSettingsPage'));
 
 export const getInventoryRoutes = () => {
   return (
@@ -386,6 +387,27 @@ export const getInventoryRoutes = () => {
           >
             <Suspense fallback={null}>
               <ChecklistsAdminPage />
+            </Suspense>
+          </ProtectedRoute>
+        }
+      />
+      {/* The gate is the ENDPOINT's, not the feature's. These four values are
+          stored in org.settings, so they are written through
+          PATCH /organizations/settings, which requires settings.manage or
+          organization.update_settings. Gating this page on
+          inventory.check_manage instead would read as "the quartermaster owns
+          checklist settings" and deliver a page that 403s on every toggle —
+          the same mismatch the builder and reports routes above were fixed for. */}
+      <Route
+        path="/inventory/admin/checklists/settings"
+        element={
+          <ProtectedRoute
+            requiredModule="inventory"
+            moduleLabel="Inventory"
+            requiredAnyPermission={['settings.manage', 'organization.update_settings']}
+          >
+            <Suspense fallback={null}>
+              <ChecklistSettingsPage />
             </Suspense>
           </ProtectedRoute>
         }

@@ -693,6 +693,7 @@ resumes rather than restarting:
 | `/inventory/checklists/my`                          | My Equipment Checklists          | Authenticated                                                                |
 | `/inventory/admin/checklists`                       | Equipment Checklists admin       | `inventory.check_manage`                                                     |
 | `/inventory/admin/checklists/supply`                | Expiring on Apparatus            | any of `scheduling.manage`, `inventory.check_view`, `inventory.manage`       |
+| `/inventory/admin/checklists/settings`              | Checklist Settings               | `inventory.check_manage`                                                     |
 | `/inventory/checklists/apparatus-inventory`         | Apparatus Inventory              | any of `inventory.check_submit`, `inventory.check_view`, `inventory.view`    |
 | `/inventory/checklists`                             | Fleet Board                      | any of `inventory.check_view`, `scheduling.manage`                           |
 | `/inventory/checklists/log`                         | Check Log                        | any of `inventory.check_submit`, `inventory.check_view`, `scheduling.manage` |

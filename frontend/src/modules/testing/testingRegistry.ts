@@ -410,6 +410,15 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
         module: 'inventory',
       },
       {
+        path: '/inventory/admin/checklists/settings',
+        label: 'Checklist settings',
+        // The department-settings grant, not the checklist one: these values
+        // are stored in org.settings and written through the organization
+        // settings endpoint.
+        anyPermission: ['settings.manage', 'organization.update_settings'],
+        module: 'inventory',
+      },
+      {
         path: '/inventory/checklists',
         label: 'Fleet board',
         anyPermission: ['inventory.check_view', 'scheduling.manage'],

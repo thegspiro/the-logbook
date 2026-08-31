@@ -2429,3 +2429,47 @@ record who performed the transfer.**
 > **[SCREENSHOT — REPLACE the item detail, return-request review and transfer
 > captures.** The vocabulary changed and the transfer screen lost a
 > checkbox.**]**
+
+## Checklist Settings Moved Here _(2026-08-31)_
+
+Equipment checklists are Inventory's now, and so are the settings that govern
+them. Go to **Gear Admin > Equipment Checklists > Checklist settings**
+(`/inventory/admin/checklists/settings`). It needs the same permission as
+editing a checklist — if you can build one, you can set these.
+
+There are four, in two groups.
+
+### When crews are prompted
+
+| Setting                   | Default | What it does                                                     |
+| ------------------------- | ------- | ---------------------------------------------------------------- |
+| Start-of-shift checklists | On      | Members are prompted to run their checks when their shift begins |
+| End-of-shift checklists   | On      | Members are reminded to run their checks before their shift ends |
+
+Turning one off stops the prompt and its reminders. It deletes nothing —
+completed checks stay, and the checklists themselves remain available to anyone
+who opens them directly.
+
+### When members can check in
+
+| Setting                | Default  | Range | What it does                                |
+| ---------------------- | -------- | ----- | ------------------------------------------- |
+| Opens before the start | 2 hours  | 0–24  | How early a member may check in for a shift |
+| Closes after the end   | 12 hours | 0–72  | How late a member may still check in        |
+
+Outside this window the Check In button is switched off and says why. Widen it
+if your crews are held over on long call-backs. A shift that has been closed
+out is always shut regardless of this setting.
+
+Every control here saves on its own, straight away — the toggles when you click
+them, the two number boxes when you click away or press Enter. There is no Save
+button to forget. Clearing a number box and leaving it empty restores the
+saved value rather than storing zero, and a number past the range is folded back
+to the nearest allowed value instead of being rejected.
+
+**Where these used to be.** They were at Scheduling > Settings > Shift Reports >
+Checklist Timing. The values carried over automatically; nothing needs
+re-entering. Four _other_ settings that used to sit at Scheduling > Settings >
+Equipment — a signature requirement, a shift-start block, an expiration warning
+default and an "enable equipment checks" switch — were removed rather than
+moved, because none of them was ever wired to anything.

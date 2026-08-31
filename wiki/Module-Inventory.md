@@ -116,6 +116,7 @@ officers.
 | Checklist builder                                | `/inventory/admin/checklists/templates/{id}` | `inventory.check_manage`                                                |
 | Check reports                                    | `/inventory/admin/checklists/reports`        | `inventory.check_view`                                                  |
 | Expiring on apparatus                            | `/inventory/admin/checklists/supply`         | `scheduling.manage`, `inventory.check_view` or `inventory.manage`       |
+| Checklist settings                               | `/inventory/admin/checklists/settings`       | `inventory.check_manage`                                                |
 
 The API keeps its `/api/v1/equipment-checks` prefix — the paths did not move,
 only ownership — but the router is gated on the **Inventory** module now. A

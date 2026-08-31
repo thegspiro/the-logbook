@@ -91,6 +91,9 @@ vi.mock('./pages/MyChecklistsPage', () => ({
 vi.mock('./pages/ChecklistsAdminPage', () => ({
   default: () => <div data-testid="checklists-admin-page">ChecklistsAdmin</div>,
 }));
+vi.mock('./pages/ChecklistSettingsPage', () => ({
+  default: () => <div data-testid="checklist-settings-page">ChecklistSettings</div>,
+}));
 vi.mock('../../components/ProtectedRoute', () => ({
   ProtectedRoute: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
@@ -201,6 +204,13 @@ describe('getInventoryRoutes', () => {
   it('renders expiring supply at /inventory/admin/checklists/supply', async () => {
     renderRoute('/inventory/admin/checklists/supply');
     expect(await screen.findByTestId('supply-expiring-page')).toBeInTheDocument();
+  });
+
+  // The settings that decide when crews are prompted moved here from
+  // Scheduling > Settings > Shift Reports > Checklist Timing.
+  it('renders checklist settings at /inventory/admin/checklists/settings', async () => {
+    renderRoute('/inventory/admin/checklists/settings');
+    expect(await screen.findByTestId('checklist-settings-page')).toBeInTheDocument();
   });
 
   it('renders the fleet board at /inventory/checklists', async () => {

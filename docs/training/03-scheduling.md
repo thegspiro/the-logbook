@@ -1650,20 +1650,19 @@ override is still logged and still audited.
 Navigate to **Scheduling > Settings > Shift Reports** to configure the shift completion report workflow. This settings tab connects the scheduling module to the training module and controls how officers file post-shift reports.
 
 The tab is a **section navigator, not a page of cards** — you pick one section
-at a time from the list and it fills the panel. There are eight: Feature
-Toggles, Checklist Timing, Post-Shift Validation, Feedback Defaults, Apparatus
-Skills, Form Sections, Review Workflow and Rating Scale. (The section is
-labelled **Form Sections**; earlier versions of this guide called it "Report
-Form Sections".)
+at a time from the list and it fills the panel. There are seven: Feature
+Toggles, Post-Shift Validation, Feedback Defaults, Apparatus Skills, Form
+Sections, Review Workflow and Rating Scale. (The section is labelled **Form
+Sections**; earlier versions of this guide called it "Report Form Sections".)
 
-![Shift Reports settings with the Checklist Timing section selected](./images/03-34-settings-checklist-timing.png)
+#### Checklist Timing — now in Inventory _(2026-08-31)_
 
-#### Checklist Timing
-
-| Setting                | Default | Description                                              |
-| ---------------------- | ------- | -------------------------------------------------------- |
-| Start of shift enabled | On      | Whether start-of-shift equipment checklists are prompted |
-| End of shift enabled   | On      | Whether end-of-shift equipment checklists are prompted   |
+This section used to sit here, as an eighth. Equipment checklists are an
+Inventory feature, so the settings that govern them moved with the rest: they
+are now at **Gear Admin > Equipment Checklists > Checklist settings**. See
+[Inventory](./05-inventory.md). What they control is unchanged — whether crews
+are prompted at shift start and shift end, and how long the check-in link stays
+usable.
 
 #### Post-Shift Validation
 

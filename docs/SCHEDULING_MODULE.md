@@ -987,12 +987,18 @@ This integration allows training officers to document field observations, automa
 
 The **Shift Reports** settings tab (within Scheduling Settings) provides centralized configuration for the shift completion report workflow:
 
-#### Checklist Timing Windows
+#### Checklist Timing Windows — moved to Inventory _(2026-08-31)_
 
-| Setting                  | Default | Description                                            |
-| ------------------------ | ------- | ------------------------------------------------------ |
-| `start_of_shift_enabled` | `true`  | Whether start-of-shift equipment checklists are active |
-| `end_of_shift_enabled`   | `true`  | Whether end-of-shift equipment checklists are active   |
+These settings are still stored under `org.settings["shift_reports"]["checklist_timing"]`, but they are **edited in Inventory**, at **Gear Admin → Equipment Checklists → Checklist settings** (`/inventory/admin/checklists/settings`), along with the rest of the checklist feature. Only the editing surface moved; the storage key and its readers are unchanged.
+
+| Setting                      | Default | Description                                            |
+| ---------------------------- | ------- | ------------------------------------------------------ |
+| `start_of_shift_enabled`     | `true`  | Whether start-of-shift equipment checklists are active |
+| `end_of_shift_enabled`       | `true`  | Whether end-of-shift equipment checklists are active   |
+| `checkin_opens_hours_before` | `2`     | How early a member may check in for a shift            |
+| `checkin_closes_hours_after` | `12`    | How late a member may still check in                   |
+
+The Shift Reports panel neither loads nor saves this block. It sends only `post_shift_validation` under the `shift_reports` key, and the settings endpoint deep-merges — sending the whole object from both screens would let whichever saved last revert the other.
 
 #### Post-Shift Validation
 
@@ -1051,8 +1057,12 @@ Officers can save incomplete reports as drafts by enabling the `save_as_draft` f
 
 ```
 Scheduling Settings (ShiftReportsSettingsPanel)
-    ↓ saves to org.settings["shift_reports"]
-Checklist timing & post-shift validation
+    ↓ saves to org.settings["shift_reports"]["post_shift_validation"]
+Post-shift validation
+
+Gear Admin → Checklist settings (ChecklistSettingsPage, Inventory)
+    ↓ saves to org.settings["shift_reports"]["checklist_timing"]
+Checklist timing
 
 Training Module Config (training_module_configs table)
     ↓ provides

@@ -928,7 +928,9 @@ POST   /templates/{template_id}/inventory-links          # Apply a reviewed set 
 
 ### Shift Reports Settings Panel
 
-A new **Shift Reports** sub-tab within Scheduling Settings provides centralized configuration for the shift completion report workflow, including checklist timing, post-shift validation, form section toggles, apparatus-specific skills/tasks, and rating scale customization.
+A new **Shift Reports** sub-tab within Scheduling Settings provides centralized configuration for the shift completion report workflow, including post-shift validation, form section toggles, apparatus-specific skills/tasks, and rating scale customization.
+
+> **Checklist timing moved (2026-08-31).** The Checklist Timing section left this panel with the rest of the equipment-checklist feature and is now at **Gear Admin → Equipment Checklists → Checklist settings**. The values are still stored under `org.settings["shift_reports"]["checklist_timing"]` — only the editing surface moved — and this panel no longer reads or writes them.
 
 **Settings stored in `org.settings["shift_reports"]`:**
 
@@ -1235,7 +1237,7 @@ Previously, incomplete checks could not be resumed. Now:
 New granular toggles in the **Shift Reports Settings Panel** extend the existing form section toggles with department-level behavioral controls:
 
 - **Editable tag lists**: Skills and tasks per apparatus type are now managed via inline `EditableTagList` components with add/remove buttons, replacing the previous accordion-only display
-- **Settings connection**: Settings panel reads from and writes to both `training_module_configs` (form section toggles, apparatus mappings) and `org.settings["shift_reports"]` (checklist timing, post-shift validation)
+- **Settings connection**: Settings panel reads from and writes to both `training_module_configs` (form section toggles, apparatus mappings) and `org.settings["shift_reports"]` — the `post_shift_validation` half only, since `checklist_timing` is edited in Inventory and the endpoint deep-merges
 
 ---
 
