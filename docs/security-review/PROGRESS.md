@@ -16,21 +16,64 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-Feature 28 (Security, audit & IP), pass 2 — PR
-[#2089](https://github.com/thegspiro/the-logbook/pull/2089), branch
-`claude/security-review-security-audit-ip-pass2`. Re-verified all six pass-1
-findings still hold, reviewed the frontend for the first time (fixed one
-route permission-gate mismatch found there), and flagged one significant
-finding (SEC2-28-7 — `security_monitoring.py`'s alert surface has no admin
-UI, plus two deeper gaps Codex review caught: brute-force alerts are
-structurally invisible to every org-scoped view, not just missing one, and
-several bulk exports bypass exfiltration detection entirely because they
-never set `Content-Length`). Codex also caught that this pass's initial
-"byte-identical to pass 1" scope claim was wrong for one file
-(`core/security_middleware.py`, changed by an unrelated PR #1917 four days
-after pass 1) — corrected in both docs. See
-`docs/security-review/SEC2-28-security-audit-ip.md` → Pass 2 for the full
-writeup.
+None. Feature 28 (Security, audit & IP) is fully closed — see log entry
+below. Next: feature 29, Reports & analytics.
+
+---
+
+### 2026-08-31 — Feature 28 (Security, audit & IP), pass 2 ✅ PR #2089 merged
+
+PR #2089 merged (`eca2825d`). No code finding fixed; two rounds of Codex
+correction on the findings writeup itself, plus one small frontend fix Codex
+caught along the way:
+
+1. **Scope-methodology error, caught round 1.** The pass's original "all
+   nine files byte-identical to pass 1" claim was false for one file —
+   `core/security_middleware.py` was rewritten by PR #1917 (an unrelated
+   feature, "core-infra," merged four days after pass 1) — the diff had been
+   run against the wrong baseline. #1917 actually fixed a real bug (session-
+   hijack/data-exfiltration detection read `user_id` before it existed on
+   the request, so those detectors never fired; also added a missing
+   `db.commit()`), which meant SEC2-28-7's wiring/severity claims needed
+   re-deriving against the corrected code, not the stale assumption.
+
+2. **SEC2-28-7 corrected across both rounds.** Original claim: all five
+   detector paths fire `ThreatLevel.CRITICAL` and are visible only via a
+   raw DB/API query. Actual: only `detect_session_hijack` and
+   `report_privilege_escalation_attempt` are unconditionally CRITICAL;
+   `detect_brute_force` is HIGH; `detect_data_exfiltration` is HIGH,
+   escalating to CRITICAL only on 5× cumulative volume (its
+   external-destination CRITICAL branch is dead code — the sole call site
+   never supplies `destination`). Three of the five detectors already write
+   an org-scoped audit-log row `AuditLogPage` displays — the real gap for
+   those three is a missing alert-specific ack/resolve UI, not
+   invisibility. Two findings widened instead: brute-force alerts carry
+   `user_id=None` on every failed login unconditionally, so they get
+   `organization_id=NULL` and are excluded by every org-scoped alert query
+   — no frontend fix alone closes this, it needs a platform-level
+   alert-viewing design; and `SecurityMonitoringMiddleware` only checks
+   exfiltration when the response has `Content-Length`, which
+   `StreamingResponse` never sets — confirmed at three of the fifteen
+   `EXPORT_ENDPOINTS` routes that build the full export in memory and still
+   never set it, so those exports create no alert at any size (a backend
+   gap, not a UI one). The remediation note also originally named only
+   `resolve` as needing `audit.export`; `acknowledge` requires the same
+   permission and was missing.
+
+3. **Small fix, both rounds.** `IPSecurityAdminPage`'s route required only
+   `security.manage` while `ip_security.py` accepts `security.manage` OR
+   `settings.manage`, refusing a `settings.manage`-only admin the page the
+   API would authorize. Fixed via `ProtectedRoute`'s `requiredAnyPermission`
+   — which immediately turned CI red via `testingRegistry.test.ts`'s route-
+   gate comparison test, since `testingRegistry.ts`'s own entry needed the
+   same update; fixed in a follow-up commit. The doc's first draft had
+   credited the wrong tests (`routeIntegrity.test.ts`, an unrelated store
+   test) with covering this change — corrected to credit the actual
+   gate-comparison test.
+
+CI green (17/17), all ten review threads across two rounds resolved, no
+merge conflict. See `docs/security-review/SEC2-28-security-audit-ip.md` for
+the full writeup.
 
 ---
 
@@ -3556,7 +3599,7 @@ each row's prior PR is recorded in the Log, not repeated here.
 | 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ✅     |
 | 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                         | ✅     |
 | 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                         | ✅     |
-| 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`                                                                    | ⏳     |
+| 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`                                                                    | ✅     |
 | 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                              | ⬜     |
 | 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (24 unauth bootstrap routes)                                                                                             | ⬜     |
 | 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                   | ⬜     |
