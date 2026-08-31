@@ -90,8 +90,13 @@ import { CheckFinish } from './CheckFinish';
 import { toLapStops } from './checkSweepAdapter';
 import { toAnswerMap, toItemResult } from './checkSweepBridge';
 import { countAnswer } from './checkAnswers';
-import { bulkClaim, stillAsked, type LapStop, type SealState as SweepSealState } from './checkLapModel';
-import type { SweepSaveState } from './CheckSweep';
+import {
+  bulkClaim,
+  stillAsked,
+  sweepSaveStateFrom,
+  type LapStop,
+  type SealState as SweepSealState,
+} from './checkLapModel';
 import type { CheckItemAnswer } from './CheckItemControls';
 import {
   deleteEquipmentCheckDraft,
@@ -344,6 +349,12 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
     checkPermission('inventory.check_submit') ||
     checkPermission('inventory.check_manage') ||
     checkPermission('inventory.manage');
+  // The half of the endpoint's rule a submitter does not clear. `swap_item_lot`
+  // sets enforce_submitter_limits for anyone below manage: with a disposition
+  // it allows up to the expired units aboard, without one only up to the
+  // position's count shortfall. So a submitter can replace expired stock but
+  // cannot top up a position that is not counted.
+  const canManageStock = checkPermission('inventory.check_manage') || checkPermission('inventory.manage');
   const tz = useTimezone();
   // Calendar day in the org's timezone — the reference every expiry check in
   // this form compares against, so the badge, the auto-fail and the server all
@@ -689,9 +700,15 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
           },
         }));
         // The inventory swap is now authoritative. Clear the previous
-        // auto-fail so the crew verifies the newly recorded stock.
+        // auto-fail so the crew verifies the newly recorded stock — and clear
+        // the confirmation with it. `expiryConfirmed` is what the sweep's
+        // expiry row paints its green "Read" state from, so leaving it set
+        // shows a unit as already read while the tally counts it unanswered:
+        // the crew is invited to walk past the physical box they have just put
+        // on the truck without looking at its date.
         updateResult(swapTarget.id, {
           status: 'not_checked',
+          expiryConfirmed: false,
         });
         toast.success(isReplacement ? 'Replaced with fresh stock' : 'Swapped in fresh stock');
         setSwapTarget(null);
@@ -1405,15 +1422,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
   // --------------------------------------------------------------------------
 
   const [sweepStopIndex, setSweepStopIndex] = useState(0);
-  /**
-   * What the save chip says, in the order that matters to a crew.
-   *
-   * A failed draft write outranks everything: "held on this phone" is the
-   * reassurance the offline state offers, and it is false once the write has
-   * rejected. Otherwise offline, then whatever the write is doing.
-   */
-  const sweepSaveState: SweepSaveState =
-    draftWriteState === 'failed' ? 'failed' : !isOnline ? 'offline' : draftWriteState === 'saving' ? 'saving' : 'saved';
+  const sweepSaveState = sweepSaveStateFrom(draftWriteState, isOnline);
   // Which pocket of the current stop is open. Lives beside the stop index
   // rather than inside the body, because the primary button's label and the
   // bulk claim both depend on it and both belong to the frame.
@@ -1432,12 +1441,21 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
   const sweepStops = useMemo(
     () =>
       toLapStops({
-        compartments: template.compartments ?? [],
+        // Through `applyOverride`, as the accordion's `effectiveCheckableItems`
+        // is. A swap writes the fresh lot to `swapOverrides` and does not
+        // re-fetch the template, so walking the raw compartments leaves the
+        // row showing the date of the box the crew just took off the truck —
+        // and Confirm computes `fail` from it, filing a failure against stock
+        // that is in date.
+        compartments: (template.compartments ?? []).map((compartment) => ({
+          ...compartment,
+          items: (compartment.items ?? []).map(applyOverride),
+        })),
         seals,
         lastSeals,
         ...(lastCheckData ? { lastResults: lastCheckData } : {}),
       }),
-    [template.compartments, seals, lastSeals, lastCheckData]
+    [template.compartments, applyOverride, seals, lastSeals, lastCheckData]
   );
 
   const sweepAnswers = useMemo(() => toAnswerMap(results), [results]);
@@ -2525,7 +2543,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
                   submissionOutcome?.status === 'evidence_pending' ||
                   submissionOutcome?.status === 'evidence_failed'
                 }
-                className="flex min-h-[52px] w-full items-center justify-center gap-2 rounded-xl bg-blue-800 px-4 py-3.5 text-sm font-medium text-white transition-colors hover:bg-blue-900 disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex min-h-[52px] w-full items-center justify-center gap-2 rounded-xl bg-red-800 px-4 py-3.5 text-sm font-medium text-white transition-colors hover:bg-red-900 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {submitting ? (
                   <>
@@ -2565,7 +2583,10 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
    * without this that instruction has nowhere to go.
    */
   const swapModal = swapTarget ? (
-    <div className="modal-overlay z-[60] flex items-end justify-center p-0 sm:items-center sm:p-4">
+    <div
+      data-testid="swap-modal"
+      className="modal-overlay z-[60] flex items-end justify-center p-0 sm:items-center sm:p-4"
+    >
       <div className="bg-theme-surface border-theme-surface-border flex max-h-[85dvh] w-full flex-col overflow-hidden rounded-t-2xl border shadow-xl sm:max-w-md sm:rounded-2xl">
         <div className="border-theme-surface-border flex items-center justify-between border-b px-4 py-3">
           <div className="min-w-0">
@@ -2682,8 +2703,14 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
     // handleSubmit's `finally` even when the POST succeeded and only the photo
     // upload failed, so the button would re-enable on an accepted check and a
     // second tap would file a duplicate under a fresh client_submission_id.
+    //
+    // `complete` belongs here for the same reason: `syncPendingChecks` promotes
+    // a drained `evidence_pending` to it without unmounting the sweep, so
+    // omitting it re-enables the button the moment the retained photos land.
     const alreadyFiled =
-      submissionOutcome?.status === 'evidence_pending' || submissionOutcome?.status === 'evidence_failed';
+      submissionOutcome?.status === 'complete' ||
+      submissionOutcome?.status === 'evidence_pending' ||
+      submissionOutcome?.status === 'evidence_failed';
 
     // Absolute inside the builder's phone frame, fixed for the real walk. The
     // preview is a 268px device mock inside a page: positioned against the
@@ -2738,6 +2765,8 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
                         if (raw) void openSwap(applyOverride(raw));
                       }
                 }
+                canSwap={canSwapStock}
+                canManageSwap={canManageStock}
                 // The organization's calendar day, so an expiry verdict does
                 // not move with the phone's timezone.
                 today={new Date(`${today}T00:00:00`)}
@@ -2765,6 +2794,11 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
             onClose={() => setSweepScreen('walk')}
           />
         )}
+
+        {/* The expiry row's Replace button sets `swapTarget` on this branch too,
+            and this return never reaches the accordion's copy below — so
+            without it the crew taps Replace and nothing opens. */}
+        {swapModal}
       </div>
     );
   }

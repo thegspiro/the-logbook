@@ -124,9 +124,13 @@ export const ChecklistSettingsPage: React.FC = () => {
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-6 sm:px-6">
+      {/* mobile-touch-target, not a bare inline-flex: at text-sm this link is
+          about 20px tall, which is under the 44px minimum the presentation
+          ratchet enforces. justify-start keeps it left-aligned — the utility
+          centers by default, which would float it away from the page edge. */}
       <Link
         to="/inventory/admin/checklists"
-        className="text-theme-text-muted hover:text-theme-text-primary mb-4 inline-flex items-center gap-2 text-sm"
+        className="text-theme-text-muted hover:text-theme-text-primary mobile-touch-target mb-4 justify-start gap-2 text-sm"
       >
         <ArrowLeft className="h-4 w-4" /> Back to Equipment Checklists
       </Link>

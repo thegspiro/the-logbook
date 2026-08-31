@@ -413,22 +413,29 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         isLoading: false,
       });
     } catch (err: unknown) {
+      // 401/403 are expected when the session has expired or user is not
+      // authenticated. Any other error (offline browser, timeout, backend
+      // 5xx) is unexpected and does NOT mean the session is actually
+      // invalid — purging local member data (offline drafts, equipment-check
+      // queues) on a transient failure would silently destroy queued work
+      // the member never got a chance to sync, with no loss notice shown.
+      const appError = toAppError(err);
+      const isConfirmedAuthFailure = appError.status === 401 || appError.status === 403;
+
       // Clear session state regardless of error type
       localStorage.removeItem('has_session');
       localStorage.removeItem('access_token');
       localStorage.removeItem('refresh_token');
-      await purgeLocalMemberData();
+      if (isConfirmedAuthFailure) {
+        await purgeLocalMemberData();
+      }
       set({
         user: null,
         isAuthenticated: false,
         isLoading: false,
       });
 
-      // 401/403 are expected when the session has expired or user is not
-      // authenticated — silently handle them. Any other error is unexpected
-      // and should be logged so it surfaces in dev tools.
-      const appError = toAppError(err);
-      if (appError.status !== 401 && appError.status !== 403) {
+      if (!isConfirmedAuthFailure) {
         console.error('loadUser failed with unexpected error:', appError.message);
       }
     }

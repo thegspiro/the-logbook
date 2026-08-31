@@ -5,6 +5,8 @@ import userEvent from '@testing-library/user-event';
 import { CheckSweep } from './CheckSweep';
 
 import type { CheckItemSpec } from './CheckItemControls';
+import { sweepSaveStateFrom } from './checkLapModel';
+
 import type { AnswerMap, LapStop } from './checkLapModel';
 
 const count = (id: string, par: number): CheckItemSpec => ({ id, name: id, checkType: 'count', expectedQuantity: par });
@@ -220,5 +222,26 @@ describe('what the save chip is reporting', () => {
     expect(screen.getByText('Not saved')).toBeVisible();
     expect(screen.getByText(/closing it will lose what you have answered/)).toBeVisible();
     expect(screen.queryByText(/held on this phone/)).not.toBeInTheDocument();
+  });
+});
+
+describe('which save state the chip is showing', () => {
+  it('reports a rejected write ahead of everything else', () => {
+    expect(sweepSaveStateFrom('failed', true)).toBe('failed');
+    expect(sweepSaveStateFrom('failed', false)).toBe('failed');
+  });
+
+  it('does not promise the walk is held on the phone while the write is open', () => {
+    // The offline chip's content is "this is already on your device". Until
+    // IndexedDB resolves it is not, and a page closed inside that window loses
+    // the answers the chip just vouched for.
+    expect(sweepSaveStateFrom('saving', false)).toBe('saving');
+    expect(sweepSaveStateFrom('saving', true)).toBe('saving');
+  });
+
+  it('says offline only once the write has settled', () => {
+    expect(sweepSaveStateFrom('saved', false)).toBe('offline');
+    expect(sweepSaveStateFrom('idle', false)).toBe('offline');
+    expect(sweepSaveStateFrom('saved', true)).toBe('saved');
   });
 });

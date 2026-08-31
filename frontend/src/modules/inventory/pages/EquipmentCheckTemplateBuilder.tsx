@@ -5300,7 +5300,11 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                       <BatteryFull className="h-2.5 w-2.5" aria-hidden="true" />
                     </span>
                   </div>
-                  <div className="bg-theme-bg h-[430px] overflow-y-auto px-1 pb-4" aria-label="Crew preview">
+                  {/* Positioned, because the sweep experience renders
+                      `absolute inset-0` in preview mode. Without a containing
+                      block here it resolves against the sticky rail and covers
+                      the builder instead of filling the phone. */}
+                  <div className="bg-theme-bg relative h-[430px] overflow-y-auto px-1 pb-4" aria-label="Crew preview">
                     {compartments.length === 0 ? (
                       <p className="text-theme-text-muted px-3 py-6 text-center text-xs">
                         Add a location to see what the crew will get.
@@ -5845,7 +5849,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
               </div>
 
               {/* Scrollable content area */}
-              <div className="bg-theme-bg overflow-y-auto" style={{ height: 'min(70vh, 640px)' }}>
+              <div className="bg-theme-bg relative overflow-y-auto" style={{ height: 'min(70vh, 640px)' }}>
                 <div className="px-1 pb-4">
                   <div className="mx-3 mt-2 mb-3 rounded-lg border border-blue-500/20 bg-blue-500/5 px-3 py-2">
                     <p className="text-[10px] text-blue-700 dark:text-blue-400">

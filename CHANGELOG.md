@@ -30,6 +30,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   stock on hand, which the catalog refused even though editing an item to the
   same value had always been allowed. A pool item can now be created with
   nothing on hand, which is what a catalog entry added from a checklist knows.
+### Frontend shared re-verification fixes (2026-08-31)
+
+**Fixed**
+
+- Entering a wrong or expired MFA code was treated as an expired session:
+  the app purged local data and hard-redirected to the login screen instead
+  of showing "invalid code, try again."
+- Loading your profile after an offline or interrupted connection could
+  silently discard unsynced shift-report drafts and equipment-check
+  submissions — now only a confirmed sign-out clears local data.
 
 ### Equipment checklists moved from Scheduling to Inventory (2026-08-31)
 
@@ -118,6 +128,19 @@ Three things change for existing departments:
   now, but the app no longer claims otherwise. The Equipment section of shift
   settings is now a signpost to Inventory and shows no Save button, because it
   has nothing left to save.
+
+### Shift template checklist fixes (2026-08-31)
+
+**Fixed**
+
+- **A rejected shift template is no longer created anyway.** Naming a checklist
+  the department does not own reported "Unable to create template" — and left
+  the template behind regardless, so every retry added another copy. The
+  checklist ids are now checked before anything is written.
+- **Crews see the checklists in the order the officer arranged them.** A shift
+  template's checklists were shown to the crew in the checklists' own catalogue
+  order instead, so the running order on the truck could disagree with the one
+  named in the shift reminder. Both now follow the template.
 
 ### A new crew experience for the equipment check (2026-08-31)
 

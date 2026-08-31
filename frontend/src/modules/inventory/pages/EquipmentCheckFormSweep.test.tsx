@@ -8,7 +8,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen, waitFor } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { IDBFactory } from 'fake-indexeddb';
 import { renderWithRouter } from '../../../test/utils';
@@ -16,6 +16,7 @@ import { renderWithRouter } from '../../../test/utils';
 const mockGetLastCheckResults = vi.fn();
 const mockGetLastCheckSeals = vi.fn();
 const mockSubmitCheck = vi.fn();
+const mockSwapItemLot = vi.fn();
 
 // The form takes its API from Inventory's own client, not the scheduling
 // service it used before the checklist move, and this file now sits two levels
@@ -31,17 +32,19 @@ vi.mock('@/modules/inventory/services/equipmentCheckApi', () => ({
     getEquipmentCheck: vi.fn(),
     updateDeployedLot: vi.fn(),
     uploadCheckItemPhotos: vi.fn().mockResolvedValue({ photoUrls: [], count: 0 }),
-    swapItemLot: vi.fn(),
+    swapItemLot: (...a: unknown[]) => mockSwapItemLot(...a) as unknown,
   },
 }));
+const mockGetItemLots = vi.fn();
 vi.mock('../../../services/inventoryService', () => ({
-  inventoryService: { getItemLots: vi.fn().mockResolvedValue([]) },
+  inventoryService: { getItemLots: (...a: unknown[]) => mockGetItemLots(...a) as unknown },
 }));
 vi.mock('../../../hooks/useTimezone', () => ({ useTimezone: () => 'UTC' }));
 vi.mock('../../../hooks/useOnlineStatus', () => ({ useOnlineStatus: () => true }));
+const mockCheckPermission = vi.fn((_p: string) => true);
 vi.mock('../../../stores/authStore', () => ({
   useAuthStore: () => ({
-    checkPermission: () => true,
+    checkPermission: (p: string) => mockCheckPermission(p),
     user: { id: 'user-1', organization_id: 'org-1', first_name: 'Dana', last_name: 'Delgado' },
   }),
 }));
@@ -55,6 +58,7 @@ vi.mock('../../../utils/offlineQueue', () => ({
 }));
 vi.mock('react-hot-toast', () => ({ default: { success: vi.fn(), error: vi.fn() } }));
 
+import toast from 'react-hot-toast';
 import EquipmentCheckForm from './EquipmentCheckForm';
 
 const item = (over: Record<string, unknown>) => ({
@@ -113,8 +117,15 @@ describe('EquipmentCheckForm in sweep mode', () => {
     vi.clearAllMocks();
     localStorage.clear();
     localStorage.setItem('has_session', '1');
+    mockCheckPermission.mockReset();
+    mockCheckPermission.mockReturnValue(true);
+    mockGetItemLots.mockReset();
+    mockGetItemLots.mockResolvedValue([]);
+    mockGetLastCheckResults.mockReset();
     mockGetLastCheckResults.mockResolvedValue({});
+    mockGetLastCheckSeals.mockReset();
     mockGetLastCheckSeals.mockResolvedValue({});
+    mockSubmitCheck.mockReset();
     mockSubmitCheck.mockResolvedValue({ id: 'check-1' });
   });
 
@@ -180,5 +191,166 @@ describe('EquipmentCheckForm in sweep mode', () => {
     renderWithRouter(<EquipmentCheckForm shiftId="shift-1" template={template() as never} onBack={vi.fn()} />);
     expect(await screen.findByRole('heading', { name: 'Engine 402 Daily' })).toBeVisible();
     expect(screen.queryByRole('list', { name: 'Truck map' })).not.toBeInTheDocument();
+  });
+});
+
+describe('replacing expiring stock from inside the sweep', () => {
+  beforeEach(() => {
+    globalThis.indexedDB = new IDBFactory();
+    vi.clearAllMocks();
+    localStorage.clear();
+    localStorage.setItem('has_session', '1');
+    mockCheckPermission.mockReset();
+    mockCheckPermission.mockReturnValue(true);
+    mockGetItemLots.mockReset();
+    mockGetItemLots.mockResolvedValue([
+      { id: 'lot-fresh', lot_number: 'L-99', expiration_date: '2099-12-31', quantity: 5 },
+    ]);
+    mockSwapItemLot.mockReset();
+    mockSwapItemLot.mockResolvedValue({ lotNumber: 'L-99', expirationDate: '2099-12-31' });
+    mockGetLastCheckResults.mockReset();
+    mockGetLastCheckResults.mockResolvedValue({});
+    mockGetLastCheckSeals.mockReset();
+    mockGetLastCheckSeals.mockResolvedValue({});
+    mockSubmitCheck.mockReset();
+    mockSubmitCheck.mockResolvedValue({ id: 'check-1' });
+  });
+
+  /** One stop, one expired drug with ready stock behind it. */
+  const expiringTemplate = () => ({
+    ...template(),
+    compartments: [
+      {
+        id: 'drugs',
+        templateId: 'tmpl-1',
+        name: 'Drug box',
+        sortOrder: 0,
+        items: [
+          item({
+            id: 'epi',
+            name: 'Epinephrine',
+            checkType: 'expiry',
+            hasExpiration: true,
+            expirationDate: '2020-01-01',
+            inventoryItemId: 'inv-epi',
+          }),
+        ],
+      },
+    ],
+  });
+
+  it('does not offer a second submit once the check is filed', async () => {
+    // `submitting` goes false in handleSubmit's `finally` whether or not the
+    // POST succeeded, and nothing here unmounts the sweep — so an accepted
+    // check leaves a live Submit button, and a second tap files a duplicate
+    // under a fresh client_submission_id.
+    const user = userEvent.setup();
+    renderWithRouter(
+      <EquipmentCheckForm
+        shiftId="shift-1"
+        template={expiringTemplate() as never}
+        experience="sweep"
+        onBack={vi.fn()}
+      />
+    );
+    await user.click(await screen.findByRole('button', { name: 'Confirm' }));
+    await user.click(await screen.findByRole('button', { name: /Finish the check/ }));
+    await user.click(await screen.findByRole('button', { name: 'Submit the check' }));
+
+    // The success toast and the `finally` that re-enables the button land in
+    // the same flush, so waiting on the toast settles both — a `waitFor` on the
+    // button instead would pass on the still-submitting frame and prove nothing.
+    await waitFor(() => expect(vi.mocked(toast.success)).toHaveBeenCalled());
+    expect(screen.getByRole('button', { name: 'Submit the check' })).toBeDisabled();
+  });
+
+  it('opens the lot dialog the Replace button asks for', async () => {
+    // The sweep's seal card tells a crew to open a container and replace what
+    // is expiring. The dialog that carries out that instruction is rendered
+    // once for the whole form, and the sweep returns before reaching it — so
+    // without it in this branch the button is a dead tap.
+    const user = userEvent.setup();
+    renderWithRouter(
+      <EquipmentCheckForm
+        shiftId="shift-1"
+        template={expiringTemplate() as never}
+        experience="sweep"
+        onBack={vi.fn()}
+      />
+    );
+    await user.click(await screen.findByRole('button', { name: 'Replace' }));
+    expect(await screen.findByRole('heading', { name: 'Replace from ready stock' })).toBeVisible();
+  });
+
+  it('un-reads a row whose unit has just been swapped', async () => {
+    // The swap clears `status` so the crew verifies the new stock, but the
+    // green "Read" chip is painted from `expiryConfirmed`. Left set, the row
+    // says already-read while the tally counts it unanswered — inviting the
+    // crew past the physical box they have just put on the truck.
+    const user = userEvent.setup();
+    renderWithRouter(
+      <EquipmentCheckForm
+        shiftId="shift-1"
+        template={expiringTemplate() as never}
+        experience="sweep"
+        onBack={vi.fn()}
+      />
+    );
+    await user.click(await screen.findByRole('button', { name: 'Confirm' }));
+    expect(await screen.findByRole('button', { name: 'Read' })).toBeVisible();
+
+    await user.click(within(screen.getByTestId('expiry-epi')).getByRole('button', { name: 'Replace' }));
+    const modal = within(await screen.findByTestId('swap-modal'));
+    await user.click(modal.getByRole('button', { name: 'Disposed of' }));
+    await user.click(modal.getByRole('button', { name: 'Replace' }));
+
+    await waitFor(() => expect(mockSwapItemLot).toHaveBeenCalled());
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Confirm' })).toBeVisible());
+  });
+
+  it('disables Replace for a member the swap endpoint would refuse', async () => {
+    // Disabled, not hidden — the same call the accordion's Swap button makes.
+    // The server rejects a read-only member, and a button that simply vanishes
+    // tells them nothing about who to hand the expired unit to.
+    mockCheckPermission.mockReturnValue(false);
+    renderWithRouter(
+      <EquipmentCheckForm
+        shiftId="shift-1"
+        template={expiringTemplate() as never}
+        experience="sweep"
+        onBack={vi.fn()}
+      />
+    );
+    const replace = await screen.findByRole('button', { name: 'Replace' });
+    expect(replace).toBeDisabled();
+    expect(replace).toHaveAttribute('title', expect.stringContaining('recorded by a crew member'));
+  });
+
+  it('shows the fresh lot before the crew confirms it', async () => {
+    // `doSwap` writes the new lot to `swapOverrides` and does not re-fetch the
+    // template. Built from the raw compartments, the sweep would keep showing
+    // the date of the box that just came off the truck — and Confirm computes
+    // its verdict from what is on screen, filing a failure against stock that
+    // is in date.
+    const user = userEvent.setup();
+    renderWithRouter(
+      <EquipmentCheckForm
+        shiftId="shift-1"
+        template={expiringTemplate() as never}
+        experience="sweep"
+        onBack={vi.fn()}
+      />
+    );
+    expect(await screen.findByTestId('expiry-epi')).toHaveTextContent('2020-01-01');
+
+    await user.click(within(screen.getByTestId('expiry-epi')).getByRole('button', { name: 'Replace' }));
+    // Scoped: the row's Replace and the lot's Replace are both on screen now.
+    const modal = within(await screen.findByTestId('swap-modal'));
+    await user.click(modal.getByRole('button', { name: 'Disposed of' }));
+    await user.click(modal.getByRole('button', { name: 'Replace' }));
+
+    await waitFor(() => expect(mockSwapItemLot).toHaveBeenCalled());
+    await waitFor(() => expect(screen.getByTestId('expiry-epi')).toHaveTextContent('2099-12-31'));
+    expect(screen.getByTestId('expiry-epi')).not.toHaveTextContent('2020-01-01');
   });
 });

@@ -72,6 +72,26 @@ export interface StopBodyProps {
    * end and they have to leave the walk to act on it.
    */
   onSwap?: ((itemId: string) => void) | undefined;
+  /**
+   * Whether this member may record a swap.
+   *
+   * Disabled rather than hidden, and false rather than an absent `onSwap`, for
+   * the reason the accordion's Swap button is: the endpoint refuses a
+   * read-only member, and a button that vanishes tells them nothing about who
+   * to hand the unit to. The tooltip does.
+   */
+  canSwap?: boolean | undefined;
+  /**
+   * Whether this member may deploy stock beyond an expired-unit replacement.
+   *
+   * `swap_item_lot` applies submitter limits to anyone below manage: a swap
+   * carrying a disposition is allowed up to the expired units aboard, and one
+   * without is allowed only up to `required_quantity or expected_quantity`
+   * minus what is on the truck. An expiry-only position has neither quantity,
+   * so that shortfall is zero and a submitter's in-window top-up is refused
+   * with a 403. Expired is unaffected — it goes through the disposition path.
+   */
+  canManageSwap?: boolean | undefined;
   disabled?: boolean | undefined;
 }
 
@@ -121,10 +141,17 @@ const CountTally: React.FC<Omit<StopBodyProps, 'stop'> & { items: CheckItemSpec[
           // precisely so a crew cannot submit a full report having looked at
           // nothing — and the row has to say so, or the number reads as a check.
           const confirmed = answer?.status !== undefined && answer.status !== 'not_checked';
-          const found = answer?.quantityFound ?? item.carriedQuantity ?? undefined;
+          const notOnTruck = answer?.status === 'not_applicable';
+          // The carried figure is a *suggestion* — last check's number, shown
+          // until this crew answers. An item they have just said is not aboard
+          // has no suggestion left to make, and `not_applicable` counts as
+          // confirmed, so the fallback would repaint last month's count as a
+          // number somebody observed today. Submission already omits it; the
+          // row has to agree, or the screen and the record disagree.
+          const found =
+            (notOnTruck ? answer?.quantityFound : (answer?.quantityFound ?? item.carriedQuantity)) ?? undefined;
           const short = par !== null && found !== undefined && found < par;
           const carried = found !== undefined && !confirmed;
-          const notOnTruck = answer?.status === 'not_applicable';
           const set = (next: number) => onAnswer(item.id, countAnswer(item, next));
           return (
             <div
@@ -184,7 +211,17 @@ const CountTally: React.FC<Omit<StopBodyProps, 'stop'> & { items: CheckItemSpec[
                   disabled={disabled}
                   aria-pressed={notOnTruck}
                   onClick={() =>
-                    onAnswer(item.id, notOnTruck ? { status: 'not_checked' } : { status: 'not_applicable' })
+                    onAnswer(
+                      item.id,
+                      notOnTruck
+                        ? { status: 'not_checked' }
+                        : // The patch is merged, so a count the crew adjusted before
+                          // tapping n/a survives unless it is cleared here — and the
+                          // server reconciles every non-null observation into the
+                          // apparatus inventory whatever the status beside it says.
+                          // Same clear the accordion's n/a does.
+                          { status: 'not_applicable', quantityFound: undefined }
+                    )
                   }
                   aria-label={`${item.name} is not on this truck`}
                   className={`h-11 w-11 shrink-0 rounded-lg border text-[13px] font-bold disabled:opacity-50 ${
@@ -361,12 +398,26 @@ const ExpiryRow: React.FC<{
   disabled?: boolean | undefined;
   today: Date;
   onSwap?: ((itemId: string) => void) | undefined;
-}> = ({ item, answer, onAnswer, disabled, today, onSwap }) => {
+  canSwap?: boolean | undefined;
+  canManageSwap?: boolean | undefined;
+}> = ({ item, answer, onAnswer, disabled, today, onSwap, canSwap, canManageSwap }) => {
   const days = daysUntil(item.expirationDate, today);
   const pullAt = item.expirationWarningDays ?? 30;
   const expired = days !== null && days < 0;
   const inWindow = days !== null && days >= 0 && days <= pullAt;
   const confirmed = answer?.expiryConfirmed === true;
+  // Mirrors the submitter limit `swap_item_lot` enforces. An in-window swap
+  // sends no disposition, so for anyone below manage the server allows it only
+  // up to this position's count shortfall — which an expiry-only row cannot
+  // have. Offering the tap anyway spends a crew's attention on a 403.
+  const par = item.expectedQuantity ?? null;
+  // Falls back to par, not zero, exactly as `_on_truck` does: a position with
+  // no live count and no lots aboard has not been counted since it was
+  // defined, which is not the same as an empty bracket. Reading it as zero
+  // invents a shortfall the server will not find, and the swap it enables
+  // comes back 403.
+  const shortfall = par !== null && (item.carriedQuantity ?? par) < par;
+  const swapRefused = canSwap === false || (!expired && canManageSwap === false && !shortfall);
 
   return (
     <div
@@ -403,17 +454,31 @@ const ExpiryRow: React.FC<{
         {onSwap && (expired || inWindow) && item.inventoryItemId ? (
           <button
             type="button"
-            disabled={disabled}
+            disabled={disabled || swapRefused}
             onClick={() => onSwap(item.id)}
-            className="border-theme-alert-danger-icon text-theme-alert-danger-title min-h-11 rounded-lg border px-3 text-[14px] font-bold disabled:opacity-50"
+            title={
+              canSwap === false
+                ? 'Swaps from stock are recorded by a crew member on the check'
+                : swapRefused
+                  ? 'Only an officer can draw stock for an item that has not expired yet'
+                  : undefined
+            }
+            className="border-theme-alert-danger-icon text-theme-alert-danger-title min-h-11 rounded-lg border px-3 text-[14px] font-bold disabled:cursor-not-allowed disabled:opacity-40"
           >
-            Replace
+            {/* Only an expired unit is *replaced*. The server refuses to retire
+                a lot that is still in date — "That lot has not expired, so it
+                cannot be replaced" — because the disposition it would file
+                against it is an expired-stock one, and recording an in-date box
+                as disposed of is a false account of where the unit went. An
+                in-window swap is therefore a top-up, which is what the
+                accordion has always called it. */}
+            {expired ? 'Replace' : 'Swap'}
           </button>
         ) : null}
         <button
           type="button"
           disabled={disabled}
-          onClick={() => onAnswer(expiryAnswer(item))}
+          onClick={() => onAnswer(expiryAnswer(item, today))}
           className={`min-h-11 shrink-0 rounded-lg border px-3 text-[14px] font-bold transition-colors disabled:opacity-50 ${
             confirmed
               ? 'border-green-800 bg-green-800 text-white'
@@ -444,6 +509,8 @@ const ItemGroups: React.FC<Omit<StopBodyProps, 'stop'> & { items: CheckItemSpec[
   disabled,
   today = new Date(),
   onSwap,
+  canSwap,
+  canManageSwap,
 }) => {
   const of = (type: string) => items.filter((i) => normalizeCheckType(i.checkType) === type);
   const counts = of(CheckType.COUNT);
@@ -501,6 +568,8 @@ const ItemGroups: React.FC<Omit<StopBodyProps, 'stop'> & { items: CheckItemSpec[
               disabled={disabled}
               today={today}
               onSwap={onSwap}
+              canSwap={canSwap}
+              canManageSwap={canManageSwap}
             />
           ))}
         </div>
@@ -650,7 +719,7 @@ const SealCard: React.FC<{
           <button
             type="button"
             disabled={disabled}
-            onClick={() => onSeal(stop.id, { status: 'intact' })}
+            onClick={() => onSeal(stop.id, { status: 'intact', cleared: canClear })}
             className="text-theme-text-secondary mt-2 min-h-11 text-[13px] font-semibold underline"
           >
             Undo — the tag matches after all
@@ -718,6 +787,8 @@ export const CheckSweepStop: React.FC<StopBodyProps> = ({
   openPocketIndex,
   today = new Date(),
   onSwap,
+  canSwap,
+  canManageSwap,
 }) => {
   // An intact tag answers the counting, so those rows come off the screen
   // rather than sitting there inviting a crew to count through a seal they
@@ -742,7 +813,16 @@ export const CheckSweepStop: React.FC<StopBodyProps> = ({
     <div className="flex flex-col gap-3">
       {stop.isSealed && <SealCard stop={stop} onSeal={onSeal} disabled={disabled} today={today} />}
 
-      <ItemGroups items={own} answers={answers} onAnswer={onAnswer} disabled={disabled} today={today} onSwap={onSwap} />
+      <ItemGroups
+        items={own}
+        answers={answers}
+        onAnswer={onAnswer}
+        disabled={disabled}
+        today={today}
+        onSwap={onSwap}
+        canSwap={canSwap}
+        canManageSwap={canManageSwap}
+      />
 
       {/* Pockets. A bag is one stop, not several — the crew is standing in front
         of the whole thing — so its pockets are sections inside this screen
@@ -770,6 +850,8 @@ export const CheckSweepStop: React.FC<StopBodyProps> = ({
             clearedByAncestorSeal={pocket.isSealed ? false : sealed}
             today={today}
             onSwap={onSwap}
+            canSwap={canSwap}
+            canManageSwap={canManageSwap}
           />
         </section>
       ))}
