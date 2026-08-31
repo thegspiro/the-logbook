@@ -411,7 +411,12 @@ const ExpiryRow: React.FC<{
   // up to this position's count shortfall — which an expiry-only row cannot
   // have. Offering the tap anyway spends a crew's attention on a 403.
   const par = item.expectedQuantity ?? null;
-  const shortfall = par !== null && (item.carriedQuantity ?? 0) < par;
+  // Falls back to par, not zero, exactly as `_on_truck` does: a position with
+  // no live count and no lots aboard has not been counted since it was
+  // defined, which is not the same as an empty bracket. Reading it as zero
+  // invents a shortfall the server will not find, and the swap it enables
+  // comes back 403.
+  const shortfall = par !== null && (item.carriedQuantity ?? par) < par;
   const swapRefused = canSwap === false || (!expired && canManageSwap === false && !shortfall);
 
   return (

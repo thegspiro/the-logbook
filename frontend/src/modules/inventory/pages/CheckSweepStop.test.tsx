@@ -276,6 +276,23 @@ describe('replacing what is expiring', () => {
     expect(screen.getByRole('button', { name: 'Swap' })).toBeEnabled();
   });
 
+  it('reads a never-counted position as stocked, not as empty', () => {
+    // `_on_truck` falls back to the target when there is no live count and no
+    // lots aboard — nobody has counted since the position was defined, which
+    // is not the same as an empty bracket. Reading it as zero invents a
+    // shortfall the server will not find, and the swap it enables 403s.
+    render(
+      <CheckSweepStop
+        stop={{ id: 's', name: 'Drug box', items: [epi({ expectedQuantity: 4 })] }}
+        answers={{}}
+        onAnswer={vi.fn()}
+        onSwap={vi.fn()}
+        canManageSwap={false}
+      />
+    );
+    expect(screen.getByRole('button', { name: 'Swap' })).toBeDisabled();
+  });
+
   it('calls an expired swap a replacement, because that one does retire stock', () => {
     mount(epi({ expirationDate: YESTERDAY }));
     expect(screen.getByRole('button', { name: 'Replace' })).toBeVisible();
