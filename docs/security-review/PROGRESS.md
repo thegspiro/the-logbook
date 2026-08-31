@@ -18,8 +18,10 @@ feature. The rotation cannot outrun its own review queue.
 
 Feature 29 (Reports & analytics), pass 3 — PR
 [#2091](https://github.com/thegspiro/the-logbook/pull/2091), branch
-`claude/security-review-reports-analytics`. No code changes (re-verification
-only); see log entry below.
+`claude/security-review-reports-analytics`. Codex's review caught six real
+gaps the initial pass missed (one P1 authorization bypass on five report
+types, one P1 label-length DoS, four P2s); all six fixed with guard tests.
+See log entry below and `docs/security-review/RPT-29-reports-analytics-pass3.md`.
 
 ---
 
@@ -67,14 +69,48 @@ Noted in passing, not fixed (dead code, not exploitable): the frontend's
 that calls a `POST /reports/export` backend route which does not exist, and
 has zero callers anywhere in the frontend.
 
-**No new findings, no code changes this pass.** Full writeup:
+**Round 1 claimed no new findings, no code changes.** That claim did not
+survive Codex's review of the doc itself. Full writeup:
 `docs/security-review/RPT-29-reports-analytics-pass3.md`.
 
-Completion gate: `flake8`/`black --check`/`isort --check-only` clean on all
-ten feature files; `validate_migrations.py --strict` passed (394 revisions,
-single head); `pytest tests/ -k "reports or analytics or dashboard or
-attendance or label"` — **486 passed, 1 skipped, 0 failed**. No frontend file
-changed, so `tsc`/`eslint` not re-run.
+**Round 2 (Codex-caught, all six verified against actual code before fixing):**
+
+1. **LBL-29-3 addendum (P1).** `extra_lines` was bounded on list length
+   (`max_length=20`) but not per-element string length; `_build_extra_lines`
+   passes a `custom:<text>` entry through unbounded, joined into every label
+   spec. Fixed with a per-element `max_length=100` on both
+   `LabelGenerateBody.extra_lines` and `LabelPrintBody.extra_lines`.
+2. **RPT-3, real authorization bypass (P1).** `PII_REPORT_PERMISSIONS`
+   covered only `member_roster`/`pipeline_overview`. `training_summary`,
+   `training_progress`, `annual_training`, `certification_expiration`, and
+   `compliance_status` all return per-member training/compliance detail
+   gated behind `training.manage` at their source; `admin_hours` returns
+   per-member hours gated behind `admin_hours.manage` at its source. A
+   `reports.view`-only caller could reach all six via `/reports/generate` and
+   `/reports/saved/{id}/run`. Fixed by adding all six to the map — this
+   supersedes round 1's "still flagged, policy call" characterization of the
+   `certification_expiration` gap, which was a real bug, not a policy choice.
+3. **Dashboard action-items caching (P2).** `/dashboard/action-items`
+   (assignee names + free-text descriptions) was missing from
+   `UNCACHEABLE_PREFIXES`, so a revoked grant could still be served from the
+   90s stale-while-revalidate cache. Fixed.
+4. **Unbounded saved-report listing (P2).** `GET /reports/saved` has no
+   pagination; capped creation at 200 active rows per org to bound it.
+5. **Saved-report field widths unvalidated (P2).** `name`/`report_type`/
+   `schedule_frequency` had no length bounds against their `VARCHAR`
+   columns, risking an uncaught `DataError` under MySQL strict mode. Fixed
+   with matching `Field(max_length=...)` bounds.
+6. **Analytics deviceType unvalidated (P2).** `metadata.deviceType` was
+   copied straight into a `VARCHAR(20)` column with no type/length check.
+   Fixed with a sanitizing extraction helper.
+
+Guard tests added: 3 (labels), 5 (report PII gate), 11 (saved-report caps/
+bounds + analytics), plus 1 frontend cache-exclusion test — 20 new tests, all
+passing. Completion gate: `flake8`/`black --check`/`isort --check-only`
+clean on all files touched; `pytest tests/ -k "reports or label or
+analytics"` — **368 passed, 1 skipped, 0 failed**; new/modified test files —
+**31 passed**; frontend `tsc --noEmit` clean, `eslint` clean on both changed
+files, `vitest run apiCache.test.ts` — **87 passed**.
 
 ---
 

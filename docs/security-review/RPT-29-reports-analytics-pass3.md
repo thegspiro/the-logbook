@@ -6,8 +6,9 @@ app-review B16/A7, security-review pass 2 — PR #1912)
 `platform_analytics.py`, `dashboard.py`, `labels.py`; services
 `reports_service.py`, `dashboard_widget_service.py`,
 `attendance_dashboard_service.py`, `label_service.py`,
-`label_printer_service.py`. Frontend `modules/reports` (routes, service,
-export utilities).
+`label_printer_service.py`; schema `schemas/reports.py`. Frontend
+`modules/reports` (routes, service, export utilities), `utils/apiCache.ts`
+(round 2 fix).
 
 ## Scope and method
 
@@ -84,7 +85,16 @@ this feature among the five features with intentionally-public routes.
 526-541`; `LabelService.generate()` still returns `(pdf, auto_populated,
 len(specs))` at `label_service.py:309-336`.
 - **LBL-29-3** (`extra_lines` bounded to `max_length=20`) — present on both
-  `LabelGenerateBody` and `LabelPrintBody` at `labels.py:82, 269`.
+  `LabelGenerateBody` and `LabelPrintBody` at `labels.py:82, 269`. **Correction
+  (round 2, Codex-caught):** bounding the _list_ to 20 elements left each
+  element's string length unbounded, and `_build_extra_lines`
+  (`inventory_service.py:349-350`) passes a `custom:<text>` entry's text
+  through verbatim with no truncation before joining. A caller could submit
+  up to 20 such entries per request and up to 2000 ids, so the string built
+  per label spec — and held in memory across every spec before the renderer's
+  draw-time truncation ever runs — was effectively unbounded. Fixed by adding
+  a per-element `StringConstraints(max_length=100)` (`ExtraLine` type alias,
+  `labels.py`), applied to both bodies. See "Fixes applied this pass" below.
 - **DASH-3** (app-review A7; `action-items` gates each half independently
   behind `meetings.view`/`minutes.view` rather than relying on the outer
   `get_current_active_user`) — present at `dashboard.py:1164-1167`.
@@ -94,7 +104,7 @@ len(specs))` at `label_service.py:309-336`.
 
 ## Still flagged, re-confirmed unchanged (no new information, not re-applied)
 
-- **RPT2-29-2 / RPT-3 (MEDIUM/policy)** — `SavedReport` scheduling
+- **RPT2-29-2 (MEDIUM/policy)** — `SavedReport` scheduling
   (`is_scheduled`, `schedule_frequency`, `email_recipients`) remains stored
   and API-writable with no reader: `grep -rn "SavedReport"` finds no
   `TASK_RUNNERS` entry or scheduler anywhere in `backend/app/`.
@@ -110,12 +120,6 @@ len(specs))` at `label_service.py:309-336`.
   still has no per-request count cap analogous to `print_labels`'s
   `MAX_LABELS_PER_JOB = 500`. Unchanged, still a flagged asymmetry rather than
   an exploitable issue.
-- **RPT-3 / RPT2-3 (LOW/MED, permission-granularity policy)** — `member_roster`
-  and `pipeline_overview` remain gated by their source-record permission
-  (`PII_REPORT_PERMISSIONS`, `reports.py:37-53`) rather than a report-specific
-  PII tier; `certification_expiration` still returns
-  `certification_number`/`issuing_agency` at plain `reports.view`. Unchanged
-  policy call, recorded in `docs/KNOWN_LIMITATIONS.md`.
 - **RPT-5c / RPT-6 / RPT-7** — inventory `float()` (belongs with the
   codebase-wide FIN-7 Decimal refactor), `apparatus_status.last_inspection_date`
   hardcoded `None`, `requirement_breakdown` completion % can exceed 100% in the
@@ -171,24 +175,95 @@ storage). **Verified good — no finding.**
   feature's models and is `nullable=True` (`label_printer.py:81`). Migration
   chain: 394 revisions, single head, `validate_migrations.py --strict` passes.
 
+## Fixes applied this pass (round 2, Codex-caught)
+
+The PR's original claim of "no new findings, 0 code changes" did not hold —
+Codex's review of this doc caught six real, verified gaps missed by the
+initial pass. Each was independently confirmed against the actual code (not
+rubber-stamped) before fixing:
+
+1. **LBL-29-3, item-length gap (P1).** `extra_lines: Optional[List[str]]` was
+   only bounded on list length (`max_length=20`), not per-element string
+   length. `_build_extra_lines` (`inventory_service.py:349-350`) passes a
+   `custom:<text>` entry's text through unbounded, joined into every
+   generated `LabelSpec`. Fixed with a per-element
+   `Annotated[str, StringConstraints(max_length=100)]` (`ExtraLine`,
+   `labels.py`) on both `LabelGenerateBody.extra_lines` and
+   `LabelPrintBody.extra_lines`.
+2. **RPT-3, incomplete PII gate (P1 — real authorization bypass, not the
+   policy call the prior "still flagged" entry described it as).**
+   `PII_REPORT_PERMISSIONS` covered only `member_roster` and
+   `pipeline_overview`. Read every other report generator in
+   `reports_service.py` end to end: `training_summary`, `training_progress`,
+   `annual_training`, `certification_expiration`, and `compliance_status` all
+   return per-member name plus training/compliance detail (course names,
+   certification numbers, compliance percentages) sourced from
+   `TrainingRecord`/`TrainingRequirement` — the same data whose org-wide
+   access is gated behind `training.manage` at its source (`training.py`'s
+   `/records` line 556-561, `/compliance-matrix` line 2627). `admin_hours`
+   returns per-member name, hours, method, and status from `AdminHoursEntry`,
+   gated behind `admin_hours.manage` at its source (`admin_hours.py`). A
+   `reports.view`-only caller could reach all six through `/reports/generate`
+   and `/reports/saved/{id}/run`. Fixed by adding all six to
+   `PII_REPORT_PERMISSIONS` (`reports.py`), which both call sites already
+   route through via `_enforce_report_pii_permission`.
+3. **Dashboard action-items caching (P2).** `dashboardService.getActionItems()`
+   (`adminServices.ts:370-375`) calls `GET /dashboard/action-items` through
+   the globally-cached axios client; the endpoint's `ActionItemSummary`
+   (`dashboard.py:417-430`) carries `description` (free text) and
+   `assignee_name`, and the prefix was absent from `UNCACHEABLE_PREFIXES`. A
+   revoked `meetings.view`/`minutes.view` grant or a changed item's
+   visibility could still be served from the stale-while-revalidate cache for
+   up to 90s. Fixed by adding `/dashboard/action-items` to
+   `UNCACHEABLE_PREFIXES` (`apiCache.ts`).
+4. **Unbounded saved-report listing (P2).** `GET /reports/saved` executes
+   `.scalars().all()` with no limit, and `POST /reports/saved` had no cap on
+   how many active rows an org could accumulate — every list load serializes
+   the entire set. Rather than redesign the endpoint into a paginated
+   response (a breaking API-shape change beyond this pass's scope), capped
+   creation at `MAX_ACTIVE_SAVED_REPORTS_PER_ORG = 200` (`reports.py`),
+   which bounds the same read at its write side.
+5. **Saved-report field widths unvalidated (P2).** `SavedReportCreate`/
+   `SavedReportUpdate` accepted unconstrained `name`, `report_type`, and
+   `schedule_frequency` strings against `saved_reports` columns
+   `VARCHAR(255)`/`VARCHAR(50)`/`VARCHAR(20)` (`models/analytics.py:65-81`).
+   An overlong value would reach `db.commit()` and raise an uncaught
+   `DataError` under MySQL strict mode instead of a 422. Fixed by adding
+   matching `Field(max_length=...)` bounds (`schemas/reports.py`).
+6. **Analytics deviceType unvalidated (P2).** `/analytics/track` copied
+   `metadata.deviceType` straight into `AnalyticsEvent.device_type`, a
+   `VARCHAR(20)` column, with no type or length check — a non-string or
+   overlong value would reach `db.commit()` and fail the same way as #5.
+   Fixed with a `_device_type_from_metadata()` helper (`analytics.py`) that
+   drops (stores `None` for) any non-string or >20-char value rather than
+   raising — `event_metadata` (the JSON column) still stores the caller's
+   full metadata dict untouched, only the extracted fixed-width column is
+   guarded.
+
+Guard tests: `test_labels_endpoint.py::TestExtraLinesLengthBound` (3 tests),
+`test_read_permission_gates.py::TestReportPiiGateTrainingAndAdminHours` (5
+tests), `apiCache.test.ts`'s new `/dashboard/action-items` case, and the new
+`test_reports_saved_caps_and_analytics_input.py` (11 tests across
+`TestSavedReportCap`, `TestSavedReportFieldBounds`,
+`TestAnalyticsDeviceTypeSanitization`).
+
 ## Findings
 
-No new findings. Every checklist dimension was worked (see table above); all
-prior findings across all three review layers (module-audit, app-review,
-security-review pass 2) re-verified as fixed-and-holding or
-correctly-still-flagged. No code changes this pass.
+Six findings above, all fixed in this pass with guard tests. Every checklist
+dimension was worked (see table above); all prior findings across all three
+review layers (module-audit, app-review, security-review pass 2) re-verified
+as fixed-and-holding, correctly-still-flagged, or (RPT-3/certification scope)
+corrected and fixed per #2 above.
 
 ## Completion gate
 
-| Check                                                                         | Result                                       |
-| ----------------------------------------------------------------------------- | -------------------------------------------- |
-| `flake8` (10 feature files)                                                   | ✅ 0 violations                              |
-| `black --check` (10 feature files)                                            | ✅ unchanged                                 |
-| `isort --check-only` (10 feature files)                                       | ✅ clean                                     |
-| `python3 scripts/validate_migrations.py --strict`                             | ✅ 394 revisions, single head `f6a7b8c9d0e1` |
-| `pytest tests/ -k "reports or analytics or dashboard or attendance or label"` | ✅ **486 passed, 1 skipped** (0 failed)      |
-| `tsc --noEmit` / `eslint .`                                                   | n/a — no frontend file changed this pass     |
-
-No code changed this pass, so the full-repo `flake8`/`black`/`isort` gate and
-frontend `tsc`/`eslint` were not re-run repo-wide (nothing to regress); the
-scoped checks above cover everything read this pass.
+| Check                                                  | Result                                  |
+| ------------------------------------------------------ | --------------------------------------- |
+| `flake8` (backend files touched this pass)             | ✅ 0 violations                         |
+| `black --check` (backend files touched this pass)      | ✅ clean                                |
+| `isort --check-only` (backend files touched this pass) | ✅ clean                                |
+| `pytest tests/ -k "reports or label or analytics"`     | ✅ **368 passed, 1 skipped** (0 failed) |
+| `pytest` (new/modified test files only)                | ✅ **31 passed**                        |
+| `tsc --noEmit` (frontend)                              | ✅ 0 errors                             |
+| `eslint` (`apiCache.ts`, `apiCache.test.ts`)           | ✅ 0 errors                             |
+| `vitest run apiCache.test.ts`                          | ✅ **87 passed**                        |
