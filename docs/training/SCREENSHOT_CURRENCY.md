@@ -37,6 +37,15 @@ three surviving entries now record where their image actually landed — `19-01`
 `doc` moved to `03-scheduling.md`, `02-67`'s anchor moved to the paragraph it now
 sits above, and `08-76` carries a note that it was placed by hand.
 
+**`08-76`'s caption was wrong on first placement, and review caught it.** It
+read "a member without `finance.manage`", which is false for a member who lacks
+that and holds `fundraising.view` or `events.manage`: `get_main_dashboard_widgets`
+gates the finance, fundraising and community blocks independently, and
+`DashboardOrganizationWidgets` drops the section only when all three come back
+empty. A member holding one of the other two still sees Department pulse, minus
+the money cards. The caption and the manifest `alt` now say all three are
+withheld — which is what the pictured member actually has.
+
 **Check the whole tree, not just `*.md`.** Six of the eight were referenced from
 `scripts/screenshots/manifest.mjs`, which is where a shot's route, auth and
 `prepare` steps live. The manifest is the reason a capture is reproducible, so

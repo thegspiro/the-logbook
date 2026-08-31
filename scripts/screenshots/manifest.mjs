@@ -10957,7 +10957,7 @@ export const SHOTS = [
     // marker with 08-75 alone, so the pair's second half never landed and the
     // guide taught half a comparison the marker had asked for whole.
     anchor: "__paired-with-08-75__",
-    alt: "The same dashboard as a member without finance.manage: Department pulse is not rendered at all, rather than shown with empty money cards",
+    alt: "The same dashboard as a member holding none of finance.manage, fundraising.view or events.manage: Department pulse is not rendered at all, rather than shown with empty money cards",
     route: "/dashboard",
     auth: "member",
     fullPage: true,
