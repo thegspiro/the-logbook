@@ -16,11 +16,45 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-Feature 27 (Integrations), pass 2 — branch
-`claude/security-review-integrations-pass2`, PR
-[#2087](https://github.com/thegspiro/the-logbook/pull/2087). One finding
-(INT-6, LOW-MED, fixed). See log entry below and
-`docs/security-review/INT-27-integrations.md`.
+None. Feature 27 (Integrations) is fully closed — see log entry below. Next:
+feature 28, Security, audit & IP.
+
+---
+
+### 2026-08-31 — Feature 27 (Integrations), pass 2 ✅ PR #2087 merged
+
+PR #2087 merged (`53ebd0ac`). One finding, one Codex correction round:
+
+1. **INT-6 (LOW-MED, fixed).** `test_integration_connection()`'s per-connector
+   implementations mostly raise hand-authored, safe messages on their
+   expected failure paths, but several don't wrap every outbound call, so an
+   unhandled infra-level exception (DNS, TLS, timeout) could still reach two
+   client-facing sites unsanitized — `POST /integrations/{id}/test-connection`
+   and `GET /integrations/salesforce/readiness`. Fixed by routing both
+   through `sanitize_error_message()`.
+
+2. **Codex correction, same commit round.** `sanitize_error_message()`'s
+   pattern blacklist doesn't cover generic DNS/TLS/timeout text (e.g.
+   `[Errno -2] Name or service not known` matches none of its SQL/path/
+   traceback patterns), so the exact scenario INT-6 was written to close
+   still leaked. Fixed by adding `sanitize_connector_error()`
+   (`app/core/utils.py`), which checks the exception's _type_ instead: only
+   an exact-type `Exception` (or the one named trusted subclass,
+   `PayPalError`) is treated as a connector's own hand-authored message —
+   anything else always gets the generic fallback regardless of content.
+   That investigation also surfaced a sharper instance of the same root
+   problem: three connectors (`google_calendar_service.py`,
+   `outlook_calendar_service.py`, `weather_service.py`) caught broadly and
+   re-raised as `Exception(f"...: {e}")`, interpolating the raw caught
+   exception into a message that _is_ exact-type `Exception` — exactly what
+   a type check (correctly) trusts. Fixed by dropping the interpolation in
+   all three; they now log the real exception server-side and raise a
+   static message instead. Also caught a second, previously-unfixed
+   `check_readiness` catch site (the per-sObject `get_field_names` lookup)
+   with the same defect as the two named in the original finding.
+
+CI green (17/17), one review thread resolved, no merge conflict. See
+`docs/security-review/INT-27-integrations.md` for the full writeup.
 
 ---
 
@@ -3408,7 +3442,7 @@ each row's prior PR is recorded in the Log, not repeated here.
 | 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ✅     |
 | 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ✅     |
 | 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                         | ✅     |
-| 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                         | ⏳     |
+| 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                         | ✅     |
 | 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`                                                                    | ⬜     |
 | 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                              | ⬜     |
 | 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (24 unauth bootstrap routes)                                                                                             | ⬜     |
