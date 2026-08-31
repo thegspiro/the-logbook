@@ -1,6 +1,10 @@
 # Security Review — Messaging & Notifications
 
-**Prefix:** `MSG` · **Iteration:** 25 · **Reviewed:** 2026-08-26 · **PR:** #1907
+**Prefix:** `MSG` · **Iteration:** 25 · **Reviewed:** 2026-08-26 (pass 1),
+2026-08-31 (pass 2) · **PR:** #1907 (pass 1), pass 2 PR recorded in
+`PROGRESS.md`
+
+## Pass 1 (2026-08-26)
 
 **Backend:** `app/api/v1/endpoints/messages.py` (461 L), `message_history.py`
 (256 L), `notifications.py` (422 L), `email_templates.py` (904 L),
@@ -259,7 +263,7 @@ changes.
   the read, a valid list round-trips unchanged, and an unrelated settings
   update on an org with legacy bad data no longer breaks.
 
-## Completion gate
+## Completion gate (pass 1)
 
 | Check                                                            | Result                  |
 | ---------------------------------------------------------------- | ----------------------- |
@@ -269,3 +273,251 @@ changes.
 | `python3 scripts/validate_migrations.py --strict`                | PASSED (no migrations)  |
 | backend tests, scope (messaging/notifications/email-theme files) | 855/855 passed          |
 | backend tests, full suite                                        | 8917 passed, 22 skipped |
+
+---
+
+## Pass 2 (2026-08-31)
+
+**Backend:** re-read `messaging_service.py` (now 1047 L, up from 968), `messages.py`
+(471 L), `message_history.py` (256 L) in full — messaging's architecture changed
+materially since pass 1: PR #1938 (merged 2026-08-27, after pass 1 closed)
+replaced live, in-Python audience re-evaluation on every inbox read with a
+durable `DepartmentMessageRecipient` table, materialized at publish time and
+reconciled on an audience edit. `notifications.py`/`notifications_service.py`/
+`push_service.py`/`notification_rules.py`/`notification_channels.py`/
+`integration_services/notification_dispatch.py` and the whole email-templates
+surface (`email_templates.py`, `email_template_service.py`, `email_service.py`,
+`email_theme.py`, `email_templates_storefront.py`) confirmed unchanged since
+pass 1 (`git log` shows only a no-op merge commit touching these files, diff
+verified empty) — not re-read line-by-line, per the rotation's own "re-verify,
+don't re-derive" rule; each pass-1 fix was instead spot-checked directly against
+current code (see below).
+
+**Frontend:** reviewed for the first time this rotation (pass 1 was backend
+only). `frontend/src/modules/communications/` (routes, pages, components,
+services, store — the messaging admin/inbox UI and the email-template
+editor/preview/scheduler), `frontend/src/modules/notifications/`,
+`frontend/src/pages/NotificationsPage.tsx`, `frontend/src/hooks/
+usePushNotifications.ts`, `frontend/src/components/NotificationCard.tsx`, and
+`frontend/src/services/communicationsServices.ts`.
+
+**Migrations:** none new. `20260826_1700_d4e5f6a7b8c9_message_recipients.py`
+(the `DepartmentMessageRecipient` backfill, part of PR #1938) and its
+`merge_heads` companion predate this pass and were reviewed as part of the
+architecture change above, not written by it.
+
+### Pass-1 fixes re-verified intact
+
+All eight (MSG-4 through MSG-8, plus the Codex-round `cc_emails` legacy-read
+fix) re-checked directly against current source, not merely trusted:
+
+- **MSG-4** (past `scheduled_at` on a published message collapses to `None`) —
+  `messaging_service.py` `update_message`, same logic, same comment. Confirmed
+  the new recipient-materialization code composes correctly with it: a still-
+  _pending_ message that is explicitly un-scheduled (`scheduled_at: null`, the
+  path the frontend's "clear the schedule field" flow actually uses) correctly
+  sets `_published_by_update = True` and calls `materialize_recipients`; a
+  _published_ message given a past `scheduled_at` still collapses to `None` and
+  triggers neither a re-publish nor a duplicate `materialize_recipients` call.
+- **MSG-5** (`update_rule` via `apply_updates`) — intact,
+  `notifications_service.py:103-119` unchanged.
+- **MSG-6** (header sanitization on `To`/`Cc`/`Reply-To`/`List-Unsubscribe`;
+  `cc_emails` tightened to `List[EmailStr]`) — `_sanitize_header` still applied
+  at both header-construction sites in `email_service.py`; both schema fields
+  still `List[EmailStr]`.
+- **MSG-7** (`_SMTP_ATTACHMENT_BUDGET`, exception-safety on all three send
+  branches) — both constants (`_CLOUDFLARE_ATTACHMENT_BUDGET`,
+  `_SMTP_ATTACHMENT_BUDGET`) present and used as before.
+- **MSG-8** (`build_shell(cache=False)` on the runtime path) — intact in
+  `email_theme.py`/`email_service.py`.
+- **Codex-round fix** (`get_organization_settings` reconstructs `scheduling`
+  explicitly and filters legacy-invalid `cc_emails` on read) — intact in
+  `organization_service.py:326-344`.
+
+### New architecture reviewed: durable recipient materialization (PR #1938)
+
+The old design re-evaluated `_is_targeted` in Python against live user/role
+data on every inbox read. The new design persists one
+`DepartmentMessageRecipient` row per (message, targeted user) at publish time
+(`materialize_recipients`) and rebuilds it when a live message's audience is
+edited (`reconcile_recipients`), with `get_inbox`/`get_unread_count`/
+`_visible_message_or_none` all now pure-SQL joins against that table instead of
+an in-Python filter over the org's users. Reviewed against all seven checklist
+dimensions:
+
+- **Tenant isolation:** every recipient row is written with
+  `organization_id = message.organization_id` at creation
+  (`materialize_recipients`, `reconcile_recipients`); every read joins on both
+  `organization_id` and `user_id`/`message_id`. `_targeted_users` — the single
+  choke point both materialization and live delivery call — still filters
+  `User.organization_id == organization_id`, so a foreign role/status/member id
+  in a message's targeting still matches nobody, matching pass 1's finding.
+- **Role targeting uses the right table.** The backfill migration
+  (`20260826_1700_d4e5f6a7b8c9_message_recipients.py`) builds its role-match set
+  from `user_positions`/`positions`, which looked like a mismatch against the
+  app-level `Role`/`_validate_targeting` code at first read — until confirmed
+  that `app/models/user.py:665` aliases `Role = Position` and `user_roles =
+user_positions` (a documented backward-compatible rename), so the migration
+  and the live code resolve against the exact same tables. Verified, not
+  assumed, by reading the alias definitions directly.
+- **Idempotent delivery, independently of MSG-4.** `DepartmentMessageDelivery`
+  carries a `UniqueConstraint("message_id", "recipient_id", "channel")` and an
+  `idempotency_key`; `_claim_delivery` catches the resulting `IntegrityError`
+  and no-ops on a duplicate claim. `_create_in_app` has the equivalent
+  constraint on `NotificationLog`. So even if something did re-trigger
+  `MessageDeliveryService.deliver()` for an already-delivered message, no
+  member would receive a second email/SMS/in-app notification — the MSG-4 fix
+  turns out to be defense-in-depth on top of an idempotent delivery layer, not
+  the only thing preventing duplicate sends.
+- **Capacity/locking (checklist dimension 6, Pitfall #27 shape):** the
+  publish-sweep (`scheduled_tasks.run_publish_scheduled_messages`) claims due
+  messages with `.with_for_update(skip_locked=True)` before doing any network
+  I/O, so two concurrent scheduler runs can't double-publish the same message.
+
+### MSG-9 — LOW-MED (defense-in-depth) — `get_message_stats`'s read/ack counts weren't org-scoped — ✅ FIXED
+
+**What:** `read_count`/`ack_count` in `get_message_stats` filtered only
+`DepartmentMessageRecipient.message_id == message_id`, unlike the
+`targeted_count` query three lines below it (and every other by-id query in
+this file), which also filters `organization_id`.
+
+**Where:** `app/services/messaging_service.py`, `get_message_stats`.
+
+**Impact:** not currently exploitable — `message_id` is only ever an id this
+same call already resolved via `get_message_by_id(message_id, organization_id)`
+one line above, which 404s on a foreign or missing id before either count query
+runs, and `DepartmentMessageRecipient` rows are always written with the same
+`organization_id` as their parent message. So the missing filter could not
+today return another org's count. Fixed anyway, for the same reason the
+checklist calls this dimension out explicitly: a by-id count that only filters
+by `message_id` is one refactor away (e.g. a future caller that passes a raw
+client id without first resolving it through `get_message_by_id`) from becoming
+a real cross-tenant read, and the fix costs nothing.
+
+**Fix:** added `DepartmentMessageRecipient.organization_id == organization_id`
+to both queries, matching `targeted_count`. Guard test added
+(`TestGetMessageStats::test_read_and_ack_counts_are_org_scoped`) that inspects
+the compiled `WHERE` clause of all three count queries and fails if
+`organization_id` is dropped from any of them — verified to fail against the
+pre-fix code (reintroducing the bug locally and re-running the test reproduces
+the failure), then reverted to the fix.
+
+### Doc correction — MAIL-3 (attachment magic-byte validation) was already fixed, `docs/app-review/email-templates.md` still said OPEN
+
+Not a code finding — `upload_attachment` (`email_templates.py:595-634`) already
+calls `detect_mime_type` on uploaded bytes against an explicit
+`ALLOWED_EMAIL_MIME_TYPES` allowlist and fails closed (503) when libmagic is
+unavailable, matching what pass 1's "Verified good" section already noted
+("MAIL-3 ... confirmed to have improved since the last pass"). The app-review
+doc's own MAIL-3 entry, however, still read "OPEN" with the old
+extension-only description — pass 1 verified the code but never corrected the
+doc it was re-verifying against. Corrected `docs/app-review/email-templates.md`
+(the MAIL-3 entry, its pass-2 summary line, and its "Future development" list)
+to point at the current code and stop presenting a closed gap as open.
+
+### Confirmed still open — no new product-decision items from re-verification
+
+MSG-3 (test-email to an arbitrary address, by design), MAIL-4 (arbitrary
+scheduled-email recipients, cross-referenced to CS-9), and the informational
+`NotificationRuleCreate.config` unbounded-JSON note are all re-verified
+unchanged from pass 1 and not re-flagged. `email_service.py`'s F4 (no SSRF
+guard on an org-configured SMTP host) remains a deliberate, unchanged policy
+call for the same reason pass 1 recorded it.
+
+### New flagged item — see `docs/KNOWN_LIMITATIONS.md`
+
+**MSG-9** in this doc is the org-scoping defense-in-depth fix above (FIXED).
+**MSG-10**, a second and unrelated finding from this pass, needed a product
+decision rather than a mechanical fix and is recorded only in
+`docs/KNOWN_LIMITATIONS.md`: **narrowing a published message's audience
+(`reconcile_recipients`) hard-deletes the `DepartmentMessageRecipient` row —
+including `read_at`/`acknowledged_at` — for any member the new audience no
+longer includes**, erasing that member's row in `get_acknowledgment_report`
+and their inbox visibility for the message. This does not erase all
+compliance evidence — `acknowledge_message` (`messages.py:425-436`) writes an
+independent, tamper-evident `message_acknowledged` audit-log entry at
+acknowledgment time that `reconcile_recipients` never touches — but it does
+erase the _report's_ record, which the same file's `delete_message` docstring
+calls "compliance evidence" and specifically avoids losing on message
+deletion. Not cross-tenant, not fixed here (fixing it changes
+inbox-visibility semantics, since visibility is currently derived from the
+same row the fix would need to keep). See `docs/KNOWN_LIMITATIONS.md` →
+"MSG-10 — Narrowing a Department Message's Audience Erases the Acknowledgment
+Report's Record, Though an Independent Audit Entry Survives" for the full
+write-up and options.
+
+### Frontend — verified good ✅
+
+- **No `window.confirm`/`alert`/`prompt`** anywhere in `modules/communications`,
+  `modules/notifications`, `pages/NotificationsPage.tsx`, or
+  `services/communicationsServices.ts` — deletes (message, attachment) go
+  through the app's `ConfirmDialog`/pending-item state pattern.
+- **No `dangerouslySetInnerHTML`.** Department-message bodies render through
+  `LinkifiedText` (`components/ux/LinkifiedText.tsx`), which is explicitly
+  built to emit only React text nodes plus `<a>` elements for `https?://` URL
+  matches (regex requires the scheme, so a `javascript:` URL can never become
+  an `href`) — verified by reading the component, not just grepping for the
+  absence of the dangerous prop.
+- **Email template preview is XSS-isolated.** `TemplatePreview.tsx` renders
+  arbitrary template HTML into an `<iframe sandbox="allow-same-origin">` with
+  no `allow-scripts` — the sandbox attribute blocks script execution
+  regardless of what the template body contains, so `allow-same-origin` alone
+  cannot be used to reach the parent document.
+- **No direct `fetch(`** in the reviewed module/service files — both
+  `communicationsServices.ts` and the module code import the shared
+  `apiClient` (`withCredentials: true` + CSRF interceptor), not a bare axios or
+  fetch instance.
+- **No banned date-formatting methods** (`.toLocaleString`/`.toLocaleDateString`/
+  `.toLocaleTimeString`/`date-fns`) — `MessageComposeForm.tsx` uses
+  `formatForDateTimeInput`/`localToUTC` from `utils/dateFormatting.ts` with an
+  explicit `useTimezone()` value throughout.
+- **Update payload correctness (Pitfall #1):** `MessageComposeForm.tsx`'s edit
+  path sends explicit `null` for `expires_at`/`scheduled_at` and for the
+  now-irrelevant audience lists when the target type changes, matching the
+  backend's `exclude_unset` + explicit-null-clears-the-field contract; the
+  create path omits unset optional keys instead of sending `undefined`,
+  matching `exactOptionalPropertyTypes`.
+- **`UNCACHEABLE_PREFIXES` coverage confirmed current:** `/messages` (no
+  trailing slash, so it covers `/messages/inbox`, `/messages/{id}/stats`,
+  `/messages/{id}/acknowledgments`, etc.), `/message-history`,
+  `/notifications/my`, `/notifications/logs`, and
+  `/email-templates/scheduled` are all present in
+  `frontend/src/utils/apiCache.ts`.
+- **Push subscription flow** (`usePushNotifications.ts`) has no client-side
+  security issue: VAPID key handling is standard base64url decoding, the
+  subscribe/unsubscribe calls go through the shared `apiClient`, and server-
+  side endpoint validation (`validate_push_endpoint` at subscribe time,
+  `assert_outbound_url_safe` at send time) was already re-verified intact on
+  the backend side above.
+- **Route permission gating matches backend gates:** `/communications/
+email-templates` requires `settings.manage` (13/13 backend endpoints in
+  `email_templates.py` gated on `settings.manage`/`organization.update_settings`
+  — enumerated, not sampled); `/communications/messages` requires
+  `notifications.manage` (all 10 backend admin routes in `messages.py` match);
+  `/messages` and `/messages/:messageId` (inbox, detail) require only sign-in,
+  matching the backend's self-scoped `get_current_user` + recipient-row-join
+  visibility gate rather than a permission string.
+
+## Guard tests added (pass 2)
+
+- `tests/test_messaging_service.py`: new `TestGetMessageStats` class —
+  `test_read_and_ack_counts_are_org_scoped` — asserts `organization_id` appears
+  in the compiled `WHERE` clause of all three count queries `get_message_stats`
+  issues. Verified to fail on reintroduction (reproduced locally, restored).
+
+## Completion gate (pass 2)
+
+| Check                                                      | Result                                                                      |
+| ---------------------------------------------------------- | --------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                              | clean                                                                       |
+| `black --check app/ tests/ alembic/`                       | clean — 1337 files unchanged                                                |
+| `isort --check-only app/ tests/ alembic/` (CI's 8.0.1 pin) | clean                                                                       |
+| `python3 scripts/validate_migrations.py --strict`          | PASSED — 394 revisions, single head                                         |
+| backend tests, scope (messaging/notifications/email files) | 1100 passed, 1 skipped                                                      |
+| backend tests, full suite                                  | 9288 passed, 22 skipped, 0 failed                                           |
+| `npx tsc --noEmit` (frontend)                              | 0 errors                                                                    |
+| `npx eslint .` (frontend)                                  | 0 errors, 8 pre-existing warnings (max-warnings 10; none in reviewed files) |
+
+No frontend file was modified this pass (findings there were "verified good" —
+no fix required), so `tsc`/`eslint` establish that the backend changes did not
+regress the frontend build, not that new frontend code was checked.

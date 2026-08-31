@@ -2436,6 +2436,60 @@ today), which lowers today's exploitability but does not change that the API
 itself grants any `meetings.manage` holder an unconditional, unaudited-before-
 this-pass, untracked approval with no self-check.
 
+## MSG-10 — Narrowing a Department Message's Audience Erases the Acknowledgment Report's Record, Though an Independent Audit Entry Survives (2026-08-31)
+
+`MessagingService.reconcile_recipients` rebuilds a published message's audience
+when an admin edits its targeting (e.g. switches from "by role" to a corrected
+role list). For every member the new audience no longer includes, it hard-
+deletes their `DepartmentMessageRecipient` row outright — including `read_at`
+and `acknowledged_at`, if they had already read or acknowledged the message.
+
+This is the same information `delete_message`'s own docstring calls
+"compliance evidence" and specifically soft-deletes the parent message to
+avoid losing (`app/services/messaging_service.py`, `delete_message`) — but
+`reconcile_recipients` (same file) discards it via a plain audience edit, no
+confirmation, no message deletion involved. A message that "requires
+acknowledgment," gets acknowledged by everyone, and then has its role list
+tweaked to fix a typo loses every acknowledgment row for anyone who falls
+outside the corrected set — `get_acknowledgment_report` would then show them
+as never having acknowledged it at all, and they'd drop out of its
+denominator entirely.
+
+**This does not erase all compliance evidence.** `acknowledge_message`
+(`app/api/v1/endpoints/messages.py:425-436`) writes an independent
+`message_acknowledged` audit-log entry — user id, message id, timestamp —
+through the tamper-evident audit hash chain at the moment of acknowledgment,
+and `reconcile_recipients` never touches `audit_logs`. That record survives
+the recipient-row deletion and could be used during remediation to
+reconstruct who had acknowledged before the audience was narrowed. What is
+actually lost is the _report's_ live state (and, per the visibility
+mechanism below, the message's presence in that member's inbox) — not the
+underlying evidence that the acknowledgment happened.
+
+Closing this needs a product decision, not a mechanical patch: keeping the
+recipient row for anyone with `read_at`/`acknowledged_at` set would preserve
+the history, but `get_inbox`/`_visible_message_or_none` currently derive
+_visibility_ from the same row (a `JOIN` on `DepartmentMessageRecipient`, no
+independent live re-check of `_is_targeted`) — so keeping the row also keeps
+the message visible in that member's inbox after they've been un-targeted,
+which may or may not be the intended behavior. The options are (a) keep
+resolved rows and accept that an already-engaged member keeps seeing a message
+they're no longer formally targeted by, (b) add a separate "still visible"
+flag so a resolved-but-untargeted row can be excluded from inbox visibility
+while its read/ack timestamps survive for reporting, or (c) accept the current
+behavior as correct — the audience is a live definition, not a historical one,
+and narrowing it is understood to also narrow who the report covers. None was
+chosen here.
+
+Found during `docs/security-review/MSG-25-messaging-notifications.md`
+(feature 25, pass 2) while reviewing the recipient-materialization
+architecture (`DepartmentMessageRecipient`, added since pass 1 by PR #1938).
+Not exploitable cross-tenant — `reconcile_recipients` only ever touches
+recipients within the message's own org — and requires an admin
+(`notifications.manage`) to edit an already-published message's targeting, so
+this is a data-integrity/compliance-record risk rather than a security
+vulnerability in the access-control sense.
+
 ## Process
 
 The review loop (see [review-log.md](./review-log.md)) advances through one area
