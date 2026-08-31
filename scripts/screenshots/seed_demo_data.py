@@ -2385,8 +2385,29 @@ class Seeder:
             None,
         )
         if existing and pick(existing, "id"):
-            event = self.api.patch(f"/events/{pick(existing, 'id')}", window)
-            self._clear_early_checkin_rsvp(pick(existing, "id"))
+            event_id = pick(existing, "id")
+            # Re-date, and reopen first if the event has been finalized.
+            #
+            # This fixture gets finalized from outside: `run_post_event_validation`
+            # notices any event that ended in the last two hours and is not
+            # finalized, so once this one has run its course it becomes a
+            # candidate, and guide 19's `19-32` finalizes whichever event the
+            # first event_validation notification names. That shot is not wrong
+            # to do it; the fixture has to survive it, because the seeder must
+            # be re-runnable against a database a capture has already touched.
+            #
+            # Driven off the refusal rather than off a field: the events *list*
+            # carries no finalized marker at all -- only the detail endpoint
+            # does -- so a guard reading one from `existing` can never fire,
+            # which is exactly how the first attempt at this failed.
+            try:
+                event = self.api.patch(f"/events/{event_id}", window)
+            except ApiError as exc:
+                if exc.code != 409 or "finalized" not in exc.detail.lower():
+                    raise
+                self.api.post(f"/events/{event_id}/reopen-attendance", {})
+                event = self.api.patch(f"/events/{event_id}", window)
+            self._clear_early_checkin_rsvp(event_id)
             return event
         return self.api.post(
             "/events",
@@ -14109,21 +14130,18 @@ class Seeder:
         rows = self._checkable_rows(detail)
         if not rows:
             return {"blocked": "template has no checkable rows"}
+        # Seals go on the create call, not a follow-up complete. Posting items
+        # completes the check outright -- which is why `seed_equipment_checks`
+        # tolerates a 400 on its own complete() -- and a completed check
+        # refuses further updates with "Only incomplete checks can be updated".
+        # Sending the seals afterwards therefore recorded none of them and left
+        # /last-seals empty, which is the one thing this fixture exists to fill.
         check = self.api.post(
             "/equipment-checks/checks",
             {
                 "template_id": template_id,
                 "apparatus_id": apparatus_id,
                 "check_timing": "start_of_shift",
-                "items": rows,
-            },
-        )
-        check_id = pick(check, "id")
-        if not check_id:
-            return {"blocked": "check was not created"}
-        self.api.put(
-            f"/equipment-checks/checks/{check_id}/complete",
-            {
                 "items": rows,
                 "seals": [
                     {
@@ -14137,6 +14155,9 @@ class Seeder:
                 ],
             },
         )
+        check_id = pick(check, "id")
+        if not check_id:
+            return {"blocked": "check was not created"}
         return {"sealed": len(sealed), "check": check_id}
 
     # The board's fourth chip state. `shiftCapacity` falls back from the
@@ -14223,18 +14244,22 @@ class Seeder:
         if not member_id:
             return {"blocked": "demo member not found"}
 
+        # Keyed on the label, not the serial, and read from `items`. The list
+        # response is `{"items": [...]}` and every row carries `uidPreview` --
+        # the last four characters -- and never the full tag: a credential is
+        # not handed back once issued. Matching on a field the API does not
+        # return meant the guard never matched, so a re-seed re-posted both
+        # cards and the server refused the duplicate.
         existing = {
-            str(pick(card, "tag_uid") or ""): card
-            for card in items(
-                self.api.get(f"/nfc-tags?user_id={member_id}"), "cards"
-            )
+            str(pick(card, "label") or "")
+            for card in items(self.api.get(f"/nfc-tags?user_id={member_id}"), "items")
         }
         issued = 0
         for tag, label in (
             (self.NFC_ACTIVE_TAG, "Duty wallet"),
             (self.NFC_REVOKED_TAG, "Old station badge"),
         ):
-            if tag in existing:
+            if label in existing:
                 continue
             self.api.post(
                 "/nfc-tags",
@@ -14246,12 +14271,10 @@ class Seeder:
         # guarded on the status rather than on whether the card was just
         # created -- a re-seed must not try to revoke an already-revoked card.
         cards = {
-            str(pick(card, "tag_uid") or ""): card
-            for card in items(
-                self.api.get(f"/nfc-tags?user_id={member_id}"), "cards"
-            )
+            str(pick(card, "label") or ""): card
+            for card in items(self.api.get(f"/nfc-tags?user_id={member_id}"), "items")
         }
-        revoked_card = cards.get(self.NFC_REVOKED_TAG)
+        revoked_card = cards.get("Old station badge")
         if revoked_card and str(pick(revoked_card, "status") or "") != "revoked":
             self.api.patch(
                 f"/nfc-tags/{pick(revoked_card, 'id')}",
