@@ -301,10 +301,15 @@ editor/preview/scheduler), `frontend/src/modules/notifications/`,
 usePushNotifications.ts`, `frontend/src/components/NotificationCard.tsx`, and
 `frontend/src/services/communicationsServices.ts`.
 
-**Migrations:** none new. `20260826_1700_d4e5f6a7b8c9_message_recipients.py`
+**Migrations:** no net change — `20260826_1700_d4e5f6a7b8c9_message_recipients.py`
 (the `DepartmentMessageRecipient` backfill, part of PR #1938) and its
 `merge_heads` companion predate this pass and were reviewed as part of the
-architecture change above, not written by it.
+architecture change above. An initial reading flagged a real-looking defect
+(**MSG-11**, below) and added a guard; a follow-up investigation on the same
+PR (prompted by Codex) found the guard unnecessary and reverted it. The test
+suite gained a general-purpose ratchet (`_find_autoload_offenders`) and a
+correctness fix (`_tables_created_by_migrations` now recognizes
+`op.rename_table`) either way.
 
 ### Pass-1 fixes re-verified intact
 
@@ -402,6 +407,198 @@ the compiled `WHERE` clause of all three count queries and fails if
 pre-fix code (reintroducing the bug locally and re-running the test reproduces
 the failure), then reverted to the fix.
 
+### MSG-11 — investigated, **not reproducible** — the recipient-materialization backfill migration's `positions`/`user_positions` reflection is unguarded, but both tables are guaranteed present when it runs
+
+**Original claim:** `20260826_1700_d4e5f6a7b8c9_message_recipients.py`'s
+backfill step reflects `positions`/`user_positions` with raw SQLAlchemy Core
+(`sa.Table(name, meta, autoload_with=bind)`) and, at the time this was
+opened as a separate follow-up PR (#2083), had no existence guard. The
+reasoning pattern-matched CLAUDE.md Pitfall #26 (`positions` is one of that
+section's own listed examples of a create_all-only table) and concluded
+`alembic upgrade head` against a fresh, empty database would raise
+`NoSuchTableError` on this reflection and fail the whole chain — the same
+class of bug that broke `event_requests` migrations on 2026-08-24.
+
+**Why it doesn't reproduce:** `positions`/`user_positions` are _not_
+create_all-only. `20260805_0008_rename_roles_to_positions.py` renames
+`roles`/`user_roles` — created outright by `op.create_table` in
+`20260118_0001_initial_schema.py` — to `positions`/`user_positions` on the
+fresh-chain path (its "Shape 1"). `20260805_0008` is a required
+upgrade-path ancestor of this migration (confirmed by walking the revision
+DAG with `ScriptDirectory.walk_revisions`, not just by date order), so on
+_every_ valid `alembic upgrade head` run, `positions`/`user_positions` exist
+by the time this migration's reflection runs — the rename has always
+already happened.
+
+**Verified empirically, not just by re-reading the code:** created a fresh
+MySQL database with the same collation CI/production use
+(`utf8mb4_unicode_ci` — an earlier attempt with the server default
+`utf8mb4_general_ci` failed on an unrelated, pre-existing FK-collation issue
+in an unrelated early migration, which is why this needs stating explicitly)
+and ran `alembic upgrade head` against it from `base`. The full 394-revision
+chain, including this migration, completed with no error; `positions` and
+`user_positions` were present (and `roles`/`user_roles` were not, confirming
+the rename had run).
+
+**Root cause of the false positive:** `test_migration_create_all_tables.py`'s
+`_tables_created_by_migrations` (used to compute the create_all-only set
+these checks apply to) only recognized `op.create_table`, not
+`op.rename_table` destinations — so it already misclassified
+`positions`/`user_positions` as create_all-only before this pass, even
+though the pre-existing `op.*`-based detector never had occasion to flag it
+(nothing else in the chain touches those tables via `op.add_column` et al.
+without a guard). **Fixed:** `_tables_created_by_migrations` now also counts
+`op.rename_table(old, new)` destinations. `positions`/`user_positions`
+(and, incidentally, `minutes_action_items`/`meeting_action_items` via
+`20260312_0200_rename_meeting_action_items_table.py`'s round trip) now
+correctly count as migration-created.
+
+**Disposition:** the existence guard that had been added to
+`20260826_1700_d4e5f6a7b8c9_message_recipients.py` was **reverted**, for two
+reasons beyond simply being unneeded: (1) its early-return path was never
+exercised on any valid upgrade path, so it was untested dead code load-bearing
+on an incorrect belief; (2) had it ever been reached — e.g., on a database
+manually missing one of the two tables — it would have silently stamped the
+migration complete with **zero** recipient rows created, which on an
+installation that already had real `department_messages`/user data would
+have permanently dropped existing messages from every member's inbox (inbox
+visibility now derives from the `DepartmentMessageRecipient` join). Silently
+skipping is only correct for a genuinely empty database, and this migration
+never runs against one that isn't already guaranteed to have both tables.
+
+Kept, because it has independent value as a ratchet against a _real_ future
+instance of this shape: the new `_find_autoload_offenders`/`_AUTOLOAD_TABLE`
+detector for unguarded `sa.Table(..., autoload_with=...)` reflections of a
+genuinely create_all-only table (which `_TABLE_FIRST`/`_TABLE_SECOND` cannot
+see, since those only recognize `op.*` calls). With
+`_tables_created_by_migrations` fixed, it now correctly reports zero
+offenders for the current migration chain.
+
+Two further rounds of Codex review on this same PR caught real problems in
+the new detector code itself, both fixed:
+
+- **The `_AUTOLOAD_TABLE` regex only matched one exact spelling**
+  (`sa.Table("t", meta, autoload_with=...)`), missing a bare (directly
+  imported) `Table(...)`, reordered/extra arguments before `autoload_with`,
+  and an argument containing its own call (`sa.MetaData()`) — any of which
+  would let a genuinely unguarded reflection pass the ratchet undetected.
+  Broadened to tolerate an optional module-qualifier, one level of nested
+  parens, and argument order, with pinning tests for each new shape plus a
+  negative test (`MyTable(...)` must not match).
+- **`_tables_created_by_migrations`'s new `op.rename_table` recognition
+  scanned the whole file, not just `upgrade()`** — so a rename destination
+  that exists only in `downgrade()` (undoing an `upgrade()`-side rename)
+  would be wrongly credited as migration-created, which is the dangerous
+  direction: it removes a genuinely create_all-only table from that set and
+  lets an unguarded `upgrade()`-time reflection of it slip past this exact
+  ratchet. `20260312_0200_rename_meeting_action_items_table.py`'s
+  `downgrade()` renames `minutes_action_items` back to
+  `meeting_action_items` for exactly this shape — harmless only by
+  coincidence, since that table is separately created by `op.create_table`
+  too. Fixed by adding `_upgrade_body`, which extracts and scopes both the
+  `create_table` and `rename_table` scans to `upgrade()` only. (Its first
+  version, matching only an unannotated `def upgrade():`, matched nothing
+  at all against this codebase's `def upgrade() -> None:` convention and
+  was caught before shipping by comparing its output against the unscoped
+  scan on the real chain — not by review, by actually running it.)
+
+Kept the `_returns_early_when_a_model_only_table_is_absent` exemption and
+`_guarded_tables` themselves file-wide/unscoped, per the "not addressed"
+paragraph below — narrowing the classification of what counts as
+"created" is safe to get precise; narrowing what counts as "guarded"
+without the same rigor risks the opposite failure mode (a real offender
+going undetected), which is exactly the class of mistake this scoping fix
+was written to prevent elsewhere in the same file.
+
+**Not addressed:** Codex separately noted (on PR #2083, before this
+correction) that `_guarded_tables`'s guard-detection scans a migration's
+whole source text rather than being scoped to `upgrade()`, so a guard that
+only appears in `downgrade()` (or after the reflection it should protect)
+would be misread as covering it. This is a pre-existing limitation of the
+whole detector (predates this PR, applies equally to the original
+`op.*`-based check), not something newly introduced here, and a proper fix
+needs function/statement-order-aware analysis rather than the current
+regex-over-whole-file approach — out of scope for this pass. No migration in
+the current chain is known to rely on this gap for a false "clean" result;
+flagged here so a future pass doesn't have to rediscover it.
+
+### MSG-12 — LOW-MED — a failed, stranded, or throttled channel delivery is never retried — FLAGGED (needs a product decision)
+
+**What:** `_claim_delivery` commits a `DepartmentMessageDelivery` row with
+`status="pending"` _before_ the actual `send_email`/`send_bulk_sms` call —
+this is what makes a raced or retried `deliver()` call safe (a second
+attempt hits the row's unique `(message_id, recipient_id, channel)`
+constraint and skips, the mechanism the "New architecture reviewed" section
+above documents as defense-in-depth on top of MSG-4). That same constraint
+means no outcome for a claimed row is ever revisited, and a department
+message is published exactly once — no future `deliver()` call comes back
+around. Two rounds of Codex review on this same PR each broadened what
+this finding originally reported as a crash-only scenario; there are three
+distinct ways a recipient ends up missing a channel:
+
+- **Stranded `pending`** (the originally reported scenario) — if the
+  process is killed, OOM-killed, or loses its DB connection between
+  `_claim_delivery`'s commit and `_finish_delivery`'s follow-up commit, the
+  row is left `status="pending"` permanently. Requires a crash in an exact
+  window.
+- **`failed`, from an ordinary provider error — no crash needed.**
+  `_finish_delivery(attempt, error)` (line 126) sets
+  `status = "failed" if error else "delivered"` whenever the provider
+  raises, or reports zero successes (`EmailService.send_email` returns
+  `(sent, failed)`; `SMSService.send_bulk_sms` returns a count). This is
+  `_finish_delivery`'s ordinary, intended behavior — hit by a transient
+  SMTP outage, a rate limit, or one rejected recipient, not an edge case.
+  `_claim_delivery` rejects a retry attempt on the unique constraint
+  regardless of the existing row's status, so a `failed` row is exactly as
+  permanently un-retriable as a stranded `pending` one.
+- **Throttled — no row at all.** `_send_email`/`_send_sms` (lines
+  231–303/304+) each check `is_rate_limited` against the org's per-hour
+  escalation cap — the 30/org/hour email, 10/org/hour SMS limits MSG-4's
+  own write-up references — **before** the `for user in ... recipients`
+  loop that calls `_claim_delivery`. On a throttled org, the method
+  returns at that check, logging a warning, having claimed zero
+  recipients. There is no `DepartmentMessageDelivery` row for any of them
+  to later find or retry — the recommendation below, as originally
+  written, only sweeps that table, so it cannot recover this path at all.
+  **Where:** `app/services/message_delivery_service.py`
+  (`_claim_delivery`/`_finish_delivery` lines 87–129, `_send_email`, `_send_sms`).
+  **Failure scenario:** (a) a background worker is killed at the exact
+  moment between `_claim_delivery`'s commit and the provider call returning;
+  (b) the email or SMS provider has a routine transient failure during the
+  one delivery attempt a department message ever gets; or (c) the org's
+  message volume trips the per-hour escalation cap for that channel. Any of
+  the three leaves that recipient's copy of that department message
+  permanently un-sent on that channel — worst case, email, the channel this
+  feature's own module docstring calls "the record of notice" — with no
+  automatic recovery, and (c) leaves no error surfaced anywhere beyond a log
+  line. The blast radius is one recipient/one channel/one message for (a)
+  and (b), but a whole channel's worth of recipients at once for (c); (b)
+  and (c) both need no crash.
+  **Why flagged, not fixed:** correcting this needs a policy decision this
+  pass should not make unilaterally, and the decision has to cover all
+  three paths together — a fix scoped to `DepartmentMessageDelivery` rows
+  alone leaves the throttled path, which creates no row, completely
+  unaddressed. Open questions: what counts as eligible for retry (any
+  `failed`/stale-`pending` row? a cap on attempts?), whether a throttled
+  batch should be recorded somewhere retriable rather than only logged,
+  whether retry is automatic via a new scheduled task or surfaced to an
+  admin instead, and — since a crash could land either before or after the
+  provider actually accepted the send — whether the department would rather
+  risk an occasional duplicate delivery (retry unconditionally) or an
+  occasional silent miss (leave it and alert). Mirrored into
+  `docs/KNOWN_LIMITATIONS.md`.
+  **Recommendation:** a scheduled task (mirroring
+  `run_publish_scheduled_messages`'s cadence) that finds
+  `DepartmentMessageDelivery` rows with `status="failed"` or `status="pending"`
+  with `attempted_at` older than some threshold, and either re-attempts the
+  send or flips them to a distinct `"orphaned"` status an admin view can
+  surface — plus a separate mechanism for the throttled path, since it
+  creates no row for that sweep to find; recording a throttled batch
+  somewhere retriable is itself part of the open product decision, not a
+  settled design. Left for a future iteration with product input on which
+  tradeoff (silently-never-sent vs. possibly-duplicate) the department would
+  prefer.
+
 ### Doc correction — MAIL-3 (attachment magic-byte validation) was already fixed, `docs/app-review/email-templates.md` still said OPEN
 
 Not a code finding — `upload_attachment` (`email_templates.py:595-634`) already
@@ -424,11 +621,13 @@ unchanged from pass 1 and not re-flagged. `email_service.py`'s F4 (no SSRF
 guard on an org-configured SMTP host) remains a deliberate, unchanged policy
 call for the same reason pass 1 recorded it.
 
-### New flagged item — see `docs/KNOWN_LIMITATIONS.md`
+### New flagged items — see `docs/KNOWN_LIMITATIONS.md`
 
 **MSG-9** in this doc is the org-scoping defense-in-depth fix above (FIXED).
-**MSG-10**, a second and unrelated finding from this pass, needed a product
-decision rather than a mechanical fix and is recorded only in
+**MSG-12** (above) is also flagged, not fixed, and mirrored into
+`docs/KNOWN_LIMITATIONS.md` in its own right. **MSG-10**, a third and
+unrelated finding from this pass, needed a product decision rather than a
+mechanical fix and is recorded only in
 `docs/KNOWN_LIMITATIONS.md`: **narrowing a published message's audience
 (`reconcile_recipients`) hard-deletes the `DepartmentMessageRecipient` row —
 including `read_at`/`acknowledged_at` — for any member the new audience no
@@ -510,20 +709,46 @@ email-templates` requires `settings.manage` (13/13 backend endpoints in
   `test_read_and_ack_counts_are_org_scoped` — asserts `organization_id` appears
   in the compiled `WHERE` clause of all three count queries `get_message_stats`
   issues. Verified to fail on reintroduction (reproduced locally, restored).
+- `backend/tests/test_migration_create_all_tables.py`: a second detector,
+  `_find_autoload_offenders`/`_AUTOLOAD_TABLE`, extending the file's
+  existing create_all-only-table ratchet to `sa.Table(...,
+autoload_with=...)` reflection — the shape the original `op.*`-only
+  detector could not see — plus the real-migrations assertion
+  (`test_migrations_reflecting_a_create_all_table_guard_on_its_existence`)
+  and two synthetic pinning tests (`test_an_unguarded_reflection_is_flagged`,
+  `test_a_guarded_reflection_is_not_flagged`) that exercise the detector
+  directly rather than through the real migration chain. Kept as a ratchet
+  against a real future instance of this shape even though the migration
+  that motivated it (MSG-11, below) turned out not to need a guard.
+  `_tables_created_by_migrations` was also fixed, independently of the
+  above, to recognize `op.rename_table` destinations — see MSG-11.
 
 ## Completion gate (pass 2)
 
-| Check                                                      | Result                                                                      |
-| ---------------------------------------------------------- | --------------------------------------------------------------------------- |
-| `flake8 app/ tests/ alembic/`                              | clean                                                                       |
-| `black --check app/ tests/ alembic/`                       | clean — 1337 files unchanged                                                |
-| `isort --check-only app/ tests/ alembic/` (CI's 8.0.1 pin) | clean                                                                       |
-| `python3 scripts/validate_migrations.py --strict`          | PASSED — 394 revisions, single head                                         |
-| backend tests, scope (messaging/notifications/email files) | 1100 passed, 1 skipped                                                      |
-| backend tests, full suite                                  | 9288 passed, 22 skipped, 0 failed                                           |
-| `npx tsc --noEmit` (frontend)                              | 0 errors                                                                    |
-| `npx eslint .` (frontend)                                  | 0 errors, 8 pre-existing warnings (max-warnings 10; none in reviewed files) |
+Re-run in full against current `main` (which already includes PR #2081's
+MSG-9 fix) after adding the MSG-11/MSG-12 follow-up — two concurrent
+security-review sessions independently reached feature 25, pass 2, at the
+same time; see `PROGRESS.md`'s log for the full sequence. Re-run again after
+investigating Codex's review of this follow-up PR, which found MSG-11 to be
+a false positive (see MSG-11 above) — that pass reverted the migration guard,
+fixed `_tables_created_by_migrations`, and re-verified with a real fresh-
+database `alembic upgrade head` run, not just the static gate below. The
+table covers the final change set: the MSG-9 org-scoping fix (already
+merged), the `test_migration_create_all_tables.py` detector fix/addition,
+and both sets of guard tests.
 
-No frontend file was modified this pass (findings there were "verified good" —
-no fix required), so `tsc`/`eslint` establish that the backend changes did not
-regress the frontend build, not that new frontend code was checked.
+| Check                                                      | Result                                                    |
+| ---------------------------------------------------------- | --------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                              | clean                                                     |
+| `black --check app/ tests/ alembic/`                       | clean — 1337 files unchanged                              |
+| `isort --check-only app/ tests/ alembic/` (CI's 8.0.1 pin) | clean                                                     |
+| `python3 scripts/validate_migrations.py --strict`          | PASSED — 394 revisions, single head                       |
+| backend tests, scope (messaging/notifications/email files) | 1036 passed, 1 skipped                                    |
+| backend tests, full suite                                  | 9291 passed, 22 skipped, 0 failed                         |
+| `npx tsc --noEmit` (frontend)                              | 0 errors                                                  |
+| `npx eslint .` (frontend)                                  | 0 errors, 8 pre-existing warnings (none in touched files) |
+
+No frontend file was modified by any part of this pass (MSG-9's fix is a
+backend query filter; MSG-11's investigation touched only a migration file
+and a backend test file), so `tsc`/`eslint` establish that no backend
+change regressed the frontend build.

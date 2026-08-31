@@ -16,12 +16,152 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-None. Feature 25 (Messaging & notifications), pass 2, is fully merged — see
-log entry below. Next: feature 26, Forms.
+PR [#2083](https://github.com/thegspiro/the-logbook/pull/2083)
+(`claude/security-review-messaging-notifications-pass2-migration-fix`) —
+feature 25 (Messaging & notifications), pass 2 follow-up. PR #2081 (the
+main pass-2 review, MSG-9 fixed + MSG-10 flagged) and its closing PR #2082
+(Codex doc-accuracy corrections) both merged to `main` before this
+iteration's independent finding could be added to either (see log entries
+below for the full sequence). This follow-up PR originally carried
+**MSG-11** as a HIGH-severity migration fix; a later correction on this same
+PR (see the correction log entry below) found MSG-11 does not actually
+reproduce and reverted the guard, keeping only a `test_migration_create_all_tables.py`
+correctness fix/ratchet. **MSG-12** (LOW-MED, flagged) stands. Rotation row
+25 stays `⏳` until this merges.
 
 ---
 
-### 2026-08-31 — Feature 25 (Messaging & notifications), pass 2 ✅ fully merged — PR #2081
+### 2026-08-31 — Feature 25 (Messaging & notifications), pass 2 follow-up — initial assessment (0 fixed, 1 flagged; see corrections below for the retracted HIGH finding)
+
+A second, independent security-review iteration reached feature 25 pass 2 at
+essentially the same moment as the entry directly below — both found no open
+PR at Step 0, both reviewed the same PR #1938 recipient-materialization
+architecture, and both pushed to the same conventional branch name
+(`claude/security-review-messaging-notifications-pass2`) within minutes of
+each other. Discovered the collision at push time (`git push` rejected,
+`git ls-remote` showed the branch already existed with PR #2081 open), and
+discovered it a second time when a first merge-onto-their-branch attempt was
+itself rejected — the other session had pushed an additional commit
+(Codex's review of PR #2081 catching an id collision in that session's own
+write-up) in the interval. Rebased a second time onto that tip, renumbered
+this session's findings to MSG-11/MSG-12 to stay clear of the ids already in
+use, and was about to push the combined branch when PR #2081 merged to
+`main` out from under it (`git fetch` came back with "couldn't find remote
+ref" — the branch was deleted on merge). Per CLAUDE.md Pitfall #24, that
+branch name is not reused. This finding — a real, unaddressed HIGH-severity
+migration bug the other session's PR did not touch — is instead delivered as
+a small follow-up PR against current `main` (which already contains #2081)
+rather than silently dropped.
+
+**MSG-11 (initially reported HIGH/fixed; corrected below to not
+reproducible)** — `20260826_1700_d4e5f6a7b8c9_message_recipients.py`
+(the same PR #1938 backfill migration PR #2081's "New architecture reviewed"
+section had already read for a different question) reflects `positions` and
+`user_positions` with raw `sa.Table(..., autoload_with=bind)` and, at the
+time this was written, had no existence guard. This paragraph pattern-matched
+CLAUDE.md Pitfall #26 (`positions` is one of that section's own listed
+examples) and concluded `alembic upgrade head` against a fresh/empty
+database would raise `NoSuchTableError` on this reflection and fail the
+whole migration chain, the same way the `event_requests` incident on
+2026-08-24 did. **This was not verified against a real fresh-database run at
+the time, and turned out to be wrong** — see the correction entry directly
+below, written the same day after Codex's review of this PR caught it.
+
+**MSG-12 (LOW-MED, flagged)** — a worker crash between
+`MessageDeliveryService._claim_delivery`'s commit and
+`_finish_delivery`'s follow-up commit leaves a `DepartmentMessageDelivery`
+row permanently `status="pending"`: the same unique
+`(message_id, recipient_id, channel)` constraint that makes retries safe
+also means nothing ever retries a stranded claim, and no sweep exists to
+detect or expire stale pending rows. Narrow blast radius (needs a crash in
+an exact window) but affects whichever channel strands, including email —
+this feature's own "record of notice." Needs a product decision on
+stale-claim policy (TTL, automatic retry vs. admin alert, duplicate-send
+risk tradeoff); mirrored into `KNOWN_LIMITATIONS.md`.
+
+New guard tests: `backend/tests/test_migration_create_all_tables.py` gained
+a second detector (`_find_autoload_offenders`/`_AUTOLOAD_TABLE`) — the
+existing ratchet only recognized `op.*` calls and could not have caught
+MSG-11, since `sa.Table(..., autoload_with=bind)` is a raw SQLAlchemy Core
+call — plus the real-migrations assertion and two pinning tests. Full local
+completion gate re-verified green against current `main` (which already
+includes #2081): flake8/black/isort (8.0.1, CI's pin) clean, migrations
+validated (394 revisions, single head), 1036/1036
+messaging+notifications+email-scoped and 9291/9291 full backend suite pass
+(22 pre-existing skips), `tsc --noEmit` 0 errors, `eslint .` 0 errors (8
+pre-existing warnings, none touched). Findings appended to
+`docs/security-review/MSG-25-messaging-notifications.md`'s existing Pass 2
+section (MSG-11/MSG-12, continuing #2081's own MSG-9/MSG-10). Rotation row
+25 stays `⏳` — a HIGH-severity, CI-breaking fix is still outstanding, so
+the feature is not fully closed until this follow-up PR merges too. PR
+[#2083](https://github.com/thegspiro/the-logbook/pull/2083) opened (never
+reusing #2081's now-merged branch name, per Pitfall #24) and subscribed.
+Next: 26 Forms, once this merges.
+
+**Correction (2026-08-31, on this same PR #2083):** Codex's review of PR
+#2083 raised four findings on the MSG-11 guard, the most serious (P1) being
+that on any real (non-CI-ephemeral) database that had already hit the
+crash MSG-11 described, the guard's own `CREATE TABLE`/`CREATE INDEX`
+statements would already have implicitly committed (MySQL DDL auto-commits
+per statement) without Alembic stamping the revision, so a retry after
+deploying the guard would fail again — this time on "table already exists."
+Investigating that finding surfaced a second Codex comment questioning
+MSG-11's premise entirely: `positions`/`user_positions` are not actually
+create_all-only, because `20260805_0008_rename_roles_to_positions.py`
+renames `roles`/`user_roles` (created by the initial schema migration) to
+those names, and is a required upgrade-path ancestor of the message-
+recipients migration. Verified this empirically rather than trusting the
+re-reading: created a fresh, correctly-collated MySQL database and ran
+`alembic upgrade head` against it from `base` — the full 394-revision chain,
+including the message-recipients migration, completed with no
+`NoSuchTableError`, and `positions`/`user_positions` existed while
+`roles`/`user_roles` did not (confirming the rename had run). Also confirmed
+via `ScriptDirectory.walk_revisions` that the rename migration is a required
+DAG ancestor, not merely an artifact of this run's ordering. **MSG-11 does
+not reproduce.** Reverted the guard (its early-return path was untested
+dead code resting on a false premise, and per Codex's fourth finding, had it
+ever triggered on a database missing exactly one of the two tables, it would
+have silently skipped the backfill and stamped success — permanently
+dropping existing messages from members' inboxes on any installation that
+already had real data, since inbox visibility now derives from the
+`DepartmentMessageRecipient` join). Fixed the actual root cause instead:
+`_tables_created_by_migrations` in `test_migration_create_all_tables.py`
+only recognized `op.create_table`, not `op.rename_table` destinations —
+now it does. Kept the new `_find_autoload_offenders`/`_AUTOLOAD_TABLE`
+detector as a ratchet with independent value against a real future instance
+of this reflection-without-guard shape; it now correctly reports zero
+offenders for the current chain. Left open, not addressed: Codex's third
+finding that `_guarded_tables` scans whole-file text rather than being
+scoped to `upgrade()` — a pre-existing limitation of the whole detector
+family, not introduced by this PR, out of scope for this pass. Full local
+gate re-verified green (flake8/black/isort/migrations/1166 scoped +
+9291 full backend tests), plus the fresh-database empirical check above
+that no static gate would have caught either the original false alarm or
+this correction. See MSG-11 in the findings doc for the complete writeup.
+Rotation row 25 still `⏳` pending this PR's merge; MSG-12 unaffected. Next:
+26 Forms, once this merges.
+
+**Second correction (2026-08-31, same PR):** two further rounds of Codex
+review, both on code this correction had just added, both real. (1)
+`_AUTOLOAD_TABLE`'s regex matched only one exact call spelling and missed a
+bare `Table(...)` import, reordered/extra arguments, and a nested-call
+argument (`sa.MetaData()`) — broadened it, with pinning tests per shape
+plus a negative test. (2) The `op.rename_table` recognition just added to
+`_tables_created_by_migrations` scanned whole files, so a rename
+destination appearing only in a migration's `downgrade()` (undoing an
+`upgrade()`-side rename) would be wrongly credited as migration-created —
+the dangerous direction, since it removes a real create_all-only table from
+that set. Added `_upgrade_body` to scope both the `create_table` and
+`rename_table` scans to `upgrade()` only; its first version (matching only
+an unannotated `def upgrade():`) matched nothing against this codebase's
+`def upgrade() -> None:` convention and was caught before shipping by
+diffing its output against the unscoped scan on the real chain, not by
+review. Re-verified `positions`/`user_positions` still correctly excluded
+from create_all-only after the fix (40-table set, unchanged). Full local
+gate green again (17 tests in this file, up from 13; 1170 scoped +
+9291 full backend). See MSG-11 in the findings doc for the complete writeup.
+
+### 2026-08-31 — Feature 25 (Messaging & notifications), pass 2 ✅ PR #2081 fully merged (PR #2082 closed the tracker)
 
 PR #2081 merged (`7d4c8fda`). Codex's review flagged two real issues on the
 first commit: a finding-id collision (the flagged `reconcile_recipients`
@@ -35,20 +175,23 @@ this tracker) and rewording the claim to distinguish the acknowledgment
 report's/inbox's lost record from the surviving audit trail. A third Codex
 comment (stale `## Open PR` header) was already addressed by the prior
 commit. All three review threads resolved; CI green on the final head
-(17/17 checks), no merge conflict. Rotation row 25 → ✅. Next: 26 Forms.
+(17/17 checks), no merge conflict.
 
-**Correction (2026-08-31, on this closing PR #2082):** Codex's review here
+**Correction (2026-08-31, on the closing PR #2082):** Codex's review there
 caught that the "surviving audit trail" framing above overstated it too —
 `AuditLogger.create_log_entry` (`app/core/audit.py:265-270`) is deliberately
 fail-open and `acknowledge_message` never checks its return value, so the
-`message_acknowledged` audit-log write is best-effort, not guaranteed. Reworded
-in `KNOWN_LIMITATIONS.md` (MSG-10) and `MSG-25-messaging-notifications.md` to
+`message_acknowledged` audit-log write is best-effort, not guaranteed. Fixed
+across three separate spots Codex caught one at a time (the `KNOWN_LIMITATIONS.md`
+body, its own heading, and this tracker's original PR #2081 summary below) to
 say the report/inbox loss is reliable while the audit-trail survival is
-conditional on that write having succeeded.
+conditional on that write having succeeded. PR #2082 merged (`c71913ec`),
+marking rotation row 25 ✅ — **before** a second, independent security-review
+session's PR #2083 (see entry above) surfaced the still-outstanding
+HIGH-severity MSG-11 migration bug, which reopened row 25 to `⏳`. Next: 26
+Forms, once #2083 merges.
 
----
-
-### 2026-08-31 — Feature 25 (Messaging & notifications), pass 2 — 1 fixed (LOW-MED), 1 flagged (LOW-MED) — PR #2081
+### 2026-08-31 — Feature 25 (Messaging & notifications), pass 2 — 1 fixed (LOW-MED), 1 flagged (LOW-MED) — PR #2081 ✅ merged
 
 No security-review PR was open (feature 24/Meetings & minutes pass 2 fully
 merged via PR #2080), so the rotation continued directly to feature 25.
@@ -3154,7 +3297,7 @@ each row's prior PR is recorded in the Log, not repeated here.
 | 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ✅     |
 | 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ✅     |
 | 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ✅     |
-| 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ✅     |
+| 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ⏳     |
 | 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                         | ⬜     |
 | 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                         | ⬜     |
 | 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`                                                                    | ⬜     |
