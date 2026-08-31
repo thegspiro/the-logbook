@@ -1395,6 +1395,10 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
   // --------------------------------------------------------------------------
 
   const [sweepStopIndex, setSweepStopIndex] = useState(0);
+  // Which pocket of the current stop is open. Lives beside the stop index
+  // rather than inside the body, because the primary button's label and the
+  // bulk claim both depend on it and both belong to the frame.
+  const [sweepPocketIndex, setSweepPocketIndex] = useState(0);
   const [sweepScreen, setSweepScreen] = useState<'walk' | 'jump' | 'flat' | 'finish'>('walk');
 
   /**
@@ -2537,6 +2541,9 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
   if (experience === 'sweep') {
     const goTo = (index: number) => {
       setSweepStopIndex(index);
+      // Arriving at a bag from the jump sheet or the finish screen starts at
+      // its first pocket, not wherever the last visit left off.
+      setSweepPocketIndex(0);
       setSweepScreen('walk');
     };
     // The walk is one screen at a time, so it takes the viewport rather than
@@ -2559,6 +2566,8 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
             answers={sweepAnswers}
             stopIndex={sweepStopIndex}
             onStopIndexChange={setSweepStopIndex}
+            pocketIndex={sweepPocketIndex}
+            onPocketIndexChange={setSweepPocketIndex}
             onBulkClaim={handleSweepBulkClaim}
             onOpenJump={() => setSweepScreen('jump')}
             onFinish={() => setSweepScreen('finish')}
@@ -2567,13 +2576,14 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
             templateName={template.name}
             saveState={isOnline ? 'saved' : 'offline'}
             disabled={submitting}
-            renderStop={(current) => (
+            renderStop={(current, openPocketIndex) => (
               <CheckSweepStop
                 stop={current}
                 answers={sweepAnswers}
                 onAnswer={handleSweepAnswer}
                 onSeal={previewMode ? undefined : handleSweepSeal}
                 disabled={submitting}
+                openPocketIndex={openPocketIndex}
               />
             )}
           />

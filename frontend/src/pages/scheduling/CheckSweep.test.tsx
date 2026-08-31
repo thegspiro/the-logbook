@@ -116,3 +116,85 @@ describe('CheckSweep', () => {
     expect(screen.queryByRole('button', { name: /All 2 work/ })).not.toBeInTheDocument();
   });
 });
+
+describe('a bag with pockets', () => {
+  const BAG: LapStop = {
+    id: 'bag',
+    name: 'Airway bag',
+    items: [],
+    children: [
+      { id: 'p1', name: 'Front pocket', items: [count('opa', 2)] },
+      { id: 'p2', name: 'Suction', items: [count('cath', 3), fn('unit')] },
+      { id: 'p3', name: 'Airway roll', items: [count('tube', 4)] },
+    ],
+  };
+
+  const openBag = (over: Partial<React.ComponentProps<typeof CheckSweep>> = {}, answers: AnswerMap = {}) =>
+    setup({ stops: [...STOPS, BAG], stopIndex: 3, pocketIndex: 0, onPocketIndexChange: vi.fn(), ...over }, answers);
+
+  it('lists the pockets as a strip, and says which is open', () => {
+    openBag({ pocketIndex: 1 });
+    const strip = screen.getByRole('list', { name: 'Pockets' });
+    expect(within(strip).getAllByRole('listitem')).toHaveLength(3);
+    expect(screen.getByRole('listitem', { name: /Pocket 2, Suction, open/ })).toHaveAttribute('aria-current', 'step');
+  });
+
+  it('marks a finished pocket done, because "how many left" is why the strip is there', () => {
+    openBag({}, { opa: { status: 'pass', quantityFound: 2 } });
+    expect(screen.getByRole('listitem', { name: /Pocket 1, Front pocket, done/ })).toBeVisible();
+    expect(screen.queryByRole('listitem', { name: /Pocket 3, Airway roll, done/ })).not.toBeInTheDocument();
+  });
+
+  it('lets a pocket be opened out of order — the numbering is a route, not a lock', async () => {
+    const user = userEvent.setup();
+    const props = openBag();
+    await user.click(screen.getByRole('listitem', { name: /Pocket 3, Airway roll/ }));
+    expect(props.onPocketIndexChange).toHaveBeenCalledWith(2);
+  });
+
+  it('names the next pocket on the primary, not the next stop', () => {
+    openBag({ pocketIndex: 1 });
+    expect(screen.getByRole('button', { name: 'Next pocket · Airway roll' })).toBeVisible();
+  });
+
+  it('moves to the next pocket rather than leaving the bag', async () => {
+    const user = userEvent.setup();
+    const props = openBag();
+    await user.click(screen.getByRole('button', { name: /^Next pocket/ }));
+    expect(props.onPocketIndexChange).toHaveBeenCalledWith(1);
+    // Leaving early would skip whatever is still zipped up inside.
+    expect(props.onStopIndexChange).not.toHaveBeenCalled();
+  });
+
+  it('finishes the check from the last pocket of the last stop', async () => {
+    const user = userEvent.setup();
+    const props = openBag({ pocketIndex: 2 });
+    await user.click(screen.getByRole('button', { name: 'Finish the check' }));
+    expect(props.onFinish).toHaveBeenCalled();
+  });
+
+  it('claims the open pocket, not the whole bag', async () => {
+    // "All 5 at par" over six pockets is a claim about five the crew has not
+    // opened. The button speaks for what is in front of them.
+    const user = userEvent.setup();
+    const props = openBag({ pocketIndex: 1 });
+    await user.click(screen.getByRole('button', { name: /All 2 good/ }));
+    expect(props.onBulkClaim).toHaveBeenCalledWith(BAG.children?.[1]);
+  });
+
+  it('counts a gauge against the pocket it is in, not the bag', () => {
+    // A gauge in pocket 3 blocking the way out of pocket 1 is a dead end with
+    // no visible cause.
+    const withGauge: LapStop = {
+      ...BAG,
+      children: [BAG.children?.[0] as LapStop, { id: 'pg', name: 'Cylinder pocket', items: [level('o2')] }],
+    };
+    openBag({ stops: [...STOPS, withGauge], pocketIndex: 0 });
+    expect(screen.getByRole('button', { name: /^Next pocket/ })).toBeEnabled();
+  });
+
+  it('says where you are inside the bag as well as along the truck', () => {
+    openBag({ pocketIndex: 1 });
+    expect(screen.getByText('Pocket 2 of 3')).toBeVisible();
+  });
+});

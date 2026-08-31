@@ -129,13 +129,13 @@ describe('EquipmentCheckForm in sweep mode', () => {
     await waitFor(() => expect(screen.getByText(/1 \/ 3 answered/)).toBeVisible());
   });
 
-  it('shows a pocket inside its bag, and answers it against its own id', async () => {
+  it('opens a bag on its first pocket, and answers it against its own id', async () => {
     const user = userEvent.setup();
     renderSweep();
     await user.click(await screen.findByRole('button', { name: /^Next ·/ }));
-    expect(await screen.findByRole('heading', { name: 'Front pocket' })).toBeVisible();
+    expect(await screen.findByRole('heading', { name: 'Pocket 1 · Front pocket' })).toBeVisible();
     await user.click(screen.getByRole('button', { name: 'One more i-gel size 4' }));
-    await waitFor(() => expect(screen.getByText(/1 \/ 3 answered/)).toBeVisible());
+    await waitFor(() => expect(screen.getByText(/Pocket 1 of 1/)).toBeVisible());
   });
 
   it('carries the last count forward into the walk', async () => {

@@ -29,6 +29,8 @@ import { CheckType, normalizeCheckType } from '@/modules/scheduling/types/equipm
 
 import {
   answerableItems,
+  isStopComplete,
+  stillAsked,
   bulkClaim,
   stopAnswered,
   stopMapState,
@@ -98,6 +100,56 @@ export const TruckMap: React.FC<{
 );
 
 // ============================================================================
+// Pockets
+// ============================================================================
+
+/**
+ * The pockets of one bag, as a strip of numbers.
+ *
+ * A bag is a stop with its own stops, so it gets the same treatment one level
+ * down: one pocket open at a time, any of them reachable, and the strip saying
+ * which are done without a legend. Numbers rather than names because six
+ * pocket names do not fit across a phone and the name is on the heading below
+ * anyway — what the strip is for is "how many left, and which".
+ *
+ * Deliberately not the truck map: that strip is a map of the vehicle and
+ * proportional to it. This is a short ordered list, so it reads as one.
+ */
+const PocketChips: React.FC<{
+  pockets: LapStop[];
+  answers: AnswerMap;
+  current: number;
+  onOpen: (index: number) => void;
+}> = ({ pockets, answers, current, onOpen }) => (
+  <div className="hscroll flex gap-1.5" role="list" aria-label="Pockets">
+    {pockets.map((pocket, index) => {
+      const done = isStopComplete(pocket, answers);
+      const isCurrent = index === current;
+      return (
+        <button
+          key={pocket.id}
+          type="button"
+          role="listitem"
+          onClick={() => onOpen(index)}
+          aria-current={isCurrent ? 'step' : undefined}
+          aria-label={`Pocket ${index + 1}, ${pocket.name}${done ? ', done' : ''}${isCurrent ? ', open' : ''}`}
+          className={`flex h-[38px] min-w-[48px] shrink-0 items-center justify-center gap-1 rounded-lg px-3 text-[14px] font-bold ${
+            isCurrent
+              ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900'
+              : done
+                ? 'bg-green-800 text-white'
+                : 'border-theme-surface-border text-theme-text-secondary border'
+          }`}
+        >
+          {index + 1}
+          {isCurrent ? <span className="font-normal"> · now</span> : done ? <Check className="h-3.5 w-3.5" /> : null}
+        </button>
+      );
+    })}
+  </div>
+);
+
+// ============================================================================
 // Header
 // ============================================================================
 
@@ -142,6 +194,15 @@ export interface CheckSweepProps {
   /** Which stop is on screen. Owned above, because Jump and Finish move it. */
   stopIndex: number;
   onStopIndexChange: (index: number) => void;
+  /**
+   * Which pocket of the current stop is open, for a stop that has them.
+   *
+   * Lifted alongside `stopIndex` rather than kept in the body, so one thing
+   * owns "where am I in the walk" — the primary button's label and the bulk
+   * claim both depend on it, and both live in this frame.
+   */
+  pocketIndex?: number | undefined;
+  onPocketIndexChange?: ((index: number) => void) | undefined;
   /** The one claim that speaks for the stop. */
   onBulkClaim: (stop: LapStop) => void;
   onOpenJump: () => void;
@@ -151,7 +212,7 @@ export interface CheckSweepProps {
   templateName: string;
   saveState: SweepSaveState;
   /** Renders the stop's items. Kept out of here so the frame stays readable. */
-  renderStop: (stop: LapStop) => React.ReactNode;
+  renderStop: (stop: LapStop, openPocketIndex: number) => React.ReactNode;
   disabled?: boolean;
 }
 
@@ -160,6 +221,8 @@ export const CheckSweep: React.FC<CheckSweepProps> = ({
   answers,
   stopIndex,
   onStopIndexChange,
+  pocketIndex = 0,
+  onPocketIndexChange,
   onBulkClaim,
   onOpenJump,
   onFinish,
@@ -185,12 +248,21 @@ export const CheckSweep: React.FC<CheckSweepProps> = ({
 
   if (!stop) return null;
 
-  const items = answerableItems(stop);
-  const claim = bulkClaim(items);
-  const gaugesLeft = unreadGauges(stop, answers);
-  const restocks = stopRestocks(stop, answers);
+  const pockets = stop.children ?? [];
+  const pocket = pockets.length > 0 ? pockets[Math.min(Math.max(pocketIndex, 0), pockets.length - 1)] : undefined;
+
+  // Everything below is about the place the crew is actually standing at. In a
+  // bag that is one pocket, not the whole bag: a claim over six pockets is a
+  // claim about five the crew has not opened, and a gauge in pocket 5 blocking
+  // the way out of pocket 2 is a dead end with no visible cause.
+  const scope = pocket ?? stop;
+  const items = answerableItems(scope);
+  const claim = bulkClaim(stillAsked(scope));
+  const gaugesLeft = unreadGauges(scope, answers);
+  const restocks = stopRestocks(scope, answers);
   const isLast = index === stops.length - 1;
   const next = stops[index + 1];
+  const nextPocket = pockets[pocketIndex + 1];
 
   // A gauge is the one thing a claim cannot cover, so a stop holding an unread
   // one cannot be left by the primary action. The button says how many rather
@@ -198,9 +270,27 @@ export const CheckSweep: React.FC<CheckSweepProps> = ({
   const blockedByGauges = gaugesLeft.length > 0;
   const primaryLabel = blockedByGauges
     ? `Read ${gaugesLeft.length} more gauge${gaugesLeft.length === 1 ? '' : 's'}`
-    : isLast
-      ? 'Finish the check'
-      : `Next · ${next?.name ?? ''}`;
+    : nextPocket
+      ? `Next pocket · ${nextPocket.name}`
+      : isLast
+        ? 'Finish the check'
+        : `Next · ${next?.name ?? ''}`;
+
+  // Moving on means the next pocket while there is one, and only then the next
+  // stop — a bag is a stop with its own stops, so leaving it early would skip
+  // whatever is still zipped up inside it.
+  const advance = () => {
+    if (nextPocket && onPocketIndexChange) {
+      onPocketIndexChange(pocketIndex + 1);
+      return;
+    }
+    if (isLast) {
+      onFinish();
+      return;
+    }
+    onPocketIndexChange?.(0);
+    onStopIndexChange(index + 1);
+  };
 
   const counts = items.filter((i) => normalizeCheckType(i.checkType) === CheckType.COUNT).length;
   const gauges = items.filter((i) => normalizeCheckType(i.checkType) === CheckType.LEVEL).length;
@@ -243,7 +333,9 @@ export const CheckSweep: React.FC<CheckSweepProps> = ({
             {isLast ? ' · last one' : ''}
           </span>
           <span className="font-mono tabular-nums">
-            {totals.answered} / {totals.total} answered
+            {pocket
+              ? `Pocket ${pocketIndex + 1} of ${pockets.length}`
+              : `${totals.answered} / ${totals.total} answered`}
           </span>
         </div>
       </div>
@@ -259,28 +351,50 @@ export const CheckSweep: React.FC<CheckSweepProps> = ({
         <div className="flex flex-col gap-0.5">
           <h2 className="text-theme-text-primary text-[20px] leading-7 font-bold">{stop.name}</h2>
           <p className="text-theme-text-muted text-[13px]">
-            {items.length} item{items.length === 1 ? '' : 's'}
-            {summary.length > 0 ? ` · ${summary.join(', ')}` : ''}
+            {pockets.length > 0
+              ? `${pockets.length} pockets, in the order you unzip them`
+              : `${items.length} item${items.length === 1 ? '' : 's'}${summary.length > 0 ? ` · ${summary.join(', ')}` : ''}`}
           </p>
         </div>
 
-        {claim && !stopSwept(stop, answers) && (
+        {pockets.length > 0 && (
+          <PocketChips
+            pockets={pockets}
+            answers={answers}
+            current={pocketIndex}
+            onOpen={(i) => onPocketIndexChange?.(i)}
+          />
+        )}
+
+        {pocket && (
+          <div className="flex flex-col gap-0.5">
+            <h3 className="text-theme-text-primary text-[16px] font-bold">
+              Pocket {pocketIndex + 1} · {pocket.name}
+            </h3>
+            <p className="text-theme-text-muted text-[13px]">
+              {items.length} item{items.length === 1 ? '' : 's'}
+              {summary.length > 0 ? ` · ${summary.join(', ')}` : ''}
+            </p>
+          </div>
+        )}
+
+        {claim && !stopSwept(scope, answers) && (
           <button
             type="button"
             disabled={disabled}
-            onClick={() => onBulkClaim(stop)}
+            onClick={() => onBulkClaim(scope)}
             className="bg-theme-alert-success-bg border-theme-alert-success-icon text-theme-alert-success-title min-h-14 rounded-lg border text-[17px] font-bold transition-opacity hover:opacity-90 disabled:pointer-events-none disabled:opacity-50"
           >
             ✓ {claim.label}
           </button>
         )}
 
-        {renderStop(stop)}
+        {renderStop(stop, pocketIndex)}
 
         {/* One consequence line, not a running commentary. */}
         {restocks.length > 0 && (
           <p className="text-theme-alert-warning-text text-[13px] font-bold">
-            {restocks.length} restock line{restocks.length === 1 ? '' : 's'} from this stop
+            {restocks.length} restock line{restocks.length === 1 ? '' : 's'} from this {pocket ? 'pocket' : 'stop'}
           </p>
         )}
         {gauges > 0 && (
@@ -303,7 +417,7 @@ export const CheckSweep: React.FC<CheckSweepProps> = ({
         <button
           type="button"
           disabled={disabled || blockedByGauges}
-          onClick={() => (isLast ? onFinish() : onStopIndexChange(index + 1))}
+          onClick={advance}
           className={`flex min-h-14 flex-1 items-center justify-center gap-2 rounded-lg px-4 text-[17px] font-bold ${
             blockedByGauges
               ? // Grey, not a dimmed primary: a faded red still reads as the

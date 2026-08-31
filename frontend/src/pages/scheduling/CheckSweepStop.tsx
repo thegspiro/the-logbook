@@ -46,6 +46,15 @@ export interface StopBodyProps {
    * answered — six rows asking to be filled in under "2 of 2 answered".
    */
   clearedByAncestorSeal?: boolean | undefined;
+  /**
+   * Which pocket to show, for a stop that has them.
+   *
+   * The sweep hands over one pocket at a time and owns the strip that
+   * navigates them, so the body shows the one that is open. Absent — the
+   * builder's preview, a read-only render — every pocket stacks, because
+   * there is nothing to drive the strip.
+   */
+  openPocketIndex?: number | undefined;
   disabled?: boolean | undefined;
 }
 
@@ -57,7 +66,8 @@ export interface StopBodyProps {
  * Par and found in columns, so the whole cabinet is one glance.
  *
  * The value is the loud element and par is quiet beside it: par is printed on
- * the truck and never changes, while found is the thing being decided. Colour
+ * the truck and never changes, while found is the thing being decided.
+ *
  * The three states — unread, at par, short — are carried by the value's colour
  * and, for short, by a tint on the whole row: high-contrast holds every alert
  * text at #f0f0f0, so colour alone would collapse two of the three there.
@@ -630,6 +640,7 @@ export const CheckSweepStop: React.FC<StopBodyProps> = ({
   onSeal,
   disabled,
   clearedByAncestorSeal,
+  openPocketIndex,
 }) => {
   // An intact tag answers the counting, so those rows come off the screen
   // rather than sitting there inviting a crew to count through a seal they
@@ -643,6 +654,13 @@ export const CheckSweepStop: React.FC<StopBodyProps> = ({
   const sealed = clearedByAncestorSeal === true || contentsAreSealed(stop);
   const own = sealed ? sealCannotClear(stop.items) : stop.items;
 
+  // One pocket while the sweep is driving the strip, all of them when nothing
+  // is. Never none: a pocket that renders nowhere is an item the tally counts
+  // and the crew cannot reach.
+  const pockets = stop.children ?? [];
+  const slice = openPocketIndex === undefined ? pockets : pockets.slice(openPocketIndex, openPocketIndex + 1);
+  const shownPockets = slice.length > 0 ? slice : pockets;
+
   return (
     <div className="flex flex-col gap-3">
       {stop.isSealed && <SealCard stop={stop} onSeal={onSeal} disabled={disabled} />}
@@ -655,11 +673,15 @@ export const CheckSweepStop: React.FC<StopBodyProps> = ({
         pocket hold pockets, and rendering one level deep is the same bug as
         rendering none: stopItems() counts the whole tree, so the tally would
         ask for items that are nowhere on screen. */}
-      {(stop.children ?? []).map((pocket) => (
+      {shownPockets.map((pocket) => (
         <section key={pocket.id} data-testid={`pocket-${pocket.id}`} className="flex flex-col gap-2">
-          <h3 className="text-theme-text-secondary border-theme-surface-border border-l-2 pl-2 text-[13px] font-bold">
-            {pocket.name}
-          </h3>
+          {/* The sweep puts the open pocket's name on its own heading above
+              the body, so repeating it here would say it twice. */}
+          {openPocketIndex === undefined && (
+            <h3 className="text-theme-text-secondary border-theme-surface-border border-l-2 pl-2 text-[13px] font-bold">
+              {pocket.name}
+            </h3>
+          )}
           <CheckSweepStop
             stop={pocket}
             answers={answers}
