@@ -96,6 +96,7 @@ function toItemSpec(item: CheckTemplateItem, source: SweepSource): CheckItemSpec
     ...(parValue !== undefined ? { expectedQuantity: parValue } : {}),
     ...(carriedValue !== undefined ? { carriedQuantity: carriedValue } : {}),
     ...(expiry !== undefined ? { expirationDate: expiry } : {}),
+    ...(item.inventoryItemId !== undefined ? { inventoryItemId: item.inventoryItemId } : {}),
     ...(item.expirationWarningDays !== undefined ? { expirationWarningDays: item.expirationWarningDays } : {}),
   };
 }

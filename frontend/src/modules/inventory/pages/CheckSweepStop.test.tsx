@@ -182,6 +182,50 @@ describe('a switch that fails', () => {
   });
 });
 
+describe('replacing what is expiring', () => {
+  const soon = new Date(Date.now() + 5 * 86_400_000).toISOString().slice(0, 10);
+  const epi = (over: Partial<CheckItemSpec> = {}): CheckItemSpec => ({
+    id: 'epi',
+    name: 'Epi 1:1000',
+    checkType: 'expiry',
+    expirationDate: soon,
+    inventoryItemId: 'inv-1',
+    ...over,
+  });
+
+  const mount = (item: CheckItemSpec) => {
+    const onSwap = vi.fn();
+    render(
+      <CheckSweepStop
+        stop={{ id: 's', name: 'Drug box', items: [item] }}
+        answers={{}}
+        onAnswer={vi.fn()}
+        onSwap={onSwap}
+      />
+    );
+    return onSwap;
+  };
+
+  it('offers the replacement the expiry rule is asking for', async () => {
+    // The seal rule tells the crew to open the container and replace what is
+    // expiring. Without this they have to leave the walk to act on it.
+    const user = userEvent.setup();
+    const onSwap = mount(epi());
+    await user.click(screen.getByRole('button', { name: 'Replace' }));
+    expect(onSwap).toHaveBeenCalledWith('epi');
+  });
+
+  it('offers nothing where there is no ready stock to draw from', () => {
+    mount(epi({ inventoryItemId: null }));
+    expect(screen.queryByRole('button', { name: 'Replace' })).not.toBeInTheDocument();
+  });
+
+  it('offers nothing on a date that is nowhere near', () => {
+    mount(epi({ expirationDate: FAR }));
+    expect(screen.queryByRole('button', { name: 'Replace' })).not.toBeInTheDocument();
+  });
+});
+
 describe('an item this truck does not carry', () => {
   const gauze: CheckItemSpec = { id: 'gauze', name: 'Roller gauze', checkType: 'count', expectedQuantity: 10 };
 

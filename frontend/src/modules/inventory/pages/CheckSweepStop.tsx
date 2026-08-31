@@ -64,6 +64,14 @@ export interface StopBodyProps {
    * the crew — so the sweep and the accordion have to agree on which day it is.
    */
   today?: Date | undefined;
+  /**
+   * Open the replacement flow for an expiring item drawn from inventory.
+   *
+   * The seal rule tells a crew to open a container and replace what is
+   * expiring. Without a way to do that from here, the instruction is a dead
+   * end and they have to leave the walk to act on it.
+   */
+  onSwap?: ((itemId: string) => void) | undefined;
   disabled?: boolean | undefined;
 }
 
@@ -352,7 +360,8 @@ const ExpiryRow: React.FC<{
   onAnswer: (patch: Partial<CheckItemAnswer>) => void;
   disabled?: boolean | undefined;
   today: Date;
-}> = ({ item, answer, onAnswer, disabled, today }) => {
+  onSwap?: ((itemId: string) => void) | undefined;
+}> = ({ item, answer, onAnswer, disabled, today, onSwap }) => {
   const days = daysUntil(item.expirationDate, today);
   const pullAt = item.expirationWarningDays ?? 30;
   const expired = days !== null && days < 0;
@@ -386,18 +395,34 @@ const ExpiryRow: React.FC<{
           {inWindow && ` · pull at ${pullAt}`}
         </p>
       </div>
-      <button
-        type="button"
-        disabled={disabled}
-        onClick={() => onAnswer(expiryAnswer(item))}
-        className={`min-h-11 shrink-0 rounded-lg border px-3 text-[14px] font-bold transition-colors disabled:opacity-50 ${
-          confirmed
-            ? 'border-green-800 bg-green-800 text-white'
-            : 'border-theme-input-border text-theme-text-secondary hover:border-green-800'
-        }`}
-      >
-        {confirmed ? 'Read' : 'Confirm'}
-      </button>
+      <div className="flex shrink-0 items-center gap-1.5">
+        {/* The replacement the expiry rule is asking for, where there is ready
+            stock to draw it from. Telling a crew to swap an expiring drug and
+            then making them leave the walk to do it is the instruction with
+            nowhere to go. */}
+        {onSwap && (expired || inWindow) && item.inventoryItemId ? (
+          <button
+            type="button"
+            disabled={disabled}
+            onClick={() => onSwap(item.id)}
+            className="border-theme-alert-danger-icon text-theme-alert-danger-title min-h-11 rounded-lg border px-3 text-[14px] font-bold disabled:opacity-50"
+          >
+            Replace
+          </button>
+        ) : null}
+        <button
+          type="button"
+          disabled={disabled}
+          onClick={() => onAnswer(expiryAnswer(item))}
+          className={`min-h-11 shrink-0 rounded-lg border px-3 text-[14px] font-bold transition-colors disabled:opacity-50 ${
+            confirmed
+              ? 'border-green-800 bg-green-800 text-white'
+              : 'border-theme-input-border text-theme-text-secondary hover:border-green-800'
+          }`}
+        >
+          {confirmed ? 'Read' : 'Confirm'}
+        </button>
+      </div>
     </div>
   );
 };
@@ -418,6 +443,7 @@ const ItemGroups: React.FC<Omit<StopBodyProps, 'stop'> & { items: CheckItemSpec[
   onAnswer,
   disabled,
   today = new Date(),
+  onSwap,
 }) => {
   const of = (type: string) => items.filter((i) => normalizeCheckType(i.checkType) === type);
   const counts = of(CheckType.COUNT);
@@ -474,6 +500,7 @@ const ItemGroups: React.FC<Omit<StopBodyProps, 'stop'> & { items: CheckItemSpec[
               onAnswer={(patch) => onAnswer(item.id, patch)}
               disabled={disabled}
               today={today}
+              onSwap={onSwap}
             />
           ))}
         </div>
@@ -690,6 +717,7 @@ export const CheckSweepStop: React.FC<StopBodyProps> = ({
   clearedByAncestorSeal,
   openPocketIndex,
   today = new Date(),
+  onSwap,
 }) => {
   // An intact tag answers the counting, so those rows come off the screen
   // rather than sitting there inviting a crew to count through a seal they
@@ -714,7 +742,7 @@ export const CheckSweepStop: React.FC<StopBodyProps> = ({
     <div className="flex flex-col gap-3">
       {stop.isSealed && <SealCard stop={stop} onSeal={onSeal} disabled={disabled} today={today} />}
 
-      <ItemGroups items={own} answers={answers} onAnswer={onAnswer} disabled={disabled} today={today} />
+      <ItemGroups items={own} answers={answers} onAnswer={onAnswer} disabled={disabled} today={today} onSwap={onSwap} />
 
       {/* Pockets. A bag is one stop, not several — the crew is standing in front
         of the whole thing — so its pockets are sections inside this screen
@@ -741,6 +769,7 @@ export const CheckSweepStop: React.FC<StopBodyProps> = ({
             // inside whatever the bag's tag has already settled.
             clearedByAncestorSeal={pocket.isSealed ? false : sealed}
             today={today}
+            onSwap={onSwap}
           />
         </section>
       ))}

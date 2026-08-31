@@ -2557,6 +2557,119 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
   // Main Render
   // --------------------------------------------------------------------------
 
+  /**
+   * The lot-swap dialog, rendered by whichever experience is on screen.
+   *
+   * A variable rather than JSX inside one branch: the sweep's seal rule
+   * tells a crew to open a container and replace what is expiring, and
+   * without this that instruction has nowhere to go.
+   */
+  const swapModal = swapTarget ? (
+    <div className="modal-overlay z-[60] flex items-end justify-center p-0 sm:items-center sm:p-4">
+      <div className="bg-theme-surface border-theme-surface-border flex max-h-[85dvh] w-full flex-col overflow-hidden rounded-t-2xl border shadow-xl sm:max-w-md sm:rounded-2xl">
+        <div className="border-theme-surface-border flex items-center justify-between border-b px-4 py-3">
+          <div className="min-w-0">
+            <h3 className="text-theme-text-primary truncate text-sm font-semibold">Replace from ready stock</h3>
+            <p className="text-theme-text-muted truncate text-xs">{swapTarget.name}</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setSwapTarget(null)}
+            className="text-theme-text-muted hover:text-theme-text-primary p-1.5"
+            aria-label="Close"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+        <div className="pb-safe space-y-2 overflow-auto px-4 py-3 sm:pb-3">
+          {/*
+                  A replacement takes the expired box off the truck, and where it
+                  goes next differs by department: destroyed here, straight back
+                  to the supplying pharmacy there, pulled for somebody to
+                  exchange days later somewhere else. Only the crew standing at
+                  the compartment knows which happened, and for the third the
+                  changelog entry is the only record that a unit is off the
+                  apparatus and owed back — so the swap will not go without it.
+                */}
+          {isReplacement && (
+            <div className="border-theme-surface-border mb-1 rounded-lg border p-3">
+              <p className="text-theme-text-primary text-xs font-medium">
+                Taking off {replacedLot?.lotNumber || swapTarget.lotNumber || 'the expired unit'}
+                {(replacedLot?.expirationDate ?? swapTarget.expirationDate)
+                  ? ` · expired ${formatCalendarDate(replacedLot?.expirationDate ?? swapTarget.expirationDate, { year: 'numeric', month: 'numeric', day: 'numeric' })}`
+                  : ''}
+              </p>
+              <fieldset className="mt-2">
+                <legend className="text-theme-text-muted mb-2 text-xs">What happens to it?</legend>
+                <div className="flex flex-wrap gap-2">
+                  {(
+                    [
+                      [ExpiredStockDisposition.DISCARDED, 'Disposed of'],
+                      [ExpiredStockDisposition.RETURNED_FOR_EXCHANGE, 'Exchanged now'],
+                      [ExpiredStockDisposition.AWAITING_EXCHANGE, 'Exchange later'],
+                    ] as const
+                  ).map(([value, label]) => (
+                    <button
+                      key={value}
+                      type="button"
+                      aria-pressed={disposition === value}
+                      onClick={() => setDisposition(value)}
+                      className={`mobile-touch-target focus:ring-theme-focus-ring rounded-md border px-3 py-2 text-xs font-medium transition-colors focus:ring-2 focus:outline-hidden ${
+                        disposition === value
+                          ? 'border-red-500 bg-red-800 text-white'
+                          : 'border-theme-surface-border text-theme-text-primary hover:bg-theme-surface-hover'
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </fieldset>
+            </div>
+          )}
+          {swapLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="text-theme-text-muted h-6 w-6 animate-spin" />
+            </div>
+          ) : swapLots.length === 0 ? (
+            <p className="text-theme-text-muted py-8 text-center text-sm">
+              No ready stock on hand. Ask the supply officer to add stock for this item.
+            </p>
+          ) : (
+            swapLots.map((lot) => (
+              <div
+                key={lot.id}
+                className="border-theme-surface-border flex items-center justify-between gap-3 rounded-lg border p-3"
+              >
+                <div className="min-w-0">
+                  <p className="text-theme-text-primary truncate text-sm font-medium">{lot.lot_number || 'No lot #'}</p>
+                  <p className="text-theme-text-muted text-xs">
+                    {lot.expiration_date
+                      ? `Exp ${formatCalendarDate(lot.expiration_date, { year: 'numeric', month: 'numeric', day: 'numeric' })}`
+                      : 'No expiration'}{' '}
+                    · {lot.quantity} ready
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  disabled={swapping || (isReplacement && !disposition)}
+                  title={isReplacement && !disposition ? 'Say what happens to the expired unit first' : undefined}
+                  onClick={() => {
+                    void doSwap(lot);
+                  }}
+                  className="btn-primary btn-sm inline-flex shrink-0 items-center gap-1 disabled:opacity-50"
+                >
+                  {swapping ? <Loader2 className="h-4 w-4 animate-spin" /> : <PackageCheck className="h-4 w-4" />}
+                  {isReplacement ? 'Replace' : 'Swap in'}
+                </button>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+    </div>
+  ) : null;
+
   if (experience === 'sweep') {
     const goTo = (index: number) => {
       setSweepStopIndex(index);
@@ -2617,6 +2730,14 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
                 onSeal={previewMode ? undefined : handleSweepSeal}
                 disabled={submitting}
                 openPocketIndex={openPocketIndex}
+                onSwap={
+                  previewMode
+                    ? undefined
+                    : (itemId) => {
+                        const raw = compartments.flatMap((c) => c.items).find((i) => i.id === itemId);
+                        if (raw) void openSwap(applyOverride(raw));
+                      }
+                }
                 // The organization's calendar day, so an expiry verdict does
                 // not move with the phone's timezone.
                 today={new Date(`${today}T00:00:00`)}
@@ -2863,114 +2984,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
       {/* Content */}
       {renderFlatView()}
 
-      {/* Lot swap modal — pick a ready replacement to put on the apparatus */}
-      {swapTarget && (
-        <div className="modal-overlay z-[60] flex items-end justify-center p-0 sm:items-center sm:p-4">
-          <div className="bg-theme-surface border-theme-surface-border flex max-h-[85dvh] w-full flex-col overflow-hidden rounded-t-2xl border shadow-xl sm:max-w-md sm:rounded-2xl">
-            <div className="border-theme-surface-border flex items-center justify-between border-b px-4 py-3">
-              <div className="min-w-0">
-                <h3 className="text-theme-text-primary truncate text-sm font-semibold">Replace from ready stock</h3>
-                <p className="text-theme-text-muted truncate text-xs">{swapTarget.name}</p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setSwapTarget(null)}
-                className="text-theme-text-muted hover:text-theme-text-primary p-1.5"
-                aria-label="Close"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-            <div className="pb-safe space-y-2 overflow-auto px-4 py-3 sm:pb-3">
-              {/*
-                A replacement takes the expired box off the truck, and where it
-                goes next differs by department: destroyed here, straight back
-                to the supplying pharmacy there, pulled for somebody to
-                exchange days later somewhere else. Only the crew standing at
-                the compartment knows which happened, and for the third the
-                changelog entry is the only record that a unit is off the
-                apparatus and owed back — so the swap will not go without it.
-              */}
-              {isReplacement && (
-                <div className="border-theme-surface-border mb-1 rounded-lg border p-3">
-                  <p className="text-theme-text-primary text-xs font-medium">
-                    Taking off {replacedLot?.lotNumber || swapTarget.lotNumber || 'the expired unit'}
-                    {(replacedLot?.expirationDate ?? swapTarget.expirationDate)
-                      ? ` · expired ${formatCalendarDate(replacedLot?.expirationDate ?? swapTarget.expirationDate, { year: 'numeric', month: 'numeric', day: 'numeric' })}`
-                      : ''}
-                  </p>
-                  <fieldset className="mt-2">
-                    <legend className="text-theme-text-muted mb-2 text-xs">What happens to it?</legend>
-                    <div className="flex flex-wrap gap-2">
-                      {(
-                        [
-                          [ExpiredStockDisposition.DISCARDED, 'Disposed of'],
-                          [ExpiredStockDisposition.RETURNED_FOR_EXCHANGE, 'Exchanged now'],
-                          [ExpiredStockDisposition.AWAITING_EXCHANGE, 'Exchange later'],
-                        ] as const
-                      ).map(([value, label]) => (
-                        <button
-                          key={value}
-                          type="button"
-                          aria-pressed={disposition === value}
-                          onClick={() => setDisposition(value)}
-                          className={`mobile-touch-target focus:ring-theme-focus-ring rounded-md border px-3 py-2 text-xs font-medium transition-colors focus:ring-2 focus:outline-hidden ${
-                            disposition === value
-                              ? 'border-red-500 bg-red-800 text-white'
-                              : 'border-theme-surface-border text-theme-text-primary hover:bg-theme-surface-hover'
-                          }`}
-                        >
-                          {label}
-                        </button>
-                      ))}
-                    </div>
-                  </fieldset>
-                </div>
-              )}
-              {swapLoading ? (
-                <div className="flex items-center justify-center py-8">
-                  <Loader2 className="text-theme-text-muted h-6 w-6 animate-spin" />
-                </div>
-              ) : swapLots.length === 0 ? (
-                <p className="text-theme-text-muted py-8 text-center text-sm">
-                  No ready stock on hand. Ask the supply officer to add stock for this item.
-                </p>
-              ) : (
-                swapLots.map((lot) => (
-                  <div
-                    key={lot.id}
-                    className="border-theme-surface-border flex items-center justify-between gap-3 rounded-lg border p-3"
-                  >
-                    <div className="min-w-0">
-                      <p className="text-theme-text-primary truncate text-sm font-medium">
-                        {lot.lot_number || 'No lot #'}
-                      </p>
-                      <p className="text-theme-text-muted text-xs">
-                        {lot.expiration_date
-                          ? `Exp ${formatCalendarDate(lot.expiration_date, { year: 'numeric', month: 'numeric', day: 'numeric' })}`
-                          : 'No expiration'}{' '}
-                        · {lot.quantity} ready
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      disabled={swapping || (isReplacement && !disposition)}
-                      title={isReplacement && !disposition ? 'Say what happens to the expired unit first' : undefined}
-                      onClick={() => {
-                        void doSwap(lot);
-                      }}
-                      className="btn-primary btn-sm inline-flex shrink-0 items-center gap-1 disabled:opacity-50"
-                    >
-                      {swapping ? <Loader2 className="h-4 w-4 animate-spin" /> : <PackageCheck className="h-4 w-4" />}
-                      {isReplacement ? 'Replace' : 'Swap in'}
-                    </button>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-        </div>
-      )}
+      {swapModal}
     </div>
   );
 };

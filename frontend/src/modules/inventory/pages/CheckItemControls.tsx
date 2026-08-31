@@ -65,6 +65,14 @@ export interface CheckItemSpec {
 
   // Expiry
   expirationDate?: string | null | undefined;
+  /**
+   * The catalog item this position draws from, where it has one.
+   *
+   * Carried so a screen can offer the replacement the expiry rule asks for.
+   * Absent on a position that is not linked to inventory — there is no ready
+   * stock to swap in, and the crew restocks it another way.
+   */
+  inventoryItemId?: string | null | undefined;
   expirationWarningDays?: number | null | undefined;
 }
 
