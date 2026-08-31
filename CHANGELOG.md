@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Admin-hours requirement progress crashed for anyone who had logged hours (2026-08-25)
+
+**Fixed**
+
+- `GET /admin-hours/compliance/{user_id}` raised
+  `TypeError: unsupported operand type(s) for /: 'decimal.Decimal' and 'float'`
+  whenever a member had approved hours against a required category. `func.sum`
+  returns a `Decimal` on MySQL and the requirement's stored JSON gives a float,
+  so the percentage calculation could not run. With **no** logged hours the
+  `or 0` fallback substitutes an int, every value stays float, and the endpoint
+  answered normally — so it worked for every member it had nothing to report
+  about and failed for every member it did.
+
+  The call site also hand-rolled the minutes-to-hours conversion that
+  `hours_from_minutes` performs at the five other sites in the same service. It
+  now uses the helper for the reported figure and grades on the raw figure,
+  which `app/utils/hours` requires in as many words: rounding before grading
+  turns a shortfall under an eighth of an hour into zero and marks a member
+  compliant while they are short.
+
 ### The tamper-seal shortcut never fired (2026-08-25)
 
 **Fixed**
