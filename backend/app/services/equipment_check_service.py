@@ -4024,6 +4024,18 @@ class EquipmentCheckService:
     # Private Helpers
     # ------------------------------------------------------------------
 
+    async def _active_templates(self, organization_id: str, **filters):
+        """``list_templates`` with drafts removed.
+
+        ``list_templates`` only filters ``is_active`` when a position filter
+        is supplied, so every caller that cares has to do it itself.
+        """
+        return [
+            t
+            for t in await self.list_templates(organization_id, **filters)
+            if t.is_active
+        ]
+
     async def _resolve_templates(
         self,
         shift: Shift,
@@ -4049,8 +4061,19 @@ class EquipmentCheckService:
             # Apparatus-specific templates, only meaningful when the shift's
             # apparatus is a full Apparatus record — the template FK targets
             # that table, so a BasicApparatus id could never match one.
+            # Drafts are filtered out *before* the precedence decision below.
+            # A draft is not a checklist the crew can be shown, so it must not
+            # be what suppresses the type-level fallback: an officer starting
+            # an Engine-1-specific template — or merely editing an item on an
+            # existing one, which sets is_active=False — otherwise took the
+            # published "Engine — start of shift" checklist off every Engine 1
+            # shift and left the crew with nothing. This is also the order
+            # equipment_readiness_service._load_templates and
+            # scheduled_tasks._resolve_check_templates already use, and the
+            # three disagreeing is what let readiness report a MISSING check
+            # for a checklist nobody was ever offered.
             if ref.full is not None:
-                templates = await self.list_templates(
+                templates = await self._active_templates(
                     organization_id, apparatus_id=ref.full_id
                 )
 
@@ -4061,12 +4084,9 @@ class EquipmentCheckService:
             if not templates:
                 type_slug = ref.type_slug
                 if type_slug:
-                    templates = await self.list_templates(
+                    templates = await self._active_templates(
                         organization_id, apparatus_type=type_slug
                     )
-
-        # Filter by active status
-        templates = [t for t in templates if t.is_active]
 
         # Filter by user position if specified
         if user_position:
