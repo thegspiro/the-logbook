@@ -16,8 +16,107 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-None. Feature 29 (Reports & analytics) is fully closed — see log entry
-below. Next: feature 30, Onboarding.
+Feature 30 (Onboarding), pass 2 — PR
+[#2093](https://github.com/thegspiro/the-logbook/pull/2093), branch
+`claude/security-review-onboarding`. Re-verified all fixes from module-audit
+iteration 25, app-review B25 (4 passes), and security-review pass 1
+(PR #1913 plus a same-day follow-up) hold with no regressions. Two low-risk
+fixes applied (rate limit on `GET /status`; removed a dead `VITE_SESSION_KEY`
+env var documented as security-critical but never read since a
+client-side-encryption code path was removed). One MED finding flagged, not
+fixed (`/test/email`'s self-hosted SMTP test has no SSRF/private-IP
+protection — a genuine product-policy tradeoff, not a drive-by-fixable bug,
+since this app's departments legitimately run on-prem SMTP relays). **Round
+2 (Codex-caught):** the `/status` rate-limit fix itself used the tight
+5-per-60s/30-minute-lockout auth defaults on a route the frontend calls on
+every page load — fixed with a read-appropriate budget instead. See log
+entry below and `docs/security-review/ONB-30-onboarding.md`.
+
+---
+
+### 2026-08-31 — Feature 30 (Onboarding), pass 2 — 2 fixed, 1 new flagged — PR #2093
+
+No security-review PR was open (feature 29 fully merged via PR #2091 earlier
+this iteration), so the rotation continued to feature 30. Loaded
+`CHECKLIST.md`, `SEC-00-cross-cutting-baseline.md`, `docs/module-audit/
+onboarding.md` (iteration 25), `docs/app-review/onboarding.md` (B25, 4
+passes), and `docs/security-review/ONB2-30-onboarding.md` (pass 1, PR #1913 +
+same-day follow-up) before reading any code — re-verified their findings
+rather than re-deriving them.
+
+Read `onboarding.py` (2,386 L), `services/onboarding.py` (1,465 L),
+`models/onboarding.py`, `utils/onboarding_security.py`, `template_service.py`
+in full, plus the SMTP/OAuth test helper (`email_test_helper.py`) for a new
+angle this pass adds. Enumerated all 24 unauthenticated bootstrap routes and
+their compensating controls (table in the findings doc). Re-verified every
+prior finding across all three review layers (ONB-1 through ONB-9, ONB2-30-1
+through ONB2-30-8, the E712/template-mass-assignment fixes) line-by-line — all
+hold, no regressions.
+
+**Two fixes, both low-risk and verified:**
+
+1. **ONB-30-1 (LOW)** — `GET /status` was the one anonymous onboarding route
+   with no rate limit (noted, not fixed, in app-review pass 2). Added the same
+   scoped-wrapper pattern the other 7 routes already use. Guard test extended
+   from 7 to 8 wrappers; verified to fail with the fix reverted.
+2. **ONB-30-2 (LOW)** — `VITE_SESSION_KEY` is declared in
+   `frontend/.env.example`/`setup.sh` and documented in `CLAUDE.md` as a
+   security-critical "Onboarding session encryption key" that "MUST be
+   changed for production," but has had zero readers anywhere in the code
+   since a client-side XOR obfuscate/deobfuscate pair was removed (confirmed
+   by a trailing comment in `onboarding/utils/security.ts` explaining exactly
+   that removal, and by `onboarding/utils/storage.ts`'s current no-client-
+   secrets design). Removed the dead variable and its "must change" guidance
+   from `.env.example`, `setup.sh` (3 places), `CLAUDE.md`'s env var table,
+   and `docs/ONBOARDING_FLOW.md`'s production checklist.
+
+**One new finding, flagged not fixed:**
+
+- **ONB-30-3 (MED)** — `POST /onboarding/test/email`'s self-hosted-SMTP path
+  (`email_test_helper.test_smtp_connection`) connects to a fully
+  client-supplied `smtpHost`/`smtpPort` via raw `smtplib` with no SSRF/
+  private-IP protection — the only client-directed outbound connection in the
+  codebase that doesn't route through `app.utils.url_validator`. Reachable
+  pre-auth during the bootstrap window (anyone can mint a rate-limited
+  onboarding session via `/start` until the first org exists); differentiated
+  error messages let a caller fingerprint internal `host:port` reachability.
+  Not fixed: the obvious mitigation (block private IPs) would break the
+  legitimate, common case of an on-prem SMTP relay reachable only from a fire
+  department's internal network — a genuine product-policy tradeoff, not a
+  drive-by-fixable bug. Mirrored in `KNOWN_LIMITATIONS.md`.
+
+All still-flagged items from prior passes (ONB-7 role editor, ONB-8 residual
+audit-transaction durability, ONB2-30-8 session sliding TTL, role/position
+dedup, `/organization`'s missing `except Exception`, `ITTeamMemberRequest`'s
+loose `email: str`) re-confirmed unchanged by direct code read, not
+re-applied.
+
+**Completion gate:** `flake8`/`black --check`/`isort --check-only` (pinned
+8.0.1) clean across `app/ tests/ alembic/`; `validate_migrations.py --strict`
+— 394 revisions, single head; `pytest tests/ -k "onboard or template_service"`
+— 109 passed, 1 skipped; `test_onboarding_rate_limit_scopes.py` — 9 passed
+(was 7), verified to fail with the fix reverted; `test_security_middleware.py`
+— 80 passed; `tsc --noEmit` — 0 errors; `eslint .` — 0 errors, 8 pre-existing
+warnings in unrelated files. Full writeup:
+`docs/security-review/ONB-30-onboarding.md`.
+
+**Round 2 (Codex-caught, verified before fixing):** ONB-30-1's own fix gave
+`GET /status` `check_rate_limit`'s bare auth defaults (5 requests/60s,
+1800s lockout on the Redis-unavailable fallback). Unlike its siblings,
+`/status` isn't gated behind a deliberate user action — `LoginPage.tsx` and
+`OnboardingCheck` call it from a `useEffect` on every mount, twice under
+React StrictMode — so a handful of page loads exhausts the budget and the
+fallback lockout could leave a legitimate admin locked out of even learning
+whether onboarding is needed for up to 30 minutes. Fixed by giving
+`_rate_limit_onboarding_status` its own explicit budget
+(`max_requests=60, window_seconds=60, lockout_seconds=60`) instead of the
+auth defaults; every other onboarding route keeps the tight defaults since
+each gates a one-shot action. Guard tests added:
+`test_status_wrapper_uses_a_read_appropriate_budget_not_auth_defaults` and
+`test_action_wrappers_keep_the_auth_defaults` (confirms the loosening stays
+confined to `/status`). `pytest tests/ -k "onboard or template_service"` —
+**117 passed, 1 skipped** (was 109); `test_onboarding_rate_limit_scopes.py`
+— **17 passed** (was 9); `flake8`/`black --check`/`isort --check-only` clean.
 
 ---
 
@@ -3693,7 +3792,7 @@ each row's prior PR is recorded in the Log, not repeated here.
 | 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                         | ✅     |
 | 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`                                                                    | ✅     |
 | 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                              | ✅     |
-| 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (24 unauth bootstrap routes)                                                                                             | ⬜     |
+| 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (24 unauth bootstrap routes)                                                                                             | 🔄     |
 | 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                   | ⬜     |
 | 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                  | ⬜     |
 | 33  | Core infrastructure       | CORE   | `core/security_middleware.py`, `core/database.py`, `core/config.py`                                                                             | ⬜     |
