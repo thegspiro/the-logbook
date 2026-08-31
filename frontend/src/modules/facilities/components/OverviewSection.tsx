@@ -13,6 +13,8 @@ import type { Facility, FacilityType, FacilityStatus } from '../types';
 import { inputCls, labelCls } from '../constants';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { formatDate, formatNumber } from '../../../utils/dateFormatting';
+import { blankToNull, numberOrNull } from '@/utils/formValues';
+import { getErrorMessage } from '@/utils/errorHandling';
 
 interface Props {
   facility: Facility;
@@ -30,7 +32,18 @@ const NUMERIC_FIELDS = new Set([
   'sleeping_quarters',
 ]);
 
-function facilityToEditData(facility: Facility): Record<string, unknown> {
+/**
+ * Columns the facility row declares NOT NULL. Both selects offer a blank
+ * "Select type..." option, so the form can present a value the column cannot
+ * hold; caught here rather than sent as a null the backend has to refuse.
+ */
+const REQUIRED_FIELDS: Record<string, string> = {
+  name: 'Facility name is required',
+  facility_type_id: 'Facility type is required',
+  status_id: 'Facility status is required',
+};
+
+function facilityToEditData(facility: Facility): Record<string, string | number> {
   return {
     name: facility.name || '',
     facility_number: facility.facilityNumber || '',
@@ -61,7 +74,7 @@ export default function OverviewSection({ facility, facilityTypes, facilityStatu
   const { updateFacility } = useFacilitiesStore();
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [editData, setEditData] = useState<Record<string, unknown>>({});
+  const [editData, setEditData] = useState<Record<string, string | number>>({});
 
   const startEditing = () => {
     setEditData(facilityToEditData(facility));
@@ -69,31 +82,38 @@ export default function OverviewSection({ facility, facilityTypes, facilityStatu
   };
 
   const handleSave = async () => {
-    if (!(editData.name as string)?.trim()) {
-      toast.error('Facility name is required');
-      return;
+    for (const [field, message] of Object.entries(REQUIRED_FIELDS)) {
+      if (!String(editData[field] ?? '').trim()) {
+        toast.error(message);
+        return;
+      }
     }
     setIsSaving(true);
     try {
+      // An update payload, so a cleared box is an explicit `null` and not
+      // `undefined`: JSON.stringify drops an undefined value entirely, the key
+      // never leaves the browser, and the backend's `exclude_unset` dump reads
+      // the absence as "leave this alone". Clearing a facility's phone number
+      // or its notes used to be a no-op behind a success toast.
       const payload: Record<string, unknown> = {};
       for (const [key, value] of Object.entries(editData)) {
-        if (value !== '' && value !== undefined) {
-          if (NUMERIC_FIELDS.has(key)) {
-            const num = Number(value);
-            payload[key] = Number.isNaN(num) ? undefined : num;
-          } else {
-            payload[key] = value;
-          }
-        } else if (value === '') {
-          payload[key] = undefined;
+        if (key in REQUIRED_FIELDS) {
+          payload[key] = typeof value === 'string' ? value.trim() : value;
+        } else if (NUMERIC_FIELDS.has(key)) {
+          payload[key] = numberOrNull(value);
+        } else {
+          payload[key] = blankToNull(String(value));
         }
       }
 
       await updateFacility(facility.id, payload);
       toast.success('Facility updated');
       setIsEditing(false);
-    } catch {
-      toast.error('Failed to update facility');
+    } catch (error) {
+      // The generic message hid the reason: with real nulls now going out, a
+      // rejection names the field, and swallowing that leaves the user
+      // retrying the same save.
+      toast.error(getErrorMessage(error, 'Failed to update facility'));
     } finally {
       setIsSaving(false);
     }

@@ -22,6 +22,13 @@ const photo = { id: 'p1', facilityId: 'f1', fileName: 'station.jpg', filePath: '
 
 describe('FilesSection permissions', () => {
   beforeEach(() => {
+    // The service mocks are module-level, created once by the factory above,
+    // so their call counters accumulate across this file. The first test
+    // asserts `getFacilityDocuments` was *never* called — the only check that
+    // a member without `canViewSensitive` does not request sensitive facility
+    // documents — and it passed solely because it is declared first. Run the
+    // file shuffled and it fails.
+    vi.clearAllMocks();
     vi.mocked(facilitiesService.getPhotos).mockResolvedValue([photo]);
     vi.mocked(facilitiesService.getFacilityDocuments).mockResolvedValue([]);
   });

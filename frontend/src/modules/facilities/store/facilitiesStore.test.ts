@@ -457,4 +457,50 @@ describe('facilitiesStore', () => {
       expect(state.selectedFacilityContacts).toEqual([]);
     });
   });
+
+  describe('a detail load cannot leave the wrong facility on screen', () => {
+    it('drops the previous facility when a different one is requested', async () => {
+      useFacilitiesStore.setState({ selectedFacility: mockFacility });
+      const pending = deferred<typeof mockFacility2>();
+      mockGetFacility.mockReturnValue(pending.promise);
+
+      // The detail page's spinner guard is `isLoadingDetail && !facility`, so
+      // a facility left in place renders in full — name, address, sections,
+      // and a working Archive button — for the whole duration of the request.
+      const load = useFacilitiesStore.getState().loadFacilityDetail('f2');
+      expect(useFacilitiesStore.getState().selectedFacility).toBeNull();
+
+      pending.resolve(mockFacility2);
+      await load;
+      expect(useFacilitiesStore.getState().selectedFacility).toEqual(mockFacility2);
+    });
+
+    it('keeps the facility in place when the same one is reloaded', async () => {
+      useFacilitiesStore.setState({ selectedFacility: mockFacility });
+      const pending = deferred<typeof mockFacility>();
+      mockGetFacility.mockReturnValue(pending.promise);
+
+      const load = useFacilitiesStore.getState().loadFacilityDetail('f1');
+      // A refresh of the facility already shown must not blank the page.
+      expect(useFacilitiesStore.getState().selectedFacility).toEqual(mockFacility);
+
+      pending.resolve(mockFacility);
+      await load;
+    });
+
+    it('discards a load that resolves after the page was left', async () => {
+      const pending = deferred<typeof mockFacility>();
+      mockGetFacility.mockReturnValue(pending.promise);
+
+      const load = useFacilitiesStore.getState().loadFacilityDetail('f1');
+      // The page unmounts — the user hit Back before the request landed.
+      useFacilitiesStore.getState().clearSelectedFacility();
+      pending.resolve(mockFacility);
+      await load;
+
+      // Otherwise the next detail page opens already showing this facility.
+      expect(useFacilitiesStore.getState().selectedFacility).toBeNull();
+      expect(useFacilitiesStore.getState().isLoadingDetail).toBe(false);
+    });
+  });
 });
