@@ -99,16 +99,10 @@ warnings in unrelated files. Full writeup:
 
 ---
 
-### 2026-08-31 — Feature 29 (Reports & analytics) PR #2091 merged, feature closed
+### 2026-08-31 — Feature 29 (Reports & analytics), pass 3 ✅ PR #2091 merged (`b6c283a7`)
 
-PR [#2091](https://github.com/thegspiro/the-logbook/pull/2091) merged to
-`main` at `b6c283a7`. Rotation table row 29 marked ✅. Continuing to feature
-30 (Onboarding) in the same iteration per the "PR merged since last
-iteration" path.
-
----
-
-### 2026-08-31 — Feature 29 (Reports & analytics), pass 3 — 0 fixed, 0 new flagged — PR #2091
+Round 1: 0 fixed, 0 new flagged (claim did not hold). Round 2 (Codex-caught):
+6 fixed — see below.
 
 No security-review PR was open (feature 28/Security-audit-IP fully merged via
 PR #2089), so the rotation continued to feature 29. Loaded `CHECKLIST.md`,
