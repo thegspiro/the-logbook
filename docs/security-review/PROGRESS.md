@@ -16,7 +16,8 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-Feature 28 (Security, audit & IP), pass 2 — PR TBD, branch
+Feature 28 (Security, audit & IP), pass 2 — PR
+[#2089](https://github.com/thegspiro/the-logbook/pull/2089), branch
 `claude/security-review-security-audit-ip-pass2`. Findings-only pass (no code
 change): re-verified all six pass-1 findings still hold against unchanged
 code, reviewed the frontend for the first time, one new finding flagged
