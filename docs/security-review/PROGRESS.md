@@ -16,12 +16,14 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-Feature 29 (Reports & analytics), pass 3 — branch
-`claude/security-review-reports-analytics`. PR opening; see log entry below.
+Feature 29 (Reports & analytics), pass 3 — PR
+[#2091](https://github.com/thegspiro/the-logbook/pull/2091), branch
+`claude/security-review-reports-analytics`. No code changes (re-verification
+only); see log entry below.
 
 ---
 
-### 2026-08-31 — Feature 29 (Reports & analytics), pass 3 — 0 fixed, 0 new flagged — PR pending
+### 2026-08-31 — Feature 29 (Reports & analytics), pass 3 — 0 fixed, 0 new flagged — PR #2091
 
 No security-review PR was open (feature 28/Security-audit-IP fully merged via
 PR #2089), so the rotation continued to feature 29. Loaded `CHECKLIST.md`,
