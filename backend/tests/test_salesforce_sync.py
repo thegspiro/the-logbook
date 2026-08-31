@@ -589,6 +589,36 @@ async def test_check_readiness_reports_disconnected():
     assert "error" in report
 
 
+async def test_check_readiness_sanitizes_connection_error(monkeypatch):
+    """test_connection() raises hand-authored messages on its expected paths,
+    but doesn't wrap every outbound call — an unhandled infra-level exception
+    (DNS, TLS, a raw driver error) must not reach the client verbatim (INT-6)."""
+    sensitive = 'OperationalError: (2003, "Can\'t connect to MySQL server")'
+    sf = AsyncMock()
+    sf.test_connection.side_effect = Exception(sensitive)
+    service, _ = make_sync_service(config={}, sf=sf)
+
+    report = await service.check_readiness()
+    assert sensitive not in report["error"]
+    assert report["error"] == "An unexpected error occurred. Please try again."
+
+
+async def test_check_readiness_sanitizes_field_lookup_error():
+    """Same class, the per-sObject describe call: get_field_names() can raise
+    an unwrapped infra exception too, and it lands in a different report key."""
+    sensitive = (
+        'File "/app/services/integration_services/salesforce_service.py", line 240'
+    )
+    sf = AsyncMock()
+    sf.test_connection.return_value = "ok"
+    sf.get_field_names.side_effect = Exception(sensitive)
+    service, _ = make_sync_service(config={}, sf=sf)
+
+    report = await service.check_readiness()
+    for entry in report["objects"].values():
+        assert sensitive not in (entry["error"] or "")
+
+
 async def test_preview_counts_create_update_adopt_skip():
     async def query(soql):
         if "Logbook_Member_ID__c" in soql:

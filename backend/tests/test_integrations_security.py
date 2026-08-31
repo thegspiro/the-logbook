@@ -9,7 +9,7 @@ Tests cover:
 """
 
 import socket
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi import HTTPException
@@ -21,6 +21,9 @@ from app.api.v1.endpoints.integrations import (
     _sanitize_config,
     _secrets_to_clear_for_base_url_change,
     _validate_config,
+)
+from app.api.v1.endpoints.integrations import (
+    test_connection as run_test_connection_route,  # Aliased: a bare "test_connection" import is collected by pytest as a; test function (name starts with test_) with no fixtures, and errors.
 )
 from app.schemas.integration import (
     INTEGRATION_CONFIG_SCHEMAS,
@@ -497,3 +500,73 @@ class TestIntegrationSchemas:
         }
         for itype in types_needing_schemas:
             assert itype in INTEGRATION_CONFIG_SCHEMAS, f"Missing schema for {itype}"
+
+
+# ============================================
+# INT-6: test-connection endpoint sanitizes errors
+# ============================================
+
+
+class TestTestConnectionEndpointSanitizesErrors:
+    """POST /{integration_id}/test-connection returns exception text straight
+    to the client on failure. Most test_integration_connection() paths raise a
+    hand-authored, safe message (e.g. "Salesforce rejected these
+    credentials"), but several don't wrap every outbound call — an unhandled
+    infra-level exception (DNS, TLS, a raw driver error) can still reach
+    here, and must not leak verbatim."""
+
+    @staticmethod
+    def _db_with_integration(integration):
+        db = AsyncMock()
+        result = MagicMock()
+        result.scalar_one_or_none.return_value = integration
+        db.execute.return_value = result
+        return db
+
+    async def test_unhandled_exception_is_sanitized(self):
+        integration = MagicMock()
+        integration.id = "int-1"
+        integration.organization_id = "org-1"
+        db = self._db_with_integration(integration)
+        current_user = MagicMock(organization_id="org-1")
+
+        sensitive = 'OperationalError: (2003, "Can\'t connect to MySQL server")'
+        with patch(
+            "app.services.integration_services.test_integration_connection",
+            AsyncMock(side_effect=Exception(sensitive)),
+        ):
+            result = await run_test_connection_route(
+                integration_id="int-1",
+                request=MagicMock(),
+                db=db,
+                current_user=current_user,
+            )
+
+        assert result["success"] is False
+        assert sensitive not in result["message"]
+        assert result["message"] == "An unexpected error occurred. Please try again."
+
+    async def test_hand_authored_message_still_passes_through(self):
+        """The sanitizer must not collapse the safe, deliberately-written
+        messages the connectors already raise on their expected failure
+        paths — only the unsafe-pattern class is replaced."""
+        integration = MagicMock()
+        integration.id = "int-1"
+        integration.organization_id = "org-1"
+        db = self._db_with_integration(integration)
+        current_user = MagicMock(organization_id="org-1")
+
+        safe = "Cal.com rejected the API key — verify it is correct and has not been revoked"
+        with patch(
+            "app.services.integration_services.test_integration_connection",
+            AsyncMock(side_effect=Exception(safe)),
+        ):
+            result = await run_test_connection_route(
+                integration_id="int-1",
+                request=MagicMock(),
+                db=db,
+                current_user=current_user,
+            )
+
+        assert result["success"] is False
+        assert result["message"] == safe

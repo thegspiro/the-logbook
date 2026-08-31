@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.dependencies import get_current_user, require_permission
 from app.core.audit import log_audit_event
 from app.core.database import get_db
+from app.core.utils import sanitize_error_message
 from app.models.integration import Integration
 from app.models.user import User
 from app.schemas.integration import (
@@ -707,4 +708,9 @@ async def test_connection(
         result_msg = await test_integration_connection(integration)
         return {"success": True, "message": result_msg}
     except Exception as e:
-        return {"success": False, "message": str(e)}
+        # Most failure paths here raise a hand-authored, safe message (e.g.
+        # "Salesforce rejected these credentials"). But several test_connection
+        # implementations don't wrap every outbound call, so an unhandled
+        # infra-level exception (DNS, TLS, timeout) can still reach here
+        # unsanitized — strip it before it goes to the client (INT-6).
+        return {"success": False, "message": sanitize_error_message(str(e))}
