@@ -1068,6 +1068,69 @@ function openPartStaffedShift(shotId) {
  * Same `?shift=` entry the other shift shots use; the drawer is state on the
  * scheduling page rather than a route of its own.
  */
+/**
+ * Arm the check-in station and record one successful tap.
+ *
+ * The marker wants the armed state *with* a tap already in the recent list, and
+ * both halves have to be driven: arming is a button, and the tap is the manual
+ * serial entry, which is the same `submitSerial` path a USB reader's keystrokes
+ * reach. Nothing here fakes a card read — the serial is the one
+ * `seed_id_cards` issued to the demo member, and the row that appears is the
+ * server's own answer.
+ */
+async function armStationAndTap(page) {
+  // Pick something to check into first: Start is disabled until a target is
+  // chosen, so pressing it before this is a silent no-op. "Event or meeting"
+  // is the drill night the marker names; the target itself is a native
+  // <select>, so it is driven with selectOption rather than a click — its
+  // popup is drawn by the OS and cannot be photographed either way.
+  await clickByName(/^Event or meeting$/)(page);
+  const target = page.locator("#station-target");
+  await target.waitFor({ timeout: 15_000 });
+  await page.waitForFunction(
+    () => {
+      const el = document.querySelector("#station-target");
+      return el instanceof HTMLSelectElement && !el.disabled && el.options.length > 0;
+    },
+    { timeout: 20_000 },
+  );
+  await target.selectOption({ index: 0 });
+  await clickByName(/^Start the reader$/)(page);
+  await page.waitForTimeout(400);
+  await page.locator("#station-manual").fill("04A2245B7C1180");
+  await clickByName(/^Check in$/)(page);
+  // The result card and the "This session" list both render off the response,
+  // so wait for the list rather than a fixed pause.
+  await page
+    .locator("h2", { hasText: "This session" })
+    .waitFor({ timeout: 20_000 });
+  await page.waitForTimeout(400);
+}
+
+/**
+ * Open the standing-shift dialog from a Tuesday night shift.
+ *
+ * The control lives on the day panel, not the shift card, and only renders on
+ * a shift somebody could still sign up for — `isShiftOpen`. Selecting the day
+ * is therefore a precondition, not decoration.
+ */
+async function openStandingShiftDialog(page) {
+  const tuesday = page
+    .locator("button", { hasText: /Make this every Tuesday night/i })
+    .first();
+  // Walk the month's days until one carries the control. Which Tuesday is open
+  // depends on the seeded roster, and hardcoding a date makes the shot expire.
+  const days = page.locator("[role='gridcell']");
+  const total = await days.count();
+  for (let i = 0; i < total && !(await tuesday.count()); i += 1) {
+    await days.nth(i).click({ timeout: 5_000 }).catch(() => {});
+    await page.waitForTimeout(200);
+  }
+  await tuesday.click({ timeout: 15_000 });
+  await page.locator("div[role='dialog']").waitFor({ timeout: 15_000 });
+  await page.waitForTimeout(500);
+}
+
 async function openPlatoonShift(page) {
   const id = await page.evaluate(async () => {
     const response = await fetch("/api/v1/scheduling/shifts?limit=400", {
