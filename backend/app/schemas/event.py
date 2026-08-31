@@ -260,7 +260,13 @@ class EventBase(BaseModel):
         description="Organization-defined custom event category",
     )
     custom_fields: Optional[Dict[str, Any]] = None
-    attachments: Optional[List[Dict[str, str]]] = None
+    # Dict[str, Any], not Dict[str, str]: the upload handler writes `file_size`
+    # as an int and `description` as None, so the narrower type made every
+    # EventResponse for an event with an attachment a 500 — the upload itself
+    # returns 201 (its own response is Dict[str, Any]), and from then on the
+    # detail page, the edit form, publish, duplicate and cancel all fail, with
+    # deleting the attachment the only way back.
+    attachments: Optional[List[Dict[str, Any]]] = None
     is_draft: bool = False
 
 
@@ -340,7 +346,10 @@ class EventUpdate(BaseModel):
         description="Organization-defined custom event category",
     )
     custom_fields: Optional[Dict[str, Any]] = None
-    attachments: Optional[List[Dict[str, str]]] = None
+    # See EventBase.attachments: an uploaded attachment carries an int
+    # file_size and a null description, so a PATCH that echoes back what a
+    # GET returned would 422 on the narrower type.
+    attachments: Optional[List[Dict[str, Any]]] = None
     is_draft: Optional[bool] = None
 
     @model_validator(mode="after")
@@ -1026,7 +1035,9 @@ class RecurringEventCreate(BaseModel):
         description="Organization-defined custom event category",
     )
     custom_fields: Optional[Dict[str, Any]] = None
-    attachments: Optional[List[Dict[str, str]]] = None
+    # Same shape as EventBase.attachments — a series built from an event that
+    # already carries one must not be refused for it.
+    attachments: Optional[List[Dict[str, Any]]] = None
     allowed_rsvp_statuses: Optional[List[str]] = Field(
         default=None,
         description="Allowed RSVP statuses. Defaults to ['going', 'not_going']",

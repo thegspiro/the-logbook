@@ -142,4 +142,56 @@ describe('AddMember', () => {
     expect(payload.member_status).toBe('regular');
     expect(payload.rank).toBe('captain');
   });
+
+  describe('the optional second emergency contact', () => {
+    it('refuses a half-filled one, naming the fields, rather than 422ing the save', async () => {
+      // `EmergencyContact` requires name, relationship and phone. Posting a
+      // name with an empty relationship failed the whole member creation with
+      // a 422 naming a field on a card the form labels "(Optional)".
+      const user = userEvent.setup();
+      renderWithRouter(<AddMember />);
+      await waitFor(() => expect(mockGetRoles).toHaveBeenCalled());
+
+      await fillRequired(user);
+      await user.type(screen.getByPlaceholderText('Bob Doe'), 'Alex Reyes');
+      await user.click(screen.getByRole('button', { name: /save member/i }));
+
+      expect(mockCreateMember).not.toHaveBeenCalled();
+      expect(screen.getByText('Relationship is required')).toBeInTheDocument();
+      expect(screen.getByText('Phone is required')).toBeInTheDocument();
+    });
+
+    it('sends a complete one', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<AddMember />);
+      await waitFor(() => expect(mockGetRoles).toHaveBeenCalled());
+
+      await fillRequired(user);
+      await user.type(screen.getByPlaceholderText('Bob Doe'), 'Alex Reyes');
+      await user.type(screen.getByPlaceholderText('Parent'), 'Parent');
+      // Shared with the member's secondary phone; the emergency one is second.
+      const secondaryPhones = screen.getAllByPlaceholderText('(555) 987-6543');
+      await user.type(secondaryPhones[1] as HTMLElement, '5550102');
+      await user.click(screen.getByRole('button', { name: /save member/i }));
+
+      await waitFor(() => expect(mockCreateMember).toHaveBeenCalled());
+      const payload = mockCreateMember.mock.calls[0]?.[0] as Record<string, unknown>;
+      const contacts = payload.emergency_contacts as Array<Record<string, unknown>>;
+      expect(contacts).toHaveLength(2);
+      expect(contacts[1]).toMatchObject({ name: 'Alex Reyes', relationship: 'Parent', is_primary: false });
+    });
+
+    it('still allows leaving it entirely blank', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<AddMember />);
+      await waitFor(() => expect(mockGetRoles).toHaveBeenCalled());
+
+      await fillRequired(user);
+      await user.click(screen.getByRole('button', { name: /save member/i }));
+
+      await waitFor(() => expect(mockCreateMember).toHaveBeenCalled());
+      const payload = mockCreateMember.mock.calls[0]?.[0] as Record<string, unknown>;
+      expect(payload.emergency_contacts).toHaveLength(1);
+    });
+  });
 });

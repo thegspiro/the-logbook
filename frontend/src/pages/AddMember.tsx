@@ -144,6 +144,20 @@ const AddMember: React.FC = () => {
     if (!formData.emergencyRelationship1.trim()) newErrors.emergencyRelationship1 = 'Relationship is required';
     if (!formData.emergencyPhone1.trim()) newErrors.emergencyPhone1 = 'Emergency phone is required';
 
+    // Emergency Contact 2 is optional as a whole, but not field by field:
+    // EmergencyContact requires name, relationship and phone. Filling only the
+    // name posted an empty relationship, and the 422 that came back named a
+    // field on a card the form labels "(Optional)" — so the whole member
+    // creation failed for a contact nobody had to enter.
+    const secondaryFilled = [formData.emergencyName2, formData.emergencyRelationship2, formData.emergencyPhone2].some(
+      (value) => value.trim()
+    );
+    if (secondaryFilled) {
+      if (!formData.emergencyName2.trim()) newErrors.emergencyName2 = 'Name is required';
+      if (!formData.emergencyRelationship2.trim()) newErrors.emergencyRelationship2 = 'Relationship is required';
+      if (!formData.emergencyPhone2.trim()) newErrors.emergencyPhone2 = 'Phone is required';
+    }
+
     // Password (if custom password is set)
     if (useCustomPassword) {
       if (!initialPassword) {
@@ -848,9 +862,12 @@ const AddMember: React.FC = () => {
                   type="text"
                   value={formData.emergencyName2}
                   onChange={(e) => handleInputChange('emergencyName2', e.target.value)}
-                  className="form-input placeholder-theme-text-muted"
+                  className={`form-input placeholder-theme-text-muted ${errors.emergencyName2 ? 'border-red-500' : ''}`}
                   placeholder="Bob Doe"
                 />
+                {errors.emergencyName2 && (
+                  <p className="mt-1 text-sm text-red-700 dark:text-red-400">{errors.emergencyName2}</p>
+                )}
               </div>
 
               <div>
@@ -859,9 +876,12 @@ const AddMember: React.FC = () => {
                   type="text"
                   value={formData.emergencyRelationship2}
                   onChange={(e) => handleInputChange('emergencyRelationship2', e.target.value)}
-                  className="form-input placeholder-theme-text-muted"
+                  className={`form-input placeholder-theme-text-muted ${errors.emergencyRelationship2 ? 'border-red-500' : ''}`}
                   placeholder="Parent"
                 />
+                {errors.emergencyRelationship2 && (
+                  <p className="mt-1 text-sm text-red-700 dark:text-red-400">{errors.emergencyRelationship2}</p>
+                )}
               </div>
 
               <div>
@@ -870,9 +890,12 @@ const AddMember: React.FC = () => {
                   type="tel"
                   value={formData.emergencyPhone2}
                   onChange={(e) => handleInputChange('emergencyPhone2', e.target.value)}
-                  className="form-input placeholder-theme-text-muted"
+                  className={`form-input placeholder-theme-text-muted ${errors.emergencyPhone2 ? 'border-red-500' : ''}`}
                   placeholder="(555) 987-6543"
                 />
+                {errors.emergencyPhone2 && (
+                  <p className="mt-1 text-sm text-red-700 dark:text-red-400">{errors.emergencyPhone2}</p>
+                )}
               </div>
 
               <div>
