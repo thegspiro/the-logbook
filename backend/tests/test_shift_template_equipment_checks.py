@@ -23,6 +23,7 @@ nobody asked them for.
 import uuid
 
 import pytest
+from sqlalchemy import select
 
 from app.models.apparatus import EquipmentCheckTemplate
 from app.models.training import (
@@ -165,9 +166,22 @@ class TestResolveTemplates:
         assert [t.name for t in resolved] == ["Special Detail"]
 
     async def test_links_are_returned_in_the_officers_order(self, db_session):
+        """The link's sort_order wins over the checklist's own sort_order.
+
+        The two are deliberately set in opposition here. Without that, and
+        without asserting a *list*, this test cannot fail: an earlier version
+        compared sets of names, so it passed while the resolver was handing
+        the crew the reverse of what the officer arranged and of what the
+        reminder resolver named.
+        """
         org = await _org(db_session)
         second = await _check_template(db_session, org, "Second")
         first = await _check_template(db_session, org, "First")
+        # The catalogue would sort these the other way round.
+        first.sort_order = 90
+        second.sort_order = 10
+        await db_session.flush()
+
         shift_template = await _shift_template(db_session, org)
         await _link(db_session, org, shift_template, first, order=0)
         await _link(db_session, org, shift_template, second, order=1)
@@ -176,7 +190,18 @@ class TestResolveTemplates:
         resolved = await service._resolve_templates(
             _shift(org, template_id=shift_template.id), org.id, None
         )
-        assert {t.name for t in resolved} == {"First", "Second"}
+        assert [t.name for t in resolved] == ["First", "Second"]
+
+        # ...and the reminder resolver agrees, which is the invariant this
+        # module exists to hold.
+        reminded = await resolve_check_templates(
+            db_session,
+            org.id,
+            None,
+            "start_of_shift",
+            shift_template_id=shift_template.id,
+        )
+        assert [t.name for t in reminded] == ["First", "Second"]
 
     async def test_a_template_naming_nothing_falls_back_to_the_apparatus(
         self, db_session
@@ -357,6 +382,38 @@ class TestLinkManagement:
         )
         assert error is None
         assert template.equipment_check_template_ids == [second.id, first.id]
+
+    async def test_create_with_a_foreign_checklist_creates_nothing(self, db_session):
+        """A refused create must not leave the template behind.
+
+        ``_crud_create`` commits, so validating the ids after it returned the
+        error to the officer with the row already written: they saw "Unable to
+        create template", retried, and left a duplicate on every attempt. The
+        ids are checked before anything is created.
+        """
+        org = await _org(db_session)
+        other = await _org(db_session)
+        theirs = await _check_template(db_session, other, "Theirs")
+
+        service = SchedulingService(db_session)
+        created, error = await service.create_template(
+            org.id,
+            {
+                "name": "Day Shift",
+                "start_time_of_day": "07:00",
+                "end_time_of_day": "19:00",
+                "duration_hours": 12.0,
+                "equipment_check_template_ids": [theirs.id],
+            },
+            None,
+        )
+        assert created is None
+        assert error == "Equipment checklist not found"
+
+        remaining = await db_session.execute(
+            select(ShiftTemplate).where(ShiftTemplate.organization_id == org.id)
+        )
+        assert remaining.scalars().all() == []
 
     async def test_update_omitting_the_key_leaves_links_alone(self, db_session):
         """An omitted key means "leave this alone" (pitfall #1)."""
