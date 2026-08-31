@@ -2500,38 +2500,56 @@ recipients within the message's own org — and requires an admin
 this is a data-integrity/compliance-record risk rather than a security
 vulnerability in the access-control sense.
 
-## MSG-12 — A Stranded Department-Message Delivery Claim Is Never Retried (2026-08-31)
+## MSG-12 — A Failed or Stranded Department-Message Delivery Claim Is Never Retried (2026-08-31)
 
 `MessageDeliveryService._claim_delivery` commits a
 `DepartmentMessageDelivery` row with `status="pending"` before calling out to
 the email/SMS provider — this is what makes a raced or retried `deliver()`
 call safe (a second attempt hits the row's unique
-`(message_id, recipient_id, channel)` constraint and skips). If the worker
-process is killed, OOM-killed, or loses its DB connection between that
-commit and `_finish_delivery`'s follow-up commit, the row is left in
-`status="pending"` permanently: nothing scans for stale pending claims, and
-the same unique constraint that makes retries safe also means no future
-`deliver()` call for that message will ever re-attempt the send — a
+`(message_id, recipient_id, channel)` constraint and skips). That same
+constraint means **no outcome for a claimed row is ever revisited**, and
+there are two distinct ways to reach one:
+
+- **Stranded `pending`.** If the worker process is killed, OOM-killed, or
+  loses its DB connection between the claim commit and `_finish_delivery`'s
+  follow-up commit, the row is left in `status="pending"` permanently.
+  Narrow blast radius: one recipient/channel/message, and only if a crash
+  lands in that exact window.
+- **`failed`, from an ordinary provider error — the more likely path.**
+  `_finish_delivery(attempt, error)` commits the same row as
+  `status="failed"` whenever the provider raises, or reports zero
+  successes (`EmailService.send_email` returning `(sent, failed)`,
+  `SMSService.send_bulk_sms` returning a count) — no crash needed, just a
+  transient outage, a rate limit, or one rejected recipient. This is not
+  an edge case: it is the intended, working behavior of `_finish_delivery`,
+  hit every time a send legitimately fails.
+
+Either way, nothing scans for stale `pending` or `failed` claims, and the
+same unique constraint that makes a _duplicate_ attempt safe also means no
+future `deliver()` call for that message will ever re-attempt the send — a
 department message is published exactly once, so there is no second chance
-for the claim to resolve itself.
+for the claim to resolve itself. The channel affected is whichever one
+fails or strands — and email is the "record of notice" this feature's own
+module docstring says a member must not be able to miss, so a routine SMTP
+hiccup during the one delivery attempt permanently and silently drops that
+member from the channel of record for that message.
 
-The blast radius is narrow (one recipient, one channel, one message, and
-only if a crash lands in an exact window), but the channel affected is
-whichever one strands — and email is the "record of notice" this feature's
-own module docstring says a member must not be able to miss.
-
-Closing this needs a product decision, not a mechanical patch: what counts
-as "stale" (a fixed TTL against `attempted_at`? some other signal?), whether
-a stale claim should be retried automatically by a new scheduled task or
-surfaced to an admin instead, and — since a crash could land either before
-or after the provider actually accepted the send — whether the department
-would rather risk an occasional duplicate delivery (retry unconditionally)
-or an occasional silent miss (leave it and alert). Neither was chosen here.
+Closing this needs a product decision, not a mechanical patch, and the
+decision has to cover both paths together (a fix for only `pending` leaves
+the more common `failed` case exactly as broken): what counts as eligible
+for retry (any `failed`/stale-`pending` row? a cap on attempts?), whether
+retry is automatic via a new scheduled task or surfaced to an admin
+instead, and — since a crash could land either before or after the
+provider actually accepted the send — whether the department would rather
+risk an occasional duplicate delivery (retry unconditionally) or an
+occasional silent miss (leave it and alert). Neither was chosen here.
 
 Found by `docs/security-review/MSG-25-messaging-notifications.md` (feature
-25, pass 2, MSG-12). No `SMSService`/`EmailService` allowlist or org-scoping
-gap involved — this is a reliability gap in an otherwise-correct idempotency
-mechanism, not an access-control defect.
+25, pass 2, MSG-12); the `failed`-status path was caught by Codex's review
+of the PR recording this finding, broadening it from the `pending`-only
+scenario originally reported. No `SMSService`/`EmailService` allowlist or
+org-scoping gap involved — this is a reliability gap in an otherwise-correct
+idempotency mechanism, not an access-control defect.
 
 ## Process
 

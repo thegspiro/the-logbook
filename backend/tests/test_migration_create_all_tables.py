@@ -321,12 +321,18 @@ _AUTOLOAD_TABLE = re.compile(
 def _find_autoload_offenders(
     sources: dict[str, str], create_all_only: set[str]
 ) -> list[str]:
+    """Scans ``_upgrade_body(text)``, not the whole file — a reflection that
+    exists only in ``downgrade()`` (e.g. to rebuild legacy data on a
+    downgrade) never runs on a fresh ``alembic upgrade head`` and must not
+    be flagged as an offender. ``_tables_created_by_migrations`` above
+    already scopes the same way for the same reason."""
     offenders = []
     for name, text in sorted(sources.items()):
-        touched = set(_AUTOLOAD_TABLE.findall(text)) & create_all_only
-        if _returns_early_when_a_model_only_table_is_absent(text, create_all_only):
+        body = _upgrade_body(text)
+        touched = set(_AUTOLOAD_TABLE.findall(body)) & create_all_only
+        if _returns_early_when_a_model_only_table_is_absent(body, create_all_only):
             continue
-        unguarded = touched - _guarded_tables(text)
+        unguarded = touched - _guarded_tables(body)
         if unguarded:
             offenders.append(f"  {name} -> {', '.join(sorted(unguarded))}")
     return offenders
@@ -606,6 +612,24 @@ class TestTheDetectionItself:
                 "    bind = op.get_bind()\n"
                 '    if "positions" not in sa.inspect(bind).get_table_names():\n'
                 "        return\n"
+                "    meta = sa.MetaData()\n"
+                '    positions = sa.Table("positions", meta, autoload_with=bind)\n'
+            )
+        }
+
+        assert _find_autoload_offenders(sources, {"positions"}) == []
+
+    def test_a_downgrade_only_reflection_is_not_flagged(self):
+        """A reflection that exists only in `downgrade()` — e.g. to rebuild
+        legacy data on a downgrade — never runs on a fresh `alembic upgrade
+        head` and must not be treated as an offender."""
+        sources = {
+            "0001_backfill.py": (
+                "def upgrade():\n"
+                "    pass\n"
+                "\n"
+                "def downgrade():\n"
+                "    bind = op.get_bind()\n"
                 "    meta = sa.MetaData()\n"
                 '    positions = sa.Table("positions", meta, autoload_with=bind)\n'
             )

@@ -522,33 +522,52 @@ regex-over-whole-file approach — out of scope for this pass. No migration in
 the current chain is known to rely on this gap for a false "clean" result;
 flagged here so a future pass doesn't have to rediscover it.
 
-### MSG-12 — LOW-MED — a worker crash between claiming and finishing a channel delivery permanently strands that recipient's message — FLAGGED (needs a product decision)
+### MSG-12 — LOW-MED — a failed or stranded channel delivery claim is never retried — FLAGGED (needs a product decision)
 
 **What:** `_claim_delivery` commits a `DepartmentMessageDelivery` row with
 `status="pending"` _before_ the actual `send_email`/`send_bulk_sms` call —
 this is what makes a raced or retried `deliver()` call safe (a second
 attempt hits the row's unique `(message_id, recipient_id, channel)`
 constraint and skips, the mechanism the "New architecture reviewed" section
-above documents as defense-in-depth on top of MSG-4). If the process is
-killed, OOM-killed, or loses its DB connection between that commit and
-`_finish_delivery`'s follow-up commit, the row is left `status="pending"`
-permanently: nothing scans for stale pending claims, and the same unique
-constraint that makes retries safe also means no future `deliver()` call for
-that message will ever re-attempt it — a department message is published
-exactly once, so there is no second chance for the claim to resolve itself.
+above documents as defense-in-depth on top of MSG-4). That same constraint
+means no outcome for a claimed row is ever revisited, and there are two
+distinct ways to reach one — the second is a Codex-caught broadening of
+what this finding originally reported as a crash-only scenario:
+
+- **Stranded `pending`** (the originally reported scenario) — if the
+  process is killed, OOM-killed, or loses its DB connection between
+  `_claim_delivery`'s commit and `_finish_delivery`'s follow-up commit, the
+  row is left `status="pending"` permanently. Requires a crash in an exact
+  window.
+- **`failed`, from an ordinary provider error — no crash needed.**
+  `_finish_delivery(attempt, error)` (line 126) sets
+  `status = "failed" if error else "delivered"` whenever the provider
+  raises, or reports zero successes (`EmailService.send_email` returns
+  `(sent, failed)`; `SMSService.send_bulk_sms` returns a count). This is
+  `_finish_delivery`'s ordinary, intended behavior — hit by a transient
+  SMTP outage, a rate limit, or one rejected recipient, not an edge case.
+  `_claim_delivery` rejects a retry attempt on the unique constraint
+  regardless of the existing row's status, so a `failed` row is exactly as
+  permanently un-retriable as a stranded `pending` one.
+
 **Where:** `app/services/message_delivery_service.py`
-(`_claim_delivery`/`_finish_delivery`, `_send_email`, `_send_sms`).
-**Failure scenario:** a background worker is killed (deploy restart, OOM,
-container eviction) at the exact moment between `_claim_delivery`'s commit
-and `send_email`/`send_bulk_sms` returning. That one recipient's copy of
-that one department message is now permanently un-sent on that channel —
-worst case, email, the channel this feature's own module docstring calls
-"the record of notice" — with no error surfaced anywhere and no automatic
+(`_claim_delivery`/`_finish_delivery` lines 87–129, `_send_email`, `_send_sms`).
+**Failure scenario:** either (a) a background worker is killed at the exact
+moment between `_claim_delivery`'s commit and the provider call returning,
+or (b) — far more likely in production — the email or SMS provider has a
+routine transient failure during the one delivery attempt a department
+message ever gets. Either way, that one recipient's copy of that one
+department message is now permanently un-sent on that channel — worst
+case, email, the channel this feature's own module docstring calls "the
+record of notice" — with no error surfaced anywhere and no automatic
 recovery. The blast radius is one recipient/one channel/one message per
-crash.
+occurrence, but occurrence (b) needs no crash at all.
 **Why flagged, not fixed:** correcting this needs a policy decision this
-pass should not make unilaterally: what counts as "stale" (a fixed TTL on
-`attempted_at`?), whether a stale claim should be retried automatically by a
+pass should not make unilaterally, and the decision has to cover both
+`pending` and `failed` together — fixing only the crash-only `pending`
+case leaves the more common `failed` case exactly as broken. Open
+questions: what counts as eligible for retry (any `failed` row? a
+stale-`pending` TTL? a cap on attempts?), whether retry is automatic via a
 new scheduled task or surfaced to an admin instead, and — since a crash
 could land either before or after the provider actually accepted the send —
 whether the department would rather risk an occasional duplicate delivery
@@ -556,11 +575,11 @@ whether the department would rather risk an occasional duplicate delivery
 Mirrored into `docs/KNOWN_LIMITATIONS.md`.
 **Recommendation:** a scheduled task (mirroring
 `run_publish_scheduled_messages`'s cadence) that finds
-`DepartmentMessageDelivery` rows with `status="pending"` and `attempted_at`
-older than some threshold, and either re-attempts the send or flips them to
-a distinct `"orphaned"` status an admin view can surface. Left for a future
-iteration with product input on which tradeoff (silently-never-sent vs.
-possibly-duplicate) the department would prefer.
+`DepartmentMessageDelivery` rows with `status="failed"` or `status="pending"`
+with `attempted_at` older than some threshold, and either re-attempts the
+send or flips them to a distinct `"orphaned"` status an admin view can
+surface. Left for a future iteration with product input on which tradeoff
+(silently-never-sent vs. possibly-duplicate) the department would prefer.
 
 ### Doc correction — MAIL-3 (attachment magic-byte validation) was already fixed, `docs/app-review/email-templates.md` still said OPEN
 
