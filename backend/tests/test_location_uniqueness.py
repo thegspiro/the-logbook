@@ -1,15 +1,20 @@
 """
-Tests for LocationService.update_location's (name, building) uniqueness scope.
+Tests for LocationService.update_location's (name, building) uniqueness scope
+and LocationUpdate's rejection of null for non-nullable columns.
 
 The duplicate check must fire whenever either half of that scope changes —
 not only when name changes — or a PATCH that moves a location into a
-building that already has a same-named one goes undetected.
+building that already has a same-named one goes undetected. Separately,
+``name`` and ``is_active`` back NOT NULL columns, so an explicit
+``null`` for either must 422 at the schema boundary rather than reach the
+database and 500.
 """
 
 from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
 import pytest
+from pydantic import ValidationError
 
 from app.schemas.location import LocationUpdate
 from app.services.location_service import LocationService
@@ -82,3 +87,24 @@ async def test_unrelated_field_change_skips_the_duplicate_query():
     assert location.capacity == 10
     db.execute.assert_not_called()
     db.commit.assert_awaited_once()
+
+
+class TestLocationUpdateRejectsNullForNonNullableFields:
+    def test_explicit_null_name_is_rejected(self):
+        with pytest.raises(ValidationError, match="name"):
+            LocationUpdate(name=None)
+
+    def test_explicit_null_is_active_is_rejected(self):
+        with pytest.raises(ValidationError, match="is_active"):
+            LocationUpdate(is_active=None)
+
+    def test_omitting_name_is_fine(self):
+        # Omission (not sent at all) must stay legal — that's how a PATCH
+        # leaves the field alone.
+        payload = LocationUpdate(building="Station 1")
+        assert "name" not in payload.model_fields_set
+
+    def test_a_real_value_is_fine(self):
+        payload = LocationUpdate(name="Bunk Room", is_active=False)
+        assert payload.name == "Bunk Room"
+        assert payload.is_active is False

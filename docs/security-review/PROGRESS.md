@@ -22,16 +22,18 @@ Feature 32 (Locations & kiosk), pass 2 — PR
 file in the feature's surface in full and reported zero findings (correctly
 noting the surface is byte-for-byte unchanged since pass 1, PR #1916 — but
 citing an unreachable commit, `1b7be79a`, for that diff). **Round 2
-(Codex-caught):** four real, independently verified findings the full read
+(Codex-caught):** five real, independently verified findings the full read
 missed — LOC-32-1 (a lost prospect-link race could cost the guest their
 whole attendance record, not just the pipeline link), LOC-32-2 (kiosk
 display codes kept working after the owning organization was deactivated),
 LOC-32-3 (the location-uniqueness check skipped a building-only change),
 LOC-32-4 (the guest-check-in daily cap was reserved before the window-open
 and attendance-finalized rejection gates, letting refused traffic exhaust
-it) — plus the commit-hash correction (`1a0a35c8` is the actual, reachable
-squash-merge commit). All four fixed with guard tests. See log entry below
-and `docs/security-review/LOC-32-locations-kiosk.md`.
+it), LOC-32-5 (an explicit `null` for `name`/`is_active` reached a NOT NULL
+column as a 500 instead of a validation error) — plus the commit-hash
+correction (`1a0a35c8` is the actual, reachable squash-merge commit). All
+five fixed with guard tests. See log entry below and
+`docs/security-review/LOC-32-locations-kiosk.md`.
 
 **Note on branch naming:** pass 1's PR (#1916) used the branch name
 `claude/security-review-locations-kiosk` — reusing it for this pass would
@@ -41,7 +43,7 @@ collision.
 
 ---
 
-### 2026-08-31 — Feature 32 (Locations & kiosk), pass 2 — round 2: 4 fixed (Codex-caught), 1 doc correction — PR #2098
+### 2026-08-31 — Feature 32 (Locations & kiosk), pass 2 — round 2: 5 fixed (Codex-caught), 1 doc correction — PR #2098
 
 No security-review PR was open (feature 31 fully merged via PR #2095, closed
 out via PR #2097 earlier this iteration), so the rotation continued to
@@ -93,13 +95,20 @@ building)` together — a building-only PATCH could merge two
    guests once it does — the exact ordering bug `event_requests.py`'s
    EV-19 fix already documents and avoids for the identical cap shape.
    Fixed by moving both rejection checks above the cap.
+6. **LOC-32-5 (LOW)** — `LocationUpdate.name`/`.is_active` are typed
+   `Optional[...] = None` to make them omittable on a PATCH, which also
+   admits an explicit `null` — `model_dump(exclude_unset=True)` preserves
+   it and `setattr` writes it straight into a NOT NULL column, 500ing
+   instead of 422ing. Fixed with a `model_validator` that rejects an
+   explicit null for either field while still allowing omission.
 
 Every fix has a guard test independently verified against the new code:
 `tests/test_guest_check_in.py::TestGuestProspectCreation::
 test_link_race_is_scoped_to_a_savepoint_not_the_whole_commit`,
 `tests/test_location_display_code.py::TestGetLocationByDisplayCode`,
-`tests/test_location_uniqueness.py` (new file, 3 tests), and
-`tests/test_public_display.py::TestGuestCheckInDailyCapOrdering` (3 tests).
+`tests/test_location_uniqueness.py` (new file, 7 tests across both
+findings), and `tests/test_public_display.py::
+TestGuestCheckInDailyCapOrdering` (3 tests).
 
 **LOC-3** (`GET /locations/{id}/display`, the dead authenticated display
 endpoint) remains unchanged and flagged, not fixed, for the same reason as
@@ -108,8 +117,8 @@ pass 1 — already tracked in `docs/KNOWN_LIMITATIONS.md`.
 **Completion gate:** `flake8`/`isort` clean; `black --check` required
 reformatting one file (`location_service.py`), applied. Scoped tests
 (`-k "location or admin_hub or guest_check_in or public_display"`) —
-**307 passed** (was 290), 1 skipped (pre-existing). Full backend suite —
-**9362 passed** (was 9353), 22 skipped, 0 failed.
+**311 passed** (was 290), 1 skipped (pre-existing). Full backend suite —
+**9366 passed** (was 9353), 22 skipped, 0 failed.
 `validate_migrations.py --strict` — 394 revisions, single head (no schema
 change). No frontend file touched. Findings doc:
 `docs/security-review/LOC-32-locations-kiosk.md`. PR #2098 opened and

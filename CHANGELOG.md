@@ -24,6 +24,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   sent before an event's check-in window opened (or after attendance was
   finalized), denying legitimate guests later that day — those requests no
   longer count against the limit.
+- Explicitly clearing a location's name or active status to null returned
+  a server error instead of a clear validation message; it's now rejected
+  up front.
 
 ### Scheduled-task reliability fixes (2026-08-31)
 

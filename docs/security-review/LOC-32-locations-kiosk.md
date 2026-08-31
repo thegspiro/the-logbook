@@ -3,12 +3,12 @@
 **Prefix:** `LOC` · **Iteration:** 32 · **Reviewed:** 2026-08-31 · **PR:** [#2098](https://github.com/thegspiro/the-logbook/pull/2098)
 
 **Backend:** `app/api/v1/endpoints/locations.py` (364 L, 8 routes),
-`app/services/location_service.py` (373 L), `app/api/public/display.py`
-(410 L, 3 routes), `app/api/v1/endpoints/admin_hub.py` (112 L, 3 routes),
+`app/services/location_service.py` (382 L), `app/api/public/display.py`
+(419 L, 3 routes), `app/api/v1/endpoints/admin_hub.py` (112 L, 3 routes),
 `app/services/admin_hub_service.py` (1,841 L), `app/services/
-guest_check_in_service.py` (369 L), `app/models/location.py`,
-`app/models/admin_hub.py`, `app/schemas/location.py`, `app/schemas/
-admin_hub.py`.
+guest_check_in_service.py` (382 L), `app/models/location.py`,
+`app/models/admin_hub.py`, `app/schemas/location.py` (+ a
+`model_validator`), `app/schemas/admin_hub.py`.
 **Frontend:** not read this pass — no response shape or contract this
 pass's fixes touch changed (see each finding).
 **Migrations:** none — no schema change.
@@ -30,13 +30,13 @@ every file in this feature's surface — the zero-diff conclusion itself was
 correct, only the citation was wrong. Caught by Codex's review of this PR;
 thanks. Every commit reference in this document uses `1a0a35c8`.
 
-## Correction — the round-1 zero-diff read missed four real gaps
+## Correction — the round-1 zero-diff read missed five real gaps
 
 Round 1 read every file in the surface in full but reported zero findings.
-Codex's review of the same PR found four real, independently verified
+Codex's review of the same PR found five real, independently verified
 issues that a genuine diff would not have surfaced (nothing in the diffed
 files changed) but that a closer functional read should have caught. All
-four are fixed below. This is why the rotation runs the completion gate and
+five are fixed below. This is why the rotation runs the completion gate and
 accepts review findings as bug reports to verify, not merely a formality —
 "no diff" is not the same claim as "no bug."
 
@@ -226,6 +226,36 @@ service, after the cap) above `daily_cap_exceeded`, matching
 staff-entry path that shares `check_in_guest`. Guard tests:
 `tests/test_public_display.py::TestGuestCheckInDailyCapOrdering`.
 
+### LOC-32-5 — LOW — An explicit `null` for a NOT NULL location field reached the database as a 500, not a validation error — ✅ FIXED
+
+**What:** `LocationUpdate.name` and `LocationUpdate.is_active` are typed
+`Optional[...] = None` to make them _omittable_ on a PATCH — but that same
+typing also accepts an explicit `null` in the request body.
+`update_location`'s `model_dump(exclude_unset=True)` preserves a
+supplied-but-null key, and `setattr(location, field, value)` then writes
+`None` straight into `Location.name` (`String(200), nullable=False`) or
+`Location.is_active` (`Boolean, nullable=False)`.
+
+**Where:** `backend/app/schemas/location.py` (`LocationUpdate`, was lines
+56-72 at `1a0a35c8`).
+
+**Failure scenario:** `PATCH /locations/{id}` with body `{"name": null}` or
+`{"is_active": null}`. Both pass schema validation, reach
+`update_location`, and fail at the database's own NOT NULL constraint —
+returning a generic 500 (via `handle_service_errors`'s catch-all, so no
+detail leaks) instead of the clean 422 a malformed request should get.
+
+**Impact:** LOW — no data corruption (the constraint holds) and no
+information disclosure, but a caller-triggerable 500 for input that should
+be rejected at the boundary, and unnecessary error-log noise.
+
+**Fix:** added a `model_validator(mode="after")` on `LocationUpdate` that
+raises when either field is present in `model_fields_set` with a `None`
+value — omission still passes untouched, matching every other optional
+field's contract, but an explicit null on these two now 422s at the schema
+boundary. Guard tests:
+`tests/test_location_uniqueness.py::TestLocationUpdateRejectsNullForNonNullableFields`.
+
 ## LOC-3 status — still flagged, unchanged
 
 `GET /locations/{id}/display` still has zero frontend callers, still
@@ -254,6 +284,10 @@ test_link_race_is_scoped_to_a_savepoint_not_the_whole_commit` — LOC-32-1:
 - `tests/test_public_display.py::TestGuestCheckInDailyCapOrdering` —
   LOC-32-4: a window-not-open rejection and a finalized-attendance rejection
   never call `daily_cap_exceeded`; a genuinely open request still does.
+- `tests/test_location_uniqueness.py::
+TestLocationUpdateRejectsNullForNonNullableFields` — LOC-32-5: an explicit
+  `null` for `name` or `is_active` is rejected; omitting either, or a real
+  value, still passes.
 
 ## Completion gate
 
@@ -263,6 +297,6 @@ test_link_race_is_scoped_to_a_savepoint_not_the_whole_commit` — LOC-32-1:
 | `black --check app/ tests/ alembic/`                                            | ✅ clean (after formatting one file)                |
 | `isort --check-only app/ tests/ alembic/`                                       | ✅ clean                                            |
 | `python3 scripts/validate_migrations.py --strict`                               | ✅ 394 revisions, single head                       |
-| Scoped tests (`-k "location or admin_hub or guest_check_in or public_display"`) | ✅ 307 passed, 1 skipped (pre-existing)             |
-| Full backend suite (`pytest tests/`)                                            | ✅ 9362 passed, 22 skipped (pre-existing), 0 failed |
+| Scoped tests (`-k "location or admin_hub or guest_check_in or public_display"`) | ✅ 311 passed, 1 skipped (pre-existing)             |
+| Full backend suite (`pytest tests/`)                                            | ✅ 9366 passed, 22 skipped (pre-existing), 0 failed |
 | `tsc --noEmit` / `eslint .`                                                     | n/a — no frontend file changed                      |
