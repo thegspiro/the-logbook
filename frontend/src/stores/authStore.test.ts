@@ -25,6 +25,12 @@ vi.mock('../services/apiClient', () => ({
   clearTempAccessToken: (...args: unknown[]) => mockClearTempAccessToken(...args) as unknown,
 }));
 
+const mockPurgeLocalMemberData = vi.fn();
+
+vi.mock('../utils/purgeLocalMemberData', () => ({
+  purgeLocalMemberData: () => mockPurgeLocalMemberData() as unknown,
+}));
+
 // ---- Import store AFTER mocks are in place ----
 import { useAuthStore } from './authStore';
 
@@ -71,6 +77,13 @@ describe('authStore', () => {
 
     // Clear all mocks
     vi.clearAllMocks();
+    mockPurgeLocalMemberData.mockResolvedValue({
+      drafts: 0,
+      queuedChecks: 0,
+      queuedReports: 0,
+      queuedGeneric: 0,
+      unsyncedDiscarded: 0,
+    });
 
     // Clear localStorage and sessionStorage
     localStorage.clear();
@@ -416,6 +429,61 @@ describe('authStore', () => {
       expect(localStorage.getItem('has_session')).toBeNull();
       expect(getState().isAuthenticated).toBe(false);
       expect(getState().user).toBeNull();
+    });
+
+    // Regression guard: purging local member data (offline shift-report
+    // drafts, equipment-check queues) must only happen on a *confirmed*
+    // auth failure. A transient error (offline, timeout, backend 5xx) does
+    // not mean the session is invalid, and silently discarding queued work
+    // on one of those — with no loss notice shown — is the defect this
+    // guards against.
+    it('purges local member data on a confirmed 401', async () => {
+      localStorage.setItem('has_session', '1');
+      mockGetCurrentUser.mockRejectedValue(Object.assign(new Error('Unauthorized'), { response: { status: 401 } }));
+
+      await act(async () => {
+        await getState().loadUser();
+      });
+
+      expect(mockPurgeLocalMemberData).toHaveBeenCalledTimes(1);
+    });
+
+    it('purges local member data on a confirmed 403', async () => {
+      localStorage.setItem('has_session', '1');
+      mockGetCurrentUser.mockRejectedValue(Object.assign(new Error('Forbidden'), { response: { status: 403 } }));
+
+      await act(async () => {
+        await getState().loadUser();
+      });
+
+      expect(mockPurgeLocalMemberData).toHaveBeenCalledTimes(1);
+    });
+
+    it('does NOT purge local member data on a network/timeout error', async () => {
+      localStorage.setItem('has_session', '1');
+      mockGetCurrentUser.mockRejectedValue(new Error('Network Error'));
+
+      await act(async () => {
+        await getState().loadUser();
+      });
+
+      expect(mockPurgeLocalMemberData).not.toHaveBeenCalled();
+      // Still reports as unauthenticated for this load — the session state
+      // is unknown, but queued offline work must survive to sync later.
+      expect(getState().isAuthenticated).toBe(false);
+    });
+
+    it('does NOT purge local member data on a backend 500', async () => {
+      localStorage.setItem('has_session', '1');
+      mockGetCurrentUser.mockRejectedValue(
+        Object.assign(new Error('Internal Server Error'), { response: { status: 500 } })
+      );
+
+      await act(async () => {
+        await getState().loadUser();
+      });
+
+      expect(mockPurgeLocalMemberData).not.toHaveBeenCalled();
     });
   });
 

@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Frontend shared re-verification fixes (2026-08-31)
+
+**Fixed**
+
+- Entering a wrong or expired MFA code was treated as an expired session:
+  the app purged local data and hard-redirected to the login screen instead
+  of showing "invalid code, try again."
+- Loading your profile after an offline or interrupted connection could
+  silently discard unsynced shift-report drafts and equipment-check
+  submissions — now only a confirmed sign-out clears local data.
+
 ### Equipment checklists moved from Scheduling to Inventory (2026-08-31)
 
 **Changed — action required**
