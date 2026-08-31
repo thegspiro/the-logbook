@@ -314,6 +314,36 @@ class TestIntegrationProcessorsSanitizeErrors:
         assert sensitive not in result["error"]
         assert "field list" not in result["error"]
 
+    async def test_equipment_assignment_processor_sanitizes_returned_error(self):
+        """InventoryService.assign_item_to_user() doesn't raise on failure —
+        it returns (None, str(e)) (inventory_service.py). That bypasses the
+        except-block sanitizer entirely, so the (result, error) tuple branch
+        needs its own sanitize_error_message() call, not just the except."""
+        submission = SimpleNamespace(
+            data={"f-member": "user-1", "f-item": "item-1"},
+            organization_id="org-1",
+            submitted_by="user-1",
+        )
+        form = SimpleNamespace(fields=[])
+        integration = SimpleNamespace(
+            field_mappings={"f-member": "member_id", "f-item": "item_id"}
+        )
+        db = _db_returning("found")
+        service = FormsService(db)
+
+        sensitive = "(pymysql.err.IntegrityError) (1452, 'Cannot add or update')"
+        with patch("app.services.inventory_service.InventoryService") as mock_inv:
+            mock_inv.return_value.assign_item_to_user = AsyncMock(
+                return_value=(None, sensitive)
+            )
+            result = await service._process_equipment_assignment(
+                submission, integration=integration, form=form
+            )
+
+        assert result["success"] is False
+        assert sensitive not in result["error"]
+        assert "pymysql" not in result["error"]
+
     async def test_process_integrations_direct_path_sanitizes_error(self):
         """The aggregator's own except (form.integration_type set, no
         FormIntegration row) must not leak a processor's raw exception."""

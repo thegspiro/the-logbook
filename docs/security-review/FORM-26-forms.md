@@ -94,6 +94,23 @@ fallback for everything else — a `RuntimeError`/`IntegrityError`/
 fallback — while still logging the real exception server-side either way, so
 nothing is lost for debugging.
 
+**Correction (2026-08-31, on PR #2085 itself):** Codex caught that this fix
+missed a seventh site with the same shape. `_process_equipment_assignment`
+doesn't only reach the `except Exception as e:` block above — its normal
+success path also reads `assignment, error = await
+InventoryService.assign_item_to_user(...)`, and that method (`inventory_
+service.py`) never raises on failure; it catches internally and returns
+`(None, str(e))`. The `if error: return {"success": False, "error": error}`
+branch that follows returned that raw string untouched, bypassing the
+`except`-block sanitizer entirely because no exception ever propagates up to
+it. Since `error` here is already a plain string (not an `Exception`
+instance), `safe_error_detail(e)` doesn't apply — fixed by routing it through
+`sanitize_error_message()` (`app/core/utils.py`), the sibling helper this
+codebase already uses for exactly this shape (`inventory.py`'s own
+`assign_item_to_user` caller does the same). Added
+`test_equipment_assignment_processor_sanitizes_returned_error`, verified to
+fail on reintroduction, alongside the original except-block test.
+
 ### Verified good ✅ (re-confirmed this pass, unchanged since PR #1908)
 
 - FORM-1/FORM-2 (`_entity_in_org` validates `member_id`/`item_id`/`event_id`

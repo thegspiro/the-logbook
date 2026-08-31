@@ -18,7 +18,7 @@ from sqlalchemy.orm import selectinload
 
 from app.core.config import settings
 from app.core.security_middleware import InputSanitizer, daily_cap_exceeded
-from app.core.utils import safe_error_detail
+from app.core.utils import safe_error_detail, sanitize_error_message
 from app.models.forms import (
     FieldType,
     Form,
@@ -2177,7 +2177,7 @@ class FormsService:
             )
 
             if error:
-                return {"success": False, "error": error}
+                return {"success": False, "error": sanitize_error_message(error)}
 
             return {
                 "success": True,
