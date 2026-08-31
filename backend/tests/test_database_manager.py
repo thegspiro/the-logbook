@@ -109,3 +109,20 @@ class TestDisconnectResetsConnectionState:
         # Should not raise even though nothing was ever connected.
         await manager.disconnect()
         assert manager.is_connected is False
+
+    async def test_state_is_reset_even_when_dispose_raises(self):
+        """Codex, PR #2106: if engine.dispose() itself fails, execution must
+        still reach the state reset — otherwise is_connected keeps reporting
+        True for a connection that is actually gone, and a caller relying on
+        it (e.g. a health check, or a reconnect-if-needed guard) is fooled."""
+        manager = DatabaseManager()
+        manager.engine = MagicMock()
+        manager.engine.dispose = AsyncMock(side_effect=RuntimeError("dispose failed"))
+        manager.session_factory = MagicMock()
+
+        with pytest.raises(RuntimeError, match="dispose failed"):
+            await manager.disconnect()
+
+        assert manager.is_connected is False
+        assert manager.engine is None
+        assert manager.session_factory is None
