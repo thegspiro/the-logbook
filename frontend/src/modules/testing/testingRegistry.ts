@@ -868,7 +868,11 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
       },
       { path: '/admin/audit-log', label: 'Audit log', permission: 'audit.view' },
       { path: '/admin/errors', label: 'Error monitoring', permission: 'settings.manage' },
-      { path: '/ip-security', label: 'IP security', permission: 'security.manage' },
+      {
+        path: '/ip-security',
+        label: 'IP security',
+        anyPermission: ['security.manage', 'settings.manage'],
+      },
       { path: '/ip-security/my-requests', label: 'My IP exception requests' },
     ],
   },

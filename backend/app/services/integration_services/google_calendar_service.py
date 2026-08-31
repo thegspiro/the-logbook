@@ -117,4 +117,11 @@ class GoogleCalendarService(CalendarSyncInterface):
             count = len(calendar_list.get("items", []))
             return f"Connected to Google Calendar ({count}+ calendars accessible)"
         except Exception as e:
-            raise Exception(f"Google Calendar connection failed: {e}")
+            # Don't interpolate the raw exception into the re-raised
+            # message — the Google API client can surface transport-level
+            # detail (DNS, TLS, timeouts) that a caller-facing bare
+            # Exception is otherwise trusted to be safe (INT-6 follow-up).
+            logger.error("Google Calendar connection test failed: {}", e)
+            raise Exception(
+                "Google Calendar connection failed — check the stored credentials"
+            )

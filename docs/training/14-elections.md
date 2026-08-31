@@ -272,9 +272,45 @@ that they become management records.
 
 By default, all active members in the organization are eligible to vote. Eligibility can be restricted by:
 
-- **Membership tier** — Only certain tiers can vote (e.g., Active and Life members, not Honorary)
+- **Membership standing** — Only certain standings can vote (e.g. operational members, or life members only)
 - **Meeting attendance** — Must be present at the associated meeting
 - **Specific voter list** — Manually defined list of eligible voter IDs
+
+> **Standing is two fields now** _(2026-08-26)_. A member's standing used to be
+> one field carrying two independent facts. It is now a **class** (operational,
+> administrative, social) and a **status** (prospective, probationary, regular,
+> life, retired).
+>
+> **The built-in voter categories keep the meaning they always had**, so your
+> existing ballots behave as before:
+>
+> | Category         | Requires                                        |
+> | ---------------- | ----------------------------------------------- |
+> | `operational`    | operational class **and** regular status        |
+> | `regular`        | operational class **and** (regular **or** life) |
+> | `life`           | operational class **and** life status           |
+> | `probationary`   | operational class **and** probationary status   |
+> | `administrative` | administrative class                            |
+> | `social`         | social class                                    |
+>
+> Two things did change, and one of them **narrows** eligibility rather than
+> widening it:
+>
+> - **A life member now receives a `regular` ballot.** Under the old single
+>   field, "life" and "regular" were competing values, so a life member could
+>   not satisfy a `regular` restriction. Now they can.
+> - **An administrative member with regular standing no longer receives ballots
+>   restricted to active or life members.** Every status category now also
+>   requires the operational class. If your bylaws intend administrative members
+>   to vote on those items, use an override or an explicit voter list.
+>
+> Members whose records predate the change are evaluated correctly — the pair is
+> derived from the old field when it has not been set. **A member on an
+> org-configured membership tier (the shipped `senior` tier, for example)
+> resolves to no class and no status**, deliberately: that is exactly what the
+> tier matched before, and guessing would widen the electorate. **A member with
+> nothing recorded at all is different** — an empty value resolves to the
+> defaults, operational and regular, so they do receive both those ballots.
 
 ### Voter Overrides
 
@@ -299,11 +335,18 @@ When a member is excluded from voting but should be allowed (e.g., absent member
 
 ### Edge Cases
 
-| Scenario                                     | Behavior                                           |
-| -------------------------------------------- | -------------------------------------------------- |
-| Member not on attendance list                | Ineligible unless override granted                 |
-| Override granted, then member's tier changes | Override persists regardless                       |
-| Bulk override for remote voters              | Use bulk override endpoint to add multiple members |
+| Scenario                                                               | Behavior                                                                                                                                                         |
+| ---------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Member not on attendance list                                          | Ineligible unless override granted                                                                                                                               |
+| Override granted, then member's standing changes                       | Override persists regardless                                                                                                                                     |
+| Bulk override for remote voters                                        | Use bulk override endpoint to add multiple members                                                                                                               |
+| Life member, on an **operational** item                                | **Not** eligible — `operational` requires regular standing. They receive `regular` and `life` items                                                              |
+| Life member, on a **regular** item                                     | **Eligible** _(changed 2026-08-26)_ — the old fused field could not put them in both                                                                             |
+| Probationary member, on an **operational** item                        | **Not** eligible; they receive `probationary` items                                                                                                              |
+| Administrative member with regular standing, on a **regular** item     | **Not** eligible _(tightened 2026-08-26)_ — status categories now also require the operational class                                                             |
+| Administrative member holding an operational role                      | **Not** eligible for operational items — the class decides, not the role                                                                                         |
+| Member on an org-configured tier (e.g. `senior`)                       | Matches no class and no status; eligible for `all` only — deliberate, since the tier satisfied neither category before the split                                 |
+| Member with **nothing** recorded (no class, status or membership type) | **Treated as operational + regular** — an empty value resolves to the defaults, so they do receive both those ballots. Not the same as the custom-tier row above |
 
 ---
 

@@ -1080,10 +1080,10 @@ lot's number or expiration date require `inventory.check_manage` or
 
 ## IP Security _(documented 2026-08-10)_
 
-| URL                        | Page                       | Permission        |
-| -------------------------- | -------------------------- | ----------------- |
-| `/ip-security`             | IP Security Administration | `security.manage` |
-| `/ip-security/my-requests` | My Access Requests         | Authenticated     |
+| URL                        | Page                       | Permission                                  |
+| -------------------------- | -------------------------- | ------------------------------------------- |
+| `/ip-security`             | IP Security Administration | any of `security.manage`, `settings.manage` |
+| `/ip-security/my-requests` | My Access Requests         | Authenticated                               |
 
 ---
 

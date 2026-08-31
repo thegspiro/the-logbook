@@ -19,7 +19,7 @@ export const getIPSecurityRoutes = () => {
       <Route
         path="/ip-security"
         element={
-          <ProtectedRoute requiredPermission="security.manage">
+          <ProtectedRoute requiredAnyPermission={['security.manage', 'settings.manage']}>
             <Suspense fallback={null}>
               <IPSecurityAdminPage />
             </Suspense>
