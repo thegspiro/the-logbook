@@ -762,6 +762,8 @@ async def run_action_item_reminders(db: AsyncSession) -> Dict[str, Any]:
     from datetime import date, timedelta
     from datetime import timezone as _tz_reminders
 
+    from sqlalchemy.orm import selectinload
+
     from app.models.meeting import ActionItemStatus, MeetingActionItem
     from app.models.minute import ActionItem as MinutesActionItem
     from app.models.minute import MinutesActionItemStatus
@@ -809,8 +811,18 @@ async def run_action_item_reminders(db: AsyncSession) -> Dict[str, Any]:
                     logger.error(f"Failed to create action item notification: {e}")
 
     # ── Minutes action items ──
+    # organization_id below is only reachable via item.minutes (this table
+    # carries no organization_id column of its own), so the relationship
+    # must be eager-loaded here — an unguarded lazy access on an AsyncSession
+    # raises MissingGreenlet outside the greenlet bridge, verified against a
+    # real async_session_factory() session. Without this every
+    # minutes-action-item reminder silently failed (logged, never sent,
+    # never retried once past its window) since the per-item try/except
+    # swallows the exception.
     minutes_items = await db.execute(
-        select(MinutesActionItem).where(
+        select(MinutesActionItem)
+        .options(selectinload(MinutesActionItem.minutes))
+        .where(
             MinutesActionItem.status.in_(
                 [
                     MinutesActionItemStatus.PENDING.value,
@@ -1932,6 +1944,17 @@ async def run_shift_reminders(db: AsyncSession) -> Dict[str, Any]:
                             "position_label": pos_value.replace("_", " ").title(),
                         }
                     )
+
+                if not roster:
+                    # Every assigned user was filtered out by the is_active
+                    # check above — no reminder was actually sent, so don't
+                    # stamp the dedup flag. Otherwise a member added or
+                    # reactivated later in the same window would never
+                    # receive the reminder (same shape as
+                    # run_end_of_shift_checklist_reminders's member_ids
+                    # guard, CRON2-31-3/4 — missed here on the sibling
+                    # function that shares the exact pattern).
+                    continue
 
                 # Fetch equipment check templates for the apparatus
                 checklist_names: list[str] = []
@@ -3655,27 +3678,56 @@ async def run_publish_scheduled_messages(db: AsyncSession) -> Dict[str, Any]:
     messaging = MessagingService(db)
     published = 0
     expired = 0
+    failed = 0
+    needs_refresh = False
     for message in due:
-        # A message that expired before its send time came due goes live for
-        # nobody and must not be escalated. The claim above already cleared
-        # scheduled_at for the whole batch, so deactivation is all that is left
-        # to persist here — main set it per message because it claimed per
-        # message; that assignment would be a no-op now.
-        expires_at = getattr(message, "expires_at", None)
-        if expires_at is not None:
-            if expires_at.tzinfo is None:
-                expires_at = expires_at.replace(tzinfo=timezone.utc)
-            else:
-                expires_at = expires_at.astimezone(timezone.utc)
-        if expires_at is not None and expires_at <= now:
-            message.is_active = False
+        try:
+            if needs_refresh:
+                # A prior message's rollback (below) expires every
+                # persistent object in the session, including this
+                # pre-fetched message — reading an attribute without
+                # refreshing first would trigger an implicit lazy load
+                # outside the async greenlet bridge and raise
+                # MissingGreenlet (same shape as CRON2-31-1/5/6).
+                await db.refresh(message)
+            # A message that expired before its send time came due goes live for
+            # nobody and must not be escalated. The claim above already cleared
+            # scheduled_at for the whole batch, so deactivation is all that is left
+            # to persist here — main set it per message because it claimed per
+            # message; that assignment would be a no-op now.
+            expires_at = getattr(message, "expires_at", None)
+            if expires_at is not None:
+                if expires_at.tzinfo is None:
+                    expires_at = expires_at.replace(tzinfo=timezone.utc)
+                else:
+                    expires_at = expires_at.astimezone(timezone.utc)
+            if expires_at is not None and expires_at <= now:
+                message.is_active = False
+                await db.commit()
+                expired += 1
+                continue
+            await messaging.materialize_recipients(message)
             await db.commit()
-            expired += 1
-            continue
-        await messaging.materialize_recipients(message)
-        await db.commit()
-        await delivery.deliver(message)
-        published += 1
+            await delivery.deliver(message)
+            published += 1
+        except Exception as e:
+            # The claim step above already cleared scheduled_at for every
+            # message in this batch, which is the only condition the "due"
+            # query selects on — so one message's failure here (a bad
+            # targeting rule, a transient DB error) must not be allowed to
+            # propagate and orphan every message still left in `due`: they
+            # would never be picked up again. Log and move on instead.
+            logger.error(
+                "Failed to publish scheduled message {}: {}",
+                getattr(message, "id", "?"),
+                e,
+            )
+            failed += 1
+            try:
+                await db.rollback()
+                needs_refresh = True
+            except Exception:
+                pass
 
     if published:
         logger.info(f"Published {published} scheduled department message(s)")
@@ -3683,6 +3735,7 @@ async def run_publish_scheduled_messages(db: AsyncSession) -> Dict[str, Any]:
         "task": "publish_scheduled_messages",
         "published": published,
         "expired": expired,
+        "failed": failed,
     }
 
 
@@ -4600,13 +4653,21 @@ async def run_rolling_recurrence_extend(db: AsyncSession) -> Dict[str, Any]:
     now = datetime.now(dt_timezone.utc).replace(tzinfo=None)
     twelve_months = now.replace(year=now.year + 1)
 
-    # Find all rolling parent events (not cancelled)
+    # Find all rolling parent events (not cancelled). Joined to Organization
+    # and filtered the same way every other org-scoped loop in this file is
+    # (isnot(False), not == True, so a row whose flag was never populated
+    # still counts as active) — this loop is keyed on Event.organization_id
+    # rather than a direct `select(Organization)`, the same shape
+    # CRON2-31-11 found skipping the filter in three other runners.
     result = await db.execute(
-        select(Event).where(
+        select(Event)
+        .join(Organization, Organization.id == Event.organization_id)
+        .where(
             Event.rolling_recurrence.is_(True),
             Event.is_recurring.is_(True),
             Event.recurrence_parent_id.is_(None),
             Event.is_cancelled.is_(False),
+            Organization.active.isnot(False),
         )
     )
     parents = list(result.scalars().all())
@@ -4727,12 +4788,24 @@ async def run_rolling_recurrence_extend(db: AsyncSession) -> Dict[str, Any]:
 
             series_extended += 1
 
+            # Commit per parent rather than deferring to a single trailing
+            # commit — the same deferred-tail-commit shape CRON2-31-1 found
+            # to be the "worst" case in run_shift_auto_checkout: a later
+            # parent's failure would otherwise discard every earlier
+            # parent's already-built occurrences and recurrence_end_date
+            # update on the next rollback.
+            await db.commit()
+
         except Exception as e:
             logger.error(f"Failed to extend rolling series {parent.id}: {e}")
             errors.append({"event_id": parent.id, "error": str(e)})
-
-    if total_created > 0:
-        await db.commit()
+            # Without this, a failed flush leaves the session in a failed
+            # transaction state and every later parent's own `select()` call
+            # raises PendingRollbackError.
+            try:
+                await db.rollback()
+            except Exception:
+                pass
 
     logger.info(
         f"Rolling recurrence extend: {series_extended} series extended, "
@@ -4983,6 +5056,19 @@ async def run_external_training_auto_sync(db: AsyncSession) -> dict:
                 provider.id,
             )
             failed += 1
+            # sync_training_records commits its own outcome internally
+            # (success or a caught, logged FAILED sync_log) — an exception
+            # here means something failed *before* that internal try/except
+            # even started (its own sync_log insert + flush), which leaves
+            # the session in a failed transaction state. Providers share
+            # this session, so without a rollback every later provider's
+            # own sync_log insert raises PendingRollbackError too (same
+            # class as CRON-1/CRON2-31-13, missed here since this loop is
+            # keyed on ExternalTrainingProvider, not a direct org select).
+            try:
+                await db.rollback()
+            except Exception:
+                pass
         finally:
             await sync_service.close()
 

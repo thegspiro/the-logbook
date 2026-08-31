@@ -16,23 +16,117 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-Feature 30 (Onboarding), pass 2 — PR
-[#2093](https://github.com/thegspiro/the-logbook/pull/2093), branch
-`claude/security-review-onboarding`. Re-verified all fixes from module-audit
-iteration 25, app-review B25 (4 passes), and security-review pass 1
-(PR #1913 plus a same-day follow-up) hold with no regressions. Two low-risk
-fixes applied (rate limit on `GET /status`; removed a dead `VITE_SESSION_KEY`
-env var documented as security-critical but never read since a
-client-side-encryption code path was removed). One MED finding flagged, not
-fixed (`/test/email`'s self-hosted SMTP test has no SSRF/private-IP
-protection — a genuine product-policy tradeoff, not a drive-by-fixable bug,
-since this app's departments legitimately run on-prem SMTP relays). **Round
-2 (Codex-caught):** the `/status` rate-limit fix itself used the tight
-5-per-60s/30-minute-lockout auth defaults on a route the frontend calls on
-every page load — fixed with a read-appropriate budget instead. See log
-entry below and `docs/security-review/ONB-30-onboarding.md`.
+Feature 31 (Scheduled tasks), pass 2 — PR TBD, branch
+`claude/security-review-scheduled-tasks-pass2`. Re-verified all 13 findings
+from `docs/security-review/CRON2-31-scheduled-tasks.md` (pass 1) hold, no
+regressions. Read `scheduled.py` and `scheduled_tasks.py` (43 runners) end to
+end, plus the in-process scheduler in `main.py` (new territory, out of pass
+1's stated scope). Six new fixes, three new flagged findings. See log entry
+below and `docs/security-review/CRON-31-scheduled-tasks.md`.
+
+**Note on branch naming:** pass 1's PR (#1915) used the branch name
+`claude/security-review-scheduled-tasks` — reusing it for this pass would
+violate CLAUDE.md Pitfall #24 (do not reuse a branch name after its PR
+merges), so this pass uses `-pass2` appended, matching the convention other
+pass-2 iterations have used when a name collision like this comes up.
 
 ---
+
+### 2026-08-31 — Feature 31 (Scheduled tasks), pass 2 — 6 fixed, 3 new flagged — PR TBD
+
+No security-review PR was open (feature 30 fully merged via PR #2093 earlier
+this iteration), so the rotation continued to feature 31. Loaded
+`CHECKLIST.md`, `SEC-00-cross-cutting-baseline.md`,
+`docs/app-review/scheduled-tasks.md` (A3, 2 passes), and
+`docs/security-review/CRON2-31-scheduled-tasks.md` (pass 1, PR #1915 + its
+Codex round, 13 findings) before reading any code.
+
+Read `scheduled.py` (58 L, 2 routes) and `scheduled_tasks.py` (5,600 L, 43
+task runners) end to end — not diffed against pass 1, per the rotation's
+"enumerate, don't spot-check" rule — plus the in-process scheduler in
+`main.py` (`_scheduled_task_loop`, `_scheduled_email_loop`,
+`_try_claim_background_task`), which drives every `TASK_RUNNERS` entry in a
+default deployment but was outside pass 1's stated scope. Diffed pass 1's
+merged head against current `HEAD` for the two named files: one real change
+landed since pass 1 (a `run_publish_scheduled_messages` rewrite adding
+row-locking and message-expiry handling), which is where CRON-31-1 was
+found.
+
+Re-verified all 13 pass-1 findings (CRON2-31-1 through -13) hold with no
+regressions, each re-checked against current `file.py:line`, not assumed
+from the prior doc.
+
+**6 new fixes:**
+
+1. **CRON-31-1 (MED)** — `run_publish_scheduled_messages` (the new code
+   since pass 1) had no per-message isolation: one message's failure
+   propagated an unhandled exception, permanently orphaning every other
+   due message in the same batch (their `scheduled_at` claim was already
+   committed, so the "due" query would never select them again). Fixed with
+   the same try/except + `needs_refresh` pattern CRON2-31-1/5/6 established.
+2. **CRON-31-2 (MED)** — `run_action_item_reminders`'s minutes-action-item
+   branch has raised `MissingGreenlet` on every single invocation since the
+   day it was written (verified against a real MariaDB connection via
+   `async_session_factory()`, not the `db_session` test fixture — a naive
+   version of the guard test using that fixture passes even with the bug
+   present, since SQLAlchemy's identity-map short-circuit for many-to-one
+   lazy loads masks it when the same session already holds the parent row).
+   Fixed with `selectinload(MinutesActionItem.minutes)`.
+3. **CRON-31-3 (MED)** — `run_shift_reminders` never got the "empty
+   member_ids after the active-user filter" guard CRON2-31-3's Codex round
+   added to its sibling `run_end_of_shift_checklist_reminders` — stamped its
+   dedup flag even when every assigned member was inactive and zero
+   reminders were sent. Fixed with the matching guard.
+4. **CRON-31-4 (LOW)** — `run_rolling_recurrence_extend` had no per-parent
+   commit/rollback isolation (a single deferred trailing commit — the
+   "worst" shape CRON2-31-1 found in `run_shift_auto_checkout`) and no
+   rollback in its except at all. Fell outside the structural test's
+   `"select(Organization)"` heuristic since it iterates `Event` parents.
+   Fixed: commit per parent, rollback on failure.
+5. **CRON-31-5 (LOW, latent)** — same function, no `Organization.active`
+   filter at all (not even the original CRON-2's bare form). Fixed with a
+   join, same pattern as CRON2-31-11.
+6. **CRON-31-6 (LOW)** — `run_external_training_auto_sync` had no rollback
+   in its per-provider except, even though the delegated service's own
+   pre-try `flush()` can fail and poison the session for every later
+   provider. Fixed.
+
+**3 new flagged (not fixed):**
+
+- **CRON-31-7 (LOW)** — `run_end_of_shift_summary` can mark a member "sent"
+  if both channels fail for them, same shape as CRON2-31-3 but much lower
+  exposure (the in-app half never reaches the DB before the org-level
+  commit) — reversing it is a product decision about cross-channel delivery
+  semantics.
+- **CRON-31-8 (LOW)** — `run_event_reminders` stamps a reminder interval
+  sent when zero recipients exist yet, by explicit documented design
+  ("avoid re-processing"), not an oversight.
+- **In-process scheduler's Redis-down fallback** (`main.py`) runs on every
+  worker unguarded when Redis is unavailable — the alternative (fail closed,
+  run on no worker) is worse for this feature. Mirrors the CLAUDE.md
+  breached-password fail-open trade-off.
+
+Every fix has a guard test independently verified to fail against the
+pre-fix code and pass against the post-fix code (not merely written and
+assumed correct) — full list in `docs/security-review/
+CRON-31-scheduled-tasks.md`'s "Guard tests added" section.
+
+**Completion gate:** `flake8`/`black --check`/`isort --check-only` clean on
+`app/ tests/ alembic/`; `validate_migrations.py --strict` — 394 revisions,
+single head; the full backend suite — **9351 passed, 22 skipped, 0 failed**
+(all skips pre-existing Docker/optional-dependency/contract-suite skips).
+No frontend file touched.
+
+Feature 31 marked 🔄 (not ✅ yet — that happens on the closing PR after
+merge, per the rotation's own rule).
+
+### 2026-08-31 — Feature 30 (Onboarding) merged — PR #2093
+
+PR #2093 (pass 2, 2 fixed / 1 flagged) merged (`27a05f78`). Feature 30 marked
+✅. Verified via `mcp__github__pull_request_read` (`merged: true`,
+`merged_by: thegspiro`) before starting the next feature, per the
+"no starting a new feature while a PR is open" rule. Rotation continues to
+feature 31 (Scheduled tasks).
 
 ### 2026-08-31 — Feature 30 (Onboarding), pass 2 — 2 fixed, 1 new flagged — PR #2093
 
@@ -3792,8 +3886,8 @@ each row's prior PR is recorded in the Log, not repeated here.
 | 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                         | ✅     |
 | 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`                                                                    | ✅     |
 | 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                              | ✅     |
-| 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (24 unauth bootstrap routes)                                                                                             | 🔄     |
-| 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                   | ⬜     |
+| 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (24 unauth bootstrap routes)                                                                                             | ✅     |
+| 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                   | 🔄     |
 | 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                  | ⬜     |
 | 33  | Core infrastructure       | CORE   | `core/security_middleware.py`, `core/database.py`, `core/config.py`                                                                             | ⬜     |
 | 34  | Frontend shared           | FE     | `utils/apiCache.ts`, module axios instances, `ProtectedRoute`, global stores                                                                    | ⬜     |

@@ -295,6 +295,89 @@ class TestShiftRemindersRosterFilter:
         assert len(second_count) == 1
 
 
+class TestShiftRemindersDedupFlagNotStampedWhenRosterEmpty:
+    """Same shape as CRON2-31-3/4's fix to
+    run_end_of_shift_checklist_reminders's member_ids guard, missed here on
+    the sibling function: excluding inactive users from the roster (fix
+    above) can leave a shift with assignments but zero *active* recipients.
+    The dedup flag must only be stamped when a reminder was actually sent,
+    or a member added/reactivated later in the window never gets one."""
+
+    async def test_flag_not_set_when_every_assigned_user_is_inactive(
+        self,
+        db_session: AsyncSession,
+    ):
+        org_id = await _insert_org(db_session)
+        inactive_user = await _insert_user(db_session, org_id=org_id, status="inactive")
+        shift_id, _, _ = await _insert_shift(
+            db_session,
+            org_id=org_id,
+            start_offset_minutes=30,
+        )
+        await _insert_assignment(
+            db_session, org_id=org_id, shift_id=shift_id, user_id=inactive_user
+        )
+        await db_session.flush()
+
+        await run_shift_reminders(db_session)
+
+        notifs = (
+            (
+                await db_session.execute(
+                    select(NotificationLog).where(
+                        NotificationLog.organization_id == org_id,
+                        NotificationLog.recipient_id == inactive_user,
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        assert notifs == []
+
+        shift = (
+            await db_session.execute(select(Shift).where(Shift.id == shift_id))
+        ).scalar_one()
+        assert not (shift.activities or {}).get("start_reminder_sent")
+
+    async def test_flag_set_and_reminder_sent_for_active_users(
+        self,
+        db_session: AsyncSession,
+    ):
+        org_id = await _insert_org(db_session)
+        active_user = await _insert_user(db_session, org_id=org_id)
+        shift_id, _, _ = await _insert_shift(
+            db_session,
+            org_id=org_id,
+            start_offset_minutes=30,
+        )
+        await _insert_assignment(
+            db_session, org_id=org_id, shift_id=shift_id, user_id=active_user
+        )
+        await db_session.flush()
+
+        await run_shift_reminders(db_session)
+
+        notifs = (
+            (
+                await db_session.execute(
+                    select(NotificationLog).where(
+                        NotificationLog.organization_id == org_id,
+                        NotificationLog.recipient_id == active_user,
+                    )
+                )
+            )
+            .scalars()
+            .all()
+        )
+        assert len(notifs) == 1
+
+        shift = (
+            await db_session.execute(select(Shift).where(Shift.id == shift_id))
+        ).scalar_one()
+        assert (shift.activities or {}).get("start_reminder_sent") is True
+
+
 # ── run_end_of_shift_summary ─────────────────────────────────────────
 
 
