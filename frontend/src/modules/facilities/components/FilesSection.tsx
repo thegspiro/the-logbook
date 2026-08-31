@@ -86,8 +86,15 @@ export default function FilesSection({
     if (!editTarget) return;
     const target = editTarget;
     const { kind, item } = target;
-    if (kind === 'photo') await facilitiesService.updatePhoto(item.id, { caption: blankToNull(value) });
-    else await facilitiesService.updateFacilityDocument(item.id, { description: blankToNull(value) });
+    try {
+      if (kind === 'photo') await facilitiesService.updatePhoto(item.id, { caption: blankToNull(value) });
+      else await facilitiesService.updateFacilityDocument(item.id, { description: blankToNull(value) });
+    } catch (error) {
+      // Leave the dialog open on failure: closing it would discard the text
+      // the user typed while telling them nothing went wrong.
+      toast.error(getErrorMessage(error, 'Unable to save'));
+      return;
+    }
     // Only close the dialog this request opened -- a slower earlier submit
     // completing after the user dismissed it and opened a different edit
     // must not clear (and discard) that second, still-open edit.
@@ -105,9 +112,17 @@ export default function FilesSection({
       }))
     )
       return;
-    if (kind === 'photo') await facilitiesService.deletePhoto(item.id);
-    else await facilitiesService.deleteFacilityDocument(item.id);
-    await load();
+    // Matching upload()/load() in this component: without the catch a failed
+    // delete is an unhandled rejection with no toast and no UI change, which
+    // reads to the user exactly like a delete that worked.
+    try {
+      if (kind === 'photo') await facilitiesService.deletePhoto(item.id);
+      else await facilitiesService.deleteFacilityDocument(item.id);
+    } catch (error) {
+      toast.error(getErrorMessage(error, `Unable to delete ${kind}`));
+    } finally {
+      await load();
+    }
   };
 
   if (loading)

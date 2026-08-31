@@ -122,9 +122,14 @@ export const useFacilitiesStore = create<FacilitiesState>((set, get) => {
     // Load lookup data (types, statuses, maintenance types)
     loadLookupData: async () => {
       try {
+        // Active only. This store feeds the pickers on the facility create and
+        // edit forms, and the types/statuses endpoints apply no filter by
+        // default — so deactivating a lookup on the settings screen changed
+        // nothing anywhere, which is a switch wired to nothing (pitfall #19).
+        // The settings screen calls the service directly and still sees both.
         const [types, statuses, maintTypes] = await Promise.all([
-          facilitiesService.getTypes(),
-          facilitiesService.getStatuses(),
+          facilitiesService.getTypes({ is_active: true }),
+          facilitiesService.getStatuses({ is_active: true }),
           facilitiesService.getMaintenanceTypes(),
         ]);
         set({

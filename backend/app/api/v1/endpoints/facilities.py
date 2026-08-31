@@ -1047,6 +1047,15 @@ async def delete_facility_document(
 )
 async def list_facility_maintenance_types(
     is_active: bool | None = Query(True, description="Filter by active status"),
+    include_inactive: bool = Query(
+        False,
+        description=(
+            "Return both active and inactive types. The settings screen needs "
+            "this: is_active defaults to True, and a bool query parameter "
+            "cannot express 'no filter', so a deactivated type disappeared "
+            "from the only screen that can edit or reactivate it."
+        ),
+    ),
     include_system: bool = Query(True, description="Include system-defined types"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(
@@ -1062,7 +1071,7 @@ async def list_facility_maintenance_types(
     service = FacilitiesService(db)
     types = await service.list_maintenance_types(
         organization_id=current_user.organization_id,
-        is_active=is_active,
+        is_active=None if include_inactive else is_active,
         include_system=include_system,
     )
     return types
