@@ -38,7 +38,7 @@ from app.utils.check_types import (
 # vocabulary. `app/utils/check_types` is the authority; see the notes there for
 # why nine values collapsed to four.
 #
-# Keep in step with CHECK_TYPES in frontend/src/pages/scheduling/
+# Keep in step with CHECK_TYPES in frontend/src/modules/inventory/
 # equipmentCheckPresets.ts, which is what the template builder offers.
 CHECK_TYPES = frozenset(
     set(CANONICAL_CHECK_TYPES) | set(STRUCTURAL_TYPES) | set(LEGACY_CHECK_TYPES)

@@ -173,12 +173,24 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
               },
             ]
           : []),
-        ...(isModuleOn('scheduling')
+        // See SideNavigation for why "My Checklists" carries no permission
+        // gate: it is every member's only route to the checks they owe.
+        ...(isModuleOn('inventory')
+          ? [
+              { label: 'My Checklists', path: '/inventory/checklists/my' },
+              {
+                label: 'Fleet Readiness',
+                path: '/inventory/checklists',
+                anyPermission: ['inventory.check_view', 'scheduling.manage'],
+              },
+            ]
+          : []),
+        ...(isModuleOn('inventory')
           ? [
               {
                 label: 'Apparatus Inventory',
-                path: '/scheduling/apparatus-inventory',
-                anyPermission: ['equipment_check.submit', 'equipment_check.view', 'inventory.view'],
+                path: '/inventory/checklists/apparatus-inventory',
+                anyPermission: ['inventory.check_submit', 'inventory.check_view', 'inventory.view'],
               },
             ]
           : []),

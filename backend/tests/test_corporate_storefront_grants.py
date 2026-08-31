@@ -12,7 +12,35 @@ from pathlib import Path
 
 import pytest
 
-from app.core.permissions import DEFAULT_POSITIONS, OPERATIONAL_RANKS
+from app.core.permissions import (
+    DEFAULT_POSITIONS,
+    LEGACY_PERMISSION_ALIASES,
+    OPERATIONAL_RANKS,
+)
+
+# Current name -> the name a migration frozen before the rename would have
+# written. Built from the alias map so it cannot fall out of step with it.
+_RENAMED_SINCE: dict[str, str] = {
+    new: legacy
+    for legacy, replacements in LEGACY_PERMISSION_ALIASES.items()
+    if not legacy.endswith(".*")
+    for new in replacements
+}
+
+
+def _as_frozen(permissions: set[str]) -> set[str]:
+    """Spell *permissions* the way a migration older than the rename would.
+
+    A migration's snapshot is frozen: it has to keep matching the rows it will
+    actually meet, and this one runs before the equipment_check -> inventory
+    rename, so the rows it reads still carry the old names (CLAUDE.md pitfall
+    #20). Translating the live registry back is therefore the correct
+    comparison — updating the snapshot to today's names would leave it matching
+    nothing and turn the backfill into a silent no-op, which is the exact
+    failure these tests exist to catch.
+    """
+    return {_RENAMED_SINCE.get(p, p) for p in permissions}
+
 
 _MIGRATION = (
     Path(__file__).resolve().parents[1]
@@ -90,7 +118,7 @@ class TestBackfillMirrorsTheRegistry:
     )
     def test_snapshot_is_the_registry_set_minus_the_added_grants(self, slug):
         module = _load_migration()
-        registry = set(DEFAULT_POSITIONS[slug]["permissions"])
+        registry = _as_frozen(set(DEFAULT_POSITIONS[slug]["permissions"]))
         assert module._PRIOR_DEFAULTS[slug] == registry - set(module._GRANTS)
 
     def test_snapshot_never_already_carries_a_grant(self):

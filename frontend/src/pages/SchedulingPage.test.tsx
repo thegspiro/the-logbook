@@ -18,14 +18,17 @@ vi.mock('../modules/scheduling/services/api', () => ({
     getTemplates: vi.fn().mockResolvedValue([]),
     getWeekCalendar: vi.fn().mockResolvedValue([]),
     getMonthCalendar: vi.fn().mockResolvedValue([]),
-    getSupplyExpiringItems: vi.fn().mockResolvedValue({ total: 0, items: [] }),
-    getMyChecklists: vi.fn().mockResolvedValue([]),
-    getMyChecklistHistory: vi.fn().mockResolvedValue([]),
-    getEquipmentCheckTemplates: vi.fn().mockResolvedValue([]),
     getMyAssignments: vi.fn().mockResolvedValue([]),
     getMyShifts: vi.fn().mockResolvedValue([]),
     getOpenShifts: vi.fn().mockResolvedValue([]),
   },
+}));
+
+// The tab-switching tests below are about the tab bar, not about what any tab
+// renders. ShiftReportsTab pulls in shiftCompletionService and a good deal
+// more, so it is stubbed rather than mocking that whole surface here.
+vi.mock('./scheduling/ShiftReportsTab', () => ({
+  default: () => <div data-testid="shift-reports-tab">Shift reports</div>,
 }));
 
 // Mock global API services
@@ -178,15 +181,19 @@ describe('SchedulingPage', () => {
     // selected it and immediately snapped back. Assert on the tab's *content*,
     // not just its label: the labels stay in the DOM either way, which is why
     // the older assertion above did not catch this.
-    it('should open the Equipment Checks tab on click', async () => {
+    it('should open a lazy tab on click and keep it open', async () => {
       renderWithRouter(<SchedulingPage />);
       const user = userEvent.setup();
 
       const tabBar = await screen.findByRole('tablist', { name: /Scheduling views/i });
-      await user.click(within(tabBar).getByRole('tab', { name: /Equipment Checks/i }));
+      const reportsTab = within(tabBar).getByRole('tab', { name: /Shift Reports/i });
+      await user.click(reportsTab);
 
-      expect(await screen.findByText('My Equipment Checklists')).toBeInTheDocument();
-      expect(window.location.search).toContain('tab=equipment-checks');
+      // Assert on the tab's body, not its label: the labels stay in the DOM
+      // either way, which is what let the snap-back through before.
+      expect(await screen.findByTestId('shift-reports-tab')).toBeInTheDocument();
+      expect(reportsTab).toHaveAttribute('aria-selected', 'true');
+      expect(window.location.search).toContain('tab=shift-reports');
     });
 
     it('should return to the Schedule tab and drop the tab param', async () => {
@@ -194,14 +201,15 @@ describe('SchedulingPage', () => {
       const user = userEvent.setup();
 
       const tabBar = await screen.findByRole('tablist', { name: /Scheduling views/i });
-      await user.click(within(tabBar).getByRole('tab', { name: /Equipment Checks/i }));
-      await screen.findByText('My Equipment Checklists');
+      const reportsTab = within(tabBar).getByRole('tab', { name: /Shift Reports/i });
+      await user.click(reportsTab);
+      await screen.findByTestId('shift-reports-tab');
 
-      await user.click(within(tabBar).getByRole('tab', { name: /Schedule/i }));
+      const scheduleTab = within(tabBar).getByRole('tab', { name: 'Schedule' });
+      await user.click(scheduleTab);
 
-      await waitFor(() => {
-        expect(screen.queryByText('My Equipment Checklists')).not.toBeInTheDocument();
-      });
+      await waitFor(() => expect(screen.queryByTestId('shift-reports-tab')).not.toBeInTheDocument());
+      expect(scheduleTab).toHaveAttribute('aria-selected', 'true');
       expect(window.location.search).not.toContain('tab=');
     });
 
@@ -220,11 +228,24 @@ describe('SchedulingPage', () => {
     });
 
     it('should honour a ?tab= deep link on first render', async () => {
+      window.history.replaceState({}, '', '/scheduling?tab=shift-reports');
+
+      renderWithRouter(<SchedulingPage />);
+
+      expect(await screen.findByTestId('shift-reports-tab')).toBeInTheDocument();
+    });
+
+    it('falls back to Schedule when ?tab= names a tab that no longer exists', async () => {
+      // Equipment checks moved to Inventory and the tab went with them, but
+      // notifications sent before that carry ?tab=equipment-checks. It has to
+      // land somewhere rather than rendering an empty body.
       window.history.replaceState({}, '', '/scheduling?tab=equipment-checks');
 
       renderWithRouter(<SchedulingPage />);
 
-      expect(await screen.findByText('My Equipment Checklists')).toBeInTheDocument();
+      const tabBar = await screen.findByRole('tablist', { name: /Scheduling views/i });
+      expect(within(tabBar).getByRole('tab', { name: 'Schedule' })).toHaveAttribute('aria-selected', 'true');
+      expect(within(tabBar).queryByRole('tab', { name: /Equipment Checks/i })).not.toBeInTheDocument();
     });
 
     it('restores and preserves the selected calendar view and date in the URL', async () => {

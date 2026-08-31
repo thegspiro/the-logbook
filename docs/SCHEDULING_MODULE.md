@@ -1,5 +1,16 @@
 # Scheduling & Shifts Module
 
+> **Equipment checklists moved to the Inventory module on 2026-08-31.**
+> The whole feature lives under `/inventory/checklists` and
+> `/inventory/admin/checklists`; the permissions were renamed from
+> `equipment_check.*` to `inventory.check_*`; and the `/api/v1/equipment-checks`
+> router is gated on the Inventory module. **Scheduling hosts none of it** —
+> the Equipment Checks tab is gone, and what remains here is a link from shift
+> check-in and the shift detail panel, the finalize gate on outstanding checks,
+> and the shift template's checklist picker. Sections below describing checks
+> are kept for that shift-side behaviour — the URLs and permission names in
+> them are historical. See `wiki/Module-Inventory.md` for the current picture.
+
 Comprehensive shift scheduling, member signup, swap/time-off management, templates, patterns, and reporting.
 
 ## Overview
@@ -976,12 +987,18 @@ This integration allows training officers to document field observations, automa
 
 The **Shift Reports** settings tab (within Scheduling Settings) provides centralized configuration for the shift completion report workflow:
 
-#### Checklist Timing Windows
+#### Checklist Timing Windows — moved to Inventory _(2026-08-31)_
 
-| Setting                  | Default | Description                                            |
-| ------------------------ | ------- | ------------------------------------------------------ |
-| `start_of_shift_enabled` | `true`  | Whether start-of-shift equipment checklists are active |
-| `end_of_shift_enabled`   | `true`  | Whether end-of-shift equipment checklists are active   |
+These settings are still stored under `org.settings["shift_reports"]["checklist_timing"]`, but they are **edited in Inventory**, at **Gear Admin → Equipment Checklists → Checklist settings** (`/inventory/admin/checklists/settings`), along with the rest of the checklist feature. Only the editing surface moved; the storage key and its readers are unchanged.
+
+| Setting                      | Default | Description                                            |
+| ---------------------------- | ------- | ------------------------------------------------------ |
+| `start_of_shift_enabled`     | `true`  | Whether start-of-shift equipment checklists are active |
+| `end_of_shift_enabled`       | `true`  | Whether end-of-shift equipment checklists are active   |
+| `checkin_opens_hours_before` | `2`     | How early a member may check in for a shift            |
+| `checkin_closes_hours_after` | `12`    | How late a member may still check in                   |
+
+The Shift Reports panel neither loads nor saves this block. It sends only `post_shift_validation` under the `shift_reports` key, and the settings endpoint deep-merges — sending the whole object from both screens would let whichever saved last revert the other.
 
 #### Post-Shift Validation
 
@@ -1040,8 +1057,12 @@ Officers can save incomplete reports as drafts by enabling the `save_as_draft` f
 
 ```
 Scheduling Settings (ShiftReportsSettingsPanel)
-    ↓ saves to org.settings["shift_reports"]
-Checklist timing & post-shift validation
+    ↓ saves to org.settings["shift_reports"]["post_shift_validation"]
+Post-shift validation
+
+Gear Admin → Checklist settings (ChecklistSettingsPage, Inventory)
+    ↓ saves to org.settings["shift_reports"]["checklist_timing"]
+Checklist timing
 
 Training Module Config (training_module_configs table)
     ↓ provides
@@ -1409,13 +1430,12 @@ Notification cards use this metadata to render:
 
 `SchedulingPage.tsx` now reads the `?tab=` query parameter on mount:
 
-| Parameter               | Tab                           |
-| ----------------------- | ----------------------------- |
-| `?tab=schedule`         | Schedule (calendar) — default |
-| `?tab=my-shifts`        | My Shifts                     |
-| `?tab=open-shifts`      | Open Shifts                   |
-| `?tab=requests`         | Requests                      |
-| `?tab=equipment-checks` | Equipment Checks              |
+| Parameter          | Tab                           |
+| ------------------ | ----------------------------- |
+| `?tab=schedule`    | Schedule (calendar) — default |
+| `?tab=my-shifts`   | My Shifts                     |
+| `?tab=open-shifts` | Open Shifts                   |
+| `?tab=requests`    | Requests                      |
 
 Invalid values fall back to the Schedule tab. This enables deep-linking from notifications, email links, and the Start Checklist CTA in notification cards.
 
@@ -1978,10 +1998,10 @@ the loop between the shelf (Inventory) and the truck (Equipment Checks).
 
 ### New pages
 
-| URL                               | Page                                                                | Permission                                                                |
-| --------------------------------- | ------------------------------------------------------------------- | ------------------------------------------------------------------------- |
-| `/scheduling/supply/expiring`     | Expiring on Apparatus — the supply worklist                         | any of `scheduling.manage`, `equipment_check.view`, `inventory.view`      |
-| `/scheduling/apparatus-inventory` | Apparatus Inventory — standing view of one truck, outside any check | any of `equipment_check.submit`, `equipment_check.view`, `inventory.view` |
+| URL                                         | Page                                                                | Permission                                                                |
+| ------------------------------------------- | ------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| `/inventory/admin/checklists/supply`        | Expiring on Apparatus — the supply worklist                         | any of `scheduling.manage`, `inventory.check_view`, `inventory.view`      |
+| `/inventory/checklists/apparatus-inventory` | Apparatus Inventory — standing view of one truck, outside any check | any of `inventory.check_submit`, `inventory.check_view`, `inventory.view` |
 
 The worklist is reached from the **Supply** tile on the Scheduling hub (which
 carries a count badge) and from the Gear Admin hub. The apparatus view is
@@ -1998,7 +2018,7 @@ reached from **My Equipment Checklists → Apparatus Inventory**.
 
 ### Endpoints
 
-All under `/api/v1/equipment-checks`. **Writes accept `equipment_check.submit`**
+All under `/api/v1/equipment-checks`. **Writes accept `inventory.check_submit`**
 — the default member position — as well as the manage permissions.
 
 ```
@@ -2146,14 +2166,14 @@ else (missed checks, failed items, an unfinished check) is _needs attention_.
 
 ### Routes
 
-| Route                                | Purpose                                                      | Permission                                                                   |
-| ------------------------------------ | ------------------------------------------------------------ | ---------------------------------------------------------------------------- |
-| `/scheduling/equipment`              | Fleet board — one card per apparatus                         | any of `equipment_check.view`, `scheduling.manage`                           |
-| `/scheduling/equipment/checks`       | Check log, fleet-wide (grid + log)                           | any of `equipment_check.submit`, `equipment_check.view`, `scheduling.manage` |
-| `/scheduling/equipment/:apparatusId` | Apparatus detail — Checks / Inventory / Findings / Check log | any of `equipment_check.view`, `scheduling.manage`                           |
+| Route                                          | Purpose                                                      | Permission                                                                   |
+| ---------------------------------------------- | ------------------------------------------------------------ | ---------------------------------------------------------------------------- |
+| `/inventory/checklists`                        | Fleet board — one card per apparatus                         | any of `inventory.check_view`, `scheduling.manage`                           |
+| `/inventory/checklists/log`                    | Check log, fleet-wide (grid + log)                           | any of `inventory.check_submit`, `inventory.check_view`, `scheduling.manage` |
+| `/inventory/checklists/apparatus/:apparatusId` | Apparatus detail — Checks / Inventory / Findings / Check log | any of `inventory.check_view`, `scheduling.manage`                           |
 
 The Equipment Checks tab (`EquipmentChecksTab`) branches on
-`equipment_check.view`: holders get the fleet board, everyone else keeps
+`inventory.check_view`: holders get the fleet board, everyone else keeps
 `MyChecklistsPage`. That is not a preference — the fleet endpoint is gated and
 would 403 a plain member.
 
@@ -2163,8 +2183,8 @@ All under `/api/v1/equipment-checks`.
 
 | Method | Path     | Notes                                                                                                                                                                                                                                                                           |
 | ------ | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `GET`  | `/fleet` | Readiness roll-up. `equipment_check.view`. Params: `strip_dates` (1–90), `expiring_days` (1–365)                                                                                                                                                                                |
-| `GET`  | `/log`   | Expected-vs-actual. Open to any authenticated member; **the server sets the scope** — without `equipment_check.view` the caller gets only their own checks and no grid, because a matrix of one member's checks reads as fleet coverage. Params: `dates` (1–90), `apparatus_id` |
+| `GET`  | `/fleet` | Readiness roll-up. `inventory.check_view`. Params: `strip_dates` (1–90), `expiring_days` (1–365)                                                                                                                                                                                |
+| `GET`  | `/log`   | Expected-vs-actual. Open to any authenticated member; **the server sets the scope** — without `inventory.check_view` the caller gets only their own checks and no grid, because a matrix of one member's checks reads as fleet coverage. Params: `dates` (1–90), `apparatus_id` |
 
 `ApparatusInventoryPage` takes an optional `apparatusId` prop; supplied, it
 drops its own picker and fleet-walk and becomes the detail page's Inventory

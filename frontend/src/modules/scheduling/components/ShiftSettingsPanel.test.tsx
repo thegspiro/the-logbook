@@ -104,7 +104,7 @@ describe('ShiftSettingsPanel', () => {
   // The footer writes only the locally-stored settings object. It used to show
   // on every section, so switching to Notifications or Shift Reports offered a
   // Save button that flashed "Settings saved" without touching their values.
-  describe.each<SettingsTab>(['general', 'apparatus', 'equipment'])('on the %s section', (tab) => {
+  describe.each<SettingsTab>(['general', 'apparatus'])('on the %s section', (tab) => {
     it('offers the Save/Reset footer', () => {
       renderPanel(tab);
 
@@ -113,7 +113,10 @@ describe('ShiftSettingsPanel', () => {
     });
   });
 
-  describe.each<SettingsTab>(['platoons', 'eligibility', 'notifications', 'shift-reports'])(
+  // 'equipment' belongs in this list, not the one above: its four settings were
+  // stored and read by nothing, so they were deleted and the section is now a
+  // signpost to Inventory. A Save button there would write nothing.
+  describe.each<SettingsTab>(['platoons', 'eligibility', 'notifications', 'shift-reports', 'equipment'])(
     'on the %s section',
     (tab) => {
       it('hides the Save/Reset footer it would not act on', () => {

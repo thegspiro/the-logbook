@@ -35,8 +35,8 @@ def test_withdrawing_a_restock_report_requires_management_permission():
     """
     permissions = _permission_set("/items/{template_item_id}/used", "DELETE")
 
-    assert permissions == {"equipment_check.manage", "inventory.manage"}
-    assert "equipment_check.submit" not in permissions
+    assert permissions == {"inventory.check_manage", "inventory.manage"}
+    assert "inventory.check_submit" not in permissions
 
 
 def test_swapping_stock_onto_a_truck_is_open_to_check_submitters():
@@ -54,8 +54,8 @@ def test_swapping_stock_onto_a_truck_is_open_to_check_submitters():
     permissions = _permission_set("/items/{template_item_id}/swap", "POST")
 
     assert permissions == {
-        "equipment_check.submit",
-        "equipment_check.manage",
+        "inventory.check_submit",
+        "inventory.check_manage",
         "inventory.manage",
     }
 
@@ -64,7 +64,7 @@ def test_supply_overview_requires_officer_permission():
     """Check and inventory officers, but not baseline viewers, get access."""
     permissions = _permission_set("/supply/expiring-items", "GET")
 
-    assert permissions == {"equipment_check.view", "inventory.manage"}
+    assert permissions == {"inventory.check_view", "inventory.manage"}
     assert "inventory.view" not in permissions
 
 
@@ -74,8 +74,8 @@ def test_supply_overview_requires_officer_permission():
 )
 def test_standalone_check_writes_require_submit_or_manage(path, method):
     assert _permission_set(path, method) == {
-        "equipment_check.submit",
-        "equipment_check.manage",
+        "inventory.check_submit",
+        "inventory.check_manage",
     }
 
 
@@ -109,8 +109,8 @@ def _route_endpoint(path: str, method: str):
 @pytest.mark.parametrize(
     ("permissions", "limited"),
     [
-        (("equipment_check.submit",), True),
-        (("equipment_check.manage",), False),
+        (("inventory.check_submit",), True),
+        (("inventory.check_manage",), False),
         (("inventory.manage",), False),
     ],
 )
@@ -139,7 +139,7 @@ async def test_swap_applies_operational_limits_only_to_submitters(permissions, l
 
 @pytest.mark.parametrize(
     "permissions",
-    [("equipment_check.submit",), ("equipment_check.manage",)],
+    [("inventory.check_submit",), ("inventory.check_manage",)],
     ids=["submit-only user", "manager"],
 )
 @pytest.mark.parametrize(

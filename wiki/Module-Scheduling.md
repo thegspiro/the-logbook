@@ -2,6 +2,22 @@
 
 The Scheduling module manages shift scheduling, member self-service signup, swap and time-off requests, shift templates, and scheduling reports.
 
+> **Equipment checklists moved to Inventory on 2026-08-31.** A checklist is a
+> list of inventory items, so the whole feature — authoring it, performing it
+> and reporting on it — lives in the
+> [Inventory module](Module-Inventory#equipment-checklists-moved-here-2026-08-31)
+> under `/inventory/checklists`. **Scheduling hosts none of it.**
+>
+> What Scheduling keeps is the shift's own business: a "Start checklist" link
+> on shift check-in and on the shift detail panel, both pointing at
+> `/inventory/checklists/my?shift={id}`; the finalize gate on outstanding
+> end-of-shift checks; and the picker that lets a shift template **name** the
+> checklists its shifts carry, edited under the vehicle picker on the template.
+>
+> The Equipment Checks tab is gone, and so are the old `/scheduling/equipment*`
+> URLs. Members reach their checklists from the **My Checklists** nav row.
+> Sections below that describe checks are kept for the shift-side behaviour.
+
 ---
 
 ## Key Features
@@ -568,11 +584,11 @@ assignments, check-in state) remains visible to any member.
 
 ## Pages
 
-| URL                               | Page                                    | Permission                                                                |
-| --------------------------------- | --------------------------------------- | ------------------------------------------------------------------------- |
-| `/scheduling`                     | Scheduling Hub                          | Authenticated                                                             |
-| `/scheduling/supply/expiring`     | Expiring on Apparatus (supply worklist) | any of `scheduling.manage`, `equipment_check.view`, `inventory.view`      |
-| `/scheduling/apparatus-inventory` | Apparatus Inventory _(2026-08-10)_      | any of `equipment_check.submit`, `equipment_check.view`, `inventory.view` |
+| URL                                         | Page                                    | Permission                                                                |
+| ------------------------------------------- | --------------------------------------- | ------------------------------------------------------------------------- |
+| `/scheduling`                               | Scheduling Hub                          | Authenticated                                                             |
+| `/inventory/admin/checklists/supply`        | Expiring on Apparatus (supply worklist) | any of `scheduling.manage`, `inventory.check_view`, `inventory.manage`    |
+| `/inventory/checklists/apparatus-inventory` | Apparatus Inventory _(2026-08-10)_      | any of `inventory.check_submit`, `inventory.check_view`, `inventory.view` |
 
 ### Scheduling Tabs
 
@@ -632,15 +648,15 @@ when the picker lands.
 ### Equipment-Check Supply Endpoints _(2026-08-10)_
 
 Everything below lives under `/api/v1/equipment-checks`. Reads accept
-`equipment_check.view` / `inventory.view`. Writes are split by intent
+`inventory.check_view` / `inventory.view`. Writes are split by intent
 _(tightened 2026-08-11)_:
 
 - **Reporting what you just used** (`POST /items/{id}/used`, and deployed-lot
-  quantity updates) accepts `equipment_check.submit` — the default member
-  position — as well as `equipment_check.manage` / `inventory.manage`.
+  quantity updates) accepts `inventory.check_submit` — the default member
+  position — as well as `inventory.check_manage` / `inventory.manage`.
   Recording consumption is crew work; gating it behind a manage permission is
   what leaves the gap for the next morning's check to find.
-- **Corrections of record** now require `equipment_check.manage` or
+- **Corrections of record** now require `inventory.check_manage` or
   `inventory.manage` only: withdrawing a restock report
   (`DELETE /items/{id}/used`), swapping a ready-stock lot onto the apparatus
   (`POST /items/{id}/swap`), and editing a deployed lot's identity fields
@@ -806,9 +822,9 @@ POST   /templates/{template_id}/inventory-links          # Apply a reviewed set 
 | `/scheduling/patterns`                              | Scheduling Patterns              | `scheduling.manage`      |
 | `/scheduling/reports`                               | Scheduling Reports               | `scheduling.manage`      |
 | `/scheduling/settings`                              | Scheduling Settings              | `scheduling.manage`      |
-| `/scheduling/equipment-check-templates/new`         | Equipment Check Template Builder | `equipment_check.manage` |
-| `/scheduling/equipment-check-templates/:templateId` | Edit Equipment Check Template    | `equipment_check.manage` |
-| `/scheduling/equipment-check-reports`               | Equipment Check Reports          | `scheduling.manage`      |
+| `/inventory/admin/checklists/templates/new`         | Equipment Check Template Builder | `inventory.check_manage` |
+| `/inventory/admin/checklists/templates/:templateId` | Edit Equipment Check Template    | `inventory.check_manage` |
+| `/inventory/admin/checklists/reports`               | Equipment Check Reports          | `inventory.check_view`   |
 
 ### Data Model Changes (2026-03-19)
 
@@ -912,7 +928,9 @@ POST   /templates/{template_id}/inventory-links          # Apply a reviewed set 
 
 ### Shift Reports Settings Panel
 
-A new **Shift Reports** sub-tab within Scheduling Settings provides centralized configuration for the shift completion report workflow, including checklist timing, post-shift validation, form section toggles, apparatus-specific skills/tasks, and rating scale customization.
+A new **Shift Reports** sub-tab within Scheduling Settings provides centralized configuration for the shift completion report workflow, including post-shift validation, form section toggles, apparatus-specific skills/tasks, and rating scale customization.
+
+> **Checklist timing moved (2026-08-31).** The Checklist Timing section left this panel with the rest of the equipment-checklist feature and is now at **Gear Admin → Equipment Checklists → Checklist settings**. The values are still stored under `org.settings["shift_reports"]["checklist_timing"]` — only the editing surface moved — and this panel no longer reads or writes them.
 
 **Settings stored in `org.settings["shift_reports"]`:**
 
@@ -1219,7 +1237,7 @@ Previously, incomplete checks could not be resumed. Now:
 New granular toggles in the **Shift Reports Settings Panel** extend the existing form section toggles with department-level behavioral controls:
 
 - **Editable tag lists**: Skills and tasks per apparatus type are now managed via inline `EditableTagList` components with add/remove buttons, replacing the previous accordion-only display
-- **Settings connection**: Settings panel reads from and writes to both `training_module_configs` (form section toggles, apparatus mappings) and `org.settings["shift_reports"]` (checklist timing, post-shift validation)
+- **Settings connection**: Settings panel reads from and writes to both `training_module_configs` (form section toggles, apparatus mappings) and `org.settings["shift_reports"]` — the `post_shift_validation` half only, since `checklist_timing` is edited in Inventory and the endpoint deep-merges
 
 ---
 

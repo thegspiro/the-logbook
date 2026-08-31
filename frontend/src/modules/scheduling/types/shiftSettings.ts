@@ -82,27 +82,18 @@ export interface ResourceTypeDefaults {
   label: string;
 }
 
-export interface EquipmentCheckSettings {
-  enabled: boolean;
-  requireSignature: boolean;
-  defaultExpirationWarningDays: number;
-  blockShiftStartOnFail: boolean;
-}
-
 // ─── Shift report & post-shift validation settings (org.settings) ───────────
 
+/**
+ * The half of org.settings["shift_reports"] that Scheduling still owns.
+ *
+ * Its sibling `checklist_timing` is edited in Inventory (Gear Admin → Checklist
+ * Settings) and is deliberately absent here. The panel saves by sending this
+ * object under `shift_reports`, and the settings endpoint deep-merges, so a key
+ * this type does not carry is a key this panel cannot overwrite — which is what
+ * keeps two screens in two modules from reverting each other.
+ */
 export interface ShiftReportSettings {
-  checklist_timing: {
-    start_of_shift_enabled: boolean;
-    end_of_shift_enabled: boolean;
-    /**
-     * How long either side of a shift a member may still check in. Check-in was
-     * previously refused only once an officer had finalised the shift, so a
-     * stale link recorded attendance against a shift that ended days earlier.
-     */
-    checkin_opens_hours_before: number;
-    checkin_closes_hours_after: number;
-  };
   post_shift_validation: {
     enabled: boolean;
     require_officer_report: boolean;
@@ -119,7 +110,6 @@ export interface ShiftSettings {
   customPositions: CustomPosition[];
   apparatusTypeDefaults: Record<string, ApparatusTypeDefaults>;
   resourceTypeDefaults: Record<string, ResourceTypeDefaults>;
-  equipmentCheckSettings: EquipmentCheckSettings;
 }
 
 /**
@@ -145,10 +135,4 @@ export const DEFAULT_SETTINGS: ShiftSettings = {
   customPositions: [],
   apparatusTypeDefaults: { ...DEFAULT_APPARATUS_TYPE_POSITIONS },
   resourceTypeDefaults: { ...DEFAULT_RESOURCE_TYPE_POSITIONS },
-  equipmentCheckSettings: {
-    enabled: false,
-    requireSignature: false,
-    defaultExpirationWarningDays: 30,
-    blockShiftStartOnFail: false,
-  },
 };

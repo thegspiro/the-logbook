@@ -7,6 +7,94 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Equipment checklists moved from Scheduling to Inventory (2026-08-31)
+
+**Changed — action required**
+
+Equipment checklists are now part of the **Inventory** module rather than
+Shift Scheduling. A checklist is a list of inventory items — a checklist
+position already pointed at an item in the catalog, and the lots aboard a truck
+are drawn from the same stock — so the feature now lives with the things it
+tracks. Crews still start and complete checks from their shift; only authoring,
+reporting and the fleet views moved.
+
+Three things change for existing departments:
+
+- **The pages have new addresses, and the old ones no longer work.** Bookmarks
+  and links in previously-sent emails will land on the dashboard.
+
+  | Was                                       | Is now                                      |
+  | ----------------------------------------- | ------------------------------------------- |
+  | `/scheduling/equipment-check-templates/…` | `/inventory/admin/checklists/templates/…`   |
+  | `/scheduling/equipment-check-reports`     | `/inventory/admin/checklists/reports`       |
+  | `/scheduling/supply/expiring`             | `/inventory/admin/checklists/supply`        |
+  | `/scheduling/equipment`                   | `/inventory/checklists`                     |
+  | `/scheduling/equipment/checks`            | `/inventory/checklists/log`                 |
+  | `/scheduling/equipment/{id}`              | `/inventory/checklists/apparatus/{id}`      |
+  | `/scheduling/apparatus-inventory`         | `/inventory/checklists/apparatus-inventory` |
+  | `/scheduling?tab=equipment-checks`        | `/inventory/checklists/my`                  |
+
+- **The Equipment Checks tab is gone from the shift screen**, and with it the
+  Check Reports and Supply shortcuts in Officer tools. Equipment checks are no
+  longer part of Shift Scheduling in any sense — the whole feature is in
+  Inventory, and Scheduling links to it.
+
+  **Members now find their checklists in the navigation**, under Operations →
+  **My Checklists**. That row is new, and it is a genuine improvement: before
+  this, a member's only route to the checks they owed was a tab inside Shift
+  Scheduling. Officers get **Fleet Readiness** beside it.
+
+  From a shift itself nothing changes in practice: check-in and the shift
+  detail panel still offer "Start checklist", and shift finalization still
+  refuses to close on outstanding end-of-shift checks.
+
+  One consequence worth knowing: end-of-shift reminder notifications already
+  sitting in members' bells carry the old address and will land on the
+  dashboard. New ones point at the right place. These reminders age out within
+  a few days.
+
+- **The permissions were renamed** from `equipment_check.view` / `.manage` /
+  `.submit` to `inventory.check_view` / `inventory.check_manage` /
+  `inventory.check_submit`. Every position keeps exactly the authority it had —
+  a migration renames the stored grants, and the old names keep working for any
+  row it cannot reach. One consequence worth knowing: a position holding the
+  `inventory.*` wildcard now also grants the checklist permissions, as it
+  already did for medical supplies.
+
+- **Checklists now require the Inventory module.** A department that had
+  switched Inventory off has it switched back on automatically if it uses
+  equipment checks. If Inventory is later switched off deliberately, the
+  Equipment Checks tab disappears from the shift screen rather than erroring.
+
+**Added**
+
+- A shift template can now **name the equipment checklists its shifts carry**,
+  instead of every shift working them out from its vehicle. Naming them
+  replaces the vehicle's own; leaving them unticked keeps today's behaviour, so
+  nothing changes until a department uses it. Edit them on the shift template,
+  under the vehicle picker.
+
+- **Checklist settings now live with the checklists**, at Gear Admin >
+  Equipment Checklists > Checklist settings. These are the four that decide
+  when crews are prompted — start-of-shift and end-of-shift checklists, and how
+  early or late a member may still check in. They were edited from the shift
+  module's settings; the values themselves are unchanged and carried over
+  automatically, so nothing needs re-entering.
+
+**Removed**
+
+- **Four equipment-check settings that did nothing have been removed** —
+  "Enable equipment checks for shifts", "Require signature on completion",
+  "Block shift start when required items fail" and "Default expiration warning
+  (days)", all previously on Scheduling > Settings > Equipment. Every one of
+  them was stored, reported as saved, and read by no code anywhere: there is no
+  signature field on the check form to require, nothing consulted the warning
+  default (30 days was hardcoded), and a failed required item never blocked a
+  shift start. Switching any of them made no difference before and makes none
+  now, but the app no longer claims otherwise. The Equipment section of shift
+  settings is now a signpost to Inventory and shows no Save button, because it
+  has nothing left to save.
+
 ### A new crew experience for the equipment check (2026-08-31)
 
 **Added**
