@@ -16,10 +16,79 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-None. Feature 24 (Meetings & minutes), pass 2, is fully merged — see log
-entry below. Next: feature 25, Messaging & notifications.
+[#2081](https://github.com/thegspiro/the-logbook/pull/2081) — feature 25
+(Messaging & notifications), pass 2. Branch
+`claude/security-review-messaging-notifications-pass2`. Subscribed via
+`subscribe_pr_activity`; awaiting CI/review.
 
 ---
+
+### 2026-08-31 — Feature 25 (Messaging & notifications), pass 2 — 1 fixed (LOW-MED), 1 flagged (LOW-MED) — PR #2081
+
+No security-review PR was open (feature 24/Meetings & minutes pass 2 fully
+merged via PR #2080), so the rotation continued directly to feature 25.
+Loaded `CHECKLIST.md`, `SEC-00-cross-cutting-baseline.md`, pass 1's own
+findings doc (`MSG-25-messaging-notifications.md`, PR #1907), the module-audit
+docs (`docs/module-audit/messaging.md`, `docs/module-audit/notifications.md`),
+and the 4-5-pass app-review docs (`docs/app-review/messaging.md`,
+`docs/app-review/notifications.md`, `docs/app-review/email-templates.md`).
+
+Messaging's architecture changed materially since pass 1: PR #1938 (merged
+2026-08-27, after pass 1 closed) replaced live in-Python audience
+re-evaluation with a durable `DepartmentMessageRecipient` table, materialized
+at publish time and reconciled on an audience edit. Re-read
+`messaging_service.py` (now 1047 L), `messages.py`, and `message_history.py`
+in full against that change; confirmed `notifications.py`/
+`notifications_service.py`/`push_service.py`/`notification_rules.py`/
+`notification_channels.py`/`integration_services/notification_dispatch.py`
+and the whole email-templates surface unchanged since pass 1 (git history
+shows only a no-op merge touching those files) and spot-checked each pass-1
+fix directly against current code rather than re-deriving. All eight pass-1
+fixes (MSG-4 through MSG-8, the Codex-round `cc_emails` legacy-read fix)
+confirmed intact.
+
+**Frontend reviewed for the first time this rotation** (pass 1 was backend
+only): `modules/communications/` (messaging admin/inbox, email-template
+editor/preview/scheduler), `modules/notifications/`, `NotificationsPage.tsx`,
+`usePushNotifications.ts`. All verified good — no `window.confirm`/`alert`/
+`prompt`, no `dangerouslySetInnerHTML` (department-message bodies render via
+the script-safe `LinkifiedText` component), the email-template preview iframe
+is `sandbox="allow-same-origin"` with no `allow-scripts` (blocks script
+execution regardless of template content), no direct `fetch(`, no banned
+date-formatting methods, update payloads send explicit nulls correctly on
+edit, `UNCACHEABLE_PREFIXES` coverage current, and route permission gates
+match all enumerated backend permission strings.
+
+**MSG-9 (LOW-MED, fixed)** — `get_message_stats`'s `read_count`/`ack_count`
+queries filtered only by `message_id`, not `organization_id`, unlike
+`targeted_count` three lines below and every other by-id query in the file.
+Not currently exploitable (`message_id` is always pre-resolved through an
+org-scoped `get_message_by_id` call one line above), but one refactor away
+from a real cross-tenant read. Fixed by adding the missing filter; guard test
+added that inspects the compiled `WHERE` clause and fails on reintroduction
+(verified by reproducing the bug locally and confirming the test catches it).
+
+**Flagged (not fixed, recorded in `docs/KNOWN_LIMITATIONS.md`)** —
+`reconcile_recipients` hard-deletes a member's `DepartmentMessageRecipient`
+row, including `read_at`/`acknowledged_at`, the moment an audience edit no
+longer targets them — silently destroying acknowledgment history the same
+file's own `delete_message` docstring calls "compliance evidence." Not
+mechanically fixable like MSG-9: keeping resolved rows would also keep the
+message visible in that member's inbox (visibility is a join on the same
+table), which is a product decision, not a bug fix. Not cross-tenant.
+
+Also corrected a stale doc: `docs/app-review/email-templates.md` still marked
+MAIL-3 (attachment magic-byte validation) as OPEN; the code already fixes it
+(fails closed with a 503 when libmagic is unavailable) — pass 1's own
+"Verified good" section had already confirmed this but never corrected the
+doc it was re-checking against.
+
+Full local completion gate green: flake8/black/isort (CI's 8.0.1 pin)
+clean across `app/ tests/ alembic/`, `validate_migrations.py --strict` passed
+(394 revisions, single head), 1100/1100 messaging+notifications+email-template
+scoped tests and 9288/9288 full backend suite passed, `tsc --noEmit` 0 errors,
+`eslint .` 0 errors (8 pre-existing warnings, none in touched/reviewed files).
+PR #2081 opened and subscribed. Next: 26 forms, once this PR merges.
 
 ### 2026-08-31 — Feature 24 (Meetings & minutes), pass 2 ✅ fully merged — PR #2079
 
