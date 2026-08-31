@@ -640,6 +640,10 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       const next = current.includes(pos) ? current.filter((p) => p !== pos) : [...current, pos];
       return { ...prev, assignedPositions: next };
     });
+    // Every other field edit marks the form dirty; this one did not, so a
+    // change to the position restriction alone left the unsaved-changes guard
+    // believing there was nothing to save.
+    markDirty();
   };
 
   // ---------------------------------------------------------------------------
@@ -1690,8 +1694,17 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
   // ---------------------------------------------------------------------------
 
   const handleSave = async (publish: boolean) => {
-    for (const { timer } of autoSavePendingRef.current.values()) clearTimeout(timer);
+    // Flush, do not discard. Cancelling these timers threw away every edit made
+    // inside the 1.5s debounce window — and because the per-item payload below
+    // omits blank fields, a field cleared just before pressing Save was then
+    // restored to its old server value behind a "Draft saved" toast.
+    const pendingPatches = [...autoSavePendingRef.current.entries()];
+    for (const [, { timer }] of pendingPatches) clearTimeout(timer);
     autoSavePendingRef.current.clear();
+    if (pendingPatches.length > 0) {
+      await ensureDraftBeforeStructureEdit();
+      await Promise.all(pendingPatches.map(([itemId, { patch }]) => schedulingService.updateCheckItem(itemId, patch)));
+    }
     if (autoSaveInFlightRef.current.size > 0) await Promise.all([...autoSaveInFlightRef.current]);
     // Drafts deliberately bypass readiness checks; publication never does.
     // Keep the blocking rules aligned with the backend instead of putting them
@@ -1765,12 +1778,18 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       if (isEditing && templateId) {
         await schedulingService.updateEquipmentCheckTemplate(templateId, {
           name: form.name.trim(),
-          description: form.description.trim() || undefined,
+          // Explicit nulls, not omissions: this is an update, and the backend
+          // dumps it with exclude_unset. Omitting a cleared field left the old
+          // value in place behind a success toast — un-pinning a template from
+          // an apparatus, or removing its position restriction, did nothing.
+          description: blankToNull(form.description),
           check_timing: form.checkTiming,
           template_type: form.templateType,
-          assigned_positions: form.assignedPositions.length > 0 ? form.assignedPositions : undefined,
-          apparatus_type: form.apparatusType || undefined,
-          apparatus_id: form.apparatusId || undefined,
+          // An empty array is a meaningful value here: it means "no position
+          // restriction", which is exactly what the user just asked for.
+          assigned_positions: form.assignedPositions,
+          apparatus_type: form.apparatusType || null,
+          apparatus_id: form.apparatusId || null,
           is_active: false,
         });
 
@@ -1787,12 +1806,15 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             updatePromises.push(
               schedulingService.updateCompartment(comp.id, {
                 name: comp.name,
-                description: comp.description.trim() || undefined,
-                image_url: comp.imageUrl.trim() || undefined,
+                description: blankToNull(comp.description),
+                image_url: blankToNull(comp.imageUrl),
                 is_header: comp.isHeader,
-                container_type: comp.containerType || undefined,
+                container_type: comp.containerType || null,
                 is_sealed: comp.isSealed,
-                parent_compartment_id: comp.parentCompartmentId || undefined,
+                // Compartments have no auto-save path, so this is the only
+                // writer: re-parenting one to the top level is expressible
+                // only as an explicit null.
+                parent_compartment_id: comp.parentCompartmentId || null,
               })
             );
 
@@ -1801,25 +1823,24 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                 updatePromises.push(
                   schedulingService.updateCheckItem(item.id, {
                     name: item.name,
-                    description: item.description.trim() || undefined,
+                    // Same coercions the auto-save path in this file already
+                    // uses (updateItemFieldWithAutoSave); handleSave was the
+                    // one writer still omitting cleared fields.
+                    description: blankToNull(item.description),
                     check_type: item.checkType,
                     is_required: item.isRequired,
-                    required_quantity: item.requiredQuantity ? Number(item.requiredQuantity) : undefined,
-                    expected_quantity: item.expectedQuantity ? Number(item.expectedQuantity) : undefined,
-                    critical_minimum_quantity: item.criticalMinimumQuantity
-                      ? Number(item.criticalMinimumQuantity)
-                      : undefined,
-                    min_level: item.minLevel ? Number(item.minLevel) : undefined,
-                    level_unit: item.levelUnit.trim() || undefined,
-                    serial_number: item.serialNumber.trim() || undefined,
-                    lot_number: item.lotNumber.trim() || undefined,
-                    inventory_item_id: item.inventoryItemId || undefined,
-                    image_url: item.imageUrl.trim() || undefined,
+                    required_quantity: numberOrNull(item.requiredQuantity),
+                    expected_quantity: numberOrNull(item.expectedQuantity),
+                    critical_minimum_quantity: numberOrNull(item.criticalMinimumQuantity),
+                    min_level: numberOrNull(item.minLevel),
+                    level_unit: blankToNull(item.levelUnit),
+                    serial_number: blankToNull(item.serialNumber),
+                    lot_number: blankToNull(item.lotNumber),
+                    inventory_item_id: item.inventoryItemId || null,
+                    image_url: blankToNull(item.imageUrl),
                     has_expiration: item.hasExpiration,
-                    expiration_date: item.expirationDate.trim() || undefined,
-                    expiration_warning_days: item.expirationWarningDays
-                      ? Number(item.expirationWarningDays)
-                      : undefined,
+                    expiration_date: blankToNull(item.expirationDate),
+                    expiration_warning_days: numberOrNull(item.expirationWarningDays),
                   })
                 );
               }
@@ -5520,7 +5541,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                       {renderItemEditorFields(compIdx, itemIdx, item, item.checkType === 'header')}
                     </section>
                   </div>
-                  <footer className="modal-footer-sticky grid shrink-0 grid-cols-3 items-center gap-2 px-4 py-3">
+                  <footer className="modal-footer-sticky grid shrink-0 grid-cols-3 items-center gap-2 px-4">
                     <button
                       type="button"
                       className="btn-secondary min-h-[44px]"

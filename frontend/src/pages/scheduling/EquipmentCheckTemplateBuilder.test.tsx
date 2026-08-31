@@ -544,6 +544,75 @@ describe('EquipmentCheckTemplateBuilder responsive actions', () => {
   });
 });
 
+describe('EquipmentCheckTemplateBuilder clearing a field on save', () => {
+  // Update payloads are dumped with exclude_unset on the backend, so an
+  // omitted key means "leave this alone". handleSave omitted every blank
+  // field, so clearing one reported success and changed nothing — while the
+  // auto-save path in the same component already sent explicit nulls.
+  beforeEach(() => {
+    vi.clearAllMocks();
+    getTemplate.mockResolvedValue(structuredClone(template));
+    updateCheckItem.mockResolvedValue({});
+    updateCompartment.mockResolvedValue({});
+    createEquipmentCheckTemplate.mockResolvedValue({ ...template, id: 'draft-1', isActive: false });
+    updateEquipmentCheckTemplate.mockResolvedValue(template);
+    reorderItems.mockResolvedValue(undefined);
+    vi.mocked(window.matchMedia).mockImplementation((query: string) => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    }));
+  });
+
+  it('sends explicit nulls rather than omitting the fields it cleared', async () => {
+    const user = userEvent.setup();
+    renderBuilder();
+    await screen.findByRole('button', { name: 'Edit Radio' });
+
+    await user.click(screen.getByRole('button', { name: /Save draft/ }));
+
+    // The values must be null, not undefined. `{ a: undefined }` still HAS
+    // property 'a' in JS — it is JSON.stringify that drops the key — so an
+    // existence check cannot tell the two apart and passes against the bug.
+    await waitFor(() =>
+      expect(updateEquipmentCheckTemplate).toHaveBeenLastCalledWith(
+        'template-1',
+        expect.objectContaining({
+          apparatus_id: null,
+          apparatus_type: null,
+          description: null,
+          // An empty array is meaningful here: "no position restriction".
+          assigned_positions: [],
+        })
+      )
+    );
+  });
+
+  it('sends compartment and item clears explicitly too', async () => {
+    const user = userEvent.setup();
+    renderBuilder();
+    await screen.findByRole('button', { name: 'Edit Radio' });
+
+    await user.click(screen.getByRole('button', { name: /Save draft/ }));
+
+    await waitFor(() =>
+      expect(updateCompartment).toHaveBeenLastCalledWith(
+        expect.any(String),
+        expect.objectContaining({ parent_compartment_id: null, description: null })
+      )
+    );
+    expect(updateCheckItem).toHaveBeenLastCalledWith(
+      expect.any(String),
+      expect.objectContaining({ serial_number: null, lot_number: null })
+    );
+  });
+});
+
 describe('EquipmentCheckTemplateBuilder movement persistence', () => {
   beforeEach(() => {
     vi.clearAllMocks();
