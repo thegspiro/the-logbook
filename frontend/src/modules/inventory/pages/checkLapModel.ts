@@ -240,7 +240,12 @@ export function stopFailures(stop: LapStop, answers: AnswerMap): CheckItemSpec[]
     // number and the par, so counting them here too would show one shortfall
     // twice: once as a fault the crew has to act on now, once as a supply
     // order.
-    if (normalizeCheckType(item.checkType) === CheckType.COUNT) {
+    //
+    // Only `fail` though. `out_of_service` is a verdict the crew typed on the
+    // item itself — the thing is broken, not merely thin on the shelf — and
+    // suppressing it because the count also came in under par would present a
+    // safety fault as a supply order on the map and the finish screen.
+    if (answer.status === 'fail' && normalizeCheckType(item.checkType) === CheckType.COUNT) {
       const found = answer.quantityFound;
       const par = item.expectedQuantity;
       if (typeof par === 'number' && found !== undefined && found < par) return false;
@@ -488,4 +493,33 @@ export function sweepSummary(stops: LapStop[], answers: AnswerMap): SweepSummary
     answeredCount,
     totalCount,
   };
+}
+
+// ============================================================================
+// The save chip
+// ============================================================================
+
+export type SweepSaveState = 'saved' | 'saving' | 'offline' | 'failed';
+
+/**
+ * Which of the four the save chip shows, given the draft write and the
+ * connection.
+ *
+ * Ordered, and the order is the whole content of the function — which is why it
+ * lives here with a test rather than inline in a 2,700-line component.
+ *
+ * A rejected write outranks everything: "held on this phone" is the promise the
+ * offline chip makes, and it is false once the write has come back rejected. An
+ * open write outranks connectivity for the same reason — until IndexedDB
+ * resolves, the walk is not on the device either, so a page closed inside that
+ * window loses exactly the answers the chip vouched for. Only a settled write
+ * earns either claim.
+ */
+export function sweepSaveStateFrom(
+  draftWriteState: 'idle' | 'saving' | 'saved' | 'failed',
+  isOnline: boolean
+): SweepSaveState {
+  if (draftWriteState === 'failed') return 'failed';
+  if (draftWriteState === 'saving') return 'saving';
+  return isOnline ? 'saved' : 'offline';
 }

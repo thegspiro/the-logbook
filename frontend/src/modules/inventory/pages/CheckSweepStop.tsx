@@ -184,7 +184,17 @@ const CountTally: React.FC<Omit<StopBodyProps, 'stop'> & { items: CheckItemSpec[
                   disabled={disabled}
                   aria-pressed={notOnTruck}
                   onClick={() =>
-                    onAnswer(item.id, notOnTruck ? { status: 'not_checked' } : { status: 'not_applicable' })
+                    onAnswer(
+                      item.id,
+                      notOnTruck
+                        ? { status: 'not_checked' }
+                        : // The patch is merged, so a count the crew adjusted before
+                          // tapping n/a survives unless it is cleared here — and the
+                          // server reconciles every non-null observation into the
+                          // apparatus inventory whatever the status beside it says.
+                          // Same clear the accordion's n/a does.
+                          { status: 'not_applicable', quantityFound: undefined }
+                    )
                   }
                   aria-label={`${item.name} is not on this truck`}
                   className={`h-11 w-11 shrink-0 rounded-lg border text-[13px] font-bold disabled:opacity-50 ${
@@ -413,7 +423,7 @@ const ExpiryRow: React.FC<{
         <button
           type="button"
           disabled={disabled}
-          onClick={() => onAnswer(expiryAnswer(item))}
+          onClick={() => onAnswer(expiryAnswer(item, today))}
           className={`min-h-11 shrink-0 rounded-lg border px-3 text-[14px] font-bold transition-colors disabled:opacity-50 ${
             confirmed
               ? 'border-green-800 bg-green-800 text-white'
@@ -650,7 +660,7 @@ const SealCard: React.FC<{
           <button
             type="button"
             disabled={disabled}
-            onClick={() => onSeal(stop.id, { status: 'intact' })}
+            onClick={() => onSeal(stop.id, { status: 'intact', cleared: canClear })}
             className="text-theme-text-secondary mt-2 min-h-11 text-[13px] font-semibold underline"
           >
             Undo — the tag matches after all

@@ -90,8 +90,13 @@ import { CheckFinish } from './CheckFinish';
 import { toLapStops } from './checkSweepAdapter';
 import { toAnswerMap, toItemResult } from './checkSweepBridge';
 import { countAnswer } from './checkAnswers';
-import { bulkClaim, stillAsked, type LapStop, type SealState as SweepSealState } from './checkLapModel';
-import type { SweepSaveState } from './CheckSweep';
+import {
+  bulkClaim,
+  stillAsked,
+  sweepSaveStateFrom,
+  type LapStop,
+  type SealState as SweepSealState,
+} from './checkLapModel';
 import type { CheckItemAnswer } from './CheckItemControls';
 import {
   deleteEquipmentCheckDraft,
@@ -1405,15 +1410,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
   // --------------------------------------------------------------------------
 
   const [sweepStopIndex, setSweepStopIndex] = useState(0);
-  /**
-   * What the save chip says, in the order that matters to a crew.
-   *
-   * A failed draft write outranks everything: "held on this phone" is the
-   * reassurance the offline state offers, and it is false once the write has
-   * rejected. Otherwise offline, then whatever the write is doing.
-   */
-  const sweepSaveState: SweepSaveState =
-    draftWriteState === 'failed' ? 'failed' : !isOnline ? 'offline' : draftWriteState === 'saving' ? 'saving' : 'saved';
+  const sweepSaveState = sweepSaveStateFrom(draftWriteState, isOnline);
   // Which pocket of the current stop is open. Lives beside the stop index
   // rather than inside the body, because the primary button's label and the
   // bulk claim both depend on it and both belong to the frame.
@@ -2682,8 +2679,14 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
     // handleSubmit's `finally` even when the POST succeeded and only the photo
     // upload failed, so the button would re-enable on an accepted check and a
     // second tap would file a duplicate under a fresh client_submission_id.
+    //
+    // `complete` belongs here for the same reason: `syncPendingChecks` promotes
+    // a drained `evidence_pending` to it without unmounting the sweep, so
+    // omitting it re-enables the button the moment the retained photos land.
     const alreadyFiled =
-      submissionOutcome?.status === 'evidence_pending' || submissionOutcome?.status === 'evidence_failed';
+      submissionOutcome?.status === 'complete' ||
+      submissionOutcome?.status === 'evidence_pending' ||
+      submissionOutcome?.status === 'evidence_failed';
 
     // Absolute inside the builder's phone frame, fixed for the real walk. The
     // preview is a 268px device mock inside a page: positioned against the
@@ -2765,6 +2768,11 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
             onClose={() => setSweepScreen('walk')}
           />
         )}
+
+        {/* The expiry row's Replace button sets `swapTarget` on this branch too,
+            and this return never reaches the accordion's copy below — so
+            without it the crew taps Replace and nothing opens. */}
+        {swapModal}
       </div>
     );
   }

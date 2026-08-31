@@ -1414,6 +1414,17 @@ describe('EquipmentCheckTemplateBuilder crew preview identity', () => {
     expect(preview().getByRole('button', { name: 'Second item works' })).toHaveAttribute('aria-pressed', 'false');
   }, 15_000);
 
+  it('anchors the crew preview so the sweep fills the phone rather than the page', async () => {
+    // The sweep renders `absolute inset-0` under previewMode. With no
+    // positioned ancestor it resolves against the sticky rail — a 268px device
+    // mock whose contents cover the builder around it. jsdom cannot lay that
+    // out, so the containing block is asserted directly.
+    const user = userEvent.setup();
+    renderNewBuilder();
+    await user.click(screen.getByRole('button', { name: 'Crew view' }));
+    expect(screen.getByLabelText('Crew preview')).toHaveClass('relative');
+  });
+
   it('expands a location added to an unsaved template, so its composer is reachable', async () => {
     const user = userEvent.setup();
     renderNewBuilder();

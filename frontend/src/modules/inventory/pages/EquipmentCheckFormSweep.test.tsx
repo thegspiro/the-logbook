@@ -55,6 +55,7 @@ vi.mock('../../../utils/offlineQueue', () => ({
 }));
 vi.mock('react-hot-toast', () => ({ default: { success: vi.fn(), error: vi.fn() } }));
 
+import toast from 'react-hot-toast';
 import EquipmentCheckForm from './EquipmentCheckForm';
 
 const item = (over: Record<string, unknown>) => ({
@@ -180,5 +181,83 @@ describe('EquipmentCheckForm in sweep mode', () => {
     renderWithRouter(<EquipmentCheckForm shiftId="shift-1" template={template() as never} onBack={vi.fn()} />);
     expect(await screen.findByRole('heading', { name: 'Engine 402 Daily' })).toBeVisible();
     expect(screen.queryByRole('list', { name: 'Truck map' })).not.toBeInTheDocument();
+  });
+});
+
+describe('replacing expiring stock from inside the sweep', () => {
+  beforeEach(() => {
+    globalThis.indexedDB = new IDBFactory();
+    vi.clearAllMocks();
+    localStorage.clear();
+    localStorage.setItem('has_session', '1');
+    mockGetLastCheckResults.mockResolvedValue({});
+    mockGetLastCheckSeals.mockResolvedValue({});
+    mockSubmitCheck.mockResolvedValue({ id: 'check-1' });
+  });
+
+  /** One stop, one expired drug with ready stock behind it. */
+  const expiringTemplate = () => ({
+    ...template(),
+    compartments: [
+      {
+        id: 'drugs',
+        templateId: 'tmpl-1',
+        name: 'Drug box',
+        sortOrder: 0,
+        items: [
+          item({
+            id: 'epi',
+            name: 'Epinephrine',
+            checkType: 'expiry',
+            hasExpiration: true,
+            expirationDate: '2020-01-01',
+            inventoryItemId: 'inv-epi',
+          }),
+        ],
+      },
+    ],
+  });
+
+  it('does not offer a second submit once the check is filed', async () => {
+    // `submitting` goes false in handleSubmit's `finally` whether or not the
+    // POST succeeded, and nothing here unmounts the sweep — so an accepted
+    // check leaves a live Submit button, and a second tap files a duplicate
+    // under a fresh client_submission_id.
+    const user = userEvent.setup();
+    renderWithRouter(
+      <EquipmentCheckForm
+        shiftId="shift-1"
+        template={expiringTemplate() as never}
+        experience="sweep"
+        onBack={vi.fn()}
+      />
+    );
+    await user.click(await screen.findByRole('button', { name: 'Confirm' }));
+    await user.click(await screen.findByRole('button', { name: /Finish the check/ }));
+    await user.click(await screen.findByRole('button', { name: 'Submit the check' }));
+
+    // The success toast and the `finally` that re-enables the button land in
+    // the same flush, so waiting on the toast settles both — a `waitFor` on the
+    // button instead would pass on the still-submitting frame and prove nothing.
+    await waitFor(() => expect(vi.mocked(toast.success)).toHaveBeenCalled());
+    expect(screen.getByRole('button', { name: 'Submit the check' })).toBeDisabled();
+  });
+
+  it('opens the lot dialog the Replace button asks for', async () => {
+    // The sweep's seal card tells a crew to open a container and replace what
+    // is expiring. The dialog that carries out that instruction is rendered
+    // once for the whole form, and the sweep returns before reaching it — so
+    // without it in this branch the button is a dead tap.
+    const user = userEvent.setup();
+    renderWithRouter(
+      <EquipmentCheckForm
+        shiftId="shift-1"
+        template={expiringTemplate() as never}
+        experience="sweep"
+        onBack={vi.fn()}
+      />
+    );
+    await user.click(await screen.findByRole('button', { name: 'Replace' }));
+    expect(await screen.findByRole('heading', { name: 'Replace from ready stock' })).toBeVisible();
   });
 });
