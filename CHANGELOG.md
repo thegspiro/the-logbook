@@ -106,6 +106,19 @@ Three things change for existing departments:
   settings is now a signpost to Inventory and shows no Save button, because it
   has nothing left to save.
 
+### Checklist review follow-ups (2026-08-31)
+
+**Fixed**
+
+- **"Failed checks" on the chief dashboard now opens a filtered log.** The card
+  counted failures and linked to `/inventory/checklists/log?status=failed`, but
+  nothing read that filter — the officer landed on an unfiltered fortnight and
+  had to find the failures by eye. The log now honours `?status=`, says which
+  outcome it is showing, and offers one click back to all checks.
+- **Fleet Readiness has its own icon in the sidebar.** It shared one with "My
+  Checklists" directly above it, which is indistinguishable when the rail is
+  collapsed to icons.
+
 ### Shift template checklist fixes (2026-08-31)
 
 **Fixed**

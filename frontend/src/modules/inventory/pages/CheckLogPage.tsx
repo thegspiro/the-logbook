@@ -20,11 +20,11 @@
  */
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router';
-import { AlertTriangle, CalendarDays, ClipboardList, Grid3x3, List, Loader2, Search } from 'lucide-react';
+import { Link, useSearchParams } from 'react-router';
+import { AlertTriangle, CalendarDays, ClipboardList, Grid3x3, List, Loader2, Search, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { equipmentCheckService } from '@/modules/inventory/services/equipmentCheckApi';
-import type { CheckLogEntry, CheckLogResponse } from '../../../modules/inventory/types/equipmentCheck';
+import type { CheckLogEntry, CheckLogResponse, CheckOutcome } from '../../../modules/inventory/types/equipmentCheck';
 import { CHECK_OUTCOME_LABELS } from '../../../modules/inventory/types/equipmentCheck';
 import {
   OUTCOME_LEGEND,
@@ -59,6 +59,29 @@ export const CheckLogPage: React.FC<CheckLogPageProps> = ({ apparatusId, showHea
   const [view, setView] = useState<ViewMode>('grid');
   const [search, setSearch] = useState('');
 
+  /**
+   * `?status=<outcome>` narrows the log to one outcome.
+   *
+   * The chief dashboard's failed-checks card has linked here with
+   * `?status=failed` since the checklist move, and nothing read it: the card
+   * counted failures and then dropped the officer into an unfiltered
+   * fortnight to find them by eye. Validated against the outcomes the log
+   * actually reports, so a hand-typed or stale value is ignored rather than
+   * silently filtering everything away.
+   */
+  const [searchParams, setSearchParams] = useSearchParams();
+  const requestedStatus = searchParams.get('status');
+  const statusFilter =
+    requestedStatus && requestedStatus in CHECK_OUTCOME_LABELS ? (requestedStatus as CheckOutcome) : null;
+
+  const clearStatusFilter = useCallback(() => {
+    const next = new URLSearchParams(searchParams);
+    next.delete('status');
+    // replace: the filter came from a link on another page, so backing out of
+    // it should return there rather than stepping through filter states.
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams]);
+
   const load = useCallback(async () => {
     setLoading(true);
     try {
@@ -81,19 +104,28 @@ export const CheckLogPage: React.FC<CheckLogPageProps> = ({ apparatusId, showHea
     void load();
   }, [load]);
 
+  // The grid is a rig-by-day matrix and carries no status filter, so showing
+  // it while one is active would answer a different question than the link
+  // asked. The log is the view the filter applies to.
+  useEffect(() => {
+    if (statusFilter) setView('log');
+  }, [statusFilter]);
+
   useRegisterPullToRefresh(load);
 
   const entries = useMemo(() => {
+    let rows = data?.entries ?? [];
+    if (statusFilter) rows = rows.filter((e) => e.status === statusFilter);
     const q = search.trim().toLowerCase();
-    if (!q) return data?.entries ?? [];
-    return (data?.entries ?? []).filter(
+    if (!q) return rows;
+    return rows.filter(
       (e) =>
         e.unitLabel.toLowerCase().includes(q) ||
         e.templateName.toLowerCase().includes(q) ||
         (e.checkedByName ?? '').toLowerCase().includes(q) ||
         e.findings.some((f) => f.toLowerCase().includes(q))
     );
-  }, [data, search]);
+  }, [data, search, statusFilter]);
 
   const canShowGrid = data?.scope === 'fleet' && data.rows.length > 0;
   const summary = data?.summary;
@@ -197,6 +229,27 @@ export const CheckLogPage: React.FC<CheckLogPageProps> = ({ apparatusId, showHea
           />
         </div>
       </div>
+
+      {/* An active status filter has to be visible and removable. Arriving
+          from the dashboard on a filtered log that looked unfiltered would
+          read as "the fortnight only had three checks in it". */}
+      {statusFilter && (
+        // role=status so the narrowing is announced, not just drawn — the
+        // filter arrives from a link on another page, so a screen-reader user
+        // never saw it being applied.
+        <div className="flex flex-wrap items-center gap-2" role="status" aria-label="Active filter">
+          <span className="text-theme-text-muted text-xs">Showing only</span>
+          <span className={`badge border ${OUTCOME_PILL[statusFilter]}`}>{CHECK_OUTCOME_LABELS[statusFilter]}</span>
+          <button
+            type="button"
+            onClick={clearStatusFilter}
+            className="text-theme-text-muted hover:text-theme-text-primary mobile-touch-target inline-flex items-center gap-1 text-xs font-medium underline-offset-2 hover:underline"
+          >
+            <X className="h-3.5 w-3.5" aria-hidden="true" />
+            Show all checks
+          </button>
+        </div>
+      )}
 
       {/* Summary */}
       {summary && (

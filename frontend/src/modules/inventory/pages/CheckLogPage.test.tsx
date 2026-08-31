@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen, waitFor } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../../../test/utils';
 import { CheckLogPage } from './CheckLogPage';
@@ -7,8 +7,9 @@ import type { CheckLogEntry, CheckLogResponse } from '../../../modules/inventory
 
 const mockGetCheckLog = vi.fn();
 
-// Equipment-check calls moved to modules/inventory when checklists
-// became an Inventory feature; the scheduling service re-exports it.
+// Equipment-check calls moved to modules/inventory when checklists became an
+// Inventory feature. Scheduling imports this module directly where it still
+// needs checks; there is no re-export from the scheduling service.
 vi.mock('@/modules/inventory/services/equipmentCheckApi', () => ({
   equipmentCheckService: {
     getCheckLog: (...a: unknown[]) => mockGetCheckLog(...a) as unknown,
@@ -249,5 +250,75 @@ describe('CheckLogPage', () => {
     );
     renderWithRouter(<CheckLogPage />);
     expect(await screen.findByText('—')).toBeInTheDocument();
+  });
+
+  /**
+   * `?status=` is what the chief dashboard's failed-checks card links with.
+   * It counted failures and dropped the officer into an unfiltered fortnight
+   * until this was wired, so these assert the link's promise rather than the
+   * control's existence.
+   */
+  describe('the ?status= filter', () => {
+    const mixed = () =>
+      makeResponse({
+        entries: [
+          makeEntry({ status: 'passed', unitLabel: 'E-1', templateName: 'Engine Daily Check' }),
+          makeEntry({ status: 'failed', unitLabel: 'L-2', templateName: 'Ladder Daily Check', failedItems: 2 }),
+        ],
+      });
+
+    beforeEach(() => {
+      mockGetCheckLog.mockReset();
+      mockGetCheckLog.mockResolvedValue(mixed());
+      window.history.replaceState({}, '', '/inventory/checklists/log');
+    });
+
+    it('narrows the log to the requested outcome', async () => {
+      window.history.replaceState({}, '', '/inventory/checklists/log?status=failed');
+      renderWithRouter(<CheckLogPage />);
+
+      expect(await screen.findByText('Ladder Daily Check')).toBeInTheDocument();
+      expect(screen.queryByText('Engine Daily Check')).not.toBeInTheDocument();
+    });
+
+    it('says a filter is on, and offers a way out of it', async () => {
+      window.history.replaceState({}, '', '/inventory/checklists/log?status=failed');
+      renderWithRouter(<CheckLogPage />);
+      await screen.findByText('Ladder Daily Check');
+
+      // An invisible filter reads as "the fortnight only had one check in it".
+      // Scoped to the status region: "Found a problem" is also a summary tile
+      // label, so an unscoped query matches two different things.
+      const banner = screen.getByRole('status', { name: 'Active filter' });
+      expect(within(banner).getByText('Showing only')).toBeInTheDocument();
+      expect(within(banner).getByText('Found a problem')).toBeInTheDocument();
+
+      await userEvent.click(screen.getByRole('button', { name: /Show all checks/i }));
+
+      expect(await screen.findByText('Engine Daily Check')).toBeInTheDocument();
+      expect(screen.queryByRole('status', { name: 'Active filter' })).not.toBeInTheDocument();
+    });
+
+    it('ignores a status the log does not report, rather than emptying it', async () => {
+      // A stale bookmark or hand-typed value must not filter everything away.
+      window.history.replaceState({}, '', '/inventory/checklists/log?status=banana');
+      renderWithRouter(<CheckLogPage />);
+
+      // No filter, so the page opens on the grid as usual — the log is where
+      // the entries live, same as every other test here.
+      await userEvent.click(await screen.findByRole('button', { name: /Log/ }));
+
+      expect(screen.getByText('Engine Daily Check')).toBeInTheDocument();
+      expect(screen.getByText('Ladder Daily Check')).toBeInTheDocument();
+      expect(screen.queryByRole('status', { name: 'Active filter' })).not.toBeInTheDocument();
+    });
+
+    it('shows the log rather than the grid, which carries no status filter', async () => {
+      window.history.replaceState({}, '', '/inventory/checklists/log?status=failed');
+      renderWithRouter(<CheckLogPage />);
+      await screen.findByText('Ladder Daily Check');
+
+      expect(screen.queryByRole('table')).not.toBeInTheDocument();
+    });
   });
 });

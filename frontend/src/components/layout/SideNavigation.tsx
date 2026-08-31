@@ -295,7 +295,13 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
               {
                 label: 'Fleet Readiness',
                 path: '/inventory/checklists',
-                icon: ClipboardCheck,
+                // Not ClipboardCheck, which "My Checklists" directly above
+                // already uses. The rail collapses to a 20-unit icon-only
+                // strip where the label is replaced by a hover title, so two
+                // adjacent rows sharing a glyph are indistinguishable at a
+                // glance — and these two are for different audiences: the
+                // checks you owe versus the state of the fleet.
+                icon: ShieldCheck,
                 anyPermission: ['inventory.check_view', 'scheduling.manage'],
               },
             ]
