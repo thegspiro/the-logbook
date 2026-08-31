@@ -1429,12 +1429,21 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
   const sweepStops = useMemo(
     () =>
       toLapStops({
-        compartments: template.compartments ?? [],
+        // Through `applyOverride`, as the accordion's `effectiveCheckableItems`
+        // is. A swap writes the fresh lot to `swapOverrides` and does not
+        // re-fetch the template, so walking the raw compartments leaves the
+        // row showing the date of the box the crew just took off the truck —
+        // and Confirm computes `fail` from it, filing a failure against stock
+        // that is in date.
+        compartments: (template.compartments ?? []).map((compartment) => ({
+          ...compartment,
+          items: (compartment.items ?? []).map(applyOverride),
+        })),
         seals,
         lastSeals,
         ...(lastCheckData ? { lastResults: lastCheckData } : {}),
       }),
-    [template.compartments, seals, lastSeals, lastCheckData]
+    [template.compartments, applyOverride, seals, lastSeals, lastCheckData]
   );
 
   const sweepAnswers = useMemo(() => toAnswerMap(results), [results]);
@@ -2562,7 +2571,10 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
    * without this that instruction has nowhere to go.
    */
   const swapModal = swapTarget ? (
-    <div className="modal-overlay z-[60] flex items-end justify-center p-0 sm:items-center sm:p-4">
+    <div
+      data-testid="swap-modal"
+      className="modal-overlay z-[60] flex items-end justify-center p-0 sm:items-center sm:p-4"
+    >
       <div className="bg-theme-surface border-theme-surface-border flex max-h-[85dvh] w-full flex-col overflow-hidden rounded-t-2xl border shadow-xl sm:max-w-md sm:rounded-2xl">
         <div className="border-theme-surface-border flex items-center justify-between border-b px-4 py-3">
           <div className="min-w-0">
@@ -2741,6 +2753,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
                         if (raw) void openSwap(applyOverride(raw));
                       }
                 }
+                canSwap={canSwapStock}
                 // The organization's calendar day, so an expiry verdict does
                 // not move with the phone's timezone.
                 today={new Date(`${today}T00:00:00`)}

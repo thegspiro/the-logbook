@@ -8,7 +8,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen, waitFor } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { IDBFactory } from 'fake-indexeddb';
 import { renderWithRouter } from '../../../test/utils';
@@ -16,6 +16,7 @@ import { renderWithRouter } from '../../../test/utils';
 const mockGetLastCheckResults = vi.fn();
 const mockGetLastCheckSeals = vi.fn();
 const mockSubmitCheck = vi.fn();
+const mockSwapItemLot = vi.fn();
 
 // The form takes its API from Inventory's own client, not the scheduling
 // service it used before the checklist move, and this file now sits two levels
@@ -31,17 +32,19 @@ vi.mock('@/modules/inventory/services/equipmentCheckApi', () => ({
     getEquipmentCheck: vi.fn(),
     updateDeployedLot: vi.fn(),
     uploadCheckItemPhotos: vi.fn().mockResolvedValue({ photoUrls: [], count: 0 }),
-    swapItemLot: vi.fn(),
+    swapItemLot: (...a: unknown[]) => mockSwapItemLot(...a) as unknown,
   },
 }));
+const mockGetItemLots = vi.fn();
 vi.mock('../../../services/inventoryService', () => ({
-  inventoryService: { getItemLots: vi.fn().mockResolvedValue([]) },
+  inventoryService: { getItemLots: (...a: unknown[]) => mockGetItemLots(...a) as unknown },
 }));
 vi.mock('../../../hooks/useTimezone', () => ({ useTimezone: () => 'UTC' }));
 vi.mock('../../../hooks/useOnlineStatus', () => ({ useOnlineStatus: () => true }));
+const mockCheckPermission = vi.fn((_p: string) => true);
 vi.mock('../../../stores/authStore', () => ({
   useAuthStore: () => ({
-    checkPermission: () => true,
+    checkPermission: (p: string) => mockCheckPermission(p),
     user: { id: 'user-1', organization_id: 'org-1', first_name: 'Dana', last_name: 'Delgado' },
   }),
 }));
@@ -114,6 +117,10 @@ describe('EquipmentCheckForm in sweep mode', () => {
     vi.clearAllMocks();
     localStorage.clear();
     localStorage.setItem('has_session', '1');
+    mockCheckPermission.mockReset();
+    mockCheckPermission.mockReturnValue(true);
+    mockGetItemLots.mockReset();
+    mockGetItemLots.mockResolvedValue([]);
     mockGetLastCheckResults.mockResolvedValue({});
     mockGetLastCheckSeals.mockResolvedValue({});
     mockSubmitCheck.mockResolvedValue({ id: 'check-1' });
@@ -190,6 +197,14 @@ describe('replacing expiring stock from inside the sweep', () => {
     vi.clearAllMocks();
     localStorage.clear();
     localStorage.setItem('has_session', '1');
+    mockCheckPermission.mockReset();
+    mockCheckPermission.mockReturnValue(true);
+    mockGetItemLots.mockReset();
+    mockGetItemLots.mockResolvedValue([
+      { id: 'lot-fresh', lot_number: 'L-99', expiration_date: '2099-12-31', quantity: 5 },
+    ]);
+    mockSwapItemLot.mockReset();
+    mockSwapItemLot.mockResolvedValue({ lotNumber: 'L-99', expirationDate: '2099-12-31' });
     mockGetLastCheckResults.mockResolvedValue({});
     mockGetLastCheckSeals.mockResolvedValue({});
     mockSubmitCheck.mockResolvedValue({ id: 'check-1' });
@@ -259,5 +274,51 @@ describe('replacing expiring stock from inside the sweep', () => {
     );
     await user.click(await screen.findByRole('button', { name: 'Replace' }));
     expect(await screen.findByRole('heading', { name: 'Replace from ready stock' })).toBeVisible();
+  });
+
+  it('disables Replace for a member the swap endpoint would refuse', async () => {
+    // Disabled, not hidden — the same call the accordion's Swap button makes.
+    // The server rejects a read-only member, and a button that simply vanishes
+    // tells them nothing about who to hand the expired unit to.
+    mockCheckPermission.mockReturnValue(false);
+    renderWithRouter(
+      <EquipmentCheckForm
+        shiftId="shift-1"
+        template={expiringTemplate() as never}
+        experience="sweep"
+        onBack={vi.fn()}
+      />
+    );
+    const replace = await screen.findByRole('button', { name: 'Replace' });
+    expect(replace).toBeDisabled();
+    expect(replace).toHaveAttribute('title', expect.stringContaining('recorded by a crew member'));
+  });
+
+  it('shows the fresh lot before the crew confirms it', async () => {
+    // `doSwap` writes the new lot to `swapOverrides` and does not re-fetch the
+    // template. Built from the raw compartments, the sweep would keep showing
+    // the date of the box that just came off the truck — and Confirm computes
+    // its verdict from what is on screen, filing a failure against stock that
+    // is in date.
+    const user = userEvent.setup();
+    renderWithRouter(
+      <EquipmentCheckForm
+        shiftId="shift-1"
+        template={expiringTemplate() as never}
+        experience="sweep"
+        onBack={vi.fn()}
+      />
+    );
+    expect(await screen.findByTestId('expiry-epi')).toHaveTextContent('2020-01-01');
+
+    await user.click(within(screen.getByTestId('expiry-epi')).getByRole('button', { name: 'Replace' }));
+    // Scoped: the row's Replace and the lot's Replace are both on screen now.
+    const modal = within(await screen.findByTestId('swap-modal'));
+    await user.click(modal.getByRole('button', { name: 'Disposed of' }));
+    await user.click(modal.getByRole('button', { name: 'Replace' }));
+
+    await waitFor(() => expect(mockSwapItemLot).toHaveBeenCalled());
+    await waitFor(() => expect(screen.getByTestId('expiry-epi')).toHaveTextContent('2099-12-31'));
+    expect(screen.getByTestId('expiry-epi')).not.toHaveTextContent('2020-01-01');
   });
 });

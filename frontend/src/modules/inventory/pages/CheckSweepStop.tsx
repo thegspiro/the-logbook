@@ -72,6 +72,15 @@ export interface StopBodyProps {
    * end and they have to leave the walk to act on it.
    */
   onSwap?: ((itemId: string) => void) | undefined;
+  /**
+   * Whether this member may record a swap.
+   *
+   * Disabled rather than hidden, and false rather than an absent `onSwap`, for
+   * the reason the accordion's Swap button is: the endpoint refuses a
+   * read-only member, and a button that vanishes tells them nothing about who
+   * to hand the unit to. The tooltip does.
+   */
+  canSwap?: boolean | undefined;
   disabled?: boolean | undefined;
 }
 
@@ -371,7 +380,8 @@ const ExpiryRow: React.FC<{
   disabled?: boolean | undefined;
   today: Date;
   onSwap?: ((itemId: string) => void) | undefined;
-}> = ({ item, answer, onAnswer, disabled, today, onSwap }) => {
+  canSwap?: boolean | undefined;
+}> = ({ item, answer, onAnswer, disabled, today, onSwap, canSwap }) => {
   const days = daysUntil(item.expirationDate, today);
   const pullAt = item.expirationWarningDays ?? 30;
   const expired = days !== null && days < 0;
@@ -413,9 +423,10 @@ const ExpiryRow: React.FC<{
         {onSwap && (expired || inWindow) && item.inventoryItemId ? (
           <button
             type="button"
-            disabled={disabled}
+            disabled={disabled || canSwap === false}
             onClick={() => onSwap(item.id)}
-            className="border-theme-alert-danger-icon text-theme-alert-danger-title min-h-11 rounded-lg border px-3 text-[14px] font-bold disabled:opacity-50"
+            title={canSwap === false ? 'Swaps from stock are recorded by a crew member on the check' : undefined}
+            className="border-theme-alert-danger-icon text-theme-alert-danger-title min-h-11 rounded-lg border px-3 text-[14px] font-bold disabled:cursor-not-allowed disabled:opacity-40"
           >
             Replace
           </button>
@@ -454,6 +465,7 @@ const ItemGroups: React.FC<Omit<StopBodyProps, 'stop'> & { items: CheckItemSpec[
   disabled,
   today = new Date(),
   onSwap,
+  canSwap,
 }) => {
   const of = (type: string) => items.filter((i) => normalizeCheckType(i.checkType) === type);
   const counts = of(CheckType.COUNT);
@@ -511,6 +523,7 @@ const ItemGroups: React.FC<Omit<StopBodyProps, 'stop'> & { items: CheckItemSpec[
               disabled={disabled}
               today={today}
               onSwap={onSwap}
+              canSwap={canSwap}
             />
           ))}
         </div>
@@ -728,6 +741,7 @@ export const CheckSweepStop: React.FC<StopBodyProps> = ({
   openPocketIndex,
   today = new Date(),
   onSwap,
+  canSwap,
 }) => {
   // An intact tag answers the counting, so those rows come off the screen
   // rather than sitting there inviting a crew to count through a seal they
@@ -752,7 +766,15 @@ export const CheckSweepStop: React.FC<StopBodyProps> = ({
     <div className="flex flex-col gap-3">
       {stop.isSealed && <SealCard stop={stop} onSeal={onSeal} disabled={disabled} today={today} />}
 
-      <ItemGroups items={own} answers={answers} onAnswer={onAnswer} disabled={disabled} today={today} onSwap={onSwap} />
+      <ItemGroups
+        items={own}
+        answers={answers}
+        onAnswer={onAnswer}
+        disabled={disabled}
+        today={today}
+        onSwap={onSwap}
+        canSwap={canSwap}
+      />
 
       {/* Pockets. A bag is one stop, not several — the crew is standing in front
         of the whole thing — so its pockets are sections inside this screen
@@ -780,6 +802,7 @@ export const CheckSweepStop: React.FC<StopBodyProps> = ({
             clearedByAncestorSeal={pocket.isSealed ? false : sealed}
             today={today}
             onSwap={onSwap}
+            canSwap={canSwap}
           />
         </section>
       ))}
