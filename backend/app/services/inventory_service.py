@@ -5940,6 +5940,8 @@ class InventoryService:
         wanted a link, and an item it could not see (medical stock is absent
         from the gear list it searched) is still the right thing to link to.
 
+        Applies to pool rows only — see the comment on the check below.
+
         This narrows the window to a single transaction; it does not close it.
         ``inventory_items`` carries no unique constraint on (organization,
         name) — `create_items_bulk` has the same property — so two creates
@@ -5951,13 +5953,22 @@ class InventoryService:
         if not name:
             return None, False, "Every item needs a name"
 
-        existing_id = await self._item_id_by_name(organization_id, name)
-        if existing_id:
-            return (
-                await self.get_item_by_id(existing_id, organization_id),
-                False,
-                None,
-            )
+        # Only a pool row is one-per-name. A pool row is a *definition* — "the
+        # department stocks 4x4 gauze" — and a second one splits the same
+        # supply's lots and checklist links across two records. An individual
+        # row is a *physical asset*, told apart by serial number or asset tag,
+        # and a department owning two thermal imagers has two rows that share a
+        # product name. Deduping those would alias two apparatus positions onto
+        # one device, and quietly report the second truck as carrying the first
+        # truck's imager.
+        if item_data.get("tracking_type") == "pool":
+            existing_id = await self._item_id_by_name(organization_id, name)
+            if existing_id:
+                return (
+                    await self.get_item_by_id(existing_id, organization_id),
+                    False,
+                    None,
+                )
 
         item, error = await self.create_item(organization_id, item_data, created_by)
         return item, item is not None, error

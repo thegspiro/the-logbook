@@ -1143,7 +1143,9 @@ class TestCreateItemIfAbsent:
         )
 
         item, created, err = await svc.create_item_if_absent(
-            org_id, {"name": "Gauze Pads, 4x4", "condition": "good"}, user_id
+            org_id,
+            {"name": "Gauze Pads, 4x4", "condition": "good", "tracking_type": "pool"},
+            user_id,
         )
 
         assert err is None
@@ -1164,7 +1166,9 @@ class TestCreateItemIfAbsent:
         )
 
         item, created, _ = await svc.create_item_if_absent(
-            org_id, {"name": "gauze pads 4x4", "condition": "good"}, user_id
+            org_id,
+            {"name": "gauze pads 4x4", "condition": "good", "tracking_type": "pool"},
+            user_id,
         )
 
         assert created is False
@@ -1206,7 +1210,13 @@ class TestCreateItemIfAbsent:
         assert items == []
 
         item, created, _ = await svc.create_item_if_absent(
-            org_id, {"name": "Code Oxygen Cylinder", "condition": "good"}, user_id
+            org_id,
+            {
+                "name": "Code Oxygen Cylinder",
+                "condition": "good",
+                "tracking_type": "pool",
+            },
+            user_id,
         )
         assert created is False
         assert item.name == "Code Oxygen Cylinder"
@@ -1247,6 +1257,36 @@ class TestCreateItemIfAbsent:
         # Another department's catalog is not this one's: the name is free here.
         assert created is True
         assert item.id != first.id
+
+    @pytest.mark.asyncio
+    async def test_two_individual_assets_may_share_a_product_name(
+        self, db_session, setup_org_and_user
+    ):
+        """A department owning two thermal imagers has two rows, not one.
+
+        Individual rows are physical assets told apart by serial number or
+        asset tag. Handing back the first one would alias two apparatus
+        positions onto one device and report the second truck as carrying the
+        first truck's imager.
+        """
+        org_id, user_id, _ = setup_org_and_user
+        svc = InventoryService(db_session)
+        first, created, _ = await svc.create_item_if_absent(
+            org_id,
+            {"name": "Thermal Imager", "tracking_type": "individual"},
+            user_id,
+        )
+        assert created is True
+
+        second, created_again, err = await svc.create_item_if_absent(
+            org_id,
+            {"name": "Thermal Imager", "tracking_type": "individual"},
+            user_id,
+        )
+
+        assert err is None
+        assert created_again is True
+        assert second.id != first.id
 
     @pytest.mark.asyncio
     async def test_a_blank_name_is_refused(self, db_session, setup_org_and_user):
