@@ -17,6 +17,7 @@ import {
   Layers,
   RefreshCw,
   ClipboardList,
+  ClipboardCheck,
   DollarSign,
   CornerDownLeft,
   Upload,
@@ -646,11 +647,25 @@ export const InventoryAdminHub: React.FC = () => {
                   iconBg="bg-indigo-500/10 text-indigo-600 dark:text-indigo-400"
                 />
                 <NavCard
-                  to="/scheduling/supply/expiring"
+                  to="/inventory/admin/checklists/supply"
                   icon={<Clock className="h-5 w-5 text-amber-600 dark:text-amber-400" />}
                   title="Expiring on Apparatus"
                   description="Items expiring on the trucks and ready replacement stock"
                   iconBg="bg-amber-500/10 text-amber-600 dark:text-amber-400"
+                />
+                <NavCard
+                  to="/inventory/checklists"
+                  icon={<ClipboardList className="h-5 w-5 text-sky-600 dark:text-sky-400" />}
+                  title="Equipment Checklists"
+                  description="Fleet readiness, the check log, and the checklists behind them"
+                  iconBg="bg-sky-500/10 text-sky-600 dark:text-sky-400"
+                />
+                <NavCard
+                  to="/inventory/admin/checklists/reports"
+                  icon={<ClipboardCheck className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />}
+                  title="Check Reports"
+                  description="Compliance, failures and item trends across completed checks"
+                  iconBg="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
                 />
               </div>
             </Section>

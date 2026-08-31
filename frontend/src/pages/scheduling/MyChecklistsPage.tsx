@@ -20,7 +20,7 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { equipmentCheckService } from '@/modules/inventory/services/equipmentCheckApi';
-import type { ShiftEquipmentCheckRecord, EquipmentCheckTemplate } from '../../modules/scheduling/types/equipmentCheck';
+import type { ShiftEquipmentCheckRecord, EquipmentCheckTemplate } from '../../modules/inventory/types/equipmentCheck';
 import type { ActiveChecklistRecord } from '../../modules/scheduling/services/api';
 import { calendarDaysFromToday, formatCalendarDate, formatDate, formatTime } from '../../utils/dateFormatting';
 import { useTimezone } from '../../hooks/useTimezone';
@@ -458,7 +458,7 @@ export const MyChecklistsPage: React.FC = () => {
           {/* A whole checklist is the wrong instrument for "we just used two of
               these". This is the way to record that without starting one. */}
           <Link
-            to="/scheduling/apparatus-inventory"
+            to="/inventory/checklists/apparatus-inventory"
             className="btn-secondary text-theme-text-secondary inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium"
           >
             <Truck className="h-3.5 w-3.5" />

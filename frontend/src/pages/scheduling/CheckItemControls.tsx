@@ -17,7 +17,7 @@
 import { AlertTriangle, Camera, Check, Minus, Plus, X } from 'lucide-react';
 import React from 'react';
 
-import { CheckType, daysUntil, normalizeCheckType } from '@/modules/scheduling/types/equipmentCheck';
+import { CheckType, daysUntil, normalizeCheckType } from '@/modules/inventory/types/equipmentCheck';
 
 // ============================================================================
 // Shared shape

@@ -18,7 +18,7 @@ import { useAuthStore } from '../../stores/authStore';
 import { lazyWithRetry } from '../../utils/lazyWithRetry';
 import MyChecklistsPage from './MyChecklistsPage';
 
-const FleetBoardPage = lazyWithRetry(() => import('./FleetBoardPage'));
+const FleetBoardPage = lazyWithRetry(() => import('../../modules/inventory/pages/FleetBoardPage'));
 
 export const EquipmentChecksTab: React.FC = () => {
   const { checkPermission } = useAuthStore();

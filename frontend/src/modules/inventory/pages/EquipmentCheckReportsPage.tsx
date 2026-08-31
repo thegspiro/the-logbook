@@ -25,14 +25,14 @@ import type {
   ItemTrendResponse,
   EquipmentCheckTemplate,
   CheckTemplateItem,
-} from '../../modules/scheduling/types/equipmentCheck';
-import { CHECK_ITEM_STATUS_LABELS } from '../../modules/scheduling/types/equipmentCheck';
-import { DateRangePicker } from '../../components/ux/DateRangePicker';
-import { Pagination } from '../../components/ux/Pagination';
-import { useTimezone } from '../../hooks/useTimezone';
-import { formatDateTime, getTodayLocalDate, toLocalDateString } from '../../utils/dateFormatting';
-import { getErrorMessage } from '../../utils/errorHandling';
-import SchedulingHeader from './SchedulingHeader';
+} from '../../../modules/inventory/types/equipmentCheck';
+import { CHECK_ITEM_STATUS_LABELS } from '../../../modules/inventory/types/equipmentCheck';
+import { DateRangePicker } from '../../../components/ux/DateRangePicker';
+import { Pagination } from '../../../components/ux/Pagination';
+import { useTimezone } from '../../../hooks/useTimezone';
+import { formatDateTime, getTodayLocalDate, toLocalDateString } from '../../../utils/dateFormatting';
+import { getErrorMessage } from '../../../utils/errorHandling';
+import SchedulingHeader from '../../../pages/scheduling/SchedulingHeader';
 
 type ReportTab = 'compliance' | 'failures' | 'trends';
 

@@ -137,7 +137,7 @@ const ADMIN_LINKS: {
   { label: 'Reports', path: '/scheduling/reports', icon: BarChart3, description: 'View scheduling reports' },
   {
     label: 'Check Reports',
-    path: '/scheduling/equipment-check-reports',
+    path: '/inventory/admin/checklists/reports',
     icon: ClipboardList,
     description: 'Equipment compliance',
   },
@@ -147,7 +147,7 @@ const ADMIN_LINKS: {
     icon: ShieldCheck,
     description: 'Who is cleared per position',
   },
-  { label: 'Supply', path: '/scheduling/supply/expiring', icon: Truck, description: 'Expiring items & stock' },
+  { label: 'Supply', path: '/inventory/admin/checklists/supply', icon: Truck, description: 'Expiring items & stock' },
   { label: 'Settings', path: '/scheduling/settings', icon: Settings, description: 'Department settings' },
 ];
 
@@ -551,7 +551,7 @@ const SchedulingPage: React.FC = () => {
             <div className="hscroll flex gap-2">
               {adminLinks.map((link) => {
                 const Icon = link.icon;
-                const isSupply = link.path === '/scheduling/supply/expiring';
+                const isSupply = link.path === '/inventory/admin/checklists/supply';
                 return (
                   <Link
                     key={link.path}

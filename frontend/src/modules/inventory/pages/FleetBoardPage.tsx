@@ -27,23 +27,23 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { equipmentCheckService } from '@/modules/inventory/services/equipmentCheckApi';
-import type { FleetApparatusReadiness, FleetReadinessResponse } from '../../modules/scheduling/types/equipmentCheck';
-import type { ActiveChecklistRecord } from '../../modules/scheduling/services/api';
-import { READINESS_LABELS } from '../../modules/scheduling/types/equipmentCheck';
+import type { FleetApparatusReadiness, FleetReadinessResponse } from '../../../modules/inventory/types/equipmentCheck';
+import type { ActiveChecklistRecord } from '../../../modules/scheduling/services/api';
+import { READINESS_LABELS } from '../../../modules/inventory/types/equipmentCheck';
 import {
   OUTCOME_LEGEND,
   OUTCOME_SWATCH,
   READINESS_PILL,
   READINESS_STRIPE,
   formatRate,
-} from '../../modules/scheduling/utils/checkOutcome';
-import CheckStrip from '../../modules/scheduling/components/CheckStrip';
-import { calendarDaysFromToday, formatDateTime } from '../../utils/dateFormatting';
-import { useTimezone } from '../../hooks/useTimezone';
-import { getErrorMessage } from '../../utils/errorHandling';
-import { useAuthStore } from '../../stores/authStore';
-import { useRegisterPullToRefresh } from '../../hooks/useRegisterPullToRefresh';
-import { SkeletonCardGrid } from '../../components/ux';
+} from '../../../modules/inventory/utils/checkOutcome';
+import CheckStrip from '../../../modules/inventory/components/CheckStrip';
+import { calendarDaysFromToday, formatDateTime } from '../../../utils/dateFormatting';
+import { useTimezone } from '../../../hooks/useTimezone';
+import { getErrorMessage } from '../../../utils/errorHandling';
+import { useAuthStore } from '../../../stores/authStore';
+import { useRegisterPullToRefresh } from '../../../hooks/useRegisterPullToRefresh';
+import { SkeletonCardGrid } from '../../../components/ux';
 
 interface FleetBoardPageProps {
   /**
@@ -131,14 +131,14 @@ export const FleetBoardPage: React.FC<FleetBoardPageProps> = ({ onOpenMyChecks }
         </div>
         <div className="hscroll flex items-center gap-2">
           <Link
-            to="/scheduling/equipment/checks"
+            to="/inventory/checklists/log"
             className="border-theme-surface-border bg-theme-surface text-theme-text-secondary hover:bg-theme-surface-hover inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors"
           >
             <ClipboardList className="h-3.5 w-3.5" aria-hidden="true" />
             Check log
           </Link>
           <Link
-            to="/scheduling/supply/expiring"
+            to="/inventory/admin/checklists/supply"
             className="border-theme-surface-border bg-theme-surface text-theme-text-secondary hover:bg-theme-surface-hover inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors"
           >
             <PackageX className="h-3.5 w-3.5" aria-hidden="true" />
@@ -280,7 +280,7 @@ const ApparatusCard: React.FC<{ unit: FleetApparatusReadiness; tz: string }> = (
 
   return (
     <Link
-      to={`/scheduling/equipment/${unit.apparatusId}`}
+      to={`/inventory/checklists/apparatus/${unit.apparatusId}`}
       className={`bg-theme-surface border-theme-surface-border hover:bg-theme-surface-hover block rounded-lg border border-l-[3px] p-3.5 transition-colors ${
         READINESS_STRIPE[unit.readiness]
       }`}

@@ -1,4 +1,4 @@
-import { containerTypeLabel } from '@/modules/scheduling/types/equipmentCheck';
+import { containerTypeLabel } from '@/modules/inventory/types/equipmentCheck';
 
 export interface HierarchyCompartment {
   id?: string;

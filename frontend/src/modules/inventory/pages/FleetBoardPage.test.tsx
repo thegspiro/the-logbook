@@ -1,9 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { renderWithRouter } from '../../test/utils';
+import { renderWithRouter } from '../../../test/utils';
 import { FleetBoardPage } from './FleetBoardPage';
-import type { FleetApparatusReadiness, FleetReadinessResponse } from '../../modules/scheduling/types/equipmentCheck';
+import type { FleetApparatusReadiness, FleetReadinessResponse } from '../../../modules/inventory/types/equipmentCheck';
 
 const mockGetFleetReadiness = vi.fn();
 const mockGetMyChecklists = vi.fn();
@@ -17,16 +17,16 @@ vi.mock('@/modules/inventory/services/equipmentCheckApi', () => ({
   },
 }));
 
-vi.mock('../../hooks/useTimezone', () => ({
+vi.mock('../../../hooks/useTimezone', () => ({
   useTimezone: () => 'America/New_York',
 }));
 
-vi.mock('../../hooks/useRegisterPullToRefresh', () => ({
+vi.mock('../../../hooks/useRegisterPullToRefresh', () => ({
   useRegisterPullToRefresh: () => undefined,
 }));
 
 const mockCheckPermission = vi.fn(() => true);
-vi.mock('../../stores/authStore', () => ({
+vi.mock('../../../stores/authStore', () => ({
   useAuthStore: () => ({ checkPermission: mockCheckPermission }),
 }));
 
@@ -112,7 +112,7 @@ describe('FleetBoardPage', () => {
   it('links each card to that apparatus', async () => {
     renderWithRouter(<FleetBoardPage />);
     const link = await screen.findByRole('link', { name: /E-1/ });
-    expect(link).toHaveAttribute('href', '/scheduling/equipment/a-1');
+    expect(link).toHaveAttribute('href', '/inventory/checklists/apparatus/a-1');
   });
 
   it('shows an em dash rather than 0% when nothing was owed', async () => {

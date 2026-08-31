@@ -25,7 +25,7 @@ import { ApparatusTypeDefaultsCard } from './ApparatusTypeDefaultsCard';
 import { ResourceTypeDefaultsCard } from './ResourceTypeDefaultsCard';
 import { DepartmentDefaultsCard } from './DepartmentDefaultsCard';
 import { PositionNamesCard } from './PositionNamesCard';
-import { EquipmentCheckTemplateList } from './EquipmentCheckTemplateList';
+import { EquipmentCheckTemplateList } from '../../inventory/components/EquipmentCheckTemplateList';
 import { EligibilitySettingsCard } from './EligibilitySettingsCard';
 import { ShiftReportsSettingsPanel } from './ShiftReportsSettingsPanel';
 import { PlatoonRosterPanel } from './PlatoonRosterPanel';

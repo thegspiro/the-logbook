@@ -22,12 +22,12 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { equipmentCheckService } from '@/modules/inventory/services/equipmentCheckApi';
-import type { SupplyExpiringItem } from '../../modules/scheduling/types/equipmentCheck';
-import { inventoryService } from '../../services/inventoryService';
-import type { InventoryLotCreate } from '../../services/eventServices';
-import { getErrorMessage } from '../../utils/errorHandling';
-import { formatCalendarDate } from '../../utils/dateFormatting';
-import { useOverlaySurface } from '../../hooks/useOverlaySurface';
+import type { SupplyExpiringItem } from '../../../modules/inventory/types/equipmentCheck';
+import { inventoryService } from '../../../services/inventoryService';
+import type { InventoryLotCreate } from '../../../services/eventServices';
+import { getErrorMessage } from '../../../utils/errorHandling';
+import { formatCalendarDate } from '../../../utils/dateFormatting';
+import { useOverlaySurface } from '../../../hooks/useOverlaySurface';
 
 const WINDOW_OPTIONS = [30, 60, 90];
 

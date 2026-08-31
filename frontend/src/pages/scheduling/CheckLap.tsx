@@ -18,7 +18,7 @@ import { AlertTriangle, Check, ChevronDown, ChevronRight } from 'lucide-react';
 import React from 'react';
 
 import { CheckItemControl, type CheckItemAnswer } from './CheckItemControls';
-import { CheckType, containerTypeLabel, normalizeCheckType } from '@/modules/scheduling/types/equipmentCheck';
+import { CheckType, containerTypeLabel, normalizeCheckType } from '@/modules/inventory/types/equipmentCheck';
 
 import {
   answerableItems,

@@ -49,7 +49,7 @@ import { trainingProgramService } from '../../services/trainingServices';
 import type { ShiftRecord, PlatoonRosterEntry } from '../../modules/scheduling/services/api';
 import { useSchedulingStore } from '../../modules/scheduling/store/schedulingStore';
 import type { Assignment } from '../../types/scheduling';
-import { isShiftCheckCompleted, type ShiftCheckSummary } from '../../modules/scheduling/types/equipmentCheck';
+import { isShiftCheckCompleted, type ShiftCheckSummary } from '../../modules/inventory/types/equipmentCheck';
 import { useAuthStore } from '../../stores/authStore';
 import { useTimezone } from '../../hooks/useTimezone';
 import {

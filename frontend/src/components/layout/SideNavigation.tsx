@@ -281,11 +281,11 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
         // member grant, matching the route's own gate — this is the medical
         // page most members actually need, and until now nothing in the nav
         // pointed at it.
-        ...(isModuleOn('scheduling')
+        ...(isModuleOn('inventory')
           ? [
               {
                 label: 'Apparatus Inventory',
-                path: '/scheduling/apparatus-inventory',
+                path: '/inventory/checklists/apparatus-inventory',
                 icon: Truck,
                 anyPermission: ['inventory.check_submit', 'inventory.check_view', 'inventory.view'],
               },

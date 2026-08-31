@@ -24,8 +24,8 @@ import { Link } from 'react-router';
 import { AlertTriangle, CalendarDays, ClipboardList, Grid3x3, List, Loader2, Search } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { equipmentCheckService } from '@/modules/inventory/services/equipmentCheckApi';
-import type { CheckLogEntry, CheckLogResponse } from '../../modules/scheduling/types/equipmentCheck';
-import { CHECK_OUTCOME_LABELS } from '../../modules/scheduling/types/equipmentCheck';
+import type { CheckLogEntry, CheckLogResponse } from '../../../modules/inventory/types/equipmentCheck';
+import { CHECK_OUTCOME_LABELS } from '../../../modules/inventory/types/equipmentCheck';
 import {
   OUTCOME_LEGEND,
   OUTCOME_PILL,
@@ -33,12 +33,12 @@ import {
   TIMING_LABELS,
   TIMING_SHORT,
   formatRate,
-} from '../../modules/scheduling/utils/checkOutcome';
-import { formatCalendarDate, formatTime } from '../../utils/dateFormatting';
-import { useTimezone } from '../../hooks/useTimezone';
-import { getErrorMessage } from '../../utils/errorHandling';
-import { useRegisterPullToRefresh } from '../../hooks/useRegisterPullToRefresh';
-import { EmptyState } from '../../components/ux';
+} from '../../../modules/inventory/utils/checkOutcome';
+import { formatCalendarDate, formatTime } from '../../../utils/dateFormatting';
+import { useTimezone } from '../../../hooks/useTimezone';
+import { getErrorMessage } from '../../../utils/errorHandling';
+import { useRegisterPullToRefresh } from '../../../hooks/useRegisterPullToRefresh';
+import { EmptyState } from '../../../components/ux';
 
 const WINDOW_OPTIONS = [7, 14, 30] as const;
 
@@ -114,7 +114,7 @@ export const CheckLogPage: React.FC<CheckLogPageProps> = ({ apparatusId, showHea
             </div>
           </div>
           <Link
-            to="/scheduling/equipment"
+            to="/inventory/checklists"
             className="border-theme-surface-border bg-theme-surface text-theme-text-secondary hover:bg-theme-surface-hover inline-flex items-center gap-1.5 self-start rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors"
           >
             &larr; Fleet
@@ -271,7 +271,7 @@ const CheckGrid: React.FC<{ data: CheckLogResponse }> = ({ data }) => (
             <tr key={row.apparatusId} className="border-theme-surface-border border-t">
               <th scope="row" className="py-1.5 pr-3 text-left whitespace-nowrap">
                 <Link
-                  to={`/scheduling/equipment/${row.apparatusId}`}
+                  to={`/inventory/checklists/apparatus/${row.apparatusId}`}
                   className="text-theme-text-primary font-mono text-xs font-bold hover:text-blue-600"
                 >
                   {row.unitLabel}

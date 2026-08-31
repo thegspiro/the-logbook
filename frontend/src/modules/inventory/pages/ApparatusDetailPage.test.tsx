@@ -1,9 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { renderWithRouter } from '../../test/utils';
+import { renderWithRouter } from '../../../test/utils';
 import { ApparatusDetailPage } from './ApparatusDetailPage';
-import type { FleetApparatusReadiness } from '../../modules/scheduling/types/equipmentCheck';
+import type { FleetApparatusReadiness } from '../../../modules/inventory/types/equipmentCheck';
 
 const mockGetFleetReadiness = vi.fn();
 const mockGetCheckLog = vi.fn();
@@ -19,7 +19,7 @@ vi.mock('@/modules/inventory/services/equipmentCheckApi', () => ({
   },
 }));
 
-vi.mock('../../hooks/useTimezone', () => ({
+vi.mock('../../../hooks/useTimezone', () => ({
   useTimezone: () => 'America/New_York',
 }));
 

@@ -63,7 +63,7 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { getErrorMessage } from '@/utils/errorHandling';
-import { useConfirm } from '../../contexts/ConfirmContext';
+import { useConfirm } from '../../../contexts/ConfirmContext';
 import { formatDateTime } from '@/utils/dateFormatting';
 import { useTimezone } from '@/hooks/useTimezone';
 import { useUnsavedChanges } from '@/hooks/useUnsavedChanges';
@@ -75,14 +75,14 @@ import {
   orderedCompartmentIds,
   orderedCompartments as buildOrderedCompartments,
   reorderCompartment,
-} from '@/modules/scheduling/utils/compartmentTree';
+} from '@/modules/inventory/utils/compartmentTree';
 import { EquipmentCheckForm } from '@/pages/scheduling/EquipmentCheckForm';
 import { DialogPortal } from '@/components/DialogPortal';
 import { DialogPanel } from '@/components/ux/DialogPanel';
-import InventoryItemPicker from '@/modules/scheduling/components/InventoryItemPicker';
-import CatalogQuickAdd from '@/modules/scheduling/components/CatalogQuickAdd';
-import InventoryMatchModal from '@/modules/scheduling/components/InventoryMatchModal';
-import type { CatalogAddPayload } from '@/modules/scheduling/components/CatalogQuickAdd';
+import InventoryItemPicker from '@/modules/inventory/components/InventoryItemPicker';
+import CatalogQuickAdd from '@/modules/inventory/components/CatalogQuickAdd';
+import InventoryMatchModal from '@/modules/inventory/components/InventoryMatchModal';
+import type { CatalogAddPayload } from '@/modules/inventory/components/CatalogQuickAdd';
 import { useAuthStore } from '@/stores/authStore';
 import { blankToNull, numberOrNull } from '@/utils/formValues';
 import { parseCsvRecords, csvValue } from '@/utils/csv';
@@ -97,7 +97,7 @@ import type {
   CheckType,
   TemplateType,
   LinkCoverage,
-} from '@/modules/scheduling/types/equipmentCheck';
+} from '@/modules/inventory/types/equipmentCheck';
 import {
   TEMPLATE_TYPE_LABELS,
   CONTAINER_TYPE_PRESETS,
@@ -105,7 +105,7 @@ import {
   containerTypeLabel,
   isPresetContainerType,
   normalizeCheckType,
-} from '@/modules/scheduling/types/equipmentCheck';
+} from '@/modules/inventory/types/equipmentCheck';
 
 // ============================================================================
 // Constants (static preset data extracted to equipmentCheckPresets.ts)
@@ -120,7 +120,7 @@ import {
   VEHICLE_PRESETS,
   EQUIPMENT_PRESETS,
 } from './equipmentCheckPresets';
-import { useOverlaySurface } from '../../hooks/useOverlaySurface';
+import { useOverlaySurface } from '../../../hooks/useOverlaySurface';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 
 /** Sentinel anchor for blockers that live in the details drawer, not on a row. */
@@ -1900,7 +1900,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
         setIsDirty(false);
         toast.success(publish ? 'Template published' : 'Draft saved');
         // Navigate to edit mode so subsequent saves work as updates
-        void navigate(`/scheduling/equipment-check-templates/${created.id}`, { replace: true });
+        void navigate(`/inventory/admin/checklists/templates/${created.id}`, { replace: true });
         return;
       }
 
@@ -2032,7 +2032,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       const cloned = await equipmentCheckService.cloneEquipmentCheckTemplate(templateId, '');
       setIsDirty(false);
       toast.success('Template cloned');
-      void navigate(`/scheduling/equipment-check-templates/${cloned.id}`, { replace: true });
+      void navigate(`/inventory/admin/checklists/templates/${cloned.id}`, { replace: true });
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to clone template'));
     } finally {

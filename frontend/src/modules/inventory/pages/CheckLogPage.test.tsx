@@ -1,9 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { renderWithRouter } from '../../test/utils';
+import { renderWithRouter } from '../../../test/utils';
 import { CheckLogPage } from './CheckLogPage';
-import type { CheckLogEntry, CheckLogResponse } from '../../modules/scheduling/types/equipmentCheck';
+import type { CheckLogEntry, CheckLogResponse } from '../../../modules/inventory/types/equipmentCheck';
 
 const mockGetCheckLog = vi.fn();
 
@@ -15,11 +15,11 @@ vi.mock('@/modules/inventory/services/equipmentCheckApi', () => ({
   },
 }));
 
-vi.mock('../../hooks/useTimezone', () => ({
+vi.mock('../../../hooks/useTimezone', () => ({
   useTimezone: () => 'America/New_York',
 }));
 
-vi.mock('../../hooks/useRegisterPullToRefresh', () => ({
+vi.mock('../../../hooks/useRegisterPullToRefresh', () => ({
   useRegisterPullToRefresh: () => undefined,
 }));
 
@@ -98,7 +98,7 @@ describe('CheckLogPage', () => {
   it('opens on the grid for a fleet-scoped caller', async () => {
     renderWithRouter(<CheckLogPage />);
     expect(await screen.findByRole('table')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'E-1' })).toHaveAttribute('href', '/scheduling/equipment/a-1');
+    expect(screen.getByRole('link', { name: 'E-1' })).toHaveAttribute('href', '/inventory/checklists/apparatus/a-1');
   });
 
   it('withholds the grid from a member scoped to their own checks', async () => {

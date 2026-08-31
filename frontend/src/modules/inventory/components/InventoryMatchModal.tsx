@@ -21,7 +21,7 @@ import toast from 'react-hot-toast';
 import { Modal } from '@/components/Modal';
 import { equipmentCheckService } from '@/modules/inventory/services/equipmentCheckApi';
 import { getErrorMessage } from '@/utils/errorHandling';
-import type { InventoryMatch, LinkCoverage } from '@/modules/scheduling/types/equipmentCheck';
+import type { InventoryMatch, LinkCoverage } from '@/modules/inventory/types/equipmentCheck';
 
 interface InventoryMatchModalProps {
   templateId: string;

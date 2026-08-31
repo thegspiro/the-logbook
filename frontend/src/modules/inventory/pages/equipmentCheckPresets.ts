@@ -5,7 +5,7 @@
  * ~570 lines of fire-service domain constants live in their own module.
  */
 
-import type { CheckType } from '@/modules/scheduling/types/equipmentCheck';
+import type { CheckType } from '@/modules/inventory/types/equipmentCheck';
 
 // ============================================================================
 // Check-type metadata

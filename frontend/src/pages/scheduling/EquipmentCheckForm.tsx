@@ -69,10 +69,10 @@ import type {
   LastCheckItemResult,
   LastSealRecord,
   DeployedLot,
-} from '../../modules/scheduling/types/equipmentCheck';
-import { CHECK_TYPE_LABELS, ExpiredStockDisposition } from '../../modules/scheduling/types/equipmentCheck';
-import { flattenCompartmentTree } from '../../modules/scheduling/utils/compartmentTree';
-import LotsAboardPanel from '../../modules/scheduling/components/LotsAboardPanel';
+} from '../../modules/inventory/types/equipmentCheck';
+import { CHECK_TYPE_LABELS, ExpiredStockDisposition } from '../../modules/inventory/types/equipmentCheck';
+import { flattenCompartmentTree } from '../../modules/inventory/utils/compartmentTree';
+import LotsAboardPanel from '../../modules/inventory/components/LotsAboardPanel';
 import SealPanel from '../../modules/scheduling/components/SealPanel';
 import type { SealState } from '../../modules/scheduling/components/SealPanel';
 

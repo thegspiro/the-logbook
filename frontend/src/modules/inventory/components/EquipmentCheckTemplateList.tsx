@@ -166,7 +166,7 @@ export const EquipmentCheckTemplateList: React.FC = () => {
           <ClipboardCheck className="h-4 w-4" /> Check Templates
         </h3>
         <a
-          href="/scheduling/equipment-check-templates/new"
+          href="/inventory/admin/checklists/templates/new"
           className="flex items-center gap-1 rounded-lg bg-violet-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-violet-700"
         >
           <Plus className="h-3.5 w-3.5" /> Create Template
@@ -225,7 +225,7 @@ export const EquipmentCheckTemplateList: React.FC = () => {
             Create templates to define what crew members verify at shift start and end.
           </p>
           <a
-            href="/scheduling/equipment-check-templates/new"
+            href="/inventory/admin/checklists/templates/new"
             className="inline-flex items-center gap-1 rounded-lg bg-violet-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-violet-700"
           >
             <Plus className="h-3.5 w-3.5" /> Create First Template
@@ -321,7 +321,7 @@ export const EquipmentCheckTemplateList: React.FC = () => {
                 {/* Actions */}
                 <div className="flex shrink-0 items-center gap-0.5">
                   <a
-                    href={`/scheduling/equipment-check-templates/${template.id}`}
+                    href={`/inventory/admin/checklists/templates/${template.id}`}
                     className="text-theme-text-muted flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md p-2 transition-colors hover:bg-violet-500/10 hover:text-violet-600 sm:min-h-0 sm:min-w-0 sm:p-1.5"
                     aria-label={template.isActive ? `Edit ${template.name}` : `Continue editing ${template.name}`}
                   >

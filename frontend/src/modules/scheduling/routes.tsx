@@ -26,22 +26,6 @@ const SchedulingPlatoonsPage = lazyWithRetry(() => import('../../pages/schedulin
 
 const PositionRosterPage = lazyWithRetry(() => import('../../pages/scheduling/PositionRosterPage'));
 
-const EquipmentCheckTemplateBuilder = lazyWithRetry(
-  () => import('../../pages/scheduling/EquipmentCheckTemplateBuilder')
-);
-
-const EquipmentCheckReportsPage = lazyWithRetry(() => import('../../pages/scheduling/EquipmentCheckReportsPage'));
-
-const SupplyExpiringPage = lazyWithRetry(() => import('../../pages/scheduling/SupplyExpiringPage'));
-
-const ApparatusInventoryPage = lazyWithRetry(() => import('../../pages/scheduling/ApparatusInventoryPage'));
-
-const FleetBoardPage = lazyWithRetry(() => import('../../pages/scheduling/FleetBoardPage'));
-
-const CheckLogPage = lazyWithRetry(() => import('../../pages/scheduling/CheckLogPage'));
-
-const ApparatusDetailPage = lazyWithRetry(() => import('../../pages/scheduling/ApparatusDetailPage'));
-
 const ShiftCheckInPage = lazyWithRetry(() => import('../../pages/scheduling/ShiftCheckInPage'));
 
 const ShiftCheckInPrintPage = lazyWithRetry(() => import('../../pages/scheduling/ShiftCheckInPrintPage'));
@@ -120,114 +104,6 @@ export const getSchedulingRoutes = () => {
           <Suspense fallback={null}>
             <ProtectedRoute requiredModule="scheduling" moduleLabel="Scheduling" requiredPermission="scheduling.manage">
               <SchedulingPlatoonsPage />
-            </ProtectedRoute>
-          </Suspense>
-        }
-      />
-      <Route
-        path="/scheduling/equipment-check-templates/new"
-        element={
-          <Suspense fallback={null}>
-            <ProtectedRoute requiredModule="scheduling" moduleLabel="Scheduling" requiredPermission="scheduling.manage">
-              <EquipmentCheckTemplateBuilder />
-            </ProtectedRoute>
-          </Suspense>
-        }
-      />
-      <Route
-        path="/scheduling/equipment-check-templates/:templateId"
-        element={
-          <Suspense fallback={null}>
-            <ProtectedRoute requiredModule="scheduling" moduleLabel="Scheduling" requiredPermission="scheduling.manage">
-              <EquipmentCheckTemplateBuilder />
-            </ProtectedRoute>
-          </Suspense>
-        }
-      />
-      <Route
-        path="/scheduling/equipment-check-reports"
-        element={
-          <Suspense fallback={null}>
-            <ProtectedRoute requiredModule="scheduling" moduleLabel="Scheduling" requiredPermission="scheduling.manage">
-              <EquipmentCheckReportsPage />
-            </ProtectedRoute>
-          </Suspense>
-        }
-      />
-      <Route
-        path="/scheduling/supply/expiring"
-        element={
-          <Suspense fallback={null}>
-            <ProtectedRoute
-              requiredModule="scheduling"
-              moduleLabel="Scheduling"
-              requiredAnyPermission={['scheduling.manage', 'inventory.check_view', 'inventory.manage']}
-            >
-              <SupplyExpiringPage />
-            </ProtectedRoute>
-          </Suspense>
-        }
-      />
-      <Route
-        path="/scheduling/apparatus-inventory"
-        element={
-          <Suspense fallback={null}>
-            {/* Crew-level, not officer-level: recording what you just used is
-                the whole point, so the default member permission opens it. */}
-            <ProtectedRoute
-              requiredModule="scheduling"
-              moduleLabel="Scheduling"
-              requiredAnyPermission={['inventory.check_submit', 'inventory.check_view', 'inventory.view']}
-            >
-              <ApparatusInventoryPage />
-            </ProtectedRoute>
-          </Suspense>
-        }
-      />
-      {/* Fleet board and its sub-pages. `/checks` is declared before the
-          dynamic apparatus route so the literal segment cannot be swallowed
-          as an apparatus id. */}
-      <Route
-        path="/scheduling/equipment"
-        element={
-          <Suspense fallback={null}>
-            <ProtectedRoute
-              requiredModule="scheduling"
-              moduleLabel="Scheduling"
-              requiredAnyPermission={['inventory.check_view', 'scheduling.manage']}
-            >
-              <FleetBoardPage />
-            </ProtectedRoute>
-          </Suspense>
-        }
-      />
-      <Route
-        path="/scheduling/equipment/checks"
-        element={
-          <Suspense fallback={null}>
-            {/* Crew-level: the server narrows a member without
-                inventory.check_view to their own checks rather than 403ing,
-                so the route opens for anyone who can submit one. */}
-            <ProtectedRoute
-              requiredModule="scheduling"
-              moduleLabel="Scheduling"
-              requiredAnyPermission={['inventory.check_submit', 'inventory.check_view', 'scheduling.manage']}
-            >
-              <CheckLogPage />
-            </ProtectedRoute>
-          </Suspense>
-        }
-      />
-      <Route
-        path="/scheduling/equipment/:apparatusId"
-        element={
-          <Suspense fallback={null}>
-            <ProtectedRoute
-              requiredModule="scheduling"
-              moduleLabel="Scheduling"
-              requiredAnyPermission={['inventory.check_view', 'scheduling.manage']}
-            >
-              <ApparatusDetailPage />
             </ProtectedRoute>
           </Suspense>
         }

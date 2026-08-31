@@ -36,21 +36,21 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { equipmentCheckService } from '@/modules/inventory/services/equipmentCheckApi';
-import { apparatusService } from '../../modules/apparatus/services/api';
-import { useAuthStore } from '../../stores/authStore';
+import { apparatusService } from '../../../modules/apparatus/services/api';
+import { useAuthStore } from '../../../stores/authStore';
 import type {
   ApparatusInventory,
   ApparatusInventoryItem,
   ItemDeployedLots,
   ReadyLot,
-} from '../../modules/scheduling/types/equipmentCheck';
-import type { ApparatusListItem } from '../../modules/apparatus/types';
-import { PromptDialog } from '../../components/ux';
-import LotsAboardPanel from '../../modules/scheduling/components/LotsAboardPanel';
-import { getErrorMessage } from '../../utils/errorHandling';
-import { formatCalendarDate, formatDateTime } from '../../utils/dateFormatting';
-import { useTimezone } from '../../hooks/useTimezone';
-import { useOverlaySurface } from '../../hooks/useOverlaySurface';
+} from '../../../modules/inventory/types/equipmentCheck';
+import type { ApparatusListItem } from '../../../modules/apparatus/types';
+import { PromptDialog } from '../../../components/ux';
+import LotsAboardPanel from '../../../modules/inventory/components/LotsAboardPanel';
+import { getErrorMessage } from '../../../utils/errorHandling';
+import { formatCalendarDate, formatDateTime } from '../../../utils/dateFormatting';
+import { useTimezone } from '../../../hooks/useTimezone';
+import { useOverlaySurface } from '../../../hooks/useOverlaySurface';
 
 /** The list endpoint's ceiling; asking for more is rejected outright. */
 const FLEET_PAGE_SIZE = 100;

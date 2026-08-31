@@ -7,7 +7,7 @@
  * refresh.
  */
 
-import { CheckType, normalizeCheckType } from '@/modules/scheduling/types/equipmentCheck';
+import { CheckType, normalizeCheckType } from '@/modules/inventory/types/equipmentCheck';
 
 import type { CheckItemAnswer, CheckItemSpec } from './CheckItemControls';
 

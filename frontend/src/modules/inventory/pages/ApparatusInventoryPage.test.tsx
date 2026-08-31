@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { renderWithRouter } from '../../test/utils';
+import { renderWithRouter } from '../../../test/utils';
 
 const mockGetApparatusInventory = vi.fn();
 const mockReportItemUsed = vi.fn();
@@ -26,20 +26,20 @@ vi.mock('@/modules/inventory/services/equipmentCheckApi', () => ({
   },
 }));
 
-vi.mock('../../modules/apparatus/services/api', () => ({
+vi.mock('../../../modules/apparatus/services/api', () => ({
   apparatusService: {
     getApparatusList: (...a: unknown[]) => mockGetApparatusList(...a) as unknown,
   },
 }));
 
-vi.mock('../../hooks/useTimezone', () => ({ useTimezone: () => 'UTC' }));
+vi.mock('../../../hooks/useTimezone', () => ({ useTimezone: () => 'UTC' }));
 
 // The page gates Undo/Swap on inventory.check_manage / inventory.manage.
 // Default to a manager so the action flows stay exercised; individual tests
 // flip the mock to a member view. (vi.clearAllMocks clears calls, not this
 // creation-time implementation.)
 const mockCheckPermission = vi.fn(() => true);
-vi.mock('../../stores/authStore', () => ({
+vi.mock('../../../stores/authStore', () => ({
   useAuthStore: () => ({
     checkPermission: (...a: unknown[]) => mockCheckPermission(...a),
   }),

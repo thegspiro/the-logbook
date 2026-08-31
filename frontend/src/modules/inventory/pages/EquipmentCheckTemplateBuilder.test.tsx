@@ -3,7 +3,7 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { ConfirmProvider } from '../../contexts/ConfirmContext';
+import { ConfirmProvider } from '../../../contexts/ConfirmContext';
 
 const {
   getTemplate,
@@ -149,7 +149,7 @@ function renderNewBuilder() {
       <ConfirmProvider>
         <Routes>
           <Route path="/templates/new" element={<EquipmentCheckTemplateBuilder />} />
-          <Route path="/scheduling/equipment-check-templates/:templateId" element={null} />
+          <Route path="/inventory/admin/checklists/templates/:templateId" element={null} />
         </Routes>
       </ConfirmProvider>
     </MemoryRouter>

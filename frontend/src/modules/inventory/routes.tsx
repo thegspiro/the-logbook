@@ -40,6 +40,16 @@ const VendorsPage = lazyWithRetry(() => import('./pages/VendorsPage'));
 const ImpactPlannerPage = lazyWithRetry(() => import('./pages/ImpactPlannerPage'));
 const InventorySetupPage = lazyWithRetry(() => import('./pages/InventorySetupPage'));
 
+// Equipment checklists. Authoring and oversight live here; performing a check
+// stays on the shift screen, under /scheduling.
+const EquipmentCheckTemplateBuilder = lazyWithRetry(() => import('./pages/EquipmentCheckTemplateBuilder'));
+const EquipmentCheckReportsPage = lazyWithRetry(() => import('./pages/EquipmentCheckReportsPage'));
+const SupplyExpiringPage = lazyWithRetry(() => import('./pages/SupplyExpiringPage'));
+const FleetBoardPage = lazyWithRetry(() => import('./pages/FleetBoardPage'));
+const CheckLogPage = lazyWithRetry(() => import('./pages/CheckLogPage'));
+const ApparatusDetailPage = lazyWithRetry(() => import('./pages/ApparatusDetailPage'));
+const ApparatusInventoryPage = lazyWithRetry(() => import('./pages/ApparatusInventoryPage'));
+
 export const getInventoryRoutes = () => {
   return (
     <React.Fragment>
@@ -342,6 +352,142 @@ export const getInventoryRoutes = () => {
           <ProtectedRoute requiredModule="inventory" moduleLabel="Inventory" requiredPermission="inventory.manage">
             <Suspense fallback={null}>
               <InventoryBarcodePrintPage />
+            </Suspense>
+          </ProtectedRoute>
+        }
+      />
+
+      {/* ==============================================================
+          Equipment checklists
+
+          A checklist is a list of inventory items, so authoring and
+          oversight live here. Performing one stays on the shift screen
+          (/scheduling?tab=equipment-checks), which is where a crew is when
+          they walk a truck.
+
+          Admin-gated screens sit under /inventory/admin/checklists, matching
+          the module's existing convention; the crew-facing board, log and
+          apparatus views sit under /inventory/checklists.
+
+          Route gates are the API's gates, not the Scheduling page's: the
+          builder and reports asked for `scheduling.manage` while their
+          endpoints require the check-manage grant, so an officer with one and
+          not the other met either a page they could not use or a page they
+          were refused for no stated reason.
+          ============================================================== */}
+      <Route
+        path="/inventory/admin/checklists/templates/new"
+        element={
+          <ProtectedRoute
+            requiredModule="inventory"
+            moduleLabel="Inventory"
+            requiredPermission="inventory.check_manage"
+          >
+            <Suspense fallback={null}>
+              <EquipmentCheckTemplateBuilder />
+            </Suspense>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/inventory/admin/checklists/templates/:templateId"
+        element={
+          <ProtectedRoute
+            requiredModule="inventory"
+            moduleLabel="Inventory"
+            requiredPermission="inventory.check_manage"
+          >
+            <Suspense fallback={null}>
+              <EquipmentCheckTemplateBuilder />
+            </Suspense>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/inventory/admin/checklists/reports"
+        element={
+          <ProtectedRoute requiredModule="inventory" moduleLabel="Inventory" requiredPermission="inventory.check_view">
+            <Suspense fallback={null}>
+              <EquipmentCheckReportsPage />
+            </Suspense>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/inventory/admin/checklists/supply"
+        element={
+          <ProtectedRoute
+            requiredModule="inventory"
+            moduleLabel="Inventory"
+            requiredAnyPermission={['scheduling.manage', 'inventory.check_view', 'inventory.manage']}
+          >
+            <Suspense fallback={null}>
+              <SupplyExpiringPage />
+            </Suspense>
+          </ProtectedRoute>
+        }
+      />
+
+      {/* Fleet board and its sub-pages. `/log` and `/apparatus-inventory` are
+          declared before the dynamic apparatus route so a literal segment
+          cannot be swallowed as an apparatus id. */}
+      <Route
+        path="/inventory/checklists"
+        element={
+          <ProtectedRoute
+            requiredModule="inventory"
+            moduleLabel="Inventory"
+            requiredAnyPermission={['inventory.check_view', 'scheduling.manage']}
+          >
+            <Suspense fallback={null}>
+              <FleetBoardPage />
+            </Suspense>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/inventory/checklists/log"
+        element={
+          /* Crew-level: the server narrows a member without
+             inventory.check_view to their own checks rather than 403ing, so
+             the route opens for anyone who can submit one. */
+          <ProtectedRoute
+            requiredModule="inventory"
+            moduleLabel="Inventory"
+            requiredAnyPermission={['inventory.check_submit', 'inventory.check_view', 'scheduling.manage']}
+          >
+            <Suspense fallback={null}>
+              <CheckLogPage />
+            </Suspense>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/inventory/checklists/apparatus-inventory"
+        element={
+          /* Crew-level, not officer-level: recording what you just used is
+             the whole point, so the default member permission opens it. */
+          <ProtectedRoute
+            requiredModule="inventory"
+            moduleLabel="Inventory"
+            requiredAnyPermission={['inventory.check_submit', 'inventory.check_view', 'inventory.view']}
+          >
+            <Suspense fallback={null}>
+              <ApparatusInventoryPage />
+            </Suspense>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/inventory/checklists/apparatus/:apparatusId"
+        element={
+          <ProtectedRoute
+            requiredModule="inventory"
+            moduleLabel="Inventory"
+            requiredAnyPermission={['inventory.check_view', 'scheduling.manage']}
+          >
+            <Suspense fallback={null}>
+              <ApparatusDetailPage />
             </Suspense>
           </ProtectedRoute>
         }

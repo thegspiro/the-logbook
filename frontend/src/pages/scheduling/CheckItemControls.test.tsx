@@ -21,7 +21,7 @@ import {
   type CheckItemAnswer,
   type CheckItemSpec,
 } from './CheckItemControls';
-import { daysUntil } from '@/modules/scheduling/types/equipmentCheck';
+import { daysUntil } from '@/modules/inventory/types/equipmentCheck';
 
 const item = (over: Partial<CheckItemSpec> = {}): CheckItemSpec => ({
   id: 'i1',

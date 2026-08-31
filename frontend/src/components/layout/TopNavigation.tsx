@@ -173,11 +173,11 @@ export const TopNavigation: React.FC<TopNavigationProps> = ({ departmentName, lo
               },
             ]
           : []),
-        ...(isModuleOn('scheduling')
+        ...(isModuleOn('inventory')
           ? [
               {
                 label: 'Apparatus Inventory',
-                path: '/scheduling/apparatus-inventory',
+                path: '/inventory/checklists/apparatus-inventory',
                 anyPermission: ['inventory.check_submit', 'inventory.check_view', 'inventory.view'],
               },
             ]

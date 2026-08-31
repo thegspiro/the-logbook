@@ -18,22 +18,22 @@ import type {
   CheckLogEntry,
   FleetApparatusReadiness,
   SupplyExpiringItem,
-} from '../../modules/scheduling/types/equipmentCheck';
-import { CHECK_OUTCOME_LABELS, READINESS_LABELS } from '../../modules/scheduling/types/equipmentCheck';
+} from '../../../modules/inventory/types/equipmentCheck';
+import { CHECK_OUTCOME_LABELS, READINESS_LABELS } from '../../../modules/inventory/types/equipmentCheck';
 import {
   OUTCOME_PILL,
   READINESS_PILL,
   READINESS_STRIPE,
   TIMING_LABELS,
   formatRate,
-} from '../../modules/scheduling/utils/checkOutcome';
-import CheckStrip from '../../modules/scheduling/components/CheckStrip';
+} from '../../../modules/inventory/utils/checkOutcome';
+import CheckStrip from '../../../modules/inventory/components/CheckStrip';
 import CheckLogPage from './CheckLogPage';
 import ApparatusInventoryPage from './ApparatusInventoryPage';
-import { formatCalendarDate, formatDateTime } from '../../utils/dateFormatting';
-import { useTimezone } from '../../hooks/useTimezone';
-import { getErrorMessage } from '../../utils/errorHandling';
-import { EmptyState } from '../../components/ux';
+import { formatCalendarDate, formatDateTime } from '../../../utils/dateFormatting';
+import { useTimezone } from '../../../hooks/useTimezone';
+import { getErrorMessage } from '../../../utils/errorHandling';
+import { EmptyState } from '../../../components/ux';
 
 const TABS = [
   { id: 'checks', label: 'Checks' },
@@ -124,7 +124,7 @@ export const ApparatusDetailPage: React.FC = () => {
           icon={Truck}
           title="Apparatus not found"
           description="This apparatus is not in the fleet, or you do not have access to it."
-          actions={[{ label: 'Back to fleet', onClick: () => void navigate('/scheduling/equipment') }]}
+          actions={[{ label: 'Back to fleet', onClick: () => void navigate('/inventory/checklists') }]}
         />
       </div>
     );
@@ -141,7 +141,7 @@ export const ApparatusDetailPage: React.FC = () => {
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="flex min-w-0 items-start gap-2">
             <Link
-              to="/scheduling/equipment"
+              to="/inventory/checklists"
               className="text-theme-text-muted hover:text-theme-text-primary hover:bg-theme-surface-hover mt-0.5 shrink-0 rounded-lg p-1.5 transition-colors"
               aria-label="Back to fleet"
             >
@@ -328,7 +328,7 @@ export const ApparatusDetailPage: React.FC = () => {
               </div>
             )}
             <Link
-              to="/scheduling/supply/expiring"
+              to="/inventory/admin/checklists/supply"
               className="mt-2 inline-flex items-center gap-1.5 text-xs font-medium text-blue-600 hover:text-blue-700"
             >
               <PackageX className="h-3.5 w-3.5" aria-hidden="true" />

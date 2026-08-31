@@ -12,7 +12,7 @@ vi.mock('./MyChecklistsPage', () => ({
   default: () => <div>My checklists view</div>,
 }));
 
-vi.mock('./FleetBoardPage', () => ({
+vi.mock('../../modules/inventory/pages/FleetBoardPage', () => ({
   default: () => <div>Fleet board view</div>,
 }));
 
