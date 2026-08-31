@@ -3655,6 +3655,7 @@ async def run_publish_scheduled_messages(db: AsyncSession) -> Dict[str, Any]:
     messaging = MessagingService(db)
     published = 0
     expired = 0
+    failed = 0
     for message in due:
         # A message that expired before its send time came due goes live for
         # nobody and must not be escalated. The claim above already cleared
@@ -3672,17 +3673,35 @@ async def run_publish_scheduled_messages(db: AsyncSession) -> Dict[str, Any]:
             await db.commit()
             expired += 1
             continue
-        await messaging.materialize_recipients(message)
-        await db.commit()
-        await delivery.deliver(message)
-        published += 1
+        # Per message, because the claim above is durable and shared. deliver()
+        # guards itself, but materialize_recipients and this commit do not, and
+        # an exception here escaped the whole loop — abandoning every remaining
+        # message in the batch with scheduled_at already cleared and committed,
+        # so nothing would ever pick them up again. One bad message must not
+        # silently swallow the rest of the batch.
+        try:
+            await messaging.materialize_recipients(message)
+            await db.commit()
+            await delivery.deliver(message)
+            published += 1
+        except Exception as exc:
+            await db.rollback()
+            failed += 1
+            logger.warning(
+                "Scheduled department message {} could not be published: {}",
+                getattr(message, "id", "?"),
+                exc,
+            )
 
     if published:
         logger.info(f"Published {published} scheduled department message(s)")
+    if failed:
+        logger.warning(f"{failed} scheduled department message(s) failed to publish")
     return {
         "task": "publish_scheduled_messages",
         "published": published,
         "expired": expired,
+        "failed": failed,
     }
 
 

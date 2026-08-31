@@ -11,8 +11,25 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from app.services.consent_service import ConsentService
-from app.services.message_delivery_service import MessageDeliveryService
+from app.services.message_delivery_service import (
+    MessageDeliveryService,
+    _MessageFacts,
+    _RecipientFacts,
+)
 from app.services.messaging_service import MessagingService
+
+
+def _facts(priority="normal", requires_ack=False):
+    """The plain-value snapshot deliver() builds and hands to each channel."""
+    return _MessageFacts(
+        id="m1",
+        organization_id="org1",
+        title="Roof collapse drill",
+        body="Report to the training tower at 0900.",
+        expires_at=None,
+        priority=priority,
+        requires_acknowledgment=requires_ack,
+    )
 
 
 def _msg(priority="normal", requires_ack=False, posted_by="author"):
@@ -48,14 +65,17 @@ def _db():
     nested.__aenter__ = AsyncMock()
     nested.__aexit__ = AsyncMock(return_value=False)
     db.begin_nested = MagicMock(return_value=nested)
-    # org lookup during escalation
-    db.execute = AsyncMock(
-        return_value=MagicMock(
-            scalar_one_or_none=MagicMock(
-                return_value=SimpleNamespace(name="Falls Church FD")
-            )
+    # Covers both reads deliver() makes: the org lookup during escalation
+    # (scalar_one_or_none) and the recipient re-read before the SMS channel
+    # (scalars().all()). The re-read exists because an earlier channel's
+    # rollback expires the instances resolve_sms_recipients has to read.
+    result = MagicMock(
+        scalar_one_or_none=MagicMock(
+            return_value=SimpleNamespace(name="Falls Church FD")
         )
     )
+    result.scalars = MagicMock(return_value=MagicMock(all=MagicMock(return_value=[])))
+    db.execute = AsyncMock(return_value=result)
     return db
 
 
@@ -409,6 +429,84 @@ class TestEscalationRateLimit:
         fake_sms.send_bulk_sms.assert_not_awaited()
 
 
+class TestChannelsRunOnPlainValues:
+    """Each channel rolls back on failure, and a rollback expires every
+    instance in the session. Passing ORM objects between channels meant a
+    later one read `message.title` off an expired instance, issued a lazy
+    refresh from a sync context, and raised MissingGreenlet — inside its own
+    `except Exception` handler, so it was logged as a delivery failure. Email
+    is the channel of record, so an in-app failure took the email with it.
+    """
+
+    async def test_deliver_hands_channels_snapshots_not_orm_instances(self):
+        seen: dict = {}
+        db = _db()
+        db.execute.return_value.scalars.return_value.all.return_value = []
+
+        class Recording(MessageDeliveryService):
+            async def _create_in_app(self, message, recipients):
+                seen["in_app"] = (message, recipients)
+
+            async def _send_email(self, message, recipients, org):
+                seen["email"] = (message, recipients)
+
+        svc = Recording(db)
+        target = MessagingService(db)
+        target._targeted_users = AsyncMock(return_value=[_user("u1", email="a@b.co")])
+        with patch(
+            "app.services.messaging_service.MessagingService", return_value=target
+        ):
+            await svc.deliver(_msg())
+
+        for channel in ("in_app", "email"):
+            message, recipients = seen[channel]
+            assert isinstance(message, _MessageFacts), channel
+            assert all(isinstance(r, _RecipientFacts) for r in recipients), channel
+        # The values still have to be right, not merely the right type.
+        assert seen["email"][0].title == "Roof collapse drill"
+        assert [r.id for r in seen["email"][1]] == ["u1"]
+
+    async def test_claim_delivery_takes_ids(self):
+        """It rolls back on a duplicate key, which expires whatever it was
+        handed — so it must not be handed anything it would then read."""
+        import inspect
+
+        params = list(
+            inspect.signature(MessageDeliveryService._claim_delivery).parameters
+        )
+        assert params == ["self", "message_id", "user_id", "channel"]
+
+
+class TestSmsAttribution:
+    async def test_two_members_sharing_a_number_are_claimed_separately(self):
+        """A married couple on one handset is ordinary in a volunteer
+        department. Keying the recipients by phone number collapsed them, and
+        the delivery row was attributed to whichever came last — including one
+        who had never given TCPA consent."""
+        shared = "+15550000000"
+        recipients = [_user("u1", mobile=shared), _user("u2", mobile=shared)]
+        db = _db()
+        svc = MessageDeliveryService(db)
+        claims: list = []
+
+        async def record(message_id, user_id, channel):
+            claims.append((user_id, channel))
+            return None  # already claimed; the send itself is not the point
+
+        svc._claim_delivery = record
+        fake_sms = MagicMock()
+        fake_sms.enabled = True
+        fake_sms.send_bulk_sms = AsyncMock(return_value=1)
+        with patch(
+            "app.services.sms_service.SMSService", return_value=fake_sms
+        ), _patch_sms_consent("u1", "u2"):
+            await svc._send_sms(
+                _facts(priority="urgent"), recipients, org=SimpleNamespace(name="FD")
+            )
+
+        assert sorted(claims) == [("u1", "sms"), ("u2", "sms")]
+
+
 class TestPublishScheduledMessages:
     """The publish task marks due messages live (clears scheduled_at) and then
     delivers them via the shared escalation path."""
@@ -443,6 +541,52 @@ class TestPublishScheduledMessages:
         claim_statement = db.execute.await_args.args[0]
         assert claim_statement._for_update_arg.skip_locked is True
 
+    async def test_one_bad_message_does_not_abandon_the_rest_of_the_batch(self):
+        """The claim (scheduled_at = NULL) is committed for the whole batch
+        before any delivery. So an exception mid-loop did not just skip that
+        message — every remaining one was already claimed and would never be
+        picked up again, going live with no email, ever."""
+        from app.services import scheduled_tasks
+
+        good, bad = _msg(), _msg()
+        good.id, bad.id = "ok", "boom"
+        good.is_active = bad.is_active = True
+        good.scheduled_at = bad.scheduled_at = datetime(2020, 1, 1, tzinfo=timezone.utc)
+        db = _db()
+        db.execute = AsyncMock(
+            return_value=MagicMock(
+                scalars=MagicMock(
+                    return_value=MagicMock(all=MagicMock(return_value=[bad, good]))
+                )
+            )
+        )
+        delivered: list = []
+
+        class Delivery:
+            def __init__(self, _db):
+                pass
+
+            async def deliver(self, message):
+                delivered.append(message.id)
+
+        class Messaging:
+            def __init__(self, _db):
+                pass
+
+            async def materialize_recipients(self, message):
+                if message.id == "boom":
+                    raise RuntimeError("audience resolution failed")
+
+        # Imported inside the function, so patch them where they are defined.
+        with patch(
+            "app.services.message_delivery_service.MessageDeliveryService", Delivery
+        ), patch("app.services.messaging_service.MessagingService", Messaging):
+            result = await scheduled_tasks.run_publish_scheduled_messages(db)
+
+        assert delivered == ["ok"], "the healthy message must still go out"
+        assert result["published"] == 1
+        assert result["failed"] == 1
+
     async def test_two_publishers_and_retry_deliver_each_channel_once(self):
         """A second publisher/retry loses the same durable delivery keys."""
         recipient = _user("u1", email="member@fd.co", mobile="+15551234567")
@@ -469,6 +613,12 @@ class TestPublishScheduledMessages:
                     channel_sends["sms"] += 1
 
         first, second = RacingDelivery(_db()), RacingDelivery(_db())
+        for worker in (first, second):
+            # deliver() re-reads the recipients before the SMS channel; hand
+            # the same member back so the racing subclass sees them.
+            worker.db.execute.return_value.scalars.return_value.all.return_value = [
+                recipient
+            ]
         target = MessagingService(first.db)
         target._targeted_users = AsyncMock(return_value=[recipient])
         # One shared patch encloses both workers, avoiding concurrent patch
@@ -509,6 +659,9 @@ class TestPublishScheduledMessages:
             "task": "publish_scheduled_messages",
             "published": 0,
             "expired": 1,
+            # Reported so a batch that partly failed is visible rather than
+            # looking like a quiet success.
+            "failed": 0,
         }
         assert due.is_active is False
         assert due.scheduled_at is None

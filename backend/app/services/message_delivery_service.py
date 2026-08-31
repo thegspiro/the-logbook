@@ -32,6 +32,7 @@ undo or block the message that was already created.
 """
 
 import html as _html
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import List, Optional, Union
 
@@ -78,6 +79,35 @@ def _text_to_html(text: str) -> str:
     return _html.escape(text or "").replace("\n", "<br>")
 
 
+@dataclass(frozen=True)
+class _MessageFacts:
+    """Everything the channels need from the message, as plain values.
+
+    Read once, before any channel runs. Each channel rolls back on failure and
+    a rollback expires every instance in the session, so a later channel
+    reading `message.title` off the ORM object issued a lazy refresh from a
+    sync context and raised MissingGreenlet — inside its own `except
+    Exception` handler, which logged it as a delivery failure. Email is the
+    channel of record, so an in-app failure silently took the email with it.
+    """
+
+    id: str
+    organization_id: str
+    title: str
+    body: str
+    expires_at: Optional[datetime]
+    priority: str
+    requires_acknowledgment: bool
+
+
+@dataclass(frozen=True)
+class _RecipientFacts:
+    """One recipient, as plain values. Same reason as _MessageFacts."""
+
+    id: str
+    email: Optional[str]
+
+
 class MessageDeliveryService:
     """Fan a posted department message out to in-app / email / SMS channels."""
 
@@ -85,14 +115,19 @@ class MessageDeliveryService:
         self.db = db
 
     async def _claim_delivery(
-        self, message: DepartmentMessage, user: User, channel: str
+        self, message_id: str, user_id: str, channel: str
     ) -> Optional[DepartmentMessageDelivery]:
-        """Atomically reserve an external channel send for one recipient."""
-        key = f"department-message:{message.id}:{user.id}:{channel}"
+        """Atomically reserve an external channel send for one recipient.
+
+        Takes ids rather than ORM instances: the rollback below expires every
+        instance in the session, so the caller's next loop iteration read of
+        `user.id` would raise MissingGreenlet.
+        """
+        key = f"department-message:{message_id}:{user_id}:{channel}"
         attempt = DepartmentMessageDelivery(
             id=generate_uuid(),
-            message_id=str(message.id),
-            recipient_id=str(user.id),
+            message_id=message_id,
+            recipient_id=user_id,
             channel=channel,
             status="pending",
             idempotency_key=key,
@@ -162,8 +197,6 @@ class MessageDeliveryService:
             priority = _priority_value(message)
             is_urgent = priority == "urgent"
 
-            await self._create_in_app(message, recipients)
-
             org_result = await self.db.execute(
                 select(Organization).where(
                     Organization.id == str(message.organization_id)
@@ -171,14 +204,41 @@ class MessageDeliveryService:
             )
             org = org_result.scalar_one_or_none()
 
+            # Everything the channels need, read while the instances are
+            # guaranteed live. Each channel rolls back on failure, and a
+            # rollback expires every instance in the session — so a later
+            # channel reading these off the ORM objects raised MissingGreenlet
+            # inside its own swallowing handler, which recorded it as a
+            # delivery failure rather than the bug it was.
+            facts = _MessageFacts(
+                id=str(message.id),
+                organization_id=str(message.organization_id),
+                title=message.title,
+                body=message.body,
+                expires_at=message.expires_at,
+                priority=priority,
+                requires_acknowledgment=bool(message.requires_acknowledgment),
+            )
+            people = [_RecipientFacts(id=str(u.id), email=u.email) for u in recipients]
+            recipient_ids = [p.id for p in people]
+
+            await self._create_in_app(facts, people)
+
             # Unconditional: email is the channel of record (see module
             # docstring). It must run before the SMS branch so that a member
             # whose SMS is suppressed for want of consent has already been
             # reached by email.
-            await self._send_email(message, recipients, org)
+            await self._send_email(facts, people, org)
 
             if is_urgent:
-                await self._send_sms(message, recipients, org)
+                # Re-read the rows: email ran first and may have rolled back,
+                # and resolve_sms_recipients reads consent and preferences off
+                # live instances. deliver() owns this sequencing, so the
+                # channel itself stays a plain function of what it is given.
+                fresh = await self.db.execute(
+                    select(User).where(User.id.in_(recipient_ids))
+                )
+                await self._send_sms(facts, list(fresh.scalars().all()), org)
         except Exception as e:  # pragma: no cover - defensive
             logger.warning(
                 "Department message delivery failed for {}: {}",
@@ -187,20 +247,20 @@ class MessageDeliveryService:
             )
 
     async def _create_in_app(
-        self, message: DepartmentMessage, recipients: List[User]
+        self, message: _MessageFacts, recipients: List[_RecipientFacts]
     ) -> None:
         """Write one in-app NotificationLog per recipient in a single commit."""
         try:
-            priority = _priority_value(message)
+            priority = message.priority
             for user in recipients:
                 try:
                     async with self.db.begin_nested():
                         self.db.add(
                             NotificationLog(
                                 id=generate_uuid(),
-                                organization_id=str(message.organization_id),
-                                recipient_id=str(user.id),
-                                department_message_id=str(message.id),
+                                organization_id=message.organization_id,
+                                recipient_id=user.id,
+                                department_message_id=message.id,
                                 channel="in_app",
                                 category=MESSAGE_CATEGORY,
                                 subject=message.title,
@@ -210,9 +270,9 @@ class MessageDeliveryService:
                                 delivered=True,
                                 expires_at=message.expires_at,
                                 notification_metadata={
-                                    "message_id": str(message.id),
+                                    "message_id": message.id,
                                     "priority": priority,
-                                    "requires_acknowledgment": bool(
+                                    "requires_acknowledgment": (
                                         message.requires_acknowledgment
                                     ),
                                 },
@@ -230,8 +290,8 @@ class MessageDeliveryService:
 
     async def _send_email(
         self,
-        message: DepartmentMessage,
-        recipients: List[User],
+        message: _MessageFacts,
+        recipients: List[_RecipientFacts],
         org: Optional[Organization],
     ) -> None:
         try:
@@ -260,7 +320,7 @@ class MessageDeliveryService:
 
             from app.services.email_service import EmailService, wrap_email_body
 
-            priority = _priority_value(message)
+            priority = message.priority
             # Red banner for urgent, amber for the rest, matching the in-app
             # priority styling.
             header_color = "#dc2626" if priority == "urgent" else ""
@@ -275,7 +335,7 @@ class MessageDeliveryService:
             )
             email_svc = EmailService(organization=org)
             for user in email_recipients:
-                attempt = await self._claim_delivery(message, user, "email")
+                attempt = await self._claim_delivery(message.id, user.id, "email")
                 if attempt is None:
                     continue
                 try:
@@ -303,11 +363,13 @@ class MessageDeliveryService:
 
     async def _send_sms(
         self,
-        message: DepartmentMessage,
+        message: _MessageFacts,
         recipients: List[User],
         org: Optional[Organization],
     ) -> None:
         try:
+            if not recipients:
+                return
             # Twilio configuration, TCPA consent (fails closed — a member who
             # was never asked counts as having refused) and the member's own
             # sms_notifications preference are all applied here. Everyone
@@ -347,13 +409,20 @@ class MessageDeliveryService:
             from app.services.sms_service import SMSService
 
             sms = SMSService()
-            users_by_number = {
-                (getattr(user, "mobile", None) or getattr(user, "phone", None)): user
-                for user in recipients
-            }
-            for number in numbers:
-                user = users_by_number[number]
-                attempt = await self._claim_delivery(message, user, "sms")
+            # A list of pairs, not a dict keyed on the number: two members
+            # sharing a phone (a married couple on one handset is ordinary in a
+            # volunteer department) collapsed to one entry, and the delivery
+            # row was attributed to whichever of them came last — including one
+            # who had never given TCPA consent.
+            remaining = list(numbers)
+            pairs: List[tuple] = []
+            for user in recipients:
+                number = getattr(user, "mobile", None) or getattr(user, "phone", None)
+                if number in remaining:
+                    remaining.remove(number)
+                    pairs.append((number, str(user.id)))
+            for number, user_id in pairs:
+                attempt = await self._claim_delivery(message.id, user_id, "sms")
                 if attempt is None:
                     continue
                 try:
@@ -361,7 +430,7 @@ class MessageDeliveryService:
                         await self._finish_delivery(attempt)
                     else:
                         await self._finish_delivery(attempt, "sms reported 0 sent")
-                        logger.warning("Department message SMS not sent to {}", user.id)
+                        logger.warning("Department message SMS not sent to {}", user_id)
                 except Exception as exc:
                     await self._finish_delivery(attempt, exc)
                     logger.warning("Department message SMS send failed: {}", exc)
