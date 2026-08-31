@@ -1043,15 +1043,14 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
   {
     path: '/inventory/admin/checklists',
     source: 'src/modules/inventory/routes.tsx',
-    coverage: 'exempt',
-    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+    coverage: 'ratchet',
+    detail: 'fast route-level mobile presentation ratchet',
   },
   {
     path: '/inventory/admin/checklists/settings',
     source: 'src/modules/inventory/routes.tsx',
-    coverage: 'exempt',
-    detail:
-      'secondary admin route reached from the checklists hub, its representative route. Exempt for a reason worth stating rather than the usual boilerplate: a ratchet entry was tried and cannot measure this page yet. The presentation fixture signs in with only inventory.manage and facilities.manage, so a route gated on settings.manage renders Access Denied — which passes both budgets while proving nothing. Granting settings.manage makes it render, and also makes /settings render its real body for the first time, exposing pre-existing debt in the shared SettingsLayout that three settings screens use: an hscroll section strip with no data-mobile-scroll-region, and section pills 36px tall against the 44px minimum. That is its own change, not this one. The page was checked by hand at 390px in the interim and its own back link raised to 44px.',
+    coverage: 'ratchet',
+    detail: 'fast route-level mobile presentation ratchet',
   },
   {
     path: '/inventory/admin/checklists/templates/new',
