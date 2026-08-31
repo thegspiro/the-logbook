@@ -163,6 +163,31 @@ now covers 8 wrappers (was 7) and asserts all 8 scopes are pairwise distinct;
 verified to fail (`AttributeError` then a scope-count mismatch) with the fix
 reverted, and to pass with it applied.
 
+**Correction (Codex-caught):** the fix above copied `check_rate_limit`'s bare
+auth defaults (5 requests/60s, 1800s lockout on the Redis-unavailable
+fallback) onto a route that is not gated behind a deliberate user action like
+its siblings. `LoginPage.tsx` and `OnboardingCheck` call `GET /status` from a
+`useEffect` on every mount — once per page load in production, twice under
+React's dev-mode `StrictMode` — so five status reads exhausts in one or two
+page loads, and the fallback lockout could leave a legitimate admin unable to
+even learn whether onboarding is needed for up to 30 minutes. Verified
+against the frontend call sites
+(`frontend/src/pages/LoginPage.tsx:90`,
+`frontend/src/modules/onboarding/services/api-client.ts:363`) and against
+`check_rate_limit`'s actual defaults (`security_middleware.py:611-617`).
+
+Fixed by giving `_rate_limit_onboarding_status` its own explicit budget —
+`max_requests=60, window_seconds=60, lockout_seconds=60` — instead of the
+auth defaults. This is still a real limit (blunts scripted hammering) but
+survives ordinary page-load traffic; every other onboarding route keeps the
+tight auth defaults since each gates a deliberate one-shot action (submit
+credentials, send a test email, reset) rather than a routing check fired on
+every render. Guard tests added:
+`test_status_wrapper_uses_a_read_appropriate_budget_not_auth_defaults`
+(asserts the loosened budget) and
+`test_action_wrappers_keep_the_auth_defaults` (asserts every _other_ wrapper
+still passes no override, so the loosening stays confined to `/status`).
+
 ### ONB-30-2 — LOW — `VITE_SESSION_KEY` is dead configuration, documented as security-critical — ✅ FIXED
 
 `frontend/.env.example`, `frontend/setup.sh` (three separate places — the
@@ -337,8 +362,8 @@ redirection vector. **Verified good, no finding.**
 | `black --check app/ tests/ alembic/`                               | ✅ clean (1339 files unchanged)                        |
 | `isort --check-only app/ tests/ alembic/` (pinned 8.0.1, CI match) | ✅ clean                                               |
 | `python3 scripts/validate_migrations.py --strict`                  | ✅ 394 revisions, single head                          |
-| `pytest tests/ -k "onboard or template_service"`                   | ✅ **109 passed, 1 skipped**                           |
-| `pytest tests/test_onboarding_rate_limit_scopes.py -v`             | ✅ **9 passed** (was 7)                                |
+| `pytest tests/ -k "onboard or template_service"`                   | ✅ **117 passed, 1 skipped** (was 109)                 |
+| `pytest tests/test_onboarding_rate_limit_scopes.py -v`             | ✅ **17 passed** (was 9)                               |
 | `pytest tests/test_security_middleware.py`                         | ✅ **80 passed**                                       |
 | Guard-test reintroduction check (fix reverted)                     | ✅ fails as expected (2 failures)                      |
 | `tsc --noEmit` (frontend)                                          | ✅ 0 errors                                            |

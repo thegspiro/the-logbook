@@ -26,7 +26,10 @@ env var documented as security-critical but never read since a
 client-side-encryption code path was removed). One MED finding flagged, not
 fixed (`/test/email`'s self-hosted SMTP test has no SSRF/private-IP
 protection — a genuine product-policy tradeoff, not a drive-by-fixable bug,
-since this app's departments legitimately run on-prem SMTP relays). See log
+since this app's departments legitimately run on-prem SMTP relays). **Round
+2 (Codex-caught):** the `/status` rate-limit fix itself used the tight
+5-per-60s/30-minute-lockout auth defaults on a route the frontend calls on
+every page load — fixed with a read-appropriate budget instead. See log
 entry below and `docs/security-review/ONB-30-onboarding.md`.
 
 ---
@@ -96,6 +99,24 @@ re-applied.
 — 80 passed; `tsc --noEmit` — 0 errors; `eslint .` — 0 errors, 8 pre-existing
 warnings in unrelated files. Full writeup:
 `docs/security-review/ONB-30-onboarding.md`.
+
+**Round 2 (Codex-caught, verified before fixing):** ONB-30-1's own fix gave
+`GET /status` `check_rate_limit`'s bare auth defaults (5 requests/60s,
+1800s lockout on the Redis-unavailable fallback). Unlike its siblings,
+`/status` isn't gated behind a deliberate user action — `LoginPage.tsx` and
+`OnboardingCheck` call it from a `useEffect` on every mount, twice under
+React StrictMode — so a handful of page loads exhausts the budget and the
+fallback lockout could leave a legitimate admin locked out of even learning
+whether onboarding is needed for up to 30 minutes. Fixed by giving
+`_rate_limit_onboarding_status` its own explicit budget
+(`max_requests=60, window_seconds=60, lockout_seconds=60`) instead of the
+auth defaults; every other onboarding route keeps the tight defaults since
+each gates a one-shot action. Guard tests added:
+`test_status_wrapper_uses_a_read_appropriate_budget_not_auth_defaults` and
+`test_action_wrappers_keep_the_auth_defaults` (confirms the loosening stays
+confined to `/status`). `pytest tests/ -k "onboard or template_service"` —
+**117 passed, 1 skipped** (was 109); `test_onboarding_rate_limit_scopes.py`
+— **17 passed** (was 9); `flake8`/`black --check`/`isort --check-only` clean.
 
 ---
 
