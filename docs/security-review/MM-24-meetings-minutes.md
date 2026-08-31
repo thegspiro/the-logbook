@@ -1,6 +1,8 @@
 # Security Review — Meetings & Minutes
 
-**Prefix:** `MM` · **Iteration:** 24 · **Reviewed:** 2026-08-26 · **PR:** #1906
+**Prefix:** `MM` · **Iteration:** 24 · **Reviewed:** 2026-08-26 (pass 1), 2026-08-31 (pass 2) · **PR:** #1906 (pass 1), TBD (pass 2)
+
+## Pass 1 (2026-08-26)
 
 **Backend:** `app/api/v1/endpoints/meetings.py` (493 L, 17 endpoints),
 `app/api/v1/endpoints/minutes.py` (1,037 L, 25 endpoints),
@@ -277,3 +279,216 @@ None — every fix is service/endpoint-layer only.
 | `python3 scripts/validate_migrations.py --strict`     | PASSED (no migrations)               |
 | backend tests, scope (`meeting or minutes or quorum`) | 203 passed, 1 skipped (pre-existing) |
 | backend tests, full suite                             | 8910 passed, 22 skipped              |
+
+---
+
+## Pass 2 (2026-08-31)
+
+**Backend:** `app/api/v1/endpoints/meetings.py` (17 routes),
+`app/api/v1/endpoints/minutes.py` (25 routes), `app/services/meetings_service.py`,
+`app/services/minute_service.py`, `app/services/quorum_service.py`,
+`app/models/meeting.py`, `app/models/minute.py`, `app/schemas/meetings.py`,
+`app/schemas/minute.py`.
+**Frontend:** established for the first time this pass (pass 1 was backend-only)
+— `frontend/src/modules/minutes/` (services, store, pages, types — 3,166 L
+across 8 files, 2 of them existing tests) plus `frontend/src/services/meetingsServices.ts`
+(the `Meeting`/`meetings.py` client, not module-scoped) and the 6-line
+`frontend/src/pages/MinutesPage.tsx` re-export wrapper.
+**Migrations:** none touched this pass.
+
+### Scope since pass 1's merge (PR #1906)
+
+All five backend files pass 1 named came back byte-identical except for one
+line: `quorum_service.py` gained `.execution_options(populate_existing=True)`
+on the `calculate_quorum` locking read, landed by the **elections** module's
+own ELEC-06 pass-2 review (`a518957e`, 2026-08-27) — `quorum_service.py` is
+shared between meetings and elections quorum math, and Codex caught there
+that a session which already held the `MeetingMinutes` row via
+`set_meeting_quorum_config`'s own unlocked read (same session, same
+identity-mapped object, `expire_on_commit=False`) would still read stale
+`attendees` after acquiring the lock, since a re-SELECT of a row already in
+the identity map does not refresh it by default. Re-read the current method
+directly (not cited from the commit message): the fix is present and correct,
+and MM-4's own locking read is otherwise unchanged. No other file in this
+feature's declared scope has moved since PR #1906 merged.
+
+Re-verified all seven pass-1 fixes (MM-1 through MM-7) by reading the current
+code rather than re-citing the doc: `update_action_item`'s `assert_in_org` on
+a reassigned owner (both services), all five `apply_updates` conversions,
+`create_from_event`'s dual locking reads (`Event` fetch **and** the `Meeting`
+existence check, both `.with_for_update()` — the Codex-caught P1 fix), the
+`assert_different_person` guard on `approve_minutes`, the seven `log_audit_event`
+calls on minutes.py's motion/action-item/quorum-config endpoints (including
+the P2 `applied_fields` fix so the audit log doesn't claim a field changed
+that the approved-minutes filter silently dropped), and `get_open_action_items`'s
+typed `UUID | None` parameter — all intact at their pass-1 lines.
+
+Re-ran a route enumeration from scratch (not a diff against pass 1's count):
+**17/17** `meetings.py` routes and **25/25** `minutes.py` routes, matching
+pass 1 exactly. Every route still carries `require_permission(...)`; no
+route fell back to bare `get_current_user`. Freshly re-swept every by-id
+query in both services for a missing `organization_id` filter (not sampled)
+— no gap; every write resolves its target through an org-scoped fetch or
+filters `organization_id` directly on the query.
+
+### MM-8 — LOW-MED — `meetings.py`'s own mutation endpoints had no audit trail — ✅ FIXED
+
+**What:** every mutating route in `minutes.py` calls `log_audit_event`
+(create/update/delete/submit/approve/reject/publish, motion CRUD, action-item
+CRUD, template CRUD, quorum-config). `meetings.py` — the sibling `Meeting`
+model, which carries the same shape of governance content (`agenda`/`notes`/
+`motions` text columns, a `DRAFT → PENDING_APPROVAL → APPROVED` status, an
+`approved_by`/`approved_at` pair) — had exactly **one** audited route
+(`grant_attendance_waiver`) out of ten mutating endpoints. `create_meeting`,
+`update_meeting`, `delete_meeting`, `approve_meeting`, `add_attendee`,
+`remove_attendee`, `create_action_item`, `update_action_item`,
+`delete_action_item`, and `create_meeting_from_event` all left zero trace.
+This is not a dead API surface: `MinutesPage.tsx`'s "New Meeting" flow calls
+`meetingsService.createMeeting()` (`POST /meetings`) directly, so the gap sat
+on a live, UI-reachable create path, not merely a theoretical one.
+**Where:** `app/api/v1/endpoints/meetings.py` — the ten routes named above.
+**Failure scenario:** a meeting's agenda/notes text is edited or the record
+is deleted outright (cascading its attendees and action items), or a meeting
+is approved, with no record of who did it or when — the same governance-record
+opacity MM-6 closed for `minutes.py` one pass ago, reopened here on the
+sibling model MM-6's own scope split didn't reach.
+**Fix:** all ten routes now call `log_audit_event`, mirroring the exact
+`event_category="meetings"` / severity convention already established by
+`grant_attendance_waiver` in this same file and by every `minutes.py`
+mutation. The one pre-existing local `from app.core.audit import
+log_audit_event` import inside `grant_attendance_waiver` was removed in favor
+of the new top-level import (it would otherwise be a duplicate/shadowing
+import, `F811`-adjacent, once the top-level import is added).
+
+### MM-9 — LOW-MED — `approve_meeting` has no approval state-machine guard and no separation of duties — OPEN (flagged, not fixed)
+
+**What:** `minute_service.approve_minutes` requires the record be
+`SUBMITTED` and calls `assert_different_person(approved_by, minutes.submitted_by, ...)`
+so the submitter cannot also approve. `meetings_service.approve_meeting` has
+neither control: it sets `status = APPROVED` unconditionally regardless of
+the meeting's current status (including re-approving an already-approved
+record, or approving one still in `DRAFT` with no submission step at all),
+and does not compare `approved_by` against `created_by` or any other actor.
+**Where:** `app/services/meetings_service.py` (`approve_meeting`);
+`app/api/v1/endpoints/meetings.py` (`approve_meeting` route).
+**Why flagged, not fixed:** unlike MM-5 (which mirrored an already-decided,
+already-repeated policy — the same `assert_different_person` guard applied
+identically to finance requests, skills tests, admin hours, and minutes), the
+`Meeting` model has **no `submitted_by` field and no submit step at all** —
+`created_by` is the only actor recorded before approval, and comparing against
+it is a materially different policy than "the submitter can't approve their
+own submission": it would also block the common case of one secretary
+single-handedly entering and approving a routine meeting record, a workflow
+this endpoint's total absence of a state-machine check suggests may be
+intentional for this lighter-weight sibling of the `MeetingMinutes` workflow.
+Confirmed this route is not currently called from the reviewed frontend (no
+`meetingsService.approveMeeting()` call site in `frontend/src/**`), which
+lowers today's exploitability but does not change that the API itself grants
+`meetings.manage` holders an unconditional, untracked approval with no
+self-check — closing it properly needs a product decision on whether
+`Meeting` should gain its own submit step and `submitted_by` field to make
+the comparison mean the same thing MM-5 already established, or whether a
+lighter `created_by`-based check is acceptable for this record type.
+**Recommendation:** mirror `MeetingMinutes`'s workflow (add `submitted_by`,
+require a submit step before `approve_meeting` accepts a status transition,
+then apply `assert_different_person`) — deferred here since it changes the
+endpoint's contract (a direct `DRAFT → APPROVED` call, which the live UI's
+`meetingsService` interface does not currently exercise, would start
+returning 400 for existing integrations that rely on it).
+
+### MM-10 — LOW — `create_meeting_from_event` forwarded a raw service-layer error string with no sanitization — ✅ FIXED
+
+**What:** every other error path in `meetings.py` wraps its service error
+through `safe_error_detail(ValueError(error))` before returning it as
+`detail=`. `create_meeting_from_event` returned `detail=error` directly —
+`error` here is `create_from_event`'s own `except Exception as e: return
+None, str(e)` branch output for anything beyond its two hand-written
+"Event not found" / "Meeting already exists for this event" strings, so an
+unexpected `IntegrityError`, `OperationalError`, or similar would forward its
+raw `str(exception)` — potentially containing SQL fragments, table/column
+names, or other internal detail — straight to the client with none of
+`safe_error_detail`'s pattern-based redaction.
+**Where:** `app/api/v1/endpoints/meetings.py` (`create_meeting_from_event`).
+**Failure scenario:** a transient DB error inside `create_from_event`'s
+`except` branch (e.g. a constraint violation from a concurrent edit) reaches
+the client's `detail` field verbatim instead of a safe fallback message.
+**Fix:** routed through `sanitize_error_message()` from `app/core/utils.py`
+— the helper built for exactly this "raw service-layer string, not an
+exception object" shape, already the established convention in
+`inventory.py`/`medical_supplies.py`. The two hand-written strings still
+pass through unchanged (neither trips `_UNSAFE_PATTERNS`); a SQL-shaped
+string is now redacted to the generic fallback.
+
+### MM-11 — MED — "Unlink" on a minutes record's linked event was a silent no-op — ✅ FIXED
+
+**What:** `MinutesDetailPage.tsx`'s `handleUnlinkEvent` called
+`minutesService.updateMinutes(minutesId, { event_id: undefined })`. Axios
+serializes the request body with `JSON.stringify`, which drops any key whose
+value is `undefined` entirely — so the PUT body sent was `{}`, not
+`{ event_id: null }`. The backend's `MinutesUpdate` is applied with
+`data.model_dump(exclude_unset=True)`; since the key never reached the JSON
+body at all, `"event_id" in update_data` is `False` and `update_minutes`'s
+own explicit-null-clears-the-field special case never runs. The result: the
+button shows an "Event unlinked" success toast and the minutes record's
+`event_id` never changes — the exact mirror-image of CLAUDE.md Pitfall #1
+("on update, omitting the key is the bug").
+**Where:** `frontend/src/modules/minutes/pages/MinutesDetailPage.tsx`
+(`handleUnlinkEvent`).
+**Failure scenario:** a secretary re-links minutes to the wrong event, then
+clicks "Unlink" to correct it. The UI reports success and the linked-event
+card disappears from view (component state is cleared locally via
+`setLinkedEvent(null)`), but a page refresh — or another user opening the
+same record — shows the stale link still present, since the database write
+never happened.
+**Fix:** changed the payload to `{ event_id: null }`, an explicit JSON
+`null` that survives serialization and triggers `update_minutes`'s existing
+clear-on-falsy handling correctly. Swept the rest of the module
+(`MinutesPage.tsx`, `MinutesDetailPage.tsx`) for the same `undefined`-in-an-
+update-payload shape — the only other `: undefined` sites are `useState`
+initializers and local form-state resets for **create** payloads
+(`MotionCreate`/`ActionItemCreate`), where an omitted optional field on
+create is the correct behavior (Pitfall #1's create-side rule), not an
+instance of this bug.
+
+## Confirmed still open (pass 2)
+
+- **MM-9** (above) — needs a product decision on `Meeting`'s approval
+  workflow shape before a mechanical fix is safe.
+- The pass-1 module-audit/app-review's deferred `minutes.view_executive`
+  tier (a distinct-from-`minutes.manage` audience for executive-session
+  minutes) remains open, unchanged, and out of this pass's scope — re-read
+  `docs/app-review/meetings-minutes.md`'s pass 1/2 sections and confirmed no
+  code in either reviewed pass introduces or removes that tier.
+
+## Guard tests added (pass 2)
+
+- `backend/tests/test_meetings_audit_trail.py` (new, 14 tests) — one test
+  per newly-audited `meetings.py` mutation route asserting `log_audit_event`
+  was awaited with the expected `event_type`; a failure-path test asserting
+  `delete_meeting` does **not** log on a failed delete; three tests for
+  MM-10 (`create_meeting_from_event`'s raw-error sanitization, and that the
+  two hand-written error strings and their status codes are unaffected).
+  Verified to fail on reintroduction: removing the new `log_audit_event`
+  call from any one route fails that route's own test with no other test
+  affected (each test asserts `assert_awaited_once`, so a reintroduced gap
+  is caught at the specific route, not just in aggregate).
+- `frontend/src/modules/minutes/pages/MinutesDetailPage.unlinkEvent.test.tsx`
+  (new) — clicks "Unlink" and asserts `updateMinutes` was called with a
+  payload where `event_id` is an **own property** equal to `null` (not
+  merely absent-and-therefore-`undefined`-when-read). Confirmed to fail
+  before the fix (reverted `null` back to `undefined` locally, re-ran: fails
+  with the expected-call assertion) and pass after.
+
+## Completion gate (pass 2)
+
+| Check                                                       | Result                                                    |
+| ----------------------------------------------------------- | --------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                               | clean (0 violations)                                      |
+| `black --check app/ tests/ alembic/`                        | clean (1337 files unchanged)                              |
+| `isort --check-only app/ tests/ alembic/` (8.0.1, CI's pin) | clean                                                     |
+| `python3 scripts/validate_migrations.py --strict`           | PASSED — 394 revisions, single head                       |
+| backend tests, scope (`-k "meeting or minutes or quorum"`)  | 219 passed, 1 skipped (pre-existing)                      |
+| backend tests, full suite                                   | 9287 passed, 22 skipped, 0 failed                         |
+| `npx tsc --noEmit` (frontend)                               | 0 errors                                                  |
+| `npx eslint .` (frontend)                                   | 0 errors, 8 pre-existing warnings (none in touched files) |
+| `npx vitest run src/modules/minutes` (frontend)             | 23 passed, 3 files                                        |

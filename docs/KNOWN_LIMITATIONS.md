@@ -2405,6 +2405,37 @@ false-positive tolerance for a log-only alert vs. a blocking one, and
 whether `SENSITIVE_ENDPOINTS` should gate it or every write request should
 be in scope. Left as documented future work.
 
+## MM-9 — `approve_meeting` Has No Approval State Machine or Separation of Duties (2026-08-31)
+
+`minute_service.approve_minutes` (the `MeetingMinutes` governance workflow)
+requires the record be `SUBMITTED` and refuses to let the submitter also
+approve it (`assert_different_person`). `meetings_service.approve_meeting`
+(the sibling `Meeting` model — same shape of content: `agenda`/`notes`/
+`motions` text, a `DRAFT → PENDING_APPROVAL → APPROVED` status, an
+`approved_by`/`approved_at` pair) has neither control: it sets `APPROVED`
+unconditionally from any status, and there is no `submitted_by` field or
+submit step to compare the approver against in the first place — only
+`created_by`.
+
+Closing this needs a product decision, not a mechanical patch: `Meeting` has
+no natural "the submitter can't approve their own submission" comparison the
+way `MeetingMinutes` does, and blocking approval whenever `approved_by ==
+created_by` would also block the common single-secretary workflow of one
+person entering and approving a routine meeting record — a materially
+different policy than the one MM-5 already established elsewhere. The
+options are (a) give `Meeting` its own `submitted_by` field and a submit
+step so the same guard MM-5 uses actually applies to the right pair of
+people, or (b) leave `Meeting` approval as a lighter-weight, single-actor
+record type and accept that its "approval" is closer to a status flag than a
+governance control. Neither was chosen here.
+
+Found by `docs/security-review/MM-24-meetings-minutes.md` (feature 24, pass
+2). Confirmed not currently reachable from the reviewed frontend (no
+`meetingsService.approveMeeting()` call site exists in `frontend/src/**`
+today), which lowers today's exploitability but does not change that the API
+itself grants any `meetings.manage` holder an unconditional, unaudited-before-
+this-pass, untracked approval with no self-check.
+
 ## Process
 
 The review loop (see [review-log.md](./review-log.md)) advances through one area

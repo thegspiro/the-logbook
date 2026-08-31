@@ -16,8 +16,98 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-None. Feature 23 (Medical supplies), pass 2, is fully merged — see log
-entry below. Next: feature 24, Meetings & minutes.
+PR #TBD (`claude/security-review-meetings-minutes-pass2`) — feature 24
+(Meetings & minutes), pass 2. 3 fixed (1 LOW-MED backend audit-trail gap, 1
+LOW backend error-sanitization gap, 1 MED frontend silent-no-op bug), 1
+flagged (LOW-MED, `approve_meeting`'s missing state-machine guard/separation
+of duties — needs a product decision). Findings doc:
+`docs/security-review/MM-24-meetings-minutes.md` → Pass 2. Awaiting PR open
+and CI.
+
+---
+
+### 2026-08-31 — Feature 24 (Meetings & minutes), pass 2 — 3 fixed (LOW-MED, LOW, MED), 1 flagged (LOW-MED)
+
+No security-review PR was open (feature 23/Medical supplies pass 2 fully
+merged via PR #2078), so the rotation continued directly to feature 24.
+Loaded pass 1's findings doc (`MM-24-meetings-minutes.md`, PR #1906), the
+module-audit and app-review docs (`docs/module-audit/meetings-minutes.md`,
+`docs/app-review/meetings-minutes.md`, 4 passes), and re-checked CLAUDE.md's
+pitfalls against the code rather than re-deriving anything those already
+settled.
+
+Scoped to the full backend surface since pass 1's merge: `quorum_service.py`
+is the only file that moved (+1 line, `populate_existing=True`), landed by
+the **elections** module's own ELEC-06 pass-2 review since `quorum_service.py`
+is shared between meetings and elections quorum math — re-read directly and
+confirmed correct, no regression to MM-4's own fix. Re-verified all seven
+pass-1 fixes (MM-1 through MM-7) by reading the current code, and re-ran a
+route enumeration from scratch: 17/17 `meetings.py` and 25/25 `minutes.py`
+routes, matching pass 1 exactly, all `require_permission`-gated. Every by-id
+query in both services re-swept for a missing `organization_id` filter — no
+gap.
+
+**Frontend scope established for the first time this pass** (pass 1 was
+backend-only): `frontend/src/modules/minutes/` (3,166 L) plus
+`frontend/src/services/meetingsServices.ts` (the `Meeting` client). Swept for
+`window.confirm`/`alert`/`prompt` (0 — `useConfirm()` used throughout),
+`dangerouslySetInnerHTML` (0), banned `.toLocale*`/`date-fns` (0), and direct
+`fetch(` (0 — both the module's own `createApiClient()` instance and the
+global `apiClient` carry auth interceptors, Pitfall #7 satisfied). Confirmed
+`/meetings` and `/minutes-records` (the real mount prefix for `minutes.py`'s
+router — not `/minutes`) are both already covered in `UNCACHEABLE_PREFIXES`.
+
+**MM-8 (LOW-MED, fixed)** — `meetings.py` had audit logging on exactly one
+of its ten mutating routes (`grant_attendance_waiver`); the other nine
+(create/update/delete/approve on `Meeting`, attendee add/remove, action-item
+CRUD, and the event-bridge create) left no trace at all, despite `Meeting`
+carrying the same governance-content shape (`agenda`/`notes`/`motions` text,
+an approval workflow) `minutes.py` already audits on every write. Not a dead
+API surface — `MinutesPage.tsx`'s "New Meeting" flow calls
+`meetingsService.createMeeting()` directly. Fixed by adding `log_audit_event`
+to all nine routes, matching this file's own established convention.
+
+**MM-9 (LOW-MED, flagged, not fixed)** — `approve_meeting` has neither an
+approval state-machine guard (it sets `APPROVED` unconditionally from any
+status) nor a separation-of-duties check, unlike its sibling
+`approve_minutes`. Not mechanically fixable like MM-5 was: `Meeting` has no
+`submitted_by` field or submit step, so there's no natural "the submitter
+can't also approve" comparison to apply — only `created_by`, and blocking
+self-approval against that would block the common single-secretary
+create-and-approve workflow, a product decision rather than a bug fix.
+Mirrored into `KNOWN_LIMITATIONS.md`.
+
+**MM-10 (LOW, fixed)** — `create_meeting_from_event` was the one error path
+in `meetings.py` that forwarded a raw service-layer error string via
+`detail=error` with no `safe_error_detail`/`sanitize_error_message` pass;
+`create_from_event`'s own `except Exception: return None, str(e)` branch
+means that string is not always one of the two hand-written messages. Fixed
+by routing through `sanitize_error_message()`, the established convention
+for this exact "raw string, not an exception object" shape.
+
+**MM-11 (MED, fixed, frontend)** — `MinutesDetailPage.tsx`'s "Unlink event"
+button sent `{ event_id: undefined }`, which `JSON.stringify` drops
+entirely — the PUT body was `{}`, so the backend's `exclude_unset=True` read
+it as "field not touched" and never cleared the link, despite an "Event
+unlinked" success toast (CLAUDE.md Pitfall #1's own update-vs-create
+mirror-image). Fixed by sending an explicit `{ event_id: null }`. Swept the
+rest of the module for the same shape — no other instance found (the
+remaining `: undefined` sites are create-form `useState` defaults, correct
+as-is).
+
+New guard tests: `backend/tests/test_meetings_audit_trail.py` (14 tests, one
+per newly-audited route plus MM-10's sanitization cases) and
+`frontend/src/modules/minutes/pages/MinutesDetailPage.unlinkEvent.test.tsx`
+(1 test, confirmed to fail on the pre-fix `undefined` payload). Full local
+completion gate green: flake8/black/isort (8.0.1, CI's pin) clean, migrations
+validated (394 revisions, single head, no schema change), 219/219
+meetings+minutes+quorum-scoped and 9287/9287 full backend suite pass (22
+pre-existing skips), `tsc --noEmit` 0 errors, `eslint .` 0 errors (8
+pre-existing warnings, none in touched files), `vitest run
+src/modules/minutes` 23/23 passed. Findings doc:
+`docs/security-review/MM-24-meetings-minutes.md` → Pass 2. Rotation row 24 →
+⏳ (awaiting PR merge). Next: 25 Messaging & notifications, once this PR
+merges.
 
 ---
 
@@ -2956,7 +3046,7 @@ each row's prior PR is recorded in the Log, not repeated here.
 | 21  | Admin hours               | AH     | `admin_hours.py`                                                                                                                                | ✅     |
 | 22  | Grants & fundraising      | GF     | `grants.py`, `grant_service.py`, `fundraising_service.py`                                                                                       | ✅     |
 | 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ✅     |
-| 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ⬜     |
+| 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ⏳     |
 | 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ⬜     |
 | 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                         | ⬜     |
 | 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                         | ⬜     |
