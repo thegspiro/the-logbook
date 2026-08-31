@@ -13,6 +13,7 @@
  */
 
 import { buildCsv, type CsvValue } from '../../utils/csv';
+import { toLocalISODate } from '../../utils/dateFormatting';
 import { describeGate } from './pageAccess';
 import { TESTING_GROUPS, type TestGroupEntry, type TestPageEntry } from './testingRegistry';
 import { GATE_VERDICT_LABELS, gateVerdict, isGateMismatch, needsGateConfirmation } from './gateVerdict';
@@ -214,8 +215,16 @@ export const buildPermissionMatrixCsv = (context: RunExportContext): string => {
   return buildCsv(rows);
 };
 
-/** `logbook-testing-run-2026-08-27.csv` — the date is the run's, not today's. */
-export const runFileName = (run: TestingRun | null, suffix: string, extension: string): string => {
-  const stamp = (run?.startedAt ?? new Date().toISOString()).slice(0, 10);
+/**
+ * `logbook-testing-run-2026-08-27.csv` — the date is the run's, not today's.
+ *
+ * Formatted in the reader's timezone rather than sliced off the UTC ISO
+ * string. A run started at 21:00 in New York is already tomorrow in UTC, so
+ * the slice dated the export a day after the run it describes — the exact
+ * `new Date().toISOString().slice(0,10)` pattern CLAUDE.md bans, on a value
+ * whose only purpose is to be read by a person.
+ */
+export const runFileName = (run: TestingRun | null, suffix: string, extension: string, timezone?: string): string => {
+  const stamp = toLocalISODate(run?.startedAt ?? new Date(), timezone);
   return `logbook-testing-${suffix}-${stamp}.${extension}`;
 };
