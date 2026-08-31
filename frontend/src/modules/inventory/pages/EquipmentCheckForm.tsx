@@ -70,7 +70,13 @@ import type {
   LastSealRecord,
   DeployedLot,
 } from '../types/equipmentCheck';
-import { CHECK_TYPE_LABELS, ExpiredStockDisposition, soonestExpiration } from '../types/equipmentCheck';
+import {
+  CHECK_TYPE_LABELS,
+  countedOnTruck,
+  ExpiredStockDisposition,
+  soonestExpiration,
+  submitterMaySwap,
+} from '../types/equipmentCheck';
 import { flattenCompartmentTree } from '../utils/compartmentTree';
 import LotsAboardPanel from '../components/LotsAboardPanel';
 import SealPanel from '../components/SealPanel';
@@ -2122,6 +2128,16 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
     const result = results[item.id];
     const effectiveStatus = getEffectiveStatus(item, result, today);
     const showNotesField = expandedNotes.has(item.id);
+    // Below manage, a swap carrying no disposition is allowed only up to this
+    // position's shortfall, and an expired one goes through the disposition
+    // path instead. `submitterMaySwap` owns that rule for both experiences.
+    const swapRefused =
+      !canManageStock &&
+      !submitterMaySwap(
+        getExpirationStatus(item, today) === 'expired',
+        item.requiredQuantity ?? item.expectedQuantity ?? null,
+        countedOnTruck(item)
+      );
     const TypeIcon = CHECK_TYPE_ICONS[item.checkType] ?? CheckCircle;
     const isQuantity = item.checkType === 'count';
 
@@ -2224,15 +2240,26 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
               ready stock on the shelf and no way to reach it. Disabled (not
               hidden) for a read-only member: the server refuses the swap, and
               the tooltip tells them who to hand the unit to instead of letting
-              the tap end in a 403. */}
+              the tap end in a 403.
+
+              Disabled for a submitter on the same rule the sweep applies —
+              being offered on any inventory-linked item is exactly what makes
+              this button reach the refused case most often, since a position
+              that is neither expired nor short is the common one. */}
           {item.inventoryItemId && (
             <button
               type="button"
-              disabled={!canSwapStock}
+              disabled={!canSwapStock || swapRefused}
               onClick={() => {
                 void openSwap(item);
               }}
-              title={canSwapStock ? undefined : 'Swaps from stock are recorded by a crew member on the check'}
+              title={
+                !canSwapStock
+                  ? 'Swaps from stock are recorded by a crew member on the check'
+                  : swapRefused
+                    ? 'Only an officer can draw stock for an item that has not expired yet'
+                    : undefined
+              }
               className={`flex min-h-[36px] items-center gap-1 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
                 getExpirationStatus(item, today) === 'expired' || getExpirationStatus(item, today) === 'expiring_soon'
                   ? 'text-theme-accent-blue hover:opacity-80'

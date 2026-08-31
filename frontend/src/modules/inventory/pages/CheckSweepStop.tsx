@@ -17,7 +17,7 @@
 import { AlertTriangle, Check, ShieldAlert, ShieldCheck, X } from 'lucide-react';
 import React from 'react';
 
-import { CheckType, daysUntil, normalizeCheckType } from '@/modules/inventory/types/equipmentCheck';
+import { CheckType, daysUntil, normalizeCheckType, submitterMaySwap } from '@/modules/inventory/types/equipmentCheck';
 
 import { countAnswer, expiryAnswer, levelAnswer } from './checkAnswers';
 import { FaultDetail, type CheckItemAnswer, type CheckItemSpec } from './CheckItemControls';
@@ -406,18 +406,13 @@ const ExpiryRow: React.FC<{
   const expired = days !== null && days < 0;
   const inWindow = days !== null && days >= 0 && days <= pullAt;
   const confirmed = answer?.expiryConfirmed === true;
-  // Mirrors the submitter limit `swap_item_lot` enforces. An in-window swap
-  // sends no disposition, so for anyone below manage the server allows it only
-  // up to this position's count shortfall — which an expiry-only row cannot
-  // have. Offering the tap anyway spends a crew's attention on a 403.
-  const par = item.expectedQuantity ?? null;
-  // Falls back to par, not zero, exactly as `_on_truck` does: a position with
-  // no live count and no lots aboard has not been counted since it was
-  // defined, which is not the same as an empty bracket. Reading it as zero
-  // invents a shortfall the server will not find, and the swap it enables
-  // comes back 403.
-  const shortfall = par !== null && (item.carriedQuantity ?? par) < par;
-  const swapRefused = canSwap === false || (!expired && canManageSwap === false && !shortfall);
+  // The adapter has already resolved par and the carried count, so those are
+  // this screen's answers to the pair `_target_quantity` and `_on_truck`
+  // compare. The rule itself lives in one place.
+  const swapRefused =
+    canSwap === false ||
+    (canManageSwap === false &&
+      !submitterMaySwap(expired, item.expectedQuantity ?? null, item.carriedQuantity ?? null));
 
   return (
     <div

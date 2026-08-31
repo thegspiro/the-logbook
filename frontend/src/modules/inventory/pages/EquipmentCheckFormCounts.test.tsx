@@ -819,3 +819,90 @@ describe('EquipmentCheckForm quantity seeding', () => {
     consoleError.mockRestore();
   });
 });
+
+/**
+ * The accordion's Swap button, held to the endpoint's submitter limit.
+ *
+ * It is offered on any inventory-linked item rather than only an expiring one,
+ * which is what makes it reach the refused case most often: a position that is
+ * neither expired nor short is the common one, and until now a submitter's tap
+ * on it ended in a 403.
+ */
+describe('who the accordion offers a swap to', () => {
+  /** Below manage: holds check_submit and nothing above it. */
+  const asSubmitter = () => mockCheckPermission.mockImplementation((p: unknown) => p === 'inventory.check_submit');
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    localStorage.clear();
+    mockGetLastCheckResults.mockReset();
+    mockGetLastCheckResults.mockResolvedValue({});
+    mockListPendingChecks.mockReset();
+    mockListPendingChecks.mockResolvedValue([]);
+    mockGetItemLots.mockReset();
+    mockGetItemLots.mockResolvedValue([]);
+    mockCheckPermission.mockReset();
+    mockCheckPermission.mockReturnValue(true);
+  });
+
+  const swapButton = async () => {
+    const buttons = await screen.findAllByRole('button', { name: /Swap/ });
+    return buttons[0] as HTMLElement;
+  };
+
+  it('refuses a submitter a position that is neither expired nor short', async () => {
+    // No disposition goes with this swap, so the server's ceiling is the
+    // shortfall — zero on a position holding its par — and the POST 403s.
+    asSubmitter();
+    renderWithRouter(
+      <EquipmentCheckForm
+        shiftId="shift-1"
+        template={template({ inventoryItemId: 'inv-1', quantityOnTruck: 4 }) as never}
+      />
+    );
+    const swap = await swapButton();
+    expect(swap).toBeDisabled();
+    expect(swap).toHaveAttribute('title', expect.stringContaining('has not expired yet'));
+  });
+
+  it('lets a submitter top up a position that is genuinely short', async () => {
+    asSubmitter();
+    renderWithRouter(
+      <EquipmentCheckForm
+        shiftId="shift-1"
+        template={template({ inventoryItemId: 'inv-1', quantityOnTruck: 1 }) as never}
+      />
+    );
+    expect(await swapButton()).toBeEnabled();
+  });
+
+  it('lets a submitter replace stock that has expired', async () => {
+    // That swap carries a disposition, and the server allows it up to the
+    // expired units aboard — so it is not a submitter's to lose.
+    asSubmitter();
+    renderWithRouter(
+      <EquipmentCheckForm
+        shiftId="shift-1"
+        template={
+          template({
+            inventoryItemId: 'inv-1',
+            quantityOnTruck: 4,
+            hasExpiration: true,
+            expirationDate: '2020-01-01',
+          }) as never
+        }
+      />
+    );
+    expect(await swapButton()).toBeEnabled();
+  });
+
+  it('leaves an officer the swap on any linked item', async () => {
+    renderWithRouter(
+      <EquipmentCheckForm
+        shiftId="shift-1"
+        template={template({ inventoryItemId: 'inv-1', quantityOnTruck: 4 }) as never}
+      />
+    );
+    expect(await swapButton()).toBeEnabled();
+  });
+});
