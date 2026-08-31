@@ -11,10 +11,10 @@
  * the state a fresh department is always in, because nothing seeds the catalog,
  * so the control whose whole purpose is making the link could never make one.
  *
- * Creation is refused when the catalog already holds the name, checked
- * server-side: the search here excludes medical stock and returns one page, so
- * "nothing on screen" is not "nothing on file", and acting on the difference
- * files a second row for an item already on the books.
+ * Creating goes through a server-side create-if-absent: the search here
+ * excludes medical stock and returns one page, so "nothing on screen" is not
+ * "nothing on file". A name already on the books comes back as the existing
+ * row to link rather than as a second one beside it.
  *
  * What gets created is a bare name. The position's own numbers — required
  * quantity, critical minimum, min level — are deliberately not copied onto it:
@@ -164,34 +164,36 @@ const InventoryItemPicker: React.FC<InventoryItemPickerProps> = ({
   /**
    * Add the typed name to the catalog and link it in one step.
    *
-   * Refused when the name is already on file. A failed existence check also
-   * refuses, by falling to the catch below: creating a duplicate is worse than
-   * making somebody try again, because nothing in the UI afterwards reveals
-   * that an item's lots and links have been split across two rows.
+   * The server decides whether that means creating a row or handing back one
+   * already carrying the name, so a name the search could not see is linked
+   * rather than duplicated — nothing in the UI afterwards would reveal an
+   * item's lots and links split across two rows.
    */
   const createAndLink = async () => {
     if (!typed || creating) return;
     setCreating(true);
     try {
-      // The search above cannot prove absence: it excludes medical stock and
-      // returns one page of ten. Ask the server, which sees the whole catalog.
-      if (await inventoryService.itemNameExists(typed)) {
-        toast.error(`“${typed}” is already in the inventory catalog. Search for it to link it.`);
-        return;
-      }
-      const created = await inventoryService.createItem({
+      // One call, not a check followed by a create: the search above cannot
+      // prove absence (it excludes medical stock and returns one page of ten),
+      // and asking from here would leave seconds before the write in which
+      // another editor can file the same name.
+      const { item, created } = await inventoryService.createItemIfAbsent({
         name: typed,
         tracking_type: createTrackingType,
         // Counted stock starts at nothing on hand; an individually tracked
         // row is the one physical asset it describes.
         quantity: createTrackingType === 'pool' ? 0 : 1,
       });
-      onChange(created.id, created.name);
-      setSelectedName(created.name);
+      onChange(item.id, item.name);
+      setSelectedName(item.name);
       setOpen(false);
       setQuery('');
       setResults([]);
-      toast.success(`Added “${created.name}” to inventory`);
+      // Linking what was already on file is the good outcome, not a failure —
+      // but say so, because the row was not in the results the user just read.
+      toast.success(
+        created ? `Added “${item.name}” to inventory` : `“${item.name}” was already in the catalog — linked it`
+      );
     } catch (err: unknown) {
       // The query stays put so the name is not retyped to retry.
       toast.error(getErrorMessage(err, 'Failed to create the inventory item'));

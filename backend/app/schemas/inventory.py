@@ -656,6 +656,20 @@ class InventoryItemResponse(InventoryItemBase):
 # ============================================
 
 
+class InventoryItemCreateIfAbsentResult(UTCResponseBase):
+    """A catalog row plus whether this call is what put it there.
+
+    ``created=False`` means the name was already on file and the caller is
+    being handed the existing row to link — not an error, and the outcome that
+    keeps one item from becoming two.
+    """
+
+    model_config = _response_config
+
+    item: InventoryItemResponse
+    created: bool
+
+
 class InventoryLotBase(BaseModel):
     """Shared fields for a stock lot of a consumable item."""
 

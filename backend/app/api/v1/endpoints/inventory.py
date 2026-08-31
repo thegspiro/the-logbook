@@ -103,6 +103,7 @@ from app.schemas.inventory import (
     InventoryItemBulkCreate,
     InventoryItemBulkResult,
     InventoryItemCreate,
+    InventoryItemCreateIfAbsentResult,
     InventoryItemResponse,
     InventoryItemUpdate,
     InventoryLotBulkCreate,
@@ -797,29 +798,63 @@ async def create_items_bulk(
     )
 
 
-@router.get("/items/name-exists")
-async def item_name_exists(
-    name: str = Query(..., min_length=1, max_length=255),
+@router.post(
+    "/items/create-if-absent", response_model=InventoryItemCreateIfAbsentResult
+)
+async def create_item_if_absent(
+    item: InventoryItemCreate,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_permission("inventory.manage")),
 ):
     """
-    Whether an item under this name is already in the org's catalog.
+    Create a catalog item, or return the one already carrying the name.
 
     Declared above `/items/{item_id}` so the literal path wins the match.
 
-    Exists because the gear list this UI searches excludes medical types, and
-    returns at most a page of results — so "no match on screen" is not the same
-    as "not in the catalog". A create-and-link flow that treats the two as
-    equal files a second row for an item already on the books, splitting its
-    checklist links and replacement lots between them.
+    For create-and-link screens. The gear list they search excludes medical
+    types and returns one page, so "no match on screen" is not "not in the
+    catalog", and a caller that checks from the browser and then posts leaves
+    seconds in which somebody else files the same name. Both roads end at one
+    item stored as two rows, its checklist links and replacement lots split
+    between them. Deciding it here, in one request, is what keeps the answer
+    and the write together.
+
+    `created` reports which happened, so the caller can say whether it added
+    the item or found it.
 
     **Authentication required**
     **Requires permission: inventory.manage**
     """
     service = InventoryService(db)
-    exists = await service.item_name_exists(current_user.organization_id, name)
-    return {"exists": exists}
+    new_item, created, error = await service.create_item_if_absent(
+        organization_id=current_user.organization_id,
+        item_data=item.model_dump(exclude_unset=True),
+        created_by=current_user.id,
+    )
+
+    if error or not new_item:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=sanitize_error_message(error or "Could not create the item"),
+        )
+
+    if created:
+        await log_audit_event(
+            db=db,
+            event_type="inventory_item_created",
+            event_category="inventory",
+            severity="info",
+            event_data={"item_id": str(new_item.id), "item_name": new_item.name},
+            user_id=str(current_user.id),
+            username=current_user.username,
+        )
+        await _publish_inventory_event(
+            str(current_user.organization_id),
+            "item_created",
+            {"item_id": str(new_item.id), "item_name": new_item.name},
+        )
+
+    return InventoryItemCreateIfAbsentResult(item=new_item, created=created)
 
 
 @router.get("/items/export")

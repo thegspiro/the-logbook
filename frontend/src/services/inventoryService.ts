@@ -215,17 +215,19 @@ export const inventoryService = {
   },
 
   /**
-   * Whether the org's catalog already holds an item under this name.
+   * Create a catalog item, or get back the one already carrying the name.
    *
-   * Spans the whole catalog, medical included — which `getItems` cannot do,
-   * because it excludes medical types and returns one page. Used to refuse a
-   * create that would file a second row for an item already on the books.
+   * One call rather than a check followed by a create: `getItems` cannot prove
+   * absence (it excludes medical types and returns one page), and a check made
+   * here leaves seconds before the write in which somebody else can file the
+   * same name. `created` says which happened.
    */
-  async itemNameExists(name: string): Promise<boolean> {
-    const response = await api.get<{ exists: boolean }>('/inventory/items/name-exists', {
-      params: { name },
-    });
-    return response.data.exists;
+  async createItemIfAbsent(data: InventoryItemCreate): Promise<{ item: InventoryItem; created: boolean }> {
+    const response = await api.post<{ item: InventoryItem; created: boolean }>(
+      '/inventory/items/create-if-absent',
+      data
+    );
+    return response.data;
   },
 
   async createItem(data: InventoryItemCreate): Promise<InventoryItem> {

@@ -1107,27 +1107,48 @@ class TestPoolWithoutStockRule:
             )
 
 
-class TestItemNameExists:
-    """The guard that stops a create-and-link filing a second row.
+class TestCreateItemIfAbsent:
+    """The operation that stops a create-and-link filing a second row.
 
-    The gear list this UI searches excludes medical types and returns one page,
-    so it cannot answer "is this already in the catalog". These assert that the
-    server-side check can.
+    The gear list a create-and-link screen searches excludes medical types and
+    returns one page, so it cannot answer "is this already in the catalog".
+    Deciding it server-side, in the same request as the write, is what keeps
+    one item from becoming two.
     """
 
     @pytest.mark.asyncio
-    async def test_name_already_on_file_is_reported(
-        self, db_session, setup_org_and_user
-    ):
+    async def test_a_new_name_is_created(self, db_session, setup_org_and_user):
         org_id, user_id, _ = setup_org_and_user
         svc = InventoryService(db_session)
-        await svc.create_item(
+
+        item, created, err = await svc.create_item_if_absent(
+            org_id, {"name": "Burn Sheet", "condition": "good"}, user_id
+        )
+
+        assert err is None
+        assert created is True
+        assert item.name == "Burn Sheet"
+
+    @pytest.mark.asyncio
+    async def test_a_name_already_on_file_comes_back_rather_than_repeating(
+        self, db_session, setup_org_and_user
+    ):
+        """The existing row is the right thing to link, so it is returned."""
+        org_id, user_id, _ = setup_org_and_user
+        svc = InventoryService(db_session)
+        first, _ = await svc.create_item(
             organization_id=uuid.UUID(org_id),
             item_data={"name": "Gauze Pads, 4x4", "condition": "good"},
             created_by=uuid.UUID(user_id),
         )
 
-        assert await svc.item_name_exists(org_id, "Gauze Pads, 4x4") is True
+        item, created, err = await svc.create_item_if_absent(
+            org_id, {"name": "Gauze Pads, 4x4", "condition": "good"}, user_id
+        )
+
+        assert err is None
+        assert created is False
+        assert item.id == first.id
 
     @pytest.mark.asyncio
     async def test_punctuation_and_case_do_not_hide_a_duplicate(
@@ -1142,7 +1163,12 @@ class TestItemNameExists:
             created_by=uuid.UUID(user_id),
         )
 
-        assert await svc.item_name_exists(org_id, "gauze pads 4x4") is True
+        item, created, _ = await svc.create_item_if_absent(
+            org_id, {"name": "gauze pads 4x4", "condition": "good"}, user_id
+        )
+
+        assert created is False
+        assert item.name == "Gauze Pads, 4x4"
 
     @pytest.mark.asyncio
     async def test_a_medical_item_is_not_invisible_here(
@@ -1178,7 +1204,12 @@ class TestItemNameExists:
             exclude_item_types=MEDICAL_ITEM_TYPES,
         )
         assert items == []
-        assert await svc.item_name_exists(org_id, "Code Oxygen Cylinder") is True
+
+        item, created, _ = await svc.create_item_if_absent(
+            org_id, {"name": "Code Oxygen Cylinder", "condition": "good"}, user_id
+        )
+        assert created is False
+        assert item.name == "Code Oxygen Cylinder"
 
     @pytest.mark.asyncio
     async def test_another_orgs_item_does_not_block_creation(
@@ -1186,20 +1217,49 @@ class TestItemNameExists:
     ):
         org_id, user_id, _ = setup_org_and_user
         svc = InventoryService(db_session)
-        await svc.create_item(
+        first, _ = await svc.create_item(
             organization_id=uuid.UUID(org_id),
             item_data={"name": "Gauze Pads, 4x4", "condition": "good"},
             created_by=uuid.UUID(user_id),
         )
 
-        assert await svc.item_name_exists(str(uuid.uuid4()), "Gauze Pads, 4x4") is False
+        other_org = _uid()
+        await db_session.execute(
+            text(
+                "INSERT INTO organizations (id, name, organization_type, slug, timezone) "
+                "VALUES (:id, :name, :otype, :slug, :tz)"
+            ),
+            {
+                "id": other_org,
+                "name": "Other Dept",
+                "otype": "fire_department",
+                "slug": f"other-{other_org[:8]}",
+                "tz": "UTC",
+            },
+        )
+        await db_session.flush()
+
+        item, created, err = await svc.create_item_if_absent(
+            other_org, {"name": "Gauze Pads, 4x4", "condition": "good"}, user_id
+        )
+
+        assert err is None
+        # Another department's catalog is not this one's: the name is free here.
+        assert created is True
+        assert item.id != first.id
 
     @pytest.mark.asyncio
-    async def test_an_unused_name_is_free(self, db_session, setup_org_and_user):
-        org_id, _, _ = setup_org_and_user
+    async def test_a_blank_name_is_refused(self, db_session, setup_org_and_user):
+        org_id, user_id, _ = setup_org_and_user
         svc = InventoryService(db_session)
 
-        assert await svc.item_name_exists(org_id, "Nothing Like This") is False
+        item, created, err = await svc.create_item_if_absent(
+            org_id, {"name": "   "}, user_id
+        )
+
+        assert item is None
+        assert created is False
+        assert err is not None
 
 
 # ── Barcode Label Generation Tests ─────────────────────────────────

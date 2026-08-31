@@ -16,15 +16,13 @@ import userEvent from '@testing-library/user-event';
 
 const mockGetItems = vi.fn();
 const mockGetItem = vi.fn();
-const mockCreateItem = vi.fn();
-const mockItemNameExists = vi.fn();
+const mockCreateItemIfAbsent = vi.fn();
 
 vi.mock('@/services/inventoryService', () => ({
   inventoryService: {
     getItems: (...a: unknown[]) => mockGetItems(...a) as unknown,
     getItem: (...a: unknown[]) => mockGetItem(...a) as unknown,
-    createItem: (...a: unknown[]) => mockCreateItem(...a) as unknown,
-    itemNameExists: (...a: unknown[]) => mockItemNameExists(...a) as unknown,
+    createItemIfAbsent: (...a: unknown[]) => mockCreateItemIfAbsent(...a) as unknown,
   },
 }));
 
@@ -56,14 +54,15 @@ describe('InventoryItemPicker', () => {
     onChange.mockReset();
     mockGetItems.mockReset();
     mockGetItem.mockReset();
-    mockCreateItem.mockReset();
-    mockItemNameExists.mockReset();
+    mockCreateItemIfAbsent.mockReset();
     mockToastSuccess.mockReset();
     mockToastError.mockReset();
     mockGetItems.mockResolvedValue(emptyResults);
     mockGetItem.mockResolvedValue(catalogItem());
-    mockCreateItem.mockResolvedValue(catalogItem({ id: 'inv-new', name: 'Code Oxygen Cylinder' }));
-    mockItemNameExists.mockResolvedValue(false);
+    mockCreateItemIfAbsent.mockResolvedValue({
+      item: catalogItem({ id: 'inv-new', name: 'Code Oxygen Cylinder' }),
+      created: true,
+    });
   });
 
   const typeSearch = async (text: string) => {
@@ -111,10 +110,10 @@ describe('InventoryItemPicker', () => {
 
       await user.click(await screen.findByText('Create “Code Oxygen Cylinder” in inventory'));
 
-      await waitFor(() => expect(mockCreateItem).toHaveBeenCalledTimes(1));
+      await waitFor(() => expect(mockCreateItemIfAbsent).toHaveBeenCalledTimes(1));
       // The whole payload, not a subset: this is the assertion that catches a
       // required quantity, critical minimum or reorder point being added later.
-      expect(mockCreateItem).toHaveBeenCalledWith({
+      expect(mockCreateItemIfAbsent).toHaveBeenCalledWith({
         name: 'Code Oxygen Cylinder',
         tracking_type: 'pool',
         quantity: 0,
@@ -129,39 +128,30 @@ describe('InventoryItemPicker', () => {
 
       await user.click(await screen.findByText('Create “Code Oxygen Cylinder” in inventory'));
 
-      await waitFor(() => expect(mockCreateItem).toHaveBeenCalledTimes(1));
-      expect(mockCreateItem).toHaveBeenCalledWith({
+      await waitFor(() => expect(mockCreateItemIfAbsent).toHaveBeenCalledTimes(1));
+      expect(mockCreateItemIfAbsent).toHaveBeenCalledWith({
         name: 'Code Oxygen Cylinder',
         tracking_type: 'individual',
         quantity: 1,
       });
     });
 
-    it('refuses to create a name the catalog already holds', async () => {
+    it('links the existing row when the name was already on file', async () => {
       // The search cannot see medical stock or past its first page, so the
-      // server is the only thing that can answer this.
-      mockItemNameExists.mockResolvedValue(true);
+      // server decides — and hands back the row to link rather than filing a
+      // second one beside it.
+      mockCreateItemIfAbsent.mockResolvedValue({
+        item: catalogItem({ id: 'inv-existing', name: 'Gauze Pads, 4x4 Sterile' }),
+        created: false,
+      });
       render(<InventoryItemPicker onChange={onChange} canCreateInventory />);
-      const user = await typeSearch('Gauze Pads, 4x4 Sterile');
+      const user = await typeSearch('gauze pads 4x4 sterile');
 
-      await user.click(await screen.findByText('Create “Gauze Pads, 4x4 Sterile” in inventory'));
+      await user.click(await screen.findByText('Create “gauze pads 4x4 sterile” in inventory'));
 
-      await waitFor(() => expect(mockItemNameExists).toHaveBeenCalledWith('Gauze Pads, 4x4 Sterile'));
-      expect(mockCreateItem).not.toHaveBeenCalled();
-      expect(onChange).not.toHaveBeenCalled();
-      expect(mockToastError).toHaveBeenCalled();
-    });
-
-    it('does not create when the existence check itself fails', async () => {
-      mockItemNameExists.mockRejectedValue(new Error('Network Error'));
-      render(<InventoryItemPicker onChange={onChange} canCreateInventory />);
-      const user = await typeSearch('Code Oxygen Cylinder');
-
-      await user.click(await screen.findByText('Create “Code Oxygen Cylinder” in inventory'));
-
-      await waitFor(() => expect(mockToastError).toHaveBeenCalled());
-      expect(mockCreateItem).not.toHaveBeenCalled();
-      expect(onChange).not.toHaveBeenCalled();
+      await waitFor(() => expect(onChange).toHaveBeenCalledWith('inv-existing', 'Gauze Pads, 4x4 Sterile'));
+      expect(mockToastSuccess).toHaveBeenCalledWith(expect.stringContaining('already in the catalog'));
+      expect(mockToastError).not.toHaveBeenCalled();
     });
 
     it('links an existing item instead of creating a second one', async () => {
@@ -172,13 +162,13 @@ describe('InventoryItemPicker', () => {
       await user.click(await screen.findByText('Gauze Pads, 4x4 Sterile'));
 
       expect(onChange).toHaveBeenCalledWith('inv-1', 'Gauze Pads, 4x4 Sterile');
-      expect(mockCreateItem).not.toHaveBeenCalled();
+      expect(mockCreateItemIfAbsent).not.toHaveBeenCalled();
     });
 
     it('does not offer creation when the search itself failed', async () => {
-      // A failed search proves nothing about the catalog. Offering to create
-      // here is how one item ends up as two rows with its links and lots split
-      // between them.
+      // A failed search proves nothing about the catalog. Offering to add to a
+      // catalog we could not reach reads as a promise the next click may not
+      // keep.
       mockGetItems.mockRejectedValue(new Error('Network Error'));
       render(<InventoryItemPicker onChange={onChange} canCreateInventory />);
       await typeSearch('Code Oxygen Cylinder');
@@ -189,7 +179,7 @@ describe('InventoryItemPicker', () => {
     });
 
     it('reports a failed create and leaves the position unlinked', async () => {
-      mockCreateItem.mockRejectedValue(new Error('Pool item quantity cannot be negative'));
+      mockCreateItemIfAbsent.mockRejectedValue(new Error('Boom'));
       render(<InventoryItemPicker onChange={onChange} canCreateInventory />);
       const user = await typeSearch('Code Oxygen Cylinder');
 

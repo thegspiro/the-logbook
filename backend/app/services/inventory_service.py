@@ -5896,8 +5896,8 @@ class InventoryService:
             await self.db.refresh(item)
         return items, skipped
 
-    async def item_name_exists(self, organization_id: str, name: str) -> bool:
-        """Whether the org's catalog already carries an item under this name.
+    async def _item_id_by_name(self, organization_id: str, name: str) -> Optional[str]:
+        """The id of the org's item carrying this name, if any.
 
         Deliberately spans the **whole** catalog, medical stock included. The
         gear list (`GET /inventory/items`) excludes medical types by design, so
@@ -5911,13 +5911,56 @@ class InventoryService:
         """
         key = normalize_name(name)
         if not key:
-            return False
+            return None
         result = await self.db.execute(
-            select(InventoryItem.name).where(
+            select(InventoryItem.id, InventoryItem.name).where(
                 InventoryItem.organization_id == organization_id
             )
         )
-        return any(normalize_name(n) == key for n in result.scalars().all() if n)
+        return next(
+            (iid for iid, n in result.all() if n and normalize_name(n) == key),
+            None,
+        )
+
+    async def create_item_if_absent(
+        self, organization_id: str, item_data: Dict[str, Any], created_by: str
+    ) -> Tuple[Optional[InventoryItem], bool, Optional[str]]:
+        """Create a catalog row, or hand back the one already carrying the name.
+
+        Returns ``(item, created, error)``.
+
+        One operation rather than a check the caller makes and then acts on.
+        A create-and-link screen that asks from the browser leaves seconds
+        between the question and the write, and a second editor filing the same
+        name inside that window gets a duplicate — one item as two rows, with
+        its checklist links and replacement lots split between them and nothing
+        in the UI afterwards saying so.
+
+        Returning the existing row rather than an error is the point: the caller
+        wanted a link, and an item it could not see (medical stock is absent
+        from the gear list it searched) is still the right thing to link to.
+
+        This narrows the window to a single transaction; it does not close it.
+        ``inventory_items`` carries no unique constraint on (organization,
+        name) — `create_items_bulk` has the same property — so two creates
+        landing in the same instant can still both find nothing. Closing that
+        needs the constraint and a backfill for the duplicate names already on
+        file, which is a schema change rather than a caller fix.
+        """
+        name = (item_data.get("name") or "").strip()
+        if not name:
+            return None, False, "Every item needs a name"
+
+        existing_id = await self._item_id_by_name(organization_id, name)
+        if existing_id:
+            return (
+                await self.get_item_by_id(existing_id, organization_id),
+                False,
+                None,
+            )
+
+        item, error = await self.create_item(organization_id, item_data, created_by)
+        return item, item is not None, error
 
     async def update_lot(
         self,
