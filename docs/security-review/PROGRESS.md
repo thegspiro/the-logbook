@@ -16,28 +16,15 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-Feature 31 (Scheduled tasks), pass 2 — PR
-[#2095](https://github.com/thegspiro/the-logbook/pull/2095), branch
-`claude/security-review-scheduled-tasks-pass2`. Re-verified all 13 findings
-from `docs/security-review/CRON2-31-scheduled-tasks.md` (pass 1) hold, no
-regressions. Read `scheduled.py` and `scheduled_tasks.py` (43 runners) end to
-end, plus the in-process scheduler in `main.py` (new territory, out of pass
-1's stated scope). Six new fixes, three new flagged findings. **Round 2
-(Codex-caught):** three of round 1's own fixes (CRON-31-1/4/5/6) still read a
-now-poisoned session's attributes inside their except blocks or counted a
-parent's work before its commit succeeded — corrected, empirically verified
-against a real connection. See log entry below and
-`docs/security-review/CRON-31-scheduled-tasks.md`.
-
-**Note on branch naming:** pass 1's PR (#1915) used the branch name
-`claude/security-review-scheduled-tasks` — reusing it for this pass would
-violate CLAUDE.md Pitfall #24 (do not reuse a branch name after its PR
-merges), so this pass uses `-pass2` appended, matching the convention other
-pass-2 iterations have used when a name collision like this comes up.
+None. Feature 31 (Scheduled tasks) is fully closed — see log entry below.
+Next: feature 32, Locations & kiosk.
 
 ---
 
-### 2026-08-31 — Feature 31 (Scheduled tasks), pass 2 — 6 fixed, 3 new flagged — PR #2095
+### 2026-08-31 — Feature 31 (Scheduled tasks), pass 2 ✅ PR #2095 merged (`8254875a`)
+
+Round 1: 6 fixed, 3 new flagged. Round 2 (Codex-caught): 3 more corrected —
+see below.
 
 No security-review PR was open (feature 30 fully merged via PR #2093 earlier
 this iteration), so the rotation continued to feature 31. Loaded
@@ -3922,7 +3909,7 @@ each row's prior PR is recorded in the Log, not repeated here.
 | 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`                                                                    | ✅     |
 | 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                              | ✅     |
 | 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (24 unauth bootstrap routes)                                                                                             | ✅     |
-| 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                   | 🔄     |
+| 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                   | ✅     |
 | 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                  | ⬜     |
 | 33  | Core infrastructure       | CORE   | `core/security_middleware.py`, `core/database.py`, `core/config.py`                                                                             | ⬜     |
 | 34  | Frontend shared           | FE     | `utils/apiCache.ts`, module axios instances, `ProtectedRoute`, global stores                                                                    | ⬜     |
