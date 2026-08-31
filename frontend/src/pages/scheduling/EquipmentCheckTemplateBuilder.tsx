@@ -5304,6 +5304,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                         shiftId="preview"
                         template={buildPreviewTemplate()}
                         previewMode
+                        experience="sweep"
                       />
                     )}
                   </div>
@@ -5844,7 +5845,12 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                       Preview — inputs are interactive but nothing will be submitted.
                     </p>
                   </div>
-                  <EquipmentCheckForm shiftId="preview" template={buildPreviewTemplate()} previewMode />
+                  <EquipmentCheckForm
+                    shiftId="preview"
+                    template={buildPreviewTemplate()}
+                    previewMode
+                    experience="sweep"
+                  />
                 </div>
               </div>
 
