@@ -16,8 +16,101 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-None. Feature 28 (Security, audit & IP) is fully closed — see log entry
-below. Next: feature 29, Reports & analytics.
+Feature 29 (Reports & analytics), pass 3 — PR
+[#2091](https://github.com/thegspiro/the-logbook/pull/2091), branch
+`claude/security-review-reports-analytics`. Codex's review caught six real
+gaps the initial pass missed (one P1 authorization bypass on five report
+types, one P1 label-length DoS, four P2s); all six fixed with guard tests.
+See log entry below and `docs/security-review/RPT-29-reports-analytics-pass3.md`.
+
+---
+
+### 2026-08-31 — Feature 29 (Reports & analytics), pass 3 — 0 fixed, 0 new flagged — PR #2091
+
+No security-review PR was open (feature 28/Security-audit-IP fully merged via
+PR #2089), so the rotation continued to feature 29. Loaded `CHECKLIST.md`,
+`SEC-00-cross-cutting-baseline.md`, and both prior findings docs
+(`docs/security-review/RPT2-29-reports-analytics.md`, PR #1912;
+`docs/module-audit/reports-analytics.md`; `docs/app-review/reports-analytics.md`;
+`docs/app-review/dashboard.md`) — re-verified their open items rather than
+re-deriving them.
+
+Diffed all ten files (`reports.py`, `analytics.py`, `platform_analytics.py`,
+`dashboard.py`, `labels.py`, `reports_service.py`,
+`dashboard_widget_service.py`, `attendance_dashboard_service.py`,
+`label_service.py`, `label_printer_service.py`) against the commit pass 2
+merged as: the only change since is one small commit adding a `printer_id`
+field to the label preset, which validates the client-supplied printer id
+against the caller's org before storage (correct pitfall-14c pattern) —
+verified good, no finding.
+
+Read every endpoint and service in full (not just the diff), enumerated all
+29 routes' auth/permission dependencies (table in the findings doc), and
+re-verified every prior fix line-by-line: RPT2-29-1, RPT2-29-3, DASH-29-1,
+DASH-29-2, DASH-29-3, LBL-29-1, LBL-29-3 (security-review pass 2) and DASH-3,
+RPT-1, RPT-4, RPT-5a, RPT-5b (module-audit/app-review) all hold exactly as
+recorded, no regressions. Every still-flagged policy item (RPT2-29-2 saved-
+report scheduler, LBL-29-2 label-printer permission gate, LBL-29-4 PDF label
+count cap, RPT-3 PII-tier permission, RPT-5c/RPT-6/RPT-7, DASH-2 dead
+`/dashboard/stats` endpoint) re-confirmed unchanged by grep/re-read, not
+re-applied.
+
+Also checked dimensions the pass-2 writeup didn't fully re-derive: zero
+`.like()`/`.ilike()` calls in this feature (n/a); the frontend's client-side
+CSV export (`modules/reports/utils/export.ts`) routes every cell through
+`escapeCsvCell`, which neutralizes formula-injection triggers the same way
+`SafeCsvWriter` does server-side (verified good); `platform_analytics.py`'s
+error-log aggregate projects only `error_type` + count, never
+`error_message`/`context` (verified good); the one `ondelete="SET NULL"` FK
+in this feature's models (`LabelPrinter.created_by_id`) is `nullable=True`.
+
+Noted in passing, not fixed (dead code, not exploitable): the frontend's
+`modules/reports/services/api.ts` exports a `reportExportService.exportReport`
+that calls a `POST /reports/export` backend route which does not exist, and
+has zero callers anywhere in the frontend.
+
+**Round 1 claimed no new findings, no code changes.** That claim did not
+survive Codex's review of the doc itself. Full writeup:
+`docs/security-review/RPT-29-reports-analytics-pass3.md`.
+
+**Round 2 (Codex-caught, all six verified against actual code before fixing):**
+
+1. **LBL-29-3 addendum (P1).** `extra_lines` was bounded on list length
+   (`max_length=20`) but not per-element string length; `_build_extra_lines`
+   passes a `custom:<text>` entry through unbounded, joined into every label
+   spec. Fixed with a per-element `max_length=100` on both
+   `LabelGenerateBody.extra_lines` and `LabelPrintBody.extra_lines`.
+2. **RPT-3, real authorization bypass (P1).** `PII_REPORT_PERMISSIONS`
+   covered only `member_roster`/`pipeline_overview`. `training_summary`,
+   `training_progress`, `annual_training`, `certification_expiration`, and
+   `compliance_status` all return per-member training/compliance detail
+   gated behind `training.manage` at their source; `admin_hours` returns
+   per-member hours gated behind `admin_hours.manage` at its source. A
+   `reports.view`-only caller could reach all six via `/reports/generate` and
+   `/reports/saved/{id}/run`. Fixed by adding all six to the map — this
+   supersedes round 1's "still flagged, policy call" characterization of the
+   `certification_expiration` gap, which was a real bug, not a policy choice.
+3. **Dashboard action-items caching (P2).** `/dashboard/action-items`
+   (assignee names + free-text descriptions) was missing from
+   `UNCACHEABLE_PREFIXES`, so a revoked grant could still be served from the
+   90s stale-while-revalidate cache. Fixed.
+4. **Unbounded saved-report listing (P2).** `GET /reports/saved` has no
+   pagination; capped creation at 200 active rows per org to bound it.
+5. **Saved-report field widths unvalidated (P2).** `name`/`report_type`/
+   `schedule_frequency` had no length bounds against their `VARCHAR`
+   columns, risking an uncaught `DataError` under MySQL strict mode. Fixed
+   with matching `Field(max_length=...)` bounds.
+6. **Analytics deviceType unvalidated (P2).** `metadata.deviceType` was
+   copied straight into a `VARCHAR(20)` column with no type/length check.
+   Fixed with a sanitizing extraction helper.
+
+Guard tests added: 3 (labels), 5 (report PII gate), 11 (saved-report caps/
+bounds + analytics), plus 1 frontend cache-exclusion test — 20 new tests, all
+passing. Completion gate: `flake8`/`black --check`/`isort --check-only`
+clean on all files touched; `pytest tests/ -k "reports or label or
+analytics"` — **368 passed, 1 skipped, 0 failed**; new/modified test files —
+**31 passed**; frontend `tsc --noEmit` clean, `eslint` clean on both changed
+files, `vitest run apiCache.test.ts` — **87 passed**.
 
 ---
 
@@ -3600,7 +3693,7 @@ each row's prior PR is recorded in the Log, not repeated here.
 | 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                         | ✅     |
 | 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                         | ✅     |
 | 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`                                                                    | ✅     |
-| 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                              | ⬜     |
+| 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                              | 🔄     |
 | 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (24 unauth bootstrap routes)                                                                                             | ⬜     |
 | 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                   | ⬜     |
 | 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                  | ⬜     |
