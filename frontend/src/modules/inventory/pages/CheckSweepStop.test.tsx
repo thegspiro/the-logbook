@@ -182,6 +182,36 @@ describe('a switch that fails', () => {
   });
 });
 
+describe('an item this truck does not carry', () => {
+  const gauze: CheckItemSpec = { id: 'gauze', name: 'Roller gauze', checkType: 'count', expectedQuantity: 10 };
+
+  it('can be answered without counting it to zero', async () => {
+    // Zero is a shortage, which the server turns into a failure; leaving it
+    // alone files the check incomplete. Neither is true of an item the
+    // apparatus simply does not carry.
+    const user = userEvent.setup();
+    const onAnswer = setup([gauze]);
+    await user.click(screen.getByRole('button', { name: 'Roller gauze is not on this truck' }));
+    expect(onAnswer).toHaveBeenCalledWith('gauze', { status: 'not_applicable' });
+  });
+
+  it('stops offering a count once it is marked not carried', () => {
+    setup([gauze], { gauze: { status: 'not_applicable' } });
+    expect(screen.getByRole('button', { name: 'One more Roller gauze' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Roller gauze is not on this truck' })).toHaveAttribute(
+      'aria-pressed',
+      'true'
+    );
+  });
+
+  it('can be taken back', async () => {
+    const user = userEvent.setup();
+    const onAnswer = setup([gauze], { gauze: { status: 'not_applicable' } });
+    await user.click(screen.getByRole('button', { name: 'Roller gauze is not on this truck' }));
+    expect(onAnswer).toHaveBeenCalledWith('gauze', { status: 'not_checked' });
+  });
+});
+
 describe('a bag with pockets', () => {
   const bag = (): LapStop => ({
     id: 'bag',

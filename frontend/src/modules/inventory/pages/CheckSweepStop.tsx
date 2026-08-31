@@ -116,6 +116,7 @@ const CountTally: React.FC<Omit<StopBodyProps, 'stop'> & { items: CheckItemSpec[
           const found = answer?.quantityFound ?? item.carriedQuantity ?? undefined;
           const short = par !== null && found !== undefined && found < par;
           const carried = found !== undefined && !confirmed;
+          const notOnTruck = answer?.status === 'not_applicable';
           const set = (next: number) => onAnswer(item.id, countAnswer(item, next));
           return (
             <div
@@ -137,7 +138,7 @@ const CountTally: React.FC<Omit<StopBodyProps, 'stop'> & { items: CheckItemSpec[
               <div className="flex w-[132px] items-center justify-end gap-1.5">
                 <button
                   type="button"
-                  disabled={disabled}
+                  disabled={disabled || notOnTruck}
                   onClick={() => set((found ?? par ?? 0) - 1)}
                   aria-label={`One fewer ${item.name}`}
                   className="border-theme-input-border text-theme-text-secondary hover:bg-theme-surface-hover h-11 w-11 shrink-0 rounded-lg border text-[20px] font-bold disabled:opacity-50"
@@ -158,12 +159,33 @@ const CountTally: React.FC<Omit<StopBodyProps, 'stop'> & { items: CheckItemSpec[
                 </span>
                 <button
                   type="button"
-                  disabled={disabled}
+                  disabled={disabled || notOnTruck}
                   onClick={() => set((found ?? par ?? 0) + 1)}
                   aria-label={`One more ${item.name}`}
                   className="border-theme-input-border text-theme-text-secondary hover:bg-theme-surface-hover h-11 w-11 shrink-0 rounded-lg border text-[20px] font-bold disabled:opacity-50"
                 >
                   +
+                </button>
+                {/* Counting to zero is a shortage, which the server turns into
+                    a failure. An item this apparatus does not carry is not
+                    short of anything, and leaving it alone files the check
+                    incomplete — so it needs its own answer, as the accordion
+                    gives it. */}
+                <button
+                  type="button"
+                  disabled={disabled}
+                  aria-pressed={notOnTruck}
+                  onClick={() =>
+                    onAnswer(item.id, notOnTruck ? { status: 'not_checked' } : { status: 'not_applicable' })
+                  }
+                  aria-label={`${item.name} is not on this truck`}
+                  className={`h-11 w-11 shrink-0 rounded-lg border text-[13px] font-bold disabled:opacity-50 ${
+                    notOnTruck
+                      ? 'border-slate-900 bg-slate-900 text-white dark:border-white dark:bg-white dark:text-slate-900'
+                      : 'border-theme-input-border text-theme-text-muted hover:bg-theme-surface-hover'
+                  }`}
+                >
+                  n/a
                 </button>
               </div>
             </div>

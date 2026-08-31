@@ -30,6 +30,16 @@ export interface CheckFinishProps {
   /** Per-template: some departments will not take a check with gaps in it. */
   blockOnUnanswered?: boolean | undefined;
   submitting?: boolean | undefined;
+  /**
+   * The one note about the check rather than about an item.
+   *
+   * Here rather than on a stop, because it is written once and it is written
+   * last — and because a note restored from a draft has to be visible before
+   * it is submitted. Without it a crew can neither add one nor see the one
+   * they are about to file.
+   */
+  overallNotes?: string | undefined;
+  onOverallNotesChange?: ((next: string) => void) | undefined;
 }
 
 export const CheckFinish: React.FC<CheckFinishProps> = ({
@@ -42,6 +52,8 @@ export const CheckFinish: React.FC<CheckFinishProps> = ({
   goesTo,
   blockOnUnanswered,
   submitting,
+  overallNotes,
+  onOverallNotesChange,
 }) => {
   const summary = sweepSummary(stops, answers);
   const { faults, unanswered, restocks, goodCount, answeredCount, totalCount } = summary;
@@ -137,6 +149,23 @@ export const CheckFinish: React.FC<CheckFinishProps> = ({
                 record — you do not have to read them again.
               </span>
             </p>
+          </div>
+        )}
+
+        {onOverallNotesChange && (
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor="sweep-overall-notes" className="form-label">
+              Anything about the truck as a whole
+            </label>
+            <textarea
+              id="sweep-overall-notes"
+              data-testid="sweep-overall-notes"
+              rows={3}
+              value={overallNotes ?? ''}
+              onChange={(event) => onOverallNotesChange(event.target.value)}
+              className="form-input"
+              placeholder="Optional — anything that is not about one item."
+            />
           </div>
         )}
       </div>

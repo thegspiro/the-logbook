@@ -2590,6 +2590,8 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
             onBack={() => setSweepScreen('walk')}
             submittingAs={user?.first_name ? `${user.first_name} ${user.last_name ?? ''}`.trim() : 'you'}
             submitting={submitting || alreadyFiled}
+            overallNotes={overallNotes}
+            onOverallNotesChange={setOverallNotes}
           />
         ) : (
           <CheckSweep
