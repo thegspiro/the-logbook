@@ -203,19 +203,6 @@ export function bulkConfirmable(items: CheckItemSpec[]): CheckItemSpec[] {
   return items.filter((i) => normalizeCheckType(i.checkType) !== CheckType.LEVEL);
 }
 
-/**
- * The bulk action's wording follows what the stop actually holds.
- *
- * A bag of counts reads "All at par"; a mixed stop reads "All good". The label
- * is the claim being made, so it should say the thing the crew is asserting.
- */
-export function bulkLabel(items: CheckItemSpec[]): string {
-  const confirmable = bulkConfirmable(items);
-  if (confirmable.length === 0) return 'All good';
-  const allCounts = confirmable.every((i) => normalizeCheckType(i.checkType) === CheckType.COUNT);
-  return allCounts ? 'All at par' : 'All good';
-}
-
 // ============================================================================
 // The sweep
 // ============================================================================
@@ -223,14 +210,13 @@ export function bulkLabel(items: CheckItemSpec[]): string {
 /**
  * The claim the bulk button is making, said out loud.
  *
- * `bulkLabel` answers "at par or good"; the sweep puts the button at the top of
- * a stop the crew has not read yet, so it also has to say *how many* items it
- * speaks for. "All 4 counts at par" is a claim somebody can check against the
- * cabinet in front of them; "All good" over four items is a button.
+ * The button sits at the top of a stop the crew has not read yet, so it has to
+ * say *how many* items it speaks for as well as what it claims about them.
+ * "All 4 counts at par" is a claim somebody can check against the cabinet in
+ * front of them; "All good" over four items is a button.
  *
- * The wording follows the contents for the same reason `bulkLabel` does — never
- * "All good" over a gauge, because a gauge is not bulk-confirmable at all and
- * the count here excludes it.
+ * The wording follows the contents — never "All good" over a gauge, because a
+ * gauge is not bulk-confirmable at all and the count here excludes it.
  */
 export interface BulkClaim {
   /** Exactly the items the button answers. */
