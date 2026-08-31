@@ -64,6 +64,12 @@ interface LabelPrintPageProps {
 
 // The symbology is part of the key so switching Code 128 <-> QR is a change
 // worth persisting, not one the comparison swallows.
+// The printer segment while the member has not chosen one. Not '' — an empty
+// string is also what `selectedPrinterId` holds before the printer list lands,
+// so the two would compare equal and a resolved printer would look like no
+// change at all. A sentinel keeps "not my decision" distinct from any id.
+const SAME_PRINTER = '\u0000same';
+
 const presetKey = (preset: string, w: string, h: string, symbology: string, printerId: string) =>
   `${preset === CUSTOM_PRESET_ID ? `custom:${w}x${h}` : preset}:${symbology}:${printerId}`;
 
@@ -151,6 +157,9 @@ export const LabelPrintPage: React.FC<LabelPrintPageProps> = ({ module, title, b
   const [customHeight, setCustomHeight] = useState('1');
   const [printers, setPrinters] = useState<LabelPrinterConfig[]>([]);
   const [selectedPrinterId, setSelectedPrinterId] = useState('');
+  // Whether the member has chosen a printer on this visit, as opposed to the
+  // page resolving one for them. Only the former is worth remembering.
+  const printerTouchedRef = useRef(false);
   const [preferredPrinterId, setPreferredPrinterId] = useState<string | null | undefined>(undefined);
   const [sendingToPrinter, setSendingToPrinter] = useState(false);
   const [printResult, setPrintResult] = useState<PrintLabelsResult | null>(null);
@@ -232,13 +241,13 @@ export const LabelPrintPage: React.FC<LabelPrintPageProps> = ({ module, title, b
               setCustomHeight(h);
             }
           }
-          lastSavedKeyRef.current = presetKey(pref.preset, w, h, pref.symbology ?? symbology, pref.printer_id ?? '');
+          lastSavedKeyRef.current = presetKey(pref.preset, w, h, pref.symbology ?? symbology, SAME_PRINTER);
         } else {
-          lastSavedKeyRef.current = presetKey(presetId, w, h, symbology, pref.printer_id ?? '');
+          lastSavedKeyRef.current = presetKey(presetId, w, h, symbology, SAME_PRINTER);
         }
       } catch {
         setPreferredPrinterId(null);
-        lastSavedKeyRef.current = presetKey(presetId, customWidth, customHeight, symbology, '');
+        lastSavedKeyRef.current = presetKey(presetId, customWidth, customHeight, symbology, SAME_PRINTER);
       }
     })();
     return () => {
@@ -275,17 +284,27 @@ export const LabelPrintPage: React.FC<LabelPrintPageProps> = ({ module, title, b
   }, [preferredPrinterId, printers]);
 
   // Persist a deliberate change to the position (debounced, best-effort).
+  //
+  // The printer is only part of that once the member has actually picked one.
+  // The effect above *resolves* a printer — the position's remembered one, or
+  // the organization default, or whichever row happens to sort first — and
+  // treating that as a choice pinned it into the position's shared settings
+  // with nobody touching a control: an admin later marking a different printer
+  // as the org default would be ignored for good. `printer_id` is therefore
+  // left out of both the key and the payload until the select fires, and the
+  // backend reads its absence as "leave the remembered destination alone".
   useEffect(() => {
     if (lastSavedKeyRef.current === null) return;
     if (isCustom && !customValid) return;
-    const key = presetKey(presetId, customWidth, customHeight, symbology, selectedPrinterId);
+    const printerSegment = printerTouchedRef.current ? selectedPrinterId : SAME_PRINTER;
+    const key = presetKey(presetId, customWidth, customHeight, symbology, printerSegment);
     if (key === lastSavedKeyRef.current) return;
     const timer = setTimeout(() => {
       lastSavedKeyRef.current = key;
       void labelService
         .setPreset(module, {
           preset: presetId,
-          ...(selectedPrinterId ? { printer_id: selectedPrinterId } : {}),
+          ...(printerTouchedRef.current ? { printer_id: selectedPrinterId || null } : {}),
           symbology,
           ...(isCustom ? { custom_width: customW, custom_height: customH } : {}),
         })
@@ -713,7 +732,10 @@ export const LabelPrintPage: React.FC<LabelPrintPageProps> = ({ module, title, b
                   <select
                     id="label-printer"
                     value={selectedPrinterId}
-                    onChange={(e) => setSelectedPrinterId(e.target.value)}
+                    onChange={(e) => {
+                      printerTouchedRef.current = true;
+                      setSelectedPrinterId(e.target.value);
+                    }}
                     className="form-input w-full sm:w-80"
                   >
                     {printers.map((p) => (
