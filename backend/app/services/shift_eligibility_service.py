@@ -42,7 +42,7 @@ from app.services.qualification_service import (
     positions_for_qualifications,
     qualification_label,
 )
-from app.utils.membership import MemberClass, effective_member_class, is_administrative
+from app.utils.membership import is_administrative, is_non_riding_class
 
 # Mapping from training program target_position values to the shift
 # position they unlock upon completion.
@@ -274,12 +274,9 @@ class ShiftEligibilityService:
             getattr(user, "member_class", None),
             getattr(user, "membership_type", None),
         )
-        operational = (
-            effective_member_class(
-                getattr(user, "member_class", None),
-                getattr(user, "membership_type", None),
-            )
-            == MemberClass.OPERATIONAL
+        can_ride = not is_non_riding_class(
+            getattr(user, "member_class", None),
+            getattr(user, "membership_type", None),
         )
 
         # ----- Step 1: Check for open-to-all shift -----
@@ -288,7 +285,7 @@ class ShiftEligibilityService:
             shift = await self._get_shift(shift_id, organization_id)
             if shift and administrative:
                 return self._administrative_shift_positions(shift)
-            if shift and shift.open_to_all_members and operational:
+            if shift and shift.open_to_all_members and can_ride:
                 return self._shift_position_list(shift)
 
         # ----- Step 2: Membership type gate -----
@@ -392,9 +389,8 @@ class ShiftEligibilityService:
         administrative = is_administrative(
             getattr(user, "member_class", None), member_type
         )
-        operational = (
-            effective_member_class(getattr(user, "member_class", None), member_type)
-            == MemberClass.OPERATIONAL
+        can_ride = not is_non_riding_class(
+            getattr(user, "member_class", None), member_type
         )
 
         base: Set[str] = set()
@@ -409,17 +405,21 @@ class ShiftEligibilityService:
 
         # Qualifications are the one source that is *not* shift-independent:
         # a certification current today may have lapsed by a shift three months
-        # out, and that shift must not offer the seat. Resolved per distinct
-        # shift date rather than per shift — a day panel has one date and a
-        # month view a few dozen, against one query each, so the base-computed-
-        # once shape survives.
+        # out, and that shift must not offer the seat. Still resolved per
+        # distinct shift date — but off one statement rather than one per date.
+        # A member listing a year of generated shifts has ~365 distinct dates
+        # on the page, and a query each made the list request that many
+        # sequential round trips.
         quals_by_date: Dict[date, Set[str]] = {}
         if not blocked:
+            windows = await QualificationService(self.db).get_member_code_windows(
+                str(user.id), organization_id
+            )
             for shift in shifts.values():
                 as_of = self._shift_date(shift)
                 if as_of not in quals_by_date:
-                    quals_by_date[as_of] = await self._get_qualification_positions(
-                        str(user.id), organization_id, as_of
+                    quals_by_date[as_of] = positions_for_qualifications(
+                        QualificationService.codes_in_force(windows, as_of)
                     )
 
         answers: Dict[str, List[str]] = {}
@@ -434,7 +434,7 @@ class ShiftEligibilityService:
             if administrative:
                 answers[str(shift_id)] = self._administrative_shift_positions(shift)
                 continue
-            if shift.open_to_all_members and operational:
+            if shift.open_to_all_members and can_ride:
                 answers[str(shift_id)] = sorted(set(self._shift_position_list(shift)))
                 continue
             if blocked:
