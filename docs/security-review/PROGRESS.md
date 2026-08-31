@@ -16,9 +16,10 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-Feature 33 (Core infrastructure), re-verification pass — branch
-`claude/friendly-babbage-ioea3m`, opening now. Zero code drift since
-CI2-33 (PR #1917); all 14 prior fixes re-verified, 0 new findings.
+Feature 33 (Core infrastructure), re-verification pass — PR
+[#2106](https://github.com/thegspiro/the-logbook/pull/2106), branch
+`claude/friendly-babbage-ioea3m`. Zero code drift since CI2-33 (PR #1917);
+all 14 prior fixes re-verified, 0 new findings.
 
 ---
 
