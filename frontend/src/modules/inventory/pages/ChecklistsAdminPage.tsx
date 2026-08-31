@@ -23,8 +23,18 @@ interface RelatedLink {
   description: string;
   path: string;
   icon: React.ElementType;
-  /** Permissions that open the target, when it needs more than this page does. */
-  anyPermission?: string[];
+  /**
+   * The permissions that open the target route — any one of them suffices,
+   * mirroring its `ProtectedRoute` gate.
+   *
+   * Required, not optional. Holding this page's own `inventory.check_manage`
+   * does not imply any of these: authoring a checklist, reading its results
+   * and managing stock are separate grants, and the seeded President position
+   * holds the first without the second. While the field was optional, two of
+   * the three cards below declared nothing and were shown to people the
+   * destination then refused.
+   */
+  anyPermission: string[];
 }
 
 const RELATED: RelatedLink[] = [
@@ -33,12 +43,17 @@ const RELATED: RelatedLink[] = [
     description: 'Compliance, failures and item trends across completed checks',
     path: '/inventory/admin/checklists/reports',
     icon: BarChart3,
+    // Reading results is a separate grant from authoring a checklist, and this
+    // page runs on the authoring one — the seeded President position holds
+    // check_manage without check_view, so this card was a refusal for them.
+    anyPermission: ['inventory.check_view'],
   },
   {
     label: 'Expiring on apparatus',
     description: 'What is running out on the trucks, and the stock behind it',
     path: '/inventory/admin/checklists/supply',
     icon: Clock,
+    anyPermission: ['scheduling.manage', 'inventory.check_view', 'inventory.manage'],
   },
   {
     label: 'Checklist settings',
@@ -55,7 +70,7 @@ const RELATED: RelatedLink[] = [
 
 export const ChecklistsAdminPage: React.FC = () => {
   const { checkPermission } = useAuthStore();
-  const related = RELATED.filter((link) => !link.anyPermission || link.anyPermission.some((p) => checkPermission(p)));
+  const related = RELATED.filter((link) => link.anyPermission.some((p) => checkPermission(p)));
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6">
