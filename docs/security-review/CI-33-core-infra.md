@@ -1,6 +1,11 @@
 # Security Review — Feature 33: Core Infrastructure (re-verification)
 
-**Prefix:** `CI` · **Iteration:** 33 · **Reviewed:** 2026-08-31 · **PR:** [#2106](https://github.com/thegspiro/the-logbook/pull/2106)
+**Prefix:** `CI` · **Iteration:** 33 · **Reviewed:** 2026-08-31 · **PR:** [#2106](https://github.com/thegspiro/the-logbook/pull/2106) (round 1, merged), [#2107](https://github.com/thegspiro/the-logbook/pull/2107) (round 2)
+
+**Note on PR split:** round 1 merged with its "0 new findings" conclusion
+before Codex's review of that same PR — posted after CI went green —
+was addressed, so round 2's fixes below landed as a separate follow-up
+PR (#2107) rather than a push onto the already-merged #2106.
 
 **Backend:** `app/core/security_middleware.py` (1,422 L → 1,447 L after this
 pass), `app/core/config.py` (1,041 L), `app/core/database.py` (248 L → 254 L).

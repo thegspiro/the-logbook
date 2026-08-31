@@ -16,10 +16,12 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-Feature 33 (Core infrastructure), re-verification pass — PR
-[#2106](https://github.com/thegspiro/the-logbook/pull/2106), branch
-`claude/friendly-babbage-ioea3m`. Round 2 (Codex-caught): 3 more fixed —
-see log entry below.
+Feature 33 (Core infrastructure), round 2 (Codex-caught) — PR
+[#2107](https://github.com/thegspiro/the-logbook/pull/2107), branch
+`claude/friendly-babbage-ioea3m`. Round 1 merged as
+[#2106](https://github.com/thegspiro/the-logbook/pull/2106) before
+Codex's review of it landed; round 2's 3 fixes follow up in a separate PR
+— see log entry below for why.
 
 ---
 
@@ -65,12 +67,21 @@ round-1 scope claim: `config.py` was verified at four specific locations
 plus confirmed byte-identical via `git diff`, not read end-to-end this
 pass (round 1's wording had conflated the two).
 
+**PR split:** round 2's fixes were first pushed onto #2106, but the repo
+owner merged #2106 (round 1's "0 new findings" content) at 18:14:21 UTC —
+before Codex's review of that PR, posted at 18:04, had been addressed. The
+push landed after the merge and never reached `main`. Per the branch-reuse
+rule (a merged PR is finished, restart the branch from the new `main`),
+reset `claude/friendly-babbage-ioea3m` to the post-merge `main` and
+cherry-picked the round-2 commit onto it — same commit content, new PR
+[#2107](https://github.com/thegspiro/the-logbook/pull/2107).
+
 **Completion gate:** flake8/black/isort clean across `app/ tests/
 alembic/`; `validate_migrations.py --strict` — 394 revisions, single head,
 no schema change; scoped tests — 171/171 passed (was 166); full backend
 suite — 9376 passed, 2 skipped, 0 failed. No frontend file touched.
 Findings doc updated: `docs/security-review/CI-33-core-infra.md`. Pushed
-to PR #2106. Next: 34 frontend shared, once #2106 merges.
+to PR #2107. Next: 34 frontend shared, once #2107 merges.
 
 Feature 33 marked 🔄 (not ✅ yet — that happens on the closing PR after
 merge, per the rotation's own rule).
