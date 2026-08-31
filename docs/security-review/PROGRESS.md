@@ -17,13 +17,14 @@ feature. The rotation cannot outrun its own review queue.
 ## Open PR
 
 Feature 27 (Integrations), pass 2 — branch
-`claude/security-review-integrations-pass2`, PR TBD (opening now). One
-finding (INT-6, LOW-MED, fixed). See log entry below and
+`claude/security-review-integrations-pass2`, PR
+[#2087](https://github.com/thegspiro/the-logbook/pull/2087). One finding
+(INT-6, LOW-MED, fixed). See log entry below and
 `docs/security-review/INT-27-integrations.md`.
 
 ---
 
-### 2026-08-31 — Feature 27 (Integrations), pass 2 ⏳ PR opening
+### 2026-08-31 — Feature 27 (Integrations), pass 2 ⏳ PR #2087 opened
 
 Re-read all five backend files in full (`integrations.py`, `salesforce_sync.py`,
 `salesforce_service.py`, `salesforce_oauth_service.py`,

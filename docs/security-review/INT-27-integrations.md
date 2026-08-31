@@ -1,6 +1,6 @@
 # Security Review — Integrations
 
-**Prefix:** `INT` · **Iteration:** 27 · **Reviewed:** 2026-08-31 (pass 2, rotation pass 2) · **PR:** #TBD (pass 1: #1910, merged)
+**Prefix:** `INT` · **Iteration:** 27 · **Reviewed:** 2026-08-31 (pass 2, rotation pass 2) · **PR:** #2087 (pass 1: #1910, merged)
 
 **Backend:** `app/api/v1/endpoints/integrations.py` (710 L, 7 endpoints),
 `app/api/v1/endpoints/salesforce_sync.py` (585 L, 9 endpoints),
