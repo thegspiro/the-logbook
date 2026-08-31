@@ -16,14 +16,20 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-Feature 33 (Core infrastructure), round 2 (Codex-caught) — PR
-[#2107](https://github.com/thegspiro/the-logbook/pull/2107), branch
-`claude/friendly-babbage-ioea3m`. Round 1 merged as
-[#2106](https://github.com/thegspiro/the-logbook/pull/2106) before
-Codex's review of it landed; round 2's 3 fixes follow up in a separate PR
-— see log entry below for why.
+None. Feature 33 (Core infrastructure) is fully closed — round 1 merged as
+[#2106](https://github.com/thegspiro/the-logbook/pull/2106), round 2's 3
+Codex-caught fixes merged as
+[#2107](https://github.com/thegspiro/the-logbook/pull/2107). Next: feature
+34, Frontend shared.
 
 ---
+
+### 2026-08-31 — Feature 33 (Core infrastructure) ✅ PR #2107 merged (round 2, Codex-caught fixes)
+
+PR #2107 merged, carrying CI-33-1/2/3 onto `main`. All 17 checks passed
+(`e0e09ffa2`), no unresolved review threads. Combined with round 1's #2106,
+feature 33 is fully closed for this rotation cycle. Next: 34 frontend
+shared.
 
 ### 2026-08-31 — Feature 33 (Core infrastructure), re-verification — round 2: 3 fixed (Codex-caught)
 
@@ -4142,7 +4148,7 @@ each row's prior PR is recorded in the Log, not repeated here.
 | 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (24 unauth bootstrap routes)                                                                                             | ✅     |
 | 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                   | ✅     |
 | 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                  | ✅     |
-| 33  | Core infrastructure       | CORE   | `core/security_middleware.py`, `core/database.py`, `core/config.py`                                                                             | ⬜     |
+| 33  | Core infrastructure       | CORE   | `core/security_middleware.py`, `core/database.py`, `core/config.py`                                                                             | ✅     |
 | 34  | Frontend shared           | FE     | `utils/apiCache.ts`, module axios instances, `ProtectedRoute`, global stores                                                                    | ⬜     |
 
 **35 iterations per full pass.** After 34 the rotation wraps to 00, which
