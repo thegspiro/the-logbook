@@ -46,6 +46,7 @@ const PALETTE: Record<string, string> = {
   'red-500': '#ef4444',
   'red-600': '#dc2626',
   'red-800': '#991b1b',
+  'red-900': '#7f1d1d',
   'orange-500': '#f97316',
   'orange-700': '#c2410c',
   'orange-800': '#9a3412',

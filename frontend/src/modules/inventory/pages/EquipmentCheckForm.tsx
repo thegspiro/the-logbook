@@ -2537,7 +2537,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
                   submissionOutcome?.status === 'evidence_pending' ||
                   submissionOutcome?.status === 'evidence_failed'
                 }
-                className="flex min-h-[52px] w-full items-center justify-center gap-2 rounded-xl bg-blue-800 px-4 py-3.5 text-sm font-medium text-white transition-colors hover:bg-blue-900 disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex min-h-[52px] w-full items-center justify-center gap-2 rounded-xl bg-red-800 px-4 py-3.5 text-sm font-medium text-white transition-colors hover:bg-red-900 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {submitting ? (
                   <>
