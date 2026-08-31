@@ -34,6 +34,11 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 const PALETTE: Record<string, string> = {
   white: '#ffffff',
   'slate-900': '#0f172a',
+  'amber-600': '#d97706',
+  'amber-800': '#92400e',
+  'blue-600': '#2563eb',
+  'blue-800': '#1e40af',
+  'blue-900': '#1e3a8a',
   'green-500': '#22c55e',
   'green-600': '#16a34a',
   'green-700': '#15803d',
@@ -73,7 +78,16 @@ const shade = (name: string): string => {
   return hex;
 };
 
-const SWEEP_FILES = ['CheckSweep.tsx', 'CheckSweepStop.tsx', 'CheckJumpSheet.tsx', 'CheckFinish.tsx'];
+const SWEEP_FILES = [
+  'CheckSweep.tsx',
+  'CheckSweepStop.tsx',
+  'CheckJumpSheet.tsx',
+  'CheckFinish.tsx',
+  // The accordion is held to the same bar. Its verdict triad shipped at
+  // 3.19 / 3.30 / 8.31 — two answers below AA sitting beside one at AAA, three
+  // buttons meant to read as peers — and nothing was watching.
+  'EquipmentCheckForm.tsx',
+];
 
 const read = (file: string): string => fs.readFileSync(path.join(HERE, file), 'utf8');
 
@@ -88,7 +102,9 @@ describe('sweep contrast', () => {
       // only when they genuinely apply together.
       for (const literal of source.match(/'[^'\n]*'|"[^"\n]*"/g) ?? []) {
         if (!/(?<![\w-])text-white(?![\w-])/.test(literal)) continue;
-        for (const [, name] of literal.matchAll(/(?<![\w-])bg-((?:slate|green|red|orange)-\d{3})(?![\w-/])/g)) {
+        for (const [, name] of literal.matchAll(
+          /(?<![\w-])bg-((?:slate|green|red|orange|amber|blue)-\d{3})(?![\w-/])/g
+        )) {
           const ratio = contrast(shade(name as string), PALETTE.white as string);
           if (ratio < 7) failures.push(`${file}: white on ${name as string} is ${ratio.toFixed(2)}:1, needs 7:1`);
         }
