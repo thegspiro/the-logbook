@@ -2220,6 +2220,10 @@ notification yet. The page no longer implies otherwise.
 Tell your officers about these. Each was live before this release:
 
 - **Facility files** — readable by the whole department through Documents.
+  **Closed for files uploaded from now on only.** Files that predate the
+  upgrade are still folderless and still downloadable by anyone who can open
+  Documents until you re-file them — the one item on this list that needs you
+  to do something.
 - **Notifications** — every member could read every other member's.
 - **Admin-hours progress** — an officer with compliance access could look up
   any member's progress **in any department**, not just their own.
