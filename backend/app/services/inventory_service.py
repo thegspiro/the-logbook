@@ -2107,6 +2107,62 @@ class InventoryService:
     # Pool Item Issuance Management
     # ============================================
 
+    async def _consume_from_lots(
+        self, item_id: str, organization_id: str, quantity: int
+    ) -> Optional[str]:
+        """Draw *quantity* ready units from an item's stock lots, or explain why not.
+
+        Lots are the authoritative ledger for a lot-stocked item:
+        ``receive_reorder`` records incoming stock as a lot and the
+        equipment-check swap consumes from one, while
+        ``InventoryItem.quantity`` is maintained by neither. Issuing against
+        `quantity` as well meant the same physical units could be dispensed
+        twice — once to a member from the pool, once onto an apparatus — with
+        neither consumer reducing the other's tally.
+
+        First-expired-first-out, which is what a consumable actually wants:
+        gauze that expires next month should leave before gauze that expires
+        next year. Expired lots are skipped entirely — the swap refuses them,
+        so they are not stock anyone can use.
+
+        Each lot row is locked before its read-check-decrement, matching the
+        equipment-check swap, so two concurrent issuances cannot both pass the
+        stock guard on the same units (pitfall #27).
+        """
+        today = date.today()
+        result = await self.db.execute(
+            select(InventoryLot)
+            .where(
+                InventoryLot.inventory_item_id == item_id,
+                InventoryLot.organization_id == organization_id,
+                InventoryLot.quantity > 0,
+                or_(
+                    InventoryLot.expiration_date.is_(None),
+                    InventoryLot.expiration_date >= today,
+                ),
+            )
+            # NULLs last: a lot with no expiry is the least urgent to use.
+            .order_by(
+                InventoryLot.expiration_date.is_(None),
+                InventoryLot.expiration_date,
+                InventoryLot.received_date,
+            )
+            .with_for_update()
+        )
+        lots = list(result.scalars().all())
+        available = sum(lot.quantity or 0 for lot in lots)
+        if available < quantity:
+            return f"Insufficient stock: {available} available, {quantity} requested"
+
+        remaining = quantity
+        for lot in lots:
+            if remaining <= 0:
+                break
+            take = min(lot.quantity or 0, remaining)
+            lot.quantity -= take
+            remaining -= take
+        return None
+
     async def issue_from_pool(
         self,
         item_id: UUID,
@@ -2150,7 +2206,18 @@ class InventoryService:
             if not item.active:
                 return None, "Item is retired or inactive"
 
-            if item.quantity < quantity:
+            # Lots are authoritative for an item that has any, because that is
+            # the ledger receiving writes and the equipment-check swap
+            # consumes. Membership in the totals map is what marks an item as
+            # lot-stocked, so an item whose lots have all expired reads as zero
+            # ready units rather than falling back to a `quantity` column no
+            # lot bookkeeping maintains. Same rule as
+            # get_low_stock_items_for_alerts.
+            lot_totals = await self._in_date_lot_totals(
+                str(organization_id), [str(item.id)]
+            )
+            lot_stocked = str(item.id) in lot_totals
+            if not lot_stocked and item.quantity < quantity:
                 return (
                     None,
                     f"Insufficient stock: {item.quantity} available, {quantity} requested",
@@ -2163,8 +2230,15 @@ class InventoryService:
                 if allowance_error:
                     return None, allowance_error
 
-            # Decrement pool quantity, increment issued count
-            item.quantity -= quantity
+            # Decrement whichever ledger holds this item's stock, never both.
+            if lot_stocked:
+                lot_err = await self._consume_from_lots(
+                    str(item.id), str(organization_id), quantity
+                )
+                if lot_err:
+                    return None, lot_err
+            else:
+                item.quantity -= quantity
             item.quantity_issued = (item.quantity_issued or 0) + quantity
 
             # Snapshot the replacement cost at issuance time for cost recovery
@@ -6333,7 +6407,10 @@ class InventoryService:
             received_by=current_user_id,
         )
         self.db.add(receipt)
-        item.quantity = (item.quantity or 0) + data["quantity"]
+        # Deliberately NOT crediting item.quantity as well. The lot above is
+        # the record for these units; issuance and the equipment-check swap
+        # both draw from lots for a lot-stocked item, so a second credit here
+        # let the same delivery be dispensed twice.
         row.quantity_received += data["quantity"]
         row.actual_unit_cost = data["unit_cost"]
         row.status = (

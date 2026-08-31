@@ -1,12 +1,20 @@
 """Reorder receiving against a real database.
 
-`receive_reorder` records a lot and a receipt for stock coming in, but until
-this test existed nothing asserted that the item's own on-hand count actually
-moved. It didn't: the function created the `InventoryLot` and incremented the
-reorder's `quantity_received`, then stopped -- `InventoryItem.quantity`, the
-column `issue_from_pool` and the distribution/equipment-request fulfillment
-paths all gate on, was never touched. Received stock existed in the lot table
-and nowhere an item could actually be issued from.
+`receive_reorder` records a lot and a receipt for stock coming in, and this
+file exists because nothing once asserted that the stock was actually
+issuable afterwards: the function created the `InventoryLot`, incremented the
+reorder's `quantity_received`, and stopped. Received stock existed in the lot
+table and nowhere an item could be issued from.
+
+That was first fixed by also crediting `InventoryItem.quantity`, which traded
+the bug for a worse one. The two are independently-consumed ledgers -- pool
+issuance decremented only `quantity`, the equipment-check swap decrements only
+`lot.quantity` -- so one delivery could be dispensed twice, and the drift was
+permanent because nothing ever debited `quantity` when its lot was consumed.
+
+Lots are now authoritative for an item that has any, so these tests assert the
+original intent (received stock is issuable) rather than the mechanism that
+briefly delivered it (a second counter going up).
 """
 
 import uuid
@@ -79,9 +87,7 @@ async def _make_reorder(db, org, item, quantity_requested=10, **kwargs):
 
 
 class TestReceiveReorderCreditsStock:
-    async def test_receiving_stock_increases_the_item_on_hand_quantity(
-        self, db_session
-    ):
+    async def test_received_stock_is_issuable_without_double_counting(self, db_session):
         org = await _make_org(db_session)
         user = await _make_user(db_session, org)
         item = await _make_pool_item(db_session, org, quantity=5)
@@ -109,10 +115,23 @@ class TestReceiveReorderCreditsStock:
         assert result.status == ReorderStatus.PARTIALLY_RECEIVED
 
         await db_session.refresh(item)
-        assert item.quantity == 9, (
-            "received stock must be credited to InventoryItem.quantity -- "
-            "that is the column pool issuance actually checks"
+        # The receipt is recorded once, as a lot. Crediting item.quantity too
+        # would make the same four pairs of gloves dispensable twice.
+        assert item.quantity == 5, (
+            "received stock belongs to the lot ledger only -- crediting "
+            "InventoryItem.quantity as well double-counts the delivery"
         )
+
+        # ...and it is genuinely issuable, which is what this file exists for.
+        issuance, err = await service.issue_from_pool(
+            item_id=uuid.UUID(item.id),
+            user_id=uuid.UUID(user.id),
+            organization_id=uuid.UUID(org.id),
+            issued_by=uuid.UUID(user.id),
+            quantity=4,
+        )
+        assert err is None
+        assert issuance is not None
 
     async def test_a_second_full_receipt_makes_the_item_fully_available(
         self, db_session
@@ -151,4 +170,15 @@ class TestReceiveReorderCreditsStock:
         assert result.status == ReorderStatus.RECEIVED
 
         await db_session.refresh(item)
-        assert item.quantity == 2
+        # Untouched: the two received units live in the lot created above.
+        assert item.quantity == 0
+
+        issuance, err = await service.issue_from_pool(
+            item_id=uuid.UUID(item.id),
+            user_id=uuid.UUID(user.id),
+            organization_id=uuid.UUID(org.id),
+            issued_by=uuid.UUID(user.id),
+            quantity=2,
+        )
+        assert err is None
+        assert issuance is not None
