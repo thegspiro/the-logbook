@@ -632,6 +632,12 @@ members that the rest of the schedule does not.
   implicitly. Anyone who used Platoon Management before and does not hold
   `scheduling.manage` will now get a permission error there.
 
+![Platoon Management refusing a member who does not hold scheduling.manage: an Access Denied page offering Return to Dashboard](./images/19-01-platoons-permission-error.png)
+
+_Shot as the member, because the refusal is the subject — an administrator's
+capture would show the working page and teach the opposite. The refusal is the
+page-level one, not an empty roster: nothing on `/scheduling/platoons` renders._
+
 ### The roster, and who sees it
 
 A shift tied to a platoon carries a second list under its crew board: every

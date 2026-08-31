@@ -1537,6 +1537,8 @@ A competency matrix is a per-position definition: a name, the position it applie
 - **Proficient**
 - **Expert**
 
+![The Competency tab: the Dreyfus legend above one card per matrix, each naming its position and how many skills it requires, with Add Matrix beside the heading](./images/02-67-competency-matrix.png)
+
 **Not yet built:** the department-wide member-by-competency heat-map — one row per member, one column per competency area, with a station/rank filter bar. The tab today shows only the matrix definitions; a member's own levels are readable through the API (`/training/competency/me` and `/training/competency/members/{id}`) but have no screen.
 
 ### Edge Cases
