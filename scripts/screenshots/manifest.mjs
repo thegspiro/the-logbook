@@ -1078,6 +1078,99 @@ function openPartStaffedShift(shotId) {
  * `seed_id_cards` issued to the demo member, and the row that appears is the
  * server's own answer.
  */
+/**
+ * Select a board day that has something to act on.
+ *
+ * The marker wants "the crew panel and the claim button both in frame", and a
+ * day whose shifts are all full or all closed shows the panel with no claim
+ * control at all. Walks the month for a day carrying a claimable shift rather
+ * than picking a date, which would expire with the seed.
+ */
+async function selectClaimableBoardDay(page) {
+  // Two labels, both real: a sized shift offers "Take a seat on this shift"
+  // and an unsized one "Join this shift" — which is the grey fixture, so a
+  // matcher that missed it would skip the very day this shot is about.
+  const claim = page
+    .locator("button", {
+      hasText: /^(Take a seat on this shift|Join this shift)$/,
+    })
+    .first();
+  const days = page.locator("[role='gridcell']");
+  await days.first().waitFor({ timeout: 25_000 });
+  const total = await days.count();
+  for (let i = 0; i < total; i += 1) {
+    await days.nth(i).click({ timeout: 5_000 }).catch(() => {});
+    await page.waitForTimeout(200);
+    if (await claim.count()) return;
+  }
+  throw new Error("no day on this month offers a claimable seat");
+}
+
+/**
+ * Clear one metric slot, leaving the swap mid-flight.
+ *
+ * Removal is local state until Save, so nothing is written and the shot needs
+ * no mutatesSeedData flag. The remove controls are labelled per slot, which is
+ * what makes this addressable without depending on which metrics the
+ * department happens to have chosen.
+ */
+async function clearOneMetricSlot(page) {
+  const remove = page
+    .locator("button[aria-label^='Remove '][aria-label*=' from slot ']")
+    .first();
+  await remove.waitFor({ timeout: 25_000 });
+  await remove.click();
+  await page.waitForTimeout(400);
+}
+
+/** The demo member's profile — the one `seed_id_cards` issues cards to. */
+async function openIdCardsProfile(page) {
+  const id = await page.evaluate(async () => {
+    const response = await fetch("/api/v1/users?limit=200", {
+      credentials: "include",
+    });
+    if (!response.ok) return null;
+    const body = await response.json();
+    const users = Array.isArray(body) ? body : body.users || body.items || [];
+    const target = users.find((u) => u.username === "nbelhaj");
+    return target ? target.id : null;
+  });
+  if (!id) throw new Error("the demo member is not in the roster");
+  await page.goto(`${new URL(page.url()).origin}/members/${id}`, {
+    waitUntil: "domcontentloaded",
+  });
+  await page
+    .locator("h2", { hasText: /^ID Cards$/ })
+    .waitFor({ timeout: 20_000 });
+  await page.waitForTimeout(500);
+}
+
+/**
+ * Open a Medic 3 check and leave the two sealed bags in opposite states.
+ *
+ * The first panel is left alone: it prefills from the last count, so it
+ * already reads "matches" and offers the clearing shortcut. The second is
+ * given a different number, which is the only way to reach "Record seal" —
+ * the mismatch is a tag the crew read, not a value anything stores.
+ */
+async function openSealPanels(page) {
+  await clickByName("Unscheduled checklist")(page);
+  await clickByName("Medic 3 Supply Check")(page);
+  const matching = page.locator("#seal-drug-bag");
+  await matching.waitFor({ timeout: 25_000 });
+  // The prefill lands only once /last-seals answers, and an empty field shows
+  // neither state the marker is about.
+  await page.waitForFunction(
+    () => {
+      const el = document.querySelector("#seal-drug-bag");
+      return el instanceof HTMLInputElement && el.value.trim() !== "";
+    },
+    { timeout: 20_000 },
+  );
+  await page.locator("#seal-trauma-bag").fill("M3-41190");
+  await page.waitForTimeout(400);
+}
+
 async function armStationAndTap(page) {
   // Pick something to check into first: Start is disabled until a target is
   // chosen, so pressing it before this is a silent no-op. "Event or meeting"
@@ -11961,6 +12054,121 @@ export const SHOTS = [
       await page.waitForTimeout(400);
     },
     selector: "div[role='dialog']",
+  },
+  {
+    // Desktop board. August already carries red, green and blue for the demo
+    // member; `seed_unsized_shift` supplies the grey one, which is the only
+    // state a department cannot produce by configuring things properly.
+    // Shot as the member, because "one blue with the demo member on it" is a
+    // statement about whose board this is.
+    id: "19-34-schedule-board-desktop",
+    doc: "19-august-2026-release-changes.md",
+    line: 1150,
+    anchor: "the Schedule board, desktop",
+    alt: "The month board with all four chip states: a red shift with open seats, a green full one, a blue one the member is already on, and a grey one that names neither positions nor a minimum",
+    route: "/scheduling?tab=schedule",
+    auth: "member",
+    prepare: selectClaimableBoardDay,
+    fullPage: false,
+  },
+  {
+    // The phone half of the pair. The marker's "bottom navigation should be
+    // absent" is not a styling note: the day sheet registers as an overlay
+    // surface, which hides the bar so its 56px cannot paint over the sheet.
+    id: "19-35-schedule-board-phone",
+    doc: "19-august-2026-release-changes.md",
+    line: 1156,
+    anchor: "the Schedule board, phone",
+    alt: "The same month on a phone: the bar grid with a day sheet open over it, and no bottom navigation while the sheet is up",
+    route: "/scheduling?tab=schedule",
+    auth: "member",
+    viewport: { width: 390, height: 844 },
+    prepare: selectClaimableBoardDay,
+    fullPage: false,
+  },
+  {
+    id: "19-36-standing-shift-dialog",
+    doc: "19-august-2026-release-changes.md",
+    line: 1189,
+    anchor: "the standing shift dialog",
+    alt: "The standing-shift dialog on a Tuesday night shift: a biweekly pattern with the horizon left at its default a year out, and the dialog's own action row in frame",
+    route: "/scheduling?tab=schedule",
+    auth: "member",
+    prepare: openStandingShiftDialog,
+    selector: "div[role='dialog']",
+  },
+  {
+    // Officers only -- a member cannot issue, relabel or revoke a card, not
+    // even their own -- so this is the administrator's session by default.
+    id: "19-37-member-id-cards",
+    doc: "19-august-2026-release-changes.md",
+    line: 1272,
+    anchor: "member profile → ID Cards panel",
+    alt: "The ID Cards panel on a demo member's profile: one active card and one revoked, each showing only the last four characters of its serial",
+    route: "/members",
+    prepare: openIdCardsProfile,
+    selector: "div.card:has(h2:text-is('ID Cards'))",
+  },
+  {
+    // Tablet width, which is how a door station is actually used, and the
+    // shared half of a pair with guide 10.
+    id: "19-38-check-in-station-armed",
+    doc: "19-august-2026-release-changes.md",
+    line: 1315,
+    anchor: "the check-in station, armed",
+    alt: "The check-in station armed against a drill night on a tablet, with one successful tap already in the session list",
+    route: "/members/check-in-station",
+    viewport: { width: 1024, height: 768 },
+    prepare: armStationAndTap,
+    fullPage: true,
+  },
+  {
+    id: "10-21-check-in-station-tablet",
+    doc: "10-mobile-pwa.md",
+    line: 873,
+    anchor: "the check-in station on a tablet-width viewport, armed",
+    alt: "The station left running on a tablet: armed, waiting for the next card, with the previous tap recorded beneath it",
+    route: "/members/check-in-station",
+    viewport: { width: 1024, height: 768 },
+    prepare: armStationAndTap,
+    fullPage: true,
+  },
+  {
+    // No seeding: the settings tab renders from the metric registry, and the
+    // controls are buttons and a switch rather than a native select, so the
+    // swap is photographable in place.
+    id: "19-39-admin-metrics-settings",
+    doc: "19-august-2026-release-changes.md",
+    line: 1397,
+    anchor: "the metrics settings screen",
+    alt: "Members metrics settings at department scope: three chooseable slots with one cleared for a swap, the applies-to-everyone switch, and slot four shown as fixed",
+    route: "/members/admin?tab=settings",
+    prepare: clearOneMetricSlot,
+    fullPage: true,
+  },
+  {
+    id: "19-40-seal-panel",
+    doc: "19-august-2026-release-changes.md",
+    line: 1478,
+    anchor: "the seal panel on a check",
+    alt: "Two sealed bags side by side: one whose tag matches the last count and offers to clear the contents, and one whose number differs and offers only Record seal with a hand count",
+    route: "/scheduling?tab=equipment-checks",
+    auth: "member",
+    prepare: openSealPanels,
+    fullPage: true,
+  },
+  {
+    // The member's own page, necessarily: the administrator has hours in all
+    // six categories, which satisfies "at least three" and makes "one category
+    // with none" impossible.
+    id: "19-41-my-admin-hours",
+    doc: "19-august-2026-release-changes.md",
+    line: 1552,
+    anchor: "the rebuilt My Admin Hours page",
+    alt: "My Admin Hours over all time: the category breakdown with share bars, the requirement-progress section, and the muted line naming the categories with nothing logged",
+    route: "/admin-hours",
+    auth: "member",
+    fullPage: true,
   },
   {
     // The healthy status line the marker asked for cannot be produced here,
