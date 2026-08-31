@@ -212,7 +212,17 @@ DRIVER_NOT_QUALIFIED = re.compile(r"LB-SCHED-001")
 # generically because the sentence names whichever position refused
 # ("firefighter", "officer", "driver", …), unlike the driver-specific code
 # above.
-POSITION_NOT_ELIGIBLE = re.compile(r"no longer eligible for the .+ position")
+#
+# Two sentences, one gate. `_validate_assignment` reports "eligible for this
+# shift" when the member may hold *no* seat on it and "eligible for the X
+# position" when they may hold some seat but not that one. The first branch
+# arrived on 2026-08-24 (ea47d4ab, closing an eligibility bypass on unscoped
+# offers) and this matcher predated it, so a refusal the docstring below
+# already calls ordinary began failing the whole scheduling step again — the
+# fourth time this has happened by a different door.
+POSITION_NOT_ELIGIBLE = re.compile(
+    r"no longer eligible for (?:this shift|the .+ position)"
+)
 
 # The seeder is single-threaded, but a re-run tops up crew on shifts an
 # earlier run already partly filled, and the two runs' view of "how many
