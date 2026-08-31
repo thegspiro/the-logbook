@@ -2,6 +2,17 @@
 
 The Scheduling module manages shift scheduling, member self-service signup, swap and time-off requests, shift templates, and scheduling reports.
 
+> **Equipment checklists moved to Inventory on 2026-08-31.** A checklist is a
+> list of inventory items, so authoring, reporting and the fleet views now live
+> in the [Inventory module](Module-Inventory#equipment-checklists-moved-here-2026-08-31)
+> under `/inventory/checklists`. Scheduling still owns **performing** a check:
+> members start one from the Equipment Checks tab on the shift screen, and
+> check-in and finalize still gate on outstanding checks. A shift template can
+> now also **name** the checklists its shifts carry, edited under the vehicle
+> picker — see the Inventory page for how that resolves. Sections below that
+> describe the checks themselves are kept for the shift-side behaviour; the old
+> `/inventory/checklists*` URLs no longer exist.
+
 ---
 
 ## Key Features
@@ -568,11 +579,11 @@ assignments, check-in state) remains visible to any member.
 
 ## Pages
 
-| URL                               | Page                                    | Permission                                                                |
-| --------------------------------- | --------------------------------------- | ------------------------------------------------------------------------- |
-| `/scheduling`                     | Scheduling Hub                          | Authenticated                                                             |
-| `/scheduling/supply/expiring`     | Expiring on Apparatus (supply worklist) | any of `scheduling.manage`, `equipment_check.view`, `inventory.view`      |
-| `/scheduling/apparatus-inventory` | Apparatus Inventory _(2026-08-10)_      | any of `equipment_check.submit`, `equipment_check.view`, `inventory.view` |
+| URL                                         | Page                                    | Permission                                                                |
+| ------------------------------------------- | --------------------------------------- | ------------------------------------------------------------------------- |
+| `/scheduling`                               | Scheduling Hub                          | Authenticated                                                             |
+| `/inventory/admin/checklists/supply`        | Expiring on Apparatus (supply worklist) | any of `scheduling.manage`, `inventory.check_view`, `inventory.manage`    |
+| `/inventory/checklists/apparatus-inventory` | Apparatus Inventory _(2026-08-10)_      | any of `inventory.check_submit`, `inventory.check_view`, `inventory.view` |
 
 ### Scheduling Tabs
 
@@ -632,15 +643,15 @@ when the picker lands.
 ### Equipment-Check Supply Endpoints _(2026-08-10)_
 
 Everything below lives under `/api/v1/equipment-checks`. Reads accept
-`equipment_check.view` / `inventory.view`. Writes are split by intent
+`inventory.check_view` / `inventory.view`. Writes are split by intent
 _(tightened 2026-08-11)_:
 
 - **Reporting what you just used** (`POST /items/{id}/used`, and deployed-lot
-  quantity updates) accepts `equipment_check.submit` — the default member
-  position — as well as `equipment_check.manage` / `inventory.manage`.
+  quantity updates) accepts `inventory.check_submit` — the default member
+  position — as well as `inventory.check_manage` / `inventory.manage`.
   Recording consumption is crew work; gating it behind a manage permission is
   what leaves the gap for the next morning's check to find.
-- **Corrections of record** now require `equipment_check.manage` or
+- **Corrections of record** now require `inventory.check_manage` or
   `inventory.manage` only: withdrawing a restock report
   (`DELETE /items/{id}/used`), swapping a ready-stock lot onto the apparatus
   (`POST /items/{id}/swap`), and editing a deployed lot's identity fields
@@ -806,9 +817,9 @@ POST   /templates/{template_id}/inventory-links          # Apply a reviewed set 
 | `/scheduling/patterns`                              | Scheduling Patterns              | `scheduling.manage`      |
 | `/scheduling/reports`                               | Scheduling Reports               | `scheduling.manage`      |
 | `/scheduling/settings`                              | Scheduling Settings              | `scheduling.manage`      |
-| `/scheduling/equipment-check-templates/new`         | Equipment Check Template Builder | `equipment_check.manage` |
-| `/scheduling/equipment-check-templates/:templateId` | Edit Equipment Check Template    | `equipment_check.manage` |
-| `/scheduling/equipment-check-reports`               | Equipment Check Reports          | `scheduling.manage`      |
+| `/inventory/admin/checklists/templates/new`         | Equipment Check Template Builder | `inventory.check_manage` |
+| `/inventory/admin/checklists/templates/:templateId` | Edit Equipment Check Template    | `inventory.check_manage` |
+| `/inventory/admin/checklists/reports`               | Equipment Check Reports          | `inventory.check_view`   |
 
 ### Data Model Changes (2026-03-19)
 

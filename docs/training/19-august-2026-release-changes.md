@@ -1011,7 +1011,7 @@ check, one set of answers._
 - **A compartment cannot be its own parent** — the tree rejects a cycle rather
   than accepting it and failing later.
 - **Standalone (non-shift) checks are unchanged for ordinary members.** The
-  endpoint accepts `equipment_check.submit` **or** `equipment_check.manage`, so
+  endpoint accepts `inventory.check_submit` **or** `inventory.check_manage`, so
   a member who could start an ad-hoc check before can still start one. Do not
   change anybody's role over this.
 - **Expired-equipment failures are decided from inventory at submission**,

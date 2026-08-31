@@ -232,9 +232,9 @@ Times are printed in the department's configured timezone, not UTC.
 
 ### Apparatus check sheet
 
-**Required permission:** `equipment_check.view`, `equipment_check.submit`, or
-`equipment_check.manage` — the same permissions that open the template itself.
-A member who only holds `equipment_check.submit` gets the checklists for the
+**Required permission:** `inventory.check_view`, `inventory.check_submit`, or
+`inventory.check_manage` — the same permissions that open the template itself.
+A member who only holds `inventory.check_submit` gets the checklists for the
 positions they actually check, exactly as they do on screen.
 
 From **Equipment Check Templates**, click the printer icon on a template. The
@@ -1233,7 +1233,7 @@ see its tracked positions compartment by compartment: what is aboard, the lots
 and expiration dates on each one, and the ready stock on the shelf behind it.
 
 **No check is required and no shift is required.** It is readable at any hour by
-any member with `equipment_check.submit` — the default member position — because
+any member with `inventory.check_submit` — the default member position — because
 recording what you just used is crew work, and putting it behind an officer
 permission is the thing that leaves the bracket empty until morning.
 
@@ -1470,7 +1470,7 @@ already says.
 | A position carries lots **and** you are inside a check           | You get the per-lot **Correct** control only. The older single-date "replaced — new date" affordance appears only where there are no lots to correct, so one fact never has two contradictory inputs                              |
 | A template is cloned to a second rig                             | The catalog link comes with it. It used to be dropped silently, which is how a department stands up its second engine with nothing tracked                                                                                        |
 | A shelf lot is deleted while units from it are on a truck        | The truck's record survives. Lot number and expiration are copied onto the deployed record rather than read through the shelf lot                                                                                                 |
-| A member has `equipment_check.submit` but not `inventory.manage` | They can report use, recount, swap and correct lots. They cannot create a new catalog item from the quick-add bar                                                                                                                 |
+| A member has `inventory.check_submit` but not `inventory.manage` | They can report use, recount, swap and correct lots. They cannot create a new catalog item from the quick-add bar                                                                                                                 |
 
 ### Shift Finalization _(2026-03-28)_
 
@@ -2853,7 +2853,7 @@ same record.
 Also changed:
 
 - **Standalone (non-shift) equipment checks still accept
-  `equipment_check.submit`** as well as `equipment_check.manage`, so ordinary
+  `inventory.check_submit`** as well as `inventory.check_manage`, so ordinary
   members keep the ad-hoc check they had.
 - **Deep nested storage paths now fit** in a check item's recorded location.
 - **A compartment cannot be made its own parent.**

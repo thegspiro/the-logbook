@@ -49,12 +49,96 @@ The Inventory module tracks department equipment, member assignments, pool/quant
 - **Dated Stock Lots** — _(2026-08-10)_ Consumables are held as dated lots (`inventory_lots`) rather than one flat count. **On-hand comes from in-date lots** for any item that has them and from `InventoryItem.quantity` for the rest; expired lots count as zero, because the equipment-check swap refuses them and counting them would hide the shortage most in need of ordering. One shared helper backs the reorder alert, the items grid and the CSV export, so the three cannot disagree
 - **Receive Stock (bulk lots)** — _(2026-08-10)_ Record a whole delivery in one pass: item, lot number, expiration and quantity per line, one received date for the lot of it. `POST /inventory/lots/bulk` validates every item is in the caller's org and **applies all lines or none** — a partly applied delivery is worse than a rejected one
 - **Add Several (bulk item create)** — _(2026-08-10)_ Paste a list of catalog items. Names already in the catalog are **skipped and reported, not rejected**, so a list can be re-pasted after it grows; any validation failure writes nothing
-- **Shelf-to-Truck Link** — _(2026-08-10)_ An inventory item's stock tab lists the apparatus checklist positions it fills and what each truck is carrying now (`GET /equipment-checks/supply/item-deployments/{id}`) — the direction a recall or an expiring lot is actually worked from, because the officer is holding the item. The forward direction lives in the [Scheduling module](Module-Scheduling)'s supply worklist
+- **Shelf-to-Truck Link** — _(2026-08-10)_ An inventory item's stock tab lists the apparatus checklist positions it fills and what each truck is carrying now (`GET /equipment-checks/supply/item-deployments/{id}`) — the direction a recall or an expiring lot is actually worked from, because the officer is holding the item. The forward direction is the [Expiring on Apparatus](#equipment-checklists-moved-here-2026-08-31) worklist
 - **Vendor Cleanup** — _(2026-08-16)_ Two tools for the mess free text leaves behind. **Merge** folds a duplicate into another vendor — items, reorder requests and contacts move across and the duplicate is removed, freeing its name; the target's own details are never overwritten. **Attach** works from the other end: the vendors screen counts supplier names typed onto rows that were never linked ("3 supplier names not on the list — named by 13 items and 3 reorders") and offers each one as either a new vendor or an attachment to an existing one, linking every row carrying that name in a single pass. Names are matched case-insensitively, and rows already linked to some other vendor are left alone — that is a decision, not a leftover
 - **Vendor Tracking** — _(2026-08-16)_ Suppliers are rows (`inventory_vendors`), not a hand-typed name on each item. A vendor carries the company's own details (main line, orders inbox, remit-to address, account number, payment terms) plus a contact list (`inventory_vendor_contacts`) — the rep who quotes turnout gear is rarely the number to call about a warranty claim, so each vendor holds as many named people as it needs, exactly one flagged primary. Items and reorder requests link to a vendor (`vendor_id`), so a vendor card shows live purchasing history — items bought, open reorders, total purchased — and an item's detail page names the supplier to call. The old free-text `vendor` column is kept as a fallback for rows nobody has linked; migration `20260816_0003` turns each distinct name already on file into a vendor (case-folded per organization) and links the items and reorders that named it. Deactivating a vendor keeps those links: "we don't buy from them anymore" must not erase where a helmet in service came from
 - **CSV Import: Unmatched Supplier Report** — _(2026-08-17)_ An import whose `Vendor` cell names a supplier not on file still imports the row and keeps the name as free text; the result now lists those names so they can be attached afterwards. Spelling variants of one name (`Gals`/`gals`/`GALS`) are folded to a single entry, because **Attach all** handles them in one pass and listing three implied three pieces of work. A name is only reported once its row actually imported — `create_item` still rejects rows the CSV parse accepted (duplicate serial, pool item with no quantity), so banking the name earlier sent readers to Attach for rows that were never written. A name matching a **deactivated** vendor now **links to it** rather than being reported as unmatched: vendor creation rejects inactive duplicates, so the previous advice was a dead end, and deactivation deliberately preserves every existing link
 - **Impact Plan PDF: untrusted text is escaped** — _(2026-08-17)_ ReportLab's `Paragraph` parses a mini-HTML dialect, so an organization name, a filter parameter, a member's full name or a contact string containing `<` or `&` was interpreted as markup and corrupted or failed the export. All four are escaped now; cells drawn as plain strings (membership number, rank, station) were never affected
 - **RFC 4180 CSV Parsing** — _(2026-08-10)_ CSV import and paste paths use a real parser. `"Gauze Pads, 4x4 Sterile"` is one field; the previous `split(',')` readers shifted every column after it, so the import preview disagreed with what the import would actually do
+
+---
+
+## Equipment Checklists _(moved here 2026-08-31)_
+
+An equipment checklist is the pass a crew makes over an apparatus — every
+compartment, every position, what should be aboard and what actually is. It was
+part of Shift Scheduling until 2026-08-31 and now belongs to Inventory, because
+a checklist is a list of **inventory items**: a checklist position carries an
+`inventory_item_id` into the catalog, the lots aboard a truck are snapshots of
+`inventory_lots` rows, and the supply worklist is a stock-room job.
+
+**Inventory owns authoring and oversight. Scheduling still owns performing.**
+A member starts and completes a check from their shift
+(`/scheduling?tab=equipment-checks`), and shift check-in and finalize still gate
+on outstanding checks. Everything else lives here.
+
+| Page                                             | URL                                          | Permission                                                              |
+| ------------------------------------------------ | -------------------------------------------- | ----------------------------------------------------------------------- |
+| Fleet readiness board                            | `/inventory/checklists`                      | `inventory.check_view` or `scheduling.manage`                           |
+| Check log (expected vs. actual)                  | `/inventory/checklists/log`                  | `inventory.check_submit`, `inventory.check_view` or `scheduling.manage` |
+| One apparatus's checks                           | `/inventory/checklists/apparatus/{id}`       | `inventory.check_view` or `scheduling.manage`                           |
+| Apparatus inventory (standing view of one truck) | `/inventory/checklists/apparatus-inventory`  | `inventory.check_submit`, `inventory.check_view` or `inventory.view`    |
+| Checklist builder                                | `/inventory/admin/checklists/templates/{id}` | `inventory.check_manage`                                                |
+| Check reports                                    | `/inventory/admin/checklists/reports`        | `inventory.check_view`                                                  |
+| Expiring on apparatus                            | `/inventory/admin/checklists/supply`         | `scheduling.manage`, `inventory.check_view` or `inventory.manage`       |
+
+The API keeps its `/api/v1/equipment-checks` prefix — the paths did not move,
+only ownership — but the router is gated on the **Inventory** module now. A
+department that had switched Inventory off has it switched back on by migration
+`20260830_0002` if it uses checks at all; if it is later switched off
+deliberately, the Equipment Checks tab disappears from the shift screen rather
+than loading a page that cannot reach its own API.
+
+### Which checklists a shift carries
+
+Two routes, and the first one wins outright.
+
+**A shift template can name them.** `shift_template_equipment_checks` links a
+shift template to the checklists its shifts carry, in the order an officer
+arranged them. Edited on the shift template itself, under the vehicle picker.
+
+**Otherwise, the apparatus decides**, as it always has: checklists assigned to
+that specific apparatus, and failing that, ones written for its apparatus type.
+
+Naming checklists **replaces** apparatus resolution rather than adding to it —
+the officer said what this shift carries, and the apparatus-type default is not
+a second opinion to be merged in. Naming none falls back, which is what every
+shift did before the table existed, so nothing changed for existing
+departments. Clearing every checklist is therefore a real instruction, not a
+no-op: it restores apparatus resolution.
+
+One case is easy to get backwards: a template whose links all point at
+**deactivated** checklists resolves to **nothing**, not to the apparatus
+default. The fallback is decided by whether the template named any checklists,
+not by whether the lookup returned rows — falling back there would report a
+crew as missing a check nobody asked them for.
+
+Resolution happens in three places and they must agree, or a reminder names one
+set of checklists and the crew is shown another:
+`EquipmentCheckService._resolve_templates` (what the crew is offered),
+`scheduled_tasks.resolve_check_templates` (what the reminders name) and
+`EquipmentReadinessService` (what the fleet board scores against).
+
+**`shifts.template_id`** is what makes this resolvable at all. A shift used to
+copy a template's fields and keep no reference back; it now records which
+template it came from. It cannot be backfilled — nothing on an existing shift
+identifies its originating template — so shifts created before the column carry
+NULL and resolve by apparatus, exactly as they did.
+
+### Permissions
+
+Renamed on 2026-08-31 from `equipment_check.*`:
+
+| Permission               | Grants                                                |
+| ------------------------ | ----------------------------------------------------- |
+| `inventory.check_view`   | Read templates, results, reports and the fleet board  |
+| `inventory.check_manage` | Create and edit checklists                            |
+| `inventory.check_submit` | Perform a check (held by the default member position) |
+
+`app.core.permissions.LEGACY_PERMISSION_ALIASES` keeps the old names working
+for any stored row migration `20260830_0001` could not reach. Being in the
+inventory namespace, all three are now granted by the `inventory.*` module
+wildcard, exactly as `view_medical` / `manage_medical` already were.
 
 ---
 

@@ -1,5 +1,14 @@
 # Scheduling & Shifts Module
 
+> **Equipment checklists moved to the Inventory module on 2026-08-31.**
+> Authoring, reporting and the fleet views live under `/inventory/checklists`
+> and `/inventory/admin/checklists`; the permissions were renamed from
+> `equipment_check.*` to `inventory.check_*`; and the `/api/v1/equipment-checks`
+> router is gated on the Inventory module. Scheduling still owns _performing_
+> a check from the shift screen. Sections below describing checks are kept for
+> that shift-side behaviour — the URLs and permission names in them are
+> historical. See `wiki/Module-Inventory.md` for the current picture.
+
 Comprehensive shift scheduling, member signup, swap/time-off management, templates, patterns, and reporting.
 
 ## Overview
@@ -1978,10 +1987,10 @@ the loop between the shelf (Inventory) and the truck (Equipment Checks).
 
 ### New pages
 
-| URL                               | Page                                                                | Permission                                                                |
-| --------------------------------- | ------------------------------------------------------------------- | ------------------------------------------------------------------------- |
-| `/scheduling/supply/expiring`     | Expiring on Apparatus — the supply worklist                         | any of `scheduling.manage`, `equipment_check.view`, `inventory.view`      |
-| `/scheduling/apparatus-inventory` | Apparatus Inventory — standing view of one truck, outside any check | any of `equipment_check.submit`, `equipment_check.view`, `inventory.view` |
+| URL                                         | Page                                                                | Permission                                                                |
+| ------------------------------------------- | ------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| `/inventory/admin/checklists/supply`        | Expiring on Apparatus — the supply worklist                         | any of `scheduling.manage`, `inventory.check_view`, `inventory.view`      |
+| `/inventory/checklists/apparatus-inventory` | Apparatus Inventory — standing view of one truck, outside any check | any of `inventory.check_submit`, `inventory.check_view`, `inventory.view` |
 
 The worklist is reached from the **Supply** tile on the Scheduling hub (which
 carries a count badge) and from the Gear Admin hub. The apparatus view is
@@ -1998,7 +2007,7 @@ reached from **My Equipment Checklists → Apparatus Inventory**.
 
 ### Endpoints
 
-All under `/api/v1/equipment-checks`. **Writes accept `equipment_check.submit`**
+All under `/api/v1/equipment-checks`. **Writes accept `inventory.check_submit`**
 — the default member position — as well as the manage permissions.
 
 ```
@@ -2146,14 +2155,14 @@ else (missed checks, failed items, an unfinished check) is _needs attention_.
 
 ### Routes
 
-| Route                                | Purpose                                                      | Permission                                                                   |
-| ------------------------------------ | ------------------------------------------------------------ | ---------------------------------------------------------------------------- |
-| `/scheduling/equipment`              | Fleet board — one card per apparatus                         | any of `equipment_check.view`, `scheduling.manage`                           |
-| `/scheduling/equipment/checks`       | Check log, fleet-wide (grid + log)                           | any of `equipment_check.submit`, `equipment_check.view`, `scheduling.manage` |
-| `/scheduling/equipment/:apparatusId` | Apparatus detail — Checks / Inventory / Findings / Check log | any of `equipment_check.view`, `scheduling.manage`                           |
+| Route                                          | Purpose                                                      | Permission                                                                   |
+| ---------------------------------------------- | ------------------------------------------------------------ | ---------------------------------------------------------------------------- |
+| `/inventory/checklists`                        | Fleet board — one card per apparatus                         | any of `inventory.check_view`, `scheduling.manage`                           |
+| `/inventory/checklists/log`                    | Check log, fleet-wide (grid + log)                           | any of `inventory.check_submit`, `inventory.check_view`, `scheduling.manage` |
+| `/inventory/checklists/apparatus/:apparatusId` | Apparatus detail — Checks / Inventory / Findings / Check log | any of `inventory.check_view`, `scheduling.manage`                           |
 
 The Equipment Checks tab (`EquipmentChecksTab`) branches on
-`equipment_check.view`: holders get the fleet board, everyone else keeps
+`inventory.check_view`: holders get the fleet board, everyone else keeps
 `MyChecklistsPage`. That is not a preference — the fleet endpoint is gated and
 would 403 a plain member.
 
@@ -2163,8 +2172,8 @@ All under `/api/v1/equipment-checks`.
 
 | Method | Path     | Notes                                                                                                                                                                                                                                                                           |
 | ------ | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `GET`  | `/fleet` | Readiness roll-up. `equipment_check.view`. Params: `strip_dates` (1–90), `expiring_days` (1–365)                                                                                                                                                                                |
-| `GET`  | `/log`   | Expected-vs-actual. Open to any authenticated member; **the server sets the scope** — without `equipment_check.view` the caller gets only their own checks and no grid, because a matrix of one member's checks reads as fleet coverage. Params: `dates` (1–90), `apparatus_id` |
+| `GET`  | `/fleet` | Readiness roll-up. `inventory.check_view`. Params: `strip_dates` (1–90), `expiring_days` (1–365)                                                                                                                                                                                |
+| `GET`  | `/log`   | Expected-vs-actual. Open to any authenticated member; **the server sets the scope** — without `inventory.check_view` the caller gets only their own checks and no grid, because a matrix of one member's checks reads as fleet coverage. Params: `dates` (1–90), `apparatus_id` |
 
 `ApparatusInventoryPage` takes an optional `apparatusId` prop; supplied, it
 drops its own picker and fleet-walk and becomes the detail page's Inventory

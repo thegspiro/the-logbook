@@ -673,7 +673,7 @@ The Equipment Check system provides structured vehicle and equipment inspections
 - **Deficiency tracking**: When any equipment check item fails, the apparatus is automatically flagged as deficient (`has_deficiency = true`, `deficiency_since` records the date). The deficiency badge appears on the apparatus list and detail pages
 - **Auto-clear**: When a subsequent full check passes all items, the deficiency flag is automatically cleared
 - **Failure notifications**: Failed check items trigger in-app notifications to shift officers and configurable roles (e.g., apparatus maintenance officer)
-- **Cross-reference**: Equipment check reports are accessible from both the Scheduling module (`/scheduling/equipment-check-reports`) and the apparatus detail page
+- **Cross-reference**: Equipment check reports are accessible from both the Scheduling module (`/inventory/admin/checklists/reports`) and the apparatus detail page
 
 > **Corrected 2026-08-12.** The **Deficiency badge is real** and appears on
 > both the list row and the detail header. The **date is not**:

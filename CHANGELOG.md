@@ -7,6 +7,55 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Equipment checklists moved from Scheduling to Inventory (2026-08-31)
+
+**Changed — action required**
+
+Equipment checklists are now part of the **Inventory** module rather than
+Shift Scheduling. A checklist is a list of inventory items — a checklist
+position already pointed at an item in the catalog, and the lots aboard a truck
+are drawn from the same stock — so the feature now lives with the things it
+tracks. Crews still start and complete checks from their shift; only authoring,
+reporting and the fleet views moved.
+
+Three things change for existing departments:
+
+- **The pages have new addresses, and the old ones no longer work.** Bookmarks
+  and links in previously-sent emails will land on the dashboard.
+
+  | Was                                       | Is now                                      |
+  | ----------------------------------------- | ------------------------------------------- |
+  | `/scheduling/equipment-check-templates/…` | `/inventory/admin/checklists/templates/…`   |
+  | `/scheduling/equipment-check-reports`     | `/inventory/admin/checklists/reports`       |
+  | `/scheduling/supply/expiring`             | `/inventory/admin/checklists/supply`        |
+  | `/scheduling/equipment`                   | `/inventory/checklists`                     |
+  | `/scheduling/equipment/checks`            | `/inventory/checklists/log`                 |
+  | `/scheduling/equipment/{id}`              | `/inventory/checklists/apparatus/{id}`      |
+  | `/scheduling/apparatus-inventory`         | `/inventory/checklists/apparatus-inventory` |
+
+  The Equipment Checks tab on the shift screen is unchanged.
+
+- **The permissions were renamed** from `equipment_check.view` / `.manage` /
+  `.submit` to `inventory.check_view` / `inventory.check_manage` /
+  `inventory.check_submit`. Every position keeps exactly the authority it had —
+  a migration renames the stored grants, and the old names keep working for any
+  row it cannot reach. One consequence worth knowing: a position holding the
+  `inventory.*` wildcard now also grants the checklist permissions, as it
+  already did for medical supplies.
+
+- **Checklists now require the Inventory module.** A department that had
+  switched Inventory off has it switched back on automatically if it uses
+  equipment checks. If Inventory is later switched off deliberately, the
+  Equipment Checks tab disappears from the shift screen rather than erroring.
+
+**Added**
+
+- A shift template can now **name the equipment checklists its shifts carry**,
+  instead of every shift working them out from its vehicle. Naming them
+  replaces the vehicle's own; leaving them unticked keeps today's behaviour, so
+  nothing changes until a department uses it. Edit them on the shift template,
+  under the vehicle picker.
+
 ### Editing a medical supply category or item left no audit trail (2026-08-30)
 
 **Fixed**

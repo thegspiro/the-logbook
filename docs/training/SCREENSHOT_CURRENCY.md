@@ -4071,7 +4071,7 @@ seventeenth is the reason this section exists.
 
 **`03-22-equipment-check-builder` was photographing the wrong page, and had
 been for as long as it existed.** Its route was
-`/scheduling/equipment-check-templates/**new**` — the blank create form — and it
+`/inventory/admin/checklists/templates/**new**` — the blank create form — and it
 carried `allowEmptyState: true` with a note calling that correct, "the shot is
 of the builder layout". But the guide text this image sits under is about
 compartments, item check types and drag-to-reorder, and the page in the image
