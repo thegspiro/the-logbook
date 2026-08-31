@@ -31,6 +31,18 @@ export interface SealState {
    * description — `isSealed` already says the container is a sealed one.
    */
   status?: 'intact' | 'broken' | undefined;
+  /**
+   * Whether the tag is standing in for the contents count. Defaults to true
+   * for an intact tag.
+   *
+   * False for an intact tag whose number is not the number on record. That is
+   * not a broken seal — the tag is physically fine — but it is not evidence
+   * either: an unrecognised number is evidence the container was opened, not
+   * evidence it was not, so the count still has to be done. The sweep's own
+   * two buttons never produce this state; a draft resumed from the accordion,
+   * which asks the fuller question, can.
+   */
+  cleared?: boolean | undefined;
   /** The tag currently on the seal. */
   tagNumber?: string | null | undefined;
   /** Displayed, never parsed — "02:41" or a full timestamp, as recorded. */
@@ -73,7 +85,7 @@ export function contentsAreSealed(stop: LapStop, today: Date = new Date()): bool
   // `=== 'intact'`, not `!== 'broken'`: an absent seal means nobody has read
   // the tag yet, and the earlier form cleared the counting for a crew that had
   // not looked at it — the one thing a seal is supposed to be evidence of.
-  if (!stop.isSealed || stop.seal?.status !== 'intact') return false;
+  if (!stop.isSealed || stop.seal?.status !== 'intact' || stop.seal.cleared === false) return false;
   // An intact tag stops standing in for the contents the moment something
   // inside has to come out: the crew is going in regardless, and once the
   // container is open the seal is no longer evidence of anything.

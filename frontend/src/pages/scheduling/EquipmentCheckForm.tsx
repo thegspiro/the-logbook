@@ -70,7 +70,11 @@ import type {
   LastSealRecord,
   DeployedLot,
 } from '../../modules/scheduling/types/equipmentCheck';
-import { CHECK_TYPE_LABELS, ExpiredStockDisposition } from '../../modules/scheduling/types/equipmentCheck';
+import {
+  CHECK_TYPE_LABELS,
+  ExpiredStockDisposition,
+  soonestExpiration,
+} from '../../modules/scheduling/types/equipmentCheck';
 import { flattenCompartmentTree } from '../../modules/scheduling/utils/compartmentTree';
 import LotsAboardPanel from '../../modules/scheduling/components/LotsAboardPanel';
 import SealPanel from '../../modules/scheduling/components/SealPanel';
@@ -203,24 +207,6 @@ const ShortfallList: React.FC<{
  * UTC midnight and call an item expired on its own expiry day in any timezone
  * behind UTC — the badge would say EXPIRED while the server passed it.
  */
-/**
- * The soonest date actually aboard, falling back to the position's own column.
- *
- * A position holding three boxes holds three dates, and the truck is exposed
- * by its oldest. Reading the column instead would report the date of whichever
- * lot was restocked last.
- */
-function soonestExpiration(item: CheckTemplateItem): string | undefined {
-  const dated = (item.lotsAboard ?? []).filter((lot) => lot.expirationDate);
-  if (dated.length > 0) {
-    // The API sorts them, but a verdict that takes an apparatus out of service
-    // should not depend on the order a payload arrived in.
-    return dated.reduce((soonest, lot) => ((lot.expirationDate ?? '') < (soonest.expirationDate ?? '') ? lot : soonest))
-      .expirationDate;
-  }
-  return item.hasExpiration ? item.expirationDate : undefined;
-}
-
 function getExpirationStatus(item: CheckTemplateItem, today: string): 'ok' | 'expiring_soon' | 'expired' | null {
   const soonest = soonestExpiration(item);
   if (!soonest) return null;

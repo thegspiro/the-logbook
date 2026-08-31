@@ -501,6 +501,23 @@ const SealCard: React.FC<{
     );
   }
 
+  // Intact, but the number is not the one on record. Not a broken seal — and
+  // not evidence either, which is why the count below is still being asked.
+  if (status === 'intact' && seal?.cleared === false) {
+    return (
+      <div data-testid={`seal-${stop.id}`} className="alert-warning p-3">
+        <p className="text-theme-alert-warning-text flex items-center gap-1.5 text-[15px] font-bold">
+          <ShieldAlert className="h-4 w-4 shrink-0" aria-hidden="true" />
+          Tag intact, but not the one on record
+        </p>
+        <p className="text-theme-text-secondary mt-0.5 text-[13px]">
+          A number nobody recognises is evidence the container was opened, not evidence it was not — so the full count
+          is below.
+        </p>
+      </div>
+    );
+  }
+
   if (status === 'intact') {
     return (
       <div data-testid={`seal-${stop.id}`} className="alert-success p-3">
