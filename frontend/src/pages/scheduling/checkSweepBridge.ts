@@ -13,9 +13,8 @@
  */
 
 import type { CheckItemAnswer } from './CheckItemControls';
-import type { AnswerMap, SealState } from './checkLapModel';
+import type { AnswerMap } from './checkLapModel';
 import type { ItemResult } from './EquipmentCheckForm';
-import type { SealState as FormSealState } from '@/modules/scheduling/components/SealPanel';
 
 /**
  * The form's results, as the sweep reads them.
@@ -38,24 +37,4 @@ export function toAnswerMap(results: Record<string, ItemResult>): AnswerMap {
 export function toItemResult(patch: Partial<CheckItemAnswer>): Partial<ItemResult> {
   const { restockNeeded: _restockNeeded, ...rest } = patch;
   return rest;
-}
-
-/**
- * The seal answer the form should record for a sweep verdict.
- *
- * The sweep asks one question — is the tag on the container the tag on the
- * record — so `intact` and `cleared` move together where it is the one asking.
- * A tag that does not match is answered with the same button as a broken one,
- * because both mean the same thing to the crew: no evidence it stayed shut, so
- * count it. The accordion can still record the finer distinction, and
- * `toLapStops` reads it back faithfully; this only says what the sweep writes.
- */
-export function toFormSeal(patch: Partial<SealState>, tagOnRecord: string | null | undefined): FormSealState {
-  const intact = patch.status === 'intact';
-  return {
-    sealNumber: tagOnRecord ?? '',
-    intact,
-    confirmed: patch.status !== undefined,
-    cleared: intact && patch.cleared !== false,
-  };
 }

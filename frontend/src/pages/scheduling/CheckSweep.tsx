@@ -227,7 +227,10 @@ export const CheckSweep: React.FC<CheckSweepProps> = ({
             <X className="h-5 w-5" aria-hidden="true" />
           </button>
           <p className="min-w-0 flex-1 truncate font-mono text-[14px] font-bold tracking-tight">
-            {unitName} · {templateName}
+            {/* Joined rather than interpolated: a check with no apparatus on it
+                — the builder's preview, a standalone template — would otherwise
+                read "Engine check · Engine check". */}
+            {[unitName, templateName].filter(Boolean).join(' · ')}
           </p>
           <SaveChip state={saveState} />
         </div>

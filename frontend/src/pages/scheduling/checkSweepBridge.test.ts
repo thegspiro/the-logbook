@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { toAnswerMap, toFormSeal, toItemResult } from './checkSweepBridge';
+import { toAnswerMap, toItemResult } from './checkSweepBridge';
 import { stopRestocks } from './checkLapModel';
 
 import type { ItemResult } from './EquipmentCheckForm';
@@ -56,46 +56,5 @@ describe('toItemResult', () => {
     };
     const stored = toItemResult({ status: 'pass', quantityFound: 6, restockNeeded: true });
     expect(stopRestocks(stop, { gauze: stored }).map((i) => i.id)).toEqual(['gauze']);
-  });
-});
-
-describe('toFormSeal', () => {
-  it('records a matching tag as intact and clearing', () => {
-    expect(toFormSeal({ status: 'intact' }, 'M2-40871')).toEqual({
-      sealNumber: 'M2-40871',
-      intact: true,
-      confirmed: true,
-      cleared: true,
-    });
-  });
-
-  it('records a broken or unrecognised tag as clearing nothing', () => {
-    // Both answers mean the same thing to the crew — no evidence it stayed
-    // shut, so count it — which is why the sweep asks with one button.
-    expect(toFormSeal({ status: 'broken' }, 'M2-40871')).toEqual({
-      sealNumber: 'M2-40871',
-      intact: false,
-      confirmed: true,
-      cleared: false,
-    });
-  });
-
-  it('carries an intact-but-unmatched tag through without clearing', () => {
-    // The accordion can produce this; the sweep only ever reads it back. It
-    // must not become a broken seal on the record — the tag is physically fine.
-    expect(toFormSeal({ status: 'intact', cleared: false }, 'X-999')).toEqual({
-      sealNumber: 'X-999',
-      intact: true,
-      confirmed: true,
-      cleared: false,
-    });
-  });
-
-  it('leaves an unread seal unconfirmed', () => {
-    expect(toFormSeal({}, 'M2-40871').confirmed).toBe(false);
-  });
-
-  it('tolerates a container with no tag on record', () => {
-    expect(toFormSeal({ status: 'intact' }, null).sealNumber).toBe('');
   });
 });

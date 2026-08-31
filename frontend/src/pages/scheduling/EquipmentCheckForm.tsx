@@ -83,6 +83,15 @@ import type { SealState } from '../../modules/scheduling/components/SealPanel';
 import { useConfirm } from '../../contexts/ConfirmContext';
 import { useAuthStore } from '../../stores/authStore';
 import { useOverlaySurface } from '../../hooks/useOverlaySurface';
+import { CheckSweep } from './CheckSweep';
+import { CheckSweepStop } from './CheckSweepStop';
+import { CheckJumpSheet, CheckFlatList } from './CheckJumpSheet';
+import { CheckFinish } from './CheckFinish';
+import { toLapStops } from './checkSweepAdapter';
+import { toAnswerMap, toItemResult } from './checkSweepBridge';
+import { countAnswer } from './checkAnswers';
+import { bulkClaim, stillAsked, type LapStop, type SealState as SweepSealState } from './checkLapModel';
+import type { CheckItemAnswer } from './CheckItemControls';
 import {
   deleteEquipmentCheckDraft,
   loadEquipmentCheckDraft,
@@ -99,6 +108,16 @@ interface EquipmentCheckFormProps {
   onComplete?: () => void;
   onBack?: () => void;
   previewMode?: boolean;
+  /**
+   * Which crew experience to render.
+   *
+   * The sweep hands over one stop at a time with a truck map and an
+   * exceptions-first finish; the accordion is the compartment list that
+   * shipped. Both write the same `results` and `seals`, so a draft started in
+   * one opens in the other and submission is identical either way — the choice
+   * is only how the walk is presented.
+   */
+  experience?: 'accordion' | 'sweep' | undefined;
   existingCheckId?: string | undefined;
   /**
    * Which shift this check belongs to. Once the checklist was open the only
@@ -312,6 +331,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
   previewMode,
   existingCheckId,
   shiftContext,
+  experience = 'accordion',
 }) => {
   const { confirm } = useConfirm();
   const { checkPermission, user } = useAuthStore();
@@ -1368,6 +1388,86 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
       });
     },
     [sealClearableIn]
+  );
+
+  // --------------------------------------------------------------------------
+  // The sweep — a second way to walk the same check
+  // --------------------------------------------------------------------------
+
+  const [sweepStopIndex, setSweepStopIndex] = useState(0);
+  const [sweepScreen, setSweepScreen] = useState<'walk' | 'jump' | 'flat' | 'finish'>('walk');
+
+  /**
+   * The walk, built from the raw template rather than the flattened list.
+   *
+   * `compartments` above has already been flattened for the accordion — pockets
+   * merged into their parent's card, sealed ones promoted beside it — and the
+   * sweep wants the tree that flattening was hiding. Both come from the same
+   * `template.compartments`, and submission still reads the flattened one, so
+   * where an item lives on the record is unaffected.
+   */
+  const sweepStops = useMemo(
+    () =>
+      toLapStops({
+        compartments: template.compartments ?? [],
+        seals,
+        lastSeals,
+        ...(lastCheckData ? { lastResults: lastCheckData } : {}),
+      }),
+    [template.compartments, seals, lastSeals, lastCheckData]
+  );
+
+  const sweepAnswers = useMemo(() => toAnswerMap(results), [results]);
+
+  const handleSweepAnswer = useCallback(
+    (itemId: string, patch: Partial<CheckItemAnswer>) => updateResult(itemId, toItemResult(patch)),
+    [updateResult]
+  );
+
+  /**
+   * Record a seal verdict, and move what it clears with it.
+   *
+   * Routed through the same handlers the accordion uses rather than setting
+   * `seals` directly: confirming a tag accepts the carried counts it vouches
+   * for, and taking that back has to un-answer them, or the check keeps a
+   * count nobody performed. Both rules already live in those callbacks.
+   */
+  const handleSweepSeal = useCallback(
+    (stopId: string, patch: Partial<SweepSealState>) => {
+      const compartment = compartments.find((c) => c.id === stopId);
+      if (!compartment) return;
+      const tag = lastSeals[stopId]?.sealNumber ?? '';
+      if (patch.status === 'intact') {
+        confirmSealIntact(compartment, tag, patch.cleared !== false);
+        return;
+      }
+      if (patch.status === 'broken') reportSealBroken(compartment, tag);
+    },
+    [compartments, lastSeals, confirmSealIntact, reportSealBroken]
+  );
+
+  /**
+   * Accept the stop's shown numbers in one tap.
+   *
+   * The claim asserts what is on screen, which is the carried figure where one
+   * carried and par otherwise — never par over a carried surplus, which would
+   * quietly write 12 found down to a par of 10 behind a button the crew read
+   * as agreement. `bulkClaim` states the quantity per item for exactly this.
+   */
+  const handleSweepBulkClaim = useCallback(
+    (stop: LapStop) => {
+      const claim = bulkClaim(stillAsked(stop));
+      if (!claim) return;
+      for (const specItem of claim.items) {
+        const quantity = claim.quantities[specItem.id];
+        if (quantity !== undefined) {
+          updateResult(specItem.id, toItemResult(countAnswer(specItem, quantity)));
+        } else {
+          updateResult(specItem.id, { status: 'pass' });
+        }
+      }
+    },
+    [updateResult]
   );
 
   // --------------------------------------------------------------------------
@@ -2433,6 +2533,74 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
   // --------------------------------------------------------------------------
   // Main Render
   // --------------------------------------------------------------------------
+
+  if (experience === 'sweep') {
+    const goTo = (index: number) => {
+      setSweepStopIndex(index);
+      setSweepScreen('walk');
+    };
+    // The walk is one screen at a time, so it takes the viewport rather than
+    // scrolling inside the page the accordion lives on.
+    return (
+      <div className="fixed inset-0 z-40 flex flex-col">
+        {sweepScreen === 'finish' ? (
+          <CheckFinish
+            stops={sweepStops}
+            answers={sweepAnswers}
+            onJump={goTo}
+            onSubmit={() => void handleSubmit()}
+            onBack={() => setSweepScreen('walk')}
+            submittingAs={user?.first_name ? `${user.first_name} ${user.last_name ?? ''}`.trim() : 'you'}
+            submitting={submitting}
+          />
+        ) : (
+          <CheckSweep
+            stops={sweepStops}
+            answers={sweepAnswers}
+            stopIndex={sweepStopIndex}
+            onStopIndexChange={setSweepStopIndex}
+            onBulkClaim={handleSweepBulkClaim}
+            onOpenJump={() => setSweepScreen('jump')}
+            onFinish={() => setSweepScreen('finish')}
+            onClose={() => onBack?.()}
+            unitName={shiftContext?.apparatusName ?? ''}
+            templateName={template.name}
+            saveState={isOnline ? 'saved' : 'offline'}
+            disabled={submitting}
+            renderStop={(current) => (
+              <CheckSweepStop
+                stop={current}
+                answers={sweepAnswers}
+                onAnswer={handleSweepAnswer}
+                onSeal={previewMode ? undefined : handleSweepSeal}
+                disabled={submitting}
+              />
+            )}
+          />
+        )}
+
+        {sweepScreen === 'jump' && (
+          <CheckJumpSheet
+            stops={sweepStops}
+            answers={sweepAnswers}
+            current={sweepStopIndex}
+            onJump={goTo}
+            onShowFlatList={() => setSweepScreen('flat')}
+            onClose={() => setSweepScreen('walk')}
+          />
+        )}
+
+        {sweepScreen === 'flat' && (
+          <CheckFlatList
+            stops={sweepStops}
+            answers={sweepAnswers}
+            onJump={goTo}
+            onClose={() => setSweepScreen('walk')}
+          />
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto max-w-lg space-y-4 px-3 pb-12">

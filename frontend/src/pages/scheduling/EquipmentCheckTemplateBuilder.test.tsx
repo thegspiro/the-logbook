@@ -1277,9 +1277,9 @@ describe('EquipmentCheckTemplateBuilder crew preview identity', () => {
     await user.type(composer, 'Second item{Enter}');
 
     await user.click(screen.getByRole('button', { name: 'Crew view' }));
-    const answers = within(screen.getByLabelText('Crew preview')).getAllByRole('button', { name: 'Pass' });
-    await user.click(answers[0] as HTMLElement);
-    expect(answers[0]).toHaveClass('bg-green-600');
+    const preview = () => within(screen.getByLabelText('Crew preview'));
+    await user.click(preview().getByRole('button', { name: 'First item works' }));
+    expect(preview().getByRole('button', { name: 'First item works' })).toHaveAttribute('aria-pressed', 'true');
 
     await user.click(screen.getByRole('button', { name: 'Delete First item' }));
     await confirm('Delete');
@@ -1288,9 +1288,8 @@ describe('EquipmentCheckTemplateBuilder crew preview identity', () => {
     // the surviving item inherits both the deleted one's preview id and the
     // answer recorded against it.
     await waitFor(() => expect(screen.queryByDisplayValue('First item')).not.toBeInTheDocument());
-    const remaining = within(screen.getByLabelText('Crew preview')).getAllByRole('button', { name: 'Pass' });
-    expect(remaining).toHaveLength(1);
-    expect(remaining[0]).not.toHaveClass('bg-green-600');
+    expect(preview().queryByRole('button', { name: 'First item works' })).not.toBeInTheDocument();
+    expect(preview().getByRole('button', { name: 'Second item works' })).toHaveAttribute('aria-pressed', 'false');
   }, 15_000);
 
   it('expands a location added to an unsaved template, so its composer is reachable', async () => {
