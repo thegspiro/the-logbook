@@ -6723,6 +6723,14 @@ export const SHOTS = [
     fullPage: true,
   },
   {
+    // Matched on `isRsvpOpen`, not `isUpcoming`. The caption is about the RSVP
+    // controls, and the soonest upcoming event is now always the early
+    // check-in fixture -- seeded 90 minutes out, with `requires_rsvp: false`
+    // and its RSVP cleared on every run by design. `isUpcoming` handed this
+    // shot that event: a detail page reading "Attendance (0)", every statistic
+    // zero and an empty Event Information card, which is a demo artifact
+    // rather than a picture of the feature. `isRsvpOpen` requires the RSVP
+    // flag and a start two days out, which the fixture can never satisfy.
     id: "04-02-event-detail",
     doc: "04-events-meetings.md",
     line: 73,
@@ -6734,7 +6742,7 @@ export const SHOTS = [
       "/events?limit=100",
       (id) => `/events/${id}`,
       "events",
-      isUpcoming,
+      isRsvpOpen,
     ),
     fullPage: true,
   },
