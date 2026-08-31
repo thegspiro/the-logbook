@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Core infrastructure re-verification fixes (2026-08-31)
+
+**Fixed**
+
+- Several unauthenticated public endpoints (calendar, legal, kiosk display,
+  finance-approval token lookups, and three inbound webhook receivers)
+  effectively lost their rate limiting during a Redis outage — the
+  in-memory fallback reset an attacker's full request allowance on almost
+  every over-limit request instead of actually limiting them.
+- A public form/event-request/guest-check-in daily submission cap could get
+  permanently stuck denying legitimate traffic (instead of resetting the
+  next day) if a transient Redis error hit at exactly the wrong moment.
+- A failed database-engine shutdown could leave the app reporting itself as
+  still connected to a database it had actually lost.
+
 ### Locations & kiosk guest check-in hardening (2026-08-31)
 
 **Fixed**
