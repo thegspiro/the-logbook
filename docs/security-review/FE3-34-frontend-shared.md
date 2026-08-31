@@ -9,11 +9,31 @@ instances (`modules/*/services/api.ts` — up from 12 last pass; the new
 `components/ProtectedRoute.tsx`, `stores/authStore.ts`,
 `stores/learningProgressStore.ts`, `stores/pendingSyncStore.ts`,
 `stores/skillsTestingStore.ts`, and — read in full for the first time this
-rotation — `components/ux/*` (20 non-test files, ~3,466 L).
+rotation — `components/ux/*` (30 non-test files, 3,514 L).
 **Backend:** none — read-only cross-reference, as in prior passes.
 **Migrations:** none.
 
 ---
+
+## Route inventory
+
+n/a — this feature owns no backend routes (frontend shared infrastructure:
+cache, axios clients, auth store, shared UI). Dimensions 1-3 below are
+evaluated at the frontend-consumption level (does a client correctly respect
+the backend's auth/authz/tenant gates) rather than against a route table,
+since there is no route table for a frontend-only feature to enumerate.
+
+## Checklist dimensions
+
+| #   | Dimension                    | Disposition                                                                                                                                                          |
+| --- | ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Authentication coverage      | n/a at the route level (no owned backend routes). `ProtectedRoute.tsx` re-verified: gates strictly pre-render, no flash of unauthorized content — see Verified good. |
+| 2   | Authorization & role fit     | n/a — same reasoning as #1.                                                                                                                                          |
+| 3   | Tenant isolation             | n/a — this layer carries no by-id backend queries to scope.                                                                                                          |
+| 4   | Injection & untrusted output | Checked. `components/ux/*` swept for XSS sinks (none); `LinkifiedText.tsx` verified safe by construction (see below).                                                |
+| 5   | Data exposure                | Checked — this feature's central concern. Diff-based cache-exclusion sweep (below) plus all 9 FE2-34 exposure findings re-verified intact.                           |
+| 6   | Abuse resistance             | Checked. Cache bounded at 200 entries/FIFO eviction (Verified good); no new unbounded tracking introduced this pass.                                                 |
+| 7   | Schema & migration integrity | n/a — see Schema & migration notes below.                                                                                                                            |
 
 ## Scope
 
@@ -95,14 +115,20 @@ services/api.ts:728-736` still catches only `AxiosError` with
 
 ## `components/ux/*` — first full read this rotation
 
-20 non-test files (~3,466 L: `Avatar`, `Breadcrumbs`, `Collapsible`,
-`CommandPalette`, `ConfirmDialog`, `DateRangePicker`, `DateTimeQuarterHour`,
-`DialogPanel`, `EmptyState`, `FileDropzone`, `FlashlightToggle`,
-`FloatingActionButton`, `InlineEdit`, `LinkifiedText`, `MobileCheckoutCard`,
-`MobileItemCard`, `PageTransition`, `Pagination`, `ProgressSteps`,
-`PromptDialog`, `ScanSuccessFlash`, `Skeleton`, `SortableHeader`,
-`SuccessAnimation`, `TimeQuarterHour`, `Tooltip`, `TopProgressBar`,
-`WhatsNew`).
+30 non-test files (3,514 L: `AutoSaveIndicator`, `Avatar`, `Breadcrumbs`,
+`Collapsible`, `CommandPalette`, `ConfirmDialog`, `DateRangePicker`,
+`DateTimeQuarterHour`, `DialogPanel`, `EmptyState`, `FileDropzone`,
+`FlashlightToggle`, `FloatingActionButton`, `InlineEdit`, `LinkifiedText`,
+`MobileCheckoutCard`, `MobileItemCard`, `PageTransition`, `Pagination`,
+`ProgressSteps`, `PromptDialog`, `ScanSuccessFlash`, `Skeleton`,
+`SortableHeader`, `SuccessAnimation`, `TimeQuarterHour`, `Tooltip`,
+`TopProgressBar`, `WhatsNew`, `index.ts`).
+_(Corrected from an initial miscount of 20 files/~3,466 L that omitted
+`AutoSaveIndicator.tsx` and `index.ts` from the enumerated list — both were
+still inside the recursive `grep -rn` sweep below, which ran over the whole
+directory rather than this list, so the security coverage was complete; only
+the written inventory undercounted. Re-checked both individually against the
+same patterns: clean.)_
 
 - **No XSS sinks**: grepped and confirmed no `dangerouslySetInnerHTML`,
   `innerHTML` assignment, `eval`, or `document.write` in the directory.
@@ -162,7 +188,7 @@ pass unchanged (147/147 in the scoped run below, which also finally exercises
 | Check                                                                             | Result                                                                          |
 | --------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
 | `npm run typecheck` (`tsc-native.mjs`)                                            | ✅ 0 errors                                                                     |
-| `npm run lint`                                                                    | ✅ 0 errors, 8 warnings (pre-existing, unrelated files, within max-warnings 10) |
+| `npm run lint`                                                                    | ✅ 0 errors, 9 warnings (pre-existing, unrelated files, within max-warnings 10) |
 | Scoped tests (`apiCache.test.ts`, `authStore.test.ts`, `createApiClient.test.ts`) | ✅ 147 passed                                                                   |
 | Backend                                                                           | n/a — no backend files in scope, none changed                                   |
 
