@@ -98,8 +98,15 @@ applied to both required-field loops. 9 unit tests added. See
 `HTTPException(detail=error)`. On the **public unauthenticated** submit path this
 returned raw SQL/column names to anonymous callers (a worse NOTIF-2/SF-2). **Fix
 (B13):** all 14 client-facing tuple returns now use `safe_error_detail(e)`
-(generic message + server-side log). The 5 remaining `str(e)` are internal
-processor-result dicts that `_process_integrations` never returns to the client.
+(generic message + server-side log).
+
+**Correction (security-review FORM-26 pass 2, 2026-08-31):** the remaining
+`str(e)` processor-result dicts were **not** internal — `_process_integrations`
+returning `None` describes only its own return value, not the dict it stores
+on `submission.integration_result`, which `FormSubmissionResponse` (the
+response model on `submit_form`/`get_submission`/`list_submissions`/
+`reprocess_submission_integrations`) serializes straight back to the client.
+Fixed as FORM-9; see `docs/security-review/FORM-26-forms.md` pass 2.
 
 ## Notes
 

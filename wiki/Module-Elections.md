@@ -58,7 +58,33 @@ Eligibility used to read `User.membership_type`, a single column that conflated 
 | **Membership type** | `User.membership_type` | Legacy single classification, now **derived** from the pair              | active, administrative, life, probationary        |
 | **Role / Position** | `User.roles`           | Assigned positions; determines system permissions                        | EMT, Quartermaster, Secretary, Chief              |
 
-**Why this mattered here more than anywhere else.** `ElectionService` could only answer "is this member operational" as `membership_type == "active"`, because that was the one value that meant it. So **a bylaws question put to the operational members never reached a life member, or anyone still on probation** — they had earned a standing that overwrote the only value the check recognised. Operational eligibility now reads the member's **class**, and every operational standing counts. `life` and `probationary` remain **status** checks, because they name a status.
+**What each built-in category requires**, per `ElectionService._user_has_role_type`:
+
+| Category         | Requires                                        |
+| ---------------- | ----------------------------------------------- |
+| `operational`    | operational class **and** regular status        |
+| `regular`        | operational class **and** (regular **or** life) |
+| `life`           | operational class **and** life status           |
+| `probationary`   | operational class **and** probationary status   |
+| `administrative` | administrative class                            |
+| `social`         | social class                                    |
+
+**The built-in categories keep their legacy meaning**, deliberately. An earlier
+version of this change had `operational` read the class alone; that was
+reverted the same day (`f65e4e7ae`) because it admitted probationary and
+retired members to a restricted ballot.
+
+The real changes are narrower than the split first appears, and one of them is
+a **tightening**:
+
+- **A life member now receives a `regular` ballot.** With one fused field,
+  `life` and `regular` were mutually exclusive values, so a life member could
+  not satisfy `regular`.
+- **Every status category now also requires the operational class.** An
+  administrative member with regular standing no longer receives ballots
+  restricted to active/life members.
+- `administrative` and `social` are answered by class rather than by a single
+  value that had to carry both facts at once.
 
 `ElectionService` falls back to deriving the pair from `membership_type` when the new columns are unset, so a member whose record predates the change is still evaluated correctly.
 
@@ -525,14 +551,16 @@ POST   /api/v1/elections/{id}/send-report-email      # Email election results re
 
 ### Edge Cases (2026-03-22)
 
-| Scenario                                                       | Behavior                                                                                                                            |
-| -------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| Member with role `emt` but member class `administrative`       | Not eligible for `operational` ballot items                                                                                         |
-| Email fails for one recipient in batch                         | Loop continues; summary shows per-recipient status                                                                                  |
-| Election linked to past meeting                                | Past meetings filtered out of dropdown                                                                                              |
-| No eligible voters after filtering                             | Descriptive error with reasons instead of false success                                                                             |
-| Neither class/status nor membership type set on member         | Falls back to "all" eligibility only                                                                                                |
-| Life member, or member still on probation _(fixed 2026-08-26)_ | **Eligible** for `operational` ballot items — their class is operational. Before the class/status split they were silently excluded |
+| Scenario                                                                                  | Behavior                                                                                                      |
+| ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| Member with role `emt` but member class `administrative`                                  | Not eligible for `operational` ballot items                                                                   |
+| Email fails for one recipient in batch                                                    | Loop continues; summary shows per-recipient status                                                            |
+| Election linked to past meeting                                                           | Past meetings filtered out of dropdown                                                                        |
+| No eligible voters after filtering                                                        | Descriptive error with reasons instead of false success                                                       |
+| Neither class/status nor membership type set on member                                    | Falls back to "all" eligibility only                                                                          |
+| Life member, on an `operational` ballot item                                              | **Not** eligible — `operational` requires regular status. They are eligible for `regular` and `life` items    |
+| Life member, on a `regular` ballot item _(changed 2026-08-26)_                            | **Eligible.** With the old fused field, `life` and `regular` were mutually exclusive values and they were not |
+| Administrative member with regular standing, on a `regular` item _(tightened 2026-08-26)_ | **Not** eligible — status categories now also require the operational class                                   |
 
 ---
 

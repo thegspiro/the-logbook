@@ -7,42 +7,63 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Governance: the department's organizational chart (2026-08-24)
+### Scheduled-task reliability fixes (2026-08-31)
 
-**Added**
+**Fixed**
 
-- **`/governance/org-chart`** — the department's chain of command, as an
-  outline or as a diagram. New tables `org_chart_nodes` and
-  `org_chart_node_holders`; `GET /org-chart`, `POST /org-chart/nodes`,
-  `PUT /org-chart/nodes/{id}`, `POST /org-chart/nodes/{id}/move`,
-  `DELETE /org-chart/nodes/{id}`.
+- A department message scheduled to publish could, in a batch with other
+  due messages, silently vanish forever if a different message in the same
+  batch failed to process first — the failed message no longer costs the
+  rest of the batch its delivery.
+- Reminders for overdue meeting-minutes action items were silently failing
+  every single time, with no error visible anywhere — they now send
+  correctly.
+- A shift with no currently-active assigned members was permanently marked
+  as "reminded" even though nobody was actually notified, so a member added
+  or reactivated later in the same window never received the pre-shift
+  reminder — fixed to match the equivalent end-of-shift-checklist behavior.
+- Extending recurring event series to their rolling 12-month horizon could,
+  on one series' failure, silently discard other series' already-generated
+  occurrences from the same run.
+- An external training-provider sync failure could cascade into every
+  provider synced after it in the same run being misreported as failed too.
 
-- **Reading is gated on authentication alone, deliberately.** The chart exists
-  so any member can work out who is in charge of an area without asking around;
-  a permission here would leave the general membership — the audience — outside
-  the one screen built for them. Editing is `orgchart.manage` OR
-  `settings.manage`, enforced server-side, and the page renders read-only
-  without either rather than offering controls that fail.
+### Onboarding hardening and setup docs cleanup (2026-08-31)
 
-- **A seat holds several people.** `org_chart_node_holders` is a separate
-  table for exactly this: a department with two deputy chiefs puts both in one
-  box instead of inventing two boxes that mean the same thing.
+**Fixed**
 
-- **A holder need not be a member.** `user_id` is nullable and `display_name`
-  carries a name with no account behind it, for the town attorney, a
-  mutual-aid liaison or a county fire marshal. Nothing else about that person
-  is stored and they gain no access.
+- The unauthenticated setup-status check (`GET /onboarding/status`), used by
+  the login page to detect a not-yet-configured instance, now has the same
+  per-route rate limiting as every other onboarding bootstrap endpoint —
+  it was the one anonymous route without one.
+- `frontend/.env.example`, `frontend/setup.sh`, and the setup documentation
+  no longer instruct operators to set a `VITE_SESSION_KEY` "for production" —
+  that variable has not been read by any code since onboarding data stopped
+  being encrypted client-side; the real protection is the backend's own
+  `ENCRYPTION_KEY`. Following the old instruction had no security effect
+  either way, but told operators otherwise.
 
-- **`position_id` assists a seat rather than defining it.** Linking a seat to a
-  position fills its holders from that position's assignees; **unlinking leaves
-  them in place.** An earlier draft made the position the seat's definition,
-  which meant a seat could not hold anyone the position did not — and a
-  department whose org chart differs from its permission structure, which is
-  most of them, could not draw its real chain of command.
+### Integrations fix (2026-08-31)
 
-- **The chart starts empty and nothing is inferred.** A permission structure is
-  not an org chart. A guessed diagram is one nobody recognises, and correcting
-  it costs more than drawing it.
+**Fixed**
+
+- Testing an integration's connection, or checking Salesforce sync
+  readiness, could show a raw internal/connection error message instead of
+  a clean explanation if the underlying network call failed unexpectedly.
+  Errors now show a generic message while the details are still logged for
+  troubleshooting; the specific, intentional messages (e.g. "Salesforce
+  rejected these credentials") are unaffected.
+
+### Forms fix (2026-08-31)
+
+**Fixed**
+
+- If a form's cross-module integration (assigning equipment, registering
+  for an event, or creating an event request from a form submission) hit
+  an unexpected internal error, the submission's integration results could
+  show a raw internal error message instead of a clean explanation. Errors
+  now show a generic message while the details are still logged for
+  troubleshooting.
 
 ### Meetings and minutes fixes (2026-08-31)
 
@@ -1194,13 +1215,41 @@ the "kept in lockstep with the frontend" comment that nothing had been enforcing
   no way to record a _probationary treasurer_, and nothing said whether a _life
   member_ still rides.
 
-  The clearest symptom was in elections. `ElectionService` could only answer
-  "is this member operational" as `membership_type == "active"`, because that
-  was the one value that meant it — so a bylaws question put to the operational
-  members never reached anyone who had earned life membership, or anyone still
-  on probation. It now reads the member's **class**, and every operational
-  standing counts. "regular", "life" and "probationary" stay **status** checks,
-  because they name a status.
+  Elections is where the fused field showed most. `ElectionService` could only
+  answer "is this member operational" as `membership_type == "active"`.
+
+  **Correction (2026-08-31).** This entry originally said the `operational`
+  category now "reads the member's class, and every operational standing
+  counts". That was true of `7204f9134` and **false ninety minutes later**:
+  `f65e4e7ae` ("Fix election voter category authorization", the same day)
+  reverted the widening because it was a disclosure — reading class alone
+  admitted probationary and retired members to a restricted ballot. The entry
+  was never updated, and the claim was propagated into the training guides,
+  the wiki and two video scripts before being caught on PR #2096.
+
+  **What the shipped code does**, per
+  `ElectionService._user_has_role_type`:
+
+  | Category         | Requires                                        |
+  | ---------------- | ----------------------------------------------- |
+  | `operational`    | operational class **and** regular status        |
+  | `regular`        | operational class **and** (regular **or** life) |
+  | `life`           | operational class **and** life status           |
+  | `probationary`   | operational class **and** probationary status   |
+  | `administrative` | administrative class                            |
+  | `social`         | social class                                    |
+
+  So the built-in categories **keep their legacy meaning**, and the real
+  changes are narrower than first written, one of them a tightening:
+
+  - **A life member now receives a `regular` ballot.** With one fused field
+    `life` and `regular` were mutually exclusive values, so they could not.
+  - **Every status category now also requires the operational class**, so an
+    administrative member with regular standing no longer receives ballots
+    restricted to active/life members. That is a **tightening**, and it is the
+    reason the widening was reverted.
+  - `administrative` and `social` are answered by class rather than by a value
+    that had to mean both things at once.
 
   `membership_type` is kept and kept correct: ~160 call sites read it, and it
   is now derived from the pair by `app/utils/membership.py`, reconciled on
@@ -1806,6 +1855,43 @@ check the consent itself.
   rotation (35 iterations, ordered by risk) with a per-iteration checklist,
   findings template, and a `/security-review` command that opens one pull
   request per feature and tends it to green before starting the next.
+
+### Governance: the department's organizational chart (2026-08-24)
+
+**Added**
+
+- **`/governance/org-chart`** — the department's chain of command, as an
+  outline or as a diagram. New tables `org_chart_nodes` and
+  `org_chart_node_holders`; `GET /org-chart`, `POST /org-chart/nodes`,
+  `PUT /org-chart/nodes/{id}`, `POST /org-chart/nodes/{id}/move`,
+  `DELETE /org-chart/nodes/{id}`.
+
+- **Reading is gated on authentication alone, deliberately.** The chart exists
+  so any member can work out who is in charge of an area without asking around;
+  a permission here would leave the general membership — the audience — outside
+  the one screen built for them. Editing is `orgchart.manage` OR
+  `settings.manage`, enforced server-side, and the page renders read-only
+  without either rather than offering controls that fail.
+
+- **A seat holds several people.** `org_chart_node_holders` is a separate
+  table for exactly this: a department with two deputy chiefs puts both in one
+  box instead of inventing two boxes that mean the same thing.
+
+- **A holder need not be a member.** `user_id` is nullable and `display_name`
+  carries a name with no account behind it, for the town attorney, a
+  mutual-aid liaison or a county fire marshal. Nothing else about that person
+  is stored and they gain no access.
+
+- **`position_id` assists a seat rather than defining it.** Linking a seat to a
+  position fills its holders from that position's assignees; **unlinking leaves
+  them in place.** An earlier draft made the position the seat's definition,
+  which meant a seat could not hold anyone the position did not — and a
+  department whose org chart differs from its permission structure, which is
+  most of them, could not draw its real chain of command.
+
+- **The chart starts empty and nothing is inferred.** A permission structure is
+  not an org chart. A guessed diagram is one nobody recognises, and correcting
+  it costs more than drawing it.
 
 ### Attendance finalization: the lock is atomic, and reopening reconciles what it undoes (2026-08-24)
 

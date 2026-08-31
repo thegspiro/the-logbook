@@ -23,44 +23,73 @@ content lives only in SCRIPT_CURRENCY):
 | **05 / 16** | Header permission line                      | "**Requires permission:** `training.manage`" — the module's org-level settings, including the member visibility panel, moved to the new `training.configure`                                                                     |
 | **02**      | `POSITIONS VS MEMBERSHIP TYPES`             | "**Membership Types** are classifications like Active, Retired, Honorary, Administrative." One flat list mixing a class, a status and a value that is now the social class                                                       |
 
-### 12 — Elections Deep Dive · **WRONG — and it was describing a bug as a feature**
+### 12 — Elections Deep Dive · **WRONG, then over-corrected, then fixed — the most instructive entry in this file**
 
-This is the most instructive determination in the window, and it is worth
-reading before making a currency call anywhere else.
+This beat has now been wrong in **both** directions inside one week. Read this
+before touching it a third time.
 
-The beat said, correctly for the build it was recorded against:
+**Round 1 — the original take, wrong by omission.** It said:
 
 > "'Operational' means active members. 'Regular' means active plus life
 > members."
 
-That was an accurate description of what the code did. It was also an accurate
-description of **a defect**: `ElectionService` could only answer "is this member
-operational" by testing `membership_type == "active"`, because that was the one
-value that meant it. A member who had earned **life** membership, or who was
-still **probationary**, had that value overwritten by their standing — so a
-bylaws question put to the operational members **never reached them**, silently,
-with nothing on the dispatch summary to say so.
+That accurately described the build. It also accurately described **a defect**:
+one fused `membership_type` field could not hold both what kind of member
+somebody was and where they sat on the ladder, so a life member's standing
+overwrote the value that put them in `regular`. The script had faithfully
+documented the behaviour and, in doing so, taught viewers to expect it.
 
-The script had faithfully documented the behaviour, and in doing so had taught
-viewers to expect it. **A currency file that only checks "does the script match
-the build" would have marked this beat green every week it was wrong.**
+**A currency check that only asks "does the script match the build" would have
+marked this green every week it was misleading.**
 
-The rule this argues for: when a beat explains _why_ a rule is the way it is,
-and the explanation is "because the field can only hold one value", that is a
-data-model limitation being narrated as a design decision — and it carries an
-expiry the moment somebody fixes the model.
+**Round 2 — the correction, wrong by over-reach.** The 2026-08-31 rewrite
+claimed the class/status split made **every operational standing** eligible for
+`operational` items, and told chiefs to expect a longer recipient list. That
+was true of commit `7204f9134` and **false ninety minutes later**: `f65e4e7ae`
+("Fix election voter category authorization") reverted the widening the same
+day, because reading class alone admitted probationary and retired members to a
+restricted ballot.
 
-The rewritten beat distinguishes the two facts the old one collapsed:
+**The rewrite was drawn from the CHANGELOG entry, which still carried the
+reverted claim five days after the revert.** That is the failure worth naming:
+the changelog is a record of what a commit intended, and a same-day revert does
+not necessarily reach back into it. Caught by review on PR #2096, not by this
+file.
 
-| The member is…                          | Gets an **operational** ballot item? |
-| --------------------------------------- | ------------------------------------ |
-| Operational class, regular status       | Yes                                  |
-| Operational class, **life** status      | **Yes** — was silently excluded      |
-| Operational class, **probationary**     | **Yes** — was silently excluded      |
-| Administrative class, holds an EMT role | No — class decides, not the role     |
+**Round 3 — what the shipped code does**, per
+`ElectionService._user_has_role_type`:
 
-It also carries a production note telling a delivery pass **not** to shorten it
-back to "operational means active", because that sentence is the bug.
+| Category         | Requires                                        |
+| ---------------- | ----------------------------------------------- |
+| `operational`    | operational class **and** regular status        |
+| `regular`        | operational class **and** (regular **or** life) |
+| `life`           | operational class **and** life status           |
+| `probationary`   | operational class **and** probationary status   |
+| `administrative` | administrative class                            |
+| `social`         | social class                                    |
+
+The built-in categories **keep their legacy meaning**. The two real changes are
+that a **life member now satisfies `regular`** (with one fused field they were
+competing values), and that **every status category now also requires the
+operational class** — so an administrative regular no longer receives
+active/life ballots, a **tightening**.
+
+**The rules this argues for**, both now applied in this file:
+
+1. When a beat explains _why_ a rule is the way it is, and the explanation is
+   "because the field can only hold one value", that is a data-model limitation
+   narrated as a design decision. It carries an expiry the moment somebody
+   fixes the model.
+2. **Verify a behavioural correction against the code, not against the
+   changelog.** A changelog entry records an intent at a moment; a revert
+   ninety minutes later does not rewrite it.
+
+The beat now carries a production note stating the shipped contract and naming
+`_user_has_role_type` as the thing to check.
+
+**Also corrected:** the screen note asking for a re-shot eligibility roster. The
+refusal reason string is **unchanged** — it still reads "membership type not
+eligible … (requires: …; member has: …)" — so the existing capture is current.
 
 ### 13 — Department Store · **WRONG — one control for two different jobs**
 
@@ -121,10 +150,11 @@ needs no permission** — the screen exists so a six-week member can find out wh
 runs an area without asking three people, and a permission would lock out its
 own audience.
 
-Two inserts: the elections correction above (in the chief's own words, with
-"check your next ballot's recipient list" as the call to action), and an
-administration note that line officers lose the Facilities workspace and the
-Testing Checklist page is off.
+Two inserts: the elections change above, in the chief's own words — the
+recipient list moves **in both directions**, so "check it against your roster"
+is the call to action rather than "expect more people" — and an administration
+note that line officers lose the Facilities workspace and the Testing Checklist
+page is off.
 
 ### 06 — Member Guide · **NEW CHAPTER + one insert**
 
@@ -132,9 +162,11 @@ New chapter, "Who do I ask?" — the same org chart, from the member's side and
 at a quarter of the length. Placed early, beside "finding your way around",
 because that is when a member needs it.
 
-Insert on the profile: class and status as two fields, with the ballot
-consequence stated plainly. **The old profile-header capture is wrong, not
-dated** — it shows one field where there are now two.
+Insert on the profile: what the split means for the member, which is a voting
+consequence and nothing else. **No re-shoot** — an earlier draft of this entry
+said the profile-header capture was wrong; it is not. No screen renders class
+and status as fields, the member forms still show a single Membership Type
+selector, and the existing capture is current.
 
 ### 07 — Secretary / Administrative · **TWO INSERTS**
 
@@ -180,15 +212,17 @@ pass does not re-check them:
 
 ### Five new shorts written in-script (8AM–8AQ)
 
-Who do I ask about this? (org chart) · One member, two facts (class vs. status,
-with the ballot consequence) · Where did /testing go? · Build a check template
-in one list · Thread colour on a brass plate.
+Who do I ask about this? (org chart) · The ballot that skipped the life members
+(class vs. status, and the only place a member can see it) · Where did /testing
+go? · Build a check template in one list · Thread colour on a brass plate.
 
 **Three carry production constraints that a scheduling pass must respect:**
 
-- **8AN** needs a genuine before/after of the profile header. If the "before"
-  capture is unavailable, narrate over the after-state — **do not reconstruct a
-  fake old screen.**
+- **8AN** was rewritten: it originally claimed the split made life and
+  probationary members eligible for **operational** ballots, which is not what
+  shipped. It now shoots the **ballot recipient list**, which is the only place
+  the change is visible — there is no member-screen UI to capture, and a
+  reconstructed two-field profile screen would be a fabrication.
 - **8AP** opens on the old template builder, and **that state no longer exists
   in any build.** Source it from an archived capture or drop the opening beat.
 - **8AQ** needs two captures, one per personalization method. One shot cannot

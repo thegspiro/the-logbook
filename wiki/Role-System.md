@@ -125,7 +125,7 @@ Each module has view and manage permissions:
 
 ### Grant movements on seeded positions _(2026-08-24 → 08-31)_
 
-Five upgrade steps in this window **move grants on seeded (`is_system`)
+Six upgrade steps in this window **move grants on seeded (`is_system`)
 positions**. A department's own customized positions are left alone. Nothing
 revoked here is granted back automatically — re-grant it on a position that is
 meant to carry it.

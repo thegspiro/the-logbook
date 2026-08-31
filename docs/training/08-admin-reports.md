@@ -2441,8 +2441,8 @@ to the next page with no mark.
 
 ## Permission Movements in the August 24–31 Upgrade
 
-**Five upgrade steps move grants on seeded positions, and nothing grants the
-revoked ones back.** Your department's own customized positions are untouched —
+**Six upgrade steps move grants on seeded positions — four take a grant away,
+two add a new permission — and nothing restores what the four remove.** Your department's own customized positions are untouched —
 only seeded (`is_system`) ones move.
 
 | Permission            | Movement                                                         | What it means for you                                                                                                               |

@@ -913,13 +913,18 @@ an officer section. ~1:15.
 > where you are on the membership ladder — probationary, regular, life,
 > retired."
 
-> "That sounds like paperwork, and for most of you it is. But it fixed
-> something real: if you'd earned life membership, or you were still on
-> probation, **you were being left off ballots put to the operational
-> members** — because the old single field could only say one of those two
-> things at a time, and your standing had overwritten the one that got you the
-> ballot. If you ever wondered why a vote didn't reach you, that's likely why,
-> and it's fixed."
+> "That sounds like paperwork, and for most of you it is — **you won't see a
+> new field to fill in.** The screens still show one Membership Type selector;
+> the two facts are worked out from it."
 
-**PRODUCTION:** re-shoot the profile header. The old capture shows one
-"Membership type" field and is now wrong, not merely dated.
+> "Where it shows up is voting. If you're a **life member**, you now qualify
+> for ballots restricted to regular members — under the old single field, 'life'
+> and 'regular' were competing values, so you were quietly dropping out of
+> those. If you're **administrative**, the reverse: a ballot restricted to
+> regular members no longer reaches you, and your department can grant an
+> override if their bylaws intend otherwise."
+
+**PRODUCTION:** **do not re-shoot the profile header for this.** No screen
+renders class and status as separate fields — the member forms still show a
+single Membership Type selector and the pair is derived from it. The existing
+capture is current. Narrate this beat over it.

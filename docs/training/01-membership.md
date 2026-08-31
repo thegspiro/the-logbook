@@ -603,20 +603,25 @@ and you could only ever record one of them:
 Because they shared a field, there was **no way to record a probationary
 treasurer**, and **nothing said whether a life member still rides**.
 
-### Where this was actually costing you: elections
+### What this changed for elections
 
-When the secretary put a bylaws question to "the operational members", the
-system worked out who those were by looking for one specific value — the one
-that meant _plain active member_. **Anyone who had earned life membership, and
-anyone still on probation, was silently left off the ballot**, because their
-standing had overwritten the only value the check recognised.
+Elections is where the fused field showed most: `ElectionService` could only
+answer "is this member operational" by testing for one specific value.
 
-Operational eligibility now reads the member's **class**, so every operational
-standing counts. "Life members only" and "probationary only" still read
-**status**, because those name a status.
+**What actually changed, and one of the two narrows eligibility.** The built-in
+voter categories **keep their legacy meaning**: `operational` still requires
+operational class **and** regular standing. (An earlier version of this change
+read the class alone; it was reverted the same day because it admitted
+probationary and retired members to a restricted ballot.) The two real changes
+are that **a life member now receives a `regular` ballot** — with one fused
+field, "life" and "regular" were competing values and they could not — and that
+**every status category now also requires the operational class**, so an
+administrative member with regular standing no longer receives ballots
+restricted to active or life members.
 
-**Check your next ballot's recipient list against your roster.** It will be
-longer than it used to be.
+**If your bylaws intend administrative members to vote on items restricted to
+active or life members, use an override or an explicit voter list** — that
+route is now closed to them by category alone.
 
 ### Honorary members are now the "social" class
 
@@ -633,11 +638,11 @@ than being the authority. If an integration **writes** it, move to the pair —
 the derivation is deliberately lossy in one direction, because the old
 vocabulary cannot express an administrative probationer.
 
-> **[SCREENSHOT — REPLACE the member profile capture.** The header shows class
-> and status as two fields where it showed one.**]**
-
-> **[SCREENSHOT — REPLACE the Members administration list capture.** Class and
-> status are separate columns.**]**
+> **No screenshot change here.** The class/status split has **no UI surface**:
+> the member screens still show a single Membership Type selector and the pair
+> is derived from its value. Existing captures of the profile, the create/edit
+> form and the Members administration list are current. The only place a user
+> can see this change is a **ballot recipient list**.
 
 ### Administrative members no longer hold an operational rank
 
@@ -681,9 +686,16 @@ starts empty. A department that recorded somebody as an EMT _rank_ has said
 where they sit, not which card they hold or when it expires — and inventing an
 expiry date would be worse than having none.
 
-> **There is no officer-facing screen for entering qualifications yet.** The
-> records, the rules and the shift-eligibility check all shipped; the form did
-> not. Do not plan a session around entering them.
+> **Qualifications are recorded through courses, not entered directly.** Set
+> **Certifies** on a course in the Course Library, and recording a member's
+> completion of that course creates or renews the qualification. There is **no
+> panel for entering, editing or expiring one on its own** — so a card a member
+> has held for years needs a training record to match, an expiry cannot be
+> corrected except by filing another record, and setting **Certifies** on a
+> course does **not** backfill records already filed against it.
+>
+> Because shift eligibility reads the expiry **as of the shift date**, a stale
+> or missing qualification decides who may be rostered — it is not cosmetic.
 
 ---
 

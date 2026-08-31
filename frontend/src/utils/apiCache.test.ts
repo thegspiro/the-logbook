@@ -569,6 +569,11 @@ describe('apiCache', () => {
       expect(isCacheable('/inventory/charges')).toBe(false);
     });
 
+    it('returns false for /dashboard/action-items (assignee names + free text)', () => {
+      expect(isCacheable('/dashboard/action-items')).toBe(false);
+      expect(isCacheable('/dashboard/action-items?status=open')).toBe(false);
+    });
+
     it('returns false for checkout possession endpoints (singular path)', () => {
       // Guards against a prior plural-prefix typo that matched nothing
       expect(isCacheable('/inventory/checkout/active')).toBe(false);

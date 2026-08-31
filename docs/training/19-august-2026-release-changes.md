@@ -1716,7 +1716,8 @@ notice mostly by things no longer going wrong.
 4. **The Testing Checklist is now a module, and the upgrade switches it off.**
 
 Read the [upgrade notes](#upgrade-notes-for-administrators-august-2431) before
-you run this one. Five upgrade steps **take permissions away**, and one clears
+you run this one. Four upgrade steps **take permissions away** (two more add new
+grants), and one clears
 a field.
 
 ## Governance → Organizational Chart: who runs what
@@ -1791,31 +1792,31 @@ ever state one of them:
 Because they shared a field, there was no way to record a **probationary
 treasurer**, and nothing said whether a **life member still rides**.
 
-### Where you were feeling this: elections
+### What this changed for elections
 
-This is the one that will have cost a department a vote. When the secretary put
-a bylaws question to "the operational members", the system could only work out
-who those were by looking for one specific value — the one that meant plain
-active member. **Anyone who had earned life membership, and anyone still on
-probation, was silently left off the ballot**, because their standing had
-overwritten the only value the check recognised.
+Elections is where the fused field showed most: the system could only work out
+who "the operational members" were by testing for one specific value.
 
-Operational eligibility now reads the member's **class**, so every operational
-standing counts. "Life members only" and "probationary members only" still read
-**status**, because those name a status.
+**What actually changed, and one of the two narrows eligibility.** The built-in
+voter categories **keep their legacy meaning**: `operational` still requires
+operational class **and** regular standing. (An earlier version of this change
+read the class alone; it was reverted the same day because it admitted
+probationary and retired members to a restricted ballot.) The two real changes
+are that **a life member now receives a `regular` ballot** — with one fused
+field, "life" and "regular" were competing values and they could not — and that
+**every status category now also requires the operational class**, so an
+administrative member with regular standing no longer receives ballots
+restricted to active or life members.
 
-**Check your next ballot's recipient list against your roster.** It will be
-longer than it used to be, and that is the fix working.
+**If your bylaws intend administrative members to vote on items restricted to
+active or life members, use an override or an explicit voter list.** That route
+is now closed to them by category alone.
 
-> **[SCREENSHOT — REPLACE the member profile capture.** The header shows class
-> and status as two fields where it showed one.**]**
-
-> **[SCREENSHOT — REPLACE the member create/edit form capture.** Same two
-> fields, plus the password, initial roles, welcome-email option, mailing
-> address and emergency-contact fields, which are back on the form.**]**
-
-> **[SCREENSHOT — REPLACE the Members administration list capture.** Class and
-> status are separate columns.**]**
+> **No screenshot change here.** The class/status split has **no UI surface**:
+> the member screens still show a single Membership Type selector and the pair
+> is derived from its value. Existing captures of the profile, the create/edit
+> form and the Members administration list are current. The only place a user
+> can see this change is a **ballot recipient list**.
 
 ### Honorary members are now "social"
 
@@ -1852,9 +1853,13 @@ starts empty. A department that recorded somebody as an EMT *rank* has said
 where they sit, not which card they hold or when it expires — and inventing an
 expiry date would be worse than having none.
 
-> **There is no screen for entering qualifications yet.** The records, the
-> rules and the shift-eligibility check all shipped; the officer-facing form
-> did not. Do not plan a training session around entering them this week.
+> **Qualifications are recorded through courses, not entered directly.** Set
+> **Certifies** on a course in the Course Library, and recording a member's
+> completion of that course creates or renews the qualification. There is **no
+> panel for entering, editing or expiring one on its own** — so a card a member
+> has held for years needs a training record to match, an expiry cannot be
+> corrected except by filing another record, and setting **Certifies** on a
+> course does **not** backfill records already filed against it.
 
 ## Equipment check templates: one list you scroll
 
@@ -1905,22 +1910,26 @@ On tablets and smaller laptops this list is a bar along the bottom of the
 checklist that opens as a sheet. It used to be reachable only by widening the
 window.
 
-### The preview is beside you now
+### The preview is beside you — on a wide enough screen
 
-On a laptop or tablet, the mobile preview is **docked next to the checklist**
-and updates as you type, instead of opening as a modal you have to close again.
+**The preview docks only at 1440px and wider** (`isWideCanvas`). Below that —
+which includes tablets and a good many laptops, a 1366px screen among them —
+the Preview control opens the modal, exactly as it does on a phone. The rail
+costs 344px, and under 1440 that leaves a canvas too narrow to edit in.
 
-**On a phone it is still a modal**, from the Tools menu — and the phone layout
-otherwise keeps what it had: compact rows, the full-height item editor, and the
-search-inventory add sheet. The side-by-side row controls are a laptop and
-tablet layout.
+Where it docks, it updates as you type instead of making you open and close a
+modal each time.
 
-> **[SCREENSHOT — REPLACE the equipment check template builder capture,
-> laptop.** _Demo data:_ an engine template with three locations, one nested
-> inside another, at least one item of each answer type, the preview docked at
-> the right, and the "Before publishing" list showing two outstanding items.
-> **The old capture shows a sidebar, a progress strip and a readiness card,
-> none of which exist.**]**
+**The phone layout otherwise keeps what it had:** compact rows, the full-height
+item editor, and the search-inventory add sheet.
+
+> **[SCREENSHOT — REPLACE the equipment check template builder capture, wide
+> canvas.** _Demo data:_ an engine template with three locations, one nested
+> inside another, at least one item of each answer type, and the "Before
+> publishing" list showing two outstanding items. **Set the viewport to at
+> least 1440px** — the preview does not dock below that. **The old capture
+> shows a sidebar, a progress strip and a readiness card, none of which
+> exist.**]**
 
 > **[SCREENSHOT — REPLACE the equipment check template builder capture, phone
 > (390×844).** _Demo data:_ the same template; capture the compact rows with
@@ -2026,10 +2035,18 @@ So anyone who could open the Documents module could list and download a
 facility's **insurance policies, leases, capital project files and inspection
 paperwork.**
 
-Fixed. Folders now carry the same three facility grants, a newly uploaded file
-is filed into its facility's own folder as soon as it is attached, and
-**existing facility folders are corrected for you on upgrade.** A documents
-administrator no longer sees facility files by virtue of that role alone.
+Fixed for files going forward: folders now carry the same three facility
+grants, and a newly uploaded file is filed into its facility's own folder as
+soon as it is attached. Existing facility **folders** have their permissions
+corrected on upgrade.
+
+**⚠️ **Existing files are not re-filed, and that is the part to act on.** The
+migration sets the folders' permissions; it does **not** move documents that
+were already stored outside a folder into them, and the app files a document
+only as it is newly attached. **Every facility file uploaded before this
+upgrade is still folderless, still treated as organization-wide, and still
+listable and downloadable by anyone who can open Documents.** Re-attach or
+re-file them to close it — the upgrade alone does not.
 
 ### Facilities is now a leadership and facility-manager workspace
 
@@ -2242,7 +2259,7 @@ checks run now.
 - **Forty-five migrations.** Back up, confirm `alembic heads` returns exactly
   one, then `alembic upgrade head`. **The head is `f6a7b8c9d0e1`.**
 
-- **Five upgrade steps take permissions away from seeded positions**, and
+- **Four upgrade steps take permissions away from seeded positions**, and
   nothing grants them back:
   - `compliance.view` off the **Member** position.
   - `notifications.view` off the **baseline member and junior rank** positions.
@@ -2289,5 +2306,8 @@ checks run now.
 - **Warn your quartermaster** that "checkout batch" is now Item Distribution,
   and that stock received through the reorder workflow is finally issuable.
 
-- **Expect your next ballot to reach more people.** Life members and
-  probationary members were being left off operational ballots and now are not.
+- **Check who your next ballot reaches.** Two categories changed: a life member
+  now receives a `regular` ballot (they could not before), and an
+  administrative member with regular standing **no longer** receives ballots
+  restricted to active or life members. The `operational` category itself is
+  unchanged — it still requires regular standing.

@@ -276,24 +276,39 @@ By default, all active members in the organization are eligible to vote. Eligibi
 - **Meeting attendance** — Must be present at the associated meeting
 - **Specific voter list** — Manually defined list of eligible voter IDs
 
-> **Life members and probationary members were being left off operational
-> ballots** _(fixed 2026-08-26)_. A member's standing used to be one field, and
-> "is this member operational" could only be answered by looking for the single
-> value that meant _plain active member_. Anyone who had earned life
-> membership, and anyone still on probation, had that value overwritten by
-> their standing — so a bylaws question put to the operational members never
-> reached them, silently and with no warning on the dispatch summary.
+> **Standing is two fields now** _(2026-08-26)_. A member's standing used to be
+> one field carrying two independent facts. It is now a **class** (operational,
+> administrative, social) and a **status** (prospective, probationary, regular,
+> life, retired).
 >
-> Standing is now two facts: a member's **class** (operational,
-> administrative, social) and their **status** (prospective, probationary,
-> regular, life, retired). An **operational** restriction reads the class, so
-> **every operational standing counts**. "Life members only" and "probationary
-> only" still read the status, because those name a status.
+> **The built-in voter categories keep the meaning they always had**, so your
+> existing ballots behave as before:
 >
-> **Check your next ballot's recipient list against your roster.** It will be
-> longer than it was, and that is the fix working. Members whose records
-> predate the change are evaluated correctly too — the pair is derived from the
-> old field when it has not been set.
+> | Category         | Requires                                        |
+> | ---------------- | ----------------------------------------------- |
+> | `operational`    | operational class **and** regular status        |
+> | `regular`        | operational class **and** (regular **or** life) |
+> | `life`           | operational class **and** life status           |
+> | `probationary`   | operational class **and** probationary status   |
+> | `administrative` | administrative class                            |
+> | `social`         | social class                                    |
+>
+> Two things did change, and one of them **narrows** eligibility rather than
+> widening it:
+>
+> - **A life member now receives a `regular` ballot.** Under the old single
+>   field, "life" and "regular" were competing values, so a life member could
+>   not satisfy a `regular` restriction. Now they can.
+> - **An administrative member with regular standing no longer receives ballots
+>   restricted to active or life members.** Every status category now also
+>   requires the operational class. If your bylaws intend administrative members
+>   to vote on those items, use an override or an explicit voter list.
+>
+> Members whose records predate the change are evaluated correctly — the pair is
+> derived from the old field when it has not been set. **A member on an
+> org-configured membership tier (the shipped `senior` tier, for example)
+> resolves to no class and no status**, deliberately: that is exactly what the
+> tier matched before, and guessing would widen the electorate.
 
 ### Voter Overrides
 
@@ -318,14 +333,17 @@ When a member is excluded from voting but should be allowed (e.g., absent member
 
 ### Edge Cases
 
-| Scenario                                          | Behavior                                                                                 |
-| ------------------------------------------------- | ---------------------------------------------------------------------------------------- |
-| Member not on attendance list                     | Ineligible unless override granted                                                       |
-| Override granted, then member's standing changes  | Override persists regardless                                                             |
-| Bulk override for remote voters                   | Use bulk override endpoint to add multiple members                                       |
-| Life member, on an **operational** ballot item    | **Eligible** — their class is operational. Before 2026-08-26 they were silently excluded |
-| Probationary member, on an **operational** item   | **Eligible**, same reason                                                                |
-| Administrative member holding an operational role | **Not** eligible for operational items — the class decides, not the role                 |
+| Scenario                                                           | Behavior                                                                                             |
+| ------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------- |
+| Member not on attendance list                                      | Ineligible unless override granted                                                                   |
+| Override granted, then member's standing changes                   | Override persists regardless                                                                         |
+| Bulk override for remote voters                                    | Use bulk override endpoint to add multiple members                                                   |
+| Life member, on an **operational** item                            | **Not** eligible — `operational` requires regular standing. They receive `regular` and `life` items  |
+| Life member, on a **regular** item                                 | **Eligible** _(changed 2026-08-26)_ — the old fused field could not put them in both                 |
+| Probationary member, on an **operational** item                    | **Not** eligible; they receive `probationary` items                                                  |
+| Administrative member with regular standing, on a **regular** item | **Not** eligible _(tightened 2026-08-26)_ — status categories now also require the operational class |
+| Administrative member holding an operational role                  | **Not** eligible for operational items — the class decides, not the role                             |
+| Member on an org-configured tier (e.g. `senior`)                   | Matches no class and no status; eligible only for `all`                                              |
 
 ---
 

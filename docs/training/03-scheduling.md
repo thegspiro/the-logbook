@@ -3101,12 +3101,16 @@ widening the window.
 
 ### The preview
 
-On a laptop or tablet the mobile preview is **docked beside the checklist** and
-updates as you edit. On a phone it stays a modal, opened from the Tools menu.
+**The preview docks only at 1440px and wider** (`isWideCanvas`). Below that —
+which includes tablets and a good many laptops, a 1366px screen among them —
+the Preview control opens the modal, exactly as it does on a phone. The rail
+costs 344px, and under 1440 that leaves a canvas too narrow to edit in.
+
+Where it docks, it updates as you edit rather than making you open and close a
+modal each time.
 
 **Phones keep the layout they had:** compact rows, the full-height item editor,
-and the search-inventory add sheet. The side-by-side row controls are a laptop
-and tablet layout, not something a phone lost.
+and the search-inventory add sheet.
 
 ### Starting from a vehicle layout
 
@@ -3118,12 +3122,13 @@ and items it brings in before you choose it.
 On a brand-new template, adding the first location now **opens it ready for
 items** — it used to arrive collapsed with nowhere to type.
 
-> **[SCREENSHOT — REPLACE the equipment check template builder capture,
-> laptop.** _Demo data:_ an engine template with three locations, one nested
-> inside another, at least one item of each answer type, the preview docked at
-> the right, and the "Before publishing" list showing two outstanding items.
-> **The old capture shows a sidebar, a progress strip and a readiness card,
-> none of which exist.**]**
+> **[SCREENSHOT — REPLACE the equipment check template builder capture, wide
+> canvas.** _Demo data:_ an engine template with three locations, one nested
+> inside another, at least one item of each answer type, and the "Before
+> publishing" list showing two outstanding items. **Set the viewport to at
+> least 1440px** — the preview does not dock below that, so a 1366px laptop
+> cannot produce this shot. **The old capture shows a sidebar, a progress strip
+> and a readiness card, none of which exist.**]**
 
 > **[SCREENSHOT — REPLACE the equipment check template builder capture, phone
 > (390×844).** _Demo data:_ the same template; capture the compact rows with

@@ -27,16 +27,27 @@ full-height item editor and a modal preview. A single laptop shot leaves the
 phone experience undocumented, and a single phone shot makes the rebuild look
 like it did not happen.
 
-**2. Anything showing a member's membership type.** The member profile header,
-the Members administration list, the member create/edit form and the elections
-eligibility panel now show **class and status as two separate fields**. A
-capture showing one "Membership type" dropdown is wrong.
+**2. ~~Anything showing a member's membership type.~~ — WITHDRAWN 2026-08-31,
+before any capture was taken.**
 
-The elections eligibility roster is the subtle one: its per-item refusal reason
-changed shape too, from `membership type not eligible (requires: regular;
-member has: probationary)` to a reason naming class and status separately. A
-capture of that expanded red row is wrong even though nothing about the layout
-moved.
+This was written on the assumption that the class/status split surfaced in the
+UI. **It does not.** No screen renders `member_class` or `member_status`:
+`MemberProfilePage` shows roles and account status, `MembersAdminPage` has
+Member / Member # / Roles columns, and both Add Member and Member Admin Edit
+still render **a single Membership Type selector** — the pair is derived from
+its value. The elections eligibility roster's refusal reason is unchanged too;
+it still reads "membership type not eligible … (requires: …; member has: …)".
+
+**Every existing capture of those screens is current.** Had this been actioned
+it would have discarded valid images and sent a producer to photograph fields
+and columns that do not exist — the more expensive of the two failure
+directions, because the shots would have come back looking wrong with nothing
+to compare against.
+
+Recorded rather than deleted because the reasoning that produced it is worth
+not repeating: a data-model change was assumed to have a UI surface. **The
+class/status split is visible to a user in exactly one place — a ballot
+recipient list — and nowhere on a member screen.**
 
 ### Replace
 
@@ -44,10 +55,6 @@ moved.
 | --- | --- |
 | Equipment check **template builder** — laptop | Rebuilt as one canvas; sidebar, progress strip, readiness card and mode toggle all gone |
 | Equipment check **template builder** — phone (390×844) | Compact rows, full-height item editor, blockers in a bottom bar |
-| Member **profile** header | Class and status are separate fields |
-| Member **create / edit** form | Same, plus the restored password / roles / welcome-email / address / emergency-contact fields |
-| **Members administration** list | Class and status columns |
-| Elections **eligibility roster**, expanded red row | The refusal reason names class and status separately |
 | **Compliance requirements configuration** | The non-compliance notification panel now carries a "not yet active" label |
 | **Grants** dashboard, campaigns, donors, application detail | Action buttons are hidden for view-only members — **caption the capturing account's grants**, or the shot is unreproducible |
 | **Inventory** item detail, return-request review, transfer | "Checkout batch" is Item Distribution; the "Transfer is immediate" checkbox is gone |
@@ -71,7 +78,7 @@ moved.
 
 | Area | Why |
 | --- | --- |
-| **Member qualifications entry** | The model, the service and the shift-eligibility reader all shipped. **There is no officer-facing screen.** The table is reachable only by direct write — there is nothing to photograph, and photographing a hand-built form would document something no department can reach |
+| **Member qualifications entry** | **There is no direct entry screen** — a qualification is written only as a side effect of recording a training record against a course whose **Certifies** field is set. Capture the course's Certifies selector if you need to show the workflow; do not photograph or mock a qualifications panel on the member profile, because none exists |
 | Live equipment **check screen** as "new" | The lap is still built and unwired, unchanged by this window. The template builder rebuild is the *authoring* side; the check screen still renders the flat compartment list |
 
 ### One capture that cannot be taken honestly, and what to do instead

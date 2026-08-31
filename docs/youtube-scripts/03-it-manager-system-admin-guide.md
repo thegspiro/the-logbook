@@ -925,7 +925,7 @@ types collapsing to four]**
 
 ---
 
-### THE AUGUST 31 UPGRADE: FORTY-FIVE MIGRATIONS, AND FIVE THAT TAKE PERMISSIONS AWAY (ADDED 2026-08-31)
+### THE AUGUST 31 UPGRADE: FORTY-FIVE MIGRATIONS, AND SIX THAT MOVE PERMISSIONS (ADDED 2026-08-31)
 
 **[SCREEN: Terminal — backup, `alembic heads`, `alembic upgrade head`]**
 
@@ -935,12 +935,13 @@ types collapsing to four]**
 
 **[CALLOUT: "Head: f6a7b8c9d0e1 — confirm it, don't assume it"]**
 
-> "But the migration count is not the thing to brief your chief on. **Five of
-> them take permissions away from seeded positions**, and nothing grants them
-> back. This is the upgrade where somebody opens a screen on Monday morning and
-> it isn't there."
+> "But the migration count is not the thing to brief your chief on. **Six of
+> them move permissions on seeded positions — four take grants away and two add
+> new ones**, and nothing restores what the four remove. This is the upgrade
+> where somebody opens a screen on Monday morning and it isn't there."
 
-**[SCREEN: The permissions table — the five movements, side by side]**
+**[SCREEN: The permissions table — the six movements, revocations and grants
+side by side]**
 
 > "`compliance.view` comes off the Member position — it reads like an innocuous
 > view grant, but it's an accepted alternative on two officer-grade checks.
@@ -1009,7 +1010,7 @@ untouched."]**
 **[PRODUCTION NOTE — 2026-08-31. This is a new chapter, not a revision of the
 August 24 one, which stays as it is: it documents a different head and a
 different irreversible migration and is still correct for anyone upgrading
-across that window. The load-bearing beats here are the **five permission
+across that window. The load-bearing beats here are the **four permission
 revocations** and the **Testing Checklist being off** — both are "a thing
 disappeared" support calls, which is squarely this script's audience. A
 delivery pass that compresses this chapter must not drop either.]**
@@ -1450,9 +1451,9 @@ Two new sections are in the script body above:
   reverse"** (~2:30). Head `e7a41b6d09c2`; the check-type collapse is
   irreversible by design; seven migrations backfill nothing **on purpose**, and
   an empty column is a decision rather than a failure.
-- **Chapter 10, "The August 31 upgrade: forty-five migrations, and five that
-  take permissions away"** (~3:30). Head `f6a7b8c9d0e1`. The two beats that
-  cannot be cut are the **five permission revocations** — `compliance.view`,
+- **Chapter 10, "The August 31 upgrade: forty-five migrations, and six that
+  move permissions"** (~3:30). Head `f6a7b8c9d0e1`. The two beats that
+  cannot be cut are the **four permission revocations** — `compliance.view`,
   `notifications.view`, and `facilities.view` twice — and the **Testing
   Checklist shipping switched off**, because both present to the department as
   "a screen disappeared" and neither is self-explanatory. Also: the

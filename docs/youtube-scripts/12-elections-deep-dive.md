@@ -175,122 +175,53 @@ eligible-voter-types selector and the attendance toggle.]**
 
 **[CALLOUT: "Class = what kind of member. Status = where on the ladder."]**
 
-> "'Operational' reads the **class**. So a life member who still rides is
-> operational. So is somebody still on probation. **All of them get the
-> operational ballot.** 'Life' and 'probationary' read the **status**, because
-> those name a status."
+> "'Operational' reads **both**: operational class _and_ regular standing.
+> That's the same electorate you had before the split, deliberately. 'Life' and
+> 'probationary' read the class _and_ their own status."
+
+**[SCREEN: A life member's ballot — the `regular` item present, the
+`operational` item absent.]**
+
+> "Here's what did change. **A life member now qualifies for a `regular`
+> ballot.** Under the old single field, 'life' and 'regular' were competing
+> values — a member could be one or the other, never both — so your life
+> members were dropping out of `regular` restrictions. Now they qualify."
+
+**[CALLOUT: "Life members are in `regular` now. They were never in
+`operational`."]**
+
+> "And one that goes the other way: **every status category now also requires
+> the operational class.** An administrative member with regular standing used
+> to satisfy a `regular` restriction. They don't any more. If your bylaws
+> intend them to vote on that item, use an override or an explicit voter list."
 
 > "A member who holds the EMT position but is classified administrative is
 > _not_ operational — class controls the ballot, positions control system
 > permissions."
 
-**[PRODUCTION NOTE — 2026-08-26. This beat was rewritten because the previous
-take was made true-and-then-false by the class/status split. It said
-"'Operational' means active members. 'Regular' means active plus life
-members." That described a single membership-type field that no longer exists,
-and it described a real defect as if it were the design: a bylaws question put
-to the operational members **never reached a life member or anyone on
-probation**, because their standing overwrote the one value the check
-recognised. Do not restore the old wording, and do not shorten this beat to
-"operational means active" in a delivery pass — that sentence is the bug.]**
+**[PRODUCTION NOTE — rewritten 2026-08-26, corrected again 2026-08-31. This
+beat has now been wrong in both directions, which is worth knowing before
+touching it a third time.
 
-> "So your officer election item might be open to operational members, while
-> the bylaw amendment right below it is restricted to regular members. Same
-> ballot, different electorates — and each member only sees, and can only
-> vote on, the items they qualify for."
+The original take said "'Operational' means active members. 'Regular' means
+active plus life members." That was an accurate description of the build — and
+of a defect, since one fused field could not express both facts.
 
-> "**Require attendance** on an item means the voter must be checked in as
-> present at the linked meeting. And here's the security guarantee: these
-> rules aren't just cosmetic filtering on the ballot page. When a ballot is
-> issued, the member's eligible items are locked to their voting token, and
-> the server enforces them again at submission. Someone hand-crafting a
-> request to vote on a restricted item gets rejected — with an audit trail."
+The 2026-08-31 rewrite then over-corrected, claiming the class/status split
+made every operational standing eligible for `operational` items. That was true
+of commit `7204f9134` and **false ninety minutes later**: `f65e4e7ae` reverted
+the widening the same day, because reading class alone admitted probationary
+and retired members to a restricted ballot.
 
-**[CALLOUT: "Eligibility is enforced at the ballot box, not just the mailbox"]**
+**The shipped contract is the one narrated above** — `operational` = class AND
+regular status, unchanged in effect from the legacy meaning. Verify against
+`ElectionService._user_has_role_type` before editing this beat, not against the
+changelog, which carried the reverted claim for five days.]**
 
-### PER-ITEM OVERRIDES (10:30 – 11:00)
-
-**[SCREEN: Show victory-condition override fields on a bylaw item]**
-
-> "Items can also override the election-level victory condition — so your
-> officer races run majority while the bylaw amendment on the same ballot
-> requires two-thirds. Set it once, per item, and the tally handles the rest."
-
----
-
-## CHAPTER 5: Candidates & Nominations (11:00 – 13:00)
-
-**[SCREEN: Candidates tab. Add candidates to the Fire Chief position.]**
-
-> "Add candidates to each position. Pick the member from the roster — their
-> name fills in — set the position, and optionally a statement and photo that
-> voters see on the ballot. Display order controls ballot ordering."
-
-**[SCREEN: Toggle a candidate's accepted status]**
-
-> "Candidates have an accepted flag. If someone declines the nomination, mark
-> them not accepted — they stay visible in your records but voters can't vote
-> for them."
-
-> "And 'your records' means exactly that: members only see pending
-> nominations while the nomination window is open, so nominees can respond.
-> Once it closes, the member-facing candidate list shows accepted candidates
-> only — you, with election-manage permission, always see the full list."
-
-**[EDITOR (2026-08-16): new 15-second beat — pending-nomination visibility
-is now phase-scoped (member list returns accepted-only outside the
-nominations phase). Re-time Chapter 5 onward by ~0:15. B-roll: capture the
-candidate list from a plain member account after closing nominations to show
-the pending entry absent.]**
-
-**[SCREEN: Attempt to delete a candidate who has votes — show the block]**
-
-> "Two guardrails: a candidate with recorded votes can't be deleted — that
-> would corrupt the tally and the audit trail. Mark them declined instead.
-> And write-in candidates, when you allow them, are created automatically at
-> vote time with the name the voter typed — sanitized, and flagged as
-> write-ins in the results."
-
-> "For membership approval items you usually don't add candidates at all —
-> the system generates Approve and Deny options automatically."
-
----
-
-## CHAPTER 6: Who Can Vote — Eligibility, the Roster & Overrides (13:00 – 17:00)
-
-> "This chapter is the one to re-watch before your first real election.
-> Eligibility has four layers, checked in order."
-
-**[SCREEN: Diagram callout — four stacked layers:
-
-1. Election voter list (optional explicit list)
-2. Membership tier rules (org settings)
-3. Per-item voter types
-4. Per-item attendance requirement]**
-
-> "Layer one: an explicit voter list on the election, if you set one — only
-> those members, period. Layer two: membership tier rules from your
-> organization settings. A tier can be marked not voting-eligible — think
-> social members — or can require a minimum meeting-attendance percentage
-> over a lookback window. The system computes each member's actual attendance
-> and denies members under the bar, with the percentage in the denial reason.
-> Layers three and four we covered: per-item voter types and per-item
-> attendance."
-
-### THE ELIGIBILITY ROSTER (14:00 – 15:30)
-
-**[SCREEN: Eligibility tab — the full roster. Point at the color coding.]**
-
-> "Before you send a single ballot, open the Eligibility Roster. Every active
-> member, color-coded: green rows are eligible, red are ineligible — with the
-> reason, per ballot item — blue rows have an override, and muted rows have
-> already voted. Search, filter, and expand any member to see exactly which
-> items they'll receive and why."
-
-**[SCREEN: Expand a red row — show per-item reasons naming the member's class
-and status, e.g. "requires status: regular; member has: probationary". Shoot
-this against a build dated 2026-08-26 or later: an older capture shows a single
-"membership type" reason, which is the wrong shape.]**
+**[SCREEN: Expand a red row — show the per-item reason. **The reason string is
+unchanged**: it still reads "membership type not eligible for N/M item(s)
+(requires: …; member has: …)". An existing capture of this row is still
+current.]**
 
 > "This kills the number-one election headache: 'why can't I vote?' The
 > answer is right here, before it becomes a meeting-night argument."

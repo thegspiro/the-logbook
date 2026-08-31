@@ -933,13 +933,22 @@ are the two things a chief will ask about within the first minute.
 
 ## ADD TO THE ELECTIONS CHAPTER (ADDED 2026-08-31)
 
-> "One correction, and it may have cost you a vote. Until the end of August, a
-> bylaws question put to 'the operational members' **never reached your life
-> members, or anyone still on probation**. The system could only recognise
-> operational standing by one specific value, and their standing had overwritten
-> it. That is fixed — operational now reads a member's _class_, so every
-> operational standing counts. **Check your next ballot's recipient list against
-> your roster.** It will be longer, and that is the fix working."
+> "One change to your electorate, and it goes in both directions. A member's
+> standing is now two facts — their **class**, and their **status** on the
+> ladder."
+
+> "Ballots restricted to your **operational members** reach exactly who they
+> reached before; that category still means operational class in regular
+> standing. But **a life member now qualifies for a `regular` ballot** — under
+> the old single field, 'life' and 'regular' were competing values, so your
+> life members were dropping out of those restrictions without anyone
+> noticing."
+
+> "And going the other way: **an administrative member with regular standing no
+> longer qualifies for a `regular` ballot.** If your bylaws intend them to vote
+> on those items, that now takes an override or an explicit voter list.
+> **Check your next ballot's recipient list against your roster** — it will
+> have moved in both directions."
 
 ---
 

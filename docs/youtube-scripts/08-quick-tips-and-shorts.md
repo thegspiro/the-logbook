@@ -1412,40 +1412,44 @@ view; the diagram view is a separate short if you want one.
 
 ---
 
-## SHORT 8AN: One Member, Two Facts
+## SHORT 8AN: The Ballot That Skipped the Life Members
 
 **Length:** 40 seconds
-**Extracted From:** Script 6, "Your profile"; Script 12, per-item eligibility
-**Added:** 2026-08-31
+**Extracted From:** Script 12, per-item eligibility; Script 4, elections insert
+**Added:** 2026-08-31 · **Rewritten 2026-08-31** (see production note)
 
-**[0:00 — SCREEN: An old profile showing a single "Membership type: Life".]**
+**[0:00 — SCREEN: A ballot dispatch summary. A fifty-year life member is not on
+the recipient list for an item restricted to regular members.]**
 
-> "This used to be one field, and it was quietly costing people a vote."
+> "Your bylaws put this one to the regular members. Your life members didn't
+> get it. Nobody noticed, because nothing said so."
 
-**[0:08 — SCREEN: The same profile now — Class: Operational. Status: Life.]**
+**[0:12 — SCREEN: The old single "Membership type" field, value `life`.]**
 
-> "It's two now. **Class** is what kind of member you are — operational,
-> administrative, social. **Status** is where you are on the ladder —
-> probationary, regular, life, retired."
+> "One field held two different facts — what kind of member you are, and where
+> you are on the ladder. 'Life' and 'regular' were competing values, so earning
+> life membership quietly took you _out_ of 'regular'."
 
-**[0:20 — SCREEN: A ballot dispatch summary, before and after, with a longer
-recipient list.]**
+**[0:24 — SCREEN: Class: Operational · Status: Life. The same ballot, life
+member now on the list.]**
 
-> "Here's why it matters. A bylaws question put to 'the operational members'
-> **never reached your life members, or anyone on probation** — because one
-> field could only say one of those two things, and their standing had
-> overwritten the one that got them the ballot."
+> "They're two fields now, so both are true at once. Your life members are back
+> in the regular electorate."
 
-**[0:32 — CALLOUT: "Check your next ballot's recipient list."]**
+**[0:33 — CALLOUT: "Check your next ballot's recipient list."]**
 
-> "Operational now reads the class, so all of them count. Your next ballot goes
-> to more people, and that's the fix."
+> "It moves the other way too — an administrative member with regular standing
+> no longer gets that ballot. Worth checking against your roster once."
 
-**Production:** this short needs a genuine before/after. If the "before"
-capture is not available, narrate it over the after-state rather than
-reconstructing a fake old screen.
+**Production:** **there is no new UI to shoot.** The member screens still show a
+single Membership Type selector; the class/status pair is derived from it. Shoot
+the _ballot recipient list_, which is where the change is visible. Do not
+reconstruct a fake profile screen showing two fields — none exists.
 
----
+**[PRODUCTION NOTE — this short originally claimed the split made life and
+probationary members eligible for **operational** ballots. It does not:
+`operational` requires regular standing, unchanged. The real change is the
+`regular` category. Verify against `ElectionService._user_has_role_type`.]**
 
 ## SHORT 8AO: Where Did /testing Go?
 

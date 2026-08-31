@@ -873,10 +873,18 @@ documents, capital project files and inspection paperwork**.
 - Facility file folders now carry the same three facility grants.
 - A newly uploaded file is filed into its facility's own folder as soon as it
   is attached.
-- **Existing facility folders are corrected for you on upgrade.**
+- Existing facility **folders** have their permissions corrected on upgrade.
 - A **documents administrator no longer sees facility files** by virtue of that
-  role alone. Access now requires a facilities grant, which is what the
-  facility screens have always required.
+  role alone — for files that are in a folder. Access now requires a facilities
+  grant, which is what the facility screens have always required.
+
+> **⚠️ **Existing files are not re-filed, and that is the part to act on.** The
+> migration sets the folders' permissions; it does **not** move documents that
+> were already stored outside a folder into them, and the app files a document
+> only as it is newly attached. **Every facility file uploaded before this
+> upgrade is still folderless, still treated as organization-wide, and still
+> listable and downloadable by anyone who can open Documents.** Re-attach or
+> re-file them to close it — the upgrade alone does not.
 
 > **[SCREENSHOT — REPLACE the facility detail Files tab capture.** The folder
 > structure is visible now, and the audience is different.**]**

@@ -16,8 +16,587 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-None. Feature 25 (Messaging & notifications) is fully closed — see log entry
-below. Next: feature 26, Forms.
+Feature 31 (Scheduled tasks), pass 2 — PR
+[#2095](https://github.com/thegspiro/the-logbook/pull/2095), branch
+`claude/security-review-scheduled-tasks-pass2`. Re-verified all 13 findings
+from `docs/security-review/CRON2-31-scheduled-tasks.md` (pass 1) hold, no
+regressions. Read `scheduled.py` and `scheduled_tasks.py` (43 runners) end to
+end, plus the in-process scheduler in `main.py` (new territory, out of pass
+1's stated scope). Six new fixes, three new flagged findings. **Round 2
+(Codex-caught):** three of round 1's own fixes (CRON-31-1/4/5/6) still read a
+now-poisoned session's attributes inside their except blocks or counted a
+parent's work before its commit succeeded — corrected, empirically verified
+against a real connection. See log entry below and
+`docs/security-review/CRON-31-scheduled-tasks.md`.
+
+**Note on branch naming:** pass 1's PR (#1915) used the branch name
+`claude/security-review-scheduled-tasks` — reusing it for this pass would
+violate CLAUDE.md Pitfall #24 (do not reuse a branch name after its PR
+merges), so this pass uses `-pass2` appended, matching the convention other
+pass-2 iterations have used when a name collision like this comes up.
+
+---
+
+### 2026-08-31 — Feature 31 (Scheduled tasks), pass 2 — 6 fixed, 3 new flagged — PR #2095
+
+No security-review PR was open (feature 30 fully merged via PR #2093 earlier
+this iteration), so the rotation continued to feature 31. Loaded
+`CHECKLIST.md`, `SEC-00-cross-cutting-baseline.md`,
+`docs/app-review/scheduled-tasks.md` (A3, 2 passes), and
+`docs/security-review/CRON2-31-scheduled-tasks.md` (pass 1, PR #1915 + its
+Codex round, 13 findings) before reading any code.
+
+Read `scheduled.py` (58 L, 2 routes) and `scheduled_tasks.py` (5,600 L, 43
+task runners) end to end — not diffed against pass 1, per the rotation's
+"enumerate, don't spot-check" rule — plus the in-process scheduler in
+`main.py` (`_scheduled_task_loop`, `_scheduled_email_loop`,
+`_try_claim_background_task`), which drives every `TASK_RUNNERS` entry in a
+default deployment but was outside pass 1's stated scope. Diffed pass 1's
+merged head against current `HEAD` for the two named files: one real change
+landed since pass 1 (a `run_publish_scheduled_messages` rewrite adding
+row-locking and message-expiry handling), which is where CRON-31-1 was
+found.
+
+Re-verified all 13 pass-1 findings (CRON2-31-1 through -13) hold with no
+regressions, each re-checked against current `file.py:line`, not assumed
+from the prior doc.
+
+**6 new fixes:**
+
+1. **CRON-31-1 (MED)** — `run_publish_scheduled_messages` (the new code
+   since pass 1) had no per-message isolation: one message's failure
+   propagated an unhandled exception, permanently orphaning every other
+   due message in the same batch (their `scheduled_at` claim was already
+   committed, so the "due" query would never select them again). Fixed with
+   the same try/except + `needs_refresh` pattern CRON2-31-1/5/6 established.
+2. **CRON-31-2 (MED)** — `run_action_item_reminders`'s minutes-action-item
+   branch has raised `MissingGreenlet` on every single invocation since the
+   day it was written (verified against a real MariaDB connection via
+   `async_session_factory()`, not the `db_session` test fixture — a naive
+   version of the guard test using that fixture passes even with the bug
+   present, since SQLAlchemy's identity-map short-circuit for many-to-one
+   lazy loads masks it when the same session already holds the parent row).
+   Fixed with `selectinload(MinutesActionItem.minutes)`.
+3. **CRON-31-3 (MED)** — `run_shift_reminders` never got the "empty
+   member_ids after the active-user filter" guard CRON2-31-3's Codex round
+   added to its sibling `run_end_of_shift_checklist_reminders` — stamped its
+   dedup flag even when every assigned member was inactive and zero
+   reminders were sent. Fixed with the matching guard.
+4. **CRON-31-4 (LOW)** — `run_rolling_recurrence_extend` had no per-parent
+   commit/rollback isolation (a single deferred trailing commit — the
+   "worst" shape CRON2-31-1 found in `run_shift_auto_checkout`) and no
+   rollback in its except at all. Fell outside the structural test's
+   `"select(Organization)"` heuristic since it iterates `Event` parents.
+   Fixed: commit per parent, rollback on failure.
+5. **CRON-31-5 (LOW, latent)** — same function, no `Organization.active`
+   filter at all (not even the original CRON-2's bare form). Fixed with a
+   join, same pattern as CRON2-31-11.
+6. **CRON-31-6 (LOW)** — `run_external_training_auto_sync` had no rollback
+   in its per-provider except, even though the delegated service's own
+   pre-try `flush()` can fail and poison the session for every later
+   provider. Fixed.
+
+**3 new flagged (not fixed):**
+
+- **CRON-31-7 (LOW)** — `run_end_of_shift_summary` can mark a member "sent"
+  if both channels fail for them, same shape as CRON2-31-3 but much lower
+  exposure (the in-app half never reaches the DB before the org-level
+  commit) — reversing it is a product decision about cross-channel delivery
+  semantics.
+- **CRON-31-8 (LOW)** — `run_event_reminders` stamps a reminder interval
+  sent when zero recipients exist yet, by explicit documented design
+  ("avoid re-processing"), not an oversight.
+- **In-process scheduler's Redis-down fallback** (`main.py`) runs on every
+  worker unguarded when Redis is unavailable — the alternative (fail closed,
+  run on no worker) is worse for this feature. Mirrors the CLAUDE.md
+  breached-password fail-open trade-off.
+
+Every fix has a guard test independently verified to fail against the
+pre-fix code and pass against the post-fix code (not merely written and
+assumed correct) — full list in `docs/security-review/
+CRON-31-scheduled-tasks.md`'s "Guard tests added" section.
+
+**Completion gate:** `flake8`/`black --check`/`isort --check-only` clean on
+`app/ tests/ alembic/`; `validate_migrations.py --strict` — 394 revisions,
+single head; the full backend suite — **9351 passed, 22 skipped, 0 failed**
+(all skips pre-existing Docker/optional-dependency/contract-suite skips).
+No frontend file touched.
+
+**Round 2 (Codex-caught, all verified against actual code — and, where the
+claim was about async session behavior, against a real connection — before
+fixing):**
+
+1. **CRON-31-1 addendum.** The except block still read
+   `getattr(message, "id", "?")` for its log line before calling
+   `db.rollback()`. Verified empirically against a real connection: once
+   `db.commit()` itself fails (not just `materialize_recipients()` raising),
+   _any_ attribute read on _any_ loaded object — not only an expired one —
+   raises `PendingRollbackError` until the rollback runs; `getattr`'s default
+   only catches `AttributeError`, so the read itself aborted the exception
+   handler, crashing the whole batch — exactly the bug this finding exists
+   to fix. Moved the `id` capture to before any further DB operation.
+2. **CRON-31-4/5 addendum, two gaps.** `total_created`/`series_extended`
+   were incremented before the commit that could still fail, so a failed
+   parent's counts survived its own rollback; moved both increments to after
+   the commit succeeds. The fix also never refreshed the parent processed
+   right after a failed one (the same `parents`-list session-poisoning gap
+   CRON-31-1 had) — added the same `needs_refresh` + `db.refresh(parent)`
+   pattern.
+3. **CRON-31-6 addendum.** Same `providers`-list gap as above — added
+   `needs_refresh` + `db.refresh(provider)`, and captured `provider.id`/
+   `provider.name` before the risky call instead of reading them in the
+   except block.
+
+New/strengthened guard tests: a real-`db_session` test forcing a genuine
+FK-violation `IntegrityError` on the commit itself (CRON-31-1), a mocked test
+forcing the failure specifically at `db.commit()` after what the pre-fix code
+would already have counted (CRON-31-4/5), and an added
+`db.refresh.assert_awaited_once_with(...)` assertion (CRON-31-6). Every one
+verified to fail against the pre-fix/pre-correction code and pass with the
+correction restored. `pytest tests/ -k "scheduled_task or rolling_recurrence
+or ..."` — **143 passed** (was 141); full suite — **9353 passed, 22 skipped,
+0 failed** (was 9351); `flake8`/`black --check`/`isort --check-only` clean.
+
+Feature 31 marked 🔄 (not ✅ yet — that happens on the closing PR after
+merge, per the rotation's own rule).
+
+### 2026-08-31 — Feature 30 (Onboarding), pass 2 ✅ PR #2093 merged (`e6a1eb45`)
+
+Round 1: 2 fixed, 1 new flagged. Round 2 (Codex-caught): 1 more fixed — see
+below.
+
+No security-review PR was open (feature 29 fully merged via PR #2091 earlier
+this iteration), so the rotation continued to feature 30. Loaded
+`CHECKLIST.md`, `SEC-00-cross-cutting-baseline.md`, `docs/module-audit/
+onboarding.md` (iteration 25), `docs/app-review/onboarding.md` (B25, 4
+passes), and `docs/security-review/ONB2-30-onboarding.md` (pass 1, PR #1913 +
+same-day follow-up) before reading any code — re-verified their findings
+rather than re-deriving them.
+
+Read `onboarding.py` (2,386 L), `services/onboarding.py` (1,465 L),
+`models/onboarding.py`, `utils/onboarding_security.py`, `template_service.py`
+in full, plus the SMTP/OAuth test helper (`email_test_helper.py`) for a new
+angle this pass adds. Enumerated all 24 unauthenticated bootstrap routes and
+their compensating controls (table in the findings doc). Re-verified every
+prior finding across all three review layers (ONB-1 through ONB-9, ONB2-30-1
+through ONB2-30-8, the E712/template-mass-assignment fixes) line-by-line — all
+hold, no regressions.
+
+**Two fixes, both low-risk and verified:**
+
+1. **ONB-30-1 (LOW)** — `GET /status` was the one anonymous onboarding route
+   with no rate limit (noted, not fixed, in app-review pass 2). Added the same
+   scoped-wrapper pattern the other 7 routes already use. Guard test extended
+   from 7 to 8 wrappers; verified to fail with the fix reverted.
+2. **ONB-30-2 (LOW)** — `VITE_SESSION_KEY` is declared in
+   `frontend/.env.example`/`setup.sh` and documented in `CLAUDE.md` as a
+   security-critical "Onboarding session encryption key" that "MUST be
+   changed for production," but has had zero readers anywhere in the code
+   since a client-side XOR obfuscate/deobfuscate pair was removed (confirmed
+   by a trailing comment in `onboarding/utils/security.ts` explaining exactly
+   that removal, and by `onboarding/utils/storage.ts`'s current no-client-
+   secrets design). Removed the dead variable and its "must change" guidance
+   from `.env.example`, `setup.sh` (3 places), `CLAUDE.md`'s env var table,
+   and `docs/ONBOARDING_FLOW.md`'s production checklist.
+
+**One new finding, flagged not fixed:**
+
+- **ONB-30-3 (MED)** — `POST /onboarding/test/email`'s self-hosted-SMTP path
+  (`email_test_helper.test_smtp_connection`) connects to a fully
+  client-supplied `smtpHost`/`smtpPort` via raw `smtplib` with no SSRF/
+  private-IP protection — the only client-directed outbound connection in the
+  codebase that doesn't route through `app.utils.url_validator`. Reachable
+  pre-auth during the bootstrap window (anyone can mint a rate-limited
+  onboarding session via `/start` until the first org exists); differentiated
+  error messages let a caller fingerprint internal `host:port` reachability.
+  Not fixed: the obvious mitigation (block private IPs) would break the
+  legitimate, common case of an on-prem SMTP relay reachable only from a fire
+  department's internal network — a genuine product-policy tradeoff, not a
+  drive-by-fixable bug. Mirrored in `KNOWN_LIMITATIONS.md`.
+
+All still-flagged items from prior passes (ONB-7 role editor, ONB-8 residual
+audit-transaction durability, ONB2-30-8 session sliding TTL, role/position
+dedup, `/organization`'s missing `except Exception`, `ITTeamMemberRequest`'s
+loose `email: str`) re-confirmed unchanged by direct code read, not
+re-applied.
+
+**Completion gate:** `flake8`/`black --check`/`isort --check-only` (pinned
+8.0.1) clean across `app/ tests/ alembic/`; `validate_migrations.py --strict`
+— 394 revisions, single head; `pytest tests/ -k "onboard or template_service"`
+— 109 passed, 1 skipped; `test_onboarding_rate_limit_scopes.py` — 9 passed
+(was 7), verified to fail with the fix reverted; `test_security_middleware.py`
+— 80 passed; `tsc --noEmit` — 0 errors; `eslint .` — 0 errors, 8 pre-existing
+warnings in unrelated files. Full writeup:
+`docs/security-review/ONB-30-onboarding.md`.
+
+**Round 2 (Codex-caught, verified before fixing):** ONB-30-1's own fix gave
+`GET /status` `check_rate_limit`'s bare auth defaults (5 requests/60s,
+1800s lockout on the Redis-unavailable fallback). Unlike its siblings,
+`/status` isn't gated behind a deliberate user action — `LoginPage.tsx` and
+`OnboardingCheck` call it from a `useEffect` on every mount, twice under
+React StrictMode — so a handful of page loads exhausts the budget and the
+fallback lockout could leave a legitimate admin locked out of even learning
+whether onboarding is needed for up to 30 minutes. Fixed by giving
+`_rate_limit_onboarding_status` its own explicit budget
+(`max_requests=60, window_seconds=60, lockout_seconds=60`) instead of the
+auth defaults; every other onboarding route keeps the tight defaults since
+each gates a one-shot action. Guard tests added:
+`test_status_wrapper_uses_a_read_appropriate_budget_not_auth_defaults` and
+`test_action_wrappers_keep_the_auth_defaults` (confirms the loosening stays
+confined to `/status`). `pytest tests/ -k "onboard or template_service"` —
+**117 passed, 1 skipped** (was 109); `test_onboarding_rate_limit_scopes.py`
+— **17 passed** (was 9); `flake8`/`black --check`/`isort --check-only` clean.
+
+---
+
+### 2026-08-31 — Feature 29 (Reports & analytics), pass 3 ✅ PR #2091 merged (`b6c283a7`)
+
+Round 1: 0 fixed, 0 new flagged (claim did not hold). Round 2 (Codex-caught):
+6 fixed — see below.
+
+No security-review PR was open (feature 28/Security-audit-IP fully merged via
+PR #2089), so the rotation continued to feature 29. Loaded `CHECKLIST.md`,
+`SEC-00-cross-cutting-baseline.md`, and both prior findings docs
+(`docs/security-review/RPT2-29-reports-analytics.md`, PR #1912;
+`docs/module-audit/reports-analytics.md`; `docs/app-review/reports-analytics.md`;
+`docs/app-review/dashboard.md`) — re-verified their open items rather than
+re-deriving them.
+
+Diffed all ten files (`reports.py`, `analytics.py`, `platform_analytics.py`,
+`dashboard.py`, `labels.py`, `reports_service.py`,
+`dashboard_widget_service.py`, `attendance_dashboard_service.py`,
+`label_service.py`, `label_printer_service.py`) against the commit pass 2
+merged as: the only change since is one small commit adding a `printer_id`
+field to the label preset, which validates the client-supplied printer id
+against the caller's org before storage (correct pitfall-14c pattern) —
+verified good, no finding.
+
+Read every endpoint and service in full (not just the diff), enumerated all
+29 routes' auth/permission dependencies (table in the findings doc), and
+re-verified every prior fix line-by-line: RPT2-29-1, RPT2-29-3, DASH-29-1,
+DASH-29-2, DASH-29-3, LBL-29-1, LBL-29-3 (security-review pass 2) and DASH-3,
+RPT-1, RPT-4, RPT-5a, RPT-5b (module-audit/app-review) all hold exactly as
+recorded, no regressions. Every still-flagged policy item (RPT2-29-2 saved-
+report scheduler, LBL-29-2 label-printer permission gate, LBL-29-4 PDF label
+count cap, RPT-3 PII-tier permission, RPT-5c/RPT-6/RPT-7, DASH-2 dead
+`/dashboard/stats` endpoint) re-confirmed unchanged by grep/re-read, not
+re-applied.
+
+Also checked dimensions the pass-2 writeup didn't fully re-derive: zero
+`.like()`/`.ilike()` calls in this feature (n/a); the frontend's client-side
+CSV export (`modules/reports/utils/export.ts`) routes every cell through
+`escapeCsvCell`, which neutralizes formula-injection triggers the same way
+`SafeCsvWriter` does server-side (verified good); `platform_analytics.py`'s
+error-log aggregate projects only `error_type` + count, never
+`error_message`/`context` (verified good); the one `ondelete="SET NULL"` FK
+in this feature's models (`LabelPrinter.created_by_id`) is `nullable=True`.
+
+Noted in passing, not fixed (dead code, not exploitable): the frontend's
+`modules/reports/services/api.ts` exports a `reportExportService.exportReport`
+that calls a `POST /reports/export` backend route which does not exist, and
+has zero callers anywhere in the frontend.
+
+**Round 1 claimed no new findings, no code changes.** That claim did not
+survive Codex's review of the doc itself. Full writeup:
+`docs/security-review/RPT-29-reports-analytics-pass3.md`.
+
+**Round 2 (Codex-caught, all six verified against actual code before fixing):**
+
+1. **LBL-29-3 addendum (P1).** `extra_lines` was bounded on list length
+   (`max_length=20`) but not per-element string length; `_build_extra_lines`
+   passes a `custom:<text>` entry through unbounded, joined into every label
+   spec. Fixed with a per-element `max_length=100` on both
+   `LabelGenerateBody.extra_lines` and `LabelPrintBody.extra_lines`.
+2. **RPT-3, real authorization bypass (P1).** `PII_REPORT_PERMISSIONS`
+   covered only `member_roster`/`pipeline_overview`. `training_summary`,
+   `training_progress`, `annual_training`, `certification_expiration`, and
+   `compliance_status` all return per-member training/compliance detail
+   gated behind `training.manage` at their source; `admin_hours` returns
+   per-member hours gated behind `admin_hours.manage` at its source. A
+   `reports.view`-only caller could reach all six via `/reports/generate` and
+   `/reports/saved/{id}/run`. Fixed by adding all six to the map — this
+   supersedes round 1's "still flagged, policy call" characterization of the
+   `certification_expiration` gap, which was a real bug, not a policy choice.
+3. **Dashboard action-items caching (P2).** `/dashboard/action-items`
+   (assignee names + free-text descriptions) was missing from
+   `UNCACHEABLE_PREFIXES`, so a revoked grant could still be served from the
+   90s stale-while-revalidate cache. Fixed.
+4. **Unbounded saved-report listing (P2).** `GET /reports/saved` has no
+   pagination; capped creation at 200 active rows per org to bound it.
+5. **Saved-report field widths unvalidated (P2).** `name`/`report_type`/
+   `schedule_frequency` had no length bounds against their `VARCHAR`
+   columns, risking an uncaught `DataError` under MySQL strict mode. Fixed
+   with matching `Field(max_length=...)` bounds.
+6. **Analytics deviceType unvalidated (P2).** `metadata.deviceType` was
+   copied straight into a `VARCHAR(20)` column with no type/length check.
+   Fixed with a sanitizing extraction helper.
+
+Guard tests added: 3 (labels), 5 (report PII gate), 11 (saved-report caps/
+bounds + analytics), plus 1 frontend cache-exclusion test — 20 new tests, all
+passing. Completion gate: `flake8`/`black --check`/`isort --check-only`
+clean on all files touched; `pytest tests/ -k "reports or label or
+analytics"` — **368 passed, 1 skipped, 0 failed**; new/modified test files —
+**31 passed**; frontend `tsc --noEmit` clean, `eslint` clean on both changed
+files, `vitest run apiCache.test.ts` — **87 passed**.
+
+---
+
+### 2026-08-31 — Feature 28 (Security, audit & IP), pass 2 ✅ PR #2089 merged
+
+PR #2089 merged (`eca2825d`). No code finding fixed; two rounds of Codex
+correction on the findings writeup itself, plus one small frontend fix Codex
+caught along the way:
+
+1. **Scope-methodology error, caught round 1.** The pass's original "all
+   nine files byte-identical to pass 1" claim was false for one file —
+   `core/security_middleware.py` was rewritten by PR #1917 (an unrelated
+   feature, "core-infra," merged four days after pass 1) — the diff had been
+   run against the wrong baseline. #1917 actually fixed a real bug (session-
+   hijack/data-exfiltration detection read `user_id` before it existed on
+   the request, so those detectors never fired; also added a missing
+   `db.commit()`), which meant SEC2-28-7's wiring/severity claims needed
+   re-deriving against the corrected code, not the stale assumption.
+
+2. **SEC2-28-7 corrected across both rounds.** Original claim: all five
+   detector paths fire `ThreatLevel.CRITICAL` and are visible only via a
+   raw DB/API query. Actual: only `detect_session_hijack` and
+   `report_privilege_escalation_attempt` are unconditionally CRITICAL;
+   `detect_brute_force` is HIGH; `detect_data_exfiltration` is HIGH,
+   escalating to CRITICAL only on 5× cumulative volume (its
+   external-destination CRITICAL branch is dead code — the sole call site
+   never supplies `destination`). Three of the five detectors already write
+   an org-scoped audit-log row `AuditLogPage` displays — the real gap for
+   those three is a missing alert-specific ack/resolve UI, not
+   invisibility. Two findings widened instead: brute-force alerts carry
+   `user_id=None` on every failed login unconditionally, so they get
+   `organization_id=NULL` and are excluded by every org-scoped alert query
+   — no frontend fix alone closes this, it needs a platform-level
+   alert-viewing design; and `SecurityMonitoringMiddleware` only checks
+   exfiltration when the response has `Content-Length`, which
+   `StreamingResponse` never sets — confirmed at three of the fifteen
+   `EXPORT_ENDPOINTS` routes that build the full export in memory and still
+   never set it, so those exports create no alert at any size (a backend
+   gap, not a UI one). The remediation note also originally named only
+   `resolve` as needing `audit.export`; `acknowledge` requires the same
+   permission and was missing.
+
+3. **Small fix, both rounds.** `IPSecurityAdminPage`'s route required only
+   `security.manage` while `ip_security.py` accepts `security.manage` OR
+   `settings.manage`, refusing a `settings.manage`-only admin the page the
+   API would authorize. Fixed via `ProtectedRoute`'s `requiredAnyPermission`
+   — which immediately turned CI red via `testingRegistry.test.ts`'s route-
+   gate comparison test, since `testingRegistry.ts`'s own entry needed the
+   same update; fixed in a follow-up commit. The doc's first draft had
+   credited the wrong tests (`routeIntegrity.test.ts`, an unrelated store
+   test) with covering this change — corrected to credit the actual
+   gate-comparison test.
+
+CI green (17/17), all ten review threads across two rounds resolved, no
+merge conflict. See `docs/security-review/SEC2-28-security-audit-ip.md` for
+the full writeup.
+
+---
+
+### 2026-08-31 — Feature 28 (Security, audit & IP), pass 2 — 0 fixed, 1 flagged (HIGH-operational) — PR pending
+
+No security-review PR was open (feature 27/Integrations fully merged via PR
+#2088), so the rotation continued to feature 28. Loaded `CHECKLIST.md`,
+`SEC-00-cross-cutting-baseline.md`, pass 1's own findings doc
+(`SEC2-28-security-audit-ip.md`, PR #1911), `docs/module-audit/
+security-audit-ip.md`, and `docs/app-review/security-audit-ip.md`; re-verified
+their open items rather than re-deriving them.
+
+Diffed all nine backend files this feature covers against the commit pass 1's
+PR merged as, and originally reported **byte-identical, zero lines changed**
+across all nine — wrong for one: `core/security_middleware.py` changed by
+159 additions / 117 deletions in PR #1917 (feature 33, "core-infra," merged
+2026-08-27, four days after pass 1's #1911), which the diff was run against
+the wrong baseline and missed. Codex review caught it (see the full writeup
+in `SEC2-28-security-audit-ip.md` for what #1917 actually changed — mainly,
+it fixed session-hijack/data-exfiltration detection's user-id timing bug and
+a missing `db.commit()`, so those detectors are now genuinely wired where
+pass 1 had no way to know they weren't yet). All six pass-1 findings
+(SEC2-28-1 through SEC2-28-6) re-verified directly against current code: the
+four fixes are intact (129/129 scoped tests pass), and the two flagged items
+(SEC2-28-5 — approved IP-allowlist exceptions have no enforcement effect;
+SEC2-28-6 — TOCTOU on the duplicate-exception check) still reproduce exactly
+as described, unchanged — none of the six touch `security_middleware.py`'s
+IP-enforcement path, so this correction doesn't affect them.
+
+**Frontend reviewed for the first time this pass** (pass 1 was backend only):
+`modules/ip-security/` (admin page, store, service, components),
+`AuditLogPage.tsx`, `ErrorMonitoringPage.tsx`. No `window.confirm`/`alert`/
+`prompt`, no `dangerouslySetInnerHTML`, no banned date methods, all three
+`/security/`, `/audit-logs`, `/ip-security/` prefixes correctly excluded from
+the API cache, module axios auth inherited correctly. Route permission gates
+were originally reported as all matching their backend endpoints — wrong:
+`IPSecurityAdminPage`'s route required only `security.manage` while
+`ip_security.py` accepts `security.manage` OR `settings.manage`, refusing a
+`settings.manage`-only admin the page the API would authorize them for.
+Codex caught it; fixed by switching to `ProtectedRoute`'s
+`requiredAnyPermission`. That alone turned CI red: the actual test covering
+route permissions, `testingRegistry.test.ts`'s `repeats each route gate
+exactly` (a second Codex catch — the first fix's own summary had credited
+`routeIntegrity.test.ts` and the ip-security store test, neither of which
+touches permissions at all), diffs every route against `testingRegistry.ts`,
+which still declared the old single permission; updated to match. Verified
+with `tsc --noEmit`, `eslint`, and the full frontend suite (5520/5520).
+
+**SEC2-28-7 (HIGH — operational-security value, not an access-control bypass;
+flagged, not fixed) — corrected after Codex review.** The original writeup
+overstated severity (claimed all five detector paths fire
+`ThreatLevel.CRITICAL`; actually `detect_brute_force` is `HIGH`, and
+`detect_data_exfiltration` is `HIGH`, escalating to `CRITICAL` only when the
+24h cumulative total exceeds 5× the single-transfer threshold — it also
+accepts a `destination` argument that would escalate an external transfer,
+but the sole production call site never supplies it, so that branch is
+unreachable as currently wired (a third Codex catch) — only
+`detect_session_hijack`/`report_privilege_escalation_attempt` are
+unconditionally `CRITICAL`) and overstated the visibility gap (claimed
+"only a direct DB/API query surfaces one" for all five; actually
+`detect_session_hijack`/`detect_data_exfiltration`/
+`report_privilege_escalation_attempt` each write an org-scoped
+`log_audit_event` call already visible via the existing `AuditLogPage` — the
+real gap for those three is narrower: no alert-specific ack/resolve UI).
+Two corrections _widen_ the finding instead: brute-force alerts are called
+with `user_id=None` on every failed login (unconditionally — `user` is
+`None` on both an unknown username and a wrong password), so
+`_add_alert` stamps `organization_id=NULL` and every org-scoped query
+(`get_recent_alerts`/`acknowledge_alert`/`resolve_alert`) excludes them
+structurally — no realistic frontend fix closes this without a new
+platform-level alert-viewing design, a bigger question than a UI build; and
+`SecurityMonitoringMiddleware` only checks exfiltration when the response
+carries `Content-Length`, which `StreamingResponse` (confirmed at three of
+the fifteen `EXPORT_ENDPOINTS` routes: `admin_hours.py`,
+`equipment_check.py`, `finance.py`) never sets even though the full export
+is already built in memory first — bulk CSV exports through at least those
+three routes create no exfiltration alert at any size, a backend gap, not a
+missing UI. `security_monitoring.py`'s 13-endpoint alert-management surface
+genuinely has zero frontend consumers either way (`securityService` in
+`adminServices.ts` wraps five of them but is called from nowhere, confirmed
+by exhaustive grep; the other eight have no wrapper at all), and this
+feature's other three backend files (`audit_logs.py`, `error_logs.py`,
+`ip_security.py`) do have working, permission-gated admin screens — that
+part of the original finding holds. See
+`docs/security-review/SEC2-28-security-audit-ip.md` for the full,
+corrected writeup. Mirrored into `docs/KNOWN_LIMITATIONS.md`.
+
+Also noted (not fixed, low severity, fails safe both directions): the
+`/admin/errors` route gates on `settings.manage` while its `error_logs.py`
+endpoints require `audit.view`/`audit.export`/`audit.manage` — a
+permission-string mismatch, not a bypass in either direction.
+
+Full local completion gate: flake8/black/isort clean on the 9 backend files
+this feature covers (no backend code changed); 129/129 scoped backend tests
+pass; `tsc --noEmit` 0 errors; `eslint` 0 errors/warnings on the files
+reviewed; full frontend suite (`npx vitest run`) 5520/5520 pass, including
+the route-permission fix and its `testingRegistry.ts` update. Findings
+appended to `docs/security-review/SEC2-28-security-audit-ip.md`'s existing
+Pass 1 doc as a new Pass 2 section, corrected across two rounds of Codex
+review on this PR. Rotation row 28 → ⏳ pending this PR's merge.
+
+---
+
+### 2026-08-31 — Feature 27 (Integrations), pass 2 ✅ PR #2087 merged
+
+PR #2087 merged (`53ebd0ac`). One finding, one Codex correction round:
+
+1. **INT-6 (LOW-MED, fixed).** `test_integration_connection()`'s per-connector
+   implementations mostly raise hand-authored, safe messages on their
+   expected failure paths, but several don't wrap every outbound call, so an
+   unhandled infra-level exception (DNS, TLS, timeout) could still reach two
+   client-facing sites unsanitized — `POST /integrations/{id}/test-connection`
+   and `GET /integrations/salesforce/readiness`. Fixed by routing both
+   through `sanitize_error_message()`.
+
+2. **Codex correction, same commit round.** `sanitize_error_message()`'s
+   pattern blacklist doesn't cover generic DNS/TLS/timeout text (e.g.
+   `[Errno -2] Name or service not known` matches none of its SQL/path/
+   traceback patterns), so the exact scenario INT-6 was written to close
+   still leaked. Fixed by adding `sanitize_connector_error()`
+   (`app/core/utils.py`), which checks the exception's _type_ instead: only
+   an exact-type `Exception` (or the one named trusted subclass,
+   `PayPalError`) is treated as a connector's own hand-authored message —
+   anything else always gets the generic fallback regardless of content.
+   That investigation also surfaced a sharper instance of the same root
+   problem: three connectors (`google_calendar_service.py`,
+   `outlook_calendar_service.py`, `weather_service.py`) caught broadly and
+   re-raised as `Exception(f"...: {e}")`, interpolating the raw caught
+   exception into a message that _is_ exact-type `Exception` — exactly what
+   a type check (correctly) trusts. Fixed by dropping the interpolation in
+   all three; they now log the real exception server-side and raise a
+   static message instead. Also caught a second, previously-unfixed
+   `check_readiness` catch site (the per-sObject `get_field_names` lookup)
+   with the same defect as the two named in the original finding.
+
+CI green (17/17), one review thread resolved, no merge conflict. See
+`docs/security-review/INT-27-integrations.md` for the full writeup.
+
+---
+
+### 2026-08-31 — Feature 27 (Integrations), pass 2 ⏳ PR #2087 opened
+
+Re-read all five backend files in full (`integrations.py`, `salesforce_sync.py`,
+`salesforce_service.py`, `salesforce_oauth_service.py`,
+`salesforce_sync_service.py`) plus `schemas/integration.py`. File sizes
+essentially unchanged since pass 1 (PR #1910); re-verified INT-1 through
+INT-5 all still hold, INT-5 still an open owner decision. Enumerated all 16
+routes across both endpoint files with their auth dependency, permission,
+and org-scoping — no gap.
+
+1. **INT-6 (LOW-MED, fixed).** Prompted by FORM-9 landing one file over in
+   the same feature 26 pass, checked every `except Exception` in this
+   feature's files against where its message ends up. Two sites returned
+   an unhandled connector exception's raw `str(e)`/`str(exc)` straight to
+   the client: `POST /integrations/{id}/test-connection` and
+   `GET /integrations/salesforce/readiness`. Most connector failure paths
+   raise a safe, hand-authored message, but not every outbound call inside
+   them is individually wrapped, so an unhandled infra-level exception
+   (DNS, TLS, timeout) could still reach the client unsanitized. Fixed by
+   routing both through `sanitize_error_message()` — not
+   `safe_error_detail()`, which only passes through `ValueError`/
+   `PermissionError` and would have replaced every intentional connector
+   message with the generic fallback, since these connectors raise bare
+   `Exception`. Two guard tests per site (leak case + hand-authored-message
+   passthrough case), all verified to fail on reintroduction.
+
+Full local completion gate green: flake8/black/isort clean across
+`app/ tests/ alembic/`, `validate_migrations.py --strict` passed (394
+revisions, single head), 1561/1561 integration/salesforce-scoped tests pass
+(21 skipped, all environment-only). No frontend file changed —
+`tsc`/`eslint` n/a. Findings doc: `docs/security-review/INT-27-integrations.md`.
+
+---
+
+### 2026-08-31 — Feature 26 (Forms), pass 2 ✅ PR #2085 merged
+
+PR #2085 merged (`8f42de4d`). One finding, one Codex correction round:
+
+1. **FORM-9 (LOW-MED, fixed).** Three prior review passes (module-audit
+   iteration 13, app-review pass 1, this doc's own pass 1) had misjudged six
+   `except Exception as e:` sites in `forms_service.py`'s integration
+   processors as "internal, never returned to the client" — the dict those
+   blocks build is persisted to `submission.integration_result`, which
+   `FormSubmissionResponse` serializes straight back on
+   `submit_form`/`get_submission`/`list_submissions`/
+   `reprocess_submission_integrations`, and `SubmissionViewer.tsx` renders
+   it verbatim. Fixed by routing all six through `safe_error_detail(e)`,
+   matching the existing FORM-7 pattern.
+
+2. **Codex correction, same commit round.** A seventh site had the same
+   shape but not the same fix: `InventoryService.assign_item_to_user()`
+   never raises on failure, it returns `(None, str(e))`, so
+   `_process_equipment_assignment`'s `if error: return {"success": False,
+"error": error}` branch returned that raw string untouched — no
+   exception ever reaches the `except`-block sanitizer. `error` here is
+   already a plain string, not an `Exception`, so `safe_error_detail`
+   doesn't apply; fixed by routing it through `sanitize_error_message()`
+   instead (the sibling helper `inventory.py`'s own caller already uses for
+   this exact tuple shape). Both sites now have dedicated guard tests,
+   each verified to fail on reintroduction.
+
+CI green (17/17), one review thread resolved, no merge conflict. See
+`docs/security-review/FORM-26-forms.md` for the full writeup.
 
 ---
 
@@ -3338,12 +3917,12 @@ each row's prior PR is recorded in the Log, not repeated here.
 | 23  | Medical supplies          | MSUP   | `medical_supplies.py`                                                                                                                           | ✅     |
 | 24  | Meetings & minutes        | MM     | `meetings.py`, `minutes.py`                                                                                                                     | ✅     |
 | 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ✅     |
-| 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                         | ⬜     |
-| 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                         | ⬜     |
-| 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`                                                                    | ⬜     |
-| 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                              | ⬜     |
-| 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (24 unauth bootstrap routes)                                                                                             | ⬜     |
-| 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                   | ⬜     |
+| 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                         | ✅     |
+| 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                         | ✅     |
+| 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`                                                                    | ✅     |
+| 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                              | ✅     |
+| 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (24 unauth bootstrap routes)                                                                                             | ✅     |
+| 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                   | 🔄     |
 | 32  | Locations & kiosk         | LOC    | `locations.py`, `admin_hub.py`                                                                                                                  | ⬜     |
 | 33  | Core infrastructure       | CORE   | `core/security_middleware.py`, `core/database.py`, `core/config.py`                                                                             | ⬜     |
 | 34  | Frontend shared           | FE     | `utils/apiCache.ts`, module axios instances, `ProtectedRoute`, global stores                                                                    | ⬜     |
