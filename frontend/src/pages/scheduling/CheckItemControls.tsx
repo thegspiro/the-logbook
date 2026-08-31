@@ -69,7 +69,10 @@ interface ControlProps {
   item: CheckItemSpec;
   answer: CheckItemAnswer | undefined;
   onChange: (patch: Partial<CheckItemAnswer>) => void;
-  disabled?: boolean;
+  // Widened rather than cast at the call sites: under exactOptionalPropertyTypes
+  // a caller holding `boolean | undefined` cannot pass it to `disabled?: boolean`,
+  // and every sweep row forwards exactly that.
+  disabled?: boolean | undefined;
 }
 
 const TOUCH = 'min-h-[48px]';
@@ -142,6 +145,62 @@ export const LevelControl: React.FC<ControlProps> = ({ item, answer, onChange, d
 // ============================================================================
 
 /**
+ * What a fault needs said about it, wherever the fault was recorded.
+ *
+ * Shared by the accordion's FunctionControl and the sweep's FunctionRow so the
+ * two cannot drift: a note written in one place and a note written in the
+ * other are the same field on the same record, and a crew that learns "photo
+ * goes here" on one screen should not have to relearn it on the next.
+ *
+ * Neither field blocks. A crew standing at a truck with a broken latch needs
+ * to keep moving, and a check that demands a paragraph is a check that gets
+ * abandoned — the unwritten note is flagged on the finished check instead.
+ */
+export const FaultDetail: React.FC<ControlProps> = ({ item, answer, onChange, disabled }) => (
+  <div className="alert-danger flex flex-col gap-2 p-3">
+    <label className="form-label" htmlFor={`what-happened-${item.id}`}>
+      What happened
+    </label>
+    <textarea
+      id={`what-happened-${item.id}`}
+      data-testid={`function-note-${item.id}`}
+      rows={3}
+      disabled={disabled}
+      value={answer?.notes ?? ''}
+      onChange={(e) => onChange({ notes: e.target.value })}
+      className="form-input"
+      placeholder="What you saw, and what you already tried."
+    />
+    <label
+      className={`${TOUCH} border-theme-surface-border text-theme-text-secondary flex w-fit cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium`}
+    >
+      <Camera className="h-4 w-4" aria-hidden="true" />
+      Photo
+      <input
+        type="file"
+        accept="image/*"
+        multiple
+        className="hidden"
+        disabled={disabled}
+        data-testid={`function-photo-${item.id}`}
+        onChange={(e) => {
+          const files = Array.from(e.target.files ?? []);
+          if (files.length > 0) onChange({ photoFiles: [...(answer?.photoFiles ?? []), ...files] });
+        }}
+      />
+    </label>
+    {answer?.photoFiles?.length ? (
+      <p className="text-theme-text-muted text-xs">
+        {answer.photoFiles.length} photo{answer.photoFiles.length === 1 ? '' : 's'} attached
+      </p>
+    ) : null}
+    <p className="text-theme-text-muted text-xs">
+      Neither is required to move on — an unwritten note is flagged on the finished check.
+    </p>
+  </div>
+);
+
+/**
  * Something is switched on and watched.
  *
  * A fail always opens the same two fields, every time, so leadership reads the
@@ -193,49 +252,7 @@ export const FunctionControl: React.FC<ControlProps> = ({ item, answer, onChange
         </button>
       </div>
 
-      {failed ? (
-        <div className="flex flex-col gap-2 rounded-lg border border-red-200 bg-red-50 p-3 dark:border-red-900/40 dark:bg-red-950/20">
-          <label className="form-label" htmlFor={`what-happened-${item.id}`}>
-            What happened
-          </label>
-          <textarea
-            id={`what-happened-${item.id}`}
-            data-testid={`function-note-${item.id}`}
-            rows={3}
-            disabled={disabled}
-            value={answer?.notes ?? ''}
-            onChange={(e) => onChange({ notes: e.target.value })}
-            className="form-input"
-            placeholder="What you saw, and what you already tried."
-          />
-          <label
-            className={`${TOUCH} border-theme-surface-border text-theme-text-secondary flex w-fit cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium`}
-          >
-            <Camera className="h-4 w-4" aria-hidden="true" />
-            Photo
-            <input
-              type="file"
-              accept="image/*"
-              multiple
-              className="hidden"
-              disabled={disabled}
-              data-testid={`function-photo-${item.id}`}
-              onChange={(e) => {
-                const files = Array.from(e.target.files ?? []);
-                if (files.length > 0) onChange({ photoFiles: [...(answer?.photoFiles ?? []), ...files] });
-              }}
-            />
-          </label>
-          {answer?.photoFiles?.length ? (
-            <p className="text-theme-text-muted text-xs">
-              {answer.photoFiles.length} photo{answer.photoFiles.length === 1 ? '' : 's'} attached
-            </p>
-          ) : null}
-          <p className="text-theme-text-muted text-xs">
-            Neither is required to move on — an unwritten note is flagged on the finished check.
-          </p>
-        </div>
-      ) : null}
+      {failed ? <FaultDetail item={item} answer={answer} onChange={onChange} disabled={disabled} /> : null}
     </div>
   );
 };

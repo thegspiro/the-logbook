@@ -20,7 +20,7 @@ import React from 'react';
 import { CheckType, daysUntil, normalizeCheckType } from '@/modules/scheduling/types/equipmentCheck';
 
 import { countAnswer, expiryAnswer, levelAnswer } from './checkAnswers';
-import { type CheckItemAnswer, type CheckItemSpec } from './CheckItemControls';
+import { FaultDetail, type CheckItemAnswer, type CheckItemSpec } from './CheckItemControls';
 import { type AnswerMap, type LapStop } from './checkLapModel';
 
 export interface StopBodyProps {
@@ -39,10 +39,16 @@ export interface StopBodyProps {
  *
  * The value is the loud element and par is quiet beside it: par is printed on
  * the truck and never changes, while found is the thing being decided. Colour
- * says which of the three states it is in — unread, at par, short — because a
- * crew scanning back up the column is looking for the one that is orange.
+ * The three states — unread, at par, short — are carried by the value's colour
+ * and, for short, by a tint on the whole row: high-contrast holds every alert
+ * text at #f0f0f0, so colour alone would collapse two of the three there.
  */
-const CountTally: React.FC<StopBodyProps & { items: CheckItemSpec[] }> = ({ items, answers, onAnswer, disabled }) => (
+const CountTally: React.FC<Omit<StopBodyProps, 'stop'> & { items: CheckItemSpec[] }> = ({
+  items,
+  answers,
+  onAnswer,
+  disabled,
+}) => (
   <div className="border-theme-surface-border overflow-hidden rounded-lg border">
     <div className="border-theme-surface-border bg-theme-surface-secondary text-theme-text-muted flex items-center gap-2 border-b px-3 py-2 text-[11px] font-bold tracking-[.06em] uppercase">
       <span className="flex-1">Item</span>
@@ -198,45 +204,53 @@ const FunctionRow: React.FC<{
 }> = ({ item, answer, onAnswer, disabled }) => {
   const status = answer?.status;
   return (
-    <div
-      data-testid={`switch-${item.id}`}
-      className="border-theme-surface-border flex items-center gap-3 border-b px-3 py-2 last:border-b-0"
-    >
-      <div className="min-w-0 flex-1">
-        <p className="text-theme-text-primary text-[16px] font-semibold">{item.name}</p>
-        {/* The test is written on the item so two people run it the same way. */}
-        {item.description && <p className="text-theme-text-muted text-[13px]">{item.description}</p>}
+    <div data-testid={`switch-${item.id}`} className="border-theme-surface-border border-b last:border-b-0">
+      <div className="flex items-center gap-3 px-3 py-2">
+        <div className="min-w-0 flex-1">
+          <p className="text-theme-text-primary text-[16px] font-semibold">{item.name}</p>
+          {/* The test is written on the item so two people run it the same way. */}
+          {item.description && <p className="text-theme-text-muted text-[13px]">{item.description}</p>}
+        </div>
+        <div className="flex shrink-0 gap-1.5">
+          <button
+            type="button"
+            disabled={disabled}
+            onClick={() => onAnswer({ status: 'pass' })}
+            aria-label={`${item.name} works`}
+            aria-pressed={status === 'pass'}
+            className={`flex h-11 w-12 items-center justify-center rounded-lg border transition-colors disabled:opacity-50 ${
+              status === 'pass'
+                ? 'border-green-800 bg-green-800 text-white'
+                : 'border-theme-input-border text-theme-text-secondary hover:border-green-800'
+            }`}
+          >
+            <Check className="h-5 w-5" aria-hidden="true" />
+          </button>
+          <button
+            type="button"
+            disabled={disabled}
+            onClick={() => onAnswer({ status: 'fail' })}
+            aria-label={`${item.name} does not work`}
+            aria-pressed={status === 'fail'}
+            className={`flex h-11 w-12 items-center justify-center rounded-lg border transition-colors disabled:opacity-50 ${
+              status === 'fail'
+                ? 'border-red-800 bg-red-800 text-white'
+                : 'border-theme-input-border text-theme-text-secondary hover:border-red-800'
+            }`}
+          >
+            <X className="h-5 w-5" aria-hidden="true" />
+          </button>
+        </div>
       </div>
-      <div className="flex shrink-0 gap-1.5">
-        <button
-          type="button"
-          disabled={disabled}
-          onClick={() => onAnswer({ status: 'pass' })}
-          aria-label={`${item.name} works`}
-          aria-pressed={status === 'pass'}
-          className={`flex h-11 w-12 items-center justify-center rounded-lg border transition-colors disabled:opacity-50 ${
-            status === 'pass'
-              ? 'border-green-800 bg-green-800 text-white'
-              : 'border-theme-input-border text-theme-text-secondary hover:border-green-800'
-          }`}
-        >
-          <Check className="h-5 w-5" aria-hidden="true" />
-        </button>
-        <button
-          type="button"
-          disabled={disabled}
-          onClick={() => onAnswer({ status: 'fail' })}
-          aria-label={`${item.name} does not work`}
-          aria-pressed={status === 'fail'}
-          className={`flex h-11 w-12 items-center justify-center rounded-lg border transition-colors disabled:opacity-50 ${
-            status === 'fail'
-              ? 'border-red-800 bg-red-800 text-white'
-              : 'border-theme-input-border text-theme-text-secondary hover:border-red-800'
-          }`}
-        >
-          <X className="h-5 w-5" aria-hidden="true" />
-        </button>
-      </div>
+
+      {/* A fault opens the same two fields here as in the accordion, from the
+          same component — a note written on one screen and a note written on
+          the other are the same field on the same record. */}
+      {status === 'fail' && (
+        <div className="px-3 pb-3">
+          <FaultDetail item={item} answer={answer} onChange={onAnswer} disabled={disabled} />
+        </div>
+      )}
     </div>
   );
 };
@@ -301,7 +315,7 @@ const ExpiryRow: React.FC<{
 };
 
 // ============================================================================
-// The stop
+// One level's items
 // ============================================================================
 
 /**
@@ -310,13 +324,18 @@ const ExpiryRow: React.FC<{
  * Within a group the template's order is kept — that order is the order the
  * items sit in the cabinet.
  */
-export const CheckSweepStop: React.FC<StopBodyProps> = ({ stop, answers, onAnswer, disabled }) => {
-  const of = (type: string) => stop.items.filter((i) => normalizeCheckType(i.checkType) === type);
+const ItemGroups: React.FC<Omit<StopBodyProps, 'stop'> & { items: CheckItemSpec[] }> = ({
+  items,
+  answers,
+  onAnswer,
+  disabled,
+}) => {
+  const of = (type: string) => items.filter((i) => normalizeCheckType(i.checkType) === type);
   const counts = of(CheckType.COUNT);
   const gauges = of(CheckType.LEVEL);
   const switches = of(CheckType.FUNCTION);
   const dates = of(CheckType.EXPIRY);
-  const labels = stop.items.filter((i) => {
+  const labels = items.filter((i) => {
     const t = normalizeCheckType(i.checkType);
     return t === CheckType.HEADER || t === CheckType.TEXT;
   });
@@ -335,9 +354,7 @@ export const CheckSweepStop: React.FC<StopBodyProps> = ({ stop, answers, onAnswe
         )
       )}
 
-      {counts.length > 0 && (
-        <CountTally stop={stop} items={counts} answers={answers} onAnswer={onAnswer} disabled={disabled} />
-      )}
+      {counts.length > 0 && <CountTally items={counts} answers={answers} onAnswer={onAnswer} disabled={disabled} />}
 
       {gauges.map((item) => (
         <GaugeCard
@@ -374,5 +391,33 @@ export const CheckSweepStop: React.FC<StopBodyProps> = ({ stop, answers, onAnswe
     </div>
   );
 };
+
+// ============================================================================
+// The stop
+// ============================================================================
+
+/**
+ * A stop's own items, then its pockets.
+ */
+export const CheckSweepStop: React.FC<StopBodyProps> = ({ stop, answers, onAnswer, disabled }) => (
+  <div className="flex flex-col gap-3">
+    <ItemGroups items={stop.items} answers={answers} onAnswer={onAnswer} disabled={disabled} />
+
+    {/* Pockets. A bag is one stop, not several — the crew is standing in front
+        of the whole thing — so its pockets are sections inside this screen
+        rather than stops of their own. Recursive because the model lets a
+        pocket hold pockets, and rendering one level deep is the same bug as
+        rendering none: stopItems() counts the whole tree, so the tally would
+        ask for items that are nowhere on screen. */}
+    {(stop.children ?? []).map((pocket) => (
+      <section key={pocket.id} data-testid={`pocket-${pocket.id}`} className="flex flex-col gap-2">
+        <h3 className="text-theme-text-secondary border-theme-surface-border border-l-2 pl-2 text-[13px] font-bold">
+          {pocket.name}
+        </h3>
+        <CheckSweepStop stop={pocket} answers={answers} onAnswer={onAnswer} disabled={disabled} />
+      </section>
+    ))}
+  </div>
+);
 
 export default CheckSweepStop;
