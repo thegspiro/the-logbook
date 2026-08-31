@@ -561,13 +561,6 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
     detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
   },
   {
-    path: '/inventory/admin/checklists/settings',
-    source: 'src/modules/inventory/routes.tsx',
-    coverage: 'exempt',
-    detail:
-      'secondary admin settings route: four controls — two toggles and two number fields — built from the shared 44px form utilities, each saving on its own, so /inventory is the representative route',
-  },
-  {
     path: '/inventory/admin/items',
     source: 'src/modules/inventory/routes.tsx',
     coverage: 'exempt',
@@ -1050,14 +1043,14 @@ export const MOBILE_ROUTE_COVERAGE: readonly MobileRouteCoverage[] = [
   {
     path: '/inventory/admin/checklists',
     source: 'src/modules/inventory/routes.tsx',
-    coverage: 'exempt',
-    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+    coverage: 'ratchet',
+    detail: 'fast route-level mobile presentation ratchet',
   },
   {
     path: '/inventory/admin/checklists/settings',
     source: 'src/modules/inventory/routes.tsx',
-    coverage: 'exempt',
-    detail: 'secondary, parameterized, print, setup, or public route; covered by its representative module route',
+    coverage: 'ratchet',
+    detail: 'fast route-level mobile presentation ratchet',
   },
   {
     path: '/inventory/admin/checklists/templates/new',

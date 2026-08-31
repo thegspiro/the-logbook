@@ -47,7 +47,25 @@ interface RouteCheck {
    * arbitrary values and are deliberately exempt there.
    */
   maxTinyText: number;
+  /**
+   * Permissions this route needs on top of the base grant, when it is gated
+   * behind something the base set does not carry.
+   *
+   * Per-route rather than one wider grant for everyone, because widening the
+   * base set changes what *other* routes render: adding settings.manage makes
+   * /settings render its real body for the first time, which surfaces its own
+   * pre-existing debt (an hscroll strip with no data-mobile-scroll-region, and
+   * section pills at 36px) and turns this pass red for reasons unrelated to the
+   * route being added. Scoping the grant keeps each addition to its own page.
+   *
+   * The cost is a re-sign-in when the set changes, so keep routes needing the
+   * same extras adjacent in the list below.
+   */
+  permissions?: string[];
 }
+
+/** Granted for every route; see the per-route `permissions` note above. */
+const BASE_PERMISSIONS = ['inventory.manage', 'facilities.manage'];
 
 const ALL_ROUTES: RouteCheck[] = [
   { path: '/dashboard', maxSmallTargets: 0, maxTinyText: 0 },
@@ -70,6 +88,23 @@ const ALL_ROUTES: RouteCheck[] = [
   { path: '/notifications?tab=inbox', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/inventory', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/inventory/my-equipment', maxSmallTargets: 0, maxTinyText: 0 },
+  // inventory.check_manage is a distinct grant from inventory.manage, and
+  // checkPermission compares literally — without it this hub renders Access
+  // Denied, which passes both budgets while measuring an error page.
+  {
+    path: '/inventory/admin/checklists',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['inventory.check_manage'],
+  },
+  // Also needs settings.manage: its four values are written through the
+  // organization-settings endpoint, so the checklist grant is not enough.
+  {
+    path: '/inventory/admin/checklists/settings',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['inventory.check_manage', 'settings.manage'],
+  },
   { path: '/apparatus', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/apparatus-basic', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/locations', maxSmallTargets: 0, maxTinyText: 0 },
@@ -128,7 +163,8 @@ test.describe('mobile presentation', () => {
     // is granted for the same reason: /facilities/settings requires it, and
     // without it that route (and /facilities itself, which only needs
     // facilities.view) would silently measure the dashboard instead.
-    await signIn(page, { permissions: ['inventory.manage', 'facilities.manage'] });
+    let granted = BASE_PERMISSIONS;
+    await signIn(page, { permissions: granted });
 
     const crashed: string[] = [];
     const overflowed: string[] = [];
@@ -139,6 +175,14 @@ test.describe('mobile presentation', () => {
     const table: string[] = [];
 
     for (const route of ROUTES) {
+      // Re-sign-in only when the needed set actually changes, so the common
+      // case stays one sign-in for the whole pass.
+      const needed = route.permissions ? [...BASE_PERMISSIONS, ...route.permissions] : BASE_PERMISSIONS;
+      if (needed.join() !== granted.join()) {
+        granted = needed;
+        await signIn(page, { permissions: granted });
+      }
+
       await page.goto(route.path);
       await page.waitForLoadState('networkidle', { timeout: 2_000 }).catch(() => {});
       await page.waitForTimeout(400);
