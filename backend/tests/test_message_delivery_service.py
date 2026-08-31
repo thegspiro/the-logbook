@@ -2,13 +2,17 @@
 (app/services/message_delivery_service.py).
 
 Covers channel routing by priority/ack and the in-app fan-out. DB and the
-email/SMS services are mocked; no MySQL, no network.
+email/SMS services are mocked; no MySQL, no network — except
+TestPublishScheduledMessagesCommitFailureIsSurvivable, marked `integration`
+because it needs a real connection to reproduce PendingRollbackError.
 """
 
 import asyncio
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
 
 from app.models.user import Organization
 from app.services.consent_service import ConsentService
@@ -569,6 +573,7 @@ class TestPublishScheduledMessages:
         db.refresh.assert_awaited_once_with(good)
 
 
+@pytest.mark.integration
 class TestPublishScheduledMessagesCommitFailureIsSurvivable:
     """CRON-31-1 addendum (Codex-caught): the mock-based test above proves
     the batch survives materialize_recipients() *raising*, but not the
