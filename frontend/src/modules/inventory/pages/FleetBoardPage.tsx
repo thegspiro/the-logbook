@@ -28,7 +28,7 @@ import {
 import toast from 'react-hot-toast';
 import { equipmentCheckService } from '@/modules/inventory/services/equipmentCheckApi';
 import type { FleetApparatusReadiness, FleetReadinessResponse } from '../../../modules/inventory/types/equipmentCheck';
-import type { ActiveChecklistRecord } from '../../../modules/scheduling/services/api';
+import type { ActiveChecklistRecord } from '../services/equipmentCheckApi';
 import { READINESS_LABELS } from '../../../modules/inventory/types/equipmentCheck';
 import {
   OUTCOME_LEGEND,
@@ -45,15 +45,6 @@ import { useAuthStore } from '../../../stores/authStore';
 import { useRegisterPullToRefresh } from '../../../hooks/useRegisterPullToRefresh';
 import { SkeletonCardGrid } from '../../../components/ux';
 
-interface FleetBoardPageProps {
-  /**
-   * Opens the member's own checklist view. Supplied by the scheduling tab,
-   * which can swap the body in place; absent on the standalone route, where
-   * the strip is informational rather than a button.
-   */
-  onOpenMyChecks?: () => void;
-}
-
 /** How late a checklist is, as a phrase rather than a signed number. */
 const lateness = (days: number | null): { label: string; overdue: boolean } => {
   if (days === null) return { label: '', overdue: false };
@@ -64,7 +55,7 @@ const lateness = (days: number | null): { label: string; overdue: boolean } => {
   return { label: `${Math.abs(days)} days overdue`, overdue: true };
 };
 
-export const FleetBoardPage: React.FC<FleetBoardPageProps> = ({ onOpenMyChecks }) => {
+export const FleetBoardPage: React.FC = () => {
   const tz = useTimezone();
   const { checkPermission } = useAuthStore();
   const canManage = checkPermission('scheduling.manage') || checkPermission('inventory.check_manage');
@@ -156,17 +147,17 @@ export const FleetBoardPage: React.FC<FleetBoardPageProps> = ({ onOpenMyChecks }
         </div>
       </div>
 
-      {/* Your own checks — the reason most people open this page */}
+      {/* Your own checks — the reason most people open this page.
+
+          A link now, not an in-place swap: the scheduling tab that used to
+          host both views is gone, and an officer's own checklists have a route
+          of their own. */}
       {owed.length > 0 && (
-        <button
-          type="button"
-          onClick={onOpenMyChecks}
-          disabled={!onOpenMyChecks}
-          className={`bg-theme-surface flex w-full items-center gap-3 rounded-lg border border-l-[3px] p-3 text-left transition-colors ${
+        <Link
+          to="/inventory/checklists/my"
+          className={`bg-theme-surface hover:bg-theme-surface-hover flex w-full items-center gap-3 rounded-lg border border-l-[3px] p-3 text-left transition-colors ${
             overdueCount > 0 ? 'border-l-red-500' : 'border-l-blue-500'
-          } border-theme-surface-border ${
-            onOpenMyChecks ? 'hover:bg-theme-surface-hover cursor-pointer' : 'cursor-default'
-          }`}
+          } border-theme-surface-border`}
         >
           <div className="min-w-0 flex-1">
             <p className="text-theme-text-primary text-sm font-semibold">
@@ -191,13 +182,11 @@ export const FleetBoardPage: React.FC<FleetBoardPageProps> = ({ onOpenMyChecks }
               </span>
             </div>
           </div>
-          {onOpenMyChecks && (
-            <span className="inline-flex shrink-0 items-center gap-1 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white">
-              Open mine
-              <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
-            </span>
-          )}
-        </button>
+          <span className="inline-flex shrink-0 items-center gap-1 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-medium text-white">
+            Open mine
+            <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
+          </span>
+        </Link>
       )}
 
       {/* Fleet summary band */}

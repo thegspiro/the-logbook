@@ -10,7 +10,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { IDBFactory } from 'fake-indexeddb';
-import { renderWithRouter } from '../../test/utils';
+import { renderWithRouter } from '../../../test/utils';
 
 const mockGetLastCheckResults = vi.fn();
 const mockGetLastCheckSeals = vi.fn();
@@ -32,19 +32,19 @@ vi.mock('@/modules/inventory/services/equipmentCheckApi', () => ({
   },
 }));
 
-vi.mock('../../services/inventoryService', () => ({
+vi.mock('../../../services/inventoryService', () => ({
   inventoryService: { getItemLots: vi.fn().mockResolvedValue([]) },
 }));
 
-vi.mock('../../hooks/useTimezone', () => ({ useTimezone: () => 'UTC' }));
-vi.mock('../../hooks/useOnlineStatus', () => ({ useOnlineStatus: () => true }));
-vi.mock('../../stores/authStore', () => ({
+vi.mock('../../../hooks/useTimezone', () => ({ useTimezone: () => 'UTC' }));
+vi.mock('../../../hooks/useOnlineStatus', () => ({ useOnlineStatus: () => true }));
+vi.mock('../../../stores/authStore', () => ({
   useAuthStore: () => ({
     checkPermission: () => true,
     user: authenticatedUser,
   }),
 }));
-vi.mock('../../utils/offlineQueue', () => ({
+vi.mock('../../../utils/offlineQueue', () => ({
   enqueueCheck: vi.fn().mockResolvedValue('queued'),
   listPendingChecks: vi.fn().mockResolvedValue([]),
   dequeueCheck: vi.fn(),
@@ -58,7 +58,7 @@ vi.mock('react-hot-toast', () => ({
 }));
 
 import EquipmentCheckForm from './EquipmentCheckForm';
-import { loadEquipmentCheckDraft } from '../../utils/equipmentCheckDrafts';
+import { loadEquipmentCheckDraft } from '../../../utils/equipmentCheckDrafts';
 
 /**
  * A sealed drug bag carrying three of a required six — the case that matters.

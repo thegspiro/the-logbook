@@ -76,7 +76,7 @@ import {
   orderedCompartments as buildOrderedCompartments,
   reorderCompartment,
 } from '@/modules/inventory/utils/compartmentTree';
-import { EquipmentCheckForm } from '@/pages/scheduling/EquipmentCheckForm';
+import { EquipmentCheckForm } from './EquipmentCheckForm';
 import { DialogPortal } from '@/components/DialogPortal';
 import { DialogPanel } from '@/components/ux/DialogPanel';
 import InventoryItemPicker from '@/modules/inventory/components/InventoryItemPicker';

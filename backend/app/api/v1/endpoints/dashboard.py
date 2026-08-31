@@ -552,7 +552,7 @@ async def get_operations_dashboard(
                         severity="info",
                         count=count,
                         oldest_age_days=_age_days(oldest, local_today),
-                        href="/scheduling/manage",
+                        href="/scheduling",
                     )
                 ],
             )
@@ -578,7 +578,7 @@ async def get_operations_dashboard(
                 count=count,
                 oldest_age_days=_age_days(oldest, local_today),
                 most_urgent="Next shift without an officer" if count else None,
-                href="/scheduling/manage?filter=missing-officer",
+                href="/scheduling",
             )
         )
     if "minutes" in enabled and user_has_permission(current_user, "meetings.manage"):
@@ -653,7 +653,7 @@ async def get_operations_dashboard(
                 count=count,
                 oldest_age_days=_age_days(oldest, local_today),
                 most_urgent="Oldest unresolved equipment check" if count else None,
-                href="/equipment-checks?status=failed",
+                href="/inventory/checklists/log?status=failed",
             )
         )
     if "notifications" in enabled and user_has_permission(

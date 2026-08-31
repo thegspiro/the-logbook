@@ -40,8 +40,8 @@ const VendorsPage = lazyWithRetry(() => import('./pages/VendorsPage'));
 const ImpactPlannerPage = lazyWithRetry(() => import('./pages/ImpactPlannerPage'));
 const InventorySetupPage = lazyWithRetry(() => import('./pages/InventorySetupPage'));
 
-// Equipment checklists. Authoring and oversight live here; performing a check
-// stays on the shift screen, under /scheduling.
+// Equipment checklists — the whole feature, authoring through performing.
+// Scheduling links in from a shift; it hosts none of this.
 const EquipmentCheckTemplateBuilder = lazyWithRetry(() => import('./pages/EquipmentCheckTemplateBuilder'));
 const EquipmentCheckReportsPage = lazyWithRetry(() => import('./pages/EquipmentCheckReportsPage'));
 const SupplyExpiringPage = lazyWithRetry(() => import('./pages/SupplyExpiringPage'));
@@ -49,6 +49,8 @@ const FleetBoardPage = lazyWithRetry(() => import('./pages/FleetBoardPage'));
 const CheckLogPage = lazyWithRetry(() => import('./pages/CheckLogPage'));
 const ApparatusDetailPage = lazyWithRetry(() => import('./pages/ApparatusDetailPage'));
 const ApparatusInventoryPage = lazyWithRetry(() => import('./pages/ApparatusInventoryPage'));
+const MyChecklistsPage = lazyWithRetry(() => import('./pages/MyChecklistsPage'));
+const ChecklistsAdminPage = lazyWithRetry(() => import('./pages/ChecklistsAdminPage'));
 
 export const getInventoryRoutes = () => {
   return (
@@ -360,14 +362,13 @@ export const getInventoryRoutes = () => {
       {/* ==============================================================
           Equipment checklists
 
-          A checklist is a list of inventory items, so authoring and
-          oversight live here. Performing one stays on the shift screen
-          (/scheduling?tab=equipment-checks), which is where a crew is when
-          they walk a truck.
+          A checklist is a list of inventory items, so the whole feature
+          lives here — authoring it, performing it, and reporting on it.
+          Scheduling links in from a shift and hosts none of it.
 
           Admin-gated screens sit under /inventory/admin/checklists, matching
-          the module's existing convention; the crew-facing board, log and
-          apparatus views sit under /inventory/checklists.
+          the module's existing convention; the crew-facing board, log, own
+          checklists and apparatus views sit under /inventory/checklists.
 
           Route gates are the API's gates, not the Scheduling page's: the
           builder and reports asked for `scheduling.manage` while their
@@ -375,6 +376,20 @@ export const getInventoryRoutes = () => {
           not the other met either a page they could not use or a page they
           were refused for no stated reason.
           ============================================================== */}
+      <Route
+        path="/inventory/admin/checklists"
+        element={
+          <ProtectedRoute
+            requiredModule="inventory"
+            moduleLabel="Inventory"
+            requiredPermission="inventory.check_manage"
+          >
+            <Suspense fallback={null}>
+              <ChecklistsAdminPage />
+            </Suspense>
+          </ProtectedRoute>
+        }
+      />
       <Route
         path="/inventory/admin/checklists/templates/new"
         element={
@@ -458,6 +473,20 @@ export const getInventoryRoutes = () => {
           >
             <Suspense fallback={null}>
               <CheckLogPage />
+            </Suspense>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/inventory/checklists/my"
+        element={
+          /* No permission gate. Performing your own check is the one thing
+             every member does, the API narrows /my-checklists to the caller,
+             and this is now their only route to it — the Scheduling tab that
+             used to carry them here is gone. */
+          <ProtectedRoute requiredModule="inventory" moduleLabel="Inventory">
+            <Suspense fallback={null}>
+              <MyChecklistsPage />
             </Suspense>
           </ProtectedRoute>
         }

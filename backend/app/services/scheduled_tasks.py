@@ -2442,7 +2442,10 @@ async def run_end_of_shift_checklist_reminders(
                 # would never receive the reminder (Codex, PR #1915).
                 continue
 
-            shift_action_url = f"/scheduling?shift={shift.id}&tab=equipment-checks"
+            # Checklists live in Inventory now. Notification rows already in
+            # the database keep the old path and will not resolve — they
+            # are end-of-shift reminders that age out within days.
+            shift_action_url = f"/inventory/checklists/my?shift={shift.id}"
             shift_metadata = {
                 "shift_id": str(shift.id),
                 "reminder_type": "end_of_shift_checklist",

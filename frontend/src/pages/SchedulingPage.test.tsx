@@ -24,15 +24,11 @@ vi.mock('../modules/scheduling/services/api', () => ({
   },
 }));
 
-// Equipment-check calls moved to modules/inventory when checklists
-// became an Inventory feature; the scheduling service re-exports it.
-vi.mock('@/modules/inventory/services/equipmentCheckApi', () => ({
-  equipmentCheckService: {
-    getSupplyExpiringItems: vi.fn().mockResolvedValue({ total: 0, items: [] }),
-    getMyChecklists: vi.fn().mockResolvedValue([]),
-    getMyChecklistHistory: vi.fn().mockResolvedValue([]),
-    getEquipmentCheckTemplates: vi.fn().mockResolvedValue([]),
-  },
+// The tab-switching tests below are about the tab bar, not about what any tab
+// renders. ShiftReportsTab pulls in shiftCompletionService and a good deal
+// more, so it is stubbed rather than mocking that whole surface here.
+vi.mock('./scheduling/ShiftReportsTab', () => ({
+  default: () => <div data-testid="shift-reports-tab">Shift reports</div>,
 }));
 
 // Mock global API services
@@ -62,18 +58,6 @@ vi.mock('../hooks/useTimezone', () => ({
   useTimezone: () => 'America/New_York',
 }));
 
-// The Equipment Checks tab follows the Inventory module switch, so this page
-// now reads the module gate. Default everything on; the tests that care about
-// a module being off set it themselves.
-const mockIsModuleOn = vi.fn((_key: string) => true);
-vi.mock('../hooks/useEnabledModules', () => ({
-  useEnabledModules: () => ({
-    isModuleOn: (key: string) => mockIsModuleOn(key),
-    enabledModules: null,
-    isLoading: false,
-  }),
-}));
-
 // Mock theme context
 vi.mock('../contexts/ThemeContext', () => ({
   useTheme: () => ({ resolvedTheme: 'light', theme: 'light', setTheme: vi.fn() }),
@@ -89,12 +73,6 @@ describe('SchedulingPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockCheckPermission.mockReturnValue(false);
-    // mockReset, not clearAllMocks: an implementation set by one test survives
-    // clearAllMocks and would decide the next block's module gate for it
-    // (CLAUDE.md pitfall #28). The default is restated here so a per-test
-    // override has something to return to.
-    mockIsModuleOn.mockReset();
-    mockIsModuleOn.mockImplementation(() => true);
     // Tab selection is mirrored into ?tab=, so reset the URL between tests.
     window.history.replaceState({}, '', '/scheduling');
   });
@@ -110,41 +88,6 @@ describe('SchedulingPage', () => {
         expect(screen.getAllByText('Requests').length).toBeGreaterThanOrEqual(1);
         expect(screen.getAllByText('Shift Reports').length).toBeGreaterThanOrEqual(1);
       });
-    });
-
-    it('should render the Equipment Checks tab when Inventory is enabled', async () => {
-      renderWithRouter(<SchedulingPage />);
-
-      await waitFor(() => {
-        expect(screen.getAllByText('Equipment Checks').length).toBeGreaterThanOrEqual(1);
-      });
-    });
-
-    it('should hide the Equipment Checks tab when the Inventory module is off', async () => {
-      // Equipment checks are gated on Inventory now, API included. Leaving the
-      // tab up would load a page that 403s against its own API.
-      mockIsModuleOn.mockImplementation((key: string) => key !== 'inventory');
-
-      renderWithRouter(<SchedulingPage />);
-
-      await waitFor(() => {
-        expect(screen.getAllByText('Schedule').length).toBeGreaterThanOrEqual(1);
-      });
-      expect(screen.queryByText('Equipment Checks')).not.toBeInTheDocument();
-    });
-
-    it('should fall back to Schedule when ?tab= names a tab the org cannot see', async () => {
-      // Notification emails deep-link ?tab=equipment-checks. A department that
-      // later switches Inventory off must land somewhere, not on a blank body.
-      mockIsModuleOn.mockImplementation((key: string) => key !== 'inventory');
-      window.history.replaceState({}, '', '/scheduling?tab=equipment-checks');
-
-      renderWithRouter(<SchedulingPage />);
-
-      await waitFor(() => {
-        expect(new URLSearchParams(window.location.search).get('tab')).toBeNull();
-      });
-      expect(screen.queryByText('Equipment Checks')).not.toBeInTheDocument();
     });
 
     it('should render admin links when user has scheduling.manage permission', async () => {
@@ -238,15 +181,19 @@ describe('SchedulingPage', () => {
     // selected it and immediately snapped back. Assert on the tab's *content*,
     // not just its label: the labels stay in the DOM either way, which is why
     // the older assertion above did not catch this.
-    it('should open the Equipment Checks tab on click', async () => {
+    it('should open a lazy tab on click and keep it open', async () => {
       renderWithRouter(<SchedulingPage />);
       const user = userEvent.setup();
 
       const tabBar = await screen.findByRole('tablist', { name: /Scheduling views/i });
-      await user.click(within(tabBar).getByRole('tab', { name: /Equipment Checks/i }));
+      const reportsTab = within(tabBar).getByRole('tab', { name: /Shift Reports/i });
+      await user.click(reportsTab);
 
-      expect(await screen.findByText('My Equipment Checklists')).toBeInTheDocument();
-      expect(window.location.search).toContain('tab=equipment-checks');
+      // Assert on the tab's body, not its label: the labels stay in the DOM
+      // either way, which is what let the snap-back through before.
+      expect(await screen.findByTestId('shift-reports-tab')).toBeInTheDocument();
+      expect(reportsTab).toHaveAttribute('aria-selected', 'true');
+      expect(window.location.search).toContain('tab=shift-reports');
     });
 
     it('should return to the Schedule tab and drop the tab param', async () => {
@@ -254,14 +201,15 @@ describe('SchedulingPage', () => {
       const user = userEvent.setup();
 
       const tabBar = await screen.findByRole('tablist', { name: /Scheduling views/i });
-      await user.click(within(tabBar).getByRole('tab', { name: /Equipment Checks/i }));
-      await screen.findByText('My Equipment Checklists');
+      const reportsTab = within(tabBar).getByRole('tab', { name: /Shift Reports/i });
+      await user.click(reportsTab);
+      await screen.findByTestId('shift-reports-tab');
 
-      await user.click(within(tabBar).getByRole('tab', { name: /Schedule/i }));
+      const scheduleTab = within(tabBar).getByRole('tab', { name: 'Schedule' });
+      await user.click(scheduleTab);
 
-      await waitFor(() => {
-        expect(screen.queryByText('My Equipment Checklists')).not.toBeInTheDocument();
-      });
+      await waitFor(() => expect(screen.queryByTestId('shift-reports-tab')).not.toBeInTheDocument());
+      expect(scheduleTab).toHaveAttribute('aria-selected', 'true');
       expect(window.location.search).not.toContain('tab=');
     });
 
@@ -280,11 +228,24 @@ describe('SchedulingPage', () => {
     });
 
     it('should honour a ?tab= deep link on first render', async () => {
+      window.history.replaceState({}, '', '/scheduling?tab=shift-reports');
+
+      renderWithRouter(<SchedulingPage />);
+
+      expect(await screen.findByTestId('shift-reports-tab')).toBeInTheDocument();
+    });
+
+    it('falls back to Schedule when ?tab= names a tab that no longer exists', async () => {
+      // Equipment checks moved to Inventory and the tab went with them, but
+      // notifications sent before that carry ?tab=equipment-checks. It has to
+      // land somewhere rather than rendering an empty body.
       window.history.replaceState({}, '', '/scheduling?tab=equipment-checks');
 
       renderWithRouter(<SchedulingPage />);
 
-      expect(await screen.findByText('My Equipment Checklists')).toBeInTheDocument();
+      const tabBar = await screen.findByRole('tablist', { name: /Scheduling views/i });
+      expect(within(tabBar).getByRole('tab', { name: 'Schedule' })).toHaveAttribute('aria-selected', 'true');
+      expect(within(tabBar).queryByRole('tab', { name: /Equipment Checks/i })).not.toBeInTheDocument();
     });
 
     it('restores and preserves the selected calendar view and date in the URL', async () => {

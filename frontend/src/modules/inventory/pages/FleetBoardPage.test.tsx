@@ -1,6 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { screen, waitFor, within } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../../../test/utils';
 import { FleetBoardPage } from './FleetBoardPage';
 import type { FleetApparatusReadiness, FleetReadinessResponse } from '../../../modules/inventory/types/equipmentCheck';
@@ -161,8 +160,7 @@ describe('FleetBoardPage', () => {
     expect(screen.queryByText(/check waiting/)).not.toBeInTheDocument();
   });
 
-  it('opens the member checklist view when the strip is pressed', async () => {
-    const onOpenMyChecks = vi.fn();
+  it("links the strip to the member's own checklists", async () => {
     mockGetMyChecklists.mockResolvedValue([
       {
         shiftId: 's-1',
@@ -174,9 +172,11 @@ describe('FleetBoardPage', () => {
         status: 'not_started',
       },
     ]);
-    renderWithRouter(<FleetBoardPage onOpenMyChecks={onOpenMyChecks} />);
-    await userEvent.click(await screen.findByText('You have 1 check waiting'));
-    expect(onOpenMyChecks).toHaveBeenCalledTimes(1);
+    renderWithRouter(<FleetBoardPage />);
+    // A link now, not an in-place swap: the scheduling tab that hosted both
+    // views is gone and a member's own checklists have a route of their own.
+    const strip = await screen.findByRole('link', { name: /You have 1 check waiting/ });
+    expect(strip).toHaveAttribute('href', '/inventory/checklists/my');
   });
 
   it('shows an empty state when the department has no apparatus', async () => {

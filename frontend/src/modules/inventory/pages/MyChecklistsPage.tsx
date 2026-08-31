@@ -20,17 +20,20 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { equipmentCheckService } from '@/modules/inventory/services/equipmentCheckApi';
-import type { ShiftEquipmentCheckRecord, EquipmentCheckTemplate } from '../../modules/inventory/types/equipmentCheck';
-import type { ActiveChecklistRecord } from '../../modules/scheduling/services/api';
-import { calendarDaysFromToday, formatCalendarDate, formatDate, formatTime } from '../../utils/dateFormatting';
-import { useTimezone } from '../../hooks/useTimezone';
-import { getErrorMessage } from '../../utils/errorHandling';
-import { useAuthStore } from '../../stores/authStore';
-import { lazyWithRetry } from '../../utils/lazyWithRetry';
+import type {
+  ShiftEquipmentCheckRecord,
+  EquipmentCheckTemplate,
+} from '../../../modules/inventory/types/equipmentCheck';
+import type { ActiveChecklistRecord } from '../services/equipmentCheckApi';
+import { calendarDaysFromToday, formatCalendarDate, formatDate, formatTime } from '../../../utils/dateFormatting';
+import { useTimezone } from '../../../hooks/useTimezone';
+import { getErrorMessage } from '../../../utils/errorHandling';
+import { useAuthStore } from '../../../stores/authStore';
+import { lazyWithRetry } from '../../../utils/lazyWithRetry';
 import { crewVisibleTemplates } from './equipmentCheckTemplates';
 
-import { useConfirm } from '../../contexts/ConfirmContext';
-import { useOverlaySurface } from '../../hooks/useOverlaySurface';
+import { useConfirm } from '../../../contexts/ConfirmContext';
+import { useOverlaySurface } from '../../../hooks/useOverlaySurface';
 const EquipmentCheckForm = lazyWithRetry(() => import('./EquipmentCheckForm'));
 
 // ---------------------------------------------------------------------------

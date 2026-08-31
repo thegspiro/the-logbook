@@ -935,17 +935,3 @@ export const schedulingService = {
     return response.data;
   },
 };
-
-/**
- * Equipment checks live in `modules/inventory` now — the checklist is an
- * inventory artifact and its router is gated on the Inventory module.
- *
- * Re-exported here because Scheduling still owns *performing* a check:
- * EquipmentCheckForm, MyChecklistsPage, EquipmentChecksTab and
- * ShiftCheckInPage all reach for it from the shift screen, and pointing them
- * at the new home through one line is what keeps the move off their import
- * lists. Same shape as `types/scheduling.ts`, which is a re-export shim for
- * this module's types.
- */
-export { equipmentCheckService } from '../../inventory/services/equipmentCheckApi';
-export type { ActiveChecklistRecord } from '../../inventory/services/equipmentCheckApi';

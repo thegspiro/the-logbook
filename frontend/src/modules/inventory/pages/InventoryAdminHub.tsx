@@ -654,10 +654,10 @@ export const InventoryAdminHub: React.FC = () => {
                   iconBg="bg-amber-500/10 text-amber-600 dark:text-amber-400"
                 />
                 <NavCard
-                  to="/inventory/checklists"
+                  to="/inventory/admin/checklists"
                   icon={<ClipboardList className="h-5 w-5 text-sky-600 dark:text-sky-400" />}
                   title="Equipment Checklists"
-                  description="Fleet readiness, the check log, and the checklists behind them"
+                  description="The checklists themselves, plus fleet readiness and the check log"
                   iconBg="bg-sky-500/10 text-sky-600 dark:text-sky-400"
                 />
                 <NavCard

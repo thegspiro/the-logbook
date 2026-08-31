@@ -39,12 +39,12 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { equipmentCheckService } from '@/modules/inventory/services/equipmentCheckApi';
-import { inventoryService } from '../../services/inventoryService';
-import type { InventoryLot } from '../../services/eventServices';
-import { getErrorMessage, isNetworkError, isNonRetryableHttpError } from '../../utils/errorHandling';
-import { formatCalendarDate, getTodayLocalDate } from '../../utils/dateFormatting';
-import { useTimezone } from '../../hooks/useTimezone';
-import { useOnlineStatus } from '../../hooks/useOnlineStatus';
+import { inventoryService } from '../../../services/inventoryService';
+import type { InventoryLot } from '../../../services/eventServices';
+import { getErrorMessage, isNetworkError, isNonRetryableHttpError } from '../../../utils/errorHandling';
+import { formatCalendarDate, getTodayLocalDate } from '../../../utils/dateFormatting';
+import { useTimezone } from '../../../hooks/useTimezone';
+import { useOnlineStatus } from '../../../hooks/useOnlineStatus';
 import {
   enqueueCheck,
   listPendingChecks,
@@ -55,7 +55,7 @@ import {
   pendingCount as getPendingCount,
   CHECK_QUEUE_MAX_RETRIES,
   type SyncStatus,
-} from '../../utils/offlineQueue';
+} from '../../../utils/offlineQueue';
 import type {
   EquipmentCheckTemplate,
   CheckTemplateCompartment,
@@ -69,22 +69,22 @@ import type {
   LastCheckItemResult,
   LastSealRecord,
   DeployedLot,
-} from '../../modules/inventory/types/equipmentCheck';
-import { CHECK_TYPE_LABELS, ExpiredStockDisposition } from '../../modules/inventory/types/equipmentCheck';
-import { flattenCompartmentTree } from '../../modules/inventory/utils/compartmentTree';
-import LotsAboardPanel from '../../modules/inventory/components/LotsAboardPanel';
-import SealPanel from '../../modules/scheduling/components/SealPanel';
-import type { SealState } from '../../modules/scheduling/components/SealPanel';
+} from '../../../modules/inventory/types/equipmentCheck';
+import { CHECK_TYPE_LABELS, ExpiredStockDisposition } from '../../../modules/inventory/types/equipmentCheck';
+import { flattenCompartmentTree } from '../../../modules/inventory/utils/compartmentTree';
+import LotsAboardPanel from '../../../modules/inventory/components/LotsAboardPanel';
+import SealPanel from '../components/SealPanel';
+import type { SealState } from '../components/SealPanel';
 
-import { useConfirm } from '../../contexts/ConfirmContext';
-import { useAuthStore } from '../../stores/authStore';
-import { useOverlaySurface } from '../../hooks/useOverlaySurface';
+import { useConfirm } from '../../../contexts/ConfirmContext';
+import { useAuthStore } from '../../../stores/authStore';
+import { useOverlaySurface } from '../../../hooks/useOverlaySurface';
 import {
   deleteEquipmentCheckDraft,
   loadEquipmentCheckDraft,
   saveEquipmentCheckDraft,
   type EquipmentCheckDraftIdentity,
-} from '../../utils/equipmentCheckDrafts';
+} from '../../../utils/equipmentCheckDrafts';
 // ============================================================================
 // Types
 // ============================================================================

@@ -25,7 +25,6 @@ import { ApparatusTypeDefaultsCard } from './ApparatusTypeDefaultsCard';
 import { ResourceTypeDefaultsCard } from './ResourceTypeDefaultsCard';
 import { DepartmentDefaultsCard } from './DepartmentDefaultsCard';
 import { PositionNamesCard } from './PositionNamesCard';
-import { EquipmentCheckTemplateList } from '../../inventory/components/EquipmentCheckTemplateList';
 import { EligibilitySettingsCard } from './EligibilitySettingsCard';
 import { ShiftReportsSettingsPanel } from './ShiftReportsSettingsPanel';
 import { PlatoonRosterPanel } from './PlatoonRosterPanel';
@@ -642,7 +641,19 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
             </div>
           </div>
 
-          <EquipmentCheckTemplateList />
+          {/* The checklists themselves are Inventory's, and are edited there.
+              What stays here is how a *shift* treats them — the timing window
+              and the finalize rule above. */}
+          <div className="card p-4">
+            <h3 className="text-theme-text-primary text-sm font-semibold">Equipment checklists</h3>
+            <p className="text-theme-text-muted mt-1 text-xs">
+              Checklists are managed in Inventory. A shift template can name which of them its shifts carry — edit that
+              on the template itself, under the vehicle picker.
+            </p>
+            <Link to="/inventory/admin/checklists" className="btn-secondary mt-3 inline-flex text-sm font-semibold">
+              Manage equipment checklists
+            </Link>
+          </div>
         </div>
       )}
 

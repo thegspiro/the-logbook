@@ -4438,7 +4438,7 @@ class EquipmentCheckService:
                     category="equipment_check",
                     subject=notif_subject,
                     message=message,
-                    action_url=(f"/scheduling/shifts/{shift.id}"),
+                    action_url="/inventory/checklists/log",
                     delivered=True,
                 )
                 self.db.add(notif)

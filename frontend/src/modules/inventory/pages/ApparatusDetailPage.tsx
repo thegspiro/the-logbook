@@ -253,7 +253,7 @@ export const ApparatusDetailPage: React.FC = () => {
               page reports on the rig, it does not assign work. */}
           <p className="text-theme-text-muted text-xs">
             To run a check, open it from{' '}
-            <Link to="/scheduling?tab=equipment-checks" className="text-blue-600 hover:text-blue-700">
+            <Link to="/inventory/checklists/my" className="text-blue-600 hover:text-blue-700">
               your checklists
             </Link>
             .

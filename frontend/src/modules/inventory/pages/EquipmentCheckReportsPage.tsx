@@ -68,7 +68,10 @@ const EquipmentCheckReportsPage: React.FC = () => {
   return (
     <div className="min-h-screen">
       <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6">
-        <SchedulingHeader backTo="/scheduling" description="Check reports · Review compliance and deficiencies" />
+        <SchedulingHeader
+          backTo="/inventory/admin/checklists"
+          description="Check reports · Review compliance and deficiencies"
+        />
 
         {/* Tabs */}
         <div className="segmented-group mb-5 flex gap-1">

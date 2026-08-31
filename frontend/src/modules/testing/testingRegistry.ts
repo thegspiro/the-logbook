@@ -355,8 +355,8 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
   },
   {
     id: 'scheduling',
-    label: 'Scheduling & equipment checks',
-    description: 'Shifts, platoons, seat qualifications and the apparatus check workflow.',
+    label: 'Scheduling',
+    description: 'Shifts, platoons and seat qualifications.',
     checklistSection: '7. Scheduling Module',
     pages: [
       { path: '/scheduling', label: 'Schedule', module: 'scheduling' },
@@ -388,6 +388,26 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
         label: 'Position roster / qualifications',
         anyPermission: ['scheduling.manage', 'training.view_all', 'training.manage'],
         module: 'scheduling',
+      },
+    ],
+  },
+  {
+    id: 'inventory',
+    label: 'Gear & inventory',
+    description: 'Member-issued gear, the catalogue and every administration screen behind it.',
+    checklistSection: '6. Inventory Module',
+    pages: [
+      { path: '/inventory/my-equipment', label: 'My equipment', module: 'inventory' },
+      {
+        path: '/inventory/checklists/my',
+        label: 'My equipment checklists',
+        module: 'inventory',
+      },
+      {
+        path: '/inventory/admin/checklists',
+        label: 'Equipment checklists admin',
+        permission: 'inventory.check_manage',
+        module: 'inventory',
       },
       {
         path: '/inventory/checklists',
@@ -437,15 +457,6 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
         permission: 'inventory.check_view',
         module: 'inventory',
       },
-    ],
-  },
-  {
-    id: 'inventory',
-    label: 'Gear & inventory',
-    description: 'Member-issued gear, the catalogue and every administration screen behind it.',
-    checklistSection: '6. Inventory Module',
-    pages: [
-      { path: '/inventory/my-equipment', label: 'My equipment', module: 'inventory' },
       { path: '/inventory/items/:id', label: 'Item detail', module: 'inventory' },
       { path: '/inventory', label: 'Gear catalogue', permission: 'inventory.manage', module: 'inventory' },
       { path: '/inventory/items', label: 'Items', permission: 'inventory.manage', module: 'inventory' },

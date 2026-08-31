@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { screen } from '@testing-library/react';
-import { renderWithRouter } from '../../test/utils';
+import { renderWithRouter } from '../../../test/utils';
 
 const { loadEquipmentCheckDraft } = vi.hoisted(() => ({ loadEquipmentCheckDraft: vi.fn() }));
 
@@ -12,20 +12,20 @@ vi.mock('@/modules/inventory/services/equipmentCheckApi', () => ({
     getLastCheckSeals: vi.fn().mockResolvedValue({}),
   },
 }));
-vi.mock('../../services/inventoryService', () => ({ inventoryService: { getItemLots: vi.fn() } }));
-vi.mock('../../hooks/useTimezone', () => ({ useTimezone: () => 'UTC' }));
-vi.mock('../../hooks/useOnlineStatus', () => ({ useOnlineStatus: () => true }));
-vi.mock('../../utils/offlineQueue', () => ({
+vi.mock('../../../services/inventoryService', () => ({ inventoryService: { getItemLots: vi.fn() } }));
+vi.mock('../../../hooks/useTimezone', () => ({ useTimezone: () => 'UTC' }));
+vi.mock('../../../hooks/useOnlineStatus', () => ({ useOnlineStatus: () => true }));
+vi.mock('../../../utils/offlineQueue', () => ({
   listPendingChecks: vi.fn().mockResolvedValue([]),
   pendingCount: vi.fn().mockResolvedValue(0),
   CHECK_QUEUE_MAX_RETRIES: 5,
 }));
-vi.mock('../../utils/equipmentCheckDrafts', () => ({
+vi.mock('../../../utils/equipmentCheckDrafts', () => ({
   loadEquipmentCheckDraft,
   saveEquipmentCheckDraft: vi.fn().mockResolvedValue(undefined),
   deleteEquipmentCheckDraft: vi.fn().mockResolvedValue(undefined),
 }));
-vi.mock('../../stores/authStore', () => ({
+vi.mock('../../../stores/authStore', () => ({
   useAuthStore: () => ({
     user: { id: 'user-1', organization_id: 'org-1' },
     checkPermission: () => true,

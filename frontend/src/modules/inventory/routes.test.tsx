@@ -85,6 +85,12 @@ vi.mock('./pages/ApparatusDetailPage', () => ({
 vi.mock('./pages/ApparatusInventoryPage', () => ({
   default: () => <div data-testid="apparatus-inventory-page">ApparatusInventory</div>,
 }));
+vi.mock('./pages/MyChecklistsPage', () => ({
+  default: () => <div data-testid="my-checklists-page">MyChecklists</div>,
+}));
+vi.mock('./pages/ChecklistsAdminPage', () => ({
+  default: () => <div data-testid="checklists-admin-page">ChecklistsAdmin</div>,
+}));
 vi.mock('../../components/ProtectedRoute', () => ({
   ProtectedRoute: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
@@ -223,6 +229,24 @@ describe('getInventoryRoutes', () => {
   it('does not let the dynamic apparatus route swallow the literal segments', async () => {
     renderRoute('/inventory/checklists/log');
     expect(await screen.findByTestId('check-log-page')).toBeInTheDocument();
+    expect(screen.queryByTestId('apparatus-detail-page')).not.toBeInTheDocument();
+  });
+
+  it("renders a member's own checklists at /inventory/checklists/my", async () => {
+    // Every member's route to the checks they owe. It carries no permission
+    // gate, and it is the only way there now that the Scheduling tab is gone.
+    renderRoute('/inventory/checklists/my');
+    expect(await screen.findByTestId('my-checklists-page')).toBeInTheDocument();
+  });
+
+  it('renders the checklists admin index at /inventory/admin/checklists', async () => {
+    renderRoute('/inventory/admin/checklists');
+    expect(await screen.findByTestId('checklists-admin-page')).toBeInTheDocument();
+  });
+
+  it('does not let /checklists/my be swallowed by the apparatus route', async () => {
+    renderRoute('/inventory/checklists/my');
+    expect(await screen.findByTestId('my-checklists-page')).toBeInTheDocument();
     expect(screen.queryByTestId('apparatus-detail-page')).not.toBeInTheDocument();
   });
 });

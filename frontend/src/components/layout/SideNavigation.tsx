@@ -276,6 +276,30 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
               },
             ]
           : []),
+        // Equipment checklists. Two rows, because the two audiences want
+        // different things and one of them is everybody: a member wants the
+        // checks they owe, an officer wants the state of the fleet.
+        //
+        // "My Checklists" carries no permission gate on purpose. Walking a
+        // truck is the one thing every member does, the API narrows
+        // /my-checklists to the caller, and this row is now their only route
+        // to it — the Scheduling tab that used to carry them here is gone, and
+        // until it was added nothing in the nav pointed at checklists at all.
+        ...(isModuleOn('inventory')
+          ? [
+              {
+                label: 'My Checklists',
+                path: '/inventory/checklists/my',
+                icon: ClipboardCheck,
+              },
+              {
+                label: 'Fleet Readiness',
+                path: '/inventory/checklists',
+                icon: ClipboardCheck,
+                anyPermission: ['inventory.check_view', 'scheduling.manage'],
+              },
+            ]
+          : []),
         // The crew half of the same shelf: "we just used two of these",
         // recorded without starting a whole checklist. Gated on the default
         // member grant, matching the route's own gate — this is the medical

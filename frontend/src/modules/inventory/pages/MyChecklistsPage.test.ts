@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { EquipmentCheckTemplate } from '../../modules/inventory/types/equipmentCheck';
+import type { EquipmentCheckTemplate } from '../../../modules/inventory/types/equipmentCheck';
 import { crewVisibleTemplates } from './equipmentCheckTemplates';
 
 describe('crewVisibleTemplates', () => {

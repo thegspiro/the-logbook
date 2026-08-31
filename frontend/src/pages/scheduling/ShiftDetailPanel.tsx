@@ -2499,7 +2499,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
                   <button
                     onClick={() => {
                       onClose();
-                      void navigate(`/scheduling?tab=equipment-checks&shift=${shift.id}`);
+                      void navigate(`/inventory/checklists/my?shift=${shift.id}`);
                     }}
                     className="inline-flex items-center gap-1.5 rounded-lg border border-violet-500/30 bg-violet-500/10 px-3 py-1.5 text-xs font-medium text-violet-700 transition-colors hover:bg-violet-500/20 dark:text-violet-400"
                   >

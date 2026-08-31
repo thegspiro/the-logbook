@@ -7,7 +7,7 @@ import { StrictMode } from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { renderWithRouter } from '../../test/utils';
+import { renderWithRouter } from '../../../test/utils';
 
 const mockGetLastCheckResults = vi.fn();
 const mockSubmitCheck = vi.fn();
@@ -35,13 +35,13 @@ vi.mock('@/modules/inventory/services/equipmentCheckApi', () => ({
   },
 }));
 
-vi.mock('../../services/inventoryService', () => ({
+vi.mock('../../../services/inventoryService', () => ({
   inventoryService: { getItemLots: (...a: unknown[]) => mockGetItemLots(...a) as unknown },
 }));
 
-vi.mock('../../hooks/useTimezone', () => ({ useTimezone: () => 'UTC' }));
-vi.mock('../../hooks/useOnlineStatus', () => ({ useOnlineStatus: () => true }));
-vi.mock('../../utils/offlineQueue', () => ({
+vi.mock('../../../hooks/useTimezone', () => ({ useTimezone: () => 'UTC' }));
+vi.mock('../../../hooks/useOnlineStatus', () => ({ useOnlineStatus: () => true }));
+vi.mock('../../../utils/offlineQueue', () => ({
   enqueueCheck: (...a: unknown[]) => mockEnqueueCheck(...a) as unknown,
   listPendingChecks: (...a: unknown[]) => mockListPendingChecks(...a) as unknown,
   dequeueCheck: (...a: unknown[]) => mockDequeueCheck(...a) as unknown,
@@ -52,7 +52,7 @@ vi.mock('../../utils/offlineQueue', () => ({
 }));
 
 const mockCheckPermission = vi.fn(() => true);
-vi.mock('../../stores/authStore', () => ({
+vi.mock('../../../stores/authStore', () => ({
   useAuthStore: () => ({
     checkPermission: (...a: unknown[]) => mockCheckPermission(...a) as unknown,
   }),
