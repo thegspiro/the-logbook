@@ -16,20 +16,27 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-Feature 34 (Frontend shared, pass 3), round 2 —
-[#2118](https://github.com/thegspiro/the-logbook/pull/2118), subscribed.
-Round 1 ([#2112](https://github.com/thegspiro/the-logbook/pull/2112))
-merged before Codex's review of its commit landed, carrying only the
-"0 findings" content; Codex then caught 4 real defects in the auth/cache
-core that round 1's methodology (diff-based cache-risk sweep + first full
-read of `components/ux/*`) wasn't aimed at. Round 2 carries the fix as a
-fresh PR off current `main` (round 1's branch had already merged — never
-reuse a branch whose PR has merged, CLAUDE.md Pitfall #24): 2 fixed
-(FE3-34-1/3), 2 flagged (FE3-34-2/4, mirrored into `KNOWN_LIMITATIONS.md`).
-Codex's review of _that_ fix then caught a fifth defect — FE3-34-5, a
-direct consequence of FE3-34-1's own fix (see the round-3 entry below) —
-flagged, not fixed, same PR. Once merged, every row (00-34) is ✅ and the
-rotation wraps to 00 for the next full pass.
+None. Feature 34 (Frontend shared) is fully closed — round 1 merged as
+[#2112](https://github.com/thegspiro/the-logbook/pull/2112), rounds 2/3's
+Codex-caught fixes (FE3-34-1/3 fixed, FE3-34-2/4/5 flagged) merged as
+[#2118](https://github.com/thegspiro/the-logbook/pull/2118). Every row
+(00-34) is now ✅; the rotation wraps to 00 (cross-cutting baseline) for a
+fresh pass.
+
+A duplicate close-out PR, [#2119](https://github.com/thegspiro/the-logbook/pull/2119),
+was opened against round 1's now-stale base (before round 2/3 landed) and
+closed without merging — merging it would have overwritten this section
+with round-1-only text and dropped the round 2/3 record.
+
+---
+
+### 2026-08-31 — Feature 34 (Frontend shared, pass 3) ✅ PR #2118 merged (rounds 2/3, Codex-caught fixes)
+
+PR #2118 merged, carrying FE3-34-1/3's fixes and the FE3-34-2/4/5
+`KNOWN_LIMITATIONS.md` entries onto `main`. All checks passed, no
+unresolved review threads. Combined with round 1's #2112, feature 34 is
+fully closed for this rotation cycle. Every row (00-34) is now ✅ — next:
+wrap to feature 00, cross-cutting baseline, for a fresh pass.
 
 ---
 
