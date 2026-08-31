@@ -117,12 +117,14 @@ function toItemSpec(item: CheckTemplateItem, source: SweepSource): CheckItemSpec
 function toSeal(compartment: CheckTemplateCompartment, source: SweepSource): SealState | undefined {
   if (!compartment.isSealed) return undefined;
   const answered = source.seals?.[compartment.id];
-  const onRecord = source.lastSeals?.[compartment.id]?.sealNumber;
+  const last = source.lastSeals?.[compartment.id];
+  const onRecord = last?.sealNumber;
   const status = answered?.confirmed ? (answered.intact ? 'intact' : 'broken') : undefined;
   return {
     ...(status !== undefined ? { status } : {}),
     ...(status === 'intact' && answered?.cleared === false ? { cleared: false } : {}),
     ...(onRecord != null ? { tagNumber: onRecord } : {}),
+    ...(last?.intact !== undefined ? { priorIntact: last.intact } : {}),
   };
 }
 

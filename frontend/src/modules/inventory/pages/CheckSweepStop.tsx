@@ -488,6 +488,12 @@ const SealCard: React.FC<{
   const status = seal?.status;
   const tag = seal?.tagNumber;
   const blockers = sealBlockers(stop, today);
+  // Only a tag matching an *intact* prior seal is evidence the container
+  // stayed shut. With no tag on record there is nothing to match against, and
+  // where the last check recorded a broken seal the container was open since —
+  // the crew can still say the tag in their hand is intact, and it still
+  // clears nothing. Same rule the accordion's SealPanel enforces.
+  const canClear = Boolean(tag) && seal?.priorIntact === true;
 
   // An intact tag does not survive contact with a drug that is expiring. The
   // crew is going in whatever the tag says, so this branch is checked first
@@ -617,11 +623,18 @@ const SealCard: React.FC<{
           'No tag number on record for this container.'
         )}
       </p>
+      {!canClear && (
+        <p data-testid={`seal-no-evidence-${stop.id}`} className="text-theme-alert-warning-text mt-1 text-[13px]">
+          {tag
+            ? 'The last check found this seal broken, so a matching tag proves nothing about the time since. Count it either way.'
+            : 'Nothing on record to match against, so the tag cannot answer for the contents. Count it either way.'}
+        </p>
+      )}
       <div className="mt-2.5 grid grid-cols-2 gap-2">
         <button
           type="button"
           disabled={disabled || !onSeal}
-          onClick={() => onSeal?.(stop.id, { status: 'intact' })}
+          onClick={() => onSeal?.(stop.id, { status: 'intact', cleared: canClear })}
           className="min-h-14 rounded-lg border border-green-800 bg-green-800 text-[15px] font-bold text-white disabled:opacity-50"
         >
           Tag matches

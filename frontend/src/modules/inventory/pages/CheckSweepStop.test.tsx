@@ -279,15 +279,33 @@ describe('a sealed container', () => {
     expect(screen.getByTestId('tally-row-gauze')).toBeVisible();
   });
 
-  it('records the crew reading the tag', async () => {
+  it('records the crew reading the tag, and clears on evidence', async () => {
     const user = userEvent.setup();
-    const onSeal = mount({ tagNumber: 'M2-40871' });
+    const onSeal = mount({ tagNumber: 'M2-40871', priorIntact: true });
     await user.click(screen.getByRole('button', { name: 'Tag matches' }));
-    expect(onSeal).toHaveBeenCalledWith('drugs', { status: 'intact' });
+    expect(onSeal).toHaveBeenCalledWith('drugs', { status: 'intact', cleared: true });
+  });
+
+  it('clears nothing when the last check found the seal broken', async () => {
+    // A matching number proves nothing about the time since a seal that was
+    // already open. The crew can still say the tag in their hand is intact.
+    const user = userEvent.setup();
+    const onSeal = mount({ tagNumber: 'M2-40871', priorIntact: false });
+    expect(screen.getByTestId('seal-no-evidence-drugs')).toHaveTextContent('found this seal broken');
+    await user.click(screen.getByRole('button', { name: 'Tag matches' }));
+    expect(onSeal).toHaveBeenCalledWith('drugs', { status: 'intact', cleared: false });
+  });
+
+  it('clears nothing when there is no tag on record to match against', async () => {
+    const user = userEvent.setup();
+    const onSeal = mount();
+    expect(screen.getByTestId('seal-no-evidence-drugs')).toHaveTextContent('Nothing on record to match against');
+    await user.click(screen.getByRole('button', { name: 'Tag matches' }));
+    expect(onSeal).toHaveBeenCalledWith('drugs', { status: 'intact', cleared: false });
   });
 
   it('takes the counting off the screen once the tag matches', () => {
-    mount({ status: 'intact', tagNumber: 'M2-40871' });
+    mount({ status: 'intact', tagNumber: 'M2-40871', priorIntact: true });
     expect(screen.queryByTestId('tally-row-morphine')).not.toBeInTheDocument();
     expect(screen.queryByTestId('tally-row-gauze')).not.toBeInTheDocument();
   });
@@ -295,7 +313,7 @@ describe('a sealed container', () => {
   it('still asks the dates and the readings, because a seal proves unchanged, not full', () => {
     // These move while the box sits shut, which is the entire reason they are
     // exempt from what an intact tag answers for.
-    mount({ status: 'intact', tagNumber: 'M2-40871' });
+    mount({ status: 'intact', tagNumber: 'M2-40871', priorIntact: true });
     expect(screen.getByTestId('gauge-o2')).toBeVisible();
     expect(screen.getByTestId('expiry-epi')).toBeVisible();
   });
@@ -315,7 +333,7 @@ describe('a sealed container', () => {
 
   it('lets the crew take back a reading they got wrong', async () => {
     const user = userEvent.setup();
-    const onSeal = mount({ status: 'intact', tagNumber: 'M2-40871' });
+    const onSeal = mount({ status: 'intact', tagNumber: 'M2-40871', priorIntact: true });
     await user.click(screen.getByRole('button', { name: /the tag is broken or wrong/ }));
     expect(onSeal).toHaveBeenCalledWith('drugs', { status: 'broken' });
   });
