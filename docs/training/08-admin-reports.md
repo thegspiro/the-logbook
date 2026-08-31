@@ -2186,6 +2186,13 @@ and links only — never facility codes, accounts, budgets or leases.
 
 ![The dashboard's Department pulse as an administrator holding finance.manage: dues, cash flow, budget and grant cards among the operational ones](./images/08-75-org-dashboard-with-finance.png)
 
+![The same dashboard as a member without finance.manage: Department pulse is not rendered at all, rather than shown with empty money cards](./images/08-76-org-dashboard-without-finance.png)
+
+_The pair is the point. The member's dashboard does not carry an empty
+Department pulse — the section is absent. An empty card would tell a member the
+department holds finance data they are not trusted with, which is the inference
+the omission prevents._
+
 ---
 
 ## Every Administration Page Opens the Same Way _(2026-08-23)_
