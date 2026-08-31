@@ -635,6 +635,8 @@ All routes below are inside `<AppLayout>` + `<ProtectedRoute>`. All non-Dashboar
 | `/scheduling/patterns`                              | SchedulingPatternsPage        | `scheduling.manage`                                                       |
 | `/scheduling/reports`                               | SchedulingReportsPage         | `scheduling.manage`                                                       |
 | `/scheduling/settings`                              | SchedulingSettingsPage        | `scheduling.manage`                                                       |
+| `/inventory/checklists/my`                          | MyChecklistsPage              | Authenticated (module only)                                               |
+| `/inventory/admin/checklists`                       | ChecklistsAdminPage           | `inventory.check_manage`                                                  |
 | `/inventory/admin/checklists/templates/new`         | EquipmentCheckTemplateBuilder | `inventory.check_manage`                                                  |
 | `/inventory/admin/checklists/templates/:templateId` | EquipmentCheckTemplateBuilder | `inventory.check_manage`                                                  |
 | `/inventory/admin/checklists/reports`               | EquipmentCheckReportsPage     | `inventory.check_view`                                                    |

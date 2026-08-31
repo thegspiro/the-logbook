@@ -3,15 +3,20 @@
 The Scheduling module manages shift scheduling, member self-service signup, swap and time-off requests, shift templates, and scheduling reports.
 
 > **Equipment checklists moved to Inventory on 2026-08-31.** A checklist is a
-> list of inventory items, so authoring, reporting and the fleet views now live
-> in the [Inventory module](Module-Inventory#equipment-checklists-moved-here-2026-08-31)
-> under `/inventory/checklists`. Scheduling still owns **performing** a check:
-> members start one from the Equipment Checks tab on the shift screen, and
-> check-in and finalize still gate on outstanding checks. A shift template can
-> now also **name** the checklists its shifts carry, edited under the vehicle
-> picker — see the Inventory page for how that resolves. Sections below that
-> describe the checks themselves are kept for the shift-side behaviour; the old
-> `/inventory/checklists*` URLs no longer exist.
+> list of inventory items, so the whole feature — authoring it, performing it
+> and reporting on it — lives in the
+> [Inventory module](Module-Inventory#equipment-checklists-moved-here-2026-08-31)
+> under `/inventory/checklists`. **Scheduling hosts none of it.**
+>
+> What Scheduling keeps is the shift's own business: a "Start checklist" link
+> on shift check-in and on the shift detail panel, both pointing at
+> `/inventory/checklists/my?shift={id}`; the finalize gate on outstanding
+> end-of-shift checks; and the picker that lets a shift template **name** the
+> checklists its shifts carry, edited under the vehicle picker on the template.
+>
+> The Equipment Checks tab is gone, and so are the old `/scheduling/equipment*`
+> URLs. Members reach their checklists from the **My Checklists** nav row.
+> Sections below that describe checks are kept for the shift-side behaviour.
 
 ---
 

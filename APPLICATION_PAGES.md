@@ -690,7 +690,8 @@ resumes rather than restarting:
 | `/inventory/admin/checklists/templates/new`         | Equipment Check Template Builder | `inventory.check_manage`                                                     |
 | `/inventory/admin/checklists/templates/:templateId` | Edit Equipment Check Template    | `inventory.check_manage`                                                     |
 | `/inventory/admin/checklists/reports`               | Equipment Check Reports          | `inventory.check_view`                                                       |
-| `/scheduling?tab=equipment-checks`                  | My Equipment Checklists          | Authenticated                                                                |
+| `/inventory/checklists/my`                          | My Equipment Checklists          | Authenticated                                                                |
+| `/inventory/admin/checklists`                       | Equipment Checklists admin       | `inventory.check_manage`                                                     |
 | `/inventory/admin/checklists/supply`                | Expiring on Apparatus            | any of `scheduling.manage`, `inventory.check_view`, `inventory.manage`       |
 | `/inventory/checklists/apparatus-inventory`         | Apparatus Inventory              | any of `inventory.check_submit`, `inventory.check_view`, `inventory.view`    |
 | `/inventory/checklists`                             | Fleet Board                      | any of `inventory.check_view`, `scheduling.manage`                           |

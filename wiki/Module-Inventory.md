@@ -67,17 +67,25 @@ a checklist is a list of **inventory items**: a checklist position carries an
 `inventory_item_id` into the catalog, the lots aboard a truck are snapshots of
 `inventory_lots` rows, and the supply worklist is a stock-room job.
 
-**Inventory owns authoring and oversight. Scheduling still owns performing.**
-A member starts and completes a check from their shift
-(`/scheduling?tab=equipment-checks`), and shift check-in and finalize still gate
-on outstanding checks. Everything else lives here.
+**Inventory owns the whole feature** — authoring a checklist, performing it,
+and reporting on it. Scheduling hosts none of it. What it keeps is the shift's
+own business: a "Start checklist" link on shift check-in and on the shift
+detail panel, the finalize gate on outstanding end-of-shift checks, and the
+picker that lets a shift template name the checklists its shifts carry.
+
+Members reach their own checklists from the **My Checklists** nav row, which is
+ungated — walking a truck is the one thing every member does, and the API
+narrows `/my-checklists` to the caller. **Fleet Readiness** sits beside it for
+officers.
 
 | Page                                             | URL                                          | Permission                                                              |
 | ------------------------------------------------ | -------------------------------------------- | ----------------------------------------------------------------------- |
+| My checklists (the checks you owe)               | `/inventory/checklists/my`                   | none — every member                                                     |
 | Fleet readiness board                            | `/inventory/checklists`                      | `inventory.check_view` or `scheduling.manage`                           |
 | Check log (expected vs. actual)                  | `/inventory/checklists/log`                  | `inventory.check_submit`, `inventory.check_view` or `scheduling.manage` |
 | One apparatus's checks                           | `/inventory/checklists/apparatus/{id}`       | `inventory.check_view` or `scheduling.manage`                           |
 | Apparatus inventory (standing view of one truck) | `/inventory/checklists/apparatus-inventory`  | `inventory.check_submit`, `inventory.check_view` or `inventory.view`    |
+| Checklists admin (the list itself)               | `/inventory/admin/checklists`                | `inventory.check_manage`                                                |
 | Checklist builder                                | `/inventory/admin/checklists/templates/{id}` | `inventory.check_manage`                                                |
 | Check reports                                    | `/inventory/admin/checklists/reports`        | `inventory.check_view`                                                  |
 | Expiring on apparatus                            | `/inventory/admin/checklists/supply`         | `scheduling.manage`, `inventory.check_view` or `inventory.manage`       |

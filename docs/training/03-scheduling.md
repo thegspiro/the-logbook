@@ -2335,7 +2335,6 @@ The scheduling page now supports `?tab=` query parameters for direct navigation 
 | `?tab=my-shifts`        | My Shifts           |
 | `?tab=open-shifts`      | Open Shifts         |
 | `?tab=requests`         | Requests            |
-| `?tab=equipment-checks` | Equipment Checks    |
 | `?tab=shift-reports`    | Shift Reports       |
 
 Shift notifications automatically deep-link to the correct tab. For example, clicking a shift assignment notification opens the scheduling page with My Shifts selected and the shift highlighted.

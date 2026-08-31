@@ -32,8 +32,26 @@ Three things change for existing departments:
   | `/scheduling/equipment/checks`            | `/inventory/checklists/log`                 |
   | `/scheduling/equipment/{id}`              | `/inventory/checklists/apparatus/{id}`      |
   | `/scheduling/apparatus-inventory`         | `/inventory/checklists/apparatus-inventory` |
+  | `/scheduling?tab=equipment-checks`        | `/inventory/checklists/my`                  |
 
-  The Equipment Checks tab on the shift screen is unchanged.
+- **The Equipment Checks tab is gone from the shift screen**, and with it the
+  Check Reports and Supply shortcuts in Officer tools. Equipment checks are no
+  longer part of Shift Scheduling in any sense — the whole feature is in
+  Inventory, and Scheduling links to it.
+
+  **Members now find their checklists in the navigation**, under Operations →
+  **My Checklists**. That row is new, and it is a genuine improvement: before
+  this, a member's only route to the checks they owed was a tab inside Shift
+  Scheduling. Officers get **Fleet Readiness** beside it.
+
+  From a shift itself nothing changes in practice: check-in and the shift
+  detail panel still offer "Start checklist", and shift finalization still
+  refuses to close on outstanding end-of-shift checks.
+
+  One consequence worth knowing: end-of-shift reminder notifications already
+  sitting in members' bells carry the old address and will land on the
+  dashboard. New ones point at the right place. These reminders age out within
+  a few days.
 
 - **The permissions were renamed** from `equipment_check.view` / `.manage` /
   `.submit` to `inventory.check_view` / `inventory.check_manage` /

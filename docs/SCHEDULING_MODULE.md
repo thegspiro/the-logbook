@@ -1,13 +1,15 @@
 # Scheduling & Shifts Module
 
 > **Equipment checklists moved to the Inventory module on 2026-08-31.**
-> Authoring, reporting and the fleet views live under `/inventory/checklists`
-> and `/inventory/admin/checklists`; the permissions were renamed from
+> The whole feature lives under `/inventory/checklists` and
+> `/inventory/admin/checklists`; the permissions were renamed from
 > `equipment_check.*` to `inventory.check_*`; and the `/api/v1/equipment-checks`
-> router is gated on the Inventory module. Scheduling still owns _performing_
-> a check from the shift screen. Sections below describing checks are kept for
-> that shift-side behaviour — the URLs and permission names in them are
-> historical. See `wiki/Module-Inventory.md` for the current picture.
+> router is gated on the Inventory module. **Scheduling hosts none of it** —
+> the Equipment Checks tab is gone, and what remains here is a link from shift
+> check-in and the shift detail panel, the finalize gate on outstanding checks,
+> and the shift template's checklist picker. Sections below describing checks
+> are kept for that shift-side behaviour — the URLs and permission names in
+> them are historical. See `wiki/Module-Inventory.md` for the current picture.
 
 Comprehensive shift scheduling, member signup, swap/time-off management, templates, patterns, and reporting.
 
@@ -1418,13 +1420,12 @@ Notification cards use this metadata to render:
 
 `SchedulingPage.tsx` now reads the `?tab=` query parameter on mount:
 
-| Parameter               | Tab                           |
-| ----------------------- | ----------------------------- |
-| `?tab=schedule`         | Schedule (calendar) — default |
-| `?tab=my-shifts`        | My Shifts                     |
-| `?tab=open-shifts`      | Open Shifts                   |
-| `?tab=requests`         | Requests                      |
-| `?tab=equipment-checks` | Equipment Checks              |
+| Parameter          | Tab                           |
+| ------------------ | ----------------------------- |
+| `?tab=schedule`    | Schedule (calendar) — default |
+| `?tab=my-shifts`   | My Shifts                     |
+| `?tab=open-shifts` | Open Shifts                   |
+| `?tab=requests`    | Requests                      |
 
 Invalid values fall back to the Schedule tab. This enables deep-linking from notifications, email links, and the Start Checklist CTA in notification cards.
 
