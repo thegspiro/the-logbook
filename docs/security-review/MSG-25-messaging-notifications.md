@@ -433,13 +433,19 @@ decision rather than a mechanical fix and is recorded only in
 (`reconcile_recipients`) hard-deletes the `DepartmentMessageRecipient` row —
 including `read_at`/`acknowledged_at` — for any member the new audience no
 longer includes**, erasing that member's row in `get_acknowledgment_report`
-and their inbox visibility for the message. This does not erase all
-compliance evidence — `acknowledge_message` (`messages.py:425-436`) writes an
-independent, tamper-evident `message_acknowledged` audit-log entry at
-acknowledgment time that `reconcile_recipients` never touches — but it does
-erase the _report's_ record, which the same file's `delete_message` docstring
-calls "compliance evidence" and specifically avoids losing on message
-deletion. Not cross-tenant, not fixed here (fixing it changes
+and their inbox visibility for the message. This reliably erases the
+_report's_ record, which the same file's `delete_message` docstring calls
+"compliance evidence" and specifically avoids losing on message deletion.
+Whether it also erases the underlying evidence depends on a second fact:
+`acknowledge_message` (`messages.py:425-436`) writes an independent,
+tamper-evident `message_acknowledged` audit-log entry at acknowledgment time
+that `reconcile_recipients` never touches — but that write is best-effort,
+not guaranteed. `AuditLogger.create_log_entry` (`app/core/audit.py:265-270`)
+is deliberately fail-open (catches any exception, logs it, returns `None`
+rather than raising), and `acknowledge_message` never checks the return
+value, so a silently-failed audit write leaves no trace for
+`reconcile_recipients` to later strand. Not cross-tenant, not fixed here
+(fixing it changes
 inbox-visibility semantics, since visibility is currently derived from the
 same row the fix would need to keep). See `docs/KNOWN_LIMITATIONS.md` →
 "MSG-10 — Narrowing a Department Message's Audience Erases the Acknowledgment

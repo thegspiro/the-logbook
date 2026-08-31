@@ -2455,16 +2455,26 @@ outside the corrected set — `get_acknowledgment_report` would then show them
 as never having acknowledged it at all, and they'd drop out of its
 denominator entirely.
 
-**This does not erase all compliance evidence.** `acknowledge_message`
+**This does not necessarily erase all compliance evidence, but the backup is
+best-effort, not guaranteed.** `acknowledge_message`
 (`app/api/v1/endpoints/messages.py:425-436`) writes an independent
 `message_acknowledged` audit-log entry — user id, message id, timestamp —
 through the tamper-evident audit hash chain at the moment of acknowledgment,
-and `reconcile_recipients` never touches `audit_logs`. That record survives
-the recipient-row deletion and could be used during remediation to
-reconstruct who had acknowledged before the audience was narrowed. What is
-actually lost is the _report's_ live state (and, per the visibility
-mechanism below, the message's presence in that member's inbox) — not the
-underlying evidence that the acknowledgment happened.
+and `reconcile_recipients` never touches `audit_logs`. When that write
+succeeds, it survives the recipient-row deletion and could be used during
+remediation to reconstruct who had acknowledged before the audience was
+narrowed. But `AuditLogger.create_log_entry` (`app/core/audit.py:265-270`) is
+deliberately fail-open — it catches any exception on the write, logs it, and
+returns `None` rather than raising, "so audit log failures don't break the
+caller's operation" — and `acknowledge_message` never checks that return
+value, so the acknowledgment itself still succeeds either way. If the audit
+write silently failed (e.g. a transient DB error at flush/refresh), no
+`message_acknowledged` row exists, and a later `reconcile_recipients` on that
+member leaves nothing — report, inbox, or audit log — behind. What is
+reliably lost by the recipient-row deletion is the _report's_ live state
+(and, per the visibility mechanism below, the message's presence in that
+member's inbox); whether the underlying evidence of the acknowledgment
+survives depends on whether that audit write happened to succeed.
 
 Closing this needs a product decision, not a mechanical patch: keeping the
 recipient row for anyone with `read_at`/`acknowledged_at` set would preserve

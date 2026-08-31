@@ -37,6 +37,15 @@ comment (stale `## Open PR` header) was already addressed by the prior
 commit. All three review threads resolved; CI green on the final head
 (17/17 checks), no merge conflict. Rotation row 25 → ✅. Next: 26 Forms.
 
+**Correction (2026-08-31, on this closing PR #2082):** Codex's review here
+caught that the "surviving audit trail" framing above overstated it too —
+`AuditLogger.create_log_entry` (`app/core/audit.py:265-270`) is deliberately
+fail-open and `acknowledge_message` never checks its return value, so the
+`message_acknowledged` audit-log write is best-effort, not guaranteed. Reworded
+in `KNOWN_LIMITATIONS.md` (MSG-10) and `MSG-25-messaging-notifications.md` to
+say the report/inbox loss is reliable while the audit-trail survival is
+conditional on that write having succeeded.
+
 ---
 
 ### 2026-08-31 — Feature 25 (Messaging & notifications), pass 2 — 1 fixed (LOW-MED), 1 flagged (LOW-MED) — PR #2081
