@@ -16,8 +16,72 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-None. Feature 27 (Integrations) is fully closed — see log entry below. Next:
-feature 28, Security, audit & IP.
+Feature 28 (Security, audit & IP), pass 2 — PR TBD, branch
+`claude/security-review-security-audit-ip-pass2`. Findings-only pass (no code
+change): re-verified all six pass-1 findings still hold against unchanged
+code, reviewed the frontend for the first time, one new finding flagged
+(SEC2-28-7 — `security_monitoring.py`'s alert/intrusion-detection endpoints
+have no admin UI). See `docs/security-review/SEC2-28-security-audit-ip.md` →
+Pass 2.
+
+---
+
+### 2026-08-31 — Feature 28 (Security, audit & IP), pass 2 — 0 fixed, 1 flagged (HIGH-operational) — PR pending
+
+No security-review PR was open (feature 27/Integrations fully merged via PR
+#2088), so the rotation continued to feature 28. Loaded `CHECKLIST.md`,
+`SEC-00-cross-cutting-baseline.md`, pass 1's own findings doc
+(`SEC2-28-security-audit-ip.md`, PR #1911), `docs/module-audit/
+security-audit-ip.md`, and `docs/app-review/security-audit-ip.md`; re-verified
+their open items rather than re-deriving them.
+
+Diffed all nine backend files this feature covers against the commit pass 1's
+PR merged as — **byte-identical, zero lines changed** since 2026-08-27. All
+six pass-1 findings (SEC2-28-1 through SEC2-28-6) re-verified directly against
+current code: the four fixes are intact (129/129 scoped tests pass), and the
+two flagged items (SEC2-28-5 — approved IP-allowlist exceptions have no
+enforcement effect; SEC2-28-6 — TOCTOU on the duplicate-exception check) still
+reproduce exactly as described, unchanged.
+
+**Frontend reviewed for the first time this pass** (pass 1 was backend only):
+`modules/ip-security/` (admin page, store, service, components),
+`AuditLogPage.tsx`, `ErrorMonitoringPage.tsx`. No `window.confirm`/`alert`/
+`prompt`, no `dangerouslySetInnerHTML`, no banned date methods, all three
+`/security/`, `/audit-logs`, `/ip-security/` prefixes correctly excluded from
+the API cache, module axios auth inherited correctly, route permission gates
+line up with their backend endpoints.
+
+**SEC2-28-7 (HIGH — operational-security value, not an access-control bypass;
+flagged, not fixed)** — none of `security_monitoring.py`'s 13 endpoints has a
+working frontend consumer. `securityService` in `adminServices.ts` wraps five
+of them (status/alerts/acknowledge/verify-integrity/manual-check) but is
+called from nowhere in the app (confirmed by exhaustive grep across
+`frontend/src`); the other eight have no frontend wrapper at all. This is not
+dead scaffolding — `detect_brute_force` (`auth.py`), `detect_session_hijack` +
+`detect_data_exfiltration` (`security_middleware.py`), and
+`report_privilege_escalation_attempt` (`users.py`/`roles.py`, the exact
+SEC2-28-1 scenario) all fire real `ThreatLevel.CRITICAL` `security_alerts`
+rows on active attack patterns, and none of them is visible, acknowledgeable,
+or resolvable through the UI — only a direct DB/API query surfaces one. By
+contrast this feature's other three backend files (`audit_logs.py`,
+`error_logs.py`, `ip_security.py`) all have working, permission-gated admin
+screens; this gap is specific to `security_monitoring.py`. Closing it is a
+genuine frontend feature build (route, permission-gate decision, alert
+list/detail view, ack/resolve actions), not a drive-by fix. Mirrored into
+`docs/KNOWN_LIMITATIONS.md`.
+
+Also noted (not fixed, low severity, fails safe both directions): the
+`/admin/errors` route gates on `settings.manage` while its `error_logs.py`
+endpoints require `audit.view`/`audit.export`/`audit.manage` — a
+permission-string mismatch, not a bypass in either direction.
+
+Full local completion gate: flake8/black/isort clean on the 9 backend files
+this feature covers (no code changed, so this re-confirms rather than
+verifies a fix); 129/129 scoped backend tests pass; `tsc --noEmit` 0 errors;
+`eslint` 0 errors/warnings on the files reviewed; `vitest run
+src/modules/ip-security` 35/35 pass. Findings appended to
+`docs/security-review/SEC2-28-security-audit-ip.md`'s existing Pass 1 doc as
+a new Pass 2 section. Rotation row 28 → ⏳ pending this PR's merge.
 
 ---
 
@@ -3443,7 +3507,7 @@ each row's prior PR is recorded in the Log, not repeated here.
 | 25  | Messaging & notifications | MSG    | `messages.py`, `message_history.py`, `notifications.py`, `email_templates.py`                                                                   | ✅     |
 | 26  | Forms                     | FORM   | `endpoints/forms.py`, `public/forms.py`                                                                                                         | ✅     |
 | 27  | Integrations              | INT    | `integrations.py`, `salesforce_sync.py`                                                                                                         | ✅     |
-| 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`                                                                    | ⬜     |
+| 28  | Security, audit & IP      | SEC2   | `security_monitoring.py`, `ip_security.py`, `audit_logs.py`, `error_logs.py`                                                                    | ⏳     |
 | 29  | Reports & analytics       | RPT    | `reports.py`, `analytics.py`, `platform_analytics.py`, `dashboard.py`, `labels.py`                                                              | ⬜     |
 | 30  | Onboarding                | ONB    | `api/v1/onboarding.py` (24 unauth bootstrap routes)                                                                                             | ⬜     |
 | 31  | Scheduled tasks           | CRON   | `scheduled.py`, `services/scheduled_tasks.py`                                                                                                   | ⬜     |

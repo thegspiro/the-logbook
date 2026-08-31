@@ -1,17 +1,23 @@
 # Security Review — Security, Audit & IP
 
-**Prefix:** `SEC2` · **Iteration:** 28 · **Reviewed:** 2026-08-27 · **PR:** #1911
+**Prefix:** `SEC2` · **Iteration:** 28 · **Reviewed:** 2026-08-27 (pass 1, PR
+#1911), 2026-08-31 (pass 2) · **PR:** #1911 (pass 1)
 
 **Backend:** `app/api/v1/endpoints/security_monitoring.py` (677 L),
 `app/api/v1/endpoints/ip_security.py` (555 L), `app/api/v1/endpoints/audit_logs.py`
 (169 L), `app/api/v1/endpoints/error_logs.py` (342 L), `app/services/security_monitoring.py`
-(1,073 L), `app/services/ip_security_service.py` (707 L), `app/core/audit.py`
-(922 L), the IP-enforcement path of `app/core/security_middleware.py`,
-`app/core/geoip.py`.
-**Frontend:** not reviewed this pass — backend only, per rotation scope.
-**Migrations:** none — every fix this iteration is application-logic only
-(the audit hash-chain version bump changes what new rows hash over, not the
-schema; existing rows are unaffected and verify unchanged).
+(1,073 L), `app/services/ip_security_service.py` (722 L), `app/core/audit.py`
+(939 L), the IP-enforcement path of `app/core/security_middleware.py`,
+`app/core/geoip.py`. Confirmed byte-identical to pass 1's merged state as of
+pass 2 (2026-08-31).
+**Frontend:** not reviewed in pass 1 (backend only, per rotation scope);
+reviewed for the first time in pass 2 — `modules/ip-security/` (admin page,
+store, service, components), `pages/AuditLogPage.tsx`,
+`pages/ErrorMonitoringPage.tsx`.
+**Migrations:** none in either pass — pass 1's fixes were all application-logic
+only (the audit hash-chain version bump changes what new rows hash over, not
+the schema; existing rows are unaffected and verify unchanged); pass 2 made no
+code change at all.
 
 ---
 
@@ -240,3 +246,149 @@ column change, no migration. `BlockedAccessAttempt` (SEC2-28-3) and
 | `python3 scripts/validate_migrations.py --strict`                                               | PASSED (no migrations)  |
 | backend tests, scope (audit/security_monitoring/ip_security/privilege_ceiling/users/middleware) | 268/268 passed          |
 | backend tests, full suite                                                                       | 8927 passed, 22 skipped |
+
+---
+
+## Pass 2 (2026-08-31)
+
+**Scope check first:** diffed all nine files this doc covers
+(`security_monitoring.py` × endpoint + service, `ip_security.py` × endpoint +
+service, `audit_logs.py`, `error_logs.py`, `core/audit.py`,
+`core/security_middleware.py`, `core/geoip.py`) against the commit pass 1's
+PR (#1911) merged as — **byte-identical, zero lines changed**. So this pass
+re-verifies pass 1 against unchanged code and reviews the **frontend** for the
+first time (pass 1 was explicitly backend-only).
+
+### Re-verified — all still hold
+
+- **SEC2-28-1** (role-grant ceiling before user flush, `users.py`): fix intact,
+  source-order guard test still passes.
+- **SEC2-28-2** (hash v4 covers `event_category`/`severity`, `core/audit.py`):
+  fix intact, `_CURRENT_HASH_VERSION == 4`, both regression tests pass.
+- **SEC2-28-3** (`BlockedAccessAttempt` row written alongside the audit log,
+  `security_middleware.py::_log_blocked_attempt`): fix intact. Also confirmed
+  the fix has a real frontend consumer — `BlockedAttemptsTable.tsx`, wired
+  through the `blocked-attempts` tab on `/ip-security` — so the endpoint this
+  fixed is not itself an instance of the gap found below.
+- **SEC2-28-4** (`add_blocked_country` updates an existing row instead of
+  re-inserting, `ip_security_service.py`): fix intact, both regression tests
+  pass.
+- **SEC2-28-5** (approved IP-allowlist exceptions have no enforcement effect):
+  still open, unchanged — `IPBlockingMiddleware.__call__` still calls
+  `geoip.is_ip_blocked(client_ip, set())` with a hardcoded empty set at the
+  only call site. Still needs the owner decision described in pass 1.
+- **SEC2-28-6** (TOCTOU on the duplicate-exception check,
+  `request_ip_exception`): still open, unchanged — the existing-row check at
+  `ip_security_service.py:90-106` is still a plain read then insert with no
+  row lock or unique constraint.
+
+Backend re-run: `pytest tests/test_privilege_ceiling_wiring.py
+tests/test_audit_hash_chain.py tests/test_audit_org_scoping.py
+tests/test_security_middleware.py tests/test_ip_security_service.py` — 129/129
+passed.
+
+### Frontend, reviewed for the first time this pass
+
+Found the module: `frontend/src/modules/ip-security/` (admin page, store,
+service, three table/form components), plus `pages/AuditLogPage.tsx` and
+`pages/ErrorMonitoringPage.tsx`. All use the shared global axios instance
+(no module-specific auth gap, Pitfall #7 n/a), no `window.confirm/alert/
+prompt` (`IPSecurityAdminPage.tsx` uses `useConfirm()` correctly for the
+unblock-country action), no `dangerouslySetInnerHTML` anywhere in the four
+files reviewed (React's default escaping covers `BlockedAttemptsTable`'s
+`blockReason`/`requestPath` and the audit/error viewers' free-text fields —
+matches the existing `docs/KNOWN_LIMITATIONS.md` SEC-9 row's "no stored-XSS
+path" claim, re-confirmed rather than re-derived), no banned
+`.toLocaleString()`-family date methods, `/security/`, `/audit-logs`, and
+`/ip-security/` are all present in `UNCACHEABLE_PREFIXES`
+(`frontend/src/utils/apiCache.ts`), and `/errors` is separately covered.
+`IPSecurityAdminPage`/`AuditLogPage`/`ErrorMonitoringPage` routes all carry a
+`ProtectedRoute` permission gate matching (or a reasonable superset of) their
+backend endpoints' `require_permission`.
+
+### SEC2-28-7 — HIGH (operational-security value, not an access-control bypass) — `security_monitoring.py`'s entire endpoint surface has no admin UI — CRITICAL alerts fire and are never seen
+
+**What:** none of `security_monitoring.py`'s 13 endpoints (`/security/status`,
+`/alerts`, `/alerts/{id}/acknowledge`, `/alerts/{id}/resolve`,
+`/audit-log/integrity`, `/audit-log/status`, `/audit-log/checkpoint`,
+`/audit-log/rehash`, `/audit-log/entries`, `/audit-log/export`,
+`/intrusion-detection/status`, `/data-exfiltration/status`, `/manual-check`)
+has a working frontend consumer. `frontend/src/services/adminServices.ts`
+does define a `securityService` wrapper for five of them (`getStatus`,
+`getAlerts`, `acknowledgeAlert`, `verifyAuditIntegrity`,
+`triggerManualCheck`), but confirmed by exhaustive grep
+(`grep -rn "'/security/` and `grep -rn securityService` across
+`frontend/src`) that **nothing calls it** — it is exported from
+`adminServices.ts`, re-exported from `services/api.ts`, and consumed by
+zero components, pages, or stores. The other eight endpoints
+(`resolve`/`status`/`checkpoint`/`rehash`/`entries`/`export`/
+`intrusion-detection`/`data-exfiltration`) have no frontend wrapper method
+at all.
+
+This is real detective capability going unseen, not dead scaffolding for a
+feature that never fires: `security_monitor.detect_brute_force` is called
+from `endpoints/auth.py` (twice) on login, `detect_session_hijack` and
+`detect_data_exfiltration` are called from `core/security_middleware.py`
+per-request, and `report_privilege_escalation_attempt` is called from
+`users.py` (×3) and `roles.py` (×2) — including the exact SEC2-28-1 scenario
+this doc's pass 1 fixed. All five paths create `ThreatLevel.CRITICAL` rows in
+`security_alerts`. **An active brute-force run, a hijacked session, a bulk
+data-exfiltration pattern, or a privilege-escalation attempt all fire a
+CRITICAL alert that is durably recorded and then invisible to every admin in
+the product** — the only way to see one is a direct DB query or a raw API
+call, which is not a workflow any of this app's admin users have.
+
+By contrast, this is not a "the whole feature has no UI" gap: `AuditLogPage`
+(`audit_logs.py`), `ErrorMonitoringPage` (`error_logs.py`), and
+`IPSecurityAdminPage` (`ip_security.py`) all exist, are routed, and are
+permission-gated correctly — three of this feature's four backend files have
+a working admin screen. `security_monitoring.py` specifically does not.
+
+**Where:** `backend/app/api/v1/endpoints/security_monitoring.py` (all
+routes); no corresponding file under `frontend/src/modules/` or
+`frontend/src/pages/` reads any of them.
+
+**Why not fixed:** this needs a new admin screen — a route, a permission-gate
+decision (`audit.view` for the read endpoints matches the backend; `resolve`
+and the destructive `/audit-log/rehash`/`checkpoint` ops already require
+`audit.export` server-side), an alert list/detail view, and
+acknowledge/resolve actions — a genuine feature build, not a drive-by fix.
+Flagged; mirrored into `docs/KNOWN_LIMITATIONS.md`.
+
+### Minor note — `/admin/errors` route permission doesn't match its API's
+
+`frontend/src/modules/admin/routes.tsx` gates `/admin/errors`
+(`ErrorMonitoringPage`) on `settings.manage`, but every `error_logs.py`
+endpoint it calls requires `audit.view` (list/stats), `audit.export`
+(export), or `audit.manage` (clear) — three different, more specific
+permissions, none of which is `settings.manage`. Both directions fail safe
+(the backend is the real authorization boundary and enforces correctly
+either way — a `settings.manage`-only admin who reaches the page gets clean
+403s from the API, not data; an `audit.view`-only admin is simply refused
+the route and never reaches the API at all), so this is a UX/consistency
+gap, not a security bypass. Changing the route gate is a one-line change but
+changes who can reach the screen in both directions, so it is left as a
+flagged observation rather than fixed inline.
+
+## Guard tests added (Pass 2)
+
+None — pass 2 made no code change (all backend files confirmed
+byte-identical to pass 1's merged state; SEC2-28-7 is a missing-feature
+finding, not a regression with a reproducible code path to pin).
+
+## Completion gate (Pass 2)
+
+No code was changed this pass (findings-only: re-verification + one flagged
+UI gap). Ran the gate against the nine backend files and the frontend files
+reviewed this pass, rather than skipping it as "n/a," per CLAUDE.md.
+
+| Check                                                                                                               | Result                     |
+| ------------------------------------------------------------------------------------------------------------------- | -------------------------- |
+| `flake8` (9 backend files this doc covers)                                                                          | clean                      |
+| `black --check` (same 9 files)                                                                                      | clean                      |
+| `isort --check-only` (same 9 files)                                                                                 | clean                      |
+| `python3 scripts/validate_migrations.py --strict`                                                                   | n/a — no migration touched |
+| backend tests, scope (privilege_ceiling/audit_hash_chain/audit_org_scoping/security_middleware/ip_security_service) | 129/129 passed             |
+| `node scripts/tsc-native.mjs --noEmit` (full project, per the wrapper CLAUDE.md documents)                          | 0 errors                   |
+| `npx eslint` (ip-security module + AuditLogPage/ErrorMonitoringPage/adminServices.ts, the files reviewed this pass) | 0 errors/warnings          |
+| `vitest run src/modules/ip-security`                                                                                | 35/35 passed               |
