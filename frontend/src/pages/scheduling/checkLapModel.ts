@@ -23,7 +23,14 @@ import type { CheckItemAnswer, CheckItemSpec } from './CheckItemControls';
  * and that evidence is gone.
  */
 export interface SealState {
-  status: 'intact' | 'broken';
+  /**
+   * Absent until the crew has actually read the tag.
+   *
+   * The numbers below come off the record and are on screen before anyone has
+   * looked, so the status is the crew's answer rather than the container's
+   * description — `isSealed` already says the container is a sealed one.
+   */
+  status?: 'intact' | 'broken' | undefined;
   /** The tag currently on the seal. */
   tagNumber?: string | null | undefined;
   /** Displayed, never parsed — "02:41" or a full timestamp, as recorded. */
@@ -60,7 +67,10 @@ export interface LapStop {
  * which would have hidden an expiring drug behind an intact tag.)
  */
 export function contentsAreSealed(stop: LapStop): boolean {
-  return Boolean(stop.isSealed) && stop.seal?.status !== 'broken';
+  // `=== 'intact'`, not `!== 'broken'`: an absent seal means nobody has read
+  // the tag yet, and the earlier form cleared the counting for a crew that had
+  // not looked at it — the one thing a seal is supposed to be evidence of.
+  return Boolean(stop.isSealed) && stop.seal?.status === 'intact';
 }
 
 /**

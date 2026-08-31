@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   bulkClaim,
+  contentsAreSealed,
   stopMapState,
   stopRestocks,
   sweepSummary,
@@ -134,5 +135,32 @@ describe('sweepSummary', () => {
     // while the box sits shut. So one item is owed, not two.
     expect(summary.totalCount).toBe(1);
     expect(summary.unanswered.map((e) => e.item.id)).toEqual(['midaz']);
+  });
+});
+
+describe('contentsAreSealed', () => {
+  const box = (seal?: LapStop['seal']): LapStop => ({
+    id: 'drugs',
+    name: 'Drug box',
+    isSealed: true,
+    ...(seal ? { seal } : {}),
+    items: [],
+  });
+
+  it('is false until somebody has actually read the tag', () => {
+    // The predicate reads as "sealed and not broken", which quietly answers
+    // the counting inside for a crew that has not looked at the container.
+    // A seal is evidence; an unread one is not.
+    expect(contentsAreSealed(box())).toBe(false);
+    expect(contentsAreSealed(box({ tagNumber: 'M2-40871' }))).toBe(false);
+  });
+
+  it('is true only on a tag the crew has confirmed matches', () => {
+    expect(contentsAreSealed(box({ status: 'intact', tagNumber: 'M2-40871' }))).toBe(true);
+  });
+
+  it('is false on a broken tag, and on a container that is not sealed at all', () => {
+    expect(contentsAreSealed(box({ status: 'broken' }))).toBe(false);
+    expect(contentsAreSealed({ id: 'cab', name: 'Cab', items: [] })).toBe(false);
   });
 });

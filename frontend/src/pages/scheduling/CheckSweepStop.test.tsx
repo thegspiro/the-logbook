@@ -244,3 +244,84 @@ describe('a bag with pockets', () => {
     expect(onAnswer).toHaveBeenCalledWith('peep', { status: 'pass' });
   });
 });
+
+describe('a sealed container', () => {
+  const gauze: CheckItemSpec = { id: 'gauze', name: '4×4 gauze', checkType: 'count', expectedQuantity: 10 };
+  const morphine: CheckItemSpec = { id: 'morphine', name: 'Morphine', checkType: 'count', expectedQuantity: 2 };
+  const cylinder: CheckItemSpec = { id: 'o2', name: 'O2 cylinder', checkType: 'level' };
+  const expiring: CheckItemSpec = { id: 'epi', name: 'Epi 1:1000', checkType: 'expiry', expirationDate: FAR };
+
+  const box = (seal?: LapStop['seal']): LapStop => ({
+    id: 'drugs',
+    name: 'Drug box',
+    isSealed: true,
+    ...(seal ? { seal } : {}),
+    items: [gauze, morphine, cylinder, expiring],
+  });
+
+  const mount = (seal?: LapStop['seal']) => {
+    const onSeal = vi.fn();
+    render(<CheckSweepStop stop={box(seal)} answers={{}} onAnswer={vi.fn()} onSeal={onSeal} />);
+    return onSeal;
+  };
+
+  it('asks the tag first, and names the number on record', () => {
+    mount({ tagNumber: 'M2-40871' });
+    expect(screen.getByText('Read the tag before you open it')).toBeVisible();
+    expect(screen.getByText('M2-40871')).toBeVisible();
+  });
+
+  it('does not clear the counting before anybody has read the tag', () => {
+    // The whole point of a seal is evidence. An unread one is not evidence,
+    // and clearing on it would answer the counts for a crew that never looked.
+    mount({ tagNumber: 'M2-40871' });
+    expect(screen.getByTestId('tally-row-morphine')).toBeVisible();
+    expect(screen.getByTestId('tally-row-gauze')).toBeVisible();
+  });
+
+  it('records the crew reading the tag', async () => {
+    const user = userEvent.setup();
+    const onSeal = mount({ tagNumber: 'M2-40871' });
+    await user.click(screen.getByRole('button', { name: 'Tag matches' }));
+    expect(onSeal).toHaveBeenCalledWith('drugs', { status: 'intact' });
+  });
+
+  it('takes the counting off the screen once the tag matches', () => {
+    mount({ status: 'intact', tagNumber: 'M2-40871' });
+    expect(screen.queryByTestId('tally-row-morphine')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('tally-row-gauze')).not.toBeInTheDocument();
+  });
+
+  it('still asks the dates and the readings, because a seal proves unchanged, not full', () => {
+    // These move while the box sits shut, which is the entire reason they are
+    // exempt from what an intact tag answers for.
+    mount({ status: 'intact', tagNumber: 'M2-40871' });
+    expect(screen.getByTestId('gauge-o2')).toBeVisible();
+    expect(screen.getByTestId('expiry-epi')).toBeVisible();
+  });
+
+  it('brings the full count back when the tag is broken or wrong', async () => {
+    const user = userEvent.setup();
+    const onSeal = mount({ tagNumber: 'M2-40871' });
+    await user.click(screen.getByRole('button', { name: 'Broken or wrong' }));
+    expect(onSeal).toHaveBeenCalledWith('drugs', { status: 'broken' });
+  });
+
+  it('names the replacement tag on a broken seal, so the re-seal comes off the record', () => {
+    mount({ status: 'broken', tagNumber: 'M2-40871', replacementTagNumber: 'M2-40872' });
+    expect(screen.getByTestId('seal-drugs')).toHaveTextContent('M2-40872');
+    expect(screen.getByTestId('tally-row-morphine')).toBeVisible();
+  });
+
+  it('lets the crew take back a reading they got wrong', async () => {
+    const user = userEvent.setup();
+    const onSeal = mount({ status: 'intact', tagNumber: 'M2-40871' });
+    await user.click(screen.getByRole('button', { name: /the tag is broken or wrong/ }));
+    expect(onSeal).toHaveBeenCalledWith('drugs', { status: 'broken' });
+  });
+
+  it('shows no seal surface on a container that is not sealed', () => {
+    render(<CheckSweepStop stop={{ id: 'cab', name: 'Cab', items: [gauze] }} answers={{}} onAnswer={vi.fn()} />);
+    expect(screen.queryByTestId('seal-cab')).not.toBeInTheDocument();
+  });
+});

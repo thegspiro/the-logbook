@@ -14,19 +14,21 @@
  * whatever the crew taps" hold in both layouts or in neither.
  */
 
-import { AlertTriangle, Check, X } from 'lucide-react';
+import { AlertTriangle, Check, ShieldAlert, ShieldCheck, X } from 'lucide-react';
 import React from 'react';
 
 import { CheckType, daysUntil, normalizeCheckType } from '@/modules/scheduling/types/equipmentCheck';
 
 import { countAnswer, expiryAnswer, levelAnswer } from './checkAnswers';
 import { FaultDetail, type CheckItemAnswer, type CheckItemSpec } from './CheckItemControls';
-import { type AnswerMap, type LapStop } from './checkLapModel';
+import { contentsAreSealed, sealCannotClear, type AnswerMap, type LapStop, type SealState } from './checkLapModel';
 
 export interface StopBodyProps {
   stop: LapStop;
   answers: AnswerMap;
   onAnswer: (itemId: string, patch: Partial<CheckItemAnswer>) => void;
+  /** Records the crew's reading of a tamper seal. Absent on a read-only body. */
+  onSeal?: ((stopId: string, patch: Partial<SealState>) => void) | undefined;
   disabled?: boolean | undefined;
 }
 
@@ -393,31 +395,157 @@ const ItemGroups: React.FC<Omit<StopBodyProps, 'stop'> & { items: CheckItemSpec[
 };
 
 // ============================================================================
+// Seal — the tag answers for the contents, or it does not
+// ============================================================================
+
+/**
+ * A tamper seal, and the one question it puts to the crew.
+ *
+ * The record supplies both numbers before anyone has looked, so all that is
+ * being asked is whether the tag on the container is the tag on the record.
+ * That is deliberately two buttons and not three: a broken seal and an intact
+ * seal bearing the wrong number have the same consequence — no evidence the
+ * container stayed shut, so the full count comes back — and asking a crew to
+ * classify which kind of wrong it is buys nothing they would act on.
+ *
+ * A matching tag clears the counting inside and nothing else. Dates and
+ * pressures move while the container sits shut, so they are still asked; a
+ * seal proves unchanged, not full.
+ */
+const SealCard: React.FC<{
+  stop: LapStop;
+  onSeal: ((stopId: string, patch: Partial<SealState>) => void) | undefined;
+  disabled?: boolean | undefined;
+}> = ({ stop, onSeal, disabled }) => {
+  const seal = stop.seal;
+  const status = seal?.status;
+  const tag = seal?.tagNumber;
+
+  if (status === 'intact') {
+    return (
+      <div data-testid={`seal-${stop.id}`} className="alert-success p-3">
+        <p className="text-theme-alert-success-title flex items-center gap-1.5 text-[15px] font-bold">
+          <ShieldCheck className="h-4 w-4 shrink-0" aria-hidden="true" />
+          Seal intact{tag ? <span className="font-mono">· {tag}</span> : null}
+        </p>
+        <p className="text-theme-text-secondary mt-0.5 text-[13px]">
+          The counting inside is answered by the tag. Dates and readings are still asked — a seal proves unchanged, not
+          full.
+        </p>
+        {onSeal && (
+          <button
+            type="button"
+            disabled={disabled}
+            onClick={() => onSeal(stop.id, { status: 'broken' })}
+            className="text-theme-text-secondary mt-2 min-h-11 text-[13px] font-semibold underline"
+          >
+            Actually, the tag is broken or wrong
+          </button>
+        )}
+      </div>
+    );
+  }
+
+  if (status === 'broken') {
+    return (
+      <div data-testid={`seal-${stop.id}`} className="alert-warning p-3">
+        <p className="text-theme-alert-warning-text flex items-center gap-1.5 text-[15px] font-bold">
+          <ShieldAlert className="h-4 w-4 shrink-0" aria-hidden="true" />
+          Seal broken or wrong
+        </p>
+        <p className="text-theme-text-secondary mt-0.5 text-[13px]">
+          Nothing vouches for the contents, so the full count is back below.
+          {seal?.replacementTagNumber ? (
+            <>
+              {' '}
+              Re-seal with <span className="font-mono font-bold">{seal.replacementTagNumber}</span>.
+            </>
+          ) : null}
+        </p>
+        {onSeal && (
+          <button
+            type="button"
+            disabled={disabled}
+            onClick={() => onSeal(stop.id, { status: 'intact' })}
+            className="text-theme-text-secondary mt-2 min-h-11 text-[13px] font-semibold underline"
+          >
+            Undo — the tag matches after all
+          </button>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div data-testid={`seal-${stop.id}`} className="border-theme-surface-border rounded-lg border p-3">
+      <p className="text-theme-text-primary text-[15px] font-bold">Read the tag before you open it</p>
+      <p className="text-theme-text-secondary mt-0.5 text-[13px]">
+        {tag ? (
+          <>
+            The record says <span className="font-mono font-bold">{tag}</span>.
+          </>
+        ) : (
+          'No tag number on record for this container.'
+        )}
+      </p>
+      <div className="mt-2.5 grid grid-cols-2 gap-2">
+        <button
+          type="button"
+          disabled={disabled || !onSeal}
+          onClick={() => onSeal?.(stop.id, { status: 'intact' })}
+          className="min-h-14 rounded-lg border border-green-800 bg-green-800 text-[15px] font-bold text-white disabled:opacity-50"
+        >
+          Tag matches
+        </button>
+        <button
+          type="button"
+          disabled={disabled || !onSeal}
+          onClick={() => onSeal?.(stop.id, { status: 'broken' })}
+          className="border-theme-input-border text-theme-text-secondary min-h-14 rounded-lg border text-[15px] font-bold hover:border-red-800 disabled:opacity-50"
+        >
+          Broken or wrong
+        </button>
+      </div>
+    </div>
+  );
+};
+
+// ============================================================================
 // The stop
 // ============================================================================
 
 /**
  * A stop's own items, then its pockets.
  */
-export const CheckSweepStop: React.FC<StopBodyProps> = ({ stop, answers, onAnswer, disabled }) => (
-  <div className="flex flex-col gap-3">
-    <ItemGroups items={stop.items} answers={answers} onAnswer={onAnswer} disabled={disabled} />
+export const CheckSweepStop: React.FC<StopBodyProps> = ({ stop, answers, onAnswer, onSeal, disabled }) => {
+  // An intact tag answers the counting, so those rows come off the screen
+  // rather than sitting there inviting a crew to count through a seal they
+  // have just vouched for. What it cannot answer stays.
+  const sealed = contentsAreSealed(stop);
+  const own = sealed ? sealCannotClear(stop.items) : stop.items;
 
-    {/* Pockets. A bag is one stop, not several — the crew is standing in front
+  return (
+    <div className="flex flex-col gap-3">
+      {stop.isSealed && <SealCard stop={stop} onSeal={onSeal} disabled={disabled} />}
+
+      <ItemGroups items={own} answers={answers} onAnswer={onAnswer} disabled={disabled} />
+
+      {/* Pockets. A bag is one stop, not several — the crew is standing in front
         of the whole thing — so its pockets are sections inside this screen
         rather than stops of their own. Recursive because the model lets a
         pocket hold pockets, and rendering one level deep is the same bug as
         rendering none: stopItems() counts the whole tree, so the tally would
         ask for items that are nowhere on screen. */}
-    {(stop.children ?? []).map((pocket) => (
-      <section key={pocket.id} data-testid={`pocket-${pocket.id}`} className="flex flex-col gap-2">
-        <h3 className="text-theme-text-secondary border-theme-surface-border border-l-2 pl-2 text-[13px] font-bold">
-          {pocket.name}
-        </h3>
-        <CheckSweepStop stop={pocket} answers={answers} onAnswer={onAnswer} disabled={disabled} />
-      </section>
-    ))}
-  </div>
-);
+      {(stop.children ?? []).map((pocket) => (
+        <section key={pocket.id} data-testid={`pocket-${pocket.id}`} className="flex flex-col gap-2">
+          <h3 className="text-theme-text-secondary border-theme-surface-border border-l-2 pl-2 text-[13px] font-bold">
+            {pocket.name}
+          </h3>
+          <CheckSweepStop stop={pocket} answers={answers} onAnswer={onAnswer} onSeal={onSeal} disabled={disabled} />
+        </section>
+      ))}
+    </div>
+  );
+};
 
 export default CheckSweepStop;

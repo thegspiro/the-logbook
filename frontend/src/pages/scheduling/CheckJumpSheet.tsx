@@ -138,7 +138,7 @@ export const CheckJumpSheet: React.FC<CheckJumpSheetProps> = ({
                         </span>
                       )}
                       {isCurrent && <span className="text-theme-text-muted block text-[13px]">You are here</span>}
-                      {stop.isSealed && stop.seal?.status !== 'broken' && (
+                      {stop.isSealed && stop.seal?.status === 'intact' && (
                         <span className="text-theme-alert-success-text block text-[13px] font-semibold">
                           Sealed{stop.seal?.tagNumber ? ` · tag ${stop.seal.tagNumber}` : ''}
                         </span>
