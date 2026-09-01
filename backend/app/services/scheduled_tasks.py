@@ -99,7 +99,7 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional, Set
 
 from loguru import logger
-from sqlalchemy import or_, select
+from sqlalchemy import or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.call_tracking import CallTrackingMode
@@ -3889,14 +3889,64 @@ async def run_recover_stranded_message_deliveries(db: AsyncSession) -> Dict[str,
     cutoff = datetime.now(dt_timezone.utc) - timedelta(
         minutes=_STRANDED_CLAIM_AFTER_MINUTES
     )
+
+    # Claims on a message that can no longer go out are retired rather than
+    # skipped. Skipping left them `pending` forever, and because the scan below
+    # is oldest-first and bounded, one deactivated message with enough stranded
+    # claims would fill the window on every sweep and starve the recoverable
+    # ones behind it — a fix for one suppressed message suppressing others.
+    # They are recorded as failed with the reason, which is also more honest
+    # than an audit row that says an attempt is still in flight.
+    undeliverable = (
+        (
+            await db.execute(
+                select(DepartmentMessageDelivery.id)
+                .join(
+                    DepartmentMessage,
+                    DepartmentMessage.id == DepartmentMessageDelivery.message_id,
+                )
+                .where(
+                    DepartmentMessageDelivery.status == "pending",
+                    DepartmentMessageDelivery.attempted_at < cutoff,
+                    or_(
+                        DepartmentMessage.is_active.is_(False),
+                        DepartmentMessage.deleted_at.isnot(None),
+                    ),
+                )
+                .limit(_STRANDED_CLAIM_SCAN_LIMIT)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    retired = list(undeliverable)
+    if retired:
+        await db.execute(
+            update(DepartmentMessageDelivery)
+            .where(DepartmentMessageDelivery.id.in_(retired))
+            .values(
+                status="failed",
+                error="Message is no longer active; delivery abandoned",
+            )
+        )
+        await db.commit()
+
     result = await db.execute(
         select(
             DepartmentMessageDelivery.message_id,
             DepartmentMessageDelivery.recipient_id,
         )
+        .join(
+            DepartmentMessage,
+            DepartmentMessage.id == DepartmentMessageDelivery.message_id,
+        )
         .where(
             DepartmentMessageDelivery.status == "pending",
             DepartmentMessageDelivery.attempted_at < cutoff,
+            # Filtered here, not just at the per-message load below, so the
+            # bounded window is only ever spent on claims that can be recovered.
+            DepartmentMessage.is_active.is_(True),
+            DepartmentMessage.deleted_at.is_(None),
         )
         .order_by(DepartmentMessageDelivery.attempted_at.asc())
         .limit(_STRANDED_CLAIM_SCAN_LIMIT)
@@ -3906,7 +3956,11 @@ async def run_recover_stranded_message_deliveries(db: AsyncSession) -> Dict[str,
         stranded.setdefault(str(message_id), set()).add(str(recipient_id))
 
     if not stranded:
-        return {"task": "recover_stranded_message_deliveries", "messages": 0}
+        return {
+            "task": "recover_stranded_message_deliveries",
+            "messages": 0,
+            "retired": len(retired),
+        }
 
     delivery = MessageDeliveryService(db)
     recovered = 0
@@ -3951,6 +4005,7 @@ async def run_recover_stranded_message_deliveries(db: AsyncSession) -> Dict[str,
     return {
         "task": "recover_stranded_message_deliveries",
         "messages": recovered,
+        "retired": len(retired),
         "failed": failed,
     }
 

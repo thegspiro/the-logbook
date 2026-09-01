@@ -196,6 +196,55 @@ class TestTheSweepFindsThem:
         assert result["messages"] == 0
         assert calls == []
 
+    async def test_an_undeliverable_claim_is_retired_rather_than_skipped(
+        self, db_session, monkeypatch
+    ):
+        """Skipping left it `pending` forever, and the scan is oldest-first and
+        bounded — so one deactivated message with enough stranded claims fills
+        the window on every sweep and starves the recoverable ones behind it.
+        A fix for one suppressed message must not suppress others.
+
+        The scan limit is lowered to one here rather than writing five hundred
+        rows: the starvation is a property of the cap, not of its size.
+        """
+        from app.services import scheduled_tasks
+
+        monkeypatch.setattr(scheduled_tasks, "_STRANDED_CLAIM_SCAN_LIMIT", 1)
+
+        org = await _org(db_session)
+        author = await _user(db_session, org)
+
+        # Older, and undeliverable: first in line for an oldest-first scan.
+        dead_member = await _user(db_session, org)
+        dead_message = await _message(db_session, org, author)
+        dead_message.is_active = False
+        dead_claim = await _claim_row(
+            db_session, dead_message, dead_member, age_minutes=120
+        )
+
+        live_member = await _user(db_session, org)
+        live_message = await _message(db_session, org, author)
+        await _claim_row(db_session, live_message, live_member, age_minutes=60)
+
+        calls = []
+
+        async def _capture(self, msg, only_user_ids=None):
+            calls.append(str(msg.id))
+
+        monkeypatch.setattr(MessageDeliveryService, "deliver", _capture)
+
+        result = await scheduled_tasks.run_recover_stranded_message_deliveries(
+            db_session
+        )
+
+        assert result["retired"] == 1
+        await db_session.refresh(dead_claim)
+        assert dead_claim.status == "failed"
+        assert "no longer active" in (dead_claim.error or "")
+        # And the live message got the window, rather than losing it to a claim
+        # that can never be delivered.
+        assert calls == [str(live_message.id)]
+
     async def test_a_fresh_claim_is_not_swept(self, db_session, monkeypatch):
         from app.services import scheduled_tasks
 
