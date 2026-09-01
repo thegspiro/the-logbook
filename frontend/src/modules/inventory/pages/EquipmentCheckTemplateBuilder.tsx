@@ -2031,21 +2031,24 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
    * and Y persisted together — a doubled checklist handed to the next crew,
    * visible in the builder only after a reload.
    *
-   * Deleted before the swap, so a failure leaves the template exactly as it
-   * was rather than half-replaced. `parent_compartment_id` is ON DELETE SET
-   * NULL, so a parent's children are orphaned rather than cascaded — every
-   * persisted id has to be named, and the order does not matter.
+   * Deleted before the swap, and in ONE request, so a failure leaves the
+   * template exactly as it was rather than half-replaced. A loop of single
+   * deletes commits each one separately: a failure on the third left the
+   * first two gone from the server while the builder still showed all of
+   * them. `parent_compartment_id` is ON DELETE SET NULL, so a parent's
+   * children are orphaned rather than cascaded — every persisted id has to
+   * be named, and the order does not matter.
    *
    * Returns false when the caller should stop.
    */
   const replaceAllCompartments = async (next: CompartmentFormState[]): Promise<boolean> => {
     const persisted = compartments.map((comp) => comp.id).filter((id): id is string => Boolean(id));
-    if (persisted.length > 0) {
+    // An id only exists on a compartment loaded from a saved template, so
+    // `persisted` is non-empty only when there is a templateId to name.
+    if (persisted.length > 0 && templateId) {
       try {
         await ensureDraftBeforeStructureEdit();
-        for (const id of persisted) {
-          await equipmentCheckService.deleteCompartment(id);
-        }
+        await equipmentCheckService.deleteCompartmentsBulk(templateId, persisted);
       } catch (err: unknown) {
         toast.error(getErrorMessage(err, 'Failed to replace the template contents'));
         return false;

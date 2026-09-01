@@ -40,6 +40,8 @@ from app.schemas.equipment_check import (
     CheckTemplateItemCreate,
     CheckTemplateItemResponse,
     CheckTemplateItemUpdate,
+    CompartmentBulkDelete,
+    CompartmentBulkDeleteResponse,
     ComplianceReportResponse,
     DeployedLotUpdateRequest,
     EquipmentCheckCompleteItems,
@@ -494,6 +496,54 @@ async def delete_compartment(
             entity_name=comp_name,
         )
         await db.commit()
+
+
+@router.post(
+    "/templates/{template_id}/compartments/bulk-delete",
+    response_model=CompartmentBulkDeleteResponse,
+)
+async def delete_compartments_bulk(
+    template_id: str,
+    data: CompartmentBulkDelete,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.check_manage")),
+):
+    """Discard a template's named compartments atomically.
+
+    Backs the builder's bulk-replacement paths, which promise to clear the
+    template before loading a preset or an import. One DELETE per compartment
+    commits each separately, so a failure part-way through half-erased the
+    template with no way back.
+    """
+    service = EquipmentCheckService(db)
+    org_id = str(current_user.organization_id)
+    names = {}
+    for compartment_id in data.compartment_ids:
+        comp = await service._get_compartment(compartment_id, org_id)
+        if comp:
+            names[compartment_id] = comp.name
+    try:
+        deleted = await service.delete_compartments_bulk(
+            template_id, org_id, data.compartment_ids
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=safe_error_detail(exc))
+    if deleted is None:
+        raise HTTPException(status_code=404, detail="Template not found")
+    for compartment_id in deleted:
+        await service.log_template_change(
+            organization_id=org_id,
+            template_id=template_id,
+            user_id=str(current_user.id),
+            user_name=_user_display_name(current_user),
+            action="delete",
+            entity_type="compartment",
+            entity_id=compartment_id,
+            entity_name=names.get(compartment_id, "Unknown"),
+        )
+    if deleted:
+        await db.commit()
+    return CompartmentBulkDeleteResponse(deleted_compartment_ids=deleted)
 
 
 @router.post(

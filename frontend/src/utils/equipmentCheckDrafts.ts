@@ -118,15 +118,31 @@ export async function loadEquipmentCheckDraft<T>(
   });
 }
 
+/**
+ * Discard this member's work on this checklist — every revision of it.
+ *
+ * Keyed on the exact draft id, this deleted only the revision the caller had
+ * open. A draft written before an officer edited the template survived the
+ * submission, and `loadEquipmentCheckDraft` hands back exactly that as its
+ * superseded-revision fallback when no current-revision draft exists: reopening
+ * the checklist after submitting restored answers from the check just filed,
+ * and went on doing so for the seven days until it expired.
+ */
 export async function deleteEquipmentCheckDraft(identity: EquipmentCheckDraftIdentity): Promise<void> {
   const db = await openOfflineDb();
   await new Promise<void>((resolve, reject) => {
-    const request = db
-      .transaction(STORE_EQUIPMENT_CHECK_DRAFTS, 'readwrite')
-      .objectStore(STORE_EQUIPMENT_CHECK_DRAFTS)
-      .delete(draftId(identity));
-    request.onsuccess = () => resolve();
+    const store = db.transaction(STORE_EQUIPMENT_CHECK_DRAFTS, 'readwrite').objectStore(STORE_EQUIPMENT_CHECK_DRAFTS);
+    const request = store.getAll();
     request.onerror = () => reject(request.error ?? new Error('Failed to delete equipment-check draft'));
+    request.onsuccess = () => {
+      for (const draft of request.result as EquipmentCheckDraft<unknown>[]) {
+        // Another member's draft on this station tablet is not ours to delete
+        // here — loadEquipmentCheckDraft purges those on sight, and only for
+        // the member actually holding the device.
+        if (sameChecklist(draft, identity) && sameOwner(draft, identity)) store.delete(draft.id);
+      }
+      resolve();
+    };
   });
 }
 

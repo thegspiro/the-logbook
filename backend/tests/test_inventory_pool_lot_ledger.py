@@ -17,7 +17,13 @@ from datetime import date, timedelta
 
 import pytest
 
-from app.models.inventory import InventoryItem, InventoryLot, TrackingType
+from app.models.inventory import (
+    InventoryItem,
+    InventoryLot,
+    ItemCondition,
+    ItemStatus,
+    TrackingType,
+)
 from app.models.user import Organization, User
 from app.services.inventory_service import InventoryService
 
@@ -160,3 +166,190 @@ class TestPoolIssuanceUsesTheLotLedger:
         assert issuance is not None
         await db_session.refresh(item)
         assert item.quantity == 4
+
+
+class TestFirstLotDoesNotStrandColumnStock:
+    """Crossing from the column ledger to the lot ledger.
+
+    The moment an item has any lot, every reader stops consulting
+    ``InventoryItem.quantity``. So recording the first delivery against an
+    item that was being counted in the column made whatever was on the shelf
+    invisible: the item read as zero ready units, low-stock alerts fired
+    against a full cupboard, and issuing refused stock that was there.
+    """
+
+    async def test_adding_a_first_lot_carries_the_shelf_count_forward(self, db_session):
+        org = await _org(db_session)
+        user = await _user(db_session, org)
+        item = await _item(db_session, org, quantity=12)
+
+        await InventoryService(db_session).add_lot(
+            item.id, org.id, {"quantity": 5, "lot_number": "L-1"}
+        )
+
+        # 12 on the shelf plus the 5 just received, all issuable.
+        issuance, err = await _issue(db_session, org, user, item, 17)
+        assert err is None, err
+        assert issuance is not None
+        await db_session.refresh(item)
+        # Counted once, in the lot ledger only.
+        assert item.quantity == 0
+
+    async def test_a_bulk_delivery_carries_it_forward_too(self, db_session):
+        org = await _org(db_session)
+        user = await _user(db_session, org)
+        item = await _item(db_session, org, quantity=4)
+
+        await InventoryService(db_session).add_lots_bulk(
+            org.id, [{"inventory_item_id": item.id, "quantity": 1}]
+        )
+
+        issuance, err = await _issue(db_session, org, user, item, 5)
+        assert err is None, err
+        assert issuance is not None
+
+    async def test_a_second_lot_does_not_carry_anything_again(self, db_session):
+        """Once per item. A stale non-zero column on an already-lotted item is
+        not stock — it is the residue the lot ledger replaced."""
+        org = await _org(db_session)
+        item = await _item(db_session, org, quantity=999)
+        await _lot(db_session, org, item, quantity=3)
+
+        await InventoryService(db_session).add_lot(item.id, org.id, {"quantity": 2})
+
+        totals = await InventoryService(db_session)._in_date_lot_totals(
+            org.id, [item.id]
+        )
+        assert totals[item.id] == 5
+
+
+async def _return(db, org, user, issuance, quantity=None):
+    return await InventoryService(db).return_to_pool(
+        issuance_id=uuid.UUID(issuance.id),
+        organization_id=uuid.UUID(org.id),
+        returned_by=uuid.UUID(user.id),
+        quantity_returned=quantity,
+    )
+
+
+class TestReturnsGoBackToTheLedgerTheyCameFrom:
+    """`item.quantity` is read by nothing once an item has lots.
+
+    Crediting a return there therefore did not restore the units — issuance,
+    low-stock and the checklist swap all consult the lots — so returned gear
+    disappeared from available stock permanently.
+    """
+
+    async def test_a_return_credits_the_lot_it_was_issued_from(self, db_session):
+        org = await _org(db_session)
+        user = await _user(db_session, org)
+        item = await _item(db_session, org, quantity=0)
+        lot = await _lot(db_session, org, item, quantity=10)
+
+        issuance, err = await _issue(db_session, org, user, item, 4)
+        assert err is None
+        await db_session.refresh(lot)
+        assert lot.quantity == 6
+
+        ok, err = await _return(db_session, org, user, issuance)
+        assert ok, err
+        await db_session.refresh(lot)
+        assert lot.quantity == 10
+        await db_session.refresh(item)
+        # Not parked in a column nobody reads.
+        assert item.quantity == 0
+
+    async def test_a_return_spanning_two_lots_repays_both(self, db_session):
+        org = await _org(db_session)
+        user = await _user(db_session, org)
+        item = await _item(db_session, org, quantity=0)
+        sooner = await _lot(db_session, org, item, quantity=3, expires_in_days=30)
+        later = await _lot(db_session, org, item, quantity=5, expires_in_days=365)
+
+        issuance, err = await _issue(db_session, org, user, item, 5)
+        assert err is None
+        await db_session.refresh(sooner)
+        await db_session.refresh(later)
+        assert (sooner.quantity, later.quantity) == (0, 3)
+
+        ok, err = await _return(db_session, org, user, issuance)
+        assert ok, err
+        await db_session.refresh(sooner)
+        await db_session.refresh(later)
+        assert (sooner.quantity, later.quantity) == (3, 5)
+
+    async def test_partial_returns_never_repay_the_same_units_twice(self, db_session):
+        org = await _org(db_session)
+        user = await _user(db_session, org)
+        item = await _item(db_session, org, quantity=0)
+        lot = await _lot(db_session, org, item, quantity=10)
+
+        issuance, _ = await _issue(db_session, org, user, item, 6)
+        await _return(db_session, org, user, issuance, quantity=2)
+        await _return(db_session, org, user, issuance, quantity=4)
+
+        await db_session.refresh(lot)
+        assert lot.quantity == 10
+
+    async def test_a_column_ledger_issue_still_returns_to_the_column(self, db_session):
+        """Items that never had lots — and every issuance written before the
+        allocation record existed — must keep working exactly as before."""
+        org = await _org(db_session)
+        user = await _user(db_session, org)
+        item = await _item(db_session, org, quantity=6)
+
+        issuance, err = await _issue(db_session, org, user, item, 2)
+        assert err is None
+        assert issuance.lot_allocations is None
+
+        ok, err = await _return(db_session, org, user, issuance)
+        assert ok, err
+        await db_session.refresh(item)
+        assert item.quantity == 6
+
+
+class TestQuarantinedPoolStockIsNotIssued:
+    """`active` stays true on a newly quarantined item, and issuance checked
+    only that — so the item edit form could record gear as damaged or retired
+    and the scan/distribution paths would still hand it out."""
+
+    @pytest.mark.parametrize(
+        "status", [ItemStatus.IN_MAINTENANCE, ItemStatus.RETIRED, ItemStatus.LOST]
+    )
+    async def test_a_quarantined_status_refuses_issuance(self, db_session, status):
+        org = await _org(db_session)
+        user = await _user(db_session, org)
+        item = await _item(db_session, org, quantity=10)
+        item.status = status
+        await db_session.flush()
+
+        issuance, err = await _issue(db_session, org, user, item, 1)
+
+        assert issuance is None
+        assert "cannot be issued" in err
+
+    @pytest.mark.parametrize(
+        "condition",
+        [ItemCondition.DAMAGED, ItemCondition.OUT_OF_SERVICE, ItemCondition.POOR],
+    )
+    async def test_an_unsafe_condition_refuses_issuance(self, db_session, condition):
+        org = await _org(db_session)
+        user = await _user(db_session, org)
+        item = await _item(db_session, org, quantity=10)
+        item.condition = condition
+        await db_session.flush()
+
+        issuance, err = await _issue(db_session, org, user, item, 1)
+
+        assert issuance is None
+        assert "cannot be issued" in err
+
+    async def test_serviceable_stock_is_unaffected(self, db_session):
+        org = await _org(db_session)
+        user = await _user(db_session, org)
+        item = await _item(db_session, org, quantity=10)
+
+        issuance, err = await _issue(db_session, org, user, item, 1)
+
+        assert err is None
+        assert issuance is not None

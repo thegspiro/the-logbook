@@ -244,6 +244,20 @@ export const equipmentCheckService = {
   async deleteCompartment(compartmentId: string): Promise<void> {
     await api.delete(`/equipment-checks/compartments/${compartmentId}`);
   },
+  /**
+   * Discard a template's compartments in one transaction.
+   *
+   * The builder's bulk-replacement paths clear the template before loading a
+   * preset or an import. A loop of single deletes commits each separately, so
+   * a failure part-way through half-erases the template with no way back.
+   */
+  async deleteCompartmentsBulk(templateId: string, compartmentIds: string[]): Promise<string[]> {
+    const response = await api.post<{ deletedCompartmentIds: string[] }>(
+      `/equipment-checks/templates/${templateId}/compartments/bulk-delete`,
+      { compartment_ids: compartmentIds }
+    );
+    return response.data.deletedCompartmentIds;
+  },
   async cloneCompartment(compartmentId: string, sortOrder: number): Promise<CheckTemplateCompartment> {
     const response = await api.post<CheckTemplateCompartment>(`/equipment-checks/compartments/${compartmentId}/clone`, {
       sort_order: sortOrder,

@@ -480,6 +480,10 @@ class DepartmentMessageRecipient(Base):
     # this, because they authorize on the row's existence alone and an author
     # who removes somebody from an audience means to remove their access too.
     revoked_at = Column(DateTime(timezone=True), nullable=True)
+    # When this member entered the audience. Distinct from the message's own
+    # created_at once an audience is widened after publication, which is the
+    # case the delivery path has to tell apart.
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     message = relationship("DepartmentMessage", back_populates="recipients")
     user = relationship("User", foreign_keys=[user_id])

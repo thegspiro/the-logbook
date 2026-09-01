@@ -181,6 +181,23 @@ describe('AddMember', () => {
       expect(contacts[1]).toMatchObject({ name: 'Alex Reyes', relationship: 'Parent', is_primary: false });
     });
 
+    it('refuses an email-only one rather than discarding the address', async () => {
+      // The email was not part of the "did they start filling this in?" check,
+      // so a second contact entered as an address alone passed validation and
+      // was then dropped: the payload builder keys the whole contact off the
+      // name. Typed, accepted, never stored.
+      const user = userEvent.setup();
+      renderWithRouter(<AddMember />);
+      await waitFor(() => expect(mockGetRoles).toHaveBeenCalled());
+
+      await fillRequired(user);
+      await user.type(screen.getByPlaceholderText('bob.doe@example.com'), 'alex@dept.test');
+      await user.click(screen.getByRole('button', { name: /save member/i }));
+
+      expect(mockCreateMember).not.toHaveBeenCalled();
+      expect(screen.getByText('Name is required')).toBeInTheDocument();
+    });
+
     it('still allows leaving it entirely blank', async () => {
       const user = userEvent.setup();
       renderWithRouter(<AddMember />);

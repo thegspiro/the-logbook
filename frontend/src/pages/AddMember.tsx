@@ -149,9 +149,16 @@ const AddMember: React.FC = () => {
     // name posted an empty relationship, and the 422 that came back named a
     // field on a card the form labels "(Optional)" — so the whole member
     // creation failed for a contact nobody had to enter.
-    const secondaryFilled = [formData.emergencyName2, formData.emergencyRelationship2, formData.emergencyPhone2].some(
-      (value) => value.trim()
-    );
+    // The email counts as "filled" too. Left out, an entry consisting only of
+    // a second contact's email address passed validation silently and was then
+    // dropped by the payload builder, which keys the whole contact off the
+    // name — the address was typed, accepted, and never stored.
+    const secondaryFilled = [
+      formData.emergencyName2,
+      formData.emergencyRelationship2,
+      formData.emergencyPhone2,
+      formData.emergencyEmail2,
+    ].some((value) => value.trim());
     if (secondaryFilled) {
       if (!formData.emergencyName2.trim()) newErrors.emergencyName2 = 'Name is required';
       if (!formData.emergencyRelationship2.trim()) newErrors.emergencyRelationship2 = 'Relationship is required';

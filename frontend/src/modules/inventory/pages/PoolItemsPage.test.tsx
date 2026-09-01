@@ -158,6 +158,26 @@ describe('PoolItemsPage', () => {
     expect(mockToastSuccess).toHaveBeenCalledWith('Issued 1 Dept Polo');
   });
 
+  it('counts lot-stocked items by their lots, not the dead quantity column', async () => {
+    // Once an item has any lot, receiving writes to the lots and issuance
+    // draws from them, while `quantity` keeps whatever it held the day the
+    // item crossed over. Reading that column showed a consumable received as
+    // a five-unit lot as out of stock — hidden from the bulk-issuance picker
+    // and capped at zero in the issue dialog — for stock the backend will
+    // happily dispense.
+    mockGetItems.mockResolvedValue({
+      items: [poolItem({ quantity: 0, lot_stock: 5, is_lot_stocked: true })],
+      total: 1,
+    });
+    const user = userEvent.setup();
+    renderWithRouter(<PoolItemsPage />);
+    await screen.findByText('Dept Polo');
+
+    await user.click(screen.getByRole('button', { name: /Bulk Issue/ }));
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByRole('option', { name: 'Dept Polo (5 available)' })).toBeInTheDocument();
+  });
+
   it('loads issuances when a card is expanded', async () => {
     mockGetItems.mockResolvedValue({ items: [poolItem()], total: 1 });
     const user = userEvent.setup();
