@@ -2940,10 +2940,11 @@ export const SHOTS = [
     auth: "member",
     route: "/training/submit",
     prepare: async (page) => {
-      const picker = page
-        .locator("select")
-        .filter({ hasText: "Select a category" })
-        .first();
+      // Addressed by id. This matched on the placeholder option's text
+      // ("Select a category"), which now reads "Select..." -- so the filter
+      // found nothing and the wait timed out. The id is the stable handle;
+      // placeholder copy is not.
+      const picker = page.locator("#training-category");
       await picker.waitFor({ timeout: 15_000 });
       await picker.scrollIntoViewIfNeeded({ timeout: 10_000 }).catch(() => {});
       const options = await picker
@@ -3008,8 +3009,11 @@ export const SHOTS = [
     route: "/training/my-training",
     // Clipped to the toolbar. It is one bar on a long page, and a page shot
     // renders the helper text too small to read.
+    // Anchored on the label, with the wrapper matched by the shared `card`
+    // utility rather than the raw `rounded-lg border` it used to carry -- the
+    // same migration that moved the shift-report cards.
     selector:
-      "div.rounded-lg.border:has(label:text-is('Training records date range'))",
+      "div.card:has(label:text-is('Training records date range'))",
   },
   {
     id: "04-37-hour-tracking-mapping",
