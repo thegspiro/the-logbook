@@ -16,14 +16,14 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**Feature 04 (Storefront & payments), pass 3** — branch
-`claude/security-review-sf-pass3`, PR link recorded in the next log entry
-once opened. `git diff` (not `git log` — this feature's history is
-squashed/rewritten, per pass 2's own correction) between pass 2's merge and
-`HEAD` across the full declared domain shows zero changes; no new findings.
-Order export's unbounded-export item carried forward again, still unfixed.
-See the log entry below and `SF-04-storefront-payments.md`'s Pass 3
-section.
+**Feature 04 (Storefront & payments), pass 3** —
+[#2138](https://github.com/thegspiro/the-logbook/pull/2138), branch
+`claude/security-review-sf-pass3`. `git diff` (not `git log` — this
+feature's history is squashed/rewritten, per pass 2's own correction)
+between pass 2's merge and `HEAD` across the full declared domain shows
+zero changes; no new findings. Order export's unbounded-export item
+carried forward again, still unfixed. See the log entry below and
+`SF-04-storefront-payments.md`'s Pass 3 section.
 
 ---
 
