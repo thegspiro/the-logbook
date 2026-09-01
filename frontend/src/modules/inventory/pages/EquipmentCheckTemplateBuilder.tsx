@@ -1735,19 +1735,42 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
   // Save
   // ---------------------------------------------------------------------------
 
-  const handleSave = async (publish: boolean) => {
-    // Flush, do not discard. Cancelling these timers threw away every edit made
-    // inside the 1.5s debounce window — and because the per-item payload below
-    // omits blank fields, a field cleared just before pressing Save was then
-    // restored to its old server value behind a "Draft saved" toast.
+  /**
+   * Send the debounced edits now, rather than letting Save race them.
+   *
+   * Flush, do not discard. Cancelling these timers threw away every edit made
+   * inside the 1.5s debounce window — and because the per-item payload below
+   * omits blank fields, a field cleared just before pressing Save was then
+   * restored to its old server value behind a "Draft saved" toast.
+   *
+   * Throws on failure, and puts the pending entries back before it does. The
+   * caller runs this inside the save lifecycle so the error reaches the same
+   * toast every other save failure does; without the restore, a flush that
+   * failed would have consumed the edits on its way out and left nothing to
+   * retry.
+   */
+  const flushPendingAutoSaves = async () => {
     const pendingPatches = [...autoSavePendingRef.current.entries()];
     for (const [, { timer }] of pendingPatches) clearTimeout(timer);
     autoSavePendingRef.current.clear();
-    if (pendingPatches.length > 0) {
-      await ensureDraftBeforeStructureEdit();
-      await Promise.all(pendingPatches.map(([itemId, { patch }]) => equipmentCheckService.updateCheckItem(itemId, patch)));
+    try {
+      if (pendingPatches.length > 0) {
+        await ensureDraftBeforeStructureEdit();
+        await Promise.all(
+          pendingPatches.map(([itemId, { patch }]) => equipmentCheckService.updateCheckItem(itemId, patch))
+        );
+      }
+      if (autoSaveInFlightRef.current.size > 0) await Promise.all([...autoSaveInFlightRef.current]);
+    } catch (err: unknown) {
+      for (const [itemId, entry] of pendingPatches) {
+        if (!autoSavePendingRef.current.has(itemId)) autoSavePendingRef.current.set(itemId, entry);
+      }
+      autoSaveErrorRef.current = true;
+      throw err;
     }
-    if (autoSaveInFlightRef.current.size > 0) await Promise.all([...autoSaveInFlightRef.current]);
+  };
+
+  const handleSave = async (publish: boolean) => {
     // Drafts deliberately bypass readiness checks; publication never does.
     // Keep the blocking rules aligned with the backend instead of putting them
     // in the overridable warning dialog below.
@@ -1785,6 +1808,11 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
 
     setSaving(true);
     try {
+      // Inside the lifecycle, not ahead of it: run before setSaving/try, a
+      // failed flush escaped as an unhandled rejection with no toast, and the
+      // auto-save indicator stayed on "saving" for good.
+      await flushPendingAutoSaves();
+
       const compartmentPayloads: CheckTemplateCompartmentCreate[] = compartments
         .filter((c) => !c.id) // Only include unsaved compartments in create payload
         .map((c, idx) => ({
@@ -1953,6 +1981,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       }
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to save template'));
+      setAutoSaveStatus(autoSaveErrorRef.current ? 'error' : 'idle');
     } finally {
       setSaving(false);
     }

@@ -117,3 +117,65 @@ describe('OverviewSection — clearing a field', () => {
     expect(updateFacility).not.toHaveBeenCalled();
   });
 });
+
+describe('OverviewSection — a lookup that was deactivated after the fact', () => {
+  beforeEach(() => {
+    updateFacility.mockReset();
+    updateFacility.mockResolvedValue(undefined);
+  });
+
+  const retained = {
+    ...facility,
+    facilityTypeId: 'type-retired',
+    facilityType: { id: 'type-retired', name: 'Substation' },
+    statusId: 'status-retired',
+    statusRecord: { id: 'status-retired', name: 'Mothballed' },
+  } as unknown as Parameters<typeof OverviewSection>[0]['facility'];
+
+  const renderRetained = async (user: ReturnType<typeof userEvent.setup>) => {
+    renderWithRouter(
+      <OverviewSection facility={retained} facilityTypes={types} facilityStatuses={statuses} canManage />,
+    );
+    await user.click(screen.getByRole('button', { name: /Edit/ }));
+  };
+
+  it("keeps the facility's own type selectable even though it is no longer offered", async () => {
+    // The store loads lookups active-only. Without the retained option the
+    // select falls back to its blank placeholder while `facility_type_id`
+    // still holds the id, so the field reads as unset and an unrelated edit
+    // looks like the moment to pick a replacement.
+    const user = userEvent.setup();
+    await renderRetained(user);
+
+    const option = screen.getByRole<HTMLOptionElement>('option', { name: 'Substation (inactive)' });
+    expect(option.value).toBe('type-retired');
+    expect(screen.getByRole('option', { name: 'Fire Station' })).toBeInTheDocument();
+  });
+
+  it('keeps the retained status too, marked as inactive', async () => {
+    const user = userEvent.setup();
+    await renderRetained(user);
+
+    expect(screen.getByRole('option', { name: 'Mothballed (inactive)' })).toBeInTheDocument();
+  });
+
+  it('leaves the retained value in place when an unrelated field is saved', async () => {
+    const user = userEvent.setup();
+    await renderRetained(user);
+
+    const notes = screen.getByDisplayValue('Roof replaced 2019');
+    await user.clear(notes);
+    await user.type(notes, 'Roof inspected 2026');
+    const payload = await save(user);
+
+    expect(payload.facility_type_id).toBe('type-retired');
+    expect(payload.status_id).toBe('status-retired');
+  });
+
+  it('offers only the active lookups when nothing inactive is referenced', async () => {
+    const user = userEvent.setup();
+    await renderEditing(user);
+
+    expect(screen.queryByRole('option', { name: /\(inactive\)/ })).not.toBeInTheDocument();
+  });
+});
