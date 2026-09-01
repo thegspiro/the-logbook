@@ -16,18 +16,50 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**Feature 01 (Auth & session lifecycle), pass 3** —
-[#2133](https://github.com/thegspiro/the-logbook/pull/2133), branch
-`claude/security-review-auth-pass3`. Codex round 1 addressed: a P1
-cross-endpoint TOTP replay gap (AUTH-7) and a P2 brute-force-detector wiring
-gap (AUTH-8) that pass 3's own "Verified good" write-up had wrongly cleared.
-Codex round 2 (reviewing round 1's own fix commit) then found a real P1
-concurrency race inside the AUTH-7 fix itself (AUTH-9), a P2 gap that
-silently defeated AUTH-8's own fix (AUTH-10), and two more P2s (AUTH-11,
-AUTH-12). All four fixed. This round's own required adversarial re-read
-before pushing then found a fifth, unreported issue of the identical shape
-as AUTH-9 in the adjacent recovery-code path (AUTH-13), also fixed. See the
-log entries below.
+**Feature 02 (Permissions & roles), pass 3** — branch
+`claude/security-review-perm-pass3`, PR link recorded in the next log entry
+once opened. Diff-since-pass-2 review of `dependencies.py`,
+`core/permissions.py`, `roles.py`/`role_service.py` (the only three files
+with commits since pass 2's merge — `officers.py`, `org_chart.py`,
+`operational_ranks.py`, and their services are unchanged); no new findings.
+See the log entry below and `PERM-02-permissions-roles.md`'s Pass 3 section.
+
+---
+
+### 2026-09-01 — Feature 02 (Permissions & roles, pass 3) — no new findings
+
+`git log --since=2026-08-27` (pass 2's merge date) against all six feature
+files found exactly three commits: `cf033864` (rename
+`equipment_check.*` → `inventory.check_*`, with an authority-preserving
+migration and an additive `LEGACY_PERMISSION_ALIASES` compatibility layer),
+`9f6e7a7a` (let the `member` position's display name be customized, slug and
+permission ceiling untouched), and `a518957e` (a Codex follow-up on PR #1948
+that changes how `get_request_enabled_modules` handles an invalid session
+cookie — doesn't weaken any endpoint's own auth dependency, confirmed by
+grep that the function is never itself used as one). All three reviewed
+against the full checklist; none introduced a finding. `officers.py`,
+`org_chart.py`, `operational_ranks.py`, and their services are
+byte-identical to pass 2 (zero commits since, confirmed via git log) — pass
+2's "Verified good" write-up for those stands without re-derivation.
+Re-verified PERM-1 through PERM-4's fixes and the ceiling machinery
+(`_enforce_permission_grant_ceiling`, `_enforce_role_edit_ceiling`,
+`_enforce_rank_grant_ceiling`) are all still present and wired exactly as
+described. No backend/frontend source touched this pass, so the code-level
+completion gates had nothing new to validate; `validate_migrations.py
+--strict` (399 revisions, single head) and `flake8 app/ tests/ alembic/` (0
+violations) re-run to confirm the baseline PR #2133 left is still clean.
+
+Full write-up: `docs/security-review/PERM-02-permissions-roles.md` (Pass 3
+section). Rotation row 02 → ⏳ (awaiting PR merge). Next: 03 Public surface &
+webhooks, once this PR merges.
+
+---
+
+### 2026-09-01 — Feature 01 (Auth & session lifecycle, pass 3) ✅ merged — PR #2133
+
+All 6 Codex review threads (AUTH-7 through AUTH-13, two P1s, four P2s) fixed
+and resolved; CI green (17/17) on the final head, no merge conflict. Rotation
+row 01 → ✅. Next: 02 Permissions & roles.
 
 ---
 
@@ -5528,7 +5560,7 @@ pass 3 — each row's prior PR is recorded in the Log, not repeated here.
 | --- | ------------------------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
 | 00  | Cross-cutting baseline    | SEC    | whole-codebase sweeps; see `SEC-00-cross-cutting-baseline.md`                                                                                   | ✅     |
 | 01  | Auth & session lifecycle  | AUTH   | `endpoints/auth.py`, `auth_service.py`, `mfa_service.py`, `oauth_service.py`                                                                    | ✅     |
-| 02  | Permissions & roles       | PERM   | `dependencies.py`, `core/permissions.py`, `roles.py`, `operational_ranks.py`, `officers.py`, `org_chart.py`                                     | ⬜     |
+| 02  | Permissions & roles       | PERM   | `dependencies.py`, `core/permissions.py`, `roles.py`, `operational_ranks.py`, `officers.py`, `org_chart.py`                                     | ⏳     |
 | 03  | Public surface & webhooks | PUB    | `api/public/*` (20 unauth routes), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`                                      | ⬜     |
 | 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                              | ⬜     |
 | 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                     | ⬜     |
