@@ -35,7 +35,7 @@ nothing restored the current key's entry into the tracker _after_ eviction
 ran, so a key correctly alerted on and then evicted lost its baseline for
 every call after (round 5's write-up also carried a since-superseded claim
 about the correct alert-path behavior — see the correction note in its
-entry below), **round 6's finding that round 5's own fix wrote the
+entry below), and **round 6's finding that round 5's own fix wrote the
 attacker's IP back as the trusted baseline on the alert path itself** —
 distinct from the eviction-ordering bug class in rounds 3–5, and new to
 round 5 specifically (verified against every prior version of the method,
@@ -199,9 +199,9 @@ SEC-00-cross-cutting-baseline.md` and this file (round-7 write-up + this log
 entry, plus the round-5 doc correction above); `CHANGELOG.md`. Same branch,
 same PR #2132.
 
-**Seven review rounds on this file's session-hijack tracking now — the sixth
-straight round to find something in this exact method, each a genuinely
-different shape** (missing eviction, one-key-at-a-time eviction,
+**Seven review rounds on this file's session-hijack tracking now — the
+seventh straight round to find something in this exact method, each a
+genuinely different shape** (missing eviction, one-key-at-a-time eviction,
 read-after-evict, a fourth method with the same read-after-evict shape,
 write-after-evict, a semantic bug in what write-after-evict wrote, and now a
 time-based path around that same semantic fix). The caution stated in

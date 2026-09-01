@@ -920,8 +920,8 @@ None`), matching the hand-traced mechanism above exactly (300s = 5 × 60s);
 from 24.
 
 **Seven review rounds on this file's session-hijack tracking now, across two
-PRs — the sixth straight round to find something in this exact method, each a
-genuinely different shape** (missing eviction, one-key-at-a-time eviction,
+PRs — the seventh straight round to find something in this exact method, each
+a genuinely different shape** (missing eviction, one-key-at-a-time eviction,
 read-after-evict, a fourth method with the same read-after-evict shape,
 write-after-evict, a semantic bug in what write-after-evict wrote, and now a
 time-based path around that same semantic fix). The caution stated in rounds
