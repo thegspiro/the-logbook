@@ -192,9 +192,15 @@ export function withDisplayCode(routeFor) {
  * reached positionally rather than by label.
  */
 export async function expandFirstReportCard(page) {
+  // Matched on what the row *says*, not on its wrapper. This anchored on
+  // `div.rounded-xl > button` until the card moved to the shared `card`
+  // utility, at which point it matched nothing and took four shots with it.
+  // A report row is the only visible button on this screen whose label
+  // carries a duration, so the duration is the durable handle; the wrapper
+  // class has already changed once and is nobody's contract.
   const header = page
-    .locator("div.rounded-xl > button:visible")
-    .filter({ hasText: /\d+(\.\d+)?h/ })
+    .locator("button:visible")
+    .filter({ hasText: /\d+(\.\d+)?h\b/ })
     .first();
   await header.scrollIntoViewIfNeeded({ timeout: 10_000 }).catch(() => {});
   await header.click({ timeout: 10_000 });
@@ -1914,7 +1920,8 @@ export const SHOTS = [
       // The Review Report button is inside the opened card, not on the
       // collapsed one — the card header is the disclosure control.
       await page
-        .locator("div.rounded-xl > button")
+        .locator("button:visible")
+        .filter({ hasText: /\d+(\.\d+)?h\b/ })
         .first()
         .click({ timeout: 15_000 });
       await page.waitForTimeout(1200);
@@ -1929,7 +1936,9 @@ export const SHOTS = [
       // itself to its end: the controls are what this shot is for, and the
       // report content above them is already pictured on the flagged card.
       await page.evaluate(() => {
-        const dialog = document.querySelector("div.fixed.inset-0");
+        const dialog =
+          document.querySelector("div[role='dialog']") ??
+          document.querySelector("div.fixed.inset-0");
         if (!dialog) return;
         const scroller = [...dialog.querySelectorAll("*")].find(
           (el) => el.scrollHeight > el.clientHeight + 40,
@@ -1938,7 +1947,11 @@ export const SHOTS = [
       });
       await page.waitForTimeout(700);
     },
-    selector: "div.fixed.inset-0 > div",
+    // `div.fixed.inset-0 > div` until the review modal moved onto the shared
+    // Modal, which exposes role="dialog". The structural form matched nothing
+    // and the shot failed at the clip rather than at any click, so the error
+    // pointed at the screenshot and not at the cause.
+    selector: "div[role='dialog']",
   },
   {
     // The scheduler's half of the pair. Framed on the drawer, not the page:
@@ -2200,7 +2213,11 @@ export const SHOTS = [
         .first()
         .waitFor({ timeout: 20_000 })
         .catch(async () => {
-          await page.locator("div.rounded-xl > button").first().click();
+          await page
+            .locator("button:visible")
+            .filter({ hasText: /\d+(\.\d+)?h\b/ })
+            .first()
+            .click();
           await page.waitForTimeout(1200);
         });
       await page.waitForTimeout(800);
@@ -3264,7 +3281,7 @@ export const SHOTS = [
     // Stops short of pressing Submit: filing the batch is finite, and the
     // shift's reports would exist on the next run.
     selector:
-      "div.bg-theme-surface.rounded-xl:has(h3:text-is('New Shift Completion Report'))",
+      "div.card:has(h3:text-is('New Shift Completion Report')), div.bg-theme-surface.rounded-xl:has(h3:text-is('New Shift Completion Report'))",
   },
   {
     id: "02-103-shift-report-drafts",
@@ -3892,8 +3909,8 @@ export const SHOTS = [
       // Scroll the card's own header to the top of the viewport: expanding it
       // leaves the summary table above still filling most of the screen.
       await page
-        .locator("div.rounded-xl > button:visible")
-        .filter({ hasText: /\d+(\.\d+)?h/ })
+        .locator("button:visible")
+        .filter({ hasText: /\d+(\.\d+)?h\b/ })
         .first()
         .evaluate((el) => el.scrollIntoView({ block: "start" }))
         .catch(() => {});
