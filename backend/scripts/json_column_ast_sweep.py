@@ -2,9 +2,29 @@
 """
 AST sweep for JSON-typed SQLAlchemy model columns.
 
-Enumerates every model attribute declared as `Column(JSON, ...)` or
-`Column(MutableDict.as_mutable(JSON), ...)` across `app/models/*.py`, by
-parsing each file with the `ast` module rather than scanning source lines.
+Enumerates every model attribute declared as `Column(JSON, ...)`,
+`Column(MutableDict.as_mutable(JSON), ...)`, or `Column(EncryptedJSON, ...)`
+across `app/models/*.py`, by parsing each file with the `ast` module rather
+than scanning source lines.
+
+Recognized type names live in `JSON_LIKE_TYPE_NAMES` below, not just the
+literal `JSON` identifier -- `app/core/encrypted_types.EncryptedJSON` is a
+`TypeDecorator` (`impl = Text`) that `json.dumps`/`json.loads`s its Python
+value around AES-256-GCM encryption. It is not wrapped in
+`MutableDict.as_mutable(...)`, so its attribute-level change-tracking
+semantics are exactly the *bare* `Column(JSON)` case pitfall #12 opens
+with: no in-place-mutation tracking at all, and reassignment is required
+for a flush to see a change -- a `TypeDecorator`'s bind/result processing
+is invisible to the ORM's dirty-tracking layer, which operates on the
+mapped attribute, not the column type. That makes it exactly as exposed to
+the shallow-copy-then-reassign bug (pitfall #12) as plain `JSON`, and it is
+currently the one JSON-shaped column holding PHI (`MedicalScreening
+.result_data`) -- Codex, PR #2132: the sweep's `--list` silently excluded
+it because nothing in the AST walk looked for any name but `JSON`.
+`app/models/*.py` has exactly one other custom `Column(...)` type,
+`EncryptedText` (also in `encrypted_types.py`); it wraps `Text`, not
+`JSON`, and stores a scalar string, so it carries no JSON-shaped mutation
+risk and is deliberately not in `JSON_LIKE_TYPE_NAMES`.
 
 Why AST and not a line-anchored regex (`docs/security-review/SEC-00-cross-
 cutting-baseline.md`, sweep 9): a regex such as `^\\s*(\\w+)\\s*=\\s*Column\\(.*
@@ -27,14 +47,14 @@ direct-body statements that is an `ast.Assign` / `ast.AnnAssign` with a
 `Call` value, check whether that call's function name is `Column`
 (`Column(...)` or `sa.Column(...)`), then `ast.walk` the call's full
 argument subtree looking for a `Name` or `Attribute` node whose identifier
-is `JSON`. Walking the subtree (rather than inspecting only the first
-positional arg) is what makes `Column(MutableDict.as_mutable(JSON), ...)`
-match identically to a bare `Column(JSON, ...)` regardless of how deep the
-wrapping nests -- nothing about the walk depends on source formatting.
-Restricting to a class's *direct* body (not `ast.walk`-ing every Assign in
-the file) is what keeps a module-level constant that happens to be named
-`Column(...)`-shaped -- none exist today -- from being misread as a model
-attribute.
+is in `JSON_LIKE_TYPE_NAMES`. Walking the subtree (rather than inspecting
+only the first positional arg) is what makes
+`Column(MutableDict.as_mutable(JSON), ...)` match identically to a bare
+`Column(JSON, ...)` regardless of how deep the wrapping nests -- nothing
+about the walk depends on source formatting. Restricting to a class's
+*direct* body (not `ast.walk`-ing every Assign in the file) is what keeps
+a module-level constant that happens to be named `Column(...)`-shaped --
+none exist today -- from being misread as a model attribute.
 
 Usage:
     cd backend
@@ -56,6 +76,18 @@ from pathlib import Path
 
 MODELS_DIR = Path(__file__).resolve().parent.parent / "app" / "models"
 
+# Type names whose columns carry the pitfall #12 shallow-copy-then-reassign
+# risk: an untracked (or only top-level-tracked) mutable JSON value. `JSON`
+# is the SQLAlchemy builtin. `EncryptedJSON` (`app/core/encrypted_types.py`)
+# is a `TypeDecorator` around `Text` that transparently encrypts a
+# `json.dumps`'d Python value -- it is not `MutableDict`-wrapped, so its
+# in-Python value is exactly as unsafe to shallow-copy-then-reassign as a
+# bare `Column(JSON)`. Extend this set (with a comment explaining the new
+# name's mutation semantics) if another JSON-wrapping type is added --
+# `EncryptedText` (also in `encrypted_types.py`) is deliberately absent: it
+# wraps `Text` and stores a scalar string, not a JSON value.
+JSON_LIKE_TYPE_NAMES = frozenset({"JSON", "EncryptedJSON"})
+
 
 def _call_target_name(call: ast.Call) -> str | None:
     """The bare function name of a Call node: `Column(...)` -> 'Column',
@@ -69,17 +101,17 @@ def _call_target_name(call: ast.Call) -> str | None:
 
 
 def _call_references_json(call: ast.Call) -> bool:
-    """True if the identifier `JSON` appears anywhere in this call's
-    argument subtree -- as a bare `Name` (`JSON`) or as the tail of an
-    `Attribute` chain (`sa.JSON`, `postgresql.JSON`). A `JSON` buried
-    inside `MutableDict.as_mutable(JSON)`, or any deeper wrapper, is found
-    the same way a bare `Column(JSON, ...)` is."""
+    """True if any name in `JSON_LIKE_TYPE_NAMES` appears anywhere in this
+    call's argument subtree -- as a bare `Name` (`JSON`, `EncryptedJSON`)
+    or as the tail of an `Attribute` chain (`sa.JSON`, `postgresql.JSON`).
+    A match buried inside `MutableDict.as_mutable(JSON)`, or any deeper
+    wrapper, is found the same way a bare `Column(JSON, ...)` is."""
     for node in ast.walk(call):
         if node is call:
             continue
-        if isinstance(node, ast.Name) and node.id == "JSON":
+        if isinstance(node, ast.Name) and node.id in JSON_LIKE_TYPE_NAMES:
             return True
-        if isinstance(node, ast.Attribute) and node.attr == "JSON":
+        if isinstance(node, ast.Attribute) and node.attr in JSON_LIKE_TYPE_NAMES:
             return True
     return False
 

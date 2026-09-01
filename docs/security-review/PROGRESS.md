@@ -16,16 +16,16 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**Feature 00 (Cross-cutting baseline), pass 3, round 3+4+5+6+7 follow-up** —
+**Feature 00 (Cross-cutting baseline), pass 3, round 3+4+5+6+7+8 follow-up** —
 [#2132](https://github.com/thegspiro/the-logbook/pull/2132), branch
 `claude/security-review-sec00-pass3-round3-fix`.
 [#2128](https://github.com/thegspiro/the-logbook/pull/2128) (rounds 1–2)
 **merged to `main` at commit `2b3231a3`** before Codex's round-3 review
-landed, so round 3 (and this PR's own rounds 4, 5, 6 and 7) are pushed to a
-**separate PR**, not a further push to `claude/security-review-sec00-pass3`
+landed, so round 3 (and this PR's own rounds 4, 5, 6, 7 and 8) are pushed to
+a **separate PR**, not a further push to `claude/security-review-sec00-pass3`
 — per Pitfall #24 ("Do Not Reuse a Branch Name After Its Pull Request
 Merges"), that branch's remote ref is gone and its PR is closed. See the
-round-3 through round-7 log entries below for what Codex found each time,
+round-3 through round-8 log entries below for what Codex found each time,
 including a real regression (not just a gap) in round 1's own ordering that
 shipped to `main` unfixed for a window, round 4's discovery of the **same
 regression shape found a fourth time** in a method round 3's "checked every
@@ -48,9 +48,17 @@ enough real wall-clock time had passed**, a time-based bypass of round 6's
 fix rather than a further instance of the eviction-ordering class. **Seven
 rounds on this file's session-hijack tracking now; see the round-7 entry's
 closing note for why that streak, not any one round's fix, is the fact worth
-weighting on a future "0 gaps" claim against this same code.** The timeline
-matters here, not just the diff, so read those entries rather than only the
-summary.
+weighting on a future "0 gaps" claim against this same code.** Round 8 is a
+different sweep entirely — not the session-hijack tracker — and found that
+`backend/scripts/json_column_ast_sweep.py`'s AST walk matched only the
+literal `JSON` identifier, missing the custom `EncryptedJSON` type
+(`app/core/encrypted_types.py`) on `MedicalScreening.result_data`, a PHI
+column, so the "179 distinct names" completeness claim was itself
+incomplete; extended the sweep to a documented `JSON_LIKE_TYPE_NAMES` set,
+corrected the count to 180/231, and re-ran the bug-detection pass against
+the newly-included `result_data` specifically (clean — see round-8 entry).
+The timeline matters here, not just the diff, so read those entries rather
+than only the summary.
 
 **Prior rounds on #2128 (now merged), for reference:** re-verified pass 1/2's
 five standing sweeps against current code (399 Alembic revisions, 1536
@@ -91,6 +99,90 @@ A duplicate close-out PR, [#2119](https://github.com/thegspiro/the-logbook/pull/
 was opened against round 1's now-stale base (before round 2/3 landed) and
 closed without merging — merging it would have overwritten this section
 with round-1-only text and dropped the round 2/3 record.
+
+---
+
+### 2026-09-01 — Feature 00 (Cross-cutting baseline, pass 3) — Codex round 8: the JSON-column sweep's own type matching was incomplete, missing a PHI column
+
+**A different sweep than the session-hijack rounds above.** Codex reviewed
+commit `dc152491` (round 7's write-up-only follow-up) and found a gap in
+`backend/scripts/json_column_ast_sweep.py` itself — the AST walk behind
+sweep 9's "179 distinct attribute names" completeness claim. `_call_
+references_json` checked a `Column(...)` call's argument subtree for a
+`Name`/`Attribute` node literally spelled `JSON`. That correctly finds
+`Column(JSON, ...)` and any depth of `MutableDict.as_mutable(JSON)`-style
+wrapping (the round-4 write-up's whole point), but not a _different_ type
+name whose underlying storage is JSON under a different spelling.
+`app/models/medical_screening.py`'s `MedicalScreening.result_data =
+Column(EncryptedJSON, ...)` is exactly that: `EncryptedJSON` never spells
+`JSON` in the `Column(...)` call, so `--list` silently excluded it, and the
+one JSON-shaped column holding PHI in this schema had never actually been
+covered by sweep 9's bug-detection pass.
+
+**Investigated before extending the sweep.** `EncryptedJSON`
+(`app/core/encrypted_types.py`) is a `TypeDecorator` (`impl = Text`) that
+does `encrypt_data(json.dumps(value))` on write and
+`json.loads(decrypt_data(value))` on read — the mapped Python attribute is
+a genuine dict/list, same shape as a bare `Column(JSON)` attribute. It is
+**not** wrapped in `MutableDict.as_mutable(...)` anywhere, and a
+`TypeDecorator`'s bind/result processing doesn't change how the ORM's
+attribute-level dirty-tracking works — that's instrumented on the mapped
+attribute, not the column type. So `result_data`'s mutation semantics are
+exactly the bare-`JSON` case pitfall #12 opens with: no in-place-mutation
+tracking at all (not even `MutableDict`'s top-level auto-detection), fully
+exposed to the shallow-copy-then-reassign bug. Also checked the whole
+`app/models/*.py` tree via AST for every other non-builtin `Column(...)`
+first-argument identifier (180+ names) to confirm no _second_ custom
+JSON-wrapping type exists — every other custom name is a `(str, Enum)`
+column via `SQLEnum`, or `EncryptedText`, which wraps `Text` and stores a
+scalar string, not JSON, and is deliberately excluded from the fix.
+
+**Fix:** `json_column_ast_sweep.py` now matches against a documented
+`JSON_LIKE_TYPE_NAMES` frozenset (`{"JSON", "EncryptedJSON"}`, each entry
+commented with why) instead of the literal string `JSON`, so a future
+third JSON-wrapping type is one named addition, not a second special case.
+Corrected count, re-run against current code: **180 distinct attribute
+names, across 231 `Column(...)` declarations, across the same 43
+files** (up from 179/230 — the one new name is `result_data`,
+`medical_screening.py:183`). Diffed `--list` output before/after the fix:
+the only change is `result_data`'s addition.
+
+**Re-ran the shallow-copy-then-reassign bug-detection pass against
+`result_data` specifically**, whole `app/` tree: no `dict(...)`/
+`{**...}`/`.copy()`/`.setdefault(...)` idiom references it anywhere, and
+both direct `.result_data =` reassignment sites
+(`app/services/medical_screening_service.py`) are clean — `create_record`
+assigns it on a row about to be `db.add()`-ed (a new insert, from a
+freshly deserialized Pydantic payload, not derived from `self`'s own
+column) and `update_record` routes through `apply_updates(record, data.
+model_dump(exclude_unset=True))`, a plain `setattr` from the incoming
+payload dict, never `dict(record.result_data)`-then-mutate. The bulk
+`update(ScreeningRecord).values(result_data=None, ...)` calls in
+`member_anonymization_service.py` are SQL-level statements, not ORM
+mutation, outside this bug's shape. A same-named local variable in
+`training_enhancement_service.py` (an unrelated xAPI `"result"` object)
+was confirmed unconnected to this column. **Clean — 0 bugs found**; no
+other name was newly added by this round, so no further sites to check.
+
+**Completion gate (round 8 — full re-run):** `flake8`/`black --check`/
+`isort --check-only` clean on `app/ tests/ alembic/ scripts/`;
+`validate_migrations.py --strict` unchanged (no migration touched);
+`pytest tests/ -m "not integration and not slow and not docker" --cov=app
+--cov-fail-under=51` (CI's exact Backend Unit Tests invocation); `cd
+frontend && npm run typecheck` (aliased 7.0.2 compiler); `cd frontend &&
+npm run lint`. No source/model changes this round (no `.result_data =`
+site needed a fix), so no new backend tests were added — the sweep script
+itself has no dedicated test suite (it's a reporting tool, exit code
+always 0, per its own docstring) and none of the newly-covered code paths
+changed behavior. Files changed this round:
+`backend/scripts/json_column_ast_sweep.py` (extended type-name matching),
+`backend/scripts/README.md` (corrected expected-output block, re-run and
+pasted rather than hand-edited), `docs/security-review/
+SEC-00-cross-cutting-baseline.md` and this file (round-8 write-up + this
+log entry, plus a forward-pointing correction note on the now-superseded
+round-4 count). No `CHANGELOG.md` entry: no functional/security bug was
+found (the newly-covered PHI field was verified clean), so this is a
+tooling/doc correction, not a fix. Same branch, same PR #2132.
 
 ---
 

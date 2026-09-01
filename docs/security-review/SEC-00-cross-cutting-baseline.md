@@ -930,6 +930,103 @@ evidentiary weight than elsewhere, and is exactly where to look hardest for
 one more angle — is carried forward again rather than treated as satisfied by
 this round's fix.
 
+**Sweep 9 correction, round 3 / round 8 overall (Codex review): the AST
+walk matched only the literal identifier `JSON`, missing a custom-named
+type that wraps it — on the one JSON-shaped column holding PHI.** Codex
+reviewed commit `dc152491` (round 7's write-up-only follow-up) and found
+that `backend/scripts/json_column_ast_sweep.py`'s `_call_references_json`
+checked a `Column(...)` call's argument subtree for a `Name`/`Attribute`
+node literally spelled `JSON` — which finds `Column(JSON, ...)` and
+`Column(MutableDict.as_mutable(JSON), ...)` (any depth of wrapping, per the
+round-4 write-up above) but not a _different_ type name whose underlying
+storage is JSON. `app/models/medical_screening.py`'s
+`MedicalScreening.result_data = Column(EncryptedJSON, ...)` is exactly
+that case: `EncryptedJSON` (`app/core/encrypted_types.py`) never spells
+`JSON` anywhere in the `Column(...)` call, so the sweep's `--list` output
+silently excluded `result_data` and the **179 distinct names, 230
+declarations, 43 files** figure everywhere in this doc and in
+`backend/scripts/README.md` was not actually complete — one JSON-shaped
+column, and specifically the medical-screening PHI one, had never been
+covered by sweep 9's bug-detection pass at all.
+
+**Investigated `EncryptedJSON` before extending the sweep, rather than
+hard-coding the name in:** it is a `TypeDecorator` (`impl = Text`) in
+`app/core/encrypted_types.py`, alongside `EncryptedText` (the only other
+custom `Column(...)` type anywhere in `app/models/*.py` — confirmed by an
+AST pass over every `Column(...)` call's first-argument identifiers across
+all 43 model files, not just a grep for the two known names). Its
+`process_bind_param` does `encrypt_data(json.dumps(value))` on write and
+`process_result_value` does `json.loads(decrypt_data(value))` on read (with
+an `InvalidToken` fallback for legacy plaintext rows, matching
+`EncryptedText`'s backward-compatibility contract) — so the mapped Python
+attribute is a genuine JSON-able object (dict/list), identical in shape to
+what a bare `Column(JSON)` attribute holds. Critically, `EncryptedJSON` is
+**not** wrapped in `MutableDict.as_mutable(...)` anywhere it's used — a
+`TypeDecorator`'s bind/result processing is invisible to the ORM's
+attribute-level dirty-tracking layer, which instruments the _mapped
+attribute_, not the column type, so wrapping `Text` instead of `JSON` at
+the type level changes nothing about how SQLAlchemy tracks changes to the
+Python value. That makes `result_data`'s mutation semantics exactly the
+**bare** `Column(JSON)` case pitfall #12 opens with (no in-place-mutation
+tracking at all — a plain `MutableDict.as_mutable(JSON)` column at least
+auto-detects top-level key reassignment, and `result_data` gets none of
+that either), and therefore exactly as exposed to the
+shallow-copy-then-reassign bug as any other name on this sweep's list.
+`EncryptedText` is deliberately _not_ added to the sweep's type-name set:
+it wraps `Text` and stores a scalar string, not a JSON value, so it carries
+no shallow-copy risk to check for.
+
+**Fix — extended, not hard-coded:** `json_column_ast_sweep.py` now matches
+against a `JSON_LIKE_TYPE_NAMES` frozenset (`{"JSON", "EncryptedJSON"}`,
+each entry commented with why it's included) instead of the literal string
+`JSON`, so a future third JSON-wrapping type is one name added to a
+documented set rather than a second special case. The AST walk's structure
+is otherwise unchanged (still walks the full argument subtree, so
+`Column(MutableDict.as_mutable(JSON), ...)`-style nesting of a future
+custom name would also still be found).
+
+**Corrected count, re-run against current `app/models/*.py`: 180 distinct
+attribute names, across 231 `Column(...)` declarations, across the same 43
+files** (up from 179/230 — the single new name is `result_data`,
+`medical_screening.py:183`; the file count is unchanged because
+`medical_screening.py` was already counted, for `EncryptedText` and its own
+`JSON`-typed attributes). Re-ran `--list` before and after the fix and
+diffed: the only change is `result_data`'s addition, confirming the fix
+didn't also pick up an unrelated false positive from the broadened name
+set.
+
+**Re-ran the shallow-copy-then-reassign bug-detection pass (b) against
+`result_data` specifically**, whole `app/` tree: grepped for
+`dict(...)`/`{**...}`/`.copy()`/`.setdefault(...)` idioms referencing
+`result_data` (zero hits) and traced every direct `.result_data =`
+reassignment by hand (two sites, both in
+`app/services/medical_screening_service.py`): `create_record` passes
+`result_data=data.result_data` straight into the `ScreeningRecord(...)`
+constructor on a row that is about to be `db.add()`-ed (a new insert — no
+prior committed value to alias against, and the value is the freshly
+deserialized Pydantic payload, never derived from `self`'s own column);
+`update_record` routes through `apply_updates(record,
+data.model_dump(exclude_unset=True))`, which does a plain `setattr` of a
+value taken directly from the incoming payload dict — never `dict(record.
+result_data)`-then-mutate, so there is no shared nested reference between
+the old committed value and the new one being written. (The bulk
+`update(ScreeningRecord).values(result_data=None, ...)` calls in
+`member_anonymization_service.py` are SQL-level `UPDATE` statements, not
+ORM-instance mutation, and set the column to a scalar `None` — outside
+this bug's shape entirely.) A third file
+(`training_enhancement_service.py`) has a local variable also named
+`result_data` (an xAPI statement's `"result"` object, parsed from a
+webhook payload) that is unrelated to this column — confirmed by reading
+the function: it is never assigned to a `ScreeningRecord` and the file
+does not import that model. **Clean — 0 bugs found in `result_data`**;
+no other name was newly added by this round's fix, so no further sites to
+check. `EncryptedJSON`'s absence of any mutation-tracking (not even
+`MutableDict`'s top-level auto-detection) makes a future direct
+`record.result_data["key"] = value` in-place mutation with no reassignment
+at all a live risk if one is ever written — worth naming for the next
+reviewer, since nothing in the type stops it, but not a finding against
+code that exists today.
+
 **Sweep 9 correction, round 2 (Codex review):** Codex re-checked round 2's
 own correction to this sweep (immediately below) and found the "132 distinct
 JSON/`MutableDict`-typed model attributes" figure was itself produced by a
@@ -982,10 +1079,15 @@ python3 scripts/json_column_ast_sweep.py --by-file   # grouped by model file
 
 which reproduces the **179 distinct names, 230 declarations** figure below
 exactly, on demand, rather than requiring a future reviewer to re-derive the
-AST-walking method from this prose.
+AST-walking method from this prose. **Superseded by the round-8 entry
+above: the script's own type-name matching was itself incomplete (matched
+only the literal `JSON` identifier, missing the custom `EncryptedJSON`
+type on the medical-screening PHI column), so re-running it today prints
+180/231, not 179/230.**
 
-**Corrected count: 179 distinct attribute names, across 230 `Column(...)`
-declarations that reference `JSON`** (some names — e.g. templated columns
+**Corrected count (at the time of this round): 179 distinct attribute
+names, across 230 `Column(...)` declarations that reference `JSON`** (some
+names — e.g. templated columns
 repeated across a handful of models — account for more than one
 declaration) — up from the 132 previously claimed, an increase of 47. A
 naive single-line regex re-run for comparison (`^\s*(\w+)\s*=\s*Column\(.*
