@@ -7,6 +7,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Quick Add: starting a log entry on a phone is now two taps from anywhere (2026-09-01)
+
+**Added**
+
+- **The centre of the phone bottom bar is an Add button.** It opens a short
+  list of the things a member actually logs — training hours, a rig check, an
+  action item, a shift report, clocking in, checking into a shift, scanning a
+  member ID, and for officers requesting equipment, creating an event or adding
+  a member. Before this, every one of them was reached the same way: tap More,
+  wait for the drawer, find the module, find the page, find its button. Four
+  taps and two page loads before the first field.
+- **Each row goes to the screen that already owns that entry.** Quick Add adds
+  no forms of its own, so there is no second path for the same data to drift
+  down and nothing that can fall behind a form's own validation rules.
+- **Rows appear only where the page behind them would actually open.** A row
+  gated more widely than its route is a link to Access Denied placed there by
+  the app itself. `navGateIntegrity.test.ts` now resolves every row against the
+  real route definition — the route must exist, the row's permissions must be a
+  subset of what the route accepts, and a route's module gate must be repeated
+  on the row.
+
+**Changed**
+
+- **The phone bar keeps five items; the configurable slots go from three to
+  two.** Six items on a 390px phone is 65px each and puts the action at an edge
+  rather than under the thumb. A bar layout saved before this shipped keeps its
+  first two destinations and is left intact on disk — the third is still one tap
+  away under More.
+
+**Documentation**
+
+- **[MOBILE_QUICK_ENTRY_REVIEW.md](docs/MOBILE_QUICK_ENTRY_REVIEW.md)** records
+  the review this came out of. Eleven findings remain open, each with its
+  evidence: the command palette is still keyboard-only and so unreachable on a
+  phone; no image input opens the camera directly; the offline queue carries two
+  kinds of write while replay protection exists on one create schema out of
+  many; a fuel log asks for eleven fields where the API needs four; and a phone
+  home screen still needs about a dozen requests to answer "what is waiting for
+  me". Nothing found blocks work.
+
 ### A member can now see who's going, RSVP without being asked, and know where they stand on a waitlist (2026-09-01)
 
 **Added**
