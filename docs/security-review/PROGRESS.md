@@ -16,13 +16,14 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**Feature 02 (Permissions & roles), pass 3** — branch
-`claude/security-review-perm-pass3`, PR link recorded in the next log entry
-once opened. Diff-since-pass-2 review of `dependencies.py`,
-`core/permissions.py`, `roles.py`/`role_service.py` (the only three files
-with commits since pass 2's merge — `officers.py`, `org_chart.py`,
-`operational_ranks.py`, and their services are unchanged); no new findings.
-See the log entry below and `PERM-02-permissions-roles.md`'s Pass 3 section.
+**Feature 02 (Permissions & roles), pass 3** —
+[#2136](https://github.com/thegspiro/the-logbook/pull/2136), branch
+`claude/security-review-perm-pass3`. Diff-since-pass-2 review of
+`dependencies.py`, `core/permissions.py`, `roles.py`/`role_service.py` (the
+only three files with commits since pass 2's merge — `officers.py`,
+`org_chart.py`, `operational_ranks.py`, and their services are unchanged);
+no new findings. See the log entry below and
+`PERM-02-permissions-roles.md`'s Pass 3 section.
 
 ---
 
