@@ -5560,18 +5560,19 @@ export const SHOTS = [
     doc: "08-admin-reports.md",
     line: 1358,
     anchor: 'Screenshot of the "Send Test Email to Me" button',
-    alt: "Send Test Email to Me, under the rendered preview it sends",
+    alt: "Send Test to Me, under the rendered preview it sends",
     route: "/communications/email-templates",
-    // The button lives under the Preview tab, not in the toolbar, and stays
-    // disabled until a preview has been rendered — clicking Preview is what
-    // renders one. Deliberately not clicked: sending needs a working mail
-    // transport, and a staged success toast would be a picture of something
-    // that did not happen.
+    // The preview is now a pane of the editor rather than a tab behind a
+    // Preview button, and the control reads "Send Test to Me" -- it was
+    // "Send Test Email to Me" under a Preview tab that no longer exists, which
+    // is what broke this shot. Deliberately not clicked: sending needs a
+    // working mail transport, and a staged success toast would be a picture of
+    // something that did not happen.
     prepare: async (page) => {
-      await clickByName(/^Preview$/)(page);
       await page.waitForTimeout(1500);
       await page
-        .getByRole("button", { name: /Send Test Email to Me/i })
+        .getByRole("button", { name: /Send Test to Me/i })
+        .first()
         .scrollIntoViewIfNeeded({ timeout: 10_000 })
         .catch(() => {});
     },
@@ -5762,7 +5763,9 @@ export const SHOTS = [
       // would picture the design without the closing block the guide points at.
       await page.getByText("Shift Assignment", { exact: true }).first().click();
       await page.waitForTimeout(1_000);
-      await clickByName(/^Preview$/)(page);
+      // The preview renders beside the editor now; "Desktop preview" selects
+      // the rendering this caption is about. The old `Preview` tab is gone.
+      await clickByName(/^Desktop preview$/)(page);
       await page.waitForTimeout(2_000);
       await page
         .getByText(/automated message from|Sent by/i)
