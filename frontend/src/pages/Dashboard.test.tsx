@@ -129,15 +129,24 @@ vi.mock('../modules/admin-hours/services/api', () => ({
 // every caller the whole state object, so a consumer selecting one primitive
 // (`state.user?.id`) gets a fresh object each render and spins any effect keyed
 // on it — which is exactly what DashboardOrientation does.
-vi.mock('../stores/authStore', () => ({
-  useAuthStore: (selector?: (state: Record<string, unknown>) => unknown) => {
-    const state = {
-      checkPermission: mockCheckPermission,
-      user: { id: 'user-1', first_name: 'Test', last_name: 'User', organization_id: 'org-1' },
-    };
-    return selector ? selector(state) : state;
-  },
-}));
+vi.mock('../stores/authStore', () => {
+  const state = () => ({
+    checkPermission: mockCheckPermission,
+    user: { id: 'user-1', first_name: 'Test', last_name: 'User', organization_id: 'org-1' },
+  });
+  // The real store is callable *and* carries getState. A hook-only double
+  // breaks every consumer that reads the store outside React — the scheduling
+  // settings cache keys its org-scoped entries that way.
+  return {
+    useAuthStore: Object.assign(
+      (selector?: (s: Record<string, unknown>) => unknown) => {
+        const s = state();
+        return selector ? selector(s) : s;
+      },
+      { getState: state }
+    ),
+  };
+});
 
 // Mock timezone hook
 vi.mock('../hooks/useTimezone', () => ({
