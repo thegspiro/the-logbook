@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Adding a checklist item to the inventory catalog (2026-08-31)
+
+**Added**
+
+- A checklist position's **Linked Inventory Item** field can now create the
+  item it links to. Previously it only searched, and nothing seeds the catalog
+  — so on a new department the field always answered "No matching items." and
+  offered nothing further, on the one control whose purpose is making that
+  link. Typing a name with no match now offers to add it to the catalog and
+  link it in a single step, for anyone who can manage inventory.
+
+  The new catalog entry carries the name and nothing else. One catalog item is
+  stocked in many places — gauze in a jump bag, a cabinet and two rigs — each
+  counted on its own, so the position's required quantity and minimum stay with
+  that position and never become a department-wide reorder point.
+
+**Fixed**
+
+- The equivalent "Create … in inventory" action already offered by the
+  compartment's add-item bar had never worked: it created the item with no
+  stock on hand, which the catalog refused even though editing an item to the
+  same value had always been allowed. A pool item can now be created with
+  nothing on hand, which is what a catalog entry added from a checklist knows.
+
 ### Frontend shared re-verification fixes (2026-08-31)
 
 **Fixed**

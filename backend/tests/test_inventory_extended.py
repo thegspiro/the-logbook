@@ -19,10 +19,11 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.services.inventory_service import InventoryService
+from app.services.inventory_service import InventoryService, is_pool_without_stock
 
 pytestmark = [pytest.mark.integration]
 from app.models.inventory import (
+    MEDICAL_ITEM_TYPES,
     ClearanceLineDisposition,
     ClearanceStatus,
     InventoryActionType,
@@ -1012,10 +1013,16 @@ class TestCategoryUpdate:
 class TestPoolItemValidation:
 
     @pytest.mark.asyncio
-    async def test_pool_item_quantity_zero_rejected(
+    async def test_pool_item_quantity_zero_accepted(
         self, db_session, setup_org_and_user
     ):
-        """Pool items with quantity 0 should be rejected."""
+        """A pool item may be created with nothing on hand.
+
+        This is the shape the checklist builder posts when a crew adds a
+        catalog row from an equipment-check position: the row records that the
+        item exists, not that any of it is in the stock room. ``update_item``
+        has always allowed the same value.
+        """
         org_id, user_id, _ = setup_org_and_user
         svc = InventoryService(db_session)
 
@@ -1030,9 +1037,269 @@ class TestPoolItemValidation:
             },
             created_by=uuid.UUID(user_id),
         )
+        assert err is None
+        assert item is not None
+        assert item.quantity == 0
+
+    @pytest.mark.asyncio
+    async def test_pool_item_negative_quantity_rejected(
+        self, db_session, setup_org_and_user
+    ):
+        """Zero is a real stock level; a negative one is incoherent."""
+        org_id, user_id, _ = setup_org_and_user
+        svc = InventoryService(db_session)
+
+        item, err = await svc.create_item(
+            organization_id=uuid.UUID(org_id),
+            item_data={
+                "name": "Negative Pool",
+                "condition": "good",
+                "status": "available",
+                "tracking_type": "pool",
+                "quantity": -1,
+            },
+            created_by=uuid.UUID(user_id),
+        )
         assert item is None
         assert err is not None
-        assert "quantity" in err.lower()
+        assert "negative" in err.lower()
+
+
+class TestPoolWithoutStockRule:
+    """The rule the list-oriented create paths keep, and single create does not.
+
+    Relaxing ``create_item`` so a checklist can add an out-of-stock catalog row
+    silently removed the CSV import's only quantity guard — that endpoint was
+    relying on it. The rule now lives in one predicate with two callers, and
+    these pin down which side of the line each case falls on.
+    """
+
+    def test_a_pool_row_with_no_count_is_a_misparsed_column(self):
+        assert is_pool_without_stock({"tracking_type": "pool", "quantity": 0}) is True
+
+    def test_a_negative_count_is_caught_too(self):
+        assert is_pool_without_stock({"tracking_type": "pool", "quantity": -3}) is True
+
+    def test_a_stocked_pool_row_is_fine(self):
+        assert is_pool_without_stock({"tracking_type": "pool", "quantity": 12}) is False
+
+    def test_an_omitted_count_defaults_to_stocked(self):
+        """The schema default is 1, so an absent column is not an empty one."""
+        assert is_pool_without_stock({"tracking_type": "pool"}) is False
+
+    def test_an_individual_row_is_out_of_scope(self):
+        assert (
+            is_pool_without_stock({"tracking_type": "individual", "quantity": 0})
+            is False
+        )
+
+    @pytest.mark.asyncio
+    async def test_the_bulk_path_still_refuses_it(self, db_session, setup_org_and_user):
+        """create_items_bulk keeps the rule even though create_item dropped it."""
+        org_id, user_id, _ = setup_org_and_user
+        svc = InventoryService(db_session)
+
+        with pytest.raises(ValueError, match="quantity of 1 or more"):
+            await svc.create_items_bulk(
+                org_id,
+                [{"name": "Gauze", "tracking_type": "pool", "quantity": 0}],
+                user_id,
+            )
+
+
+class TestCreateItemIfAbsent:
+    """The operation that stops a create-and-link filing a second row.
+
+    The gear list a create-and-link screen searches excludes medical types and
+    returns one page, so it cannot answer "is this already in the catalog".
+    Deciding it server-side, in the same request as the write, is what keeps
+    one item from becoming two.
+    """
+
+    @pytest.mark.asyncio
+    async def test_a_new_name_is_created(self, db_session, setup_org_and_user):
+        org_id, user_id, _ = setup_org_and_user
+        svc = InventoryService(db_session)
+
+        item, created, err = await svc.create_item_if_absent(
+            org_id, {"name": "Burn Sheet", "condition": "good"}, user_id
+        )
+
+        assert err is None
+        assert created is True
+        assert item.name == "Burn Sheet"
+
+    @pytest.mark.asyncio
+    async def test_a_name_already_on_file_comes_back_rather_than_repeating(
+        self, db_session, setup_org_and_user
+    ):
+        """The existing row is the right thing to link, so it is returned."""
+        org_id, user_id, _ = setup_org_and_user
+        svc = InventoryService(db_session)
+        first, _ = await svc.create_item(
+            organization_id=uuid.UUID(org_id),
+            item_data={"name": "Gauze Pads, 4x4", "condition": "good"},
+            created_by=uuid.UUID(user_id),
+        )
+
+        item, created, err = await svc.create_item_if_absent(
+            org_id,
+            {"name": "Gauze Pads, 4x4", "condition": "good", "tracking_type": "pool"},
+            user_id,
+        )
+
+        assert err is None
+        assert created is False
+        assert item.id == first.id
+
+    @pytest.mark.asyncio
+    async def test_punctuation_and_case_do_not_hide_a_duplicate(
+        self, db_session, setup_org_and_user
+    ):
+        """ "Gauze Pads, 4x4" and "gauze pads 4x4" are the same box."""
+        org_id, user_id, _ = setup_org_and_user
+        svc = InventoryService(db_session)
+        await svc.create_item(
+            organization_id=uuid.UUID(org_id),
+            item_data={"name": "Gauze Pads, 4x4", "condition": "good"},
+            created_by=uuid.UUID(user_id),
+        )
+
+        item, created, _ = await svc.create_item_if_absent(
+            org_id,
+            {"name": "gauze pads 4x4", "condition": "good", "tracking_type": "pool"},
+            user_id,
+        )
+
+        assert created is False
+        assert item.name == "Gauze Pads, 4x4"
+
+    @pytest.mark.asyncio
+    async def test_a_medical_item_is_not_invisible_here(
+        self, db_session, setup_org_and_user
+    ):
+        """The whole point: the gear list hides medical stock, this must not.
+
+        Filed under a medical category, the item is absent from
+        ``GET /inventory/items`` — which is exactly the case that produced a
+        duplicate row before this check existed.
+        """
+        org_id, user_id, _ = setup_org_and_user
+        svc = InventoryService(db_session)
+        category, cat_err = await svc.create_category(
+            organization_id=uuid.UUID(org_id),
+            category_data={"name": "EMS Consumables", "item_type": "medical"},
+            created_by=uuid.UUID(user_id),
+        )
+        assert cat_err is None
+        await svc.create_item(
+            organization_id=uuid.UUID(org_id),
+            item_data={
+                "name": "Code Oxygen Cylinder",
+                "condition": "good",
+                "category_id": uuid.UUID(category.id),
+            },
+            created_by=uuid.UUID(user_id),
+        )
+
+        items, _ = await svc.get_items(
+            organization_id=uuid.UUID(org_id),
+            search="Code Oxygen Cylinder",
+            exclude_item_types=MEDICAL_ITEM_TYPES,
+        )
+        assert items == []
+
+        item, created, _ = await svc.create_item_if_absent(
+            org_id,
+            {
+                "name": "Code Oxygen Cylinder",
+                "condition": "good",
+                "tracking_type": "pool",
+            },
+            user_id,
+        )
+        assert created is False
+        assert item.name == "Code Oxygen Cylinder"
+
+    @pytest.mark.asyncio
+    async def test_another_orgs_item_does_not_block_creation(
+        self, db_session, setup_org_and_user
+    ):
+        org_id, user_id, _ = setup_org_and_user
+        svc = InventoryService(db_session)
+        first, _ = await svc.create_item(
+            organization_id=uuid.UUID(org_id),
+            item_data={"name": "Gauze Pads, 4x4", "condition": "good"},
+            created_by=uuid.UUID(user_id),
+        )
+
+        other_org = _uid()
+        await db_session.execute(
+            text(
+                "INSERT INTO organizations (id, name, organization_type, slug, timezone) "
+                "VALUES (:id, :name, :otype, :slug, :tz)"
+            ),
+            {
+                "id": other_org,
+                "name": "Other Dept",
+                "otype": "fire_department",
+                "slug": f"other-{other_org[:8]}",
+                "tz": "UTC",
+            },
+        )
+        await db_session.flush()
+
+        item, created, err = await svc.create_item_if_absent(
+            other_org, {"name": "Gauze Pads, 4x4", "condition": "good"}, user_id
+        )
+
+        assert err is None
+        # Another department's catalog is not this one's: the name is free here.
+        assert created is True
+        assert item.id != first.id
+
+    @pytest.mark.asyncio
+    async def test_two_individual_assets_may_share_a_product_name(
+        self, db_session, setup_org_and_user
+    ):
+        """A department owning two thermal imagers has two rows, not one.
+
+        Individual rows are physical assets told apart by serial number or
+        asset tag. Handing back the first one would alias two apparatus
+        positions onto one device and report the second truck as carrying the
+        first truck's imager.
+        """
+        org_id, user_id, _ = setup_org_and_user
+        svc = InventoryService(db_session)
+        first, created, _ = await svc.create_item_if_absent(
+            org_id,
+            {"name": "Thermal Imager", "tracking_type": "individual"},
+            user_id,
+        )
+        assert created is True
+
+        second, created_again, err = await svc.create_item_if_absent(
+            org_id,
+            {"name": "Thermal Imager", "tracking_type": "individual"},
+            user_id,
+        )
+
+        assert err is None
+        assert created_again is True
+        assert second.id != first.id
+
+    @pytest.mark.asyncio
+    async def test_a_blank_name_is_refused(self, db_session, setup_org_and_user):
+        org_id, user_id, _ = setup_org_and_user
+        svc = InventoryService(db_session)
+
+        item, created, err = await svc.create_item_if_absent(
+            org_id, {"name": "   "}, user_id
+        )
+
+        assert item is None
+        assert created is False
+        assert err is not None
 
 
 # ── Barcode Label Generation Tests ─────────────────────────────────
