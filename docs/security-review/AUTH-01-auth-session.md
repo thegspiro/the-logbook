@@ -42,36 +42,186 @@ this feature's own security surface and already correctly implemented in
 `app/core/permissions.py`; `auth_service.py` 978 L; `mfa_service.py` 121 L;
 `oauth_service.py` 340 L) against all seven checklist dimensions.
 
-### Verified good ✅ (new this pass)
+### Correction (Codex review on PR #2133)
 
-- **TOTP replay handling is intentionally asymmetric between login and
-  already-authenticated MFA management, and the asymmetry is not a gap.**
-  `mfa_login` uses `verify_totp_get_timestep`, which rejects a code whose
-  time-step was already consumed (anti-replay, `mfa_service.py:42-75`).
-  `mfa_verify_setup`, `mfa_disable`, and `mfa_recovery-codes` instead call
-  plain `verify_totp` (no replay tracking). Traced the actual exposure rather
-  than assuming from the asymmetry alone: all three of these routes require
-  an already-authenticated session (`get_current_active_user`), so a replayed
-  code buys an attacker nothing beyond what a single valid call already
-  grants — `mfa_verify_setup` and `mfa_disable` are self-blocking against a
-  second call in the same replay window (`current_user.mfa_enabled` flips, so
-  the second call hits the router's own "already enabled" / "not enabled"
-  400 before `verify_totp` is even reached again), and
-  `mfa_recovery-codes` regenerating twice with the same code is
-  idempotent-equivalent in risk to regenerating once. The login path's
-  replay protection exists to stop a captured code completing a _second,
-  independent_ authentication; none of the three management routes let a
-  replay do anything a single legitimate call could not already do.
-- **`security_monitor.detect_brute_force`/suspicious-IP wiring from the auth
-  endpoints matches `SEC-00`'s documented brute-force model exactly**, traced
-  from `auth.py` rather than re-deriving the tracker internals `SEC-00`
-  already swept: `login` and `mfa_login` both feed
-  `record_auth_failure`/`clear_auth_failures` (long-window, cross-account,
-  per-IP) alongside `detect_brute_force` (short-window, per-IP/per-user), and
-  `clear_auth_failures` is called only after full authentication succeeds —
-  after the MFA branch on `login`, not on password-correct alone — matching
-  the CLAUDE.md invariant that a leaked password for an MFA-protected account
-  must not let an attacker zero the tally by itself.
+Pass 3's original "Verified good" section (below, as first published) was
+wrong on both of its two claims. Codex caught both; re-verified against the
+real code before acting on either, per this rotation's own rule that a wrong
+fix in an auth path is worse than an honest finding.
+
+> ~~**TOTP replay handling is intentionally asymmetric between login and
+> already-authenticated MFA management, and the asymmetry is not a gap.**~~
+> ~~... none of the three management routes let a replay do anything a single
+> legitimate call could not already do.~~
+>
+> ~~**`security_monitor.detect_brute_force`/suspicious-IP wiring from the auth
+> endpoints matches `SEC-00`'s documented brute-force model exactly** ...~~
+
+Struck through rather than deleted, so the record shows what was actually
+claimed and reviewed, not a cleaned-up version of it.
+
+### AUTH-7 — P1 — A TOTP code verified at an MFA management route was never recorded as consumed, letting it replay at `/mfa/login` — ✅ FIXED
+
+**What:** `mfa_login` verifies a live TOTP code through
+`verify_totp_get_timestep(secret, code, last_timestep=user.mfa_last_timestep)`
+and, on success, records the matched step in `user.mfa_last_timestep` — a
+code whose step is `<=` that value is rejected as a replay
+(`mfa_service.py:42-75`). `mfa_verify_setup`, `mfa_disable`, and
+`mfa_regenerate_recovery_codes` (the `/mfa/recovery-codes` handler) instead
+called bare `mfa_service.verify_totp(secret, code)`, which returns a
+boolean and touches no state at all. None of the three ever wrote
+`mfa_last_timestep`.
+
+The original "Verified good" writeup reasoned that this was harmless because
+all three routes require an authenticated session and are each
+self-blocking against a _second call to that same route_ with the same code
+(`mfa_verify_setup`/`mfa_disable` flip `mfa_enabled` so a repeat hits the
+router's own 400 first; regenerating recovery codes twice was called
+"idempotent-equivalent in risk"). That reasoning only checked replay _at the
+same endpoint_. It never checked replay _at a different endpoint_ — and
+`/mfa/login` is exactly that: a route that accepts a bare TOTP `code` from
+anyone holding a fresh `mfa_pending` token, with no session of its own.
+
+**Where:** `app/api/v1/endpoints/auth.py` — `mfa_verify_setup` (former line
+940), `mfa_disable` (former line 989), `mfa_regenerate_recovery_codes`
+(former line 1050); all three called `mfa_service.verify_totp` directly,
+pre-fix.
+
+**Failure scenario:** an attacker already holds the account's password (a
+breach, reuse, phishing — a prerequisite either way, and the same
+prerequisite the "Attack Protection" table in CLAUDE.md already assumes for
+every MFA-bypass discussion). That alone gets them a valid `mfa_pending`
+token for free from `POST /login` — the password step succeeds regardless
+of MFA. If the attacker then _observes_ a TOTP code the legitimate user is
+using _right now_ at `/mfa/recovery-codes` (or `/mfa/disable`, or
+`/mfa/verify-setup` during enrollment) — shoulder-surfing, a compromised
+endpoint or extension, a phishing-relay page that captures and immediately
+forwards the code — nothing recorded that time-step as spent. The attacker
+submits the same code to `/mfa/login` within its remaining ~30–60s validity
+window (pyotp's default `valid_window=1` both `verify_totp` and
+`verify_totp_get_timestep` use accepts the step before and after "now," so
+the practical window is up to ~90s from when the legitimate user's code was
+generated) and completes a fully independent login of their own — a second,
+attacker-controlled session, indistinguishable from the legitimate one at
+the protocol level. `user.mfa_last_timestep` was `None` or older than the
+current step regardless of how many times the code had already been used
+elsewhere, so `mfa_login`'s replay check had nothing to reject.
+
+Confirmed empirically, not just reasoned: reverting the fix and driving
+`mfa_regenerate_recovery_codes` then `mfa_login` with the same code through
+the real handlers produces a completed session
+(`Created session for user: ...`, `mfa_login` returns 200) — see the
+`git log` message on this fix's commit for the reproduction. The design gap
+predates this pass (`mfa_last_timestep`'s own column comment says "Highest
+TOTP time-step ... already accepted **at login**" — the mechanism was scoped
+to the login path from when it was written, not extended when the three
+management routes were added), so this is not a regression introduced by
+pass 3's diff; pass 3's error was mischaracterizing it as verified-safe.
+
+**Fix:** introduced `_verify_and_consume_totp(user, code) -> bool` in
+`auth.py` — the single "verify AND consume" primitive every code-verifying
+route must go through. It calls `verify_totp_get_timestep` and, on a match,
+sets `user.mfa_last_timestep` before returning `True`. All four call sites
+(`mfa_login`, `mfa_verify_setup`, `mfa_disable`,
+`mfa_regenerate_recovery_codes`) now call it instead of calling
+`verify_totp`/`verify_totp_get_timestep` directly; each route's existing
+`db.commit()` persists the recorded step exactly as it already persisted
+every other field the route sets in the same request. No behavior change to
+any route's success/failure semantics — only that a verified code is now
+always recorded as spent, everywhere.
+
+**Also raised (Codex): `/mfa/recovery-codes` is not idempotent** — a retried
+request (network retry, double-click) regenerates an entirely new code set
+and overwrites the stored hashes, so a client that never saw the first
+response is left with codes that don't match what was displayed. **FLAGGED,
+not fixed** — see `docs/KNOWN_LIMITATIONS.md`. This fix incidentally
+narrows it (a retry using the _same_ TOTP code now fails cleanly with
+"Invalid verification code" instead of silently generating a second set,
+because the code was already consumed by the first call), but does not
+close it: a retry that lands after the server committed but the response
+was lost in transit still leaves the user without the codes they were
+shown. That is a generic exactly-once-delivery problem shared by every
+secret-shown-once response in this file (`mfa_verify_setup`'s recovery codes
+have the identical exposure), not specific to TOTP replay, and the right
+fix (an idempotency-key mechanism, or a "re-show last-issued codes" path) is
+a product decision this pass is not making unilaterally in an auth path.
+
+**Guard test:** `TestTotpConsumedAcrossMfaRoutes` in
+`backend/tests/test_auth_mfa_endpoints.py` —
+`test_code_used_at_recovery_codes_route_cannot_replay_at_login` drives the
+real `mfa_regenerate_recovery_codes` handler with a valid code, then submits
+the same code to the real `mfa_login` handler and asserts a 401. Confirmed
+to fail pre-fix: reverting `auth.py` to the pre-fix revision and re-running
+the exact same two calls (via a standalone script, since the pre-fix module
+doesn't even export `_verify_and_consume_totp`) shows `mfa_login` completing
+successfully with the replayed code — `user.mfa_last_timestep` stayed `None`
+after the recovery-codes call, and `mfa_login` proceeded straight to session
+creation. Two supporting unit tests
+(`test_verify_and_consume_totp_rejects_its_own_replay`,
+`test_fresh_code_after_consumption_still_verifies`) cover the shared
+primitive directly.
+
+### AUTH-8 — P2 — `mfa_login` never fed `detect_brute_force`, and the doc's "matches SEC-00's model" claim was wrong — ✅ FIXED
+
+**What:** `login`'s password-failure branch calls
+`security_monitor.detect_brute_force(db, ip=login_ip, user_id=None,
+success=False)` and its password-success branch calls it again with
+`success=True` — but that success call runs _before_ the `if
+user.mfa_enabled:` branch (`auth.py`, former lines 682–727), i.e. on
+password-correct alone, not on full authentication. `mfa_login` — the
+second-factor completion step — never called `detect_brute_force` at all,
+in either its failure or success path. The original writeup asserted this
+"matches `SEC-00`'s documented brute-force model exactly" and specifically
+that `clear_auth_failures` (a _different_ function, the suspicious-IP
+throttle) is "called only after full authentication succeeds — after the
+MFA branch on `login`, not on password-correct alone." That description of
+`clear_auth_failures` is correct — but the claim was about
+`detect_brute_force`'s wiring being equivalent, and `detect_brute_force`'s
+own success call sits _before_ the MFA branch, the opposite of the
+invariant being cited to justify it. And `mfa_login` calling it not at all
+means guessing the second factor generates zero `detect_brute_force`
+alerting history for the whole MFA step.
+
+**Where:** `app/api/v1/endpoints/auth.py` — `login`'s
+`detect_brute_force(..., success=True)` call at former line 713 (still
+runs, and is correctly positioned relative to _its own_ purpose — see
+"What's still covered" below); `mfa_login` had no `detect_brute_force` call
+anywhere, pre-fix.
+
+**What's still covered, so the write-up is precise about scope:**
+`detect_brute_force` is purely an alerting/audit mechanism — it stages a
+HIGH-severity `SecurityAlert` row and an audit-log entry past a threshold; it
+enforces nothing itself. Two _enforcing_ controls already covered MFA-code
+guessing before this fix and still do: the per-account lockout
+(`user.failed_login_attempts`/`locked_until`, mirroring the password step's
+own lockout logic) and the suspicious-IP throttle
+(`record_auth_failure`/`clear_auth_failures`, gated on the next request by
+`enforce_suspicious_ip`). Guessing the second factor was already throttled
+and eventually locked the account; what was missing was purely this one
+detector's alert firing and its short-window per-IP/per-user tally.
+
+**Fix:** `mfa_login`'s failure branch now calls
+`security_monitor.detect_brute_force(db, ip=get_client_ip(request),
+user_id=str(user.id), success=False)` alongside the existing
+`failed_login_attempts` increment, before the branch's existing
+`db.commit()` (which now also persists any alert row `detect_brute_force`
+staged — no new commit needed). The success branch calls it with
+`success=True` alongside the existing `clear_auth_failures` call, resetting
+the account's short-window tally once the _full_ login (password + second
+factor) has completed. Both calls are best-effort, wrapped in
+`try/except Exception: logger.debug(...)`, matching `login`'s own pattern
+exactly — a detector failure must never break the login response. `login`'s
+own `success=True` ordering (before the MFA branch) is unchanged by this
+fix; it is a separate, lower-severity inaccuracy (a purely-alerting
+detector's history resets on password-correct rather than on full auth) that
+this pass is not re-ordering, since `login`'s call is scoped to the password
+step specifically and doing so was not part of Codex's finding.
+
+**Guard test:** `TestMfaLoginBruteForceWiring` in
+`backend/tests/test_auth_mfa_endpoints.py` — asserts a failed MFA code calls
+`detect_brute_force(db, ip="unknown", user_id=user.id, success=False)` and a
+successful one calls it with `success=True`, against the real `mfa_login`
+handler.
 
 ### AUTH-5 — NIT — `validate-reset-token` docstring claimed the endpoint returns the email — ✅ FIXED (doc only)
 
@@ -122,7 +272,7 @@ the only place this landmine existed.
 `_memory_tracker.failures.clear()` / `.blocks.clear()` — plain `dict.clear()`,
 not the removed class method — so it required no change).
 
-**Completion gate (pass 3):**
+**Completion gate (pass 3, initial — before the AUTH-7/AUTH-8 correction):**
 
 | Check                                                                   | Result                                                                |
 | ----------------------------------------------------------------------- | --------------------------------------------------------------------- |
@@ -133,6 +283,18 @@ not the removed class method — so it required no change).
 | backend tests (`-k "auth or mfa or oauth or consent or suspicious_ip"`) | ✅ 216 passed, 1 skipped (pre-existing, missing optional `pywebpush`) |
 | `npm run typecheck` (native compiler wrapper)                           | ✅ 0 errors                                                           |
 | `npx eslint .`                                                          | ✅ 0 errors/warnings (no frontend files touched this pass)            |
+
+**Completion gate (AUTH-7/AUTH-8 correction, this PR):**
+
+| Check                                                                   | Result                                                               |
+| ----------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                           | ✅ 0 violations                                                      |
+| `black --check app/ tests/ alembic/`                                    | ✅ clean (1 file reformatted before commit — new test file)          |
+| `isort --check-only app/ tests/ alembic/`                               | ✅ clean                                                             |
+| `validate_migrations.py --strict`                                       | ✅ single head, 399 revisions                                        |
+| backend tests (`-k "auth or mfa or oauth or consent or suspicious_ip"`) | ✅ 221 passed (5 new), 1 skipped (pre-existing, missing `pywebpush`) |
+| `npm run typecheck` (native compiler wrapper)                           | ✅ 0 errors                                                          |
+| `npx eslint .`                                                          | ✅ 0 errors/warnings (no frontend files changed this correction)     |
 
 ---
 

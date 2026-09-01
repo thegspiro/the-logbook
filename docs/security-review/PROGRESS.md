@@ -18,7 +18,83 @@ feature. The rotation cannot outrun its own review queue.
 
 **Feature 01 (Auth & session lifecycle), pass 3** —
 [#2133](https://github.com/thegspiro/the-logbook/pull/2133), branch
-`claude/security-review-auth-pass3`.
+`claude/security-review-auth-pass3`. Codex round 1 addressed: a P1
+cross-endpoint TOTP replay gap (AUTH-7) and a P2 brute-force-detector wiring
+gap (AUTH-8) that pass 3's own "Verified good" write-up had wrongly cleared.
+Both fixed; see the log entry immediately below.
+
+---
+
+### 2026-09-01 — Feature 01 (Auth & session lifecycle, pass 3) — Codex round 1: a real P1 TOTP-replay gap the pass had wrongly marked "verified good", plus a P2 brute-force-wiring doc error
+
+Codex reviewed pass 3's commit `87212a8` and found its "Verified good"
+section's two claims both wrong — not overcautious, not a style nit, but a
+real authentication gap incorrectly cleared. Investigated both from the real
+code before acting, per this rotation's rule that a wrong fix in an auth
+path is worse than an honest finding.
+
+- **AUTH-7 (P1, FIXED):** `mfa_verify_setup`, `mfa_disable`, and
+  `mfa_regenerate_recovery_codes` (`/mfa/recovery-codes`) verified a live
+  TOTP code with bare `mfa_service.verify_totp` and never recorded the
+  matched time-step in `user.mfa_last_timestep` — only `mfa_login` did. The
+  original writeup reasoned each of the three management routes was
+  self-blocking against a _repeat call to itself_, but never checked replay
+  at a _different_ route. Because none of the three ever wrote
+  `mfa_last_timestep`, a code verified there stayed valid at `/mfa/login`
+  for the rest of its ~30–90s window. An attacker who already holds the
+  account's password gets a free `mfa_pending` token from `/login` (password
+  alone, MFA not required for that step) and, if they observe a code the
+  legitimate user is using _right now_ at one of those three routes
+  (shoulder-surfing, a compromised endpoint, a phishing relay), can replay
+  it at `/mfa/login` to open a fully independent session. Reproduced
+  empirically against the pre-fix code (see the fix commit's message).
+  **Fix:** every code-verifying route now goes through one shared
+  `_verify_and_consume_totp(user, code)` primitive in `auth.py` that records
+  the consumed step on every match, not just on `/mfa/login`. Also flagged,
+  not fixed (needs a product decision, not a guess in an auth path): the
+  same recovery-codes route is not idempotent under a retried request
+  (network retry/double-click) — recorded in `docs/KNOWN_LIMITATIONS.md`.
+- **AUTH-8 (P2, FIXED):** the writeup claimed
+  `security_monitor.detect_brute_force` wiring "matches SEC-00's documented
+  brute-force model exactly." `mfa_login` never called
+  `detect_brute_force` at all — a wrong TOTP code fed the per-account lockout
+  and the suspicious-IP throttle (both real, enforcing, and still correct)
+  but generated no history for this specific short-window per-IP/per-user
+  alert. Separately, `login`'s own `success=True` call to
+  `detect_brute_force` runs _before_ the MFA branch (on password-correct
+  alone), which the writeup conflated with the _different_
+  `clear_auth_failures` function's documented after-MFA-only invariant.
+  **Fix:** `mfa_login`'s failure and success branches now call
+  `detect_brute_force` with `success=False`/`True` respectively, mirroring
+  `login`'s exact pattern (best-effort, `try/except`, piggybacking the
+  branch's existing `db.commit()`). `login`'s own password-step ordering is
+  unchanged — a separate, lower-severity, out-of-scope-for-this-fix
+  inaccuracy, now described accurately in the doc rather than left
+  mischaracterized.
+
+Both replied to and resolved on PR #2133 (Codex review comments), with the
+mechanism and reasoning mirrored into
+`docs/security-review/AUTH-01-auth-session.md` (AUTH-7/AUTH-8, replacing the
+struck-through "Verified good" claims) and `docs/KNOWN_LIMITATIONS.md`
+(the recovery-codes idempotency flag).
+
+**Guard tests:** `TestTotpConsumedAcrossMfaRoutes` and
+`TestMfaLoginBruteForceWiring` in `backend/tests/test_auth_mfa_endpoints.py`
+(5 new tests) — the replay test drives the real `mfa_regenerate_recovery_codes`
+then `mfa_login` handlers and confirmed to fail against the pre-fix code
+(reverted `auth.py`, re-ran: `mfa_login` completed successfully with the
+replayed code).
+
+**Completion gate (Codex round 1, full re-run):** `flake8`/`black
+--check`/`isort --check-only` on `app/ tests/ alembic/` clean;
+`validate_migrations.py --strict` passed (399 revisions, single head);
+scoped backend tests (`-k "auth or mfa or oauth or consent or
+suspicious_ip"`) 221 passed (5 new), 1 skipped (pre-existing, missing
+optional `pywebpush`); `npm run typecheck` (native compiler wrapper) 0
+errors; `npm run lint` 0 errors/warnings (no frontend files changed).
+
+Full write-up: `docs/security-review/AUTH-01-auth-session.md` (AUTH-7,
+AUTH-8, and the struck-through correction note under Pass 3).
 
 ---
 

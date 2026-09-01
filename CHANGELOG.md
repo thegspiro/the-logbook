@@ -7,6 +7,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### A TOTP code verified at an MFA management route could replay at login, and the MFA-code brute-force alert was unwired (2026-09-01)
+
+**Fixed**
+
+- **`mfa_verify_setup`, `mfa_disable`, and `POST /mfa/recovery-codes` verified
+  a live TOTP code without ever recording it as consumed, leaving that same
+  code still valid at `/mfa/login` for the rest of its ~30–90s window.** Only
+  `mfa_login` recorded the matched time-step (`user.mfa_last_timestep`); the
+  three management routes called the plain, stateless `verify_totp` check
+  instead. An attacker who already holds an account's password (a
+  prerequisite either way for any MFA-bypass discussion) gets a valid
+  `mfa_pending` challenge token for free from the password step alone; if
+  they then observe a code the legitimate user is actively using at one of
+  the three management routes (shoulder-surfing, a compromised endpoint, a
+  phishing-relay page), they could replay that same code at `/mfa/login` and
+  open a fully independent session of their own — nothing had marked the
+  code's time-step spent. Fixed by routing every TOTP-verifying route through
+  one shared `_verify_and_consume_totp()` primitive that always records the
+  consumed step on a match, closing the gap for all four routes at once. 3
+  new regression tests, including one that drives the real
+  `mfa_regenerate_recovery_codes` and `mfa_login` handlers end-to-end and is
+  confirmed to fail against the pre-fix code.
+- **`mfa_login` never fed `security_monitor.detect_brute_force`, so guessing
+  the second factor generated no history for this HIGH-severity alert.** The
+  per-account lockout and the suspicious-IP throttle already enforced against
+  MFA-code guessing and still do — this closes a purely alerting/audit gap,
+  not an enforcement one. `mfa_login`'s failure and success paths now call
+  `detect_brute_force` with `success=False`/`True`, mirroring `login`'s own
+  password-step wiring exactly. 2 new regression tests assert the call on
+  both paths.
+
+Full write-up: `docs/security-review/AUTH-01-auth-session.md` (AUTH-7,
+AUTH-8). A related non-idempotency gap in the recovery-codes regeneration
+endpoint (a retried request silently overwrites the codes shown on a prior
+call) was investigated and flagged, not fixed — see
+`docs/KNOWN_LIMITATIONS.md`.
+
 ### A concurrent request for the same session could silently erase another request's session-hijack tracking data (2026-09-01)
 
 **Fixed**

@@ -775,6 +775,30 @@ async def login(
 _MFA_ISSUER = "The Logbook"
 
 
+def _verify_and_consume_totp(user: User, code: str) -> bool:
+    """Verify a live TOTP code and record its time-step as consumed.
+
+    Every route that checks an authenticator code — not just `/mfa/login` —
+    must go through this, or a code verified here but not recorded stays
+    valid at `/mfa/login` for the rest of its ~30s window. An attacker who
+    already holds the account's password (a prerequisite either way) gets a
+    fresh `mfa_pending` token from `/login` for free and, without this,
+    could replay a code merely *observed* in use elsewhere (shoulder-surfing,
+    a compromised endpoint, a phishing relay) to open an independent session
+    of their own — nothing marked that time-step spent. Mutates
+    `user.mfa_last_timestep` in place on a match; the caller's existing
+    `db.commit()` persists it, same as every other field the caller sets in
+    the same request.
+    """
+    matched_timestep = mfa_service.verify_totp_get_timestep(
+        user.mfa_secret, code, last_timestep=user.mfa_last_timestep
+    )
+    if matched_timestep is None:
+        return False
+    user.mfa_last_timestep = matched_timestep
+    return True
+
+
 @router.post(
     "/mfa/login",
     dependencies=[rate_limit_login(), Depends(enforce_suspicious_ip)],
@@ -835,12 +859,8 @@ async def mfa_login(
         raise invalid
 
     verified = False
-    matched_timestep: int | None = None
     if data.code:
-        matched_timestep = mfa_service.verify_totp_get_timestep(
-            user.mfa_secret, data.code, last_timestep=user.mfa_last_timestep
-        )
-        verified = matched_timestep is not None
+        verified = _verify_and_consume_totp(user, data.code)
     if not verified and data.recovery_code:
         codes = user.mfa_backup_codes or []
         matched = mfa_service.find_matching_recovery_code(data.recovery_code, codes)
@@ -857,6 +877,22 @@ async def mfa_login(
             user.locked_until = now + timedelta(
                 minutes=settings.ACCOUNT_LOCKOUT_DURATION_MINUTES
             )
+        # Feed the failed MFA-code attempt to the same short-window,
+        # per-IP/per-user brute-force detector `login` feeds on a failed
+        # password. Without this, a wrong code never reached
+        # `detect_brute_force` at all, so guessing the second factor could
+        # not trigger this alert — only the (separate, still-enforced)
+        # per-account lockout and suspicious-IP throttle below covered it.
+        # Best-effort and must never break the login response; the
+        # unconditional `db.commit()` right after persists any alert row
+        # `detect_brute_force` staged, same as the failed_login_attempts
+        # change above.
+        try:
+            await security_monitor.detect_brute_force(
+                db, ip=get_client_ip(request), user_id=str(user.id), success=False
+            )
+        except Exception:
+            logger.debug("brute-force detection failed on MFA failure")
         await db.commit()
         try:
             await record_auth_failure(get_client_ip(request))
@@ -868,13 +904,22 @@ async def mfa_login(
             error_code=ErrorCode.AUTH_MFA_CODE_INVALID,
         )
 
-    # Success: record the consumed TOTP step (replay prevention) and clear the
-    # failure counter/lock.
-    if matched_timestep is not None:
-        user.mfa_last_timestep = matched_timestep
+    # Success: the TOTP branch already recorded the consumed step (replay
+    # prevention) via `_verify_and_consume_totp`; the recovery-code branch
+    # consumed its own single-use code above. Clear the failure counter/lock.
     user.failed_login_attempts = 0
     user.locked_until = None
     await db.commit()
+
+    # Full authentication just completed (password + second factor), so
+    # reset this account/IP's brute-force tally the same way `login` does on
+    # an outright success.
+    try:
+        await security_monitor.detect_brute_force(
+            db, ip=get_client_ip(request), user_id=str(user.id), success=True
+        )
+    except Exception:
+        logger.debug("brute-force counter reset failed on MFA success")
 
     try:
         await clear_auth_failures(get_client_ip(request))
@@ -937,7 +982,7 @@ async def mfa_verify_setup(
         raise HTTPException(status_code=400, detail="MFA is already enabled")
     if not current_user.mfa_secret:
         raise HTTPException(status_code=400, detail="Start setup first")
-    if not mfa_service.verify_totp(current_user.mfa_secret, data.code):
+    if not _verify_and_consume_totp(current_user, data.code):
         raise CodedHTTPException(
             status_code=400,
             detail="Invalid verification code",
@@ -986,7 +1031,7 @@ async def mfa_disable(
     """Disable MFA after verifying a current authenticator code."""
     if not current_user.mfa_enabled:
         raise HTTPException(status_code=400, detail="MFA is not enabled")
-    if not mfa_service.verify_totp(current_user.mfa_secret, data.code):
+    if not _verify_and_consume_totp(current_user, data.code):
         raise CodedHTTPException(
             status_code=400,
             detail="Invalid verification code",
@@ -1047,7 +1092,7 @@ async def mfa_regenerate_recovery_codes(
     """
     if not current_user.mfa_enabled:
         raise HTTPException(status_code=400, detail="MFA is not enabled")
-    if not mfa_service.verify_totp(current_user.mfa_secret, data.code):
+    if not _verify_and_consume_totp(current_user, data.code):
         raise CodedHTTPException(
             status_code=400,
             detail="Invalid verification code",
