@@ -10,6 +10,7 @@ import type { EventListItem } from '../types/event';
 vi.mock('../services/api', () => ({
   eventService: {
     getEvents: vi.fn(),
+    createOrUpdateRSVP: vi.fn(),
     getMissedMandatoryEvents: vi.fn().mockResolvedValue([]),
     getVisibleEventTypes: vi
       .fn()
@@ -565,6 +566,42 @@ describe('EventsPage', () => {
       await waitFor(() => {
         expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Events');
         expect(screen.getByText(/department events, meetings, training sessions/i)).toBeInTheDocument();
+      });
+    });
+  });
+
+  describe('Quick RSVP refresh', () => {
+    // Pitfall #28: this block installs the mocks it depends on rather than
+    // inheriting whatever a previous block configured.
+    beforeEach(() => {
+      vi.mocked(eventService.getEvents).mockReset();
+      vi.mocked(eventService.getEvents).mockResolvedValue(mockEvents);
+      vi.mocked(eventService.createOrUpdateRSVP).mockReset();
+      vi.mocked(eventService.createOrUpdateRSVP).mockResolvedValue({ status: 'going' } as never);
+    });
+
+    it('refetches the list so the seat aggregates do not go stale', async () => {
+      // going_count, occupied_seats and waitlist_count are interdependent, and
+      // the client cannot derive occupied_seats at all — it does not know the
+      // member's prior guest count. Patching two of three and guessing the
+      // third is how the capacity label drifts.
+      const user = userEvent.setup();
+      renderWithRouter(<EventsPage />);
+
+      await waitFor(() => {
+        expect(eventService.getEvents).toHaveBeenCalled();
+      });
+      const initialCalls = vi.mocked(eventService.getEvents).mock.calls.length;
+
+      const [goingButton] = await screen.findAllByRole('button', { name: /^going$/i });
+      // Asserted rather than `!`-ed: noUncheckedIndexedAccess types this as
+      // possibly-undefined, and an assertion documents the expectation without
+      // a non-null operator or a conditional in the test body.
+      expect(goingButton).toBeDefined();
+      await user.click(goingButton as HTMLElement);
+
+      await waitFor(() => {
+        expect(vi.mocked(eventService.getEvents).mock.calls.length).toBeGreaterThan(initialCalls);
       });
     });
   });

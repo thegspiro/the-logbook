@@ -509,6 +509,10 @@ class EventListItem(UTCResponseBase):
     # Capacity UI must use this against max_attendees; going_count remains the
     # people count.
     occupied_seats: Optional[int] = None
+    # Which responses this event accepts. The list surfaces RSVP controls now,
+    # and without this they were hardcoded to Going/Not Going — so an event
+    # configured for "maybe" only rendered a button the API always rejected.
+    allowed_rsvp_statuses: Optional[List[str]] = None
     user_rsvp_status: Optional[str] = None
 
     # Fields the member-facing list needs to tell an urgent event from a

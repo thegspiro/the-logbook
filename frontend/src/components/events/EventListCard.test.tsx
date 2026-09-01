@@ -202,6 +202,29 @@ describe('EventListCard', () => {
       expect(screen.queryByRole('button', { name: /change rsvp/i })).not.toBeInTheDocument();
     });
 
+    it('offers only the responses the event accepts', () => {
+      // Hardcoding Going/Not Going rendered a button the API rejects
+      // deterministically on an event configured for a narrower set.
+      renderCard(makeEvent({ allowed_rsvp_statuses: ['going'] }));
+      expect(screen.getByRole('button', { name: /^going$/i })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /not going/i })).not.toBeInTheDocument();
+    });
+
+    it('falls back to no RSVP controls when it accepts neither', () => {
+      // This card only ever submits going / not_going, so a 'maybe'-only event
+      // has nothing here that can succeed.
+      renderCard(makeEvent({ allowed_rsvp_statuses: ['maybe'] }));
+      expect(screen.queryByRole('button', { name: /^going$/i })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /not going/i })).not.toBeInTheDocument();
+    });
+
+    it('offers both when the payload names no statuses', () => {
+      // Absent means the server default pair, not "nothing allowed".
+      renderCard(makeEvent());
+      expect(screen.getByRole('button', { name: /^going$/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /not going/i })).toBeInTheDocument();
+    });
+
     it('offers no RSVP controls on a draft', () => {
       // EventsPage includes drafts for managers, and the API refuses every
       // draft RSVP outright, so these controls could never succeed.

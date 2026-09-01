@@ -1133,7 +1133,12 @@ const Dashboard: React.FC = () => {
               >
                 {getRSVPStatusLabel(evt.user_rsvp_status)}
               </span>
-            ) : evt.is_cancelled || (evt.rsvp_deadline && new Date(evt.rsvp_deadline) <= new Date()) ? (
+            ) : evt.is_cancelled ||
+              (evt.rsvp_deadline && new Date(evt.rsvp_deadline) <= new Date()) ||
+              // This row only submits `going`, so an event that does not accept
+              // it has nothing here that can succeed — the API rejects the
+              // request deterministically against allowed_rsvp_statuses.
+              !(evt.allowed_rsvp_statuses ?? ['going', 'not_going']).includes('going') ? (
               <button
                 type="button"
                 onClick={() => void navigate(`/events/${evt.id}`)}

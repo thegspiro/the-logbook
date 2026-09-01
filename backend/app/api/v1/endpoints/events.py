@@ -323,6 +323,9 @@ def _to_list_item(row: dict) -> EventListItem:
         going_count=row["going_count"],
         waitlist_count=row.get("waitlist_count"),
         occupied_seats=row.get("occupied_seats"),
+        allowed_rsvp_statuses=(
+            event.allowed_rsvp_statuses or DEFAULT_ALLOWED_RSVP_STATUSES
+        ),
         user_rsvp_status=row["user_rsvp_status"],
         rsvp_deadline=event.rsvp_deadline,
         max_attendees=event.max_attendees,
