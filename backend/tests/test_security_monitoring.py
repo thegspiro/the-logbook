@@ -32,6 +32,35 @@ def _svc():
     return SecurityMonitoringService()
 
 
+class _FrozenClock:
+    """A small controllable clock standing in for freezegun (not a project
+    dependency) for tests that need `detect_session_hijack`'s internal
+    `now = datetime.now(timezone.utc)` to advance under test control,
+    without a real sleep. Pair with `_install_fake_now` below.
+    """
+
+    def __init__(self, start: datetime):
+        self.current = start
+
+    def advance(self, delta: timedelta) -> datetime:
+        self.current += delta
+        return self.current
+
+
+def _install_fake_now(monkeypatch, clock: "_FrozenClock") -> None:
+    """Patch `app.services.security_monitoring.datetime` so every
+    `datetime.now(...)` call in that module returns `clock.current`
+    instead of the real wall clock.
+    """
+
+    class _FakeDateTime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return clock.current
+
+    monkeypatch.setattr("app.services.security_monitoring.datetime", _FakeDateTime)
+
+
 class TestInjectionPatterns:
     async def test_clean_request_is_none(self):
         out = await _svc()._check_injection_patterns(
@@ -815,6 +844,155 @@ class TestSessionHijackTrustedBaseline:
             "trusted baseline must have stayed pinned at '1.1.1.1' "
             "throughout, not drifted to the attacker IP '6.6.6.6' seen in "
             "between"
+        )
+
+
+class TestSessionHijackLeniencyWindow:
+    """PR #2132 round 7 (Codex): round 6 (commit 56620c9e) correctly
+    stopped the attacker's IP from replacing the trusted IP on the alert
+    path, but left the trusted entry's TIMESTAMP pinned to whenever the
+    trusted IP was last CONFIRMED-good. That stored timestamp is exactly
+    what `time_diff < 300` reads on the *next* call to decide "alert or
+    lenient" -- so under continuous attacker traffic, real wall-clock time
+    keeps advancing on every call while the stored timestamp does not.
+    Once enough real time elapses since the trusted IP's ORIGINAL
+    confirmation (not since this session was last evaluated), `time_diff`
+    crosses 300s on some later attacker call, and the method's own "IP
+    changed but it's been a while, probably roaming" leniency (meant for a
+    session that genuinely went idle) silently takes over: no alert fires,
+    and the default path then promotes the attacker's now-longstanding IP
+    to trusted -- purely because enough time passed while the attacker was
+    the only one using the session.
+
+    The fix refreshes the trusted entry's timestamp to `now` on every
+    call, alert or not (the IP itself still only changes on a non-alert
+    call, per round 6) -- so `time_diff` always measures the gap since
+    this session was last evaluated, not since the last legitimate
+    sighting. A continuously-attacked session never accumulates elapsed
+    time toward the leniency window; a genuinely idle session still earns
+    it, because nothing refreshes the timestamp while no calls occur.
+    """
+
+    async def test_continuous_attacker_traffic_never_earns_the_leniency_window(
+        self, monkeypatch
+    ):
+        """The exact bypass Codex found: attacker IP B alerts at t=0, then
+        keeps calling every minute through t=10min. Every one of those
+        calls must still alert -- none may be silently waved through just
+        because 5+ minutes have passed since B's *first* call -- and the
+        trusted baseline must still be the legitimate IP A when it
+        returns at t=11min.
+        """
+        svc = _svc()
+        session_id = "victim-session"
+        db = _db()
+        key = f"session:{session_id}"
+
+        clock = _FrozenClock(datetime(2026, 1, 1, tzinfo=timezone.utc))
+        _install_fake_now(monkeypatch, clock)
+
+        # t=0: trusted IP A establishes the baseline, no alert (first-ever
+        # observation for this session).
+        alert = await svc.detect_session_hijack(
+            db,
+            session_id=session_id,
+            current_ip="1.1.1.1",
+            user_agent="ua",
+            user_id="u1",
+        )
+        assert alert is None
+
+        # Attacker IP B hits the session every minute from t=+1min through
+        # t=+10min. Each individual gap between consecutive calls is only
+        # 60s (well under the 300s threshold), but cumulative real elapsed
+        # time since the t=0 confirmation crosses 300s partway through --
+        # against the pre-fix code, that is what wrongly silences the
+        # alert.
+        for minute in range(1, 11):
+            clock.advance(timedelta(minutes=1))
+            alert = await svc.detect_session_hijack(
+                db,
+                session_id=session_id,
+                current_ip="6.6.6.6",
+                user_agent="ua",
+                user_id="u1",
+            )
+            assert alert is not None, (
+                f"attacker call at t=+{minute}min was silently waved "
+                "through with no alert -- the trusted entry's timestamp "
+                "was not refreshed on the alert path, so elapsed "
+                "wall-clock time since the ORIGINAL trusted-IP "
+                "confirmation wrongly satisfied the 5-minute leniency "
+                "window even though the session has been under "
+                "continuous attack, not idle"
+            )
+            assert alert.details["previous_ip"] == "1.1.1.1"
+            assert alert.details["current_ip"] == "6.6.6.6"
+
+        # After ten straight minutes of attacker traffic, the trusted
+        # baseline must still be the legitimate IP -- never promoted to
+        # the attacker's.
+        trusted_ip, _ = svc._session_trusted_ip[key][-1]
+        assert trusted_ip == "1.1.1.1", (
+            "the attacker's IP was silently promoted to the trusted "
+            "baseline once enough wall-clock time passed"
+        )
+
+        # t=+11min: the legitimate IP returns. It matches the (still
+        # preserved) trusted IP, so this must NOT alert.
+        clock.advance(timedelta(minutes=1))
+        final_alert = await svc.detect_session_hijack(
+            db,
+            session_id=session_id,
+            current_ip="1.1.1.1",
+            user_agent="ua",
+            user_id="u1",
+        )
+        assert final_alert is None, (
+            "the legitimate IP's return after sustained attacker traffic "
+            "was itself flagged as a hijack"
+        )
+
+    async def test_genuinely_idle_session_still_gets_the_leniency_on_return(
+        self, monkeypatch
+    ):
+        """The leniency window's original purpose must survive the fix: a
+        session with NO activity at all (neither legitimate nor attacker)
+        for 5+ minutes, followed by a legitimate IP change (e.g. the user
+        roamed onto a new network), must still be treated as non-suspicious.
+        """
+        svc = _svc()
+        session_id = "victim-session"
+        db = _db()
+
+        clock = _FrozenClock(datetime(2026, 1, 1, tzinfo=timezone.utc))
+        _install_fake_now(monkeypatch, clock)
+
+        alert = await svc.detect_session_hijack(
+            db,
+            session_id=session_id,
+            current_ip="1.1.1.1",
+            user_agent="ua",
+            user_id="u1",
+        )
+        assert alert is None
+
+        # Ten idle minutes: nobody touches the session at all.
+        clock.advance(timedelta(minutes=10))
+
+        # The same user returns from a new IP (e.g. switched networks).
+        alert = await svc.detect_session_hijack(
+            db,
+            session_id=session_id,
+            current_ip="9.9.9.9",
+            user_agent="ua",
+            user_id="u1",
+        )
+        assert alert is None, (
+            "a legitimate IP change after a genuine 10-minute idle gap "
+            "with no intervening activity was flagged as a hijack -- the "
+            "leniency window this fix preserves exists exactly for this "
+            "case"
         )
 
 

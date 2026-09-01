@@ -16,16 +16,16 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**Feature 00 (Cross-cutting baseline), pass 3, round 3+4+5+6 follow-up** —
+**Feature 00 (Cross-cutting baseline), pass 3, round 3+4+5+6+7 follow-up** —
 [#2132](https://github.com/thegspiro/the-logbook/pull/2132), branch
 `claude/security-review-sec00-pass3-round3-fix`.
 [#2128](https://github.com/thegspiro/the-logbook/pull/2128) (rounds 1–2)
 **merged to `main` at commit `2b3231a3`** before Codex's round-3 review
-landed, so round 3 (and this PR's own rounds 4, 5 and 6) are pushed to a
+landed, so round 3 (and this PR's own rounds 4, 5, 6 and 7) are pushed to a
 **separate PR**, not a further push to `claude/security-review-sec00-pass3`
 — per Pitfall #24 ("Do Not Reuse a Branch Name After Its Pull Request
 Merges"), that branch's remote ref is gone and its PR is closed. See the
-round-3 through round-6 log entries below for what Codex found each time,
+round-3 through round-7 log entries below for what Codex found each time,
 including a real regression (not just a gap) in round 1's own ordering that
 shipped to `main` unfixed for a window, round 4's discovery of the **same
 regression shape found a fourth time** in a method round 3's "checked every
@@ -33,14 +33,21 @@ method" pass missed, round 5's finding that round 3/4's own fix — read the
 current key before eviction — was still incomplete on the write side:
 nothing restored the current key's entry into the tracker _after_ eviction
 ran, so a key correctly alerted on and then evicted lost its baseline for
-every call after, and **round 6's finding that round 5's own fix wrote the
+every call after (round 5's write-up also carried a since-superseded claim
+about the correct alert-path behavior — see the correction note in its
+entry below), **round 6's finding that round 5's own fix wrote the
 attacker's IP back as the trusted baseline on the alert path itself** —
 distinct from the eviction-ordering bug class in rounds 3–5, and new to
 round 5 specifically (verified against every prior version of the method,
 which returned before that write ever ran on the alert path), not a
-pre-existing gap the eviction scrutiny happened to expose. **Six rounds on
-this file's session-hijack tracking now; see the round-6 entry's closing
-note for why that streak, not any one round's fix, is the fact worth
+pre-existing gap the eviction scrutiny happened to expose — and **round 7's
+finding that round 6's fix pinned the trusted IP correctly but left its
+stored TIMESTAMP unrefreshed on the alert path, letting the method's own
+5-minute leniency check silently wave a persistent attacker through once
+enough real wall-clock time had passed**, a time-based bypass of round 6's
+fix rather than a further instance of the eviction-ordering class. **Seven
+rounds on this file's session-hijack tracking now; see the round-7 entry's
+closing note for why that streak, not any one round's fix, is the fact worth
 weighting on a future "0 gaps" claim against this same code.** The timeline
 matters here, not just the diff, so read those entries rather than only the
 summary.
@@ -84,6 +91,124 @@ A duplicate close-out PR, [#2119](https://github.com/thegspiro/the-logbook/pull/
 was opened against round 1's now-stale base (before round 2/3 landed) and
 closed without merging — merging it would have overwritten this section
 with round-1-only text and dropped the round 2/3 record.
+
+---
+
+### 2026-09-01 — Feature 00 (Cross-cutting baseline, pass 3) — Codex round 7: round 6's fix pinned the trusted IP but not its timestamp — a time-based bypass
+
+**Seven rounds of Codex review on this same file's session-hijack tracking
+now, across two PRs (#2128, #2132).** Round 6 (commit `56620c9e`) correctly
+stopped the alert path from advancing `_session_trusted_ip`'s stored _IP_ to
+the attacker's, but left that entry's stored _timestamp_ unrefreshed on the
+same path — `new_trusted_time = last_time` instead of `now`. That timestamp
+is exactly what the method's own 5-minute leniency check reads on the next
+call:
+
+```python
+if last_ip != current_ip:
+    time_diff = (now - last_time).total_seconds()
+    if time_diff < 300:                 # suspicious -> alert
+        ...
+    # time_diff >= 300 falls through to the DEFAULT path at the top of the
+    # method, which promotes current_ip as the new trusted baseline
+```
+
+Under continuous attacker traffic, `last_time` stays pinned to whenever the
+trusted IP was last confirmed-good, while real wall-clock time keeps
+advancing on every subsequent attacker call. `time_diff` therefore grows
+monotonically with elapsed real time regardless of how many attacker
+requests occur in between, and once it crosses 300s — which it eventually
+will, purely because time passed — the alert branch stops matching and
+control falls through to the default path, silently promoting the
+attacker's now-longstanding IP to trusted with no alert. This is the "IP
+changed but it's been a while, probably roaming" leniency (correct for a
+session that genuinely went idle) wrongly triggered by a session that has
+in fact been under continuous, uninterrupted attack the whole time. Distinct
+from round 6's bug: round 6 was the `ip` half of the stored pair being
+wrongly advanced; round 7 is the `timestamp` half being wrongly held still,
+and it fully bypasses round 6's fix given enough elapsed wall-clock time.
+
+**Fix:** refresh the trusted entry's timestamp to `now` on every call —
+alert or not — while still leaving the trusted `ip` unchanged on the alert
+path (round 6's fix, unmodified):
+
+```python
+new_trusted_ip = last_ip
+new_trusted_time = now   # was `last_time`; refreshed regardless of alert
+```
+
+This makes the stored timestamp mean "the last time this session was
+evaluated, by any IP," not "the last time the trusted IP was
+confirmed-good." The next call's `time_diff` then measures the gap since
+_this_ call, not since the session's last idle period ended — so a session
+under continuous attack never accumulates elapsed time toward the leniency
+window (every attacker call resets the clock the same call it fails to earn
+promotion on), while a genuinely idle session (no calls from anyone for 5+
+minutes) still earns the leniency exactly as before, since nothing
+refreshes the timestamp while there are no calls to refresh it with.
+
+**Three scenarios hand-traced end-to-end:** (1) attacker persists — trusted
+`A`, attacker `B` alerts at `t=0`, `B` continues once/minute through
+`t=10min`; against the pre-fix code `time_diff` is measured against the
+_original_ `t=0` and crosses 300s at exactly `t=5min` (300s = 5×60s),
+silently promoting `B` from that call onward; against the fix, `time_diff`
+is measured against the _previous call's_ refreshed timestamp, stays ~60s
+every time, and all ten calls alert; legitimate `A` returns at `t=11min`,
+matches the still-preserved trusted `A`, no alert. (2) Legitimate
+idle-then-return — trusted `A` at `t=0`, _no calls from anyone_ for 10
+minutes, then the same user returns from a new IP: `time_diff` against the
+unrefreshed `t=0` timestamp is 600s, leniency applies, no alert, new IP
+promoted — unaffected by the fix, since nothing refreshes a timestamp during
+a gap with no calls at all. (3) Round 6's original 4-step trace, re-confirmed
+under the fix: trusted `A` → `B` alerts (timestamp refreshes, `A` stays
+trusted) → `B` again within a short gap (alerts again, `A` still trusted) →
+legitimate `A` returns (matches, no alert) — same outcome as round 6 found,
+unaffected since every gap in that trace is already well under 300s.
+
+**Verification, round 7:** new `TestSessionHijackLeniencyWindow` class, 2
+tests. `test_continuous_attacker_traffic_never_earns_the_leniency_window`
+drives one legitimate call then ten attacker calls one simulated minute
+apart, asserting every one of the ten still alerts, the trusted baseline is
+still the legitimate IP afterward, and the legitimate IP's return at
+`t=+11min` does not alert. `test_genuinely_idle_session_still_gets_the_
+leniency_on_return` asserts the original idle-then-roam case (a 10-minute
+gap with no calls at all) still does not alert. Simulated time is driven by
+a small `_FrozenClock` helper plus a `datetime` subclass monkeypatched over
+`app.services.security_monitoring.datetime` — this project has no
+`freezegun` dependency, and the existing session-hijack tests instead seed
+tracker dicts directly with past timestamps, which doesn't fit this
+scenario's need to control several successive calls' `now` independently.
+Verified directly: `git stash`-ing this round's one-line fix (restoring
+`new_trusted_time = last_time`) and running the new leniency-window test
+against commit `56620c9e` — it **fails** at the `t=+5min` call specifically
+(`alert is None`), matching the hand-traced mechanism exactly; **passes**
+after the fix. Full `test_security_monitoring.py` **26/26**, up from 24.
+
+**Completion gate (round 7 — full re-run):** `flake8`/`black --check`/
+`isort --check-only` clean on `app/ tests/ alembic/ scripts/`;
+`validate_migrations.py --strict` unchanged (399 revisions, single head, no
+migration touched); `pytest tests/ -m "not integration and not slow and not
+docker" --cov=app --cov-fail-under=51` (CI's exact Backend Unit Tests
+invocation); `cd frontend && npm run typecheck` (aliased 7.0.2 compiler);
+`cd frontend && npm run lint` (no frontend files touched this round). See
+this round's PR push for the exact pass/fail counts recorded at push time.
+Files changed this round: `app/services/security_monitoring.py` (one-line
+timestamp-refresh fix plus updated comments) and its test file
+(`TestSessionHijackLeniencyWindow`, 2 new tests); `docs/security-review/
+SEC-00-cross-cutting-baseline.md` and this file (round-7 write-up + this log
+entry, plus the round-5 doc correction above); `CHANGELOG.md`. Same branch,
+same PR #2132.
+
+**Seven review rounds on this file's session-hijack tracking now — the sixth
+straight round to find something in this exact method, each a genuinely
+different shape** (missing eviction, one-key-at-a-time eviction,
+read-after-evict, a fourth method with the same read-after-evict shape,
+write-after-evict, a semantic bug in what write-after-evict wrote, and now a
+time-based path around that same semantic fix). The caution stated in
+rounds 4, 5, and 6 — that a clean result on this exact code is worth
+substantially less evidentiary weight than the same result elsewhere, and
+is exactly the place to look hardest for one more angle — is carried
+forward again, not treated as satisfied by this round's fix.
 
 ---
 
@@ -258,11 +383,28 @@ that: `alert1` is a `SecurityAlert`, `alert2` is `None`.
 `self._session_ips[key]` from the pre-eviction `session_data` plus this
 call's own `(current_ip, now)` (trimmed to the last 10 entries) and returns
 the alert (or `None`) at the end, regardless of which path was taken. This
-also fixes a second, eviction-independent bug the early return caused: even
-with no eviction at all, the pre-fix code never advanced a hijacked
-session's "last known IP" past its pre-hijack value, so every later request
-was compared against increasingly stale ground truth instead of the
-attacker's actual most recent IP.
+closes the eviction-loses-the-entry gap described above.
+
+**Correction (round 6/round 7, superseding the paragraph below as
+originally written):** this entry originally went on to claim a _second_
+bug here — that the pre-fix code never advancing a hijacked session's "last
+known IP" past its pre-hijack value was itself a correctness gap, and that
+comparing against "the attacker's actual most recent IP" was the right
+behavior. **That claim was wrong and is superseded — see the round-6 entry
+below.** Preserving the pre-hijack IP is correct; round 5's actual fix (this
+entry), by writing `current_ip` back unconditionally including on the alert
+path, is exactly the bug round 6 found and reverted (it silently promoted
+the attacker's IP to "trusted," so a repeat attack from the same IP stopped
+alerting after the first hit). Left in place immediately below, unedited,
+as the record of what round 5 believed at the time — see
+`SEC-00-cross-cutting-baseline.md`'s matching correction for the fuller
+account, and this rotation's round-4 "Attribution correction" for the
+established precedent of correcting in place rather than deleting:
+
+> even with no eviction at all, the pre-fix code never advanced a hijacked
+> session's "last known IP" past its pre-hijack value, so every later
+> request was compared against increasingly stale ground truth instead of
+> the attacker's actual most recent IP. _(Superseded — see above.)_
 
 **Checked individually, not assumed, whether `_check_rate_limit`,
 `detect_brute_force`, and `detect_data_exfiltration` share this exact gap —

@@ -7,6 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### A session-hijack alert could be silently waved through once enough real time passed, even under continuous attack (2026-09-01)
+
+**Fixed**
+
+- **The trusted-IP fix below (`detect_session_hijack`) correctly stopped an
+  alerting call from promoting the attacker's IP as the new trusted
+  baseline, but left that entry's stored TIMESTAMP unrefreshed on the same
+  path — and that timestamp is exactly what the method's own 5-minute
+  "IP changed, but it's been a while, probably roaming" leniency check
+  reads.** Under continuous attacker traffic, the stored timestamp stayed
+  pinned to whenever the trusted IP was last legitimately seen, while real
+  wall-clock time kept advancing on every subsequent attacker request —
+  so once enough time elapsed since that original sighting (regardless of
+  how many attacker requests happened in between), the leniency check
+  wrongly concluded the session must have gone idle, stopped alerting, and
+  silently promoted the attacker's now-longstanding IP to trusted. Fixed by
+  refreshing the stored timestamp to the current time on every call — alert
+  or not — while still leaving the trusted IP itself unchanged on the alert
+  path. The stored timestamp now means "the last time this session was
+  evaluated, by any IP," so the leniency window measures the gap since the
+  last time the session was looked at, not since its last legitimate
+  sighting — a continuously-attacked session never accumulates elapsed time
+  toward the leniency window, while a genuinely idle session (no requests
+  from anyone for 5+ minutes) still earns it exactly as before. 2 new
+  regression tests simulate ten minutes of continuous attacker traffic
+  (asserting every request still alerts and the legitimate IP's return is
+  still correctly recognized) and a genuinely idle 10-minute gap followed by
+  a legitimate IP change (asserting that case still does not alert); both
+  verified against the prior fix's commit.
+
 ### A session-hijack alert silenced itself after firing once, because its own fix trusted the attacker's IP (2026-09-01)
 
 **Fixed**

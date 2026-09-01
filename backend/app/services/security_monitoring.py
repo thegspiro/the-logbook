@@ -123,7 +123,11 @@ class SecurityMonitoringService:
         # ones); this dict holds only the single IP/timestamp a hijack
         # decision is actually made against, and it is deliberately NOT
         # updated to an IP that itself just triggered an alert (Codex, PR
-        # #2132, round 6 — see the comment in detect_session_hijack).
+        # #2132, round 6 — see the comment in detect_session_hijack). Its
+        # stored timestamp IS refreshed on every call, alert or not, so
+        # that the 5-minute leniency check measures time since this
+        # session was last evaluated, not time since the trusted IP's
+        # original confirmation (Codex, PR #2132, round 7 — same method).
         self._session_trusted_ip: Dict[str, List[Tuple[str, datetime]]] = defaultdict(
             list
         )
@@ -709,7 +713,39 @@ class SecurityMonitoringService:
                     # legitimate IP returning) actually earns the promotion
                     # (Codex, PR #2132, round 6).
                     new_trusted_ip = last_ip
-                    new_trusted_time = last_time
+                    # But DO refresh the timestamp to `now`, even though the
+                    # IP is being kept unchanged. Round 6 left this as
+                    # `last_time` (the timestamp of the last CONFIRMED-good
+                    # sighting of `last_ip`), which reads as "when was the
+                    # trusted IP last seen" but is actually consulted by the
+                    # `time_diff < 300` check above as "how long has it been
+                    # since we last evaluated this session" -- and those are
+                    # only the same thing while the session is idle. Under
+                    # sustained attacker traffic they diverge: `last_time`
+                    # stays pinned to the pre-hijack confirmation while real
+                    # wall-clock time keeps advancing on every subsequent
+                    # attacker call, so eventually `time_diff` on some later
+                    # attacker call crosses 300s purely because enough time
+                    # has passed since the ORIGINAL legitimate sighting -- not
+                    # because the session went idle -- and the 5-minute
+                    # leniency (meant for "IP changed after a genuine gap in
+                    # activity, probably roaming") wrongly kicks in and
+                    # silently waves the attacker's now-longstanding IP
+                    # through with no alert (Codex, PR #2132, round 7).
+                    #
+                    # Refreshing to `now` here makes the stored timestamp
+                    # mean "the last time this session was evaluated,
+                    # regardless of which IP made that call" -- so the next
+                    # call's `time_diff` measures the gap since THIS call,
+                    # not since the session's last idle period ended. A
+                    # continuously-attacking session therefore never
+                    # accumulates elapsed time toward the leniency window
+                    # (each attacker call keeps the gap tiny), while a
+                    # genuinely idle session (no calls from anyone for 5+
+                    # minutes) still earns the leniency exactly as before,
+                    # because nothing refreshes the timestamp during a gap
+                    # with no calls at all.
+                    new_trusted_time = now
 
         # Write the trusted baseline back after cap enforcement (read-before
         # /write-after-evict, same shape as _session_ips below): a single
