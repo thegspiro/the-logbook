@@ -246,14 +246,20 @@ const InventoryItemPicker: React.FC<InventoryItemPickerProps> = ({
             <button
               key={r.id}
               type="button"
+              // A pending create must be the only selection that can land.
+              // Left enabled, a slow POST gave the user time to pick a result —
+              // and the create's response then replaced their choice with the
+              // new row, leaving the extra catalog entry behind.
+              disabled={creating}
               onClick={() => {
+                if (creating) return;
                 onChange(r.id, r.name);
                 setSelectedName(r.name);
                 setOpen(false);
                 setQuery('');
                 setResults([]);
               }}
-              className="hover:bg-theme-surface-secondary block w-full px-3 py-2 text-left"
+              className="hover:bg-theme-surface-secondary block w-full px-3 py-2 text-left disabled:opacity-50"
             >
               <span className="text-theme-text-primary block text-sm">{r.name}</span>
               {r.sub && <span className="text-theme-text-muted block text-xs">{r.sub}</span>}

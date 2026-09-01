@@ -5914,7 +5914,13 @@ class InventoryService:
             return None
         result = await self.db.execute(
             select(InventoryItem.id, InventoryItem.name).where(
-                InventoryItem.organization_id == organization_id
+                InventoryItem.organization_id == organization_id,
+                # Active rows only. A retired item is hidden from every catalog
+                # search (they all pass active_only), so handing one back would
+                # report a link to a row the crew cannot find, in retired
+                # condition — and where a name has both a retired and an active
+                # row, an unordered query could return the wrong one of the two.
+                InventoryItem.active.is_(True),
             )
         )
         return next(

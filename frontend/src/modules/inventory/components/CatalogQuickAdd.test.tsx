@@ -243,7 +243,10 @@ describe('CatalogQuickAdd', () => {
   it('offers to create the item in inventory when nothing matches', async () => {
     const user = userEvent.setup();
     mockGetItems.mockResolvedValue({ items: [], total: 0, skip: 0, limit: 6 });
-    mockCreateItemIfAbsent.mockResolvedValue({ item: { id: 'inv-new', name: 'Burn Sheet' }, created: true });
+    mockCreateItemIfAbsent.mockResolvedValue({
+      item: { id: 'inv-new', name: 'Burn Sheet', tracking_type: 'pool' },
+      created: true,
+    });
     renderWith();
 
     await typeName(user, 'Burn Sheet');
@@ -269,7 +272,7 @@ describe('CatalogQuickAdd', () => {
     const user = userEvent.setup();
     mockGetItems.mockResolvedValue({ items: [], total: 0, skip: 0, limit: 6 });
     mockCreateItemIfAbsent.mockResolvedValue({
-      item: { id: 'inv-existing', name: 'Burn Sheet' },
+      item: { id: 'inv-existing', name: 'Burn Sheet', tracking_type: 'pool' },
       created: false,
     });
     renderWith();
@@ -284,6 +287,45 @@ describe('CatalogQuickAdd', () => {
         checkType: 'count',
       });
     });
+  });
+
+  it('carries expiration over from a returned row that has dated lots', async () => {
+    // The row came back rather than being created, so it may already hold
+    // stock with expiry dates. Adding it as a bare count would leave that
+    // expiry neither shown nor checked.
+    const user = userEvent.setup();
+    mockGetItems.mockResolvedValue({ items: [], total: 0, skip: 0, limit: 6 });
+    mockCreateItemIfAbsent.mockResolvedValue({
+      item: { id: 'inv-existing', name: 'Epinephrine', tracking_type: 'pool' },
+      created: false,
+    });
+    mockGetItemLots.mockResolvedValue([{ id: 'lot-1', expiration_date: '2028-01-31' }]);
+    renderWith();
+
+    await typeName(user, 'Epinephrine');
+    await user.click(await screen.findByText(/Create .Epinephrine. in inventory/));
+
+    await waitFor(() => {
+      expect(onAdd).toHaveBeenCalledWith(expect.objectContaining({ hasExpiration: true }));
+    });
+  });
+
+  it('leaves a returned individual asset as a function check', async () => {
+    // Matching addLinked: whether a position counts or is switched on should
+    // not depend on which page of results the item happened to be on.
+    const user = userEvent.setup();
+    mockGetItems.mockResolvedValue({ items: [], total: 0, skip: 0, limit: 6 });
+    mockCreateItemIfAbsent.mockResolvedValue({
+      item: { id: 'inv-imager', name: 'Thermal Imager', tracking_type: 'individual' },
+      created: false,
+    });
+    renderWith();
+
+    await typeName(user, 'Thermal Imager');
+    await user.click(await screen.findByText(/Create .Thermal Imager. in inventory/));
+
+    await waitFor(() => expect(onAdd).toHaveBeenCalled());
+    expect(onAdd).toHaveBeenCalledWith(expect.not.objectContaining({ checkType: 'count' }));
   });
 
   it('does not offer creation when the catalog search failed', async () => {
