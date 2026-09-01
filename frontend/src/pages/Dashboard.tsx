@@ -79,7 +79,7 @@ import type { NotificationLogRecord } from '../services/api';
 import type { ShiftRecord } from '../modules/scheduling/services/api';
 import type { EventListItem } from '../types/event';
 import { dashboardService } from '../services/api';
-import { POSITION_LABELS } from '../constants/enums';
+import { positionLabel } from '../modules/scheduling/utils/positionLabels';
 import { useNotificationCountStore } from '../hooks/useNotificationCount';
 
 /**
@@ -1081,7 +1081,7 @@ const Dashboard: React.FC = () => {
                 >
                   {dashboardEligiblePositions.map((pos) => (
                     <option key={pos} value={pos}>
-                      {POSITION_LABELS[pos] ?? pos}
+                      {positionLabel(pos)}
                     </option>
                   ))}
                 </select>

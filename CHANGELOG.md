@@ -7,6 +7,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### The schedule named a crew seat by its stored token, so the EMT seat read as "EMS" (2026-09-01)
+
+**Fixed**
+
+- **A shift built from a template with two EMT seats listed them as "EMS" on
+  the schedule.** The seat's stored token and its name on screen are two
+  different things: the token is canonical and lowercase (`ems`) because it is
+  what the signup API grants against, and the label is what a firefighter
+  reads, which everywhere the seat is _chosen_ — the template form, the
+  eligibility settings, the rank editor — is "EMT". The board, the phone day
+  sheet, My Shifts, the shift report crew list and both template summaries
+  printed the token instead, so the same seat had two names depending on which
+  screen you were standing on, and "EMS" reads as a different seat rather than
+  as the same one spelled another way. Every screen that shows a seat name now
+  resolves it through one helper (`positionLabel`), so there is no second copy
+  of the mapping left to drift. Custom seats a department defines itself are
+  not in that mapping — their labels live in the department's scheduling
+  settings, read by the screens that offer them — and are unchanged.
+- **The same token reached print and email.** A printed shift roster's
+  right-hand column and the shift-reminder emails' crew list were built from
+  the token as well ("EMS", "Ems"), and a shift assignment notification told a
+  member they had been assigned to the "ems position". These now go through
+  `position_label` in `app/utils/positions.py`, the backend half of the same
+  mapping, asserted against the frontend's copy from source so the two cannot
+  disagree. On a 32-character receipt a label wider than the seat column falls
+  back to its first word, because the renderer's mid-word cut
+  ("DRIVER/OPERA") reads as a printer fault.
+- **`POSITION_LABELS` held three keys for one seat** — `EMS`, `ems` and `EMT`,
+  all mapping to "EMT" — which is also why the shift assign dropdown, built by
+  iterating that map, offered "EMT" three times, two of them tokens no member
+  can actually be signed up as. The map is now one entry per seat, keyed by the
+  canonical token, and the alias folding lives in the helper next to the
+  backend's own.
+
 ### A concurrency race in the previous TOTP-replay fix let the same code complete two independent logins, three related MFA/brute-force gaps, and the identical race found one field over on re-review (2026-09-01)
 
 **Fixed**

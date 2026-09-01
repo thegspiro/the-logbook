@@ -27,6 +27,7 @@ import { enumLabel } from '../utils/displayValue';
 import { schedulingService, useSchedulingStore } from '../modules/scheduling';
 import type { ShiftRecord, ShiftTemplateRecord } from '../modules/scheduling';
 import { resolveTemplatePositions } from '../modules/scheduling/services/api';
+import { positionLabel } from '../modules/scheduling/utils/positionLabels';
 import { trainingModuleConfigService } from '../services/api';
 import { lazyWithRetry } from '../utils/lazyWithRetry';
 import TimeQuarterHour from '../components/ux/TimeQuarterHour';
@@ -785,7 +786,7 @@ const SchedulingPage: React.FC = () => {
                                       key={i}
                                       className={`rounded-sm px-2 py-0.5 text-[10px] font-medium capitalize ${slot.required ? 'bg-violet-500/10 text-violet-700 dark:text-violet-300' : 'bg-theme-surface-hover text-theme-text-muted'}`}
                                     >
-                                      {slot.position}
+                                      {positionLabel(slot.position)}
                                       {!slot.required && ' (opt)'}
                                     </span>
                                   ))}

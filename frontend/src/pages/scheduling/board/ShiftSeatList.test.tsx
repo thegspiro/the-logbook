@@ -86,8 +86,25 @@ describe('ShiftSeatList', () => {
   it('lets a member take a specific open seat from the roster', async () => {
     const user = userEvent.setup();
     renderList({ eligiblePositions: ['driver', 'firefighter'] });
-    await user.click(screen.getByRole('button', { name: /take the driver seat/i }));
+    // The seat is named the way the template that created it names it —
+    // "Driver/Operator", not the stored `driver` token.
+    await user.click(screen.getByRole('button', { name: /take the Driver\/Operator seat/i }));
     expect(onClaim).toHaveBeenCalledWith(expect.objectContaining({ id: 's1' }), 'driver');
+  });
+
+  it('names a seat the way the template that created it does', () => {
+    // A template with two EMT seats listed them as "EMS" on the board: the
+    // stored token was printed where the label belonged.
+    renderList({
+      shift: shift({
+        positions: [
+          { position: 'ems', required: true },
+          { position: 'ems', required: true },
+        ],
+      }),
+    });
+    expect(screen.getAllByText('EMT')).toHaveLength(2);
+    expect(screen.queryByText('ems')).not.toBeInTheDocument();
   });
 
   it('does not offer a seat the member is not cleared for', () => {
