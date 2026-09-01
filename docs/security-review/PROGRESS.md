@@ -16,7 +16,8 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**Feature 00 (Cross-cutting baseline), pass 3** — PR TBD, branch
+**Feature 00 (Cross-cutting baseline), pass 3** —
+[#2128](https://github.com/thegspiro/the-logbook/pull/2128), branch
 `claude/security-review-sec00-pass3`. Docs-only: re-verified pass 1/2's five
 standing sweeps against current code (399 Alembic revisions, 1536 routes) and
 added four new sweep classes (`BaseHTTPMiddleware`, unbounded in-memory
