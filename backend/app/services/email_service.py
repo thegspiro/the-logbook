@@ -1094,7 +1094,16 @@ class EmailService:
 
             # Build one MIME message per recipient
             batch: List[Tuple[List[str], str]] = []
-            for to_email in to_emails:
+            # Which address each batch entry was built for. A message that
+            # fails to build is dropped from the batch, and the send answers
+            # per batch entry — so without this the answers close up over the
+            # gap. results_out promises one entry per address in order and the
+            # delivery service indexes it against the recipients it claimed, so
+            # a shifted list files the failed address under its neighbour's
+            # outcome (marking it delivered) and leaves the last member with no
+            # answer at all.
+            built_for: List[int] = []
+            for position, to_email in enumerate(to_emails):
                 try:
                     if attachment_parts:
                         msg = MIMEMultipart("mixed")
@@ -1140,6 +1149,7 @@ class EmailService:
                         all_recipients.extend(bcc_emails)
 
                     batch.append((all_recipients, msg.as_string()))
+                    built_for.append(position)
                 except Exception as e:
                     logger.error(
                         f"Failed to build email for {_redact_email(to_email)}: {e}"
@@ -1165,6 +1175,13 @@ class EmailService:
                     results = [False] * len(batch)
             else:
                 results = []
+
+            # Back onto the address list. A message that never built has no
+            # answer of its own and is not sent.
+            aligned = [False] * len(to_emails)
+            for position, sent in zip(built_for, results):
+                aligned[position] = sent
+            results = aligned
 
         # One entry per address in `to_emails`, in order. A caller that tracks
         # delivery per recipient needs this: the (sent, failed) counts alone

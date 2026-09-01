@@ -98,3 +98,61 @@ class TestHistoryWriteIsIsolated:
         written = db.add.call_args.args[0]
         assert len(written.to_email) <= 320
         assert written.recipient_count == 50
+
+
+class TestPerRecipientResultsStayAligned:
+    """``results_out`` promises one answer per address, in the order given.
+
+    ``MessageDeliveryService._send_email`` indexes it against the recipients it
+    claimed, so alignment is not cosmetic: an answer list that closes up over a
+    dropped address files that member's outcome under their neighbour — marking
+    an address that was never sent as delivered, which also marks its delivery
+    attempt complete and stops it being retried — and leaves the last member of
+    the batch with no answer at all.
+
+    A message can fail to build for one address while the rest are fine: the
+    MIME assembly runs per recipient, and only the built ones reach the batch
+    the SMTP send answers for.
+    """
+
+    @pytest.mark.asyncio
+    async def test_an_address_whose_message_fails_to_build_keeps_its_place(self):
+        service = EmailService(
+            organization=SimpleNamespace(
+                id="org-1",
+                name="FD",
+                settings={"email_service": {"enabled": True}},
+            )
+        )
+        service._cloudflare_config = None
+        service._smtp_config = {
+            "host": "smtp.test",
+            "port": 587,
+            "from_email": "no-reply@fd.co",
+            "from_name": "Falls Church FD",
+            "username": "",
+            "password": "",
+            "use_tls": False,
+        }
+        # Raises for the second recipient only. Any per-recipient step could;
+        # this is the one with no side effects of its own.
+        service._make_message_id = MagicMock(
+            side_effect=["<1@fd.co>", RuntimeError("bad header"), "<3@fd.co>"]
+        )
+        service._smtp_send_batch = MagicMock(
+            side_effect=lambda batch: [True] * len(batch)
+        )
+
+        outcomes: list = []
+        success, failure = await service.send_email(
+            to_emails=["first@fd.co", "second@fd.co", "third@fd.co"],
+            subject="Roof collapse drill",
+            html_body="<p>0700</p>",
+            results_out=outcomes,
+        )
+
+        assert outcomes == [True, False, True], (
+            "the address whose message never built must hold its own slot; "
+            "closing up over it hands its outcome to the next member"
+        )
+        assert (success, failure) == (2, 1)
