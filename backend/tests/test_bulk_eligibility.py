@@ -146,7 +146,15 @@ class TestBulkEligibility:
         """
         shifts = [_shift("s1", positions=[{"position": "ems"}], open_to_all=True)]
         service = _service(shifts)
-        senior = SimpleNamespace(id=USER.id, rank="ff", membership_type="senior")
+        # The class is what answers this, and applying a tier no longer erases
+        # it (``_reconcile_membership``), so a senior firefighter is still
+        # recorded as operational.
+        senior = SimpleNamespace(
+            id=USER.id,
+            rank="ff",
+            membership_type="senior",
+            member_class="operational",
+        )
 
         answers = await service.get_eligible_positions_bulk(senior, ORG, ["s1"])
 

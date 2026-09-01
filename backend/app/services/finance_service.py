@@ -703,11 +703,38 @@ class FinanceService:
         weighed in, defeating the point of a multi-step chain. Called with
         `record` already status==PENDING and already locked by the caller.
         """
+        # A denial is terminal for the whole entity, and this is the guard that
+        # makes that true for the chains already in a department's database.
+        # ``_terminate_pending_steps`` closes the rest of a chain from the
+        # moment it shipped, but an installation can already hold a DENIED step
+        # followed by PENDING ones — and approving the last of those made
+        # ``_check_all_steps_complete()`` true, reversing the denial and
+        # encumbering budget against a request the department refused.
+        # Enforced here as well as backfilled (20260901_1300_d5e1f6a8b037) so
+        # it holds whether or not that migration has run.
+        if await self._chain_is_denied(record, org_id):
+            raise ValueError("This request has already been denied")
+
         current = await self.get_current_pending_step(
             record.entity_type, record.entity_id, org_id
         )
         if current is None or current.id != record.id:
             raise ValueError("An earlier approval step is still pending")
+
+    async def _chain_is_denied(self, record: ApprovalStepRecord, org_id: str) -> bool:
+        """Whether any step on this entity has already denied it."""
+        result = await self.db.execute(
+            select(ApprovalStepRecord.id)
+            .join(ApprovalChain, ApprovalChain.id == ApprovalStepRecord.chain_id)
+            .where(
+                ApprovalStepRecord.entity_type == record.entity_type,
+                ApprovalStepRecord.entity_id == record.entity_id,
+                ApprovalStepRecord.status == ApprovalStepStatus.DENIED,
+                ApprovalChain.organization_id == org_id,
+            )
+            .limit(1)
+        )
+        return result.scalar_one_or_none() is not None
 
     async def _terminate_pending_steps(
         self, record: ApprovalStepRecord, org_id: str

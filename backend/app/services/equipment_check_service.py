@@ -602,9 +602,20 @@ class EquipmentCheckService:
         half-erased with no way back, while the builder still shows the
         contents it thinks are there.
 
-        Returns None when the template is not the caller's, and raises
-        ``ValueError`` when an id names a compartment on another template —
-        neither of which is allowed to delete anything.
+        **Idempotent, and that is load-bearing.** If the server commits and the
+        response is lost, the builder reports failure while the template is
+        already empty — and it still holds every old compartment id in local
+        state. Rejecting an id that no longer exists would make the retry fail
+        too, and the only way out would be a reload that reveals the loss. So
+        an id that resolves to nothing is treated as already deleted, and the
+        retry succeeds having done nothing. That is what the id means here: the
+        request asks for a state ("these are gone"), not for an event.
+
+        An id that resolves to a compartment on a *different* template is a
+        different matter and is still refused — it names something real that
+        this call has no business destroying.
+
+        Returns None when the template is not the caller's.
         """
         template = await self.get_template(template_id, organization_id)
         if not template:
@@ -614,24 +625,31 @@ class EquipmentCheckService:
         if len(set(compartment_ids)) != len(compartment_ids):
             raise ValueError("Compartment IDs must be unique")
 
+        # Resolved without the template filter, so a live compartment belonging
+        # to another template is seen and refused rather than quietly skipped
+        # alongside the ids that are genuinely gone.
         result = await self.db.execute(
             select(CheckTemplateCompartment)
+            .join(
+                EquipmentCheckTemplate,
+                EquipmentCheckTemplate.id == CheckTemplateCompartment.template_id,
+            )
             .where(
-                CheckTemplateCompartment.template_id == template_id,
+                EquipmentCheckTemplate.organization_id == organization_id,
                 CheckTemplateCompartment.id.in_(compartment_ids),
             )
-            .with_for_update()
+            .with_for_update(of=CheckTemplateCompartment)
         )
-        compartments = result.scalars().all()
-        by_id = {str(comp.id): comp for comp in compartments}
-        if set(by_id) != set(compartment_ids):
+        found = list(result.scalars().all())
+        foreign = [c for c in found if str(c.template_id) != str(template_id)]
+        if foreign:
             raise ValueError("Every compartment must belong to the specified template")
 
-        for comp in compartments:
+        for comp in found:
             await self.db.delete(comp)
         await self._advance_content_revision(template_id)
         await self.db.commit()
-        return list(by_id)
+        return [str(comp.id) for comp in found]
 
     async def clone_compartment(
         self, compartment_id: str, organization_id: str, sort_order: int

@@ -42,7 +42,11 @@ from app.services.qualification_service import (
     positions_for_qualifications,
     qualification_label,
 )
-from app.utils.membership import is_administrative, is_non_riding_class
+from app.utils.membership import (
+    effective_member_class,
+    is_administrative,
+    is_operational,
+)
 
 # Mapping from training program target_position values to the shift
 # position they unlock upon completion.
@@ -274,9 +278,19 @@ class ShiftEligibilityService:
             getattr(user, "member_class", None),
             getattr(user, "membership_type", None),
         )
-        can_ride = not is_non_riding_class(
-            getattr(user, "member_class", None),
-            getattr(user, "membership_type", None),
+        # Affirmative, not "is not one of the two non-riding classes". The
+        # bypass below waives the membership-type, rank, training and
+        # qualification checks in one step, so it has to be granted on a class
+        # that is actually established. A member whose class cannot be
+        # resolved — a legacy row carrying a custom tier, written before the
+        # reconciler stopped erasing the class — falls through to the normal
+        # eligibility path instead, which is the safe direction: they are
+        # judged on rank and training rather than handed every seat.
+        can_ride = is_operational(
+            effective_member_class(
+                getattr(user, "member_class", None),
+                getattr(user, "membership_type", None),
+            )
         )
 
         # ----- Step 1: Check for open-to-all shift -----
@@ -389,8 +403,9 @@ class ShiftEligibilityService:
         administrative = is_administrative(
             getattr(user, "member_class", None), member_type
         )
-        can_ride = not is_non_riding_class(
-            getattr(user, "member_class", None), member_type
+        # Affirmative, for the reason given in get_eligible_positions.
+        can_ride = is_operational(
+            effective_member_class(getattr(user, "member_class", None), member_type)
         )
 
         base: Set[str] = set()

@@ -212,3 +212,75 @@ class TestCustomTiersAreNotPromoted:
         # widening the split above exists to prevent.
         assert is_operational(None) is False
         assert is_operational("") is False
+
+
+class TestApplyingACustomTierKeepsTheClass:
+    """The split refuses to guess a class for an unrecognised tier — and the
+    flush reconciler used to write that refusal into the row, erasing the
+    class the member already had.
+
+    Nothing downstream could then answer "does this member ride?" A rule that
+    read the silence as *no* dropped every senior firefighter off the
+    schedule; one that read it as *yes* handed an open-to-all shift's every
+    seat to whatever tier a department had configured, including one meant for
+    members who do not ride. Refusing to guess is not the same as forgetting.
+    """
+
+    @staticmethod
+    def _reconciled(**changes):
+        """Run the flush listener over an existing member, then *change* them.
+
+        The standing is installed with ``set_committed_value`` — as loaded from
+        the database, carrying no history — because the listener branches on
+        which side of the pair the caller wrote. Passing it to the constructor
+        instead records every field as freshly set, which is a different case:
+        the class wins and derives the legacy value, rather than the tier
+        change this covers.
+        """
+        from sqlalchemy.orm.attributes import set_committed_value
+
+        from app.models.user import User, _reconcile_membership
+
+        member = User(
+            organization_id="org-1",
+            username="pat",
+            email="pat@fd.test",
+            password_hash="x",
+        )
+        set_committed_value(member, "membership_type", "active")
+        set_committed_value(member, "member_class", MemberClass.OPERATIONAL)
+        set_committed_value(member, "member_status", MemberStatus.REGULAR)
+        for field, value in changes.items():
+            setattr(member, field, value)
+        _reconcile_membership(None, None, member)
+        return member
+
+    def test_a_senior_firefighter_stays_operational(self):
+        member = self._reconciled(membership_type="senior")
+
+        assert member.member_class == MemberClass.OPERATIONAL
+        assert member.member_status == MemberStatus.REGULAR
+        assert member.membership_type == "senior"
+
+    def test_a_recognised_value_still_overwrites(self):
+        """Preserving is only for the case the split cannot answer."""
+        member = self._reconciled(membership_type="administrative")
+
+        assert member.member_class == MemberClass.ADMINISTRATIVE
+
+    def test_a_row_that_never_had_a_class_still_has_none(self):
+        """No invention: a legacy row carrying a custom tier and no class has
+        nothing to preserve, and guessing one is the widening the split
+        refuses to make. Callers treat it as not established."""
+        from app.models.user import User, _reconcile_membership
+
+        member = User(
+            organization_id="org-1",
+            username="pat",
+            email="pat@fd.test",
+            password_hash="x",
+        )
+        member.membership_type = "support-tier"
+        _reconcile_membership(None, None, member)
+
+        assert member.member_class is None

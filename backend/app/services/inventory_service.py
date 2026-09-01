@@ -125,6 +125,23 @@ _UNISSUABLE_CONDITIONS = {
     ItemCondition.RETIRED,
 }
 
+
+def _enum_member(value):
+    """An ItemCondition however the caller spelled it, or None.
+
+    `return_condition` reaches return_to_pool as the enum from the endpoint and
+    as its raw string from a few service callers, and a set membership test on
+    the wrong one silently answers False — which here would mean shipping a
+    damaged unit back out.
+    """
+    if value is None or isinstance(value, ItemCondition):
+        return value
+    try:
+        return ItemCondition(str(value).strip().lower())
+    except ValueError:
+        return None
+
+
 # Inventory barcode scheme — a single rule used everywhere: a human-readable
 # sequential number per organization, ``<prefix><zero-padded number>`` with a
 # 6-digit minimum (e.g. INV-000001, INV-000002, ...). The prefix (default
@@ -2463,15 +2480,34 @@ class InventoryService:
             if not item:
                 return False, "Associated pool item not found"
 
-            # Back to the ledger it came out of. Crediting `quantity` for an
-            # item whose stock lives in lots puts the units in a column no
-            # reader consults — issuance, low-stock and the checklist swap all
-            # go to the lots — so returned gear simply disappeared from
-            # available stock, permanently.
-            if issuance.lot_allocations:
+            # Unserviceable units do not rejoin ready stock. A lot carries no
+            # condition of its own, so crediting a damaged return back to the
+            # lot it came from puts it at the front of the FEFO queue with a
+            # lot number and an expiry — issuable again, and swappable onto an
+            # apparatus during a check. The issuance row keeps the return and
+            # its condition, which is the record; the units are written off the
+            # issuable balance rather than being quietly re-offered.
+            #
+            # `lot_allocations` is left alone: it says how many units are still
+            # owed back to which lots, and a written-off unit is never coming
+            # back. A later return of the serviceable remainder repays only
+            # itself, because each pass repays at most what it returns.
+            unsafe = _enum_member(return_condition) in _UNISSUABLE_CONDITIONS
+            if unsafe:
+                write_off = f"{qty} unit(s) written off on return: not serviceable"
+                issuance.return_notes = (
+                    (issuance.return_notes or "") + "\n" + write_off
+                ).strip()
+            elif issuance.lot_allocations:
+                # Back to the ledger it came out of. Crediting `quantity` for
+                # an item whose stock lives in lots puts the units in a column
+                # no reader consults — issuance, low-stock and the checklist
+                # swap all go to the lots — so returned gear simply
+                # disappeared from available stock, permanently.
                 await self._restore_to_lots(issuance, str(organization_id), qty)
             else:
                 item.quantity += qty
+            # Down either way: the member is not holding them any more.
             item.quantity_issued = max(0, (item.quantity_issued or 0) - qty)
 
             # Handle partial return: reduce issuance quantity_issued and leave open

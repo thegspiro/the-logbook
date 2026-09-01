@@ -71,8 +71,13 @@ def _scalars(items):
     return r
 
 
-def _user(rank="ff", membership_type="active"):
-    return SimpleNamespace(id="u1", rank=rank, membership_type=membership_type)
+def _user(rank="ff", membership_type="active", member_class=None):
+    return SimpleNamespace(
+        id="u1",
+        rank=rank,
+        membership_type=membership_type,
+        member_class=member_class,
+    )
 
 
 def _rank_rows(entries):
@@ -215,22 +220,50 @@ class TestGetEligiblePositions:
         that "not established" as "not operational", so every member the
         shipped ``senior`` tier had auto-advanced lost the shift: absent from
         the member list, 403 on the detail, refused at signup.
+
+        The class is what answers this, and applying a tier no longer erases
+        it (``_reconcile_membership``), so a senior firefighter is still
+        recorded as operational and still rides.
         """
         org = _org()
         shift = _shift(["driver", "officer"], open_to_all=True)
         db = _db([_one(org), _one(shift)])
 
         out = await ShiftEligibilityService(db).get_eligible_positions(
-            _user(rank=None, membership_type="senior"), "org-1", shift_id="sh1"
+            _user(rank=None, membership_type="senior", member_class="operational"),
+            "org-1",
+            shift_id="sh1",
         )
 
         assert out == ["driver", "officer"]
+
+    async def test_open_to_all_does_not_bypass_for_an_unresolvable_class(self):
+        """The bypass waives the membership-type, rank, training and
+        qualification checks in one step, so it needs a class that is actually
+        established. A legacy row carrying a custom tier and no class — written
+        before the reconciler stopped erasing it — cannot supply one, and
+        reading that silence as "rides" handed every seat on the shift to a
+        tier a department may well have created for members who do not.
+
+        Not a block: they fall through to the normal path and are judged on
+        rank and training like anyone else. Here that yields nothing, because
+        this member has neither.
+        """
+        org = _org()
+        shift = _shift(["driver", "officer"], open_to_all=True)
+        db = _db([_one(org), _one(shift)])
+
+        out = await ShiftEligibilityService(db).get_eligible_positions(
+            _user(rank=None, membership_type="support-tier"), "org-1", shift_id="sh1"
+        )
+
+        assert out == []
 
     async def test_bulk_open_to_all_agrees_with_the_single_shift_answer(self):
         """The two paths gate the bypass separately; they must not disagree."""
         org = _org()
         shift = _shift(["driver"], open_to_all=True)
-        user = _user(rank=None, membership_type="senior")
+        user = _user(rank=None, membership_type="senior", member_class="operational")
 
         single = await ShiftEligibilityService(
             _db([_one(org), _one(shift)])

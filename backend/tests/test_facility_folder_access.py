@@ -158,3 +158,28 @@ class TestTheGateIsStampedOnTheFolderTreeItGuards:
             "role holds them, and migration a9c4e7b2f631 never stamped "
             "apparatus-% rows, so new and existing apparatus trees disagree"
         )
+
+    def test_the_apparatus_folders_already_stamped_are_repaired(self):
+        """Removing the stamp fixes the next truck, not the ones on file.
+
+        Every apparatus sub-folder created by the previous implementation
+        still carries the facilities list, so an apparatus officer holding the
+        apparatus and document grants but no facilities grant cannot open the
+        manuals for a truck the department already has — while the next truck
+        added behaves correctly. A source-level assertion because the repair
+        is a data migration, matching the rest of this class.
+        """
+        from pathlib import Path
+
+        source = (
+            Path(__file__).resolve().parents[1]
+            / "alembic"
+            / "versions"
+            / "20260901_1310_e6f2a7c9d148_clear_apparatus_folder_acls.py"
+        ).read_text()
+
+        assert "slug LIKE 'apparatus-%'" in source
+        assert "required_permissions = NULL" in source
+        # Matched on the exact stored list, so a department's own deliberate
+        # ACL on an apparatus folder survives.
+        assert "sorted(value) == sorted(_MISTAKEN)" in source

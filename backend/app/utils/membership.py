@@ -198,29 +198,6 @@ def is_administrative(
     )
 
 
-def is_non_riding_class(
-    member_class: Optional[str],
-    membership_type: Optional[str] = None,
-) -> bool:
-    """Whether this member's *class* keeps them out of a crew seat.
-
-    Administrative and social members do not ride. Asked as "is one of the two
-    classes that cannot" rather than "is not operational", for the reason
-    ``is_administrative`` gives: a department running an org-configured
-    membership tier resolves to ``None``, and reading that as non-operational
-    is the widening ``split_membership_type`` refuses to make. An open-to-all
-    shift gated on ``== OPERATIONAL`` disappeared from the schedule of every
-    member the shipped ``senior`` tier had auto-advanced.
-
-    Class only. Status — probationary, retired, junior — is a separate
-    question, answered by the membership-type gate.
-    """
-    return effective_member_class(member_class, membership_type) in (
-        MemberClass.ADMINISTRATIVE,
-        MemberClass.SOCIAL,
-    )
-
-
 def is_operational(member_class: Optional[str]) -> bool:
     """Whether this member is on the operational side of the house.
 

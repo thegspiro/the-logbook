@@ -102,11 +102,32 @@ class TestDeleteCompartmentsBulk:
         )
         assert items.scalar() == 0
 
+    async def test_a_retry_after_a_lost_response_succeeds(self, db_session):
+        """The server commits, the response never arrives, the builder reports
+        failure — and it still holds every old compartment id. Rejecting an id
+        that no longer exists made the retry fail too, and the only way out
+        was a reload that revealed the template had been emptied.
+        """
+        org = await _org(db_session)
+        template = await _template(db_session, org)
+        cab = await _compartment(db_session, template, "Cab", 0)
+
+        service = EquipmentCheckService(db_session)
+        assert await service.delete_compartments_bulk(template.id, org.id, [cab.id])
+
+        # The same request again, as the builder would send it.
+        assert (
+            await service.delete_compartments_bulk(template.id, org.id, [cab.id]) == []
+        )
+        assert await _compartment_count(db_session, template) == 0
+
     async def test_a_foreign_id_deletes_nothing_at_all(self, db_session):
         """The whole point of the single call: all or none.
 
         A per-compartment loop would already have committed the valid deletes
-        before reaching the id it cannot accept.
+        before reaching the id it cannot accept. Distinct from an id that
+        resolves to nothing, which is treated as already deleted: this one
+        names something real on another template.
         """
         org = await _org(db_session)
         template = await _template(db_session, org)

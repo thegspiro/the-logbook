@@ -223,12 +223,13 @@ class TestFirstLotDoesNotStrandColumnStock:
         assert totals[item.id] == 5
 
 
-async def _return(db, org, user, issuance, quantity=None):
+async def _return(db, org, user, issuance, quantity=None, condition=None):
     return await InventoryService(db).return_to_pool(
         issuance_id=uuid.UUID(issuance.id),
         organization_id=uuid.UUID(org.id),
         returned_by=uuid.UUID(user.id),
         quantity_returned=quantity,
+        return_condition=condition,
     )
 
 
@@ -290,6 +291,53 @@ class TestReturnsGoBackToTheLedgerTheyCameFrom:
 
         await db_session.refresh(lot)
         assert lot.quantity == 10
+
+    async def test_an_unserviceable_return_does_not_rejoin_ready_stock(
+        self, db_session
+    ):
+        """A lot carries no condition of its own.
+
+        Crediting a damaged return back to the lot it came from puts it at the
+        front of the FEFO queue with a lot number and an expiry — issuable
+        again, and swappable onto an apparatus during a check. The issuance
+        row keeps the return and its condition; the units come off the
+        issuable balance.
+        """
+        org = await _org(db_session)
+        user = await _user(db_session, org)
+        item = await _item(db_session, org, quantity=0)
+        lot = await _lot(db_session, org, item, quantity=10)
+
+        issuance, _ = await _issue(db_session, org, user, item, 4)
+        await db_session.refresh(lot)
+        assert lot.quantity == 6
+
+        ok, err = await _return(
+            db_session, org, user, issuance, condition=ItemCondition.DAMAGED
+        )
+        assert ok, err
+        await db_session.refresh(lot)
+        assert lot.quantity == 6
+        await db_session.refresh(item)
+        # Not parked in the column either — it is not stock any more.
+        assert item.quantity == 0
+        assert item.quantity_issued == 0
+
+    async def test_an_unserviceable_column_return_is_written_off_too(self, db_session):
+        org = await _org(db_session)
+        user = await _user(db_session, org)
+        item = await _item(db_session, org, quantity=6)
+
+        issuance, _ = await _issue(db_session, org, user, item, 2)
+        await db_session.refresh(item)
+        assert item.quantity == 4
+
+        ok, err = await _return(
+            db_session, org, user, issuance, condition=ItemCondition.OUT_OF_SERVICE
+        )
+        assert ok, err
+        await db_session.refresh(item)
+        assert item.quantity == 4
 
     async def test_a_column_ledger_issue_still_returns_to_the_column(self, db_session):
         """Items that never had lots — and every issuance written before the

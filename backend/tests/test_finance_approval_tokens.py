@@ -44,6 +44,10 @@ async def test_token_action_locks_and_consumes_token(action):
     db.flush = AsyncMock()
     service = FinanceService(db)
     service.get_current_pending_step = AsyncMock(return_value=record)
+    # The db double answers every query with the same row, so the
+    # terminal-denial probe would read this record back as a denial.
+    # Its own coverage is in test_finance_denied_chain_is_terminal.py.
+    service._chain_is_denied = AsyncMock(return_value=False)
     service._advance_reachable_steps = AsyncMock()
     service._check_all_steps_complete = AsyncMock(return_value=False)
     service._finalize_denial = AsyncMock()
@@ -82,6 +86,10 @@ async def test_token_action_rejects_a_later_step_out_of_order(action):
     db.execute = AsyncMock(return_value=_result(record))
     service = FinanceService(db)
     service.get_current_pending_step = AsyncMock(return_value=earlier_step)
+    # The db double answers every query with the same row, so the
+    # terminal-denial probe would read this record back as a denial.
+    # Its own coverage is in test_finance_denied_chain_is_terminal.py.
+    service._chain_is_denied = AsyncMock(return_value=False)
 
     with pytest.raises(ValueError, match="earlier approval step"):
         await getattr(service, action)(record.approval_token, "too soon")
@@ -106,6 +114,10 @@ class TestApproveByTokenSelfApprovalGuard:
         db.flush = AsyncMock()
         service = FinanceService(db)
         service.get_current_pending_step = AsyncMock(return_value=record)
+        # The db double answers every query with the same row, so the
+        # terminal-denial probe would read this record back as a denial.
+        # Its own coverage is in test_finance_denied_chain_is_terminal.py.
+        service._chain_is_denied = AsyncMock(return_value=False)
         service._entity_creator_email = AsyncMock(return_value=requester_email)
         service._advance_reachable_steps = AsyncMock()
         service._check_all_steps_complete = AsyncMock(return_value=False)
