@@ -51,6 +51,8 @@ class TestHistoryWriteIsIsolated:
         """The savepoint is the point: the caller's transaction survives."""
         entered = {}
 
+        added_before_savepoint = []
+
         class _Savepoint:
             async def __aenter__(self):
                 entered["opened"] = True
@@ -60,7 +62,15 @@ class TestHistoryWriteIsIsolated:
                 return False
 
         db = MagicMock()
-        db.add = MagicMock()
+        # Records whether the row was added before the savepoint opened.
+        # Entering begin_nested() flushes whatever is already pending, so an
+        # add above it has its INSERT rejected outside the savepoint — the
+        # exact failure the savepoint exists to contain.
+        db.add = MagicMock(
+            side_effect=lambda _row: added_before_savepoint.append(
+                entered.get("opened", False)
+            )
+        )
         db.flush = AsyncMock()
         db.begin_nested = MagicMock(return_value=_Savepoint())
 
@@ -80,6 +90,11 @@ class TestHistoryWriteIsIsolated:
         )
 
         assert entered == {"opened": True, "closed": True}
+        assert added_before_savepoint == [True], (
+            "the history row must be added inside the savepoint; entering it "
+            "flushes anything already pending, so an add above it is not "
+            "protected at all"
+        )
         written = db.add.call_args.args[0]
         assert len(written.to_email) <= 320
         assert written.recipient_count == 50

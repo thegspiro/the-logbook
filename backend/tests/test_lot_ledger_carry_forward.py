@@ -26,9 +26,12 @@ import textwrap
 from app.services import inventory_service
 
 _HELPER = "_carry_forward_column_stock"
-# Repays lots recorded on the issuance being returned, so the item was already
-# on the lot ledger when the issuance was written.
-_EXEMPT = {"_restore_to_lots", _HELPER}
+# Both run only for an item that is *already* lot-stocked, so there is no shelf
+# count to carry: _restore_to_lots repays lots recorded on the issuance being
+# returned, and _restore_without_allocations handles an issuance written before
+# that record existed. Their items' `quantity` holds a stale residue rather
+# than stock, and turning that into a lot would invent units.
+_EXEMPT = {"_restore_to_lots", "_restore_without_allocations", _HELPER}
 
 
 def _functions_constructing_a_lot() -> dict:

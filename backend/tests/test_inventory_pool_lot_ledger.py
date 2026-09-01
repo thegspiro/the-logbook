@@ -339,6 +339,40 @@ class TestReturnsGoBackToTheLedgerTheyCameFrom:
         await db_session.refresh(item)
         assert item.quantity == 4
 
+    async def test_a_legacy_issuance_returns_into_the_lot_ledger(self, db_session):
+        """No allocation record, but the item is lot-stocked anyway.
+
+        Every issuance that went out before `lot_allocations` existed has it
+        NULL, and the migration deliberately leaves those rows alone — it
+        cannot know which lots they drew from. Sending their returns back to
+        `quantity` puts the units in a column no reader consults for a
+        lot-stocked item, which is the same disappearance in a different
+        place. The lot is unrecoverable, so they land undated.
+        """
+        org = await _org(db_session)
+        user = await _user(db_session, org)
+        item = await _item(db_session, org, quantity=0)
+        lot = await _lot(db_session, org, item, quantity=10)
+
+        issuance, _ = await _issue(db_session, org, user, item, 3)
+        # Exactly the shape of a row written before the column existed.
+        issuance.lot_allocations = None
+        await db_session.flush()
+
+        ok, err = await _return(db_session, org, user, issuance)
+        assert ok, err
+
+        await db_session.refresh(item)
+        assert item.quantity == 0
+        await db_session.refresh(lot)
+        # The original lot is not credited — which one it was is unknown — so
+        # the units arrive as a lot of their own and the total is whole again.
+        assert lot.quantity == 7
+        totals = await InventoryService(db_session)._in_date_lot_totals(
+            org.id, [item.id]
+        )
+        assert totals[item.id] == 10
+
     async def test_a_column_ledger_issue_still_returns_to_the_column(self, db_session):
         """Items that never had lots — and every issuance written before the
         allocation record existed — must keep working exactly as before."""

@@ -115,23 +115,39 @@ class TestReceiveReorderCreditsStock:
         assert result.status == ReorderStatus.PARTIALLY_RECEIVED
 
         await db_session.refresh(item)
-        # The receipt is recorded once, as a lot. Crediting item.quantity too
-        # would make the same four pairs of gloves dispensable twice.
-        assert item.quantity == 5, (
-            "received stock belongs to the lot ledger only -- crediting "
-            "InventoryItem.quantity as well double-counts the delivery"
+        # The receipt is recorded once, as a lot — crediting item.quantity too
+        # would make the same four pairs of gloves dispensable twice. And the
+        # column is emptied rather than left standing, because creating that
+        # first lot is what flips the item to the lot ledger: from then on
+        # every reader stops consulting item.quantity, so five left sitting
+        # there would be five pairs nobody could issue. They move into an
+        # opening-balance lot instead.
+        assert item.quantity == 0, (
+            "the shelf count belongs in a lot once the item is lot-stocked -- "
+            "left in the column it is invisible to every stock reader"
         )
 
-        # ...and it is genuinely issuable, which is what this file exists for.
+        # Nine, not four and not thirteen: the five that were on the shelf
+        # plus the four just received, each issuable exactly once.
         issuance, err = await service.issue_from_pool(
             item_id=uuid.UUID(item.id),
             user_id=uuid.UUID(user.id),
             organization_id=uuid.UUID(org.id),
             issued_by=uuid.UUID(user.id),
-            quantity=4,
+            quantity=9,
         )
         assert err is None
         assert issuance is not None
+
+        over, err = await service.issue_from_pool(
+            item_id=uuid.UUID(item.id),
+            user_id=uuid.UUID(user.id),
+            organization_id=uuid.UUID(org.id),
+            issued_by=uuid.UUID(user.id),
+            quantity=1,
+        )
+        assert over is None
+        assert "Insufficient stock" in err
 
     async def test_a_second_full_receipt_makes_the_item_fully_available(
         self, db_session

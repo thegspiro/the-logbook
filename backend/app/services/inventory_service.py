@@ -2245,6 +2245,52 @@ class InventoryService:
             remaining -= take
         return None, taken
 
+    async def _item_is_lot_stocked(self, item_id: str, organization_id: str) -> bool:
+        """Whether this item's stock lives in lots rather than in `quantity`.
+
+        Any lot at all, not just an in-date one: the question is which ledger
+        the readers consult, and `_in_date_lot_totals` treats an item with an
+        expired lot as lot-stocked too. Answering it from in-date lots alone
+        would send a return into a column nothing reads whenever the shelf
+        happened to be empty.
+        """
+        result = await self.db.execute(
+            select(InventoryLot.id)
+            .where(
+                InventoryLot.inventory_item_id == item_id,
+                InventoryLot.organization_id == organization_id,
+            )
+            .limit(1)
+        )
+        return result.scalar_one_or_none() is not None
+
+    def _restore_without_allocations(
+        self, item_id: str, organization_id: str, quantity: int, returned_by: str
+    ) -> None:
+        """Return units whose source lot was never recorded.
+
+        An issuance that went out before ``lot_allocations`` existed has it
+        NULL, and the migration deliberately leaves those rows alone — it
+        cannot know which lots they drew from. But the item is on the lot
+        ledger, so the units must not go back into ``quantity``, which nothing
+        reads for such an item. They land undated, exactly as an opening
+        balance does.
+
+        Not a carry-forward site despite creating a lot: this branch runs only
+        when the item is *already* lot-stocked, so its ``quantity`` holds a
+        stale residue rather than shelf stock, and turning that into a lot
+        would invent units. See tests/test_lot_ledger_carry_forward.py.
+        """
+        self.db.add(
+            InventoryLot(
+                organization_id=organization_id,
+                inventory_item_id=item_id,
+                created_by=returned_by,
+                quantity=quantity,
+                notes="Returned stock; original lot not recorded.",
+            )
+        )
+
     async def _restore_to_lots(
         self, issuance, organization_id: str, quantity: int
     ) -> None:
@@ -2505,6 +2551,10 @@ class InventoryService:
                 # swap all go to the lots — so returned gear simply
                 # disappeared from available stock, permanently.
                 await self._restore_to_lots(issuance, str(organization_id), qty)
+            elif await self._item_is_lot_stocked(str(item.id), str(organization_id)):
+                self._restore_without_allocations(
+                    str(item.id), str(organization_id), qty, str(returned_by)
+                )
             else:
                 item.quantity += qty
             # Down either way: the member is not holding them any more.

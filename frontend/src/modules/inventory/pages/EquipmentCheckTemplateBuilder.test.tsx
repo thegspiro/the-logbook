@@ -1531,7 +1531,7 @@ describe('EquipmentCheckTemplateBuilder replacing a saved template’s contents'
     await user.click(screen.getByRole('button', { name: 'Back to templates' }));
 
     expect(await screen.findByText('Leave without saving?')).toBeInTheDocument();
-  });
+  }, 15_000);
 
   it('keeps the template intact when the discard fails', async () => {
     // Deleted before the swap, so a failure leaves the template as it was

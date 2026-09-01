@@ -1242,15 +1242,19 @@ class EmailService:
             history.error_message = (
                 f"Failed to deliver to all {failure_count} recipient(s)"
             )
-        db.add(history)
-        # Inside a savepoint: a failure here must not poison the caller's
-        # transaction. This is a log write on a shared session, and an
-        # exception at flush leaves that session needing an explicit rollback —
-        # every later statement raises PendingRollbackError until it runs. The
-        # caller catches and warns, so without this the *send* would report
-        # success while the delivery-status writes and the urgent-SMS
-        # escalation that follow it silently aborted.
+        # The add goes INSIDE the savepoint, not before it. Entering
+        # begin_nested() flushes whatever is already pending, so an add placed
+        # above it has its INSERT rejected before the savepoint exists — which
+        # is the whole failure this is here to contain.
+        #
+        # And it has to be contained: this is a log write on a session the
+        # caller owns, and an exception at flush leaves that session needing an
+        # explicit rollback — every later statement raises
+        # PendingRollbackError until one runs. send_email catches and warns, so
+        # without this the send reports success while the delivery-status
+        # writes and the urgent-SMS escalation that follow it silently abort.
         async with db.begin_nested():
+            db.add(history)
             await db.flush()
         self.last_message_history_id = history.id
 
