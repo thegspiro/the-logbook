@@ -6,6 +6,16 @@
 
 ## Pass 3 (2026-09-01) — re-sweep, plus four sweep classes new to this file
 
+**Revised same-day after Codex review on PR #2128:** four P2 findings against
+this pass's methodology — a too-narrow tracker sweep that missed a real gap,
+a too-narrow JSON shallow-copy sweep, a route-auth method description that
+dropped a scan root, and a completion-gate command that ran the wrong
+TypeScript compiler. All four verified against real code and corrected below
+(one produced an actual source fix, `app/services/security_monitoring.py`;
+the rest were methodology/doc corrections with the same zero-finding
+conclusion holding once properly re-checked). See each numbered sweep and the
+completion-gate section for what changed.
+
 Re-verified pass 1/2's five standing sweeps against current code (backend grew
 to 399 Alembic revisions, 1536 routes across 80 `app/api/` files, from pass
 2's 381 revisions / 1526 routes), and added four sweep classes named in the
@@ -27,43 +37,205 @@ line ~4220).
 | 4   | Alembic chain integrity          | `backend/scripts/validate_migrations.py --strict`                    | **clean** — 399 revisions, single head `4e7e125cb00f`, no duplicate ids                   |
 | 5   | LIKE-wildcard handling           | `tests/test_like_escaping.py` (2 guard tests)                        | **clean** — both pass; no new call site reintroduced a raw copy or dropped `escape=`      |
 
-**Route auth coverage re-check:** an AST walk of every route decorator across
-all 80 files registered in `api/v1/api.py` (derived from its router
-registrations, not a directory glob — pass 2's Codex-caught correction) found
-**69 routes with no recognized auth dependency** (pass 1: 69, pass 2: 68 —
-the pass-2 count was itself narrower than this walk by one due to a decorator
-this AST pass now also recognizes; not a new gap). Every one is confined to
-the same five features pass 1 named: auth (14), `event_requests.py`'s 4
-public routes, `elections.py`'s 4 token-scoped routes, `onboarding.py`'s 24
-bootstrap routes, and the `public/*` surface (22) plus
-`salesforce_sync.py`'s OAuth callback and the API root. **No new ungated
-route outside those five features.**
+**Route auth coverage re-check (corrected on Codex review — see below):** an
+AST walk of every route decorator across **two scan roots**: the 68 files
+`api/v1/api.py` imports and registers (derived from its router registrations,
+not a directory glob — pass 2's Codex-caught correction), plus the 10 routers
+in `app/api/public/` that `backend/main.py` mounts **directly**
+(`app.include_router(public_portal_router, ...)` etc. — these are never
+imported by `api.py` at all, so a walk scoped to `api.py`'s registrations
+structurally cannot see them). `api/v1/api.py` itself is also walked, for the
+bare `GET /` root route it defines. This two-root method is what pass 1's
+original "whole `app/api/`" directory walk did implicitly; pass 2 preserved it
+by scanning `api/v1/endpoints/`, `api/v1/onboarding.py`, and `api/public/` as
+three explicit roots; this pass's own prose (before this correction) had
+narrowed the _stated_ method to "files registered in `api.py`" and dropped the
+explicit second root — the walk's actual output still matched pass 1/2's
+totals, but the method sentence no longer supported the conclusion,
+[per Codex review](https://github.com/thegspiro/the-logbook/pull/2128#discussion_r3900139059).
+
+Re-running with both roots stated explicitly finds **69 routes with no
+`Depends()`-recognized auth dependency**, unchanged from pass 1/2's count but
+with one raw hit reclassified and the `public/*` subtotal corrected:
+
+| Bucket                                               |  Count |
+| ---------------------------------------------------- | -----: |
+| `auth.py` (login, register, OAuth, password reset)   |     14 |
+| `elections.py` (token-scoped ballot routes)          |      4 |
+| `event_requests.py` (public outreach-request routes) |      4 |
+| `events.py` (`GET /events/public-calendar`)          |      1 |
+| `salesforce_sync.py` (OAuth callback)                |      1 |
+| `onboarding.py` (bootstrap routes)                   |     24 |
+| `app/api/public/*` (10 routers, main.py-mounted)     |     20 |
+| `api/v1/api.py` (`GET /` root)                       |      1 |
+| **Total**                                            | **69** |
+
+The `public/*` figure is **20, not the 22** pass 2/3 had been carrying
+forward — verified by direct AST count of every `@router.<verb>` in
+`app/api/public/*.py` today (10 files: `calendar`, `display`×3, `finance_
+approvals`×3, `forms`×2, `integrations_webhook`×2, `legal`, `paypal_webhook`,
+`portal`×5, `salesforce_webhook`, `security_txt` = 20), and it matches pass
+1's own original count on this same directory ("20 in `api/public/`" —
+see the Pass 1 section below). The "22" was never re-derived after pass 1; it
+was carried forward across pass 2 and pass 3 as prose. All 20 are
+intentionally public (rate-limited, token-addressed, webhook-signature- or
+CAPTCHA-verified) — no genuine gap, same conclusion as pass 1, just a
+corrected subtotal.
+
+**One raw AST hit is a false positive, not a finding:**
+`app/api/v1/endpoints/inventory.py`'s `@router.websocket("/ws")` (`inventory_
+websocket`) carries no `Depends()` in its signature, so a decorator-only scan
+flags it. It is not ungated: WebSocket handshakes can't rely on the same
+`Depends()`-before-response flow as HTTP routes (the socket must call
+`.accept()` first or the browser sees a bare HTTP 403 with no close code), so
+this route authenticates **in the function body** — through
+`AuthService.get_user_from_token()` against the same access-token-type,
+live-session, and expiry checks as every HTTP request, reading the token from
+the `access_token` cookie with a query-param fallback for non-browser
+clients. Manually confirmed correct; excluded from the 69. This is a
+documented blind spot of the AST method going forward: it recognizes auth
+expressed as a `Depends()` marker, not auth checked manually in a handler
+body, and WebSocket routes are the one place in this codebase that pattern
+appears.
+
+Every one of the 69 is confined to the same features pass 1 named: auth (14),
+`event_requests.py`'s 4 public routes, `elections.py`'s 4 token-scoped
+routes, `events.py`'s public calendar (1), `onboarding.py`'s 24 bootstrap
+routes, `salesforce_sync.py`'s OAuth callback, the API root, and the
+`public/*` surface (now correctly 20, not 22). **No new ungated route outside
+those features**, and the one route the wider method newly surfaced
+(`inventory_websocket`) is correctly gated, just not decorator-visible.
 
 ### New sweep classes (first run in this file)
 
-| #   | Class swept                                               | Method                                                                                                                                                                               | Result                                                                                                                                                                                                                                                                                     |
-| --- | --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| 6   | `BaseHTTPMiddleware` usage (Pitfall #4)                   | `grep -rn "BaseHTTPMiddleware" app/`                                                                                                                                                 | **clean** — 0 imports/usages; the 7 hits are all comments in `security_middleware.py` documenting the ban                                                                                                                                                                                  |
-| 7   | Unbounded in-memory trackers (Pitfall #9)                 | grep for module-level `defaultdict(`/`= {}` request-state trackers outside `app/core/`, then check each for a size cap + eviction                                                    | **clean** — the only two runtime trackers found (`rate_limit_cache`/`ip_rate_limit_cache` in `public_portal_security.py`, and `requests`/`lockouts`/`failures`/`blocks` in `security_middleware.py`/`suspicious_ip.py`) all have a `_MAX_KEYS` cap and stale-entry + oldest-first eviction |
-| 8   | `window.confirm`/`alert`/`prompt` (Pitfall #16)           | `grep` for `window.confirm(`/`window.alert(`/`window.prompt(` in `frontend/src/`; confirmed `no-restricted-syntax`'s `noBlockingBrowserDialogs` is still wired in `eslint.config.js` | **clean** — 0 raw calls in source (tests excluded); the ESLint rule is present and active                                                                                                                                                                                                  |
-| 9   | JSON-column shallow-copy-then-nested-mutate (Pitfall #12) | grep every `.settings =` / `.positions =` / `.config =` assignment on a model instance across `app/services/` and `app/api/v1/endpoints/`, read each site's copy step                | **clean** — all 16 sites found either `copy.deepcopy()` the column before mutating a nested key, or (the one `dict()` shallow copy, `salesforce_sync.py:564`) mutate only a top-level key, which a shallow copy does not alias                                                             |
+| #   | Class swept                                               | Method                                                                                                                                                                               | Result                                                                                                    |
+| --- | --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------- |
+| 6   | `BaseHTTPMiddleware` usage (Pitfall #4)                   | `grep -rn "BaseHTTPMiddleware" app/`                                                                                                                                                 | **clean** — 0 imports/usages; the 7 hits are all comments in `security_middleware.py` documenting the ban |
+| 7   | Unbounded in-memory trackers (Pitfall #9)                 | broadened on Codex review (see below) — module-level _and_ `self.<name> = {}`/`= set()` instance trackers, whole `app/` tree                                                         | **1 gap found and fixed** — see below                                                                     |
+| 8   | `window.confirm`/`alert`/`prompt` (Pitfall #16)           | `grep` for `window.confirm(`/`window.alert(`/`window.prompt(` in `frontend/src/`; confirmed `no-restricted-syntax`'s `noBlockingBrowserDialogs` is still wired in `eslint.config.js` | **clean** — 0 raw calls in source (tests excluded); the ESLint rule is present and active                 |
+| 9   | JSON-column shallow-copy-then-nested-mutate (Pitfall #12) | broadened on Codex review (see below) — every JSON/`MutableDict`-typed model attribute (132 names), whole `app/` tree                                                                | **clean** — see below for the corrected method and count                                                  |
 
-No findings this pass. All nine invariants hold — five re-verified against
-399 revisions / 1536 routes, four checked for the first time as an explicit
-whole-codebase sweep in this file (each was already correct, evidence that
-the individual feature iterations that touched these classes already applied
-CLAUDE.md's pitfalls correctly; this pass turns that scattered evidence into
-one standing sweep record).
+**Sweep 7 correction (Codex review):** the original method (`grep` for
+module-level `defaultdict(`/`= {}`) cannot find a tracker initialized on
+`self` inside `__init__`, and one exists:
+[`SecurityMonitoringService`](https://github.com/thegspiro/the-logbook/pull/2128#discussion_r3900139050)
+(`app/services/security_monitoring.py`) is a process-wide singleton
+(`security_monitor = SecurityMonitoringService()`) whose `__init__` sets
+`self._login_attempts`, `self._session_ips`, `self._data_transfers`, and
+`self._api_calls` — four `Dict[str, list]` trackers keyed on attacker-
+controlled IPs/user ids/session ids. Re-swept with `grep -rn "self\.\w+\s*=\s*
+({}\|set()\|defaultdict(\|\[\])"` across the whole `app/` tree (not just
+`app/core/`) for anything tracking request/security state; this is the only
+additional tracker class found (all other `self.<dict>` hits are per-request
+caches scoped to a single request/response cycle, not cross-request state).
 
-**Completion gate (pass 3):** `flake8`/`black --check`/`isort --check-only`
-clean across `app/ tests/ alembic/`; `validate_migrations.py --strict`
-passed (399 revisions, single head); `test_like_escaping.py` (2/2),
-`test_database_schema.py::test_set_null_fks_are_nullable` (1/1),
-`test_capacity_locking.py` (17/17), `test_migration_create_all_tables.py`
-(clean) all pass; `tsc --noEmit` 0 errors; `eslint .` 0 errors, 8 pre-existing
-warnings (all `testing-library/no-node-access` / `react-refresh/only-export-
-components`, unrelated to this pass — well under the `max-warnings 10` gate).
-No code changes this pass — documentation only.
+Read the file rather than trusting Codex's "happen to be bounded" claim.
+All four dicts share one cap (`_MAX_TRACKING_KEYS = 5_000`) enforced by
+`_enforce_key_caps()` (evicts the least-recently-active keys first once a
+dict exceeds the cap) plus a throttled (≤ once/60s) stale-entry sweep,
+`_evict_stale_tracking_keys()`, which calls `_enforce_key_caps()`
+unconditionally first. **But two of the four were not actually reached by
+either function on the hot path that grows them:** `detect_session_hijack`
+(writes `_session_ips` on every request through `security_middleware.py`) and
+`detect_data_exfiltration` (writes `_data_transfers`) called neither eviction
+function themselves. The only caller of `_enforce_key_caps` /
+`_evict_stale_tracking_keys` was `detect_brute_force` — invoked exclusively
+from the password `/auth/login` endpoint (`app/api/v1/endpoints/auth.py`) —
+and `analyze_request` (the method that wraps the full time-based sweep,
+`_check_rate_limit`) is never called anywhere in the app at all, dead code.
+For an organization running SSO/OAuth-only (`AZURE_AD_ENABLED` /
+`GOOGLE_OAUTH_ENABLED`, no password logins), `detect_brute_force` — and so
+every cap on every one of the four dicts — would never fire, and
+`_session_ips`/`_data_transfers` would grow without bound for the life of the
+process, one entry per authenticated request.
+
+**Fixed** (trivial, low-risk — one line each, mirroring the existing
+`detect_brute_force` self-cap pattern): `detect_session_hijack` and
+`detect_data_exfiltration` now call `self._enforce_key_caps()` on entry, so
+the hard cap on all four trackers is enforced from the same code path that
+grows the two previously-uncovered ones, independent of login volume or auth
+provider. `tests/test_security_monitoring.py` (10/10) still passes unchanged.
+
+**Sweep 9 correction (Codex review):** the original method
+([flagged here](https://github.com/thegspiro/the-logbook/pull/2128#discussion_r3900139055))
+grepped only `.settings =` / `.positions =` / `.config =` across two
+directories (`app/services/`, `app/api/v1/endpoints/`) — Codex's specific
+example, `app/api/v1/onboarding.py:815`, sits one directory level up
+(`app/api/v1/`, not `.../endpoints/`) and so was structurally invisible to
+that grep, and the field-name list ignored the rest of the schema (`notification_
+preferences`, `filters`, `custom_fields`, and more).
+
+Re-swept properly: enumerated all **132 distinct JSON/`MutableDict`-typed
+model attribute names** by parsing every `Column(JSON...)` /
+`MutableDict.as_mutable(JSON)` in `app/models/*.py`, then checked the whole
+`app/` tree (excluding tests) for the two idioms that actually produce this
+bug regardless of which of the 132 names is involved: (a) a two-level nested
+bracket mutation on any variable (`x[a][b] = ...`) — field-name-agnostic, so
+complete by construction — and (b) a shallow-copy idiom (`dict(...)`,
+`.setdefault(...)[...] =`, `{**x, ...}`) feeding one of the 132 field names.
+(a) found 12 hits app-wide; all are either local report/response dicts
+unconnected to any persisted JSON column, or mutate a dict created fresh in
+the same scope (never aliased to committed ORM state). (b) found the
+`onboarding.py:815` site Codex named (`org_settings = copy.deepcopy(
+organization.settings or {})` at line 676, correctly deep-copied — just
+outside the original two-directory scope, not a bug) plus ~30 more sites
+across 26 files, spanning `notification_preferences`, `custom_fields`,
+`filters`, `progress_notes`, `action_result`, `package_config`,
+`applicant_snapshot`, `inactivity_config`, `steps_completed`, and
+`ballot_items` in addition to the original three names. Every reassignment
+found is one of: `copy.deepcopy()` before a nested mutation, a fresh dict via
+`{**old, "key": new}` / `dict(old); d[k] = new` that only ever sets a
+_top-level_ key (safe even with a shallow copy, per pitfall #12's own
+explanation), a wholesale replace from a validated Pydantic payload (no
+aliasing possible), or not a persisted SQLAlchemy attribute at all (e.g.
+`training_programs.py:117`'s `notes = dict(response.progress_notes or {})`
+mutates a Pydantic response model for redaction, never written back to the
+DB). Every single-level bracket mutation on a bare column reference
+(`session.data["key"] = ...`, 11 sites, all in `onboarding.py`) targets
+`OnboardingSession.data`, the one column wrapped in `MutableDict.as_mutable
+(JSON)` specifically so `__setitem__` is auto-tracked without a copy —
+correct by design, not a gap. **Clean** — 0 bugs found, ~40+ sites checked
+across the whole tree and all 132 attribute names, up from 16 sites / 3 names
+/ 2 directories.
+
+One finding this pass, fixed: the tracker-cap gap in `SecurityMonitoringService`
+(sweep 7, above). All nine invariants otherwise hold — five re-verified
+against 399 revisions / 1536 routes, four checked for the first time as an
+explicit whole-codebase sweep in this file (two of the four — sweeps 6 and
+8 — were already correct; sweep 7 needed a fix and sweep 9 needed its method
+broadened before it could be trusted, both corrected in this revision after
+Codex review on PR #2128 — see each sweep's write-up above for what changed
+and why).
+
+**Completion gate (pass 3, revised):** `flake8`/`black --check`/
+`isort --check-only` clean across `app/ tests/ alembic/` (including the one
+touched file, `app/services/security_monitoring.py`); `validate_migrations.py
+--strict` passed (399 revisions, single head `4e7e125cb00f`);
+`test_like_escaping.py` (2/2), `test_database_schema.py::test_set_null_fks_
+are_nullable` (1/1), `test_capacity_locking.py` (17/17), `test_migration_
+create_all_tables.py` (clean), and `test_security_monitoring.py` (10/10,
+unchanged by the fix) all pass; **`cd frontend && npm run typecheck`** (not
+bare `tsc`/`npx tsc` — see the completion-gate correction below) **0
+errors**; `eslint .` 0 errors, 8 pre-existing warnings (all `testing-
+library/no-node-access` / `react-refresh/only-export-components`, unrelated
+to this pass — well under the `max-warnings 10` gate). One source file
+changed this pass: `app/services/security_monitoring.py` (2-line fix, sweep
+7 above); everything else is documentation.
+
+**Completion-gate command correction (Codex review):** this section
+originally reported `tsc --noEmit`
+([flagged here](https://github.com/thegspiro/the-logbook/pull/2128#discussion_r3900139067)).
+Per CLAUDE.md's "Two TypeScript installs" section, bare `tsc`/`npx tsc`
+resolves through whichever bin `npm` happened to link into `node_modules/
+.bin` — the 5.9.3 `typescript` install kept for typescript-eslint's peer
+range, not the 7.0.2 `typescript-native` install this repo's build and
+typecheck actually run on. `npm run typecheck` is the command that goes
+through `frontend/scripts/tsc-native.mjs` to force the aliased 7.0.2
+compiler; re-run as `cd frontend && npm run typecheck` for this pass — 0
+errors, confirming the tree was clean under the compiler that actually
+matters, not just under the lint-compatibility one. Every completion-gate
+section in this file (and, where they quote it, PR bodies for this rotation)
+should read `npm run typecheck`, not `tsc --noEmit`.
 
 ---
 

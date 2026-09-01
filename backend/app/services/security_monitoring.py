@@ -520,6 +520,11 @@ class SecurityMonitoringService:
         """
         Detect potential session hijacking by monitoring IP/UA changes
         """
+        # Called on requests, not logins — detect_brute_force's cap-enforcement
+        # never fires for SSO/OAuth-only orgs, where nothing else bounds this
+        # dict's growth. Hard cap only (cheap), matching detect_brute_force.
+        self._enforce_key_caps()
+
         now = datetime.now(timezone.utc)
         key = f"session:{session_id}"
 
@@ -591,6 +596,11 @@ class SecurityMonitoringService:
         - Bulk record access
         - Transfers to external/unknown destinations
         """
+        # Called on requests, not logins — detect_brute_force's cap-enforcement
+        # never fires for SSO/OAuth-only orgs, where nothing else bounds this
+        # dict's growth. Hard cap only (cheap), matching detect_brute_force.
+        self._enforce_key_caps()
+
         now = datetime.now(timezone.utc)
         day_ago = now - timedelta(days=1)
 

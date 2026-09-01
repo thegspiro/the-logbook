@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security monitoring trackers are capped on every write path (2026-09-01)
+
+**Fixed**
+
+- **Two of `SecurityMonitoringService`'s four in-memory trackers were never
+  capped for SSO/OAuth-only organizations.** `_session_ips` and
+  `_data_transfers` grow on every authenticated request, but the only code
+  path that enforced the process-wide size cap on them
+  (`detect_brute_force`) is reachable exclusively from the password
+  `/auth/login` endpoint. An organization authenticating entirely through
+  Google/Azure AD SSO never calls it, so those two dicts would grow without
+  bound for the life of the process. `detect_session_hijack` and
+  `detect_data_exfiltration` — the methods that actually write to them — now
+  enforce the cap themselves on entry, matching the existing pattern.
+
 ### Adding a checklist item to the inventory catalog (2026-08-31)
 
 **Added**

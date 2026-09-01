@@ -18,17 +18,77 @@ feature. The rotation cannot outrun its own review queue.
 
 **Feature 00 (Cross-cutting baseline), pass 3** —
 [#2128](https://github.com/thegspiro/the-logbook/pull/2128), branch
-`claude/security-review-sec00-pass3`. Docs-only: re-verified pass 1/2's five
-standing sweeps against current code (399 Alembic revisions, 1536 routes) and
-added four new sweep classes (`BaseHTTPMiddleware`, unbounded in-memory
-caches, `window.confirm`/`alert`/`prompt`, JSON shallow-copy-then-mutate) —
-all clean, no findings, no source changes. See
-`SEC-00-cross-cutting-baseline.md`'s Pass 3 section.
+`claude/security-review-sec00-pass3`. Re-verified pass 1/2's five standing
+sweeps against current code (399 Alembic revisions, 1536 routes) and added
+four new sweep classes (`BaseHTTPMiddleware`, unbounded in-memory caches,
+`window.confirm`/`alert`/`prompt`, JSON shallow-copy-then-mutate). **Revised
+after Codex review:** the unbounded-tracker sweep had missed a real gap
+(`SecurityMonitoringService`'s instance-attribute trackers, two of four
+uncapped on the SSO-only path — now fixed, one small source change) and the
+JSON shallow-copy sweep's method was too narrow (broadened, still clean);
+route-auth-coverage's method description and the completion gate's
+TypeScript command were also corrected (doc-only, same conclusions). See
+`SEC-00-cross-cutting-baseline.md`'s Pass 3 section for the full write-up of
+each correction.
 
 A duplicate close-out PR, [#2119](https://github.com/thegspiro/the-logbook/pull/2119),
 was opened against round 1's now-stale base (before round 2/3 landed) and
 closed without merging — merging it would have overwritten this section
 with round-1-only text and dropped the round 2/3 record.
+
+---
+
+### 2026-09-01 — Feature 00 (Cross-cutting baseline, pass 3) — Codex review fixes on PR #2128
+
+Codex left 4 P2 comments on PR #2128, all legitimate methodology gaps in the
+same-day pass-3 sweeps. Verified each against real code and fixed:
+
+- **Tracker sweep (Pitfall #9) was scoped to module-level globals only.**
+  `SecurityMonitoringService` (`app/services/security_monitoring.py`) is a
+  process-wide singleton with four `self.<dict>` trackers
+  (`_login_attempts`/`_session_ips`/`_data_transfers`/`_api_calls`), invisible
+  to that grep. Read the code rather than trusting Codex's "happen to be
+  bounded" claim: all four share one cap (`_MAX_TRACKING_KEYS`), but
+  `detect_session_hijack`/`detect_data_exfiltration` never called the
+  eviction function themselves, and the only caller that did
+  (`detect_brute_force`) is reachable only from the password `/auth/login`
+  endpoint — an SSO/OAuth-only org would never enforce the cap on
+  `_session_ips`/`_data_transfers`, which grow on every request. **Fixed**
+  (2-line change): both methods now call `self._enforce_key_caps()` on
+  entry, mirroring the existing pattern. `test_security_monitoring.py`
+  (10/10) unchanged.
+- **JSON shallow-copy sweep (Pitfall #12) covered 3 field names in 2
+  directories.** Broadened to all 132 JSON/`MutableDict`-typed model
+  attributes across the whole `app/` tree, using field-name-agnostic
+  structural patterns (nested bracket mutation, shallow-copy idioms) rather
+  than a fixed name list. Codex's specific example
+  (`onboarding.py:815`, `.settings =` one directory above the original
+  scope) checked out safe (`copy.deepcopy()` at the top of the function) —
+  method broadened, conclusion unchanged: 0 bugs across ~40+ sites checked
+  (up from 16).
+- **Route-auth-coverage method description dropped a scan root.** The
+  `app/api/public/*` routers are mounted directly in `backend/main.py`, never
+  through `api/v1/api.py`; the doc's stated method (api.py-registrations
+  only) couldn't have found them, even though the number carried forward
+  (69) happened to still be right. Corrected the method to name both scan
+  roots explicitly, corrected the stale `public/*` subtotal (22 → verified
+  20, matching pass 1's own original count), and documented one AST
+  false-positive the wider scan surfaced (`inventory.py`'s `/ws` WebSocket
+  route authenticates in-body, not via `Depends()` — correctly gated, not a
+  gap).
+- **Completion gate quoted bare `tsc --noEmit`.** Per CLAUDE.md's two-
+  TypeScript-installs section, that resolves the 5.9.3 lint-compatibility
+  compiler, not the 7.0.2 one `npm run typecheck` forces via
+  `scripts/tsc-native.mjs`. Re-ran with the correct command — 0 errors — and
+  fixed the doc to say `npm run typecheck` throughout.
+
+Full completion gate re-run clean after the source fix: `flake8`/
+`black --check`/`isort --check-only` on `app/ tests/ alembic/`;
+`validate_migrations.py --strict` (399 revisions, single head); the five
+scoped test files (`test_like_escaping.py`, `test_database_schema.py`,
+`test_capacity_locking.py`, `test_migration_create_all_tables.py`,
+`test_security_monitoring.py`) all pass; `npm run typecheck` 0 errors;
+`eslint .` 0 errors / 8 pre-existing warnings. Same branch, same PR #2128.
 
 ---
 
