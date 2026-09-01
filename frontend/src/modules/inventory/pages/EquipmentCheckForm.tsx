@@ -70,7 +70,14 @@ import type {
   LastSealRecord,
   DeployedLot,
 } from '../types/equipmentCheck';
-import { CHECK_TYPE_LABELS, ExpiredStockDisposition, soonestExpiration } from '../types/equipmentCheck';
+import {
+  CHECK_TYPE_LABELS,
+  countedOnTruck,
+  ExpiredStockDisposition,
+  soonestExpiration,
+  submitterMaySwap,
+  targetQuantity,
+} from '../types/equipmentCheck';
 import { flattenCompartmentTree } from '../utils/compartmentTree';
 import LotsAboardPanel from '../components/LotsAboardPanel';
 import SealPanel from '../components/SealPanel';
@@ -203,7 +210,7 @@ const ShortfallList: React.FC<{
       </p>
       <ul className="border-theme-surface-border divide-theme-surface-border divide-y rounded-md border">
         {shown.map((item) => {
-          const required = item.requiredQuantity ?? item.expectedQuantity;
+          const required = targetQuantity(item);
           const found = results[item.id]?.quantityFound;
           return (
             <li key={item.id} className="flex items-center justify-between gap-3 px-3 py-1.5">
@@ -1221,7 +1228,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
       const next = { ...prev };
       for (const item of items) {
         const existing = next[item.id];
-        const required = item.requiredQuantity ?? item.expectedQuantity;
+        const required = targetQuantity(item);
         const shown = existing?.quantityFound;
         const patch: Partial<ItemResult> = { status: 'pass' };
         if (item.checkType === 'count' && required != null) {
@@ -1247,7 +1254,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
     (compartment: CheckTemplateCompartment) =>
       checkableIn(compartment).filter((item) => {
         if (item.checkType !== 'count') return false;
-        const required = item.requiredQuantity ?? item.expectedQuantity;
+        const required = targetQuantity(item);
         const shown = results[item.id]?.quantityFound;
         return required != null && shown != null && shown < required;
       }),
@@ -1282,7 +1289,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
           const existing = next[item.id];
           const patch: Partial<ItemResult> = { status: 'pass' };
           if (item.checkType === 'count') {
-            const required = item.requiredQuantity ?? item.expectedQuantity;
+            const required = targetQuantity(item);
             if (required != null) patch.quantityFound = required;
           }
           next[item.id] = { status: 'not_checked', ...existing, ...patch };
@@ -1542,7 +1549,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
           check_type: item.checkType,
           status: getEffectiveStatus(item, result, today),
           quantity_found: result?.quantityFound,
-          required_quantity: item.requiredQuantity ?? item.expectedQuantity,
+          required_quantity: targetQuantity(item) ?? undefined,
           critical_minimum_quantity: item.criticalMinimumQuantity ?? undefined,
           level_reading: result?.levelReading,
           level_unit: item.levelUnit || undefined,
@@ -1875,7 +1882,7 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
         return passFailButtons;
 
       case 'count': {
-        const required = item.requiredQuantity ?? item.expectedQuantity;
+        const required = targetQuantity(item);
         const expected = item.expectedQuantity ?? required;
         const criticalMin = item.criticalMinimumQuantity;
         const currentQty = result?.quantityFound ?? 0;
@@ -2122,6 +2129,12 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
     const result = results[item.id];
     const effectiveStatus = getEffectiveStatus(item, result, today);
     const showNotesField = expandedNotes.has(item.id);
+    // Below manage, a swap carrying no disposition is allowed only up to this
+    // position's shortfall, and an expired one goes through the disposition
+    // path instead. `submitterMaySwap` owns that rule for both experiences.
+    const swapRefused =
+      !canManageStock &&
+      !submitterMaySwap(getExpirationStatus(item, today) === 'expired', targetQuantity(item), countedOnTruck(item));
     const TypeIcon = CHECK_TYPE_ICONS[item.checkType] ?? CheckCircle;
     const isQuantity = item.checkType === 'count';
 
@@ -2224,15 +2237,26 @@ const EquipmentCheckForm: React.FC<EquipmentCheckFormProps> = ({
               ready stock on the shelf and no way to reach it. Disabled (not
               hidden) for a read-only member: the server refuses the swap, and
               the tooltip tells them who to hand the unit to instead of letting
-              the tap end in a 403. */}
+              the tap end in a 403.
+
+              Disabled for a submitter on the same rule the sweep applies —
+              being offered on any inventory-linked item is exactly what makes
+              this button reach the refused case most often, since a position
+              that is neither expired nor short is the common one. */}
           {item.inventoryItemId && (
             <button
               type="button"
-              disabled={!canSwapStock}
+              disabled={!canSwapStock || swapRefused}
               onClick={() => {
                 void openSwap(item);
               }}
-              title={canSwapStock ? undefined : 'Swaps from stock are recorded by a crew member on the check'}
+              title={
+                !canSwapStock
+                  ? 'Swaps from stock are recorded by a crew member on the check'
+                  : swapRefused
+                    ? 'Only an officer can draw stock for an item that has not expired yet'
+                    : undefined
+              }
               className={`flex min-h-[36px] items-center gap-1 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
                 getExpirationStatus(item, today) === 'expired' || getExpirationStatus(item, today) === 'expiring_soon'
                   ? 'text-theme-accent-blue hover:opacity-80'

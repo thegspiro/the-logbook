@@ -239,6 +239,58 @@ describe('replacing expiring stock from inside the sweep', () => {
     ],
   });
 
+  it('submits the same target it counted against', async () => {
+    // The sweep evaluates its shortfall against the resolved par, so the
+    // payload should not disagree with the screen that produced it.
+    //
+    // This asserts the request, not the record: `_snapshot_from_template`
+    // overwrites `required_quantity` with the template's raw column before
+    // `_compute_check_status` reads it, so today the persisted value is the
+    // unresolved one whatever the client sends. Sending the resolved target is
+    // still right — a request that contradicts its own screen is worse — but
+    // closing the gap end-to-end needs the server to snapshot
+    // `_target_quantity` rather than the raw column.
+    const user = userEvent.setup();
+    renderWithRouter(
+      <EquipmentCheckForm
+        shiftId="shift-1"
+        template={
+          {
+            ...template(),
+            compartments: [
+              {
+                id: 'cab',
+                templateId: 'tmpl-1',
+                name: 'Cab',
+                sortOrder: 0,
+                items: [
+                  item({
+                    id: 'gauze',
+                    name: 'Roller gauze',
+                    checkType: 'count',
+                    requiredQuantity: 0,
+                    expectedQuantity: 4,
+                  }),
+                ],
+              },
+            ],
+          } as never
+        }
+        experience="sweep"
+        onBack={vi.fn()}
+      />
+    );
+    await user.click(await screen.findByRole('button', { name: /Finish the check/ }));
+    await user.click(await screen.findByRole('button', { name: /^Submit with/ }));
+    await user.click(await screen.findByRole('button', { name: 'Submit anyway' }));
+
+    await waitFor(() => expect(mockSubmitCheck).toHaveBeenCalled());
+    const payload = mockSubmitCheck.mock.calls[0]?.[1] as {
+      items: { template_item_id: string; required_quantity?: number }[];
+    };
+    expect(payload.items.find((i) => i.template_item_id === 'gauze')?.required_quantity).toBe(4);
+  });
+
   it('does not offer a second submit once the check is filed', async () => {
     // `submitting` goes false in handleSubmit's `finally` whether or not the
     // POST succeeded, and nothing here unmounts the sweep — so an accepted
