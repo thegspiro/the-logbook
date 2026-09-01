@@ -31,6 +31,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   same value had always been allowed. A pool item can now be created with
   nothing on hand, which is what a catalog entry added from a checklist knows.
 
+### Settings screens are usable on a phone (2026-08-31)
+
+**Fixed**
+
+- The section row across the top of every settings screen (Organization,
+  Scheduling, Elections, Events, Email Templates, Checklist Settings and your
+  own account) rendered its pills at 36px tall, under the 44px a finger
+  reliably hits. They now grow to 44px on phones.
+- On a screen with enough sections to overflow a phone — Organization Settings
+  has six — the last pill sat off the right edge of the screen with no way to
+  reach it: the row scrolled sideways, but nothing told the browser it was a
+  scroll region, so a keyboard could not reach it and the overflow read as a
+  layout fault rather than a strip. Both the section row and the sub-page rail
+  beneath it now declare themselves as scrollable and are keyboard-reachable.
+- Organization Settings' "Upload logo" button was a 20px-tall text link.
+
+**Internal**
+
+Organization Settings was in the mobile presentation pass but the fixture
+account lacked `settings.manage`, so the pass had been measuring the dashboard
+under that route's name and reporting it green. It now signs in with the grant
+and measures the real page; `/account` joins it, so two of the seven screens
+built on the shared settings shell are exercised rather than none.
+
 ### Frontend shared re-verification fixes (2026-08-31)
 
 **Fixed**
