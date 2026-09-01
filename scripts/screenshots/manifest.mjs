@@ -3701,14 +3701,18 @@ export const SHOTS = [
     doc: "05-inventory.md",
     line: 1357,
     anchor: "Screenshot of My Equipment as an ordinary member",
-    alt: "My Equipment as an ordinary member — the count tiles and their permanent assignments",
-    // My Equipment rather than the inventory page: the item list on the latter
-    // is the department catalogue by design, and only its figures are scoped.
+    alt: "My Issued Gear as an ordinary member — the count tiles and their permanent assignments",
+    // This page rather than the inventory list: the item list on the latter is
+    // the department catalogue by design, and only its figures are scoped.
+    //
+    // The heading reads "My Issued Gear"; it was "My Equipment" when this shot
+    // was written, and the route still says my-equipment. Waiting on the old
+    // wording is what broke it.
     auth: "member",
     route: "/inventory/my-equipment",
     prepare: async (page) => {
       await page
-        .getByRole("heading", { name: /My Equipment/i })
+        .getByRole("heading", { name: /My Issued Gear/i })
         .first()
         .waitFor({ timeout: 20_000 });
       await page.waitForTimeout(1500);
@@ -6361,7 +6365,12 @@ export const SHOTS = [
       await page.waitForTimeout(500);
     },
     // The phone frame itself, not the dimmed page behind it.
-    selector: "div.fixed.inset-0.z-50 > div",
+    //
+    // Third distinct dialog shape in this file: this one is the shared
+    // `modal-overlay` utility, which carries the fixed positioning itself, so
+    // it matches neither `fixed.inset-0` nor role="dialog". Anchored on the
+    // utility, which is the thing the design system actually guarantees.
+    selector: "div.modal-overlay > div",
     viewport: { width: 1440, height: 1300 },
   },
   {

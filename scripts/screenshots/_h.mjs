@@ -1,0 +1,11 @@
+import { chromium } from "playwright";
+const [route, who="admin"] = process.argv.slice(2);
+const cr = who==="member" ? {u:"nbelhaj",p:"DemoMember!2026"} : {u:"chief",p:process.env.SCREENSHOT_ADMIN_PASSWORD};
+const b = await chromium.launch({ executablePath: process.env.PLAYWRIGHT_BROWSERS_PATH ? `${process.env.PLAYWRIGHT_BROWSERS_PATH}/chromium` : undefined });
+const p = await (await b.newContext({viewport:{width:1440,height:900}})).newPage();
+await p.goto("http://localhost:3000/login",{waitUntil:"domcontentloaded"});
+await p.fill("#username",cr.u); await p.fill("#password",cr.p); await p.click("button[type=submit]");
+await p.waitForTimeout(3000);
+await p.goto(`http://localhost:3000${route}`,{waitUntil:"networkidle"}); await p.waitForTimeout(2500);
+console.log("headings:", JSON.stringify(await p.locator("h1,h2,h3").allInnerTexts()));
+await b.close();
