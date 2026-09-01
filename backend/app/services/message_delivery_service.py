@@ -409,13 +409,17 @@ class MessageDeliveryService:
             # deliver()), which is the invariant that makes the filter safe.
             from app.services.notification_channels import (
                 SmsAlert,
-                resolve_sms_recipients,
+                resolve_sms_targets,
             )
 
-            numbers = await resolve_sms_recipients(
+            # Pairs, not bare numbers: a number does not identify a member, and
+            # rebuilding the pairing here by matching on the number attributed
+            # the delivery row to whichever recipient came first in this list
+            # rather than the one who actually cleared the consent gates.
+            targets = await resolve_sms_targets(
                 self.db, recipients, SmsAlert.URGENT_DEPARTMENT_MESSAGE
             )
-            if not numbers:
+            if not targets:
                 return
 
             from app.core.security import is_rate_limited
@@ -441,19 +445,7 @@ class MessageDeliveryService:
             from app.services.sms_service import SMSService
 
             sms = SMSService()
-            # A list of pairs, not a dict keyed on the number: two members
-            # sharing a phone (a married couple on one handset is ordinary in a
-            # volunteer department) collapsed to one entry, and the delivery
-            # row was attributed to whichever of them came last — including one
-            # who had never given TCPA consent.
-            remaining = list(numbers)
-            pairs: List[tuple] = []
-            for user in recipients:
-                number = getattr(user, "mobile", None) or getattr(user, "phone", None)
-                if number in remaining:
-                    remaining.remove(number)
-                    pairs.append((number, str(user.id)))
-            for number, user_id in pairs:
+            for user_id, number in targets:
                 attempt = await self._claim_delivery(message.id, user_id, "sms")
                 if attempt is None:
                     continue

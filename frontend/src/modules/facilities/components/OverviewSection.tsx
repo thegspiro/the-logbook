@@ -33,6 +33,33 @@ const NUMERIC_FIELDS = new Set([
 ]);
 
 /**
+ * The lookup options this facility can be saved with.
+ *
+ * The store loads active types and statuses only, so that deactivating one on
+ * the settings screen actually stops it being chosen. But an existing facility
+ * still references whatever it was filed under, and dropping that option from
+ * the editor left the select showing its blank placeholder against a NOT NULL
+ * column: an unrelated edit either could not be saved ("Facility type is
+ * required") or quietly re-filed the station under something else.
+ *
+ * So the retained value is added back for this facility only, marked, and the
+ * choice stays out of every other facility's list.
+ */
+interface LookupOption {
+  id: string;
+  name: string;
+}
+
+function withRetainedOption<T extends LookupOption>(
+  active: T[],
+  current: T | undefined,
+  currentId: string | undefined
+): LookupOption[] {
+  if (!currentId || active.some((option) => option.id === currentId)) return active;
+  return [...active, { id: currentId, name: current ? `${current.name} (inactive)` : 'Current value (inactive)' }];
+}
+
+/**
  * Columns the facility row declares NOT NULL. Both selects offer a blank
  * "Select type..." option, so the form can present a value the column cannot
  * hold; caught here rather than sent as a null the backend has to refuse.
@@ -165,7 +192,12 @@ export default function OverviewSection({ facility, facilityTypes, facilityStatu
         {!isEditing ? (
           <OverviewViewMode facility={facility} tz={tz} />
         ) : (
-          <OverviewEditMode ed={ed} setEd={setEd} facilityTypes={facilityTypes} facilityStatuses={facilityStatuses} />
+          <OverviewEditMode
+            ed={ed}
+            setEd={setEd}
+            facilityTypes={withRetainedOption(facilityTypes, facility.facilityType, facility.facilityTypeId)}
+            facilityStatuses={withRetainedOption(facilityStatuses, facility.statusRecord, facility.statusId)}
+          />
         )}
       </div>
     </div>
@@ -255,8 +287,10 @@ function OverviewViewMode({ facility, tz }: { facility: Facility; tz: string }) 
 interface EditModeProps {
   ed: (field: string) => string;
   setEd: (field: string, value: string) => void;
-  facilityTypes: FacilityType[];
-  facilityStatuses: FacilityStatus[];
+  // Already resolved by the parent — the active lookups plus, when this
+  // facility references a deactivated one, that value kept selectable.
+  facilityTypes: LookupOption[];
+  facilityStatuses: LookupOption[];
 }
 
 function OverviewEditMode({ ed, setEd, facilityTypes, facilityStatuses }: EditModeProps) {

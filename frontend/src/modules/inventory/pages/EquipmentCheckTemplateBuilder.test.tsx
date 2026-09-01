@@ -346,6 +346,29 @@ describe('EquipmentCheckTemplateBuilder responsive actions', () => {
     );
   }, 15_000);
 
+  it('reports a failed pre-save flush instead of dropping the edits silently', async () => {
+    // Save overtakes the 1.5s autosave debounce by cancelling those timers and
+    // sending the patches itself. That flush ran before handleSave's try/catch,
+    // so a failure escaped as an unhandled rejection — no toast, no error
+    // state, and the cancelled edits gone — while the indicator stayed on
+    // "Saving…" for the rest of the session because the timer that would have
+    // cleared it had been cancelled.
+    mockViewport('laptop');
+    updateCheckItem.mockRejectedValue({ response: { data: { detail: 'Item is locked' } } });
+    const user = userEvent.setup();
+    renderBuilder();
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Radio selection checkbox' }));
+    fireEvent.click(screen.getByRole('button', { name: /^Set (Required|Optional)$/ }));
+    await user.click(screen.getByRole('button', { name: 'Save draft' }));
+
+    await waitFor(() => expect(toastError).toHaveBeenCalled());
+    expect(String(toastError.mock.calls[0]?.[0])).toContain('Item is locked');
+    // The template write never ran: saving stopped at the failed flush rather
+    // than committing a payload built from edits the server had rejected.
+    expect(updateEquipmentCheckTemplate).not.toHaveBeenCalled();
+  }, 15_000);
+
   it('retains bulk selection, drag handles, badges, and dense actions at 1024px', async () => {
     vi.mocked(window.matchMedia).mockImplementation((query: string) => ({
       matches: query === '(min-width: 640px)',

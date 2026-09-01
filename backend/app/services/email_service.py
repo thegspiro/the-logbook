@@ -340,6 +340,30 @@ def wrap_email_body(
     return build_email_document(title, body)
 
 
+def _summarize_recipients(to_emails: List[str]) -> str:
+    """Fit a batch's addresses into MessageHistory.to_email (VARCHAR(320)).
+
+    A joined list overflows that column as soon as a send has more than a
+    handful of recipients, and a department message goes to the whole roster in
+    one batch. Under strict MySQL the insert is rejected, which is a 1406 on
+    the shared session — see the savepoint below. ``recipient_count`` carries
+    the true number, so the addresses are a legible sample, not the record.
+    """
+    joined = ", ".join(to_emails)
+    if len(joined) <= 320:
+        return joined
+    kept: List[str] = []
+    used = 0
+    for address in to_emails:
+        # 40 characters of headroom for the "… (+N more)" suffix.
+        if used + len(address) + 2 > 280:
+            break
+        kept.append(address)
+        used += len(address) + 2
+    suffix = f"… (+{len(to_emails) - len(kept)} more)"
+    return (", ".join(kept) + suffix)[:320]
+
+
 class EmailService:
     """Service for sending emails"""
 
@@ -1205,7 +1229,7 @@ class EmailService:
         history = MessageHistory(
             id=generate_uuid(),
             organization_id=org_id,
-            to_email=", ".join(to_emails),
+            to_email=_summarize_recipients(to_emails),
             cc_emails=cc_emails,
             bcc_emails=bcc_emails,
             subject=subject,
@@ -1219,7 +1243,15 @@ class EmailService:
                 f"Failed to deliver to all {failure_count} recipient(s)"
             )
         db.add(history)
-        await db.flush()
+        # Inside a savepoint: a failure here must not poison the caller's
+        # transaction. This is a log write on a shared session, and an
+        # exception at flush leaves that session needing an explicit rollback —
+        # every later statement raises PendingRollbackError until it runs. The
+        # caller catches and warns, so without this the *send* would report
+        # success while the delivery-status writes and the urgent-SMS
+        # escalation that follow it silently aborted.
+        async with db.begin_nested():
+            await db.flush()
         self.last_message_history_id = history.id
 
     async def render_ballot_notification(

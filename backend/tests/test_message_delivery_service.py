@@ -512,6 +512,45 @@ class TestSmsGating:
         numbers = [call.args[0][0] for call in fake_sms.send_bulk_sms.await_args_list]
         assert numbers == ["+1555mobile", "+1555phone"]
 
+    async def test_a_shared_handset_is_recorded_against_whoever_consented(self):
+        """Two members on one number is ordinary in a volunteer department.
+
+        The consent filter returned bare numbers, so the send path rebuilt the
+        pairing by matching on the number — and matched the first recipient
+        carrying it, who here is the member who never granted TCPA consent.
+        The text went out correctly; the delivery record named the wrong
+        person, and the one who did consent got no audit row at all.
+        """
+        db = _db()
+        shared = "+15550000000"
+        recipients = [
+            _user("no-consent", mobile=shared),
+            _user("consented", mobile=shared),
+        ]
+        svc = MessageDeliveryService(db)
+        claimed = []
+
+        async def _claim(message, user, channel):
+            claimed.append(user)
+            return SimpleNamespace(
+                status="pending", error=None, delivered_at=None, channel=channel
+            )
+
+        svc._claim_delivery = _claim
+        fake_sms = MagicMock()
+        fake_sms.enabled = True
+        fake_sms.send_bulk_sms = AsyncMock(return_value=1)
+        with patch(
+            "app.services.sms_service.SMSService", return_value=fake_sms
+        ), _patch_sms_consent("consented"):
+            await svc._send_sms(
+                _msg(priority="urgent"),
+                recipients,
+                org=SimpleNamespace(name="FD"),
+            )
+
+        assert claimed == ["consented"]
+
     async def test_sms_requires_consent_even_when_the_channel_is_on(self):
         # TCPA: the recorded consent gates the send independently of the
         # member's channel preference. u2 never granted consent, so despite
