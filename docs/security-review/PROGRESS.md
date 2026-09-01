@@ -16,18 +16,94 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**Feature 01 (Auth & session lifecycle), pass 3** —
-[#2133](https://github.com/thegspiro/the-logbook/pull/2133), branch
-`claude/security-review-auth-pass3`. Codex round 1 addressed: a P1
-cross-endpoint TOTP replay gap (AUTH-7) and a P2 brute-force-detector wiring
-gap (AUTH-8) that pass 3's own "Verified good" write-up had wrongly cleared.
-Codex round 2 (reviewing round 1's own fix commit) then found a real P1
-concurrency race inside the AUTH-7 fix itself (AUTH-9), a P2 gap that
-silently defeated AUTH-8's own fix (AUTH-10), and two more P2s (AUTH-11,
-AUTH-12). All four fixed. This round's own required adversarial re-read
-before pushing then found a fifth, unreported issue of the identical shape
-as AUTH-9 in the adjacent recovery-code path (AUTH-13), also fixed. See the
-log entries below.
+**Feature 02 (Permissions & roles), pass 3** —
+[#2136](https://github.com/thegspiro/the-logbook/pull/2136), branch
+`claude/security-review-perm-pass3`. Diff-since-pass-2 review, corrected
+mid-review by Codex to use merge-commit ancestry instead of a date cutoff —
+four commits in scope, not three; still no code-level finding, but the
+write-up's own overclaim (wildcard authority, completion-gate baseline) was
+narrowed. See the log entries below and `PERM-02-permissions-roles.md`'s
+Pass 3 section.
+
+---
+
+### 2026-09-01 — Feature 02 (Permissions & roles, pass 3) — Codex round 1: date-cutoff methodology bug found a real omitted commit, plus two overclaims in the write-up
+
+Codex reviewed this PR's first commit (`4e53af51`) and found three real
+process defects, none of them a code-level security finding:
+
+- **A missed commit.** This pass's original scope used
+  `git log --since=2026-08-27` (a date) instead of the actual pass-2 merge
+  commit as the lower bound. `7ac83395` (merging `4e40f96b` +
+  `2959d2aa` — a `facilities.view` baseline-grant restriction touching
+  `core/permissions.py`) landed ~45 minutes after pass 2's closing merge
+  `e601a95d` and was present in the `--since` output as the trailing
+  boundary commit but never actually opened and reviewed. Confirmed with
+  `git merge-base --is-ancestor e601a95d 7ac83395` that it postdates pass 2
+  and is genuinely in scope. Reviewed now: a revocation (removes
+  `facilities.view` from baseline member/line-member defaults), which can
+  only narrow authority; its own Pitfall #23 gap (registry-only edit not
+  reaching already-materialized `positions` rows) was caught and fixed by
+  its own author 3.5 hours later in the same PR (`2959d2aa`, migration
+  `c7e2b9a41f83`). No residual issue found.
+- **An overclaimed "no permission gained or lost."** The `cf033864` rename's
+  write-up checked only seeded `OPERATIONAL_RANKS`/`DEFAULT_POSITIONS`
+  entries but stated the conclusion as if it covered every position. A
+  **custom** position holding the `inventory.*` module wildcard does gain
+  the three `inventory.check_*` grants post-rename (it could not match
+  `equipment_check.*` pre-rename — different module segment). Real, but not
+  a new finding: the original commit's own message already named this as a
+  deliberate, accepted consequence, since no seeded position uses that
+  wildcard. The write-up's blanket claim is narrowed to "no **seeded** rank
+  or position," with the custom-wildcard case now stated explicitly instead
+  of being swept into an absolute claim.
+- **A wrong completion-gate citation.** The write-up cited PR #2133 as
+  confirming a green baseline, but PR #2134 (7 frontend files) merged after
+  #2133 and is this branch's actual parent — #2133's checks say nothing
+  about it. Corrected to cite this PR's own CI run (which validates the
+  real current tree, #2134 included) instead of a prior PR.
+
+All three fixed in the findings doc (`PERM-02-permissions-roles.md`, Pass 3
+section) and in this entry. Guidance for future passes: use
+`git log <prior-pass-merge-sha>..HEAD`, never a date, when scoping a diff
+review.
+
+---
+
+### 2026-09-01 — Feature 02 (Permissions & roles, pass 3) — no new findings
+
+`git log --since=2026-08-27` (pass 2's merge date) against all six feature
+files found exactly three commits: `cf033864` (rename
+`equipment_check.*` → `inventory.check_*`, with an authority-preserving
+migration and an additive `LEGACY_PERMISSION_ALIASES` compatibility layer),
+`9f6e7a7a` (let the `member` position's display name be customized, slug and
+permission ceiling untouched), and `a518957e` (a Codex follow-up on PR #1948
+that changes how `get_request_enabled_modules` handles an invalid session
+cookie — doesn't weaken any endpoint's own auth dependency, confirmed by
+grep that the function is never itself used as one). All three reviewed
+against the full checklist; none introduced a finding. `officers.py`,
+`org_chart.py`, `operational_ranks.py`, and their services are
+byte-identical to pass 2 (zero commits since, confirmed via git log) — pass
+2's "Verified good" write-up for those stands without re-derivation.
+Re-verified PERM-1 through PERM-4's fixes and the ceiling machinery
+(`_enforce_permission_grant_ceiling`, `_enforce_role_edit_ceiling`,
+`_enforce_rank_grant_ceiling`) are all still present and wired exactly as
+described. No backend/frontend source touched this pass, so the code-level
+completion gates had nothing new to validate; `validate_migrations.py
+--strict` (399 revisions, single head) and `flake8 app/ tests/ alembic/` (0
+violations) re-run to confirm the baseline PR #2133 left is still clean.
+
+Full write-up: `docs/security-review/PERM-02-permissions-roles.md` (Pass 3
+section). Rotation row 02 → ⏳ (awaiting PR merge). Next: 03 Public surface &
+webhooks, once this PR merges.
+
+---
+
+### 2026-09-01 — Feature 01 (Auth & session lifecycle, pass 3) ✅ merged — PR #2133
+
+All 6 Codex review threads (AUTH-7 through AUTH-13, two P1s, four P2s) fixed
+and resolved; CI green (17/17) on the final head, no merge conflict. Rotation
+row 01 → ✅. Next: 02 Permissions & roles.
 
 ---
 
@@ -5528,7 +5604,7 @@ pass 3 — each row's prior PR is recorded in the Log, not repeated here.
 | --- | ------------------------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
 | 00  | Cross-cutting baseline    | SEC    | whole-codebase sweeps; see `SEC-00-cross-cutting-baseline.md`                                                                                   | ✅     |
 | 01  | Auth & session lifecycle  | AUTH   | `endpoints/auth.py`, `auth_service.py`, `mfa_service.py`, `oauth_service.py`                                                                    | ✅     |
-| 02  | Permissions & roles       | PERM   | `dependencies.py`, `core/permissions.py`, `roles.py`, `operational_ranks.py`, `officers.py`, `org_chart.py`                                     | ⬜     |
+| 02  | Permissions & roles       | PERM   | `dependencies.py`, `core/permissions.py`, `roles.py`, `operational_ranks.py`, `officers.py`, `org_chart.py`                                     | ⏳     |
 | 03  | Public surface & webhooks | PUB    | `api/public/*` (20 unauth routes), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`                                      | ⬜     |
 | 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                              | ⬜     |
 | 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                     | ⬜     |
