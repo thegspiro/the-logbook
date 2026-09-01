@@ -3131,7 +3131,9 @@ export const SHOTS = [
         .click({ timeout: 10_000 });
       await page.waitForTimeout(500);
     },
-    selector: "div.bg-theme-surface-modal.relative",
+    // As 03-98: the panel class this drilled to is gone with the move onto
+    // the shared Modal.
+    selector: "div[role='dialog']",
   },
   {
     id: "04-40-end-event",
@@ -5009,7 +5011,11 @@ export const SHOTS = [
     },
     // Clipped to the dialog: the profile behind it is a different section's
     // subject, and the panel it happens to sit over is an empty table.
-    selector: "div[role='dialog']",
+    // `modal-overlay`, not role="dialog": this one is still a hand-rolled
+    // panel inside the shared overlay utility rather than a shared Modal.
+    // Three shapes, and which one a given dialog uses has to be checked
+    // rather than assumed -- 03-98 and 04-39 next door are role="dialog".
+    selector: "div.modal-overlay > div",
   },
   {
     id: "01-30-evoc-operator-modal",
@@ -8642,7 +8648,10 @@ export const SHOTS = [
       await page.waitForTimeout(1500);
     },
     // The panel, not the full-screen overlay that carries role="dialog".
-    selector: "div[role='dialog'] div.bg-theme-surface-modal.relative",
+    // The dialog panel itself. This drilled to
+    // `div.bg-theme-surface-modal.relative` inside it, which the shared Modal
+    // no longer renders.
+    selector: "div[role='dialog']",
   },
   {
     id: "05-72-setup-prompt",
