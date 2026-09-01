@@ -18,12 +18,55 @@ feature. The rotation cannot outrun its own review queue.
 
 **Feature 02 (Permissions & roles), pass 3** —
 [#2136](https://github.com/thegspiro/the-logbook/pull/2136), branch
-`claude/security-review-perm-pass3`. Diff-since-pass-2 review of
-`dependencies.py`, `core/permissions.py`, `roles.py`/`role_service.py` (the
-only three files with commits since pass 2's merge — `officers.py`,
-`org_chart.py`, `operational_ranks.py`, and their services are unchanged);
-no new findings. See the log entry below and
-`PERM-02-permissions-roles.md`'s Pass 3 section.
+`claude/security-review-perm-pass3`. Diff-since-pass-2 review, corrected
+mid-review by Codex to use merge-commit ancestry instead of a date cutoff —
+four commits in scope, not three; still no code-level finding, but the
+write-up's own overclaim (wildcard authority, completion-gate baseline) was
+narrowed. See the log entries below and `PERM-02-permissions-roles.md`'s
+Pass 3 section.
+
+---
+
+### 2026-09-01 — Feature 02 (Permissions & roles, pass 3) — Codex round 1: date-cutoff methodology bug found a real omitted commit, plus two overclaims in the write-up
+
+Codex reviewed this PR's first commit (`4e53af51`) and found three real
+process defects, none of them a code-level security finding:
+
+- **A missed commit.** This pass's original scope used
+  `git log --since=2026-08-27` (a date) instead of the actual pass-2 merge
+  commit as the lower bound. `7ac83395` (merging `4e40f96b` +
+  `2959d2aa` — a `facilities.view` baseline-grant restriction touching
+  `core/permissions.py`) landed ~45 minutes after pass 2's closing merge
+  `e601a95d` and was present in the `--since` output as the trailing
+  boundary commit but never actually opened and reviewed. Confirmed with
+  `git merge-base --is-ancestor e601a95d 7ac83395` that it postdates pass 2
+  and is genuinely in scope. Reviewed now: a revocation (removes
+  `facilities.view` from baseline member/line-member defaults), which can
+  only narrow authority; its own Pitfall #23 gap (registry-only edit not
+  reaching already-materialized `positions` rows) was caught and fixed by
+  its own author 3.5 hours later in the same PR (`2959d2aa`, migration
+  `c7e2b9a41f83`). No residual issue found.
+- **An overclaimed "no permission gained or lost."** The `cf033864` rename's
+  write-up checked only seeded `OPERATIONAL_RANKS`/`DEFAULT_POSITIONS`
+  entries but stated the conclusion as if it covered every position. A
+  **custom** position holding the `inventory.*` module wildcard does gain
+  the three `inventory.check_*` grants post-rename (it could not match
+  `equipment_check.*` pre-rename — different module segment). Real, but not
+  a new finding: the original commit's own message already named this as a
+  deliberate, accepted consequence, since no seeded position uses that
+  wildcard. The write-up's blanket claim is narrowed to "no **seeded** rank
+  or position," with the custom-wildcard case now stated explicitly instead
+  of being swept into an absolute claim.
+- **A wrong completion-gate citation.** The write-up cited PR #2133 as
+  confirming a green baseline, but PR #2134 (7 frontend files) merged after
+  #2133 and is this branch's actual parent — #2133's checks say nothing
+  about it. Corrected to cite this PR's own CI run (which validates the
+  real current tree, #2134 included) instead of a prior PR.
+
+All three fixed in the findings doc (`PERM-02-permissions-roles.md`, Pass 3
+section) and in this entry. Guidance for future passes: use
+`git log <prior-pass-merge-sha>..HEAD`, never a date, when scoping a diff
+review.
 
 ---
 
