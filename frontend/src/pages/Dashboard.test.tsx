@@ -280,6 +280,26 @@ describe('Dashboard', () => {
         expect(await screen.findByText('Ladder Ops Drill')).toBeInTheDocument();
       });
 
+      // The sixty-day reach is the footer's alone. Letting it into the
+      // "Take a Shift" count would quote the member a number matching nothing
+      // the card shows, and send them to a schedule not displaying those
+      // shifts either.
+      it('keeps lookahead shifts out of the quick action, but counts them in the footer', async () => {
+        mockGetOpenShifts.mockResolvedValue([
+          makeShift({ id: 'open-near', shift_date: inWindow(2), min_staffing: 4, attendee_count: 1 }),
+          makeShift({ id: 'open-far', shift_date: pastWindow, min_staffing: 4, attendee_count: 1 }),
+        ]);
+
+        renderWithRouter(<Dashboard />);
+
+        const takeAShift = await screen.findByRole('button', { name: /take a shift/i });
+        // One open shift inside the window, not the two the fetch returned.
+        await waitFor(() => expect(takeAShift).toHaveTextContent('1 open'));
+        expect(takeAShift).not.toHaveTextContent('2 open');
+        // The far one is still disclosed, as the reach exists to allow.
+        expect(await screen.findByRole('button', { name: /1 more open shift/ })).toBeInTheDocument();
+      });
+
       it('asks for the whole window rather than the five soonest events', async () => {
         renderWithRouter(<Dashboard />);
 

@@ -99,11 +99,18 @@ const TIMELINE_DAYS = 30;
 /**
  * How far past the visible window the open-shift fetch reaches.
  *
- * The footer offers "N more open shifts after that", and it can only count
- * what it was given: with the fetch window equal to the display window that
- * line is dead on every department, silently, because zero is also what an
- * empty schedule looks like. Reaching further is what leaves it able to say
- * there is more.
+ * The footer discloses how many open shifts lie beyond the window, and it can
+ * only count what it was given: with the fetch window equal to the display
+ * window that line is dead on every department, silently, because zero is
+ * also what an empty schedule looks like. Reaching further is what leaves it
+ * able to say there is more.
+ *
+ * Two consequences, both load-bearing. The count stops here, so the footer
+ * names this horizon ("in the following month") rather than implying it
+ * covers everything after the window — it does not. And the reach belongs to
+ * that footer alone: every other count describing what is open reads
+ * `openShiftsInWindow`, or it would quote the member a number matching
+ * nothing the card shows.
  */
 const TIMELINE_LOOKAHEAD_DAYS = 60;
 
@@ -813,6 +820,19 @@ const Dashboard: React.FC = () => {
     return openShifts.filter((s) => !mine.has(s.id));
   }, [myShifts, openShifts]);
 
+  // The open shifts inside the window the card actually shows.
+  //
+  // `availableOpenShifts` reaches TIMELINE_LOOKAHEAD_DAYS out, and that reach
+  // exists for one purpose: letting the footer say how many more lie beyond
+  // the window. Any count that describes "what is open" to the member belongs
+  // to the window instead — a quick action reporting a shift sixty days out
+  // sends them to a schedule that is not showing it, and the number it quotes
+  // matches nothing they can see.
+  const openShiftsInWindow = useMemo(
+    () => availableOpenShifts.filter((s) => s.shift_date <= windowEnd),
+    [availableOpenShifts, windowEnd]
+  );
+
   const timeline = useMemo<TimelineEntry[]>(() => {
     const entries: TimelineEntry[] = [];
 
@@ -893,7 +913,7 @@ const Dashboard: React.FC = () => {
   const timelineHiddenOnMobile = timelineCollapsedOnMobile ? timeline.slice(TIMELINE_ROWS_SHOWN_MOBILE) : [];
   const firstHiddenTimelineRow = timelineHiddenOnMobile[0];
   const laterOpenShifts = availableOpenShifts.filter((s) => s.shift_date > windowEnd).length;
-  const shortStaffedOpenShifts = availableOpenShifts.filter(
+  const shortStaffedOpenShifts = openShiftsInWindow.filter(
     (s) => s.min_staffing != null && s.attendee_count < s.min_staffing
   ).length;
   const timelineLoading = loadingMyShifts || loadingOpenShifts || loadingUpcomingEvents;
@@ -1331,7 +1351,7 @@ const Dashboard: React.FC = () => {
                       Take a Shift
                     </span>
                     <span className="text-theme-text-muted mt-0.5 hidden truncate text-[13px] sm:block">
-                      <span className="font-bold tabular-nums">{availableOpenShifts.length}</span> open
+                      <span className="font-bold tabular-nums">{openShiftsInWindow.length}</span> open
                       {shortStaffedOpenShifts > 0 && ` · ${shortStaffedOpenShifts} short-staffed`}
                     </span>
                   </span>
@@ -1429,7 +1449,7 @@ const Dashboard: React.FC = () => {
                             >
                               {laterOpenShifts} more open shift{laterOpenShifts === 1 ? '' : 's'}
                             </button>{' '}
-                            after that
+                            in the following month
                           </>
                         )}
                       </p>
