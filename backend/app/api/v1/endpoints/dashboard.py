@@ -653,7 +653,16 @@ async def get_operations_dashboard(
                 count=count,
                 oldest_age_days=_age_days(oldest, local_today),
                 most_urgent="Oldest unresolved equipment check" if count else None,
-                href="/inventory/checklists/log?status=failed",
+                # All three outcomes this count can become, not just
+                # "failed". EquipmentReadinessService._status_for_check
+                # collapses a submitted check to one outcome: an
+                # ``incomplete`` one reads as ``partial``, and any check
+                # holding an out-of-service item reads as ``out_of_service``
+                # whatever its overall status. Linking with ``failed`` alone
+                # sent the officer to a log that hid records this card had
+                # just counted — and to an empty one, for a department whose
+                # exceptions were all incomplete checks.
+                href="/inventory/checklists/log?status=failed,partial,out_of_service",
             )
         )
     if "notifications" in enabled and user_has_permission(

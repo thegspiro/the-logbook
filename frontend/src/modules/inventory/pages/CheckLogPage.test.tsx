@@ -264,6 +264,8 @@ describe('CheckLogPage', () => {
         entries: [
           makeEntry({ status: 'passed', unitLabel: 'E-1', templateName: 'Engine Daily Check' }),
           makeEntry({ status: 'failed', unitLabel: 'L-2', templateName: 'Ladder Daily Check', failedItems: 2 }),
+          makeEntry({ status: 'partial', unitLabel: 'M-3', templateName: 'Medic Daily Check' }),
+          makeEntry({ status: 'out_of_service', unitLabel: 'T-4', templateName: 'Tower Daily Check' }),
         ],
       });
 
@@ -318,6 +320,65 @@ describe('CheckLogPage', () => {
       renderWithRouter(<CheckLogPage />);
       await screen.findByText('Ladder Daily Check');
 
+      expect(screen.queryByRole('table')).not.toBeInTheDocument();
+    });
+
+    /**
+     * The dashboard's card counts `overall_status in (fail, incomplete)`, and
+     * _status_for_check collapses those to three different log outcomes —
+     * `partial` for an incomplete check, `out_of_service` for any check
+     * holding an out-of-service item. A single-outcome filter hid records the
+     * card had counted, so the parameter takes a list and the card links with
+     * all three.
+     */
+    it('accepts the comma-separated set the dashboard card links with', async () => {
+      window.history.replaceState({}, '', '/inventory/checklists/log?status=failed,partial,out_of_service');
+      renderWithRouter(<CheckLogPage />);
+
+      expect(await screen.findByText('Ladder Daily Check')).toBeInTheDocument();
+      expect(screen.getByText('Medic Daily Check')).toBeInTheDocument();
+      expect(screen.getByText('Tower Daily Check')).toBeInTheDocument();
+      // ...and still excludes the one outcome the card does not count.
+      expect(screen.queryByText('Engine Daily Check')).not.toBeInTheDocument();
+    });
+
+    it('names every outcome it is filtering on', async () => {
+      window.history.replaceState({}, '', '/inventory/checklists/log?status=failed,partial');
+      renderWithRouter(<CheckLogPage />);
+      await screen.findByText('Ladder Daily Check');
+
+      const banner = screen.getByRole('status', { name: 'Active filter' });
+      expect(within(banner).getByText('Found a problem')).toBeInTheDocument();
+      expect(within(banner).getByText('Started, not finished')).toBeInTheDocument();
+    });
+
+    it('ignores inherited property names, which are not outcomes', async () => {
+      // `in` walks the prototype chain, so `constructor` passed validation and
+      // then indexed the label map with a function — which React throws on.
+      window.history.replaceState({}, '', '/inventory/checklists/log?status=constructor');
+      renderWithRouter(<CheckLogPage />);
+
+      await userEvent.click(await screen.findByRole('button', { name: /Log/ }));
+      expect(screen.getByText('Engine Daily Check')).toBeInTheDocument();
+      expect(screen.queryByRole('status', { name: 'Active filter' })).not.toBeInTheDocument();
+    });
+
+    it('drops an unknown outcome but honours the valid ones beside it', async () => {
+      window.history.replaceState({}, '', '/inventory/checklists/log?status=failed,banana');
+      renderWithRouter(<CheckLogPage />);
+
+      expect(await screen.findByText('Ladder Daily Check')).toBeInTheDocument();
+      expect(screen.queryByText('Engine Daily Check')).not.toBeInTheDocument();
+    });
+
+    it('withdraws the grid toggle while filtering, so it cannot contradict the banner', async () => {
+      // Forcing the view in an effect left this button live: one click showed
+      // the unfiltered matrix under a banner that said otherwise.
+      window.history.replaceState({}, '', '/inventory/checklists/log?status=failed');
+      renderWithRouter(<CheckLogPage />);
+      await screen.findByText('Ladder Daily Check');
+
+      expect(screen.queryByRole('button', { name: /Grid/ })).not.toBeInTheDocument();
       expect(screen.queryByRole('table')).not.toBeInTheDocument();
     });
   });

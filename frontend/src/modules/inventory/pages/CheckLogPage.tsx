@@ -60,19 +60,41 @@ export const CheckLogPage: React.FC<CheckLogPageProps> = ({ apparatusId, showHea
   const [search, setSearch] = useState('');
 
   /**
-   * `?status=<outcome>` narrows the log to one outcome.
+   * `?status=` narrows the log to one or more outcomes, comma-separated.
    *
-   * The chief dashboard's failed-checks card has linked here with
-   * `?status=failed` since the checklist move, and nothing read it: the card
-   * counted failures and then dropped the officer into an unfiltered
-   * fortnight to find them by eye. Validated against the outcomes the log
-   * actually reports, so a hand-typed or stale value is ignored rather than
-   * silently filtering everything away.
+   * The chief dashboard's failed-checks card has linked here since the
+   * checklist move and nothing read the parameter, so the card counted
+   * exceptions and then dropped the officer into an unfiltered fortnight to
+   * find them by eye.
+   *
+   * It takes a **list** because one outcome cannot express what that card
+   * counts. The card counts `overall_status in (fail, incomplete)`, and
+   * `EquipmentReadinessService._status_for_check` collapses those to three
+   * different log outcomes: an incomplete check reads as `partial`, and any
+   * check holding an out-of-service item reads as `out_of_service` whatever
+   * its overall status. Filtering on `failed` alone would hide records the
+   * card counted — a department whose exceptions are all incomplete checks
+   * would click a non-zero count and land on an empty log, which is worse
+   * than the unfiltered list this set out to fix.
+   *
+   * Validated with `hasOwnProperty`, not `in`: `in` walks the prototype
+   * chain, so `?status=constructor` would pass and then index the label map
+   * with a function, which React throws on rendering.
    */
   const [searchParams, setSearchParams] = useSearchParams();
-  const requestedStatus = searchParams.get('status');
-  const statusFilter =
-    requestedStatus && requestedStatus in CHECK_OUTCOME_LABELS ? (requestedStatus as CheckOutcome) : null;
+  const statusFilter = useMemo<CheckOutcome[]>(() => {
+    const raw = searchParams.get('status');
+    if (!raw) return [];
+    const seen: CheckOutcome[] = [];
+    for (const part of raw.split(',')) {
+      const value = part.trim();
+      if (!Object.prototype.hasOwnProperty.call(CHECK_OUTCOME_LABELS, value)) continue;
+      const outcome = value as CheckOutcome;
+      if (!seen.includes(outcome)) seen.push(outcome);
+    }
+    return seen;
+  }, [searchParams]);
+  const hasStatusFilter = statusFilter.length > 0;
 
   const clearStatusFilter = useCallback(() => {
     const next = new URLSearchParams(searchParams);
@@ -80,6 +102,10 @@ export const CheckLogPage: React.FC<CheckLogPageProps> = ({ apparatusId, showHea
     // replace: the filter came from a link on another page, so backing out of
     // it should return there rather than stepping through filter states.
     setSearchParams(next, { replace: true });
+    // Stay on the log. Clearing the filter widens what is listed; it is not a
+    // request to leave the list for the matrix, and `view` still holds the
+    // 'grid' default nobody chose while the toggle was withdrawn.
+    setView('log');
   }, [searchParams, setSearchParams]);
 
   const load = useCallback(async () => {
@@ -104,18 +130,11 @@ export const CheckLogPage: React.FC<CheckLogPageProps> = ({ apparatusId, showHea
     void load();
   }, [load]);
 
-  // The grid is a rig-by-day matrix and carries no status filter, so showing
-  // it while one is active would answer a different question than the link
-  // asked. The log is the view the filter applies to.
-  useEffect(() => {
-    if (statusFilter) setView('log');
-  }, [statusFilter]);
-
   useRegisterPullToRefresh(load);
 
   const entries = useMemo(() => {
     let rows = data?.entries ?? [];
-    if (statusFilter) rows = rows.filter((e) => e.status === statusFilter);
+    if (hasStatusFilter) rows = rows.filter((e) => statusFilter.includes(e.status));
     const q = search.trim().toLowerCase();
     if (!q) return rows;
     return rows.filter(
@@ -125,9 +144,17 @@ export const CheckLogPage: React.FC<CheckLogPageProps> = ({ apparatusId, showHea
         (e.checkedByName ?? '').toLowerCase().includes(q) ||
         e.findings.some((f) => f.toLowerCase().includes(q))
     );
-  }, [data, search, statusFilter]);
+  }, [data, search, statusFilter, hasStatusFilter]);
 
-  const canShowGrid = data?.scope === 'fleet' && data.rows.length > 0;
+  /**
+   * The grid is a rig-by-day matrix with no status dimension, so it cannot
+   * honour the filter. Rather than forcing `view` to 'log' in an effect —
+   * which left the Grid button live, so one click showed the unfiltered
+   * matrix under a "Showing only" banner that now contradicted it — the
+   * toggle is withdrawn while filtering and the rendered view is derived.
+   */
+  const canShowGrid = data?.scope === 'fleet' && data.rows.length > 0 && !hasStatusFilter;
+  const effectiveView: ViewMode = hasStatusFilter ? 'log' : view;
   const summary = data?.summary;
 
   return (
@@ -188,9 +215,11 @@ export const CheckLogPage: React.FC<CheckLogPageProps> = ({ apparatusId, showHea
             <button
               type="button"
               onClick={() => setView('grid')}
-              aria-pressed={view === 'grid'}
+              aria-pressed={effectiveView === 'grid'}
               className={`inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
-                view === 'grid' ? 'bg-blue-600 text-white' : 'text-theme-text-muted hover:text-theme-text-primary'
+                effectiveView === 'grid'
+                  ? 'bg-blue-600 text-white'
+                  : 'text-theme-text-muted hover:text-theme-text-primary'
               }`}
             >
               <Grid3x3 className="h-3.5 w-3.5" aria-hidden="true" /> Grid
@@ -198,9 +227,11 @@ export const CheckLogPage: React.FC<CheckLogPageProps> = ({ apparatusId, showHea
             <button
               type="button"
               onClick={() => setView('log')}
-              aria-pressed={view === 'log'}
+              aria-pressed={effectiveView === 'log'}
               className={`inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
-                view === 'log' ? 'bg-blue-600 text-white' : 'text-theme-text-muted hover:text-theme-text-primary'
+                effectiveView === 'log'
+                  ? 'bg-blue-600 text-white'
+                  : 'text-theme-text-muted hover:text-theme-text-primary'
               }`}
             >
               <List className="h-3.5 w-3.5" aria-hidden="true" /> Log
@@ -233,13 +264,17 @@ export const CheckLogPage: React.FC<CheckLogPageProps> = ({ apparatusId, showHea
       {/* An active status filter has to be visible and removable. Arriving
           from the dashboard on a filtered log that looked unfiltered would
           read as "the fortnight only had three checks in it". */}
-      {statusFilter && (
+      {hasStatusFilter && (
         // role=status so the narrowing is announced, not just drawn — the
         // filter arrives from a link on another page, so a screen-reader user
         // never saw it being applied.
         <div className="flex flex-wrap items-center gap-2" role="status" aria-label="Active filter">
           <span className="text-theme-text-muted text-xs">Showing only</span>
-          <span className={`badge border ${OUTCOME_PILL[statusFilter]}`}>{CHECK_OUTCOME_LABELS[statusFilter]}</span>
+          {statusFilter.map((outcome) => (
+            <span key={outcome} className={`badge border ${OUTCOME_PILL[outcome]}`}>
+              {CHECK_OUTCOME_LABELS[outcome]}
+            </span>
+          ))}
           <button
             type="button"
             onClick={clearStatusFilter}
@@ -276,7 +311,7 @@ export const CheckLogPage: React.FC<CheckLogPageProps> = ({ apparatusId, showHea
           title="Nothing in this window"
           description="No checks were expected on any apparatus over these duty days. Check templates are set up per apparatus or apparatus type."
         />
-      ) : view === 'grid' && canShowGrid ? (
+      ) : effectiveView === 'grid' && canShowGrid ? (
         <CheckGrid data={data} />
       ) : (
         <CheckEntries entries={entries} tz={tz} scoped={Boolean(apparatusId)} />
