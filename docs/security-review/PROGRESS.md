@@ -16,7 +16,7 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**Feature 00 (Cross-cutting baseline), pass 3, round 3+4+5+6+7+8 follow-up** —
+**Feature 00 (Cross-cutting baseline), pass 3, round 3+4+5+6+7+8+9 follow-up** —
 [#2132](https://github.com/thegspiro/the-logbook/pull/2132), branch
 `claude/security-review-sec00-pass3-round3-fix`.
 [#2128](https://github.com/thegspiro/the-logbook/pull/2128) (rounds 1–2)
@@ -57,6 +57,19 @@ column, so the "179 distinct names" completeness claim was itself
 incomplete; extended the sweep to a documented `JSON_LIKE_TYPE_NAMES` set,
 corrected the count to 180/231, and re-ran the bug-detection pass against
 the newly-included `result_data` specifically (clean — see round-8 entry).
+**Round 9** is back on the session-hijack tracker, a different bug class
+from rounds 3–7's eviction-ordering family: `detect_session_hijack` awaits
+`log_audit_event()`/`_add_alert()` — real DB-I/O yield points — _before_
+writing its decision back to the (module-singleton-shared) trackers, so a
+second concurrent call for the same session_id can write in between and get
+silently clobbered when the first call resumes. Verified real with an actual
+`asyncio` reproduction (fails against round-8's `c417d659`, passes after),
+and fixed by moving the tracker writes before the alert-dispatch awaits —
+matching the write-before-await pattern the other three tracker methods in
+this file already use, and confirmed not to reintroduce rounds 6/7's own
+fixes. See the round-9 entry for the full verification and why this
+qualified as the small, established-pattern kind of fix rather than
+something to flag.
 The timeline matters here, not just the diff, so read those entries rather
 than only the summary.
 
@@ -99,6 +112,136 @@ A duplicate close-out PR, [#2119](https://github.com/thegspiro/the-logbook/pull/
 was opened against round 1's now-stale base (before round 2/3 landed) and
 closed without merging — merging it would have overwritten this section
 with round-1-only text and dropped the round 2/3 record.
+
+---
+
+### 2026-09-01 — Feature 00 (Cross-cutting baseline, pass 3) — Codex round 9: a real async interleaving race in detect_session_hijack, plus a one-line attribution fix
+
+**Two findings from Codex's review of round-8 commit `c417d659`.**
+
+**1. Doc-accuracy fix (quick).** A comment in `detect_session_hijack`
+(`security_monitoring.py:634`) still attributed the eviction-ordering
+regression to "the round-2 fix" alone. The corrected attribution —
+established by round 4's own correction, and stated in this file's
+"Attribution correction" note — is that the ordering bug was **introduced**
+in round 1's commit `3b6b65e4` and only **widened** (not introduced) by round
+2's `df7438e0`. Reworded the comment to match; no code changed.
+
+**2. Concurrency finding: verified real, reproduced, and fixed by reordering
+— not flagged.** Codex flagged that `detect_session_hijack` is `async def`
+and, on its alert-firing path, `await`s `log_audit_event()` and
+`self._add_alert()` — both real DB-I/O yield points — _before_ writing the
+call's decision back to `_session_trusted_ip`/`_session_ips`. Since
+`security_monitor` (`app/services/security_monitoring.py`, module scope) is a
+single instance shared by every request through the ASGI middleware
+(`security_middleware.py:1400-1418` for the hijack check,
+`:1425-1445` for the sibling exfiltration check), and this method runs on
+every authenticated request ("a genuine hot path", per this file's own
+`_enforce_key_caps` docstring), a second concurrent request for the SAME
+session_id can run its own read-decide-write cycle while the first is
+suspended mid-await — and when the first call resumes, it writes its own
+now-stale snapshot back, silently overwriting whatever the second call
+legitimately wrote in the meantime.
+
+**Verified before deciding anything, per this rotation's own rule that a
+wrong fix in a security path is worse than an honest finding:**
+
+- Confirmed `detect_session_hijack` is `async def` and that
+  `log_audit_event()` (→ `audit_logger.create_log_entry`: `async with
+db.begin_nested()`, `await db.execute(...)`) and `_add_alert()` (`await
+db.execute(...)`, `await db.flush()`) are genuine `await` points doing real
+  DB I/O — not synchronous calls in async clothing.
+- Confirmed `security_monitor = SecurityMonitoringService()`
+  (`security_monitoring.py`, bottom of file) is a true module-level
+  singleton, and that `security_middleware.py` imports and calls it directly
+  on every request — not a per-request instance.
+- Checked the other three tracker methods in the same file
+  (`_check_rate_limit`, `detect_brute_force`, `detect_data_exfiltration`) for
+  the same shape, per the task's instruction not to stop at the one method
+  Codex named: **all three already write their tracker state before doing
+  anything that awaits** — each one's alert-dispatch `await`s sit strictly
+  _after_ its tracker write, already documented in each method's own
+  round-5 comments. `detect_session_hijack` was the only one of the four
+  with an `await` sandwiched between its read and its write. That is exactly
+  why 8 prior rounds' "checked every method" passes never caught this: the
+  bug isn't the read-after-evict/write-after-evict shape those rounds hunted
+  for, it's a new shape specific to this one method's own alert-dispatch
+  position.
+- Reproduced with an actual `asyncio` test
+  (`TestSessionHijackConcurrentInterleaving`, new in
+  `test_security_monitoring.py`): two coroutines call
+  `detect_session_hijack` for the same `session_id`. Call A's IP change fires
+  the hijack alert and is stalled inside a monkeypatched `log_audit_event`
+  (an `asyncio.Event` under test control, standing in for the real DB-I/O
+  await). While A is stalled, call B — a legitimate IP change outside the
+  5-minute window — runs to completion and writes its own trusted-IP update.
+  A is then released and resumes. **Run against the pre-fix source (commit
+  `c417d659`): fails** — A's resumed write overwrites B's
+  `_session_trusted_ip` entry (ends up `10.0.0.1`/A's stale timestamp instead
+  of `10.0.0.3`/B's) and B's forensic-log entry vanishes from `_session_ips`
+  entirely, exactly as predicted. **Run against the fix below: passes.**
+- Real-world likelihood assessed honestly, not inflated or deflated: this
+  detection runs on _every_ authenticated response, and this app's frontend
+  is a SPA that routinely fires several concurrent API calls carrying the
+  same session cookie on one page load (parallel widget fetches,
+  prefetching) — so two concurrent calls for the same session_id are
+  ordinary traffic here, not an attack precondition. The race window only
+  opens on the alert-firing branch specifically (an IP change observed
+  within 5 minutes), which narrows it, but that branch fires for both a
+  genuine hijack attempt _and_ a legitimate client presenting multiple
+  egress IPs (mobile carrier-grade NAT, corporate proxies round-robining
+  outbound IPs) making concurrent requests — a known source of
+  false-positive hijack alerts this method's own leniency window already
+  exists to soften. Impact where it does fire: a security-relevant forensic
+  log (`_session_ips`) can silently lose an entry, and the trusted-IP
+  baseline's timestamp can regress — neither corrupts the _alert_ that
+  already fired on either individual call (each call's own alert-or-not
+  decision, and the audit-log row it wrote, are computed and persisted
+  independently of the race), so this is a data-integrity gap in the
+  monitoring layer's tracker state for _subsequent_ calls, not a bypass of
+  detection on the call where the interleaving happens. Real, worth fixing,
+  and not a reason to distrust an alert that already fired.
+
+**Fix — chosen over flagging, and why it qualifies as the small kind, not the
+architectural kind:** moved both tracker writes
+(`self._session_trusted_ip[key] = ...` and `self._session_ips[key] = ...`)
+to occur immediately after the (synchronous) decision logic, _before_ the
+`await log_audit_event(...)` / `await self._add_alert(...)` calls that only
+run when an alert fires. This is the exact pattern the other three methods
+in this file already use (compute → write → _then_ await for alert
+dispatch), so it is this method finally matching the other three, not a new
+pattern introduced under review pressure. Nothing the writes depend on
+(`new_trusted_ip`, `new_trusted_time`, `session_data`, `current_ip`, `now`)
+is produced or altered by the awaited calls, so reordering changes nothing
+about _what_ gets written, only _when_ — confirmed by running the full
+existing `TestSessionHijackTrustedBaseline` and
+`TestSessionHijackLeniencyWindow` suites (rounds 6 and 7's own regression
+tests) unchanged after the reorder: still pass, showing the reorder didn't
+reopen either of those prior bugs. No lock, no merge-not-overwrite semantics,
+no architecture change — the fix removes the only `await` between this
+method's read and its write, so there is nothing left for a concurrent call
+to interleave with. A per-session `asyncio.Lock` was considered and rejected
+as unneeded: once the write moves ahead of the await, this method's tracker
+section is synchronous start-to-finish again, same as the other three, which
+is what actually closes the race rather than just narrowing its window.
+
+**Verification:** `TestSessionHijackConcurrentInterleaving` (1 new test) —
+fails against `c417d659`, passes after the fix. Full
+`test_security_monitoring.py` **27/27**, up from 26.
+
+**Completion gate (round 9 — full re-run):** `flake8`/`black --check`/
+`isort --check-only` clean on `app/ tests/ alembic/ scripts/`;
+`validate_migrations.py --strict` unchanged (399 revisions, single head
+`4e7e125cb00f`, no migration touched); `pytest tests/ -m "not integration and
+not slow and not docker" --cov=app --cov-fail-under=51` (CI's exact Backend
+Unit Tests invocation) — **8106 passed, 2 skipped, 58.66% coverage**; `cd
+frontend && npm run typecheck` (aliased 7.0.2 compiler) **0 errors**; `cd
+frontend && npm run lint` **0 errors, 0 warnings** (no frontend files touched
+this round). Files changed this round: `app/services/security_monitoring.py`
+(comment fix + the write-before-await reorder) and its test file (new
+`TestSessionHijackConcurrentInterleaving`); `CHANGELOG.md`;
+`docs/security-review/SEC-00-cross-cutting-baseline.md` and this file
+(round-9 write-up + this log entry). Same branch, same PR #2132.
 
 ---
 

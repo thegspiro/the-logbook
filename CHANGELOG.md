@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### A concurrent request for the same session could silently erase another request's session-hijack tracking data (2026-09-01)
+
+**Fixed**
+
+- **`detect_session_hijack` awaited the audit-log write and alert dispatch
+  BEFORE writing its decision back to the in-memory session trackers, and
+  those trackers are shared by every request through a single process-wide
+  security-monitoring instance.** This app's frontend routinely fires
+  several concurrent API calls under one session cookie (parallel data
+  fetches on page load), so two concurrent requests for the same session
+  were ordinary, not rare. When one such request's IP-change check fired a
+  hijack alert, it would suspend mid-request to log the alert to the
+  database — and if a second concurrent request for the same session
+  finished its own (legitimate) update to the tracker while the first was
+  suspended, the first request would resume and overwrite the second
+  request's update with its own, now-stale snapshot: silently erasing an
+  entry from the session's forensic IP history and, in some orderings,
+  moving the trusted-IP baseline's recorded time backward. Neither
+  request's own alert-or-not decision was affected — only the tracker data
+  used to evaluate the _next_ request for that session. Fixed by writing
+  the tracker state before dispatching the alert (matching the order this
+  file's three other tracking methods already used), so there is no longer
+  a gap in which a concurrent request's update can be silently discarded. 1
+  new regression test drives two genuinely concurrent requests for the same
+  session, one deliberately stalled mid-dispatch while the other completes,
+  and confirms the completed request's update survives; verified to fail
+  against the prior commit and pass after the fix.
+
 ### A session-hijack alert could be silently waved through once enough real time passed, even under continuous attack (2026-09-01)
 
 **Fixed**

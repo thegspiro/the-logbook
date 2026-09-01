@@ -631,7 +631,8 @@ class SecurityMonitoringService:
         # eviction would find no prior IP for this session, treat a genuine
         # hijack as a first-ever observation, silently reset the baseline,
         # and never fire the alert (Codex, PR #2128, round 3 — a regression
-        # introduced by the round-2 fix that added the call below).
+        # introduced in round 1's commit 3b6b65e4, widened in round 2's
+        # df7438e0, which added the call below).
         session_data = self._session_ips.get(key, [])
 
         # The trusted comparison baseline (see _session_trusted_ip's
@@ -682,19 +683,6 @@ class SecurityMonitoringService:
                             "time_since_last_request": time_diff,
                         },
                     )
-
-                    await log_audit_event(
-                        db=db,
-                        event_type="session_hijack_suspected",
-                        event_category="security",
-                        severity="critical",
-                        event_data=alert.__dict__,
-                        ip_address=current_ip,
-                        user_id=user_id,
-                        session_id=session_id,
-                    )
-
-                    await self._add_alert(db, alert)
 
                     # Do NOT promote the alerting IP to "trusted". Round 5
                     # (commit 90e373cc) made the tracker write unconditional
@@ -774,6 +762,41 @@ class SecurityMonitoringService:
         # session needs to see every IP that touched it, not just the ones
         # that were never flagged.
         self._session_ips[key] = (session_data + [(current_ip, now)])[-10:]
+
+        # Both tracker writes above happen BEFORE the alert-dispatch awaits
+        # below, not after -- deliberately, and unlike the two blocks'
+        # position in every revision through round 8. `log_audit_event()`
+        # and `_add_alert()` are real `await` points (DB I/O), and this
+        # method runs on every authenticated request via the ASGI
+        # middleware (security_middleware.py), against the single
+        # module-level `security_monitor` instance. A second concurrent
+        # request for the SAME session_id -- routine for this SPA, which
+        # fires several API calls in parallel on one page load, not just an
+        # attacker replaying a stolen cookie -- can run its own read/decide/
+        # write while this call is suspended mid-await. With the tracker
+        # write sitting *after* the awaits (the old order), that second
+        # call's write would land first and then be silently clobbered by
+        # this call resuming with its own now-stale `new_trusted_ip` /
+        # `new_trusted_time` / `session_data` snapshot -- corrupting the
+        # forensic IP log and, since this call's `now` was captured before
+        # the other call's, potentially moving the trusted baseline's
+        # timestamp backward. Writing first removes the only await between
+        # this call's read and its write, so there is nothing left for a
+        # concurrent call to interleave with (Codex, PR #2132, round 9;
+        # see TestSessionHijackConcurrentInterleaving).
+        if alert is not None:
+            await log_audit_event(
+                db=db,
+                event_type="session_hijack_suspected",
+                event_category="security",
+                severity="critical",
+                event_data=alert.__dict__,
+                ip_address=current_ip,
+                user_id=user_id,
+                session_id=session_id,
+            )
+
+            await self._add_alert(db, alert)
 
         return alert
 

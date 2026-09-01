@@ -1336,6 +1336,194 @@ matters, not just under the lint-compatibility one. Every completion-gate
 section in this file (and, where they quote it, PR bodies for this rotation)
 should read `npm run typecheck`, not `tsc --noEmit`.
 
+### Round 9 (Codex review on round-8 commit `c417d659`): a real async interleaving race in `detect_session_hijack`, plus a stale attribution comment
+
+Two findings, handled separately per this rotation's own rule that a
+doc-accuracy nit and a genuine concurrency finding call for different levels
+of scrutiny.
+
+**Doc fix.** The comment at `security_monitoring.py:634` (inside
+`detect_session_hijack`, explaining why `session_data` is read before
+`_enforce_key_caps()` runs) still read "a regression introduced by the
+round-2 fix that added the call below." Per the "Attribution correction" note
+above (round 4), the accurate framing is: **introduced in round 1's
+`3b6b65e4`, widened in round 2's `df7438e0`.** Reworded to match. No
+behavior change.
+
+**Concurrency finding.** Codex's claim: `detect_session_hijack` is `async
+def`; on its alert-firing path it `await`s `log_audit_event()` and
+`self._add_alert()` — both real DB-I/O yield points — **before** writing its
+decision back to `_session_trusted_ip` / `_session_ips`; `security_monitor`
+is a module-level singleton shared by every request via the ASGI middleware;
+so a second concurrent call for the same `session_id` can write to those
+trackers while the first call is suspended mid-await, and the first call's
+resumption then overwrites the second call's write with a stale snapshot —
+losing a forensic-log entry and potentially moving the trusted-IP timestamp
+backward.
+
+**Verification, in the order the task required — claim, then singleton,
+then reproduction, then impact — nothing taken on reasoning alone:**
+
+1. **Are these real `await` points?** Yes, traced to the actual I/O.
+   `log_audit_event()` (`app/core/audit.py:814`) delegates to
+   `AuditLogger.create_log_entry()` (`audit.py:163`), which opens `async with
+db.begin_nested()` and does two `await db.execute(...)` calls inside it —
+   a nested transaction and two real round-trips to the (mocked-in-tests,
+   real-in-production) async DB driver. `_add_alert()`
+   (`security_monitoring.py:290`) does `await db.execute(...)` (the
+   alert's owning-org lookup) and `await db.flush()`. Neither is a
+   synchronous function merely declared `async`; both are genuine
+   cooperative-yield points under `asyncio`.
+2. **Is `security_monitor` actually a shared singleton on the request
+   path, not a fresh instance per call?** Yes.
+   `security_monitoring.py`'s last line is `security_monitor =
+SecurityMonitoringService()` at module scope — constructed once, at
+   import time. `security_middleware.py:1403` and `:1406` import that exact
+   name and call `security_monitor.detect_session_hijack(...)` directly, for
+   **every** authenticated request that carries `user_id`/`session_id`
+   /`client_ip` (`security_middleware.py:1400`) — not behind a
+   per-request factory or DI scope. This is also the method's own
+   documented hot-path assumption (`_enforce_key_caps`'s docstring: "a
+   genuine hot path (`detect_session_hijack` fires on every authenticated
+   response)").
+3. **Same bug shape checked against the other three tracker methods in this
+   file** (`_check_rate_limit`, `detect_brute_force`,
+   `detect_data_exfiltration`), per the task's explicit instruction not to
+   stop at the one method named. All three already write their tracker
+   state (the `self._api_calls[ip] = calls` / `self._login_attempts[ip] =
+ip_attempts` / `self._data_transfers[user_id] = transfers` lines) **before**
+   building any `SecurityAlert` or awaiting `log_audit_event`/`_add_alert` —
+   each one's own round-5 comment already says so explicitly ("Write the
+   filtered window back AFTER eviction... Check threshold [below]"). Only
+   `detect_session_hijack` interleaves an `await` between its read and its
+   write, because its alert-dispatch calls sit _inside_ the same `if
+trusted_data:` block that computes the new tracker values, ahead of the
+   writes at the bottom of the method. This is a genuinely different shape
+   from the read-after-evict/write-after-evict family rounds 3–5 fixed
+   (and round 4 found a fourth instance of) — which is exactly why eight
+   rounds of "checked every method" passes on that bug class never surfaced
+   it.
+4. **Reproduced, not just reasoned about.** New test
+   `TestSessionHijackConcurrentInterleaving` in
+   `backend/tests/test_security_monitoring.py`. Two coroutines share one
+   `SecurityMonitoringService` instance and call `detect_session_hijack` for
+   the same `session_id`. Call A presents an IP change inside the 5-minute
+   window (fires the hijack alert) and is stalled inside a monkeypatched
+   `app.services.security_monitoring.log_audit_event` — an `asyncio.Event`
+   under the test's control stands in for the real DB-I/O suspension. While
+   A is parked there, call B — a legitimate IP change the test arranges to
+   land outside the 5-minute window, so it takes the no-alert branch and
+   never awaits at all — runs to completion, writing its own entries to both
+   trackers. Only then is A released to resume and finish.
+
+   ```python
+   # backend/tests/test_security_monitoring.py
+   # A stalls inside log_audit_event; B runs to completion in the gap;
+   # A is released and resumes last.
+   alert_a, alert_b = await asyncio.gather(call_a(), call_b())
+   assert alert_a is not None
+   assert alert_b is None
+   final_ip, _ = svc._session_trusted_ip[key][-1]
+   assert final_ip == "10.0.0.3"       # B's IP, not A's stale "10.0.0.1"
+   assert "10.0.0.3" in [ip for ip, _ in svc._session_ips[key]]
+   ```
+
+   **Run against the pre-round-9 source (commit `c417d659`, saved aside and
+   swapped in for the run, then restored): fails**, exactly as predicted —
+   `final_ip` comes back `"10.0.0.1"` (call A's pre-hijack trusted IP,
+   written by A's stale resume) instead of B's `"10.0.0.3"`, and
+   `"10.0.0.3"` is absent from `_session_ips` (B's forensic entry, silently
+   erased by A rebuilding the list from its own pre-B `session_data`
+   snapshot). **Run against the fix (below): passes.** This is a genuine
+   reproduction of both halves of Codex's claim — the stale-overwrite on
+   `_session_trusted_ip` and the erased entry in `_session_ips` — not an
+   assertion accepted on the strength of the reasoning alone.
+
+5. **Impact, assessed honestly rather than inflated or minimized for the
+   sake of a clean decision.** This detection runs on every authenticated
+   request, and this app is a React SPA that fires multiple concurrent API
+   calls under one session cookie as a matter of routine (parallel widget
+   fetches on page load, prefetching) — so two concurrent calls for the same
+   `session_id` are ordinary traffic here, not solely an attacker replaying
+   a stolen cookie. The race window is narrower than "every call," though:
+   it only opens on the alert-firing branch (an IP change observed within 5
+   minutes of the last), which correlates with either a genuine hijack in
+   progress or a legitimate client presenting multiple egress IPs (mobile
+   carrier-grade NAT, corporate proxies round-robining outbound addresses) —
+   already a known source of the false-positive alerts this method's
+   leniency window exists to soften, and a plausible source of concurrent
+   requests specifically during that same short window. What's actually at
+   risk is bounded: each call's own alert-or-not decision and the audit-log
+   row it writes are computed and persisted independently, unaffected by the
+   race — what the race corrupts is the _tracker state a later call reads_,
+   i.e. the session's stored forensic IP history and the trusted-baseline
+   timestamp used to evaluate the _next_ request. Real, and worth fixing on
+   its own terms; not a reason to distrust an alert that has already fired,
+   and not the kind of finding whose severity needed rounding up or down to
+   make the fix-vs-flag call easier.
+
+**Fix — reorder, not redesign.** Moved both tracker writes
+(`self._session_trusted_ip[key] = [(new_trusted_ip, new_trusted_time)]` and
+`self._session_ips[key] = (session_data + [(current_ip, now)])[-10:]`) to run
+immediately after the synchronous decision logic that computes
+`new_trusted_ip` / `new_trusted_time` and builds the `SecurityAlert` object
+(if any), and moved the `await log_audit_event(...)` / `await
+self._add_alert(db, alert)` pair to run afterward, gated on `if alert is not
+None:`. This is not a new pattern invented for this fix — it is exactly the
+compute-then-write-then-await-for-dispatch shape `_check_rate_limit`,
+`detect_brute_force`, and `detect_data_exfiltration` already use, so
+`detect_session_hijack` now matches the other three instead of being the one
+outlier. None of the values written (`new_trusted_ip`, `new_trusted_time`,
+`session_data`, `current_ip`, `now`) are produced or altered by the two
+awaited calls, so the reorder changes _when_ the write happens, never _what_
+gets written — confirmed by re-running the full pre-existing
+`TestSessionHijackTrustedBaseline` (round 6's regression tests) and
+`TestSessionHijackLeniencyWindow` (round 7's) suites unmodified after the
+reorder: both still pass, showing the reorder does not reopen either prior
+bug. With the write now sitting ahead of both awaits, there is no `await`
+left between this method's read and its write for a concurrent call to land
+inside — closing the race outright rather than narrowing it.
+
+**Why this was fixed rather than flagged.** The task's own criterion is
+whether the fix is "small... doesn't require a broader redesign... and
+doesn't lose any needed ordering guarantee elsewhere." This qualifies on all
+three: it is a pure statement reorder inside one method, touching no other
+method, model, or migration; it requires no `asyncio.Lock`, no change to how
+alerts are dispatched, and no merge-vs-overwrite semantics decision (the
+"last write wins" contract this dict was always written with is preserved —
+what changes is which call's write happens to run last, which is now
+determined by request completion order rather than an arbitrary await
+suspension); and every ordering guarantee the file's prior seven rounds
+established (read-before-evict, write-after-evict, trusted-IP-not-promoted-
+on-alert, timestamp-refreshed-on-alert) is unaffected, verified by the
+unmodified regression suites for rounds 6 and 7 above. An `asyncio.Lock` per
+session key was considered explicitly and rejected as unnecessary
+complexity: it would serialize concurrent calls for the same session rather
+than removing the interleaving opportunity, adds a new failure mode (lock
+contention, potential deadlock interaction with the DB session), and buys
+nothing the reorder doesn't already deliver, since the reorder leaves the
+method's tracker-mutating section synchronous start-to-finish.
+
+**Verification:** `TestSessionHijackConcurrentInterleaving` (1 new test) —
+verified to **fail** against the pre-round-9 commit `c417d659` and **pass**
+after the fix, per the reproduction steps above. Full
+`test_security_monitoring.py`: **27/27**, up from 26.
+
+**Completion gate (round 9 — full re-run):** `flake8`/`black --check`/
+`isort --check-only` clean on `app/ tests/ alembic/ scripts/`;
+`validate_migrations.py --strict` unchanged (399 revisions, single head
+`4e7e125cb00f`, no migration touched this round); full backend unit suite
+matching CI's `Backend Unit Tests` job exactly (`pytest tests/ -m "not
+integration and not slow and not docker" --cov=app --cov-fail-under=51`):
+**8106 passed, 2 skipped, 58.66% coverage** (well over the 51% floor); `cd
+frontend && npm run typecheck` (aliased 7.0.2 compiler) **0 errors**; `cd
+frontend && npm run lint` **0 errors, 0 warnings** (no frontend files touched
+this round — this round's whole diff is backend + docs). Files changed:
+`app/services/security_monitoring.py` (the comment fix and the
+write-before-await reorder in `detect_session_hijack`) and its test file
+(new `TestSessionHijackConcurrentInterleaving`); `CHANGELOG.md`; this file
+and `PROGRESS.md`.
+
 ---
 
 ## Pass 2 (2026-08-27) — re-sweep after rotation pass 1

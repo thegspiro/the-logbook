@@ -7,6 +7,7 @@ pattern matching (SQLi / XSS / path traversal), per-IP API rate limiting,
 and brute-force login detection. The audit-log call is stubbed. DB mocked.
 """
 
+import asyncio
 from datetime import datetime, timedelta, timezone
 from unittest import mock
 from unittest.mock import AsyncMock, MagicMock
@@ -993,6 +994,106 @@ class TestSessionHijackLeniencyWindow:
             "with no intervening activity was flagged as a hijack -- the "
             "leniency window this fix preserves exists exactly for this "
             "case"
+        )
+
+
+class TestSessionHijackConcurrentInterleaving:
+    """PR #2132 round 9 (Codex): `detect_session_hijack` is `async def` and,
+    on the alert-firing path, awaits `log_audit_event()` before writing its
+    decision back to `_session_trusted_ip` / `_session_ips`. Those trackers
+    live on the module-level `security_monitor` singleton
+    (`app/services/security_monitoring.py`) that every authenticated request
+    shares via the ASGI middleware (`security_middleware.py`), and this SPA
+    routinely fires several concurrent API calls carrying the same session
+    cookie -- so two concurrent calls for the SAME session_id are an
+    ordinary occurrence, not just an attacker replaying a stolen cookie.
+
+    While one call (A) is suspended inside that await, a second call (B) for
+    the same session can run its own read-decide-write cycle to completion.
+    When A resumes, it was still holding its OWN pre-await snapshot of
+    `session_data` and its own locally-computed `new_trusted_ip` /
+    `new_trusted_time` -- so its write overwrites B's, erasing B's forensic
+    log entry and (since A's `now` was captured before B's) potentially
+    moving the trusted-IP timestamp backward.
+
+    The fix moves both tracker writes to before the alert-dispatch awaits,
+    matching this file's own established pattern in `_check_rate_limit`,
+    `detect_brute_force`, and `detect_data_exfiltration`, all three of which
+    already write their tracker state before doing anything that awaits.
+    That leaves no await between this method's read and its write, so there
+    is nothing left for a concurrent call to interleave with.
+    """
+
+    async def test_concurrent_calls_do_not_clobber_each_others_write(self, monkeypatch):
+        svc = _svc()
+        db = _db()
+        session_id = "sess-race"
+        key = f"session:{session_id}"
+
+        baseline_time = datetime.now(timezone.utc)
+        svc._session_trusted_ip[key] = [("10.0.0.1", baseline_time)]
+        svc._session_ips[key] = [("10.0.0.1", baseline_time)]
+
+        a_reached_await = asyncio.Event()
+        release_a = asyncio.Event()
+
+        async def _stalling_log_audit_event(*args, **kwargs):
+            # Stands in for the real DB-I/O await inside log_audit_event.
+            # Only call A ever reaches this (B's IP change is legitimate --
+            # outside the 5-minute window -- and never fires an alert).
+            a_reached_await.set()
+            await release_a.wait()
+
+        monkeypatch.setattr(
+            "app.services.security_monitoring.log_audit_event",
+            _stalling_log_audit_event,
+        )
+
+        async def call_a():
+            # "Attacker" / second-IP request: within the 5-minute window,
+            # fires the hijack alert and stalls mid-dispatch.
+            return await svc.detect_session_hijack(
+                db,
+                session_id=session_id,
+                current_ip="10.0.0.2",
+                user_agent="ua",
+                user_id="u1",
+            )
+
+        async def call_b():
+            # Runs while A is suspended. Move the recorded trusted-IP
+            # timestamp back so B's own read of the (still pre-A-write)
+            # baseline falls outside the 5-minute hijack window -- B is a
+            # legitimate, non-alerting IP change (e.g. mobile network
+            # handoff), not a second attacker.
+            await a_reached_await.wait()
+            ip, ts = svc._session_trusted_ip[key][-1]
+            svc._session_trusted_ip[key] = [(ip, ts - timedelta(minutes=10))]
+            result = await svc.detect_session_hijack(
+                db,
+                session_id=session_id,
+                current_ip="10.0.0.3",
+                user_agent="ua",
+                user_id="u1",
+            )
+            release_a.set()
+            return result
+
+        alert_a, alert_b = await asyncio.gather(call_a(), call_b())
+
+        assert alert_a is not None, "call A's hijack alert should have fired"
+        assert alert_b is None, "call B's legitimate IP change should not alert"
+
+        final_ip, _final_ts = svc._session_trusted_ip[key][-1]
+        assert final_ip == "10.0.0.3", (
+            "call A's stale post-await write clobbered call B's legitimate "
+            "trusted-IP update made while A was suspended"
+        )
+
+        observed_ips = [ip for ip, _ in svc._session_ips[key]]
+        assert "10.0.0.3" in observed_ips, (
+            "call B's observed-IP entry was erased from the forensic log by "
+            "call A's stale post-await write"
         )
 
 
