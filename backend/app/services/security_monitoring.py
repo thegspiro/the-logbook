@@ -420,12 +420,23 @@ class SecurityMonitoringService:
         # touch.
         self._api_calls[ip].append(now)
         calls = [ts for ts in self._api_calls[ip] if ts > minute_ago]
-        self._api_calls[ip] = calls
 
-        # Periodically evict stale keys to bound memory usage. Runs after the
-        # read/write above, captured into `calls`, so eviction can never
-        # remove the entry this call just appended for `ip`.
+        # Periodically evict stale keys to bound memory usage.
         self._evict_stale_tracking_keys()
+
+        # Write the filtered window back AFTER eviction, not before it. The
+        # read above protects this call's own decision from a corrupted
+        # value, but eviction can still delete `ip`'s entry from the dict as
+        # part of its batch -- if the write happened before eviction (as it
+        # did through PR #2132 round 4), that delete goes through anyway,
+        # and the *next* call from this ip finds no entry at all: not a
+        # miscount, a missing baseline, indistinguishable from a first-ever
+        # call. Writing here, after eviction has already run, guarantees the
+        # tracker ends every call holding a live, current entry for the
+        # calling key -- and since that entry now carries this call's
+        # timestamp, it will also be among the least likely to be evicted on
+        # the *next* call's sweep (round-5 fix, Codex, PR #2132).
+        self._api_calls[ip] = calls
 
         # Check threshold
         if len(calls) > self.thresholds.api_calls_per_minute:
@@ -474,15 +485,16 @@ class SecurityMonitoringService:
         # Track by IP
         self._login_attempts[ip].append(now)
         ip_attempts = [ts for ts in self._login_attempts[ip] if ts > hour_ago]
-        self._login_attempts[ip] = ip_attempts
 
         # Track by user if provided
         user_attempts: List[datetime] = []
+        user_key: Optional[str] = None
         if user_id:
-            key = f"user:{user_id}"
-            self._login_attempts[key].append(now)
-            user_attempts = [ts for ts in self._login_attempts[key] if ts > hour_ago]
-            self._login_attempts[key] = user_attempts
+            user_key = f"user:{user_id}"
+            self._login_attempts[user_key].append(now)
+            user_attempts = [
+                ts for ts in self._login_attempts[user_key] if ts > hour_ago
+            ]
 
         # Cap enforcement runs after the reads above, captured into
         # ip_attempts/user_attempts, rather than before them. Brute-force /
@@ -499,6 +511,20 @@ class SecurityMonitoringService:
         # tracker to its cap. Only the hard cap (not the time-based sweep) so
         # this stays cheap on the hot login path.
         self._enforce_key_caps()
+
+        # Write the filtered windows back AFTER cap enforcement, not before
+        # it. Reading before eviction (above) protects this call's own
+        # threshold decision, but eviction can still delete ip's (and/or
+        # user_key's) entry from the dict as part of its batch -- writing
+        # before eviction ran (as this did through PR #2132 round 4) lets
+        # that delete stand, so the *next* attempt from the same ip/user
+        # finds no history at all and is scored as attempt #1, not a
+        # continuation. Writing here guarantees the tracker ends this call
+        # holding a live, current entry for every key this call touched
+        # (round-5 fix, Codex, PR #2132).
+        self._login_attempts[ip] = ip_attempts
+        if user_key is not None:
+            self._login_attempts[user_key] = user_attempts
 
         # Check IP threshold
         if len(ip_attempts) >= self.thresholds.failed_logins_per_hour:
@@ -594,6 +620,8 @@ class SecurityMonitoringService:
         # this call is about to compare against.
         self._enforce_key_caps()
 
+        alert: Optional[SecurityAlert] = None
+
         if session_data:
             last_ip, last_time = session_data[-1]
 
@@ -631,16 +659,33 @@ class SecurityMonitoringService:
                     )
 
                     await self._add_alert(db, alert)
-                    return alert
 
-        # Track this request
-        self._session_ips[key].append((current_ip, now))
+        # Track this request unconditionally -- including when an alert just
+        # fired above -- built from `session_data` (captured before eviction)
+        # plus this call's own entry, rather than appending to
+        # self._session_ips[key] in place. Two distinct bugs made that the
+        # wrong shape: (1) the old code returned early the moment an alert
+        # fired, skipping this append entirely, so a session's tracker entry
+        # never advanced past its pre-hijack IP; (2) even without that early
+        # return, appending to self._session_ips[key] reads whatever cap
+        # enforcement above left behind, which can be nothing at all if this
+        # key was evicted in the batch. Rebuilding from the pre-eviction
+        # `session_data` and writing the result back is what actually fixes
+        # both: the tracker always ends this call holding a live, current
+        # entry for the session, so the *next* call has a real baseline to
+        # compare against.
+        #
+        # This closes the round-5 gap Codex found in the round-4 fix: reading
+        # the old value before eviction (above) protects only *this* call's
+        # decision. Without also writing the new value back after eviction,
+        # a session whose key got evicted the moment its hijack alert fired
+        # lost its baseline outright -- the very next request from the same
+        # hijacked session found no prior IP, was scored as a first-ever
+        # observation, and the alert stream for an ongoing hijack went silent
+        # after its correctly-fired first alert (Codex, PR #2132).
+        self._session_ips[key] = (session_data + [(current_ip, now)])[-10:]
 
-        # Keep only last 10 entries
-        if len(self._session_ips[key]) > 10:
-            self._session_ips[key] = self._session_ips[key][-10:]
-
-        return None
+        return alert
 
     async def detect_data_exfiltration(
         self,
@@ -674,7 +719,6 @@ class SecurityMonitoringService:
         transfers = [
             (size, ts) for size, ts in self._data_transfers[user_id] if ts > day_ago
         ]
-        self._data_transfers[user_id] = transfers
 
         # Calculate total transferred in last 24 hours from the local list
         # captured above, not another dict lookup — see comment above.
@@ -687,6 +731,17 @@ class SecurityMonitoringService:
         # Runs after the transfer history above is captured into `transfers`
         # so eviction can never wipe the data this call needs to decide with.
         self._enforce_key_caps()
+
+        # Write the filtered 24h window back AFTER cap enforcement, not
+        # before it. Reading before eviction (above) protects this call's own
+        # total/alert decision, but eviction can still delete user_id's entry
+        # from the dict as part of its batch -- writing before eviction ran
+        # (as this did through PR #2132 round 4) lets that delete stand, so
+        # the *next* transfer from the same user finds no history and the
+        # running 24h total silently resets to just that one transfer.
+        # Writing here guarantees the tracker ends this call holding a live,
+        # current entry for user_id (round-5 fix, Codex, PR #2132).
+        self._data_transfers[user_id] = transfers
 
         alerts = []
 

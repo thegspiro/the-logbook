@@ -16,22 +16,28 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**Feature 00 (Cross-cutting baseline), pass 3, round 3+4 follow-up** —
+**Feature 00 (Cross-cutting baseline), pass 3, round 3+4+5 follow-up** —
 [#2132](https://github.com/thegspiro/the-logbook/pull/2132), branch
 `claude/security-review-sec00-pass3-round3-fix`.
 [#2128](https://github.com/thegspiro/the-logbook/pull/2128) (rounds 1–2)
 **merged to `main` at commit `2b3231a3`** before Codex's round-3 review
-landed, so round 3 (and this PR's own round 4) are pushed to a **separate
-PR**, not a further push to `claude/security-review-sec00-pass3` — per
-Pitfall #24 ("Do Not Reuse a Branch Name After Its Pull Request Merges"),
-that branch's remote ref is gone and its PR is closed. See the round-3 and
-round-4 log entries below for what Codex found each time, including a real
-regression (not just a gap) in round 1's own ordering that shipped to `main`
-unfixed for a window, and — round 4 — the **same regression shape found a
-fourth time**, in a method round 3's own "checked every method" pass missed,
-plus a correction to this file's own (and `SEC-00`'s) prior misattribution of
-which round introduced the bug. The timeline matters here, not just the
-diff, so read those entries rather than only the summary.
+landed, so round 3 (and this PR's own rounds 4 and 5) are pushed to a
+**separate PR**, not a further push to `claude/security-review-sec00-pass3`
+— per Pitfall #24 ("Do Not Reuse a Branch Name After Its Pull Request
+Merges"), that branch's remote ref is gone and its PR is closed. See the
+round-3 through round-5 log entries below for what Codex found each time,
+including a real regression (not just a gap) in round 1's own ordering that
+shipped to `main` unfixed for a window, round 4's discovery of the **same
+regression shape found a fourth time** in a method round 3's "checked every
+method" pass missed, and round 5's finding that round 3/4's own fix — read
+the current key before eviction — was still incomplete on the write side:
+nothing restored the current key's entry into the tracker _after_ eviction
+ran, so a key correctly alerted on and then evicted lost its baseline for
+every call after. **Five rounds on this exact tracker-cap logic now; see the
+round-5 entry's closing note for why that streak, not any one round's fix,
+is the fact worth weighting on a future "0 gaps" claim against this same
+code.** The timeline matters here, not just the diff, so read those entries
+rather than only the summary.
 
 **Prior rounds on #2128 (now merged), for reference:** re-verified pass 1/2's
 five standing sweeps against current code (399 Alembic revisions, 1536
@@ -52,14 +58,164 @@ cap-enforcement helper never touched at all, left capped only by a dead code
 path. Both fixed. **Round 4** found the identical read-after-evict shape in a
 fourth method (`_check_rate_limit`) that round 3's own "checked every method"
 pass missed, and corrected this file's (and `SEC-00`'s) misattribution of the
-regression's origin to round 2 — it was round 1. See
-`SEC-00-cross-cutting-baseline.md`'s Pass 3 section for the full write-up of
-every correction across all four rounds.
+regression's origin to round 2 — it was round 1. **Round 5** found that the
+round 3/4 fix pattern (read the old value before eviction) protected only
+each call's own decision, not the _next_ call's baseline — fixed by writing
+the current call's contribution back into the tracker after eviction runs,
+on all five methods, though only `detect_session_hijack` was empirically
+exploitable this way (the other four already wrote before evicting, which
+incidentally protected them). See `SEC-00-cross-cutting-baseline.md`'s Pass 3
+section for the full write-up of every correction across all five rounds.
 
 A duplicate close-out PR, [#2119](https://github.com/thegspiro/the-logbook/pull/2119),
 was opened against round 1's now-stale base (before round 2/3 landed) and
 closed without merging — merging it would have overwritten this section
 with round-1-only text and dropped the round 2/3 record.
+
+---
+
+### 2026-09-01 — Feature 00 (Cross-cutting baseline, pass 3) — Codex round 5: read-before-evict was necessary but not sufficient — nothing wrote the new value back
+
+**Five rounds of Codex review on this same file's tracker-cap sweep now,
+across two PRs (#2128, #2132).** Round 4's fix (reviewed this round) added
+the fourth instance of the "read the current key's tracker entry into a
+local variable before calling `_enforce_key_caps()`" pattern first applied
+in round 3. That pattern is real and necessary — it stops eviction from
+corrupting the read a call uses to decide whether to alert — but Codex found
+it is not sufficient: nothing in it ever re-inserts the current key's entry
+into the tracker **after** eviction runs. A call whose key was the batch-
+eviction target could still correctly detect and alert on this call (using
+the protected pre-eviction read), while leaving the tracker holding no entry
+at all for that key afterward. The next call from the same key then finds no
+baseline and is scored as a first-ever observation — an ongoing attack stops
+being detected right after its first (correctly fired) alert.
+
+**Finding 1 (P2, the substantive fix): `detect_session_hijack` loses its
+tracked baseline the moment its hijack alert fires, if the session's key was
+also this call's eviction target.** Its read (`session_data`) and its write
+(appending `(current_ip, now)`) are two separate steps with
+`_enforce_key_caps()` in between, and the write was gated behind "no alert
+fired" via an early `return alert` on the hijack path:
+
+```python
+session_data = self._session_ips.get(key, [])   # read, before evict
+self._enforce_key_caps()                        # can still delete the entry
+if session_data:
+    if time_diff < 300:
+        ...
+        return alert                             # returns before writing
+self._session_ips[key].append((current_ip, now)) # only reached if no alert
+```
+
+Codex's reproduction: call 1, with the session's key as the eviction target,
+correctly fires the `session_hijack` alert. Call 2, immediately after, from
+the same session: `None`. Verified directly — `git stash`-ing the fix and
+running the new two-call test against commit `95db016b` reproduces exactly
+that: `alert1` is a `SecurityAlert`, `alert2` is `None`.
+
+**Fixed by removing the early return:** the method now always rebuilds
+`self._session_ips[key]` from the pre-eviction `session_data` plus this
+call's own `(current_ip, now)` (trimmed to the last 10 entries) and returns
+the alert (or `None`) at the end, regardless of which path was taken. This
+also fixes a second, eviction-independent bug the early return caused: even
+with no eviction at all, the pre-fix code never advanced a hijacked
+session's "last known IP" past its pre-hijack value, so every later request
+was compared against increasingly stale ground truth instead of the
+attacker's actual most recent IP.
+
+**Checked individually, not assumed, whether `_check_rate_limit`,
+`detect_brute_force`, and `detect_data_exfiltration` share this exact gap —
+they do not, empirically.** In all three, the read and the write are the
+same statement block, executed unconditionally, before
+`_enforce_key_caps()` is called (e.g. `detect_brute_force`: append, filter
+into a local var, _then_ `_enforce_key_caps()`). Because the write happens
+first, the current call's key always carries the freshest timestamp in the
+tracker by the time eviction runs, and `_enforce_key_caps()` evicts the
+_oldest_ keys — the current key structurally cannot be among them. Verified
+by `git stash`-ing the source fix and running the three corresponding new
+tests against `95db016b`: all three **pass unmodified**. Only the
+`detect_session_hijack` test fails against that commit.
+
+**Fix applied to all five methods anyway, for uniformity, and the
+alternative (excluding the current key from eviction) considered and
+rejected for this tracker shape:** two ways to close the gap were available
+— (A) always write the current call's contribution back after eviction
+runs, or (B) exclude the current call's key from eviction outright. (B) is
+the wrong default for a tracker where an attacker can mint many _distinct_
+keys cheaply and flood the cap; that concern does not apply here, since
+every key in these five trackers already _is_ one attacker-controlled
+identity (an IP, a session id, a user id) — there is no cheaper sub-value
+underneath a key to churn — so excluding the one key a call is actively
+using would have been safe for this tracker's actual shape. (A) was chosen
+anyway: it makes all five methods follow one uniform read/evict/write
+ordering rather than four doing write-then-evict and a fifth doing
+evict-then-write-with-exclusion, and after five rounds of this exact logic
+needing correction, one provable mechanism applied everywhere was judged
+worth the few extra lines in the three methods that did not strictly need
+it. See `SEC-00-cross-cutting-baseline.md`'s round-5 write-up for the full
+reasoning.
+
+**Verification:** 4 new tests in a new `TestWriteAfterEvictOrdering` class —
+one two-call sequence per affected method (call 1 fires its alert and puts
+the key up for eviction, call 2 asserts the tracker still has a live
+baseline), plus a third call in the `detect_session_hijack` test
+specifically to confirm the fix generalizes past the exact two-call
+reproduction Codex gave. `test_session_hijack_detects_a_second_and_third_ip_
+change_in_a_row` fails against `95db016b` and passes after the fix; the
+other three pass against `95db016b` unmodified (as the empirical check
+above found) and continue to pass after — they stand as regression guards
+against a future refactor reintroducing the same early-return-before-write
+shape, not as reproductions of a bug that was ever live in those three.
+`test_security_monitoring.py` **22/22**, up from 18.
+
+**Finding 2 (P3, doc/tooling accuracy): `backend/scripts/
+json_column_ast_sweep.py`'s "N files" summary counted `__init__.py` even
+though the sweep itself skips it while parsing** — `total_files` was
+`len(list(MODELS_DIR.glob("*.py")))` (44, every `.py` file), while `sweep()`
+explicitly excludes `__init__.py` (43 actually parsed). The script's own
+printed summary line, `backend/scripts/README.md`'s "Expected Output" block,
+and this round's own prior-round Codex reply all quoted the inflated 44.
+**Fixed:** both `total_files` and `sweep()` now iterate a single shared
+`_model_files()` helper that applies the `__init__.py` exclusion once, so the
+two can never drift apart again the way they just had. Re-ran the script —
+confirmed **43 files**, same 179 distinct names / 230 declarations (the
+name/declaration counts were never affected; only the file count in the
+summary line was wrong). `backend/scripts/README.md`'s "Expected Output"
+block updated to match.
+
+**Five review rounds on the same tracker-cap logic now, in one PR/its
+predecessor.** Stated plainly, per the standing instruction in this file not
+to fold a repeat finding into routine "more polish" language: round 1 added
+eviction but missed a tracker; round 2 fixed that but introduced the
+read-after-evict ordering bug; round 3 fixed that ordering in three of four
+methods; round 4 found and fixed the fourth, explicitly re-auditing all five
+eviction call sites against all five tracker reads and calling all five
+"correctly ordered" — and still missed that read-before-write does not imply
+write-after-evict; round 5 (this entry) fixed that. Every prior round's
+"checked every method, all fixed" framing was narrower than it read, each
+time in a different way. That repetition, not any single round's fix, is
+the fact worth carrying forward: a clean result from a future pass over this
+exact tracker-cap code is worth less evidentiary weight here than the same
+result elsewhere, and is exactly the place to look hardest for one more
+angle before accepting "audited all five, all correct" — round 4 wrote
+almost that exact sentence and was still one fix short.
+
+**Completion gate (round 5 — full re-run):** `flake8`/`black --check`/
+`isort --check-only` clean on `app/ tests/ alembic/ scripts/`;
+`validate_migrations.py --strict` unchanged (399 revisions, single head, no
+migration touched); `pytest tests/ -m "not integration and not slow and not
+docker" --cov=app --cov-fail-under=51` (CI's exact Backend Unit Tests
+invocation) — **8101 passed, 2 skipped** (both pre-existing skips, unrelated
+to this change: optional `pywebpush` dependency, and a `roles` table that no
+longer exists post-migration), coverage 58.66% (floor 51%); `cd frontend &&
+npm run typecheck` (aliased 7.0.2 compiler) 0 errors; `cd frontend && npm run
+lint` 0 errors, 0 warnings (no frontend files touched this round). Files
+changed this round: `app/services/security_monitoring.py` (write-after-evict
+on all five methods) and its test file (`TestWriteAfterEvictOrdering`, 4 new
+tests); `backend/scripts/json_column_ast_sweep.py` (shared file-count
+helper) and `backend/scripts/README.md`; `docs/security-review/
+SEC-00-cross-cutting-baseline.md` and this file (round-5 write-up + this log
+entry); `CHANGELOG.md`. Same branch, same PR #2132.
 
 ---
 

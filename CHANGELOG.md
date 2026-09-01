@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### An evicted session lost its hijack baseline right after correctly firing its first alert (2026-09-01)
+
+**Fixed**
+
+- **The read-before-evict fix below (`detect_session_hijack` and three other
+  methods) was necessary but not sufficient: it protected the alert decision
+  on the call that fired, but nothing wrote that call's own contribution
+  back into the tracker afterward.** If the session's key was also this
+  call's batch-eviction target, `detect_session_hijack` correctly detected
+  the IP change and raised the `session_hijack` alert (using the protected
+  pre-eviction read) — but then returned without ever recording this call's
+  own IP, because the write only ran on the no-alert path. The tracker was
+  left holding no entry at all for that session. The very next request from
+  the same hijacked session found no baseline, was scored as a first-ever
+  observation, and no further alerts fired for an attack that was still
+  ongoing. Fixed by always rebuilding the session's tracker entry from its
+  pre-eviction history plus this call's own IP, regardless of which path was
+  taken — the tracker now always ends a call holding a live entry for the
+  session, so the next call has a real baseline. The same defensive
+  restructuring (write the current call's contribution back to the tracker
+  after eviction runs, not before) was applied to the other three affected
+  methods (`_check_rate_limit`, `detect_brute_force`,
+  `detect_data_exfiltration`) for consistency, though those three were
+  verified not to be exploitable the same way — they already wrote before
+  evicting, which incidentally protected them. 4 new regression tests
+  (including a three-call chain for the session-hijack case) reproduce the
+  exact failure shape and are verified to fail before this fix and pass
+  after.
+
 ### Rate-limit alerts could also silently skip under tracker churn (2026-09-01)
 
 **Fixed**

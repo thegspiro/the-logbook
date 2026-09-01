@@ -508,6 +508,178 @@ to have. No other method in the file calls either eviction function.
 tests. Verified to **fail** against the pre-round-4 code (`alert is None`)
 and **pass** after the reordering fix; full file **18/18**.
 
+**Round 5 (Codex review): the round-4 fix protected the read, but nothing
+wrote the current call's contribution back into the tracker after eviction
+ran — so a key that was evicted while its own call correctly fired an alert
+had no baseline left for the very next call.** Round 3/4's fix pattern —
+read the current key's tracker entry into a local variable _before_ calling
+`_enforce_key_caps()` — correctly stops eviction from corrupting the read a
+given call uses to make its own alert decision. It does not stop
+`_enforce_key_caps()` from deleting that key's entry from the tracker as
+part of its batch. Nothing in the round-3/4 fix re-inserted the entry
+afterward, so the round-3/4 fix only ever guaranteed **this call's own
+decision** was correct — it said nothing about what the _next_ call from the
+same key would find.
+
+Codex reproduced this concretely in `detect_session_hijack`: call 1, with the
+session's key as the batch-eviction target, correctly detects the IP change
+and fires the `session_hijack` alert (round 4 already guarantees this much).
+Call 2, immediately after, from the same session: `None` — no alert. The
+method's shape explains exactly why. Its read (the prior IP/timestamp) and
+its write (this call's new IP/timestamp) are two separate steps with
+`_enforce_key_caps()` running in between, and the write was gated behind "no
+alert fired this call" via an early `return alert` on the hijack-detected
+path:
+
+```python
+# 95db016b (round 4) — detect_session_hijack
+session_data = self._session_ips.get(key, [])   # read, before evict (round 3/4 fix)
+self._enforce_key_caps()                        # can still delete _session_ips[key]
+if session_data:
+    ...
+    if time_diff < 300:
+        ...
+        await self._add_alert(db, alert)
+        return alert                             # <- returns WITHOUT writing this
+                                                   #    call's own (current_ip, now)
+self._session_ips[key].append((current_ip, now)) # only reached when no alert fired
+```
+
+When the alert fires, the method returns before this call's own IP is ever
+recorded — so if `key` was also the eviction target a few lines above, the
+tracker ends the call holding **no entry at all** for this session. The next
+request from the same hijacked session reads `session_data = []`, is scored
+as a first-ever observation, and the alert stream for an ongoing hijack goes
+silent immediately after its first (correctly fired) alert — a false
+negative on every call after the first, precisely because the first call was
+a true positive.
+
+**Checked individually, per the review instruction not to assume the same
+reproduction applies everywhere the round-3/4 fix pattern was applied, for
+whether `_check_rate_limit`, `detect_brute_force`, and
+`detect_data_exfiltration` share this exact gap.** They do not, and the
+reason is structural, not incidental: in all three, the read and the write
+are the _same_ statement block, executed unconditionally, and that block
+runs entirely **before** `_enforce_key_caps()` is called — e.g.
+`detect_brute_force`:
+
+```python
+self._login_attempts[ip].append(now)                              # write
+ip_attempts = [ts for ts in self._login_attempts[ip] if ts > hour_ago]  # read
+...
+self._enforce_key_caps()                                          # evict runs after
+```
+
+Because the write happens first, this call's own key always carries the
+freshest timestamp in the tracker by the time `_enforce_key_caps()` runs —
+`_enforce_key_caps()` evicts the _oldest_ `N` keys by last-activity
+timestamp, and a key that was just written to, this call, cannot be among
+them (barring a same-microsecond tie with another key written in the same
+call, which does not happen — each call writes at most two keys, `ip` and
+optionally `user:{id}`). So the current key can never be evicted by its own
+call's eviction pass in these three methods; the round-4 fix's read-before-
+write ordering was never actually necessary for them in the way it is for
+`detect_session_hijack`, and there is no "call 1 alerts, call 2 finds no
+baseline" sequence to reproduce. Verified empirically, not just reasoned
+about: `git stash`-ing the round-5 source fix and running the new regression
+tests (below) for all three against commit `95db016b` — they **pass
+unmodified**; only the `detect_session_hijack` test fails.
+
+**Fix applied to all five (write-after-evict), even though only one was
+empirically exploitable — write-after-evict chosen over excluding the
+current key from eviction, and here is why:** two ways to close the gap.
+(A) After `_enforce_key_caps()` runs, always write this call's own
+contribution into the tracker — restoring the entry if eviction removed it,
+extending it otherwise — so the tracker provably ends every call holding a
+live entry for the calling key regardless of what eviction just did. (B)
+Exclude the current call's key from the eviction candidate set entirely, so
+it can never be picked no matter how stale it looked going in.
+
+(B) was considered and rejected for this tracker shape specifically, not
+picked-against by default. The caution against it is for a tracker where one
+attacker can cheaply mint many _distinct_ keys and hammer through them to
+starve out the cap (a bloat/DoS angle) — excluding "whichever key is active
+right now" from eviction would still let that attacker's flood evict
+everyone else's legitimate entries while contributing nothing evictable
+itself. That does not describe these five trackers: every key here already
+is one attacker-controlled identity (an IP, a session id, a user id) — there
+is no cheaper "distinct sub-value" underneath a key for an attacker to
+churn — so excluding _the one key this call is actively using_ from this
+call's own eviction pass costs nothing: it is exactly the key CLAUDE.md
+pitfall #9's cap exists to eventually evict once it truly goes idle, and one
+call's temporary exclusion does not stop that from happening on a later,
+quieter call once other keys have taken its place among the oldest.
+Excluding it would have worked, and would have been fewer lines.
+
+Write-after-evict (A) was chosen anyway, for two reasons specific to this
+file's actual history rather than as a generic default: first, it is the
+same shape already applied to `_check_rate_limit` / `detect_brute_force` /
+`detect_data_exfiltration` (write happens, then evict) — restructuring
+`detect_session_hijack` to write-after-evict makes all five methods follow
+one uniform read/evict/write ordering, rather than four methods doing
+write-then-evict and a fifth doing evict-then-write-with-exclusion, which is
+exactly the kind of asymmetry that let this bug hide in one method while the
+others were "checked" in three prior rounds. Second, and the more direct
+reason: this file has now needed the _same_ tracker-cap logic corrected
+across five consecutive review rounds (see the closing note below) — adding
+a second distinct mechanism (exclusion) alongside the first (read-before-
+write) for the _same_ underlying invariant is one more shape for the next
+review to have to hold in its head and re-verify empirically per method,
+which is exactly what round 5 had to do here to find that only one of five
+methods actually needed it. One mechanism, applied uniformly and provably,
+was judged worth the few extra lines in the three methods that did not
+strictly need it.
+
+`detect_session_hijack` no longer returns early on the alert path; it always
+rebuilds `self._session_ips[key]` from the pre-eviction `session_data` plus
+this call's own `(current_ip, now)`, trimmed to the last 10 entries, and
+returns the alert (or `None`) at the end. This closes both of the bugs the
+early return combined: the tracker losing the entry to eviction, _and_ the
+tracker never recording this call's IP at all on the alert-firing path
+(independent of eviction — a real correctness gap on its own, since even
+without any eviction the pre-round-5 code left a hijacked session's "last
+known IP" frozen at its pre-hijack value forever, comparing every subsequent
+request's IP against increasingly stale ground truth).
+
+**Verification, round 5:** 4 new tests in a new `TestWriteAfterEvictOrdering`
+class — one per affected method, each driving **two** calls in a row (call 1
+puts the key up for batch eviction and correctly fires its alert; call 2
+immediately after asserts the tracker still has a live baseline and detects
+the continuing activity, not a fresh first observation), plus a **third**
+call in the `detect_session_hijack` test specifically (three IP changes in a
+row) to confirm the fix generalizes past the exact two-call shape Codex
+reproduced rather than special-casing it. `test_session_hijack_detects_a_
+second_and_third_ip_change_in_a_row` fails against commit `95db016b` (call 2
+returns `None`) and passes after the fix; the other three
+(`_check_rate_limit`, `detect_brute_force`, `detect_data_exfiltration`) pass
+against `95db016b` unmodified, as the empirical check above found, and
+continue to pass after the fix — they stand as regression guards against a
+_future_ refactor reintroducing the same early-return-before-write shape
+that broke `detect_session_hijack`, not as reproductions of a bug that was
+ever live in those three. Full file **22/22**.
+
+**Five review rounds on the same tracker-cap logic, in one PR/its
+predecessor — worth stating plainly rather than folding into routine
+follow-up, because it is information about how much to trust the next "0
+gaps found" claim on this exact code:** round 1 added eviction but only
+one-key-at-a-time and missed `_external_endpoints`; round 2 fixed both of
+those but introduced the read-after-evict ordering bug across two methods;
+round 3 fixed that ordering in three methods (missing a fourth,
+`_check_rate_limit`, because it evicts through a different wrapper); round 4
+found and fixed the fourth method, and explicitly re-audited all five
+eviction call sites against all five tracker reads — the audit table in that
+round's write-up above lists all five as "correctly ordered" — and still
+missed that read-before-write does not imply write-after-evict; round 5
+fixed that. Every prior round's "checked every method, all fixed" framing
+turned out to be narrower than it read, in a different way each time. That
+pattern, not any single round's fix, is the fact worth a future reviewer
+weighting: a review of this file's tracker-cap code that reaches a clean
+result is worth substantially less evidentiary weight here than the same
+result on code with no such history, and is exactly the place to look
+hardest for one more angle rather than accept "audited all five, all
+correct" at face value — round 4 wrote almost that exact sentence and was
+still short one fix.
+
 **Sweep 9 correction, round 2 (Codex review):** Codex re-checked round 2's
 own correction to this sweep (immediately below) and found the "132 distinct
 JSON/`MutableDict`-typed model attributes" figure was itself produced by a

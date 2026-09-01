@@ -104,6 +104,19 @@ def _json_columns_in_class(cls: ast.ClassDef):
                 yield target.id, stmt.lineno
 
 
+def _model_files(models_dir: Path = MODELS_DIR) -> list[Path]:
+    """Every model file the sweep actually parses.
+
+    Excludes `__init__.py`, which re-exports model classes and declares no
+    `Column(...)` of its own. `sweep()` and `main()`'s "N files" summary line
+    both call this rather than globbing independently, so the two can never
+    drift apart again: `main()` used to glob `*.py` directly, counting
+    `__init__.py` even though `sweep()` skipped it, overstating the summary
+    by one file (44 counted vs. 43 actually parsed) -- Codex, PR #2132.
+    """
+    return sorted(p for p in models_dir.glob("*.py") if p.name != "__init__.py")
+
+
 def sweep(models_dir: Path = MODELS_DIR) -> dict[str, list[tuple[str, int]]]:
     """Returns {attribute_name: [(file_name, lineno), ...]} for every
     JSON-typed Column declaration found under `models_dir`. `ast.walk`
@@ -111,9 +124,7 @@ def sweep(models_dir: Path = MODELS_DIR) -> dict[str, list[tuple[str, int]]]:
     depth, so nested classes (none exist today) are covered without extra
     handling and without double-counting."""
     by_name: dict[str, list[tuple[str, int]]] = defaultdict(list)
-    for path in sorted(models_dir.glob("*.py")):
-        if path.name == "__init__.py":
-            continue
+    for path in _model_files(models_dir):
         tree = ast.parse(path.read_text(), filename=str(path))
         for node in ast.walk(tree):
             if not isinstance(node, ast.ClassDef):
@@ -138,7 +149,7 @@ def main() -> int:
     by_name = sweep()
     total_declarations = sum(len(locations) for locations in by_name.values())
     total_names = len(by_name)
-    total_files = len(list(MODELS_DIR.glob("*.py")))
+    total_files = len(_model_files())
 
     if args.by_file:
         by_file: dict[str, list[tuple[str, int]]] = defaultdict(list)

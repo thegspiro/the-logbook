@@ -299,7 +299,7 @@ python3 scripts/json_column_ast_sweep.py --by-file   # every declaration grouped
 
 ```
 179 distinct attribute names, 230 Column(...) declarations referencing JSON,
-across 44 files in .../backend/app/models.
+across 43 files in .../backend/app/models.
 ```
 
 **Exit Codes:**

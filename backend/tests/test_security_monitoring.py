@@ -383,6 +383,271 @@ class TestReadBeforeEvictOrdering:
         assert alert.details["threshold"] == 2
 
 
+class TestWriteAfterEvictOrdering:
+    """PR #2132 round 5 (Codex): the round-4 fix (read the current key's
+    tracker entry into a local variable BEFORE calling _enforce_key_caps())
+    correctly protects THAT call's own decision, but nothing re-inserted the
+    current key's entry into the tracker AFTER eviction ran.
+
+    **Confirmed exploitable, in commit 95db016b, in exactly one of the four
+    methods: detect_session_hijack.** Its read (the prior IP/timestamp) and
+    its write (this call's new IP/timestamp) are two separate steps, with
+    eviction running in between and the write gated behind "no alert fired
+    this call" via an early `return alert`. So when the hijack alert fires
+    correctly (using the pre-eviction local copy), the method returns before
+    ever writing this call's own contribution -- and if this session's key
+    was also the batch-eviction target, the tracker is left holding NO entry
+    at all for it. The next call from the same hijacked session finds no
+    baseline, is scored as a first-ever observation, and the alert stream
+    for an ongoing hijack goes silent after its first (correctly fired)
+    alert. `test_session_hijack_detects_a_second_and_third_ip_change_in_a_row`
+    below fails against 95db016b for exactly this reason.
+
+    **Not reproducible the same way in `_check_rate_limit`,
+    `detect_brute_force`, or `detect_data_exfiltration`.** In 95db016b all
+    three already write this call's filtered window back to the dict in the
+    same statement block that reads/appends it -- *before* calling
+    `_enforce_key_caps()` -- so by the time eviction runs, this call's own
+    key already carries the freshest timestamp in the tracker and cannot be
+    among the "oldest N" keys eviction selects; it always survives its own
+    call's eviction pass. Traced and confirmed empirically (see PR
+    description / commit message): the three tests below for these methods
+    pass unmodified against 95db016b too. The fix still moves their writes
+    to run after `_enforce_key_caps()`, matching the read-old/write-new
+    shape applied everywhere else -- not because 95db016b is broken here,
+    but so the invariant ("the tracker always ends a call holding a live
+    entry for the calling key") holds by construction rather than by an
+    incidental ordering property that a future refactor (e.g. adding an
+    early return, exactly what happened to detect_session_hijack) could
+    silently break again. These three tests are regression guards against
+    that future break, not reproductions of a currently-live bug.
+    """
+
+    async def test_session_hijack_detects_a_second_and_third_ip_change_in_a_row(
+        self,
+    ):
+        """Three calls in a row, not just two -- the fix must be general,
+        not just patch the exact two-call reproduction Codex gave. Each call
+        changes IP again, simulating an attacker continuing to use the
+        hijacked session after the first alert fired.
+        """
+        svc = _svc()
+        svc._MAX_TRACKING_KEYS = 10
+
+        victim_session = "victim-session"
+        victim_key = f"session:{victim_session}"
+        now = datetime.now(timezone.utc)
+        svc._session_ips[victim_key] = [("1.1.1.1", now - timedelta(seconds=10))]
+
+        for i in range(20):
+            svc._session_ips[f"session:filler-{i}"] = [("2.2.2.2", now)]
+
+        assert len(svc._session_ips) > svc._MAX_TRACKING_KEYS
+
+        # Call 1: victim_session is the batch-eviction target. The alert
+        # fires correctly (round-4 fix already covers this), but round-4
+        # left the tracker with no entry at all for victim_key afterward.
+        alert1 = await svc.detect_session_hijack(
+            _db(),
+            session_id=victim_session,
+            current_ip="9.9.9.9",
+            user_agent="ua",
+            user_id="u1",
+        )
+        assert alert1 is not None
+        assert alert1.details["previous_ip"] == "1.1.1.1"
+        assert alert1.details["current_ip"] == "9.9.9.9"
+
+        # No further growth past the cap between calls, so no more eviction
+        # happens below -- these two calls isolate the write-after-evict gap
+        # itself, not a second batch eviction.
+        assert len(svc._session_ips) <= svc._MAX_TRACKING_KEYS
+
+        # Call 2: same session, IP changes again. Against 95db016b this
+        # finds no entry for victim_key at all (round-4 fixed the read, but
+        # nothing wrote the call-1 IP back after eviction deleted it), so
+        # session_data is `[]`, the hijack looks like a first-ever
+        # observation, and no alert fires.
+        alert2 = await svc.detect_session_hijack(
+            _db(),
+            session_id=victim_session,
+            current_ip="8.8.8.8",
+            user_agent="ua",
+            user_id="u1",
+        )
+        assert alert2 is not None, (
+            "session-hijack alert did not fire on the second call -- the "
+            "tracker lost its baseline for this session after the first "
+            "call's alert, even though the first call correctly detected "
+            "the hijack"
+        )
+        assert alert2.details["previous_ip"] == "9.9.9.9"
+        assert alert2.details["current_ip"] == "8.8.8.8"
+
+        # Call 3: continue the chain one step further to prove the fix does
+        # not merely special-case the two-call reproduction.
+        alert3 = await svc.detect_session_hijack(
+            _db(),
+            session_id=victim_session,
+            current_ip="7.7.7.7",
+            user_agent="ua",
+            user_id="u1",
+        )
+        assert alert3 is not None, (
+            "session-hijack alert did not fire on the third call -- the "
+            "fix must keep restoring a live baseline on every call, not "
+            "just the one immediately after an eviction"
+        )
+        assert alert3.details["previous_ip"] == "8.8.8.8"
+        assert alert3.details["current_ip"] == "7.7.7.7"
+
+    async def test_brute_force_second_attempt_after_batch_eviction_still_counts(
+        self,
+    ):
+        svc = _svc()
+        svc._MAX_TRACKING_KEYS = 10
+        svc.thresholds.failed_logins_per_hour = 3
+
+        attacker_ip = "203.0.113.9"
+        now = datetime.now(timezone.utc)
+        svc._login_attempts[attacker_ip] = [
+            now - timedelta(minutes=5),
+            now - timedelta(minutes=3),
+        ]
+
+        for i in range(20):
+            svc._login_attempts[f"filler-ip-{i}"] = [now]
+
+        assert len(svc._login_attempts) > svc._MAX_TRACKING_KEYS
+
+        # Call 1 (3rd failed attempt): attacker_ip is the batch-eviction
+        # target; the alert correctly fires at the threshold of 3.
+        alert1 = await svc.detect_brute_force(_db(), attacker_ip, success=False)
+        assert alert1 is not None
+        assert alert1.details["failed_attempts"] == 3
+        assert len(svc._login_attempts) <= svc._MAX_TRACKING_KEYS
+
+        # Call 2 (4th failed attempt, same attacker): asserts the count keeps
+        # accumulating rather than resetting. Passes against 95db016b too --
+        # detect_brute_force already writes attacker_ip's filtered window
+        # back to the dict in the same statement block that reads it,
+        # *before* calling _enforce_key_caps(), so this call's own entry is
+        # always the freshest in the tracker and cannot be evicted by its
+        # own call's eviction pass. Kept as a regression guard: the fix below
+        # moves the write to run after cap enforcement so this holds by
+        # construction, not by that ordering coincidence.
+        alert2 = await svc.detect_brute_force(_db(), attacker_ip, success=False)
+        assert alert2 is not None, (
+            "brute-force alert did not fire on the second call -- the "
+            "tracker lost the attacker ip's history after the first call's "
+            "alert fired"
+        )
+        assert alert2.details["failed_attempts"] == 4
+
+    async def test_data_exfiltration_second_transfer_after_batch_eviction_still_sums(
+        self,
+    ):
+        svc = _svc()
+        svc._MAX_TRACKING_KEYS = 10
+        svc.thresholds.large_data_export_mb = 10
+
+        victim_user = "victim-user"
+        now = datetime.now(timezone.utc)
+        mb = 1024 * 1024
+        svc._data_transfers[victim_user] = [
+            (15 * mb, now - timedelta(minutes=10)),
+            (15 * mb, now - timedelta(minutes=7)),
+            (15 * mb, now - timedelta(minutes=5)),
+        ]
+
+        for i in range(20):
+            svc._data_transfers[f"filler-user-{i}"] = [(1, now)]
+
+        assert len(svc._data_transfers) > svc._MAX_TRACKING_KEYS
+
+        # Call 1: victim_user is the batch-eviction target. 45MB prior +
+        # 10MB this call = 55MB, correctly over the 50MB cumulative
+        # threshold -- the alert fires.
+        alert1 = await svc.detect_data_exfiltration(
+            db=_db(),
+            user_id=victim_user,
+            data_size_bytes=10 * mb,
+            endpoint="/api/v1/some/export",
+            ip_address="203.0.113.5",
+        )
+        assert alert1 is not None
+        assert alert1.details["total_24h_mb"] == pytest.approx(55.0)
+        assert len(svc._data_transfers) <= svc._MAX_TRACKING_KEYS
+
+        # Call 2: another 10MB transfer from the same user, asserting the
+        # 24h total keeps accumulating rather than resetting. Passes against
+        # 95db016b too -- detect_data_exfiltration already writes
+        # victim_user's filtered window back to the dict in the same
+        # statement block that reads it, *before* calling
+        # _enforce_key_caps(), so this call's own entry is always the
+        # freshest in the tracker and cannot be evicted by its own call's
+        # eviction pass. Kept as a regression guard: the fix below moves the
+        # write to run after cap enforcement so this holds by construction,
+        # not by that ordering coincidence.
+        alert2 = await svc.detect_data_exfiltration(
+            db=_db(),
+            user_id=victim_user,
+            data_size_bytes=10 * mb,
+            endpoint="/api/v1/some/export",
+            ip_address="203.0.113.5",
+        )
+        assert alert2 is not None, (
+            "cumulative data-exfiltration alert did not fire on the second "
+            "call -- the tracker lost the victim user's transfer history "
+            "after the first call's alert fired"
+        )
+        assert alert2.details["total_24h_mb"] == pytest.approx(65.0)
+        assert alert2.details["transfer_count"] == 5
+
+    async def test_rate_limit_second_call_after_batch_eviction_still_counts(self):
+        svc = _svc()
+        svc._MAX_TRACKING_KEYS = 10
+        svc.thresholds.api_calls_per_minute = 2
+
+        victim_ip = "203.0.113.9"
+        now = datetime.now(timezone.utc)
+        svc._api_calls[victim_ip] = [
+            now - timedelta(seconds=30),
+            now - timedelta(seconds=20),
+        ]
+
+        for i in range(20):
+            svc._api_calls[f"filler-ip-{i}"] = [datetime.now(timezone.utc)]
+
+        assert len(svc._api_calls) > svc._MAX_TRACKING_KEYS
+
+        # Call 1 (3rd call): victim_ip is the batch-eviction target. The
+        # alert correctly fires: 3 calls > the threshold of 2.
+        alert1 = await svc._check_rate_limit(_db(), victim_ip, "u1")
+        assert alert1 is not None
+        assert alert1.details["calls_per_minute"] == 3
+        assert len(svc._api_calls) <= svc._MAX_TRACKING_KEYS
+
+        # Call 2 (4th call, same ip), asserting the count keeps accumulating
+        # rather than resetting. Passes against 95db016b too --
+        # _check_rate_limit already writes victim_ip's filtered window back
+        # to the dict in the same statement block that reads it, *before*
+        # calling _evict_stale_tracking_keys() -> _enforce_key_caps(), so
+        # this call's own entry is always the freshest in the tracker and
+        # cannot be evicted by its own call's eviction pass. Kept as a
+        # regression guard: the fix below moves the write to run after
+        # eviction so this holds by construction, not by that ordering
+        # coincidence.
+        alert2 = await svc._check_rate_limit(_db(), victim_ip, "u1")
+        assert alert2 is not None, (
+            "rate-limit alert did not fire on the second call -- the "
+            "tracker lost the victim ip's call history after the first "
+            "call's alert fired"
+        )
+        assert alert2.details["calls_per_minute"] == 4
+        assert alert2.details["threshold"] == 2
+
+
 class TestReportPrivilegeEscalation:
     """The convenience wrapper wired into the role/permission grant ceilings."""
 
