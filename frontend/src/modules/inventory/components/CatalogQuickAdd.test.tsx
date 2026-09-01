@@ -57,8 +57,23 @@ describe('CatalogQuickAdd', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    // mockReset, not clearAllMocks alone: clearing wipes call history and
+    // leaves implementations and any unconsumed *Once queue in place, so a
+    // persistent mockResolvedValue set by one test — or the queued
+    // mockReturnValueOnce a test never reached — is still installed for
+    // whichever test calls that mock next. It then passes on a value it never
+    // asked for, and only fails when run alone. (CLAUDE.md pitfall #28.)
+    mockGetItems.mockReset();
+    mockGetItemLots.mockReset();
+    mockCreateItemIfAbsent.mockReset();
+    onAdd.mockReset();
+
     mockGetItems.mockResolvedValue({ items: [catalogItem()], total: 1, skip: 0, limit: 6 });
     mockGetItemLots.mockResolvedValue([]);
+    mockCreateItemIfAbsent.mockResolvedValue({
+      item: { id: 'inv-new', name: 'Burn Sheet', tracking_type: 'pool' },
+      created: true,
+    });
     onAdd.mockResolvedValue(undefined);
   });
 
