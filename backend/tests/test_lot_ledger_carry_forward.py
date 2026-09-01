@@ -85,9 +85,35 @@ class TestEveryLotCreatorCarriesColumnStockForward:
             f"loses that stock the moment they run: {missing}"
         )
 
-    def test_the_helper_only_carries_forward_for_items_with_no_lot_yet(self):
-        """Otherwise a second delivery would double the opening balance."""
-        source = inspect.getsource(getattr(inventory_service.InventoryService, _HELPER))
+    def test_the_helper_reads_existing_lots_before_creating_one(self):
+        """Otherwise a second delivery would double the opening balance.
 
-        assert "already" in source
-        assert "pending" in source
+        Asserted on order rather than on the names inside the helper: it has
+        to learn which items already hold a lot *before* it constructs one, so
+        a rewrite that keeps that behaviour keeps passing and one that drops
+        the check does not.
+        """
+        node = _functions_constructing_a_lot()[_HELPER]
+
+        reads_existing = [
+            n.lineno
+            for n in ast.walk(node)
+            if isinstance(n, ast.Attribute)
+            and n.attr == "inventory_item_id"
+            and isinstance(n.value, ast.Name)
+            and n.value.id == "InventoryLot"
+        ]
+        creates = [
+            n.lineno
+            for n in ast.walk(node)
+            if isinstance(n, ast.Call)
+            and isinstance(n.func, ast.Name)
+            and n.func.id == "InventoryLot"
+        ]
+
+        assert reads_existing, "the helper never checks which items already have a lot"
+        assert creates
+        assert min(reads_existing) < min(creates), (
+            "the existing-lot check must run before the opening balance is "
+            "constructed, or an item that already has a lot gets a second one"
+        )
