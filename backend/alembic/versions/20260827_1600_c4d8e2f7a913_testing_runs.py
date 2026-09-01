@@ -54,8 +54,22 @@ def _has_column(table: str, column: str) -> bool:
     return column in {c["name"] for c in _inspector().get_columns(table)}
 
 
-def _has_foreign_key(table: str, name: str) -> bool:
-    return any(fk["name"] == name for fk in _inspector().get_foreign_keys(table))
+def _foreign_keys_on(table: str, column: str) -> list[str]:
+    """Names of the foreign keys constraining ``column``, whatever they are called.
+
+    The name cannot be assumed. This migration's own upgrade creates
+    ``fk_testing_entry_run``, but these tables are create_all-only (CLAUDE.md
+    pitfall #26), and an installation that started the app first has the
+    constraint under SQLAlchemy's naming convention instead —
+    ``fk_testing_checklist_entries_run_id_testing_runs``. Dropping by the
+    hardcoded name leaves that installation's constraint in place, and the
+    column drop behind it then fails with 1828.
+    """
+    return [
+        fk["name"]
+        for fk in _inspector().get_foreign_keys(table)
+        if fk.get("name") and column in (fk.get("constrained_columns") or [])
+    ]
 
 
 def _index_columns(table: str, name: str) -> list[str] | None:
@@ -260,12 +274,15 @@ def downgrade() -> None:
         if _index_columns(_ENTRIES, _OLD_UNIQUE) is not None:
             op.drop_index(_OLD_UNIQUE, table_name=_ENTRIES)
         if _has_column(_ENTRIES, "run_id"):
-            # Guarded like every other step, and for the same reason: an
-            # installation whose table came from create_all has the column
-            # without this migration's constraint name, and an unguarded drop
-            # aborts the downgrade with the column drops already committed.
-            if _has_foreign_key(_ENTRIES, "fk_testing_entry_run"):
-                op.drop_constraint("fk_testing_entry_run", _ENTRIES, type_="foreignkey")
+            # Discovered rather than named, and dropped before the column: an
+            # installation whose table came from create_all carries this
+            # constraint under a different name, so a hardcoded drop either
+            # aborts the downgrade (1091, the name is absent) or silently
+            # skips and lets the column drop abort instead (1828, the
+            # constraint still references it). Either way the run of DDL
+            # above has already committed and the schema is left wedged.
+            for fk_name in _foreign_keys_on(_ENTRIES, "run_id"):
+                op.drop_constraint(fk_name, _ENTRIES, type_="foreignkey")
             op.drop_column(_ENTRIES, "run_id")
         for column in ("expected_access", "build_id"):
             if _has_column(_ENTRIES, column):
