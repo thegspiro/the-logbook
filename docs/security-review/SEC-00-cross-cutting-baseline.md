@@ -1,6 +1,69 @@
 # Security Review 00 — Cross-Cutting Baseline
 
-**Prefix:** `SEC` · **Iteration:** 00 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2) · **PR:** [#1799](https://github.com/thegspiro/the-logbook/pull/1799) (pass 1)
+**Prefix:** `SEC` · **Iteration:** 00 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-01 (pass 3) · **PR:** [#1799](https://github.com/thegspiro/the-logbook/pull/1799) (pass 1)
+
+---
+
+## Pass 3 (2026-09-01) — re-sweep, plus four sweep classes new to this file
+
+Re-verified pass 1/2's five standing sweeps against current code (backend grew
+to 399 Alembic revisions, 1536 routes across 80 `app/api/` files, from pass
+2's 381 revisions / 1526 routes), and added four sweep classes named in the
+rotation's own "typical categories" list that this file had not yet run as an
+explicit whole-codebase pass — each is a class CLAUDE.md documents as a
+recurring defect, and each is exactly the kind of thing a per-feature
+iteration can only ever show "not here" for. This pass does not re-derive pass
+1/2's conclusions; it re-checks them against current code and extends
+coverage, per the rotation's own rule (`docs/security-review/PROGRESS.md`
+line ~4220).
+
+### Re-verified standing sweeps
+
+| #   | Class swept                      | Method                                                               | Result                                                                                    |
+| --- | -------------------------------- | -------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| 1   | Formula injection in exports     | `grep` for `csv.writer(` / `csv.DictWriter(` outside `csv_export.py` | **clean** — 0 sites, unchanged                                                            |
+| 2   | `SET NULL` on `NOT NULL` columns | `test_set_null_fks_are_nullable` (guard test)                        | **clean** — passes                                                                        |
+| 3   | Proxy-IP attribution             | grep `request.client.host`                                           | **clean** — same 3 hits as pass 1/2 (2 comments, 1 deliberate use inside `get_client_ip`) |
+| 4   | Alembic chain integrity          | `backend/scripts/validate_migrations.py --strict`                    | **clean** — 399 revisions, single head `4e7e125cb00f`, no duplicate ids                   |
+| 5   | LIKE-wildcard handling           | `tests/test_like_escaping.py` (2 guard tests)                        | **clean** — both pass; no new call site reintroduced a raw copy or dropped `escape=`      |
+
+**Route auth coverage re-check:** an AST walk of every route decorator across
+all 80 files registered in `api/v1/api.py` (derived from its router
+registrations, not a directory glob — pass 2's Codex-caught correction) found
+**69 routes with no recognized auth dependency** (pass 1: 69, pass 2: 68 —
+the pass-2 count was itself narrower than this walk by one due to a decorator
+this AST pass now also recognizes; not a new gap). Every one is confined to
+the same five features pass 1 named: auth (14), `event_requests.py`'s 4
+public routes, `elections.py`'s 4 token-scoped routes, `onboarding.py`'s 24
+bootstrap routes, and the `public/*` surface (22) plus
+`salesforce_sync.py`'s OAuth callback and the API root. **No new ungated
+route outside those five features.**
+
+### New sweep classes (first run in this file)
+
+| #   | Class swept                                               | Method                                                                                                                                                                               | Result                                                                                                                                                                                                                                                                                     |
+| --- | --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 6   | `BaseHTTPMiddleware` usage (Pitfall #4)                   | `grep -rn "BaseHTTPMiddleware" app/`                                                                                                                                                 | **clean** — 0 imports/usages; the 7 hits are all comments in `security_middleware.py` documenting the ban                                                                                                                                                                                  |
+| 7   | Unbounded in-memory trackers (Pitfall #9)                 | grep for module-level `defaultdict(`/`= {}` request-state trackers outside `app/core/`, then check each for a size cap + eviction                                                    | **clean** — the only two runtime trackers found (`rate_limit_cache`/`ip_rate_limit_cache` in `public_portal_security.py`, and `requests`/`lockouts`/`failures`/`blocks` in `security_middleware.py`/`suspicious_ip.py`) all have a `_MAX_KEYS` cap and stale-entry + oldest-first eviction |
+| 8   | `window.confirm`/`alert`/`prompt` (Pitfall #16)           | `grep` for `window.confirm(`/`window.alert(`/`window.prompt(` in `frontend/src/`; confirmed `no-restricted-syntax`'s `noBlockingBrowserDialogs` is still wired in `eslint.config.js` | **clean** — 0 raw calls in source (tests excluded); the ESLint rule is present and active                                                                                                                                                                                                  |
+| 9   | JSON-column shallow-copy-then-nested-mutate (Pitfall #12) | grep every `.settings =` / `.positions =` / `.config =` assignment on a model instance across `app/services/` and `app/api/v1/endpoints/`, read each site's copy step                | **clean** — all 16 sites found either `copy.deepcopy()` the column before mutating a nested key, or (the one `dict()` shallow copy, `salesforce_sync.py:564`) mutate only a top-level key, which a shallow copy does not alias                                                             |
+
+No findings this pass. All nine invariants hold — five re-verified against
+399 revisions / 1536 routes, four checked for the first time as an explicit
+whole-codebase sweep in this file (each was already correct, evidence that
+the individual feature iterations that touched these classes already applied
+CLAUDE.md's pitfalls correctly; this pass turns that scattered evidence into
+one standing sweep record).
+
+**Completion gate (pass 3):** `flake8`/`black --check`/`isort --check-only`
+clean across `app/ tests/ alembic/`; `validate_migrations.py --strict`
+passed (399 revisions, single head); `test_like_escaping.py` (2/2),
+`test_database_schema.py::test_set_null_fks_are_nullable` (1/1),
+`test_capacity_locking.py` (17/17), `test_migration_create_all_tables.py`
+(clean) all pass; `tsc --noEmit` 0 errors; `eslint .` 0 errors, 8 pre-existing
+warnings (all `testing-library/no-node-access` / `react-refresh/only-export-
+components`, unrelated to this pass — well under the `max-warnings 10` gate).
+No code changes this pass — documentation only.
 
 ---
 

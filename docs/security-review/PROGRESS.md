@@ -16,18 +16,53 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-None. Feature 34 (Frontend shared) is fully closed — round 1 merged as
-[#2112](https://github.com/thegspiro/the-logbook/pull/2112), rounds 2/3's
-Codex-caught fixes (FE3-34-1/3 fixed, FE3-34-2/4/5 flagged) merged as
-[#2118](https://github.com/thegspiro/the-logbook/pull/2118). That was the
-last ⏳ row: pass 2 is complete, and every row in the Rotation table below
-has been reset to ⬜ for pass 3 — the next iteration starts at feature 00
-(cross-cutting baseline).
+**Feature 00 (Cross-cutting baseline), pass 3** — PR TBD, branch
+`claude/security-review-sec00-pass3`. Docs-only: re-verified pass 1/2's five
+standing sweeps against current code (399 Alembic revisions, 1536 routes) and
+added four new sweep classes (`BaseHTTPMiddleware`, unbounded in-memory
+caches, `window.confirm`/`alert`/`prompt`, JSON shallow-copy-then-mutate) —
+all clean, no findings, no source changes. See
+`SEC-00-cross-cutting-baseline.md`'s Pass 3 section.
 
 A duplicate close-out PR, [#2119](https://github.com/thegspiro/the-logbook/pull/2119),
 was opened against round 1's now-stale base (before round 2/3 landed) and
 closed without merging — merging it would have overwritten this section
 with round-1-only text and dropped the round 2/3 record.
+
+---
+
+### 2026-09-01 — Feature 00 (Cross-cutting baseline, pass 3) — 0 findings, 4 new sweep classes added
+
+Pass 3 opens the reset rotation. Re-verified all five of pass 1/2's standing
+sweeps against current code — codebase grew to 399 Alembic revisions (from 381) and 1536 routes across 80 `app/api/` files (from 1526/80): formula
+injection in CSV exports (clean, 0 raw `csv.writer` sites), `SET NULL`
+nullability (clean, guard test), proxy-IP attribution (clean, same 3 hits),
+Alembic chain integrity (clean, single head `4e7e125cb00f`), and LIKE-wildcard
+escaping (clean, `test_like_escaping.py` 2/2). Route auth coverage re-check:
+69 ungated routes, all within the same five already-accounted features
+(auth, event_requests public routes, elections token-scoped routes,
+onboarding bootstrap, `public/*`) — no new gap.
+
+Extended the file with four sweep classes named in the rotation's own
+"typical categories" list that SEC-00 had not yet run as an explicit
+whole-codebase pass, each a CLAUDE.md-documented recurring defect class:
+`BaseHTTPMiddleware` usage (Pitfall #4, clean — 0 imports), unbounded
+in-memory request-state trackers (Pitfall #9, clean — the two found both cap
+
+- evict), `window.confirm`/`alert`/`prompt` (Pitfall #16, clean — 0 raw calls,
+  ESLint rule still wired), and JSON-column shallow-copy-then-nested-mutate
+  (Pitfall #12, clean — all 16 `.settings`/`.positions`/`.config` reassignment
+  sites found across `app/services/` and `app/api/v1/endpoints/` either
+  `copy.deepcopy()` or mutate only a top-level key). **Zero findings** — every
+  invariant already held; this pass converts scattered per-feature correctness
+  into one standing cross-cutting sweep record. Docs-only, no source changes.
+  Completion gate green: `flake8`/`black --check`/`isort --check-only` clean on
+  `app/ tests/ alembic/`; `validate_migrations.py --strict` passed; the four
+  touched guard-test files (`test_like_escaping.py`,
+  `test_database_schema.py::test_set_null_fks_are_nullable`,
+  `test_capacity_locking.py`, `test_migration_create_all_tables.py`) all pass;
+  `tsc --noEmit` 0 errors; `eslint .` 0 errors / 8 pre-existing warnings. Next:
+  feature 01, Auth & session lifecycle.
 
 ---
 
@@ -4236,7 +4271,7 @@ pass 3 — each row's prior PR is recorded in the Log, not repeated here.
 
 | #   | Feature                   | Prefix | Principal code                                                                                                                                  | Status |
 | --- | ------------------------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
-| 00  | Cross-cutting baseline    | SEC    | whole-codebase sweeps; see `SEC-00-cross-cutting-baseline.md`                                                                                   | ⬜     |
+| 00  | Cross-cutting baseline    | SEC    | whole-codebase sweeps; see `SEC-00-cross-cutting-baseline.md`                                                                                   | ✅     |
 | 01  | Auth & session lifecycle  | AUTH   | `endpoints/auth.py`, `auth_service.py`, `mfa_service.py`, `oauth_service.py`                                                                    | ⬜     |
 | 02  | Permissions & roles       | PERM   | `dependencies.py`, `core/permissions.py`, `roles.py`, `operational_ranks.py`, `officers.py`, `org_chart.py`                                     | ⬜     |
 | 03  | Public surface & webhooks | PUB    | `api/public/*` (20 unauth routes), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`                                      | ⬜     |
