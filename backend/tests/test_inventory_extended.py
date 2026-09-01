@@ -1259,6 +1259,36 @@ class TestCreateItemIfAbsent:
         assert item.id != first.id
 
     @pytest.mark.asyncio
+    async def test_a_retired_row_does_not_count_as_the_name_being_taken(
+        self, db_session, setup_org_and_user
+    ):
+        """A retired item is hidden from every catalog search, so linking one
+        would report a link to a row the crew cannot find."""
+        org_id, user_id, _ = setup_org_and_user
+        svc = InventoryService(db_session)
+        retired, _ = await svc.create_item(
+            organization_id=uuid.UUID(org_id),
+            item_data={
+                "name": "Gauze Pads, 4x4",
+                "tracking_type": "pool",
+                "quantity": 5,
+            },
+            created_by=uuid.UUID(user_id),
+        )
+        retired.active = False
+        await db_session.flush()
+
+        item, created, err = await svc.create_item_if_absent(
+            org_id,
+            {"name": "Gauze Pads, 4x4", "tracking_type": "pool", "quantity": 0},
+            user_id,
+        )
+
+        assert err is None
+        assert created is True
+        assert item.id != retired.id
+
+    @pytest.mark.asyncio
     async def test_two_individual_assets_may_share_a_product_name(
         self, db_session, setup_org_and_user
     ):
