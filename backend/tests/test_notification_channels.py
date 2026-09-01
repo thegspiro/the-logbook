@@ -13,8 +13,8 @@ import pytest
 from app.services.consent_service import ConsentService
 from app.services.notification_channels import (
     SmsAlert,
-    resolve_sms_deliveries,
     resolve_sms_recipients,
+    resolve_sms_targets,
     wants_channel,
 )
 
@@ -125,7 +125,7 @@ class TestSharedPhoneNumbers:
             _user("consented", mobile=shared),
         ]
         with _patch_sms_enabled(), _patch_consent("consented"):
-            deliveries = await resolve_sms_deliveries(MagicMock(), users, URGENT)
+            deliveries = await resolve_sms_targets(MagicMock(), users, URGENT)
 
         assert deliveries == [("consented", shared)]
 
@@ -133,7 +133,7 @@ class TestSharedPhoneNumbers:
         shared = "+15550001"
         users = [_user("a", mobile=shared), _user("b", mobile=shared)]
         with _patch_sms_enabled(), _patch_consent("a", "b"):
-            deliveries = await resolve_sms_deliveries(MagicMock(), users, URGENT)
+            deliveries = await resolve_sms_targets(MagicMock(), users, URGENT)
 
         assert deliveries == [("a", shared), ("b", shared)]
 

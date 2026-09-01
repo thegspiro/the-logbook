@@ -1638,6 +1638,18 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
   // Auto-save: debounced save of a single item when in edit mode
   // ---------------------------------------------------------------------------
 
+  // Report only once the whole batch has settled; a per-item "saved" would
+  // flicker through every row a bulk action touched. Shared with the Save
+  // button's flush below, which cancels those timers and so never reaches the
+  // `.finally` that used to be the only caller — leaving the indicator stuck
+  // on "Saving…" for the rest of the session.
+  const settleAutoSaveStatus = useCallback(() => {
+    if (autoSaveInFlightRef.current.size > 0 || autoSavePendingRef.current.size > 0) return;
+    const failed = autoSaveErrorRef.current;
+    setAutoSaveStatus(failed ? 'error' : 'saved');
+    autoSaveFadeRef.current = setTimeout(() => setAutoSaveStatus('idle'), failed ? 4000 : 2000);
+  }, []);
+
   const scheduleAutoSaveItem = useCallback(
     (itemId: string, patch: Record<string, unknown>, options?: { immediate?: boolean }) => {
       if (!isEditing || !itemId) return;
@@ -1667,13 +1679,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             })
             .finally(() => {
               autoSaveInFlightRef.current.delete(request);
-              // Report only once the whole batch has settled; a per-item "saved"
-              // would flicker through every row a bulk action touched.
-              if (autoSaveInFlightRef.current.size === 0 && autoSavePendingRef.current.size === 0) {
-                const failed = autoSaveErrorRef.current;
-                setAutoSaveStatus(failed ? 'error' : 'saved');
-                autoSaveFadeRef.current = setTimeout(() => setAutoSaveStatus('idle'), failed ? 4000 : 2000);
-              }
+              settleAutoSaveStatus();
             });
           autoSaveInFlightRef.current.add(request);
         },
@@ -1682,7 +1688,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
 
       autoSavePendingRef.current.set(itemId, { timer, patch: merged });
     },
-    [ensureDraftBeforeStructureEdit, isEditing]
+    [ensureDraftBeforeStructureEdit, isEditing, settleAutoSaveStatus]
   );
 
   // Enhanced updateItemField that triggers auto-save for persisted items
@@ -1736,41 +1742,43 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
   // ---------------------------------------------------------------------------
 
   /**
-   * Send the debounced edits now, rather than letting Save race them.
+   * Send the debounced item edits Save is about to overtake.
    *
    * Flush, do not discard. Cancelling these timers threw away every edit made
-   * inside the 1.5s debounce window — and because the per-item payload below
-   * omits blank fields, a field cleared just before pressing Save was then
-   * restored to its old server value behind a "Draft saved" toast.
+   * inside the 1.5s debounce window — and because handleSave's per-item
+   * payload omits blank fields, a field cleared just before pressing Save was
+   * then restored to its old server value behind a "Draft saved" toast.
    *
-   * Throws on failure, and puts the pending entries back before it does. The
-   * caller runs this inside the save lifecycle so the error reaches the same
-   * toast every other save failure does; without the restore, a flush that
-   * failed would have consumed the edits on its way out and left nothing to
-   * retry.
+   * Guarded, because it runs before handleSave's own try/catch: a failure here
+   * escaped as an unhandled rejection with no toast, and the pending edits
+   * were gone. On failure the patches are re-armed on the normal debounce, so
+   * the retry is automatic and the indicator goes back to reporting on them.
+   *
+   * Returns false when the caller should stop.
    */
-  const flushPendingAutoSaves = async () => {
+  const flushPendingAutoSaves = async (): Promise<boolean> => {
     const pendingPatches = [...autoSavePendingRef.current.entries()];
     for (const [, { timer }] of pendingPatches) clearTimeout(timer);
     autoSavePendingRef.current.clear();
-    try {
-      if (pendingPatches.length > 0) {
+    if (pendingPatches.length > 0) {
+      try {
         await ensureDraftBeforeStructureEdit();
         await Promise.all(
           pendingPatches.map(([itemId, { patch }]) => equipmentCheckService.updateCheckItem(itemId, patch))
         );
+      } catch (err: unknown) {
+        for (const [itemId, { patch }] of pendingPatches) scheduleAutoSaveItem(itemId, patch);
+        toast.error(getErrorMessage(err, 'Could not save your latest edits'));
+        return false;
       }
-      if (autoSaveInFlightRef.current.size > 0) await Promise.all([...autoSaveInFlightRef.current]);
-    } catch (err: unknown) {
-      for (const [itemId, entry] of pendingPatches) {
-        if (!autoSavePendingRef.current.has(itemId)) autoSavePendingRef.current.set(itemId, entry);
-      }
-      autoSaveErrorRef.current = true;
-      throw err;
     }
+    if (autoSaveInFlightRef.current.size > 0) await Promise.all([...autoSaveInFlightRef.current]);
+    settleAutoSaveStatus();
+    return true;
   };
 
   const handleSave = async (publish: boolean) => {
+    if (!(await flushPendingAutoSaves())) return;
     // Drafts deliberately bypass readiness checks; publication never does.
     // Keep the blocking rules aligned with the backend instead of putting them
     // in the overridable warning dialog below.
@@ -1808,11 +1816,6 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
 
     setSaving(true);
     try {
-      // Inside the lifecycle, not ahead of it: run before setSaving/try, a
-      // failed flush escaped as an unhandled rejection with no toast, and the
-      // auto-save indicator stayed on "saving" for good.
-      await flushPendingAutoSaves();
-
       const compartmentPayloads: CheckTemplateCompartmentCreate[] = compartments
         .filter((c) => !c.id) // Only include unsaved compartments in create payload
         .map((c, idx) => ({
@@ -1981,7 +1984,6 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       }
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to save template'));
-      setAutoSaveStatus(autoSaveErrorRef.current ? 'error' : 'idle');
     } finally {
       setSaving(false);
     }

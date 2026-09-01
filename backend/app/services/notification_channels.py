@@ -26,7 +26,8 @@ the system:
   ``sms_notifications`` preference, which mutes texts without touching the
   emails they keep receiving.
 
-Routing recipients through :func:`resolve_sms_recipients` is what keeps those
+Routing recipients through :func:`resolve_sms_targets` (or its number-only
+wrapper :func:`resolve_sms_recipients`) is what keeps those
 rules in one place. Call sites must not rebuild the enabled/consent/preference
 /number filter themselves — the 2026-08 sweep found the low-stock task had
 grown its own copy, which is how a routine reorder notice ended up sending
@@ -62,25 +63,23 @@ def wants_channel(preferences: Optional[dict], key: str) -> bool:
     return (preferences or {}).get(key, True) is not False
 
 
-async def resolve_sms_deliveries(
+async def resolve_sms_targets(
     db: AsyncSession,
     users: Sequence[Any],
     alert: SmsAlert,
 ) -> List[Tuple[str, str]]:
-    """``(user_id, number)`` for each recipient that may be texted for *alert*.
+    """``(user_id, number)`` pairs that may be texted for *alert*.
 
-    Same gates as :func:`resolve_sms_recipients`, which is this function with
-    the identities dropped. Prefer this one wherever the caller records who was
-    texted.
+    Identity travels with the number because a number does not identify a
+    member: two people sharing a handset — a married couple in a volunteer
+    department is ordinary — have one number between them. A caller that gets
+    back bare numbers has to rebuild the pairing by matching on the number,
+    which picks whichever member comes first in its own list rather than the
+    one who actually cleared the consent gates, and files the delivery record
+    against them.
 
-    **A phone number does not identify a member.** Two members sharing one
-    handset is ordinary in a volunteer department, and once the number is all
-    that comes back, the only way to name the recipient again is to search the
-    roster for whoever carries it — which finds the *first* such member, not
-    the one the number was returned for. When only the second of them consented,
-    that attributes the text, and its TCPA audit row, to the member who
-    refused, and leaves the member who agreed with no record at all. Keeping
-    the pair together is what makes that unrepresentable.
+    Same gates and same ordering as :func:`resolve_sms_recipients`, which is
+    now this function with the identities dropped.
     """
     if not isinstance(alert, SmsAlert):
         raise ValueError(
@@ -130,10 +129,8 @@ async def resolve_sms_recipients(
     get around the allowlist; fan-out callers guard their channel methods, so
     this surfaces as a logged warning and no texts, not a failed notification.
 
-    For a caller that records *who* was texted, use
-    :func:`resolve_sms_deliveries` instead — see the note there on why a number
-    cannot be turned back into a member.
+    Prefer :func:`resolve_sms_targets` when the caller records anything per
+    member: this drops the identities, and a number cannot be matched back to
+    the member who consented once two of them share a handset.
     """
-    return [
-        number for _user_id, number in await resolve_sms_deliveries(db, users, alert)
-    ]
+    return [number for _, number in await resolve_sms_targets(db, users, alert)]

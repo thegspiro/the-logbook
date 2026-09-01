@@ -105,6 +105,28 @@ describe('OverviewSection — clearing a field', () => {
     expect(payload.sleeping_quarters).toBe(0);
   });
 
+  it('keeps a deactivated type selectable on the facility that still uses it', async () => {
+    // The store loads active lookups only, so deactivating a type on the
+    // settings screen actually stops it being chosen. An existing station
+    // still references it, though, and dropping the option left the select
+    // blank against a NOT NULL column: an unrelated edit either could not be
+    // saved or quietly re-filed the station under something else.
+    const retired = {
+      ...(facility as object),
+      facilityTypeId: 'type-old',
+      facilityType: { id: 'type-old', name: 'Substation' },
+    } as typeof facility;
+    const user = userEvent.setup();
+    renderWithRouter(
+      <OverviewSection facility={retired} facilityTypes={types} facilityStatuses={statuses} canManage />
+    );
+    await user.click(screen.getByRole('button', { name: /Edit/ }));
+
+    expect(screen.getByRole('option', { name: 'Substation (inactive)' })).toBeInTheDocument();
+    const payload = await save(user);
+    expect(payload.facility_type_id).toBe('type-old');
+  });
+
   it('refuses a blank required select instead of sending a null the column cannot hold', async () => {
     // Both selects offer a blank option on a NOT NULL column, so the form can
     // present a value the row cannot store.

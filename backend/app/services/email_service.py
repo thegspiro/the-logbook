@@ -46,23 +46,6 @@ def _sanitize_header(value: str) -> str:
     return _HEADER_INJECTION_RE.sub("", value)
 
 
-# ``MessageHistory.to_email`` is String(320) — one address' worth. A batch send
-# joins every recipient into that one column, so a handful of members with long
-# addresses overflows it and, under a strict sql_mode, the row is rejected
-# outright. The true figure is already kept in ``recipient_count``, so the
-# column only has to stay readable, not exhaustive.
-_TO_EMAIL_MAX = 320
-
-
-def _summarize_recipients(to_emails: List[str]) -> str:
-    """The recipient list for MessageHistory, guaranteed to fit the column."""
-    joined = ", ".join(to_emails)
-    if len(joined) <= _TO_EMAIL_MAX:
-        return joined
-    suffix = f" (+{len(to_emails) - 1} more)"
-    return to_emails[0][: _TO_EMAIL_MAX - len(suffix)] + suffix
-
-
 def _redact_email(address: str) -> str:
     """Redact an email address for safe logging (HIPAA)."""
     if "@" in address:
@@ -355,6 +338,30 @@ def wrap_email_body(
     )
     body = body.replace("{{footer_html}}", footer_block)
     return build_email_document(title, body)
+
+
+def _summarize_recipients(to_emails: List[str]) -> str:
+    """Fit a batch's addresses into MessageHistory.to_email (VARCHAR(320)).
+
+    A joined list overflows that column as soon as a send has more than a
+    handful of recipients, and a department message goes to the whole roster in
+    one batch. Under strict MySQL the insert is rejected, which is a 1406 on
+    the shared session — see the savepoint below. ``recipient_count`` carries
+    the true number, so the addresses are a legible sample, not the record.
+    """
+    joined = ", ".join(to_emails)
+    if len(joined) <= 320:
+        return joined
+    kept: List[str] = []
+    used = 0
+    for address in to_emails:
+        # 40 characters of headroom for the "… (+N more)" suffix.
+        if used + len(address) + 2 > 280:
+            break
+        kept.append(address)
+        used += len(address) + 2
+    suffix = f"… (+{len(to_emails) - len(kept)} more)"
+    return (", ".join(kept) + suffix)[:320]
 
 
 class EmailService:
@@ -1235,14 +1242,15 @@ class EmailService:
             history.error_message = (
                 f"Failed to deliver to all {failure_count} recipient(s)"
             )
-        # Inside a SAVEPOINT so a rejected insert cannot take the caller's
-        # session with it. Callers treat history as best-effort and swallow the
-        # exception, but a failed flush leaves the shared session unusable, so
-        # everything the caller does *after* the send — recording per-member
-        # delivery status, and then the urgent-SMS escalation query — fails
-        # too. The email went out and the follow-on work silently did not.
+        db.add(history)
+        # Inside a savepoint: a failure here must not poison the caller's
+        # transaction. This is a log write on a shared session, and an
+        # exception at flush leaves that session needing an explicit rollback —
+        # every later statement raises PendingRollbackError until it runs. The
+        # caller catches and warns, so without this the *send* would report
+        # success while the delivery-status writes and the urgent-SMS
+        # escalation that follow it silently aborted.
         async with db.begin_nested():
-            db.add(history)
             await db.flush()
         self.last_message_history_id = history.id
 

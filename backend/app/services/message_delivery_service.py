@@ -409,13 +409,17 @@ class MessageDeliveryService:
             # deliver()), which is the invariant that makes the filter safe.
             from app.services.notification_channels import (
                 SmsAlert,
-                resolve_sms_deliveries,
+                resolve_sms_targets,
             )
 
-            deliveries = await resolve_sms_deliveries(
+            # Pairs, not bare numbers: a number does not identify a member, and
+            # rebuilding the pairing here by matching on the number attributed
+            # the delivery row to whichever recipient came first in this list
+            # rather than the one who actually cleared the consent gates.
+            targets = await resolve_sms_targets(
                 self.db, recipients, SmsAlert.URGENT_DEPARTMENT_MESSAGE
             )
-            if not deliveries:
+            if not targets:
                 return
 
             from app.core.security import is_rate_limited
@@ -441,13 +445,7 @@ class MessageDeliveryService:
             from app.services.sms_service import SMSService
 
             sms = SMSService()
-            # The identity comes back paired with the number rather than being
-            # recovered from it. Two members sharing one handset is ordinary in
-            # a volunteer department, and searching the roster for whoever
-            # carries a number finds the first of them — so when only the
-            # second consented, the text and its TCPA audit row were filed
-            # against the member who had refused.
-            for user_id, number in deliveries:
+            for user_id, number in targets:
                 attempt = await self._claim_delivery(message.id, user_id, "sms")
                 if attempt is None:
                     continue
