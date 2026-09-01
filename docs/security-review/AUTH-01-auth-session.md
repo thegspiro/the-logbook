@@ -1,6 +1,138 @@
 # Security Review — Auth & Session Lifecycle
 
-**Prefix:** `AUTH` · **Iteration:** 01 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2) · **PR:** #1804 (pass 1)
+**Prefix:** `AUTH` · **Iteration:** 01 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-01 (pass 3) · **PR:** #1804 (pass 1), #1929 (pass 2)
+
+---
+
+## Pass 3 (2026-09-01)
+
+**Diff since pass 2's baseline (`9a58e352`):** `auth.py` (+11/-4),
+`consent_service.py` (+104/-4, all `roster()` — already reviewed and fixed in
+pass 2, unchanged since), `models/user.py` (+124, all member-classification
+work unrelated to auth — see the file's own `_reconcile_membership` docstring;
+out of this feature's scope). `mfa_service.py` and `oauth_service.py` are
+byte-identical to pass 2. Three frontend files touched since pass 2
+(`authStore.ts`, `apiClient.ts`, `utils/createApiClient.ts`) — all three
+diffs are already-landed fixes from other work (a `decodeURIComponent` on the
+CSRF cookie reader, adding `/auth/mfa/login` to the refresh-skip allowlist so
+an invalid MFA code doesn't trigger a refresh attempt, and a JSON-blob-decode
+fix for file-download error responses); read and confirmed correct, not new
+findings.
+
+**Re-verified both prior fixes and the one flagged item, all still current:**
+
+- **AUTH-1** (OAuth login skipped the organization-active check) — the fix is
+  still in place: `oauth_service.py:50-60`'s `_link_existing_user` still
+  filters `Organization.active.is_(True)` and fails closed with
+  `(None, "no_account")` on an empty result. `test_resolve_user_no_active_organization`
+  still passes.
+- **AUTH-3** (stale photo-consent roster response could overwrite a newer one)
+  — the `cancelled` guard is still present in
+  `PhotoUseConsentPage.tsx:68-84`.
+- **AUTH-4** (unbounded roster query, informational) — still accurate;
+  `ConsentService.roster()` remains unpaginated for the same reason recorded
+  in pass 2 (one of 255+ identically-shaped call sites app-wide; not a
+  meaningful fix in isolation).
+
+**Full re-read of all four in-scope backend files** (`auth.py` 1543 L / 26
+routes — route count unchanged from pass 1, the +11 lines are one new import
+and one line in `_build_current_user_dict` expanding legacy permission
+aliases into the `/auth/me` and login-response permission list, unrelated to
+this feature's own security surface and already correctly implemented in
+`app/core/permissions.py`; `auth_service.py` 978 L; `mfa_service.py` 121 L;
+`oauth_service.py` 340 L) against all seven checklist dimensions.
+
+### Verified good ✅ (new this pass)
+
+- **TOTP replay handling is intentionally asymmetric between login and
+  already-authenticated MFA management, and the asymmetry is not a gap.**
+  `mfa_login` uses `verify_totp_get_timestep`, which rejects a code whose
+  time-step was already consumed (anti-replay, `mfa_service.py:42-75`).
+  `mfa_verify_setup`, `mfa_disable`, and `mfa_recovery-codes` instead call
+  plain `verify_totp` (no replay tracking). Traced the actual exposure rather
+  than assuming from the asymmetry alone: all three of these routes require
+  an already-authenticated session (`get_current_active_user`), so a replayed
+  code buys an attacker nothing beyond what a single valid call already
+  grants — `mfa_verify_setup` and `mfa_disable` are self-blocking against a
+  second call in the same replay window (`current_user.mfa_enabled` flips, so
+  the second call hits the router's own "already enabled" / "not enabled"
+  400 before `verify_totp` is even reached again), and
+  `mfa_recovery-codes` regenerating twice with the same code is
+  idempotent-equivalent in risk to regenerating once. The login path's
+  replay protection exists to stop a captured code completing a _second,
+  independent_ authentication; none of the three management routes let a
+  replay do anything a single legitimate call could not already do.
+- **`security_monitor.detect_brute_force`/suspicious-IP wiring from the auth
+  endpoints matches `SEC-00`'s documented brute-force model exactly**, traced
+  from `auth.py` rather than re-deriving the tracker internals `SEC-00`
+  already swept: `login` and `mfa_login` both feed
+  `record_auth_failure`/`clear_auth_failures` (long-window, cross-account,
+  per-IP) alongside `detect_brute_force` (short-window, per-IP/per-user), and
+  `clear_auth_failures` is called only after full authentication succeeds —
+  after the MFA branch on `login`, not on password-correct alone — matching
+  the CLAUDE.md invariant that a leaked password for an MFA-protected account
+  must not let an attacker zero the tally by itself.
+
+### AUTH-5 — NIT — `validate-reset-token` docstring claimed the endpoint returns the email — ✅ FIXED (doc only)
+
+**What:** `auth.py`'s `validate_reset_token` docstring said "Returns whether
+the token is valid and the associated email," but the handler deliberately
+returns only `{"valid": True}` — the inline comment directly above the
+`return` even says why ("omit email to prevent user enumeration"). The
+docstring and the code next to it disagreed.
+
+**Where:** `app/api/v1/endpoints/auth.py` (the `validate_reset_token`
+docstring, pre-fix).
+
+**Failure scenario:** n/a — documentation accuracy only. Left as-is, a future
+reader trusting the docstring over the code could add an email field to the
+response believing one was already being returned and removed, reintroducing
+the exact enumeration vector the comment next to `return` exists to prevent.
+
+**Fix:** Docstring now states what the code does: validity only, email
+intentionally omitted.
+
+### AUTH-6 — INFORMATIONAL — Dead code in the suspicious-IP in-memory fallback contradicted its own invariant — ✅ FIXED
+
+**What:** `_InMemoryFailureTracker.clear(ip)` in `app/core/suspicious_ip.py`
+cleared **both** `self.failures` and `self.blocks` for an IP. It was never
+called — `clear_auth_failures()` (the only place that resets a counter on
+successful auth) calls `_memory_tracker.failures.pop(ip, None)` directly, not
+`.clear()`. The module's own docstring and `clear_auth_failures`'s docstring
+both state the invariant this class exists to enforce: "clearing never lifts
+an active block" (mirrored in CLAUDE.md's Attack Protection table). The dead
+`clear()` method did the opposite of that invariant.
+
+**Where:** `app/core/suspicious_ip.py:117-119` (pre-fix).
+
+**Why this matters even though it was never called:** an unused method whose
+behavior contradicts a documented, load-bearing invariant is a landmine, not
+neutral dead code — a future edit that "simplifies" `clear_auth_failures()` by
+calling the conveniently-named `.clear()` instead of the two-line direct pop
+would silently reintroduce exactly the bypass CLAUDE.md's Attack Protection
+section calls out by name: "an attacker holding one leaked password... could
+zero the tally at will." The Redis-backed path (`clear_auth_failures`'s
+primary branch) never had an equivalent method to begin with — only `delete`
+on the fail key, never touching the block key — so the in-memory fallback was
+the only place this landmine existed.
+
+**Fix:** Removed the unused method. `grep`-confirmed no caller anywhere in
+`app/` or `tests/` (the one test file exercising this tracker,
+`test_suspicious_ip_throttle.py`, resets state directly via
+`_memory_tracker.failures.clear()` / `.blocks.clear()` — plain `dict.clear()`,
+not the removed class method — so it required no change).
+
+**Completion gate (pass 3):**
+
+| Check                                                                   | Result                                                                |
+| ----------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                           | ✅ 0 violations                                                       |
+| `black --check app/ tests/ alembic/`                                    | ✅ unchanged (1351 files)                                             |
+| `isort --check-only app/ tests/ alembic/`                               | ✅ clean                                                              |
+| `validate_migrations.py --strict`                                       | ✅ single head, 399 revisions                                         |
+| backend tests (`-k "auth or mfa or oauth or consent or suspicious_ip"`) | ✅ 216 passed, 1 skipped (pre-existing, missing optional `pywebpush`) |
+| `npm run typecheck` (native compiler wrapper)                           | ✅ 0 errors                                                           |
+| `npx eslint .`                                                          | ✅ 0 errors/warnings (no frontend files touched this pass)            |
 
 ---
 

@@ -1528,7 +1528,8 @@ async def validate_reset_token(
     """
     Validate a password reset token (POST to avoid token in URL/logs).
 
-    Returns whether the token is valid and the associated email.
+    Returns only validity status; the associated email is intentionally
+    omitted from the response to prevent user enumeration.
     """
     auth_service = AuthService(db)
     is_valid, email = await auth_service.validate_reset_token(token_data.token)
