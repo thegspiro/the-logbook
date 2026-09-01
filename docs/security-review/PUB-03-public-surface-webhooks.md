@@ -6,12 +6,22 @@
 
 ## Pass 3 (2026-09-01) — re-verified, no new findings
 
-**Scope.** `git log 36ce7595..HEAD -- backend/app/api/public/` (`36ce7595` is
-pass 2's own closing merge — the actual merge commit used as the lower
-bound, not a date, per the methodology correction PERM-02's pass 3 recorded
-after Codex caught a missed commit there). One commit in range:
-`b2b2c53c`, touching only `display.py`. File count unchanged at 12; route
-count unchanged at 20 (`grep -rc "@router\."` across all 12 files).
+**Scope — corrected mid-review by Codex.** The first cut of this section's
+scope command was `git log 36ce7595..HEAD -- backend/app/api/public/`
+(`36ce7595` is pass 2's own closing merge — the actual merge commit used as
+the lower bound, not a date, per the methodology correction PERM-02's pass 3
+recorded after Codex caught a missed commit there). That command only
+covers the `app/api/public/` directory, but this feature's declared scope
+is 12 files, one of which — `app/core/public_portal_security.py` (the
+public portal's API-key resolution and rate-limit controls) — lives outside
+that directory, in `app/core/`. The write-up below claimed that file
+byte-identical on the strength of a command that never actually looked at
+it. Re-run with the complete scope,
+`git log 36ce7595..HEAD -- backend/app/api/public/ backend/app/core/public_portal_security.py`:
+still exactly one commit, `b2b2c53c`, touching only `display.py` — the
+substantive conclusion is unchanged, but it's now the command shown that
+establishes it. File count unchanged at 12; route count unchanged at 20
+(`grep -rc "@router\."` across all 12 files).
 
 - **`b2b2c53c` — reorders `guest_check_in`'s rejection gates ahead of the
   per-event daily cap.** This is feature 32's (Locations & kiosk) own

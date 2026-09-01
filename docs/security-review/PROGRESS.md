@@ -26,12 +26,31 @@ rotation pass; no new findings. See the log entry below and
 
 ---
 
+### 2026-09-01 — Feature 03 (Public surface & webhooks, pass 3) — Codex round 1: scope command missed a declared file outside `app/api/public/`
+
+Codex reviewed this PR's first commit (`d64e525`) and found the pass 3 scope
+command, `git log 36ce7595..HEAD -- backend/app/api/public/`, only covers
+the `app/api/public/` directory — but this feature's declared 12-file scope
+includes `app/core/public_portal_security.py` (the public portal's API-key
+and rate-limit controls), which lives in `app/core/`, not `app/api/public/`.
+The write-up claimed that file byte-identical to pass 2 on the strength of
+a command that never looked at it. Re-run with the complete scope
+(`... -- backend/app/api/public/ backend/app/core/public_portal_security.py`):
+still exactly one commit, `b2b2c53c` — the conclusion doesn't change, but
+the earlier command didn't establish it. Fixed in
+`docs/security-review/PUB-03-public-surface-webhooks.md`'s Pass 3 section
+and in the entry below.
+
+---
+
 ### 2026-09-01 — Feature 03 (Public surface & webhooks, pass 3) — no new findings
 
-`git log 36ce7595..HEAD -- backend/app/api/public/` (`36ce7595` is pass 2's
-own closing merge commit, used as the lower bound per the ancestry-based
-scoping method PERM-02 pass 3 established) found one commit, `b2b2c53c`,
-touching only `display.py` — a reorder of `guest_check_in`'s rejection
+`git log 36ce7595..HEAD -- backend/app/api/public/ backend/app/core/public_portal_security.py`
+(`36ce7595` is pass 2's own closing merge commit, used as the lower bound
+per the ancestry-based scoping method PERM-02 pass 3 established; the second
+path corrects a Codex-caught scope gap — see the entry above) found one
+commit, `b2b2c53c`, touching only `display.py` — a reorder of
+`guest_check_in`'s rejection
 gates ahead of its daily-cap check, already made and guard-tested under
 feature 32's (Locations & kiosk) own rotation pass (LOC-32-4), cited and
 re-verified here rather than re-derived. File count (12) and route count
