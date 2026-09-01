@@ -16,12 +16,13 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**Feature 03 (Public surface & webhooks), pass 3** — branch
-`claude/security-review-pub-pass3`, PR link recorded in the next log entry
-once opened. Diff since pass 2's merge (`36ce7595..HEAD`, correct
-merge-commit ancestry) touches only `display.py`, via a fix already made
-and reviewed under feature 32's own rotation pass; no new findings. See the
-log entry below and `PUB-03-public-surface-webhooks.md`'s Pass 3 section.
+**Feature 03 (Public surface & webhooks), pass 3** —
+[#2137](https://github.com/thegspiro/the-logbook/pull/2137), branch
+`claude/security-review-pub-pass3`. Diff since pass 2's merge
+(`36ce7595..HEAD`, correct merge-commit ancestry) touches only
+`display.py`, via a fix already made and reviewed under feature 32's own
+rotation pass; no new findings. See the log entry below and
+`PUB-03-public-surface-webhooks.md`'s Pass 3 section.
 
 ---
 
