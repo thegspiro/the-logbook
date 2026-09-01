@@ -9,7 +9,7 @@
 
 import React from 'react';
 import { UserPlus, Loader2, LogIn } from 'lucide-react';
-import { POSITION_LABELS } from '../../constants/enums';
+import { positionLabel } from '../../modules/scheduling/utils/positionLabels';
 import { formatTime } from '../../utils/dateFormatting';
 import { formatHours } from '../../utils/hoursFormatting';
 import type { Assignment } from '../../types/scheduling';
@@ -70,7 +70,7 @@ export const CrewBoardSlot: React.FC<CrewBoardSlotProps> = ({
   onSignup,
 }) => {
   const isCurrentUser = assignment?.user_id === currentUserId;
-  const positionLabel = POSITION_LABELS[position] || position;
+  const seatLabel = positionLabel(position);
 
   return (
     <div
@@ -96,7 +96,7 @@ export const CrewBoardSlot: React.FC<CrewBoardSlotProps> = ({
               <PositionEditor
                 assignmentId={assignment.id}
                 currentPosition={assignment.position}
-                displayLabel={positionLabel}
+                displayLabel={seatLabel}
                 positionOptions={positionOptions}
                 onSave={onPositionChange}
                 editable={canAssign && !isPast}
@@ -123,7 +123,7 @@ export const CrewBoardSlot: React.FC<CrewBoardSlotProps> = ({
             </div>
             <div>
               <p className="text-theme-text-muted text-sm capitalize">
-                {positionLabel}
+                {seatLabel}
                 {!required && <span className="text-theme-text-muted ml-1 text-[10px]">(optional)</span>}
               </p>
               <p className="text-theme-text-muted text-xs">{required ? 'Open position' : 'Optional position'}</p>
@@ -158,7 +158,7 @@ export const CrewBoardSlot: React.FC<CrewBoardSlotProps> = ({
               {canAssign && (
                 <button
                   onClick={() => onAssignToPosition(position)}
-                  aria-label={`Assign someone as ${positionLabel}`}
+                  aria-label={`Assign someone as ${seatLabel}`}
                   className="inline-flex items-center gap-1 rounded-lg border border-violet-500/30 px-2.5 py-1.5 text-xs font-medium text-violet-600 hover:bg-violet-500/10 sm:px-3 dark:text-violet-400"
                 >
                   <UserPlus className="h-3 w-3" aria-hidden="true" />
@@ -170,7 +170,7 @@ export const CrewBoardSlot: React.FC<CrewBoardSlotProps> = ({
                 <button
                   onClick={() => onSignup(position)}
                   disabled={pendingStates.signingUp}
-                  aria-label={`Sign myself up as ${positionLabel}`}
+                  aria-label={`Sign myself up as ${seatLabel}`}
                   className="inline-flex items-center gap-1 rounded-lg bg-violet-600 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-violet-700 disabled:opacity-50 sm:px-3"
                 >
                   {pendingStates.signingUp ? (

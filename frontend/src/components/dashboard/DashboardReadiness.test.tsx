@@ -37,10 +37,10 @@ describe('DashboardReadiness', () => {
     expect(within(seats).getByText('Driver/Operator')).toBeInTheDocument();
   });
 
-  it('falls back to the raw position when there is no label for it', () => {
+  it("names a department's own seat readably when there is no label for it", () => {
     render(<DashboardReadiness certs={[cert()]} positions={['safety_officer']} onOpen={vi.fn()} />);
 
-    expect(screen.getByText('safety_officer')).toBeInTheDocument();
+    expect(screen.getByText('safety officer')).toBeInTheDocument();
   });
 
   // The scope note names the inputs the verdict actually used. Claiming seats

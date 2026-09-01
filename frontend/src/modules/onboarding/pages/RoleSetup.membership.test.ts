@@ -28,7 +28,14 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const SOURCE = fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), 'RoleSetup.tsx'), 'utf8');
+const DIR = path.dirname(fileURLToPath(import.meta.url));
+const SOURCE = fs.readFileSync(path.join(DIR, 'RoleSetup.tsx'), 'utf8');
+// The position template definitions (and RETIRED_STANDING_SLUGS's sibling,
+// buildPositionTemplates) moved to their own file on 2026-09-01 (PR #2128
+// round 3 — fixing a `react-refresh/only-export-components` warning): the
+// `id: '...'` position entries this file's first describe() block checks
+// for now live here, not in RoleSetup.tsx.
+const TEMPLATES_SOURCE = fs.readFileSync(path.join(DIR, 'positionTemplates.ts'), 'utf8');
 
 /** Slugs the screen used to create as positions. Each is a class or a status. */
 const STANDING_SLUGS = [
@@ -42,14 +49,14 @@ const STANDING_SLUGS = [
 
 describe('RoleSetup does not offer membership standing as a position', () => {
   it.each(STANDING_SLUGS)('does not define a %s position', (slug) => {
-    expect(SOURCE).not.toContain(`id: '${slug}'`);
+    expect(TEMPLATES_SOURCE).not.toContain(`id: '${slug}'`);
   });
 
   it('still offers the baseline member position', () => {
     // The guard has to be able to fail in the other direction too: deleting
     // `member` would leave a new department with no baseline position at all,
     // and this test would otherwise pass.
-    expect(SOURCE).toContain("id: 'member'");
+    expect(TEMPLATES_SOURCE).toContain("id: 'member'");
   });
 });
 
@@ -66,10 +73,11 @@ describe('a session started before the change does not re-create them', () => {
   });
 
   it.each(STANDING_SLUGS)('lists %s as retired', (slug) => {
-    const set = SOURCE.slice(
-      SOURCE.indexOf('const RETIRED_STANDING_SLUGS'),
-      SOURCE.indexOf('const buildPositionTemplates')
-    );
+    // `buildPositionTemplates` moved to positionTemplates.ts (2026-09-01,
+    // PR #2128 round 3 — fixing a `react-refresh/only-export-components`
+    // warning), so the end anchor is the next const declared after
+    // RETIRED_STANDING_SLUGS in RoleSetup.tsx now, not that import.
+    const set = SOURCE.slice(SOURCE.indexOf('const RETIRED_STANDING_SLUGS'), SOURCE.indexOf('const ICON_MAP'));
     expect(set).toContain(`'${slug}'`);
   });
 

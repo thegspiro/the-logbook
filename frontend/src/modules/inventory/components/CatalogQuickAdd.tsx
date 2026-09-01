@@ -216,7 +216,18 @@ const CatalogQuickAdd: React.FC<CatalogQuickAddProps> = ({
         tracking_type: 'pool',
         quantity: 0,
       });
-      await onAdd({ name: item.name, inventoryItemId: item.id, checkType: 'count' });
+      // A row handed back rather than created gets exactly what picking it out
+      // of the results would have given it. It may be an individual asset, and
+      // it may carry dated lots — an existing medication added as a bare count
+      // would have its expiry neither shown nor checked. A row created just now
+      // has no lots, so that lookup is skipped rather than asked and ignored.
+      const hasExpiration = created ? false : await hasDatedStock(item.id);
+      await onAdd({
+        name: item.name,
+        inventoryItemId: item.id,
+        ...(item.tracking_type === 'pool' ? { checkType: 'count' as const } : {}),
+        ...(hasExpiration ? { hasExpiration: true } : {}),
+      });
       inputRef.current?.focus();
       toast.success(
         created ? `Added “${item.name}” to inventory` : `“${item.name}” was already in the catalog — linked it`

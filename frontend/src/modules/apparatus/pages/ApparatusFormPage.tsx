@@ -10,7 +10,7 @@ import { Truck, Save, ArrowLeft, Plus, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { getErrorMessage } from '@/utils/errorHandling';
 import { useRanks } from '@/hooks/useRanks';
-import { POSITION_LABELS } from '@/constants/enums';
+import { positionLabel } from '@/modules/scheduling/utils/positionLabels';
 import { getPositionOptions } from '@/modules/scheduling/components/shiftTemplateTypes';
 import { ensureShiftSettingsLoaded } from '@/modules/scheduling/services/shiftSettingsApi';
 import { useApparatusStore } from '../store/apparatusStore';
@@ -51,7 +51,7 @@ export const ApparatusFormPage: React.FC = () => {
     };
   }, []);
   const crewPositionOptions = [
-    ...CREW_POSITION_CODES.map((code) => ({ code, label: POSITION_LABELS[code] ?? code })),
+    ...CREW_POSITION_CODES.map((code) => ({ code, label: positionLabel(code) })),
     ...schedulingPositionOptions
       .filter((option) => !CREW_POSITION_CODES.includes(option.value as (typeof CREW_POSITION_CODES)[number]))
       .map((option) => ({ code: option.value, label: option.label })),

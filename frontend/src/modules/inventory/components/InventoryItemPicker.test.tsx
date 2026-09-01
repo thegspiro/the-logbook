@@ -178,6 +178,29 @@ describe('InventoryItemPicker', () => {
       expect(screen.queryByText('No matching items.')).not.toBeInTheDocument();
     });
 
+    it('locks the results while a create is in flight', async () => {
+      // Left enabled, a slow create gave the user time to pick a result — and
+      // the create's response then replaced their choice with the new row,
+      // leaving the extra catalog entry behind.
+      let release!: (value: { item: unknown; created: boolean }) => void;
+      mockCreateItemIfAbsent.mockReturnValue(
+        new Promise((resolve) => {
+          release = resolve;
+        })
+      );
+      mockGetItems.mockResolvedValue({ items: [catalogItem()], total: 1, skip: 0, limit: 10 });
+      render(<InventoryItemPicker onChange={onChange} canCreateInventory />);
+      const user = await typeSearch('Gauze');
+
+      await user.click(await screen.findByText('Create “Gauze” in inventory'));
+
+      await waitFor(() => expect(screen.getByRole('button', { name: /Gauze Pads, 4x4 Sterile/ })).toBeDisabled());
+
+      release({ item: catalogItem({ id: 'inv-new', name: 'Gauze' }), created: true });
+      await waitFor(() => expect(onChange).toHaveBeenCalledTimes(1));
+      expect(onChange).toHaveBeenCalledWith('inv-new', 'Gauze');
+    });
+
     it('reports a failed create and leaves the position unlinked', async () => {
       mockCreateItemIfAbsent.mockRejectedValue(new Error('Boom'));
       render(<InventoryItemPicker onChange={onChange} canCreateInventory />);

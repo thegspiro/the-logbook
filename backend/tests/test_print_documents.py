@@ -191,7 +191,19 @@ class TestShiftRoster:
             rows=[(_assignment("driver"), _user("Jon", "Okafor"))],
         )
         doc = await build_shift_roster(db, ORG, "shift-1", TZ, _viewer())
+        # "Driver/Operator" does not fit the column, and a mid-word cut
+        # ("DRIVER/OPERA") reads as a printer fault.
         assert next(_rows_of(doc, "Crew")).right == "DRIVER"
+
+    async def test_the_ems_seat_prints_as_emt(self):
+        # The seat is stored as "ems" and called EMT everywhere it is chosen;
+        # a roster carried round the station named it something else.
+        db = _db(
+            scalars=[_shift()],
+            rows=[(_assignment("ems"), _user("Ada", "Rivera"))],
+        )
+        doc = await build_shift_roster(db, ORG, "shift-1", TZ, _viewer())
+        assert next(_rows_of(doc, "Crew")).right == "EMT"
 
     async def test_minimum_staffing_appears_in_the_heading(self):
         db = _db(

@@ -21,6 +21,7 @@ the purpose; a roster printed in UTC at a station in Virginia would have every
 shift starting at the wrong time.
 """
 
+import re
 from datetime import datetime, timezone
 from typing import Any, Awaitable, Callable, Dict, List, Optional, Tuple
 from zoneinfo import ZoneInfo
@@ -28,6 +29,7 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.utils.positions import position_label
 from app.utils.print_document import DocumentRow, DocumentSection, PrintDocument
 from app.utils.scheduling_dates import DEFAULT_TIMEZONE
 
@@ -56,6 +58,27 @@ _POSITION_RANK = {
 # Someone who declined or was cancelled is not on the shift; printing them
 # would have the oncoming crew looking for a person who is not coming.
 _ROSTER_EXCLUDED_STATUSES = {"declined", "cancelled", "no_show"}
+
+# How much of a 32-character line the seat may take before the name it sits
+# beside stops being readable.
+_SEAT_COLUMN_WIDTH = 12
+
+
+def _seat_column(position: Any) -> Optional[str]:
+    """The seat's name for the roster's right-hand column.
+
+    The seat is named the way every screen names it — the ``ems`` seat prints
+    as EMT — but a label wider than the column is cut mid-word by the
+    renderer, and "DRIVER/OPERA" reads as a printer fault rather than as a
+    seat. One that will not fit falls back to its first word, which is what a
+    crew calls the seat out loud anyway.
+    """
+    label = position_label(position)
+    if not label:
+        return None
+    if len(label) > _SEAT_COLUMN_WIDTH:
+        label = re.split(r"[/ ]", label)[0]
+    return label.upper()[:_SEAT_COLUMN_WIDTH] or None
 
 
 async def _org_timezone(db: AsyncSession, organization_id: str) -> str:
@@ -194,7 +217,7 @@ async def build_shift_roster(
             marks.append("unconfirmed")
         if marks:
             name = f"{name} ({', '.join(marks)})"
-        crew_rows.append(DocumentRow(left=name, right=position.upper()[:12] or None))
+        crew_rows.append(DocumentRow(left=name, right=_seat_column(position)))
 
     if not crew_rows:
         crew_rows.append(DocumentRow(left="No one assigned", emphasis=True))

@@ -1534,11 +1534,24 @@ class EquipmentCheckService:
         unit was checked. Taking them from the request lets a client file a
         result whose serial or lot disagrees with the authoritative row it
         claims to answer, and every report downstream reads the snapshot.
+
+        ``required_quantity`` is snapshotted through ``_target_quantity`` rather
+        than off the column, because the column is only half of what this
+        service means by a target: ``required_quantity or expected_quantity``.
+        Storing the raw value gave the service two definitions of "short" —
+        ``_compute_check_status`` and the recompute in ``update_check`` compared
+        against this snapshot, while ``_is_short`` and ``swap_item_lot``'s
+        submitter limits used the resolved one. A position carrying
+        ``required_quantity = 0`` beside a positive ``expected_quantity`` was
+        therefore short by one rule and full by the other, and the crew-facing
+        screens read the resolved rule while the filed record kept the raw one.
         """
         item["item_name"] = template_item.name
         item["compartment_name"] = template_item._check_compartment_name
         item["check_type"] = template_item.check_type
-        item["required_quantity"] = template_item.required_quantity
+        item["required_quantity"] = EquipmentCheckService._target_quantity(
+            template_item
+        )
         item["critical_minimum_quantity"] = template_item.critical_minimum_quantity
         item["level_unit"] = template_item.level_unit
         item["serial_number"] = template_item.serial_number

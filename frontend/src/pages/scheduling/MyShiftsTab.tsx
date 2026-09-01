@@ -31,6 +31,7 @@ import { formatHours } from '../../utils/hoursFormatting';
 import { ASSIGNMENT_STATUS_COLORS, AssignmentStatus } from '../../constants/enums';
 import { useAuthStore } from '../../stores/authStore';
 import { useSchedulingStore } from '../../modules/scheduling/store/schedulingStore';
+import { positionLabel } from '../../modules/scheduling/utils/positionLabels';
 import { CalendarSubscribeCard } from './CalendarSubscribeCard';
 
 interface MyShiftsTabProps {
@@ -542,7 +543,7 @@ export const MyShiftsTab: React.FC<MyShiftsTabProps> = ({ onViewShift }) => {
                         <p className="text-theme-text-muted text-xs capitalize">
                           {assignment.outreach_role_label
                             ? `Role: ${assignment.outreach_role_label}`
-                            : `Position: ${assignment.position}`}
+                            : `Position: ${positionLabel(assignment.position)}`}
                         </p>
                         <span
                           className={`rounded-full border px-2 py-0.5 text-[10px] font-medium capitalize sm:hidden ${statusColor}`}
