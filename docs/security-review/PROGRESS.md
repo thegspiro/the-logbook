@@ -78,6 +78,36 @@ Storefront & payments, once this PR merges.
 
 ---
 
+### 2026-09-01 — Feature 04 (Storefront & payments, pass 3) — Codex round 3: two more shared dependencies changed, both reviewed and confirmed safe
+
+Codex reviewed round 2's own fix commit and found two more shared
+dependencies this feature actually calls that had changed since `d8c5e39e`:
+
+- **`app/core/security_middleware.py`** (imported by `paypal_webhook.py` for
+  `public_rate_limit`) — a `RateLimiter` fix (already reviewed once,
+  independently, per its own `Codex, PR #2106` comments): a bug where
+  `lockout_seconds=0` (`public_rate_limit`'s own fallback value) made an
+  "expired lockout" check unconditionally wipe the caller's request
+  history, so every `max_requests+1`th over-limit hit silently reset the
+  sliding window and defeated the rate limit; now gated on
+  `lockout_seconds > 0`. Strictly tightens enforcement. A second hunk
+  self-heals a missing Redis TTL on `daily_cap_exceeded`'s counter so a
+  transient `EXPIRE` failure can't leave a scope blocked past its intended
+  day. Neither weakens anything this feature's webhook relies on.
+- **`frontend/src/utils/createApiClient.ts`** (storefront's own
+  `services/api.ts` builds its axios instance through it) — decodes a JSON
+  error body that arrives as a `Blob` (axios applies the request's
+  `responseType` to error responses too, which matters here because
+  storefront's order-export flow is exactly that shape), so a real backend
+  error message reaches the user instead of a generic fallback. Parsed JSON
+  only feeds existing error-message plumbing, no new sink.
+
+Both reviewed and confirmed safe — defensive corrections to shared
+infrastructure, not new surface. Fixed in
+`docs/security-review/SF-04-storefront-payments.md`'s Pass 3 section.
+
+---
+
 ### 2026-09-01 — Feature 04 (Storefront & payments, pass 3) — Codex round 2: the router-level module gate does reach storefront, the routing inventory dropped a known exception, and two dependency-graph files were missed by a filename filter
 
 Codex reviewed round 1's own fix commit and found three more real gaps —

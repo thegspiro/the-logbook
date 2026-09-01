@@ -32,10 +32,37 @@ storefront/embroidery/personalization/thread filename filter applied to
 it does rather than for "storefront"), the entire
 `frontend/src/modules/storefront/` tree, and every other migration whose
 filename matches storefront/embroidery/personalization/thread. **Zero
-changes across the entire domain, now actually covering everything this
-feature depends on** — `git diff --stat` returns nothing for any of it. SF-5
-and SF-6's fixes, and every pass-1/2 "Verified good" item, stand unmodified
-and unre-derived.
+changes across that domain** — `git diff --stat` returns nothing for any of
+it. SF-5 and SF-6's fixes, and every pass-1/2 "Verified good" item, stand
+unmodified and unre-derived.
+
+**Correction (Codex review on this PR, round 3): two more shared
+dependencies this feature actually calls had changed, and "zero changes"
+needed to become "reviewed the changes that exist," not another attempt at
+an ever-widening enumeration.** `paypal_webhook.py` imports and calls
+`public_rate_limit` from `app/core/security_middleware.py`, which changed
+(both hunks carry a `Codex, PR #2106` comment, so already reviewed and
+merged once independently of this rotation): a `RateLimiter` bug fix where
+`lockout_seconds=0` — `public_rate_limit`'s own in-memory-fallback value —
+made an expired-lockout check unconditionally clear the caller's whole
+request history, so every `max_requests+1`th over-limit hit reset the
+sliding window and defeated the limit entirely; now gated on
+`lockout_seconds > 0`, so a real lockout still clears its history the same
+way it always did, and a zero-second one no longer resets anything. Strictly
+tightens enforcement — nothing this feature's webhook relies on got weaker.
+A second, unrelated hunk in the same file self-heals a missing Redis TTL on
+`daily_cap_exceeded`'s counter key so a transient `EXPIRE` failure can't
+leave a scope blocked past its intended day. Frontend:
+`frontend/src/modules/storefront/services/api.ts` builds its axios instance
+via `createApiClient()`, which changed to decode a JSON error body that
+arrives as a `Blob` (because axios applies a `blob` `responseType` to error
+responses too, not just success ones — relevant here because storefront's
+own order-export flow is exactly this shape) so the real backend error
+message reaches the user instead of a generic fallback; parsed JSON only
+feeds existing error-message plumbing, never a `dangerouslySetInnerHTML` or
+similar sink. Both changes are defensive corrections to shared
+infrastructure, not new surface, and neither weakens anything this feature
+depends on.
 
 **Correction (Codex review on this PR, two rounds): the router-level module
 gate does reach every storefront request, and the routing/auth inventory had
@@ -111,7 +138,8 @@ row cap or a mandatory date window), not a drive-by fix.
 **No new findings** beyond the corrections above (a wrong "doesn't reach it"
 authorization claim, restated with the actual mechanism; a lost `GET
 /permissions` exception; a wrong export line citation; two scope artifacts a
-filename filter missed) — all in this write-up across two Codex rounds, none
+filename filter missed; two shared-dependency changes reviewed and confirmed
+safe) — all in this write-up across three Codex rounds, none
 in application code.
 
 **Completion gate:** no backend or frontend source file was modified by
