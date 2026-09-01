@@ -154,10 +154,15 @@ vi.mock('../hooks/useRelativeTime', () => ({
   formatRelativeTime: (date: string) => date,
 }));
 
-/** Inside the seven-day window the timeline covers, whatever day the suite runs. */
+/** Inside the thirty-day window the timeline covers, whatever day the suite runs. */
 const inWindow = (offsetDays: number) => addCalendarDays(getTodayLocalDate('America/New_York'), offsetDays);
-/** Past the window, so it only counts toward the "more open shifts" footer. */
-const pastWindow = addCalendarDays(getTodayLocalDate('America/New_York'), 20);
+/**
+ * Past the display window but inside the open-shift fetch's lookahead, so it
+ * counts only toward the "more open shifts" footer. It has to sit between the
+ * two: inside thirty days it becomes an ordinary row, past sixty days the
+ * fetch never returns it and the footer has nothing to count.
+ */
+const pastWindow = addCalendarDays(getTodayLocalDate('America/New_York'), 40);
 
 const makeShift = (overrides: Partial<ShiftRecord> = {}): ShiftRecord => ({
   id: 'shift-1',
@@ -209,7 +214,7 @@ describe('Dashboard', () => {
     });
   });
 
-  describe('Next 7 Days', () => {
+  describe('Next 30 Days', () => {
     it('merges my shifts, open shifts and events into one list', async () => {
       mockGetMyShifts.mockResolvedValue({
         shifts: [makeShift({ id: 'my-1', shift_date: inWindow(1), apparatus_name: 'Engine 1' })],
@@ -233,12 +238,80 @@ describe('Dashboard', () => {
 
       renderWithRouter(<Dashboard />);
 
-      expect(await screen.findByRole('heading', { name: 'Next 7 Days' })).toBeInTheDocument();
+      expect(await screen.findByRole('heading', { name: 'Next 30 Days' })).toBeInTheDocument();
       // The heading renders above the timeline's own skeleton, so it is no
       // evidence the three sources have merged yet.
       expect(await screen.findByText('Shift · Engine 1')).toBeInTheDocument();
       expect(await screen.findByText('Open Shift')).toBeInTheDocument();
       expect(await screen.findByText('Ladder Ops Drill')).toBeInTheDocument();
+    });
+
+    // The window used to be seven days, and the fetches behind it were capped
+    // at five records applied *before* the window filter. Widening the window
+    // without lifting those caps would have made the card worse, not better:
+    // it would promise thirty days and keep showing a handful.
+    describe('the reach of the window', () => {
+      beforeEach(() => {
+        mockGetEvents.mockReset();
+        mockGetEvents.mockResolvedValue([]);
+        mockGetMyShifts.mockReset();
+        mockGetMyShifts.mockResolvedValue({ shifts: [], total: 0 });
+      });
+
+      it('keeps a drill three weeks out, which the seven-day window hid', async () => {
+        mockGetEvents.mockResolvedValue([
+          {
+            id: 'evt-far',
+            title: 'Ladder Ops Drill',
+            event_type: 'training',
+            start_datetime: `${inWindow(20)}T14:00:00Z`,
+            end_datetime: `${inWindow(20)}T17:00:00Z`,
+            requires_rsvp: true,
+            is_mandatory: false,
+            is_cancelled: false,
+          },
+        ]);
+
+        renderWithRouter(<Dashboard />);
+
+        expect(await screen.findByText('Ladder Ops Drill')).toBeInTheDocument();
+      });
+
+      it('asks for the whole window rather than the five soonest events', async () => {
+        renderWithRouter(<Dashboard />);
+
+        await waitFor(() => expect(mockGetEvents).toHaveBeenCalled());
+        const params = mockGetEvents.mock.calls[0]?.[0] as {
+          start_before?: string;
+          limit?: number;
+        };
+        // Asserted as a floor rather than an exact instant: the bound is
+        // computed from Date.now() and deliberately overshoots the window, so
+        // pinning it exactly would fail on the arithmetic rather than on the
+        // behaviour. What matters is that it reaches at least the whole window.
+        const reach = new Date(params.start_before ?? 0).getTime() - Date.now();
+        expect(reach).toBeGreaterThanOrEqual(30 * 24 * 60 * 60 * 1000);
+        expect(params.limit).toBe(500);
+      });
+
+      it('asks for more than five of the member’s own shifts', async () => {
+        renderWithRouter(<Dashboard />);
+
+        await waitFor(() => expect(mockGetMyShifts).toHaveBeenCalled());
+        const params = mockGetMyShifts.mock.calls[0]?.[0] as { end_date?: string; limit?: number };
+        expect(params.end_date).toBe(inWindow(30));
+        expect(params.limit).toBe(200);
+      });
+
+      // The footer can only count open shifts the fetch actually returned, so
+      // its reach has to exceed the window the list renders.
+      it('reaches past the window for the open shifts the footer counts', async () => {
+        renderWithRouter(<Dashboard />);
+
+        await waitFor(() => expect(mockGetOpenShifts).toHaveBeenCalled());
+        const params = mockGetOpenShifts.mock.calls[0]?.[0] as { end_date?: string };
+        expect(params.end_date).toBe(inWindow(60));
+      });
     });
 
     it('marks the member’s own shifts as theirs', async () => {
@@ -397,7 +470,7 @@ describe('Dashboard', () => {
       await user.click(screen.getByRole('button', { name: /confirm/i }));
 
       await waitFor(() => {
-        expect(mockGetMyShifts).toHaveBeenCalledWith(expect.objectContaining({ limit: 5 }));
+        expect(mockGetMyShifts).toHaveBeenCalledWith(expect.objectContaining({ limit: 200 }));
         expect(mockGetOpenShifts).toHaveBeenCalledWith(
           expect.objectContaining({
             start_date: expect.any(String) as string,
@@ -977,7 +1050,7 @@ describe('Dashboard', () => {
       const personalTab = await screen.findByRole('tab', { name: 'Personal' });
       const departmentTab = screen.getByRole('tab', { name: 'My Department' });
       expect(personalTab).toHaveAttribute('aria-selected', 'true');
-      expect(screen.getByText('Next 7 Days')).toBeInTheDocument();
+      expect(screen.getByText('Next 30 Days')).toBeInTheDocument();
       expect(screen.queryByRole('region', { name: 'Department overview' })).not.toBeInTheDocument();
       expect(mockGetAdminSummary).not.toHaveBeenCalled();
       expect(mockGetSetupChecklist).not.toHaveBeenCalled();
@@ -989,7 +1062,7 @@ describe('Dashboard', () => {
       expect(screen.getByRole('region', { name: 'Department overview' })).toBeInTheDocument();
       expect(screen.queryByRole('button', { name: /^Admin Hours:/ })).not.toBeInTheDocument();
       expect(screen.queryByRole('region', { name: 'My Updates' })).not.toBeInTheDocument();
-      expect(screen.queryByText('Next 7 Days')).not.toBeInTheDocument();
+      expect(screen.queryByText('Next 30 Days')).not.toBeInTheDocument();
       expect(window.location.search).toBe('?tab=department');
       await waitFor(() => {
         expect(mockGetAdminSummary).toHaveBeenCalledTimes(1);
