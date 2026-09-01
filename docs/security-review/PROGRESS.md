@@ -16,9 +16,9 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**Feature 01 (Auth & session lifecycle), pass 3** — branch
-`claude/security-review-auth-pass3`. PR not yet opened; this row is updated
-with the PR number in a follow-up commit once it exists.
+**Feature 01 (Auth & session lifecycle), pass 3** —
+[#2133](https://github.com/thegspiro/the-logbook/pull/2133), branch
+`claude/security-review-auth-pass3`.
 
 ---
 
