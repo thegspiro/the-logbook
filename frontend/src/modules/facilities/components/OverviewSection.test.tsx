@@ -87,6 +87,24 @@ describe('OverviewSection — clearing a field', () => {
     expect(payload.name).toBe('Station 1');
   });
 
+  it('keeps a stored zero rather than clearing it on an unrelated edit', async () => {
+    // A station with no bays, no bunks, no second floor stores 0, which is an
+    // answer. Seeding the form with `||` turned it into '', and handleSave
+    // sends '' as an explicit null — so opening the editor to change the
+    // phone number wiped every zero on the record.
+    const withZeros = { ...(facility as object), numBays: 0, sleepingQuarters: 0 } as typeof facility;
+    const user = userEvent.setup();
+    renderWithRouter(
+      <OverviewSection facility={withZeros} facilityTypes={types} facilityStatuses={statuses} canManage />
+    );
+    await user.click(screen.getByRole('button', { name: /Edit/ }));
+
+    const payload = await save(user);
+
+    expect(payload.num_bays).toBe(0);
+    expect(payload.sleeping_quarters).toBe(0);
+  });
+
   it('refuses a blank required select instead of sending a null the column cannot hold', async () => {
     // Both selects offer a blank option on a NOT NULL column, so the form can
     // present a value the row cannot store.

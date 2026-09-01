@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { OFFLINE_DB_NAME } from './offlineDb';
 import {
   clearAllEquipmentCheckDrafts,
+  deleteEquipmentCheckDraft,
   EQUIPMENT_CHECK_DRAFT_RETENTION_MS,
   loadEquipmentCheckDraft,
   saveEquipmentCheckDraft,
@@ -72,6 +73,32 @@ describe('equipment-check drafts', () => {
     const draft = await loadEquipmentCheckDraft<{ answer: string }>(nextRevision, 2_000);
 
     expect(draft?.contents).toEqual({ answer: 'current' });
+  });
+
+  it('discards every revision of this checklist once it is submitted', async () => {
+    // Keyed on the exact draft id, the delete missed the older revision — and
+    // loadEquipmentCheckDraft hands that back as its fallback when no
+    // current-revision draft exists. Reopening the checklist after submitting
+    // restored the answers from the check just filed, for seven days.
+    await saveEquipmentCheckDraft(base, { answer: 'stale' }, 1_000);
+    const nextRevision = { ...base, templateRevision: 'revision-b' };
+    await saveEquipmentCheckDraft(nextRevision, { answer: 'current' }, 1_500);
+
+    await deleteEquipmentCheckDraft(nextRevision);
+
+    expect(await loadEquipmentCheckDraft(nextRevision, 2_000)).toBeNull();
+    expect(await clearAllEquipmentCheckDrafts()).toBe(0);
+  });
+
+  it('leaves another member’s draft for the same checklist alone', async () => {
+    // Purging somebody else's work is loadEquipmentCheckDraft's job, and only
+    // for the member actually holding the device.
+    await saveEquipmentCheckDraft(base, { answer: 'mine' }, 1_000);
+    await saveEquipmentCheckDraft({ ...base, userId: 'user-b' }, { answer: 'theirs' }, 1_000);
+
+    await deleteEquipmentCheckDraft(base);
+
+    expect(await clearAllEquipmentCheckDrafts()).toBe(1);
   });
 
   it('purges expired drafts without returning their contents', async () => {

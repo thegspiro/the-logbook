@@ -66,6 +66,7 @@ import {
   getStatusStyle,
   getConditionColor,
 } from '../types';
+import { onHandQuantity } from '../utils/onHand';
 import { asArray } from '../../../utils/asArray';
 import { useConfirm } from '../../../contexts/ConfirmContext';
 
@@ -89,7 +90,7 @@ function qtyLabel(item: InventoryItem): string {
   // is a separate ledger that lot bookkeeping never writes to, so showing it
   // here would report a stale number for every consumable the supply officer
   // manages — the same disagreement the reorder alert had to be taught about.
-  if (item.is_lot_stocked) return String(item.lot_stock ?? 0);
+  if (item.is_lot_stocked) return String(onHandQuantity(item));
   if (item.tracking_type !== 'pool') return '-';
   // `quantity` is already the on-hand count — issuing decrements it and a
   // return adds it back — so the department's total is on-hand *plus* what is

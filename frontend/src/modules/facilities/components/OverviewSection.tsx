@@ -58,12 +58,16 @@ function facilityToEditData(facility: Facility): Record<string, string | number>
     phone: facility.phone || '',
     fax: facility.fax || '',
     email: facility.email || '',
-    year_built: facility.yearBuilt || '',
-    square_footage: facility.squareFootage || '',
-    num_floors: facility.numFloors || '',
-    num_bays: facility.numBays || '',
-    max_occupancy: facility.maxOccupancy || '',
-    sleeping_quarters: facility.sleepingQuarters || '',
+    // `??`, not `||`, for every NUMERIC_FIELDS member: a stored 0 is a real
+    // answer — a station with no bays, no bunks, no second floor — and `||`
+    // turned it into '', which handleSave then sends as an explicit null.
+    // Opening the editor and pressing Save wiped every zero on the record.
+    year_built: facility.yearBuilt ?? '',
+    square_footage: facility.squareFootage ?? '',
+    num_floors: facility.numFloors ?? '',
+    num_bays: facility.numBays ?? '',
+    max_occupancy: facility.maxOccupancy ?? '',
+    sleeping_quarters: facility.sleepingQuarters ?? '',
     notes: facility.notes || '',
     description: facility.description || '',
   };

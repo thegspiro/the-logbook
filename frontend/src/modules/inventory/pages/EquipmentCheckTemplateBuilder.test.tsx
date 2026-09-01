@@ -15,7 +15,7 @@ const {
   addCheckItemsBulk,
   deleteCheckItemsBulk,
   deleteCheckItem,
-  deleteCompartment,
+  deleteCompartmentsBulk,
   createEquipmentCheckTemplate,
   updateEquipmentCheckTemplate,
   toastSuccess,
@@ -30,7 +30,7 @@ const {
   addCheckItemsBulk: vi.fn(),
   deleteCheckItemsBulk: vi.fn(),
   deleteCheckItem: vi.fn(),
-  deleteCompartment: vi.fn(),
+  deleteCompartmentsBulk: vi.fn(),
   createEquipmentCheckTemplate: vi.fn(),
   updateEquipmentCheckTemplate: vi.fn(),
   toastSuccess: vi.fn(),
@@ -59,7 +59,7 @@ vi.mock('@/modules/inventory/services/equipmentCheckApi', () => ({
     getCsvSampleUrl: vi.fn().mockReturnValue('/sample.csv'),
     deleteCheckItemsBulk: (...args: unknown[]) => deleteCheckItemsBulk(...args),
     deleteCheckItem: (...args: unknown[]) => deleteCheckItem(...args),
-    deleteCompartment: (...args: unknown[]) => deleteCompartment(...args),
+    deleteCompartmentsBulk: (...args: unknown[]) => deleteCompartmentsBulk(...args),
     createEquipmentCheckTemplate: (...args: unknown[]) => createEquipmentCheckTemplate(...args),
     updateEquipmentCheckTemplate: (...args: unknown[]) => updateEquipmentCheckTemplate(...args),
   },
@@ -1466,7 +1466,7 @@ describe('EquipmentCheckTemplateBuilder replacing a saved template’s contents'
   beforeEach(() => {
     vi.clearAllMocks();
     getTemplate.mockResolvedValue(structuredClone(vehicleTemplate));
-    deleteCompartment.mockResolvedValue(undefined);
+    deleteCompartmentsBulk.mockResolvedValue(['cab', 'bag', 'section']);
     updateEquipmentCheckTemplate.mockResolvedValue(vehicleTemplate);
     mockViewport('phone');
   });
@@ -1484,13 +1484,15 @@ describe('EquipmentCheckTemplateBuilder replacing a saved template’s contents'
 
     await loadEnginePreset(user);
 
-    await waitFor(() => expect(deleteCompartment).toHaveBeenCalledWith('cab'));
+    // One request, not one per compartment: a loop commits each delete
+    // separately and a failure on the third leaves the first two gone.
+    await waitFor(() => expect(deleteCompartmentsBulk).toHaveBeenCalledWith('template-1', ['cab', 'bag', 'section']));
   });
 
   it('keeps the template intact when the discard fails', async () => {
     // Deleted before the swap, so a failure leaves the template as it was
     // rather than half-replaced with no way back.
-    deleteCompartment.mockRejectedValue({ response: { data: { detail: 'Compartment is in use' } } });
+    deleteCompartmentsBulk.mockRejectedValue({ response: { data: { detail: 'Compartment is in use' } } });
     const user = userEvent.setup();
     renderBuilder();
 

@@ -131,6 +131,18 @@ class CheckTemplateItemBulkDeleteResponse(BaseModel):
     replayed: bool = False
 
 
+class CompartmentBulkDelete(BaseModel):
+    """Discard a named set of a template's compartments in one transaction."""
+
+    compartment_ids: List[str] = Field(..., min_length=1, max_length=250)
+
+
+class CompartmentBulkDeleteResponse(BaseModel):
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
+
+    deleted_compartment_ids: List[str]
+
+
 class CheckTemplateItemUpdate(BaseModel):
     """Schema for updating a check template item."""
 

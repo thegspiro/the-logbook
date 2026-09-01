@@ -1,4 +1,4 @@
-"""Add department_message_recipients.revoked_at
+"""Add department_message_recipients.revoked_at and created_at
 
 Inbox visibility is authorized on the recipient row alone — ``get_inbox``,
 ``get_unread_count`` and ``_visible_message_or_none`` all join to it and ask
@@ -10,6 +10,10 @@ record that the member read (and possibly formally acknowledged) the notice.
 The two rules collided: a member removed from an audience kept full access to
 the message, because the row kept for evidence was also the row that granted
 access. ``revoked_at`` splits the two — the receipt stays, the access does not.
+
+``created_at`` comes along because the table had none: it records when a
+member entered the audience, which is not the message's own creation time once
+an audience is widened after publication.
 
 Guarded on the table existing: fresh installs come up through ``create_all`` +
 stamp-head rather than this chain (CLAUDE.md pitfall #26), so a database can
@@ -25,7 +29,7 @@ branch_labels = None
 depends_on = None
 
 _TABLE = "department_message_recipients"
-_COLUMN = "revoked_at"
+_COLUMNS = ("revoked_at", "created_at")
 
 
 def _has_table(table: str) -> bool:
@@ -40,13 +44,22 @@ def _has_column(table: str, column: str) -> bool:
 
 
 def upgrade() -> None:
-    if _has_table(_TABLE) and not _has_column(_TABLE, _COLUMN):
-        op.add_column(
-            _TABLE,
-            sa.Column(_COLUMN, sa.DateTime(timezone=True), nullable=True),
-        )
+    if not _has_table(_TABLE):
+        return
+    for column in _COLUMNS:
+        if not _has_column(_TABLE, column):
+            op.add_column(
+                _TABLE,
+                sa.Column(
+                    column,
+                    sa.DateTime(timezone=True),
+                    nullable=True,
+                    server_default=sa.func.now() if column == "created_at" else None,
+                ),
+            )
 
 
 def downgrade() -> None:
-    if _has_column(_TABLE, _COLUMN):
-        op.drop_column(_TABLE, _COLUMN)
+    for column in _COLUMNS:
+        if _has_column(_TABLE, column):
+            op.drop_column(_TABLE, column)

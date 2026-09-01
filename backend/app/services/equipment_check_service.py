@@ -590,6 +590,49 @@ class EquipmentCheckService:
         await self.db.commit()
         return True
 
+    async def delete_compartments_bulk(
+        self, template_id: str, organization_id: str, compartment_ids: List[str]
+    ) -> Optional[List[str]]:
+        """Delete a named set of a template's compartments in one transaction.
+
+        The builder's three bulk-replacement paths — vehicle preset, JSON
+        import, CSV import — each promise to discard everything currently on
+        the template. Driving that as one DELETE per compartment commits each
+        one separately, so a failure part-way through leaves the template
+        half-erased with no way back, while the builder still shows the
+        contents it thinks are there.
+
+        Returns None when the template is not the caller's, and raises
+        ``ValueError`` when an id names a compartment on another template —
+        neither of which is allowed to delete anything.
+        """
+        template = await self.get_template(template_id, organization_id)
+        if not template:
+            return None
+        if not compartment_ids:
+            return []
+        if len(set(compartment_ids)) != len(compartment_ids):
+            raise ValueError("Compartment IDs must be unique")
+
+        result = await self.db.execute(
+            select(CheckTemplateCompartment)
+            .where(
+                CheckTemplateCompartment.template_id == template_id,
+                CheckTemplateCompartment.id.in_(compartment_ids),
+            )
+            .with_for_update()
+        )
+        compartments = result.scalars().all()
+        by_id = {str(comp.id): comp for comp in compartments}
+        if set(by_id) != set(compartment_ids):
+            raise ValueError("Every compartment must belong to the specified template")
+
+        for comp in compartments:
+            await self.db.delete(comp)
+        await self._advance_content_revision(template_id)
+        await self.db.commit()
+        return list(by_id)
+
     async def clone_compartment(
         self, compartment_id: str, organization_id: str, sort_order: int
     ) -> Optional[CheckTemplateCompartment]:
