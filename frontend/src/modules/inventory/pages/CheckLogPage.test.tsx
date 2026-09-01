@@ -266,6 +266,17 @@ describe('CheckLogPage', () => {
           makeEntry({ status: 'failed', unitLabel: 'L-2', templateName: 'Ladder Daily Check', failedItems: 2 }),
           makeEntry({ status: 'partial', unitLabel: 'M-3', templateName: 'Medic Daily Check' }),
           makeEntry({ status: 'out_of_service', unitLabel: 'T-4', templateName: 'Tower Daily Check' }),
+          // The other source of `out_of_service`: the rig was unavailable and
+          // nobody submitted anything, so the server reconstructed this row
+          // and left checkId unset. The dashboard card never counted it.
+          makeEntry({
+            status: 'out_of_service',
+            unitLabel: 'R-5',
+            templateName: 'Rescue Daily Check',
+            checkId: undefined,
+            checkedAt: undefined,
+            checkedByName: undefined,
+          }),
         ],
       });
 
@@ -380,6 +391,46 @@ describe('CheckLogPage', () => {
 
       expect(screen.queryByRole('button', { name: /Grid/ })).not.toBeInTheDocument();
       expect(screen.queryByRole('table')).not.toBeInTheDocument();
+    });
+
+    /**
+     * `out_of_service` is the one outcome with two sources: a submitted check
+     * holding an out-of-service item, and a day the rig was unavailable with
+     * no check at all. The card counts only persisted rows, so its link also
+     * carries `submitted=1` — otherwise clicking "3 exceptions" padded the
+     * list with "the truck was in the shop".
+     */
+    it('excludes availability-only rows when the link asks for submitted checks', async () => {
+      window.history.replaceState({}, '', '/inventory/checklists/log?status=failed,partial,out_of_service&submitted=1');
+      renderWithRouter(<CheckLogPage />);
+
+      // The submitted out-of-service check stays...
+      expect(await screen.findByText('Tower Daily Check')).toBeInTheDocument();
+      // ...the reconstructed one, which has no checkId, does not.
+      expect(screen.queryByText('Rescue Daily Check')).not.toBeInTheDocument();
+      // and the other two submitted exceptions are still there.
+      expect(screen.getByText('Ladder Daily Check')).toBeInTheDocument();
+      expect(screen.getByText('Medic Daily Check')).toBeInTheDocument();
+    });
+
+    it('keeps availability-only rows when only a status is asked for', async () => {
+      // Without `submitted`, `?status=out_of_service` means every occasion
+      // with that outcome — reconstructed ones included.
+      window.history.replaceState({}, '', '/inventory/checklists/log?status=out_of_service');
+      renderWithRouter(<CheckLogPage />);
+
+      expect(await screen.findByText('Tower Daily Check')).toBeInTheDocument();
+      expect(screen.getByText('Rescue Daily Check')).toBeInTheDocument();
+    });
+
+    it('says it is showing only submitted checks', async () => {
+      window.history.replaceState({}, '', '/inventory/checklists/log?submitted=1');
+      renderWithRouter(<CheckLogPage />);
+      await screen.findByText('Engine Daily Check');
+
+      const banner = screen.getByRole('status', { name: 'Active filter' });
+      expect(within(banner).getByText('checks someone submitted')).toBeInTheDocument();
+      expect(screen.queryByText('Rescue Daily Check')).not.toBeInTheDocument();
     });
   });
 });

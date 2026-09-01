@@ -96,9 +96,28 @@ export const CheckLogPage: React.FC<CheckLogPageProps> = ({ apparatusId, showHea
   }, [searchParams]);
   const hasStatusFilter = statusFilter.length > 0;
 
+  /**
+   * `?submitted=1` narrows to occasions a crew actually submitted.
+   *
+   * `out_of_service` is the one outcome with two sources.
+   * `_build_occasions` uses it both for a submitted check holding an
+   * out-of-service item and for a day when the rig was unavailable and *no
+   * check exists at all*. The dashboard card counts only persisted
+   * `ShiftEquipmentCheck` rows, so linking on status alone padded its count
+   * with "the truck was in the shop" rows nobody had recorded a check for.
+   *
+   * A submitted occasion is exactly one with a `checkId` — the server leaves
+   * it unset for anything it reconstructed. Kept as its own parameter rather
+   * than folded into the status list, because "which outcomes" and "did
+   * anyone actually do it" are different questions, and `?status=missed`
+   * still has to work for the occasions that by definition have no check.
+   */
+  const submittedOnly = ['1', 'true'].includes((searchParams.get('submitted') ?? '').toLowerCase());
+
   const clearStatusFilter = useCallback(() => {
     const next = new URLSearchParams(searchParams);
     next.delete('status');
+    next.delete('submitted');
     // replace: the filter came from a link on another page, so backing out of
     // it should return there rather than stepping through filter states.
     setSearchParams(next, { replace: true });
@@ -135,6 +154,7 @@ export const CheckLogPage: React.FC<CheckLogPageProps> = ({ apparatusId, showHea
   const entries = useMemo(() => {
     let rows = data?.entries ?? [];
     if (hasStatusFilter) rows = rows.filter((e) => statusFilter.includes(e.status));
+    if (submittedOnly) rows = rows.filter((e) => Boolean(e.checkId));
     const q = search.trim().toLowerCase();
     if (!q) return rows;
     return rows.filter(
@@ -144,7 +164,7 @@ export const CheckLogPage: React.FC<CheckLogPageProps> = ({ apparatusId, showHea
         (e.checkedByName ?? '').toLowerCase().includes(q) ||
         e.findings.some((f) => f.toLowerCase().includes(q))
     );
-  }, [data, search, statusFilter, hasStatusFilter]);
+  }, [data, search, statusFilter, hasStatusFilter, submittedOnly]);
 
   /**
    * The grid is a rig-by-day matrix with no status dimension, so it cannot
@@ -153,8 +173,9 @@ export const CheckLogPage: React.FC<CheckLogPageProps> = ({ apparatusId, showHea
    * matrix under a "Showing only" banner that now contradicted it — the
    * toggle is withdrawn while filtering and the rendered view is derived.
    */
-  const canShowGrid = data?.scope === 'fleet' && data.rows.length > 0 && !hasStatusFilter;
-  const effectiveView: ViewMode = hasStatusFilter ? 'log' : view;
+  const isFiltered = hasStatusFilter || submittedOnly;
+  const canShowGrid = data?.scope === 'fleet' && data.rows.length > 0 && !isFiltered;
+  const effectiveView: ViewMode = isFiltered ? 'log' : view;
   const summary = data?.summary;
 
   return (
@@ -264,7 +285,7 @@ export const CheckLogPage: React.FC<CheckLogPageProps> = ({ apparatusId, showHea
       {/* An active status filter has to be visible and removable. Arriving
           from the dashboard on a filtered log that looked unfiltered would
           read as "the fortnight only had three checks in it". */}
-      {hasStatusFilter && (
+      {isFiltered && (
         // role=status so the narrowing is announced, not just drawn — the
         // filter arrives from a link on another page, so a screen-reader user
         // never saw it being applied.
@@ -275,6 +296,11 @@ export const CheckLogPage: React.FC<CheckLogPageProps> = ({ apparatusId, showHea
               {CHECK_OUTCOME_LABELS[outcome]}
             </span>
           ))}
+          {submittedOnly && (
+            <span className="badge border-theme-surface-border text-theme-text-secondary border">
+              checks someone submitted
+            </span>
+          )}
           <button
             type="button"
             onClick={clearStatusFilter}
