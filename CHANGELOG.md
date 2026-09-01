@@ -130,6 +130,35 @@ Three things change for existing departments:
   settings is now a signpost to Inventory and shows no Save button, because it
   has nothing left to save.
 
+### Checklist links, and who the `inventory.*` wildcard now covers (2026-08-31)
+
+**Changed — check your custom positions**
+
+- **A position granting `inventory.*` now also grants the equipment-checklist
+  permissions.** Those three grants used to be `equipment_check.view` /
+  `.manage` / `.submit`, which the `inventory.*` wildcard did not reach. Moving
+  checklists into Inventory renamed them to `inventory.check_view` /
+  `.check_manage` / `.check_submit`, and a module wildcard covers everything in
+  its module — so anyone holding `inventory.*` can now author and submit
+  equipment checklists. No seeded position or rank grants `inventory.*`, so
+  this only affects positions a department built for itself, typically a
+  quartermaster. If that is wider than you intend, replace `inventory.*` on
+  that position with the specific `inventory.` grants you want. The behaviour
+  is deliberate — a checklist is a list of inventory items — and is now pinned
+  by a test so it cannot drift unnoticed.
+
+**Fixed**
+
+- **Checklist shortcuts are no longer shown to people the destination turns
+  away.** Three links advertised pages their viewer could not open: "Manage
+  equipment checklists" in Scheduling's Equipment settings needs
+  `inventory.check_manage`, and "Check reports" and "Expiring on apparatus" on
+  the Equipment Checklists admin page need grants that authoring a checklist
+  does not imply — the seeded President position holds `check_manage` without
+  `check_view`, so Check reports was a dead end for them. Each link is now
+  shown only to whoever its page admits, matching the "Checklist settings" link
+  that already worked this way.
+
 ### Shift template checklist fixes (2026-08-31)
 
 **Fixed**
