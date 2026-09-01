@@ -17,6 +17,8 @@ feature. The rotation cannot outrun its own review queue.
 ## Open PR
 
 **Feature 00 (Cross-cutting baseline), pass 3, round 3 follow-up** —
+[#2132](https://github.com/thegspiro/the-logbook/pull/2132), branch
+`claude/security-review-sec00-pass3-round3-fix`.
 [#2128](https://github.com/thegspiro/the-logbook/pull/2128) (rounds 1–2)
 **merged to `main` at commit `2b3231a3`** before Codex's round-3 review
 landed, so round 3's fixes are a **separate PR**, not a further push to
@@ -26,10 +28,6 @@ gone and its PR is closed. See the round-3 log entry below for what Codex
 found this time, including a real regression (not just a gap) in round 2's
 own fix that shipped to `main` unfixed for a window — the timeline matters
 here, not just the diff, so read that entry rather than only the summary.
-
-_(Placeholder until the follow-up PR is opened and this line is updated in
-the same push: PR number/URL TBD, branch `claude/security-review-sec00-
-pass3-round3-fix`.)_
 
 **Prior rounds on #2128 (now merged), for reference:** re-verified pass 1/2's
 five standing sweeps against current code (399 Alembic revisions, 1536
