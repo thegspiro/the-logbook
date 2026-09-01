@@ -256,6 +256,7 @@ api.interceptors.response.use(
     const requestUrl = originalRequest.url || '';
     const isAuthEndpoint = [
       '/auth/login',
+      '/auth/mfa/login',
       '/auth/register',
       '/auth/forgot-password',
       '/auth/reset-password',

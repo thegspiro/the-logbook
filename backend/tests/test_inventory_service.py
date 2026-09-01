@@ -6,7 +6,7 @@ Tests for InventoryService business logic using mocked database sessions.
 Covers:
   - State-validation logic (_validate_item_state)
   - Category requirement enforcement (_validate_category_requirements)
-  - Create item validation paths (state, category, serial, pool quantity)
+  - Create item validation paths (state, category, serial, negative pool qty)
   - Create / update / rename categories
   - Serial number uniqueness checks
   - Update item validation paths (not found, invalid state, negative pool qty)
@@ -262,8 +262,15 @@ class TestCreateItem:
         mock_db.commit.assert_called_once()
 
     @pytest.mark.asyncio
-    async def test_create_pool_item_requires_quantity(self, service, org_id, user_id):
-        """Pool items with quantity < 1 are rejected."""
+    async def test_create_pool_item_accepts_zero_quantity(
+        self, service, org_id, user_id
+    ):
+        """A pool item may be created with nothing on hand.
+
+        This is the shape the checklist builder posts when a crew adds a
+        catalog row from an equipment-check position: the row records that the
+        item exists, not that any of it is in the stock room.
+        """
         service._validate_category_requirements = AsyncMock(return_value=None)
 
         item, error = await service.create_item(
@@ -277,8 +284,29 @@ class TestCreateItem:
             },
             created_by=user_id,
         )
-        assert error is not None
-        assert "quantity" in error.lower()
+        assert error is None
+        assert item is not None
+
+    @pytest.mark.asyncio
+    async def test_create_pool_item_rejects_negative_quantity(
+        self, service, org_id, user_id
+    ):
+        """Zero is a real stock level; a negative one is incoherent."""
+        service._validate_category_requirements = AsyncMock(return_value=None)
+
+        item, error = await service.create_item(
+            organization_id=org_id,
+            item_data={
+                "name": "Gloves",
+                "tracking_type": "pool",
+                "quantity": -1,
+                "status": "available",
+                "condition": "good",
+            },
+            created_by=user_id,
+        )
+        assert item is None
+        assert "negative" in error.lower()
 
     @pytest.mark.asyncio
     async def test_create_item_duplicate_serial_rejected(
@@ -1174,10 +1202,10 @@ class TestPoolIssuanceValidation:
 
     @pytest.mark.unit
     @pytest.mark.asyncio
-    async def test_create_pool_item_zero_quantity_rejected(
+    async def test_create_pool_item_zero_quantity_allowed(
         self, service, mock_db, org_id, user_id
     ):
-        """Pool item with quantity=0 should be rejected."""
+        """Pool item with quantity=0 is an out-of-stock catalog row, not an error."""
         service._validate_category_requirements = AsyncMock(return_value=None)
 
         item, err = await service.create_item(
@@ -1191,8 +1219,8 @@ class TestPoolIssuanceValidation:
             },
             created_by=user_id,
         )
-        assert item is None
-        assert "quantity" in err.lower()
+        assert err is None
+        assert item is not None
 
     @pytest.mark.unit
     @pytest.mark.asyncio

@@ -114,9 +114,9 @@ class TestRegistry:
         # every member the department's whole checklist configuration. This
         # matches GET /templates/{id}.
         assert required_permissions_for_document("apparatus_check_sheet") == (
-            "equipment_check.view",
-            "equipment_check.submit",
-            "equipment_check.manage",
+            "inventory.check_view",
+            "inventory.check_submit",
+            "inventory.check_manage",
         )
 
     def test_an_unknown_document_has_no_permissions(self):
@@ -191,7 +191,19 @@ class TestShiftRoster:
             rows=[(_assignment("driver"), _user("Jon", "Okafor"))],
         )
         doc = await build_shift_roster(db, ORG, "shift-1", TZ, _viewer())
+        # "Driver/Operator" does not fit the column, and a mid-word cut
+        # ("DRIVER/OPERA") reads as a printer fault.
         assert next(_rows_of(doc, "Crew")).right == "DRIVER"
+
+    async def test_the_ems_seat_prints_as_emt(self):
+        # The seat is stored as "ems" and called EMT everywhere it is chosen;
+        # a roster carried round the station named it something else.
+        db = _db(
+            scalars=[_shift()],
+            rows=[(_assignment("ems"), _user("Ada", "Rivera"))],
+        )
+        doc = await build_shift_roster(db, ORG, "shift-1", TZ, _viewer())
+        assert next(_rows_of(doc, "Crew")).right == "EMT"
 
     async def test_minimum_staffing_appears_in_the_heading(self):
         db = _db(
@@ -331,7 +343,7 @@ def _check_sheet(template, positions=None):
     )
 
 
-def _check_viewer(permissions=("equipment_check.view",)):
+def _check_viewer(permissions=("inventory.check_view",)):
     return _viewer(permissions=permissions)
 
 
@@ -477,7 +489,7 @@ class TestCheckSheet:
                 ORG,
                 "tpl-1",
                 TZ,
-                _check_viewer(permissions=("equipment_check.submit",)),
+                _check_viewer(permissions=("inventory.check_submit",)),
             )
             # Captured inside the block: patch.multiple with explicit mocks
             # yields an empty dict, and outside the block the name is restored.
@@ -570,7 +582,7 @@ class TestPrinterSelection:
 
 class TestPrinterErrorRedaction:
     """DOC-10 finding #7: /station-documents/print is reachable by ordinary
-    scheduling.view / equipment_check.submit holders, not just printer-config
+    scheduling.view / inventory.check_submit holders, not just printer-config
     admins — unlike labels.py's printer endpoints, which are gated on
     settings.manage. The transport's own error message embeds the printer's
     configured host/IP and port, so it must not reach this endpoint's caller

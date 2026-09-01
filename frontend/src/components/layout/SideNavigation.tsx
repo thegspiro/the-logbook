@@ -276,18 +276,48 @@ export const SideNavigation: React.FC<SideNavigationProps> = ({ departmentName, 
               },
             ]
           : []),
+        // Equipment checklists. Two rows, because the two audiences want
+        // different things and one of them is everybody: a member wants the
+        // checks they owe, an officer wants the state of the fleet.
+        //
+        // "My Checklists" carries no permission gate on purpose. Walking a
+        // truck is the one thing every member does, the API narrows
+        // /my-checklists to the caller, and this row is now their only route
+        // to it — the Scheduling tab that used to carry them here is gone, and
+        // until it was added nothing in the nav pointed at checklists at all.
+        ...(isModuleOn('inventory')
+          ? [
+              {
+                label: 'My Checklists',
+                path: '/inventory/checklists/my',
+                icon: ClipboardCheck,
+              },
+              {
+                label: 'Fleet Readiness',
+                path: '/inventory/checklists',
+                // Not ClipboardCheck, which "My Checklists" directly above
+                // already uses. The rail collapses to a 20-unit icon-only
+                // strip where the label is replaced by a hover title, so two
+                // adjacent rows sharing a glyph are indistinguishable at a
+                // glance — and these two are for different audiences: the
+                // checks you owe versus the state of the fleet.
+                icon: ShieldCheck,
+                anyPermission: ['inventory.check_view', 'scheduling.manage'],
+              },
+            ]
+          : []),
         // The crew half of the same shelf: "we just used two of these",
         // recorded without starting a whole checklist. Gated on the default
         // member grant, matching the route's own gate — this is the medical
         // page most members actually need, and until now nothing in the nav
         // pointed at it.
-        ...(isModuleOn('scheduling')
+        ...(isModuleOn('inventory')
           ? [
               {
                 label: 'Apparatus Inventory',
-                path: '/scheduling/apparatus-inventory',
+                path: '/inventory/checklists/apparatus-inventory',
                 icon: Truck,
-                anyPermission: ['equipment_check.submit', 'equipment_check.view', 'inventory.view'],
+                anyPermission: ['inventory.check_submit', 'inventory.check_view', 'inventory.view'],
               },
             ]
           : []),

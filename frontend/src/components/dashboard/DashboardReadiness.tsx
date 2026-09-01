@@ -2,7 +2,7 @@ import React from 'react';
 import { ChevronRight, ShieldAlert, ShieldCheck, ShieldX } from 'lucide-react';
 import { computeReadiness, joinClauses } from '../../utils/readiness';
 import type { ReadinessCert, ReadinessLevel, ReadinessScreenings } from '../../utils/readiness';
-import { POSITION_LABELS } from '../../constants/enums';
+import { positionLabel } from '../../modules/scheduling/utils/positionLabels';
 
 const LEVEL: Record<ReadinessLevel, { box: string; icon: string; headline: string; Icon: typeof ShieldCheck }> = {
   clear: {
@@ -96,7 +96,7 @@ const DashboardReadiness: React.FC<DashboardReadinessProps> = ({ certs, position
                 key={position}
                 className="border-theme-surface-border bg-theme-surface text-theme-text-secondary rounded-full border px-2.5 py-0.5 text-xs font-semibold"
               >
-                {POSITION_LABELS[position] ?? position}
+                {positionLabel(position)}
               </span>
             ))}
           </span>

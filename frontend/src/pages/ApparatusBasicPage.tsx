@@ -16,7 +16,7 @@ import toast from 'react-hot-toast';
 import { schedulingService } from '../modules/scheduling/services/api';
 
 import { useConfirm } from '../contexts/ConfirmContext';
-import { POSITION_LABELS } from '../constants/enums';
+import { positionLabel } from '../modules/scheduling/utils/positionLabels';
 interface BasicApparatus {
   id: string;
   organization_id?: string;
@@ -53,7 +53,7 @@ const APPARATUS_TYPES = [
 // eligible_positions) — an apparatus seat outside it cannot be signed up for by
 // anyone, because the API has no way to name it. This list previously carried
 // 'EMT' where the rest of the system says 'ems', which made every EMT seat on
-// every ambulance unfillable. Labels come from POSITION_LABELS.
+// every ambulance unfillable. Labels come from positionLabel().
 const POSITION_OPTIONS = [
   'officer',
   'driver',
@@ -468,7 +468,7 @@ export default function ApparatusBasicPage() {
                       >
                         {POSITION_OPTIONS.map((o) => (
                           <option key={o} value={o}>
-                            {POSITION_LABELS[o] ?? o}
+                            {positionLabel(o)}
                           </option>
                         ))}
                       </select>

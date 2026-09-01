@@ -1,8 +1,8 @@
 """
 A member who may submit an equipment check must be able to open one.
 
-EC-7 widened `GET /shifts/{id}/checklists` to accept `equipment_check.view` OR
-`equipment_check.submit`, on the stated grounds that a member holds `.submit`
+EC-7 widened `GET /shifts/{id}/checklists` to accept `inventory.check_view` OR
+`inventory.check_submit`, on the stated grounds that a member holds `.submit`
 and the check-performing flow has to keep working. Its siblings were left
 view-only — and the compartments and items on a template *are* the check form.
 
@@ -61,8 +61,8 @@ def _permission_names(handler) -> set[str]:
 def test_the_member_flow_accepts_submit(name):
     """`.submit` is the permission the default member position carries."""
     names = _permission_names(getattr(equipment_check, name))
-    assert "equipment_check.submit" in names, (
-        f"{name} does not accept equipment_check.submit — a member can be shown "
+    assert "inventory.check_submit" in names, (
+        f"{name} does not accept inventory.check_submit — a member can be shown "
         "a checklist they are then refused"
     )
 
@@ -70,7 +70,7 @@ def test_the_member_flow_accepts_submit(name):
 @pytest.mark.parametrize("name", MEMBER_FLOW_ENDPOINTS)
 def test_the_member_flow_still_accepts_view(name):
     """Widening must not have narrowed: an officer holds `.view`, not `.submit`."""
-    assert "equipment_check.view" in _permission_names(getattr(equipment_check, name))
+    assert "inventory.check_view" in _permission_names(getattr(equipment_check, name))
 
 
 def test_writes_are_not_widened():
@@ -79,17 +79,17 @@ def test_writes_are_not_widened():
         handler = getattr(equipment_check, name, None)
         if handler is None:
             continue
-        assert "equipment_check.submit" not in _permission_names(
+        assert "inventory.check_submit" not in _permission_names(
             handler
-        ), f"{name} accepts equipment_check.submit — members can edit templates"
+        ), f"{name} accepts inventory.check_submit — members can edit templates"
 
 
 @pytest.mark.parametrize("name", ["get_template", "list_templates"])
 def test_template_reads_accept_manage(name):
     """A manage-without-view role edits templates it must be able to fetch."""
-    assert "equipment_check.manage" in _permission_names(
+    assert "inventory.check_manage" in _permission_names(
         getattr(equipment_check, name)
-    ), f"{name} does not accept equipment_check.manage"
+    ), f"{name} does not accept inventory.check_manage"
 
 
 # ---------------------------------------------------------------------------

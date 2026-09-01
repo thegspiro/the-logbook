@@ -244,12 +244,31 @@ taxable, max 2 per member. Status left on Draft.]**
 
 ### PERSONALIZATION (7:00 – 8:00)
 
-**[SCREEN: Enabling personalization — label "Name for embroidery", max 20
-characters, $8.00 surcharge. Then the member view showing the text box.]**
+**[SCREEN: Enabling personalization on an **embroidered** item — method set to
+Embroidery, label "Name for embroidery", max 20 characters, $8.00 surcharge,
+thread colour swatch visible. Then the member view showing the text box and the
+swatch.]**
 
-> "For anything embroidered or engraved, turn on personalization. Set the label
-> the member sees, the character limit your vendor imposes, and a surcharge if
-> you charge one."
+> "Turn on personalization and **say which job it is** — embroidery or
+> engraving. They are not the same job, and the questions they need are not the
+> same questions."
+
+**[SCREEN: The same panel on an **engraved** item — method set to Engraving.
+The thread swatch is absent.]**
+
+> "Embroidery asks for a thread colour. Engraving doesn't — there's no thread
+> on a brass plate. Set the label the member sees, the character limit your
+> vendor imposes, and a surcharge if you charge one."
+
+**[CALLOUT: "Thread colour only where there's thread."]**
+
+**[PRODUCTION NOTE — 2026-08-26. Rewritten because embroidery and engraving
+shared one "customization" field until this release, and the old take narrated
+that conflation as the design: "For anything embroidered or engraved, turn on
+personalization" over a single "Name for embroidery" label. Any take showing a
+thread-colour picker on an engraved item is now **wrong**, not merely stale.
+This beat needs **two** captures — one of each method — and a delivery pass
+that drops the second one loses the entire point of the change.]**
 
 **[SCREEN: A cart with two job shirts — one "SMITH", one "GARCIA" — as separate
 lines rather than one line of quantity 2.]**

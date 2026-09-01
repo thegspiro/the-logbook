@@ -304,7 +304,12 @@ api_router.include_router(
     equipment_check.router,
     prefix="/equipment-checks",
     tags=["equipment-checks"],
-    dependencies=module_gate("scheduling", "Scheduling"),
+    # Inventory, not Scheduling: a checklist is a list of inventory items, and
+    # the templates carry FKs into inventory_items / inventory_lots. The crew
+    # still perform checks from the shift screen, but the data is Inventory's.
+    # Migration 7e2f11397849 switches Inventory back on for any department
+    # that had it off and is using checks, so nothing goes dark on upgrade.
+    dependencies=module_gate("inventory", "Inventory"),
 )
 api_router.include_router(
     reports.router,

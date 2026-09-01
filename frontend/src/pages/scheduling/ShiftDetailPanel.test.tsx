@@ -20,6 +20,18 @@ const shift = {
 vi.mock('../../modules/scheduling/services/api', () => ({
   schedulingService: {
     getShiftAssignments: vi.fn().mockResolvedValue([]),
+    getMyAttendance: vi.fn().mockResolvedValue(null),
+    getShiftAttendance: vi.fn().mockResolvedValue([]),
+    getShift: vi.fn().mockResolvedValue(null),
+    getShiftHandoff: vi.fn().mockResolvedValue(null),
+    getEligiblePositions: vi.fn().mockResolvedValue({ positions: ['firefighter'], is_excluded: false }),
+  },
+}));
+
+// Equipment-check calls moved to modules/inventory when checklists
+// became an Inventory feature; the scheduling service re-exports it.
+vi.mock('@/modules/inventory/services/equipmentCheckApi', () => ({
+  equipmentCheckService: {
     getShiftChecklists: vi.fn().mockResolvedValue([
       {
         templateId: 'end-check',
@@ -35,11 +47,6 @@ vi.mock('../../modules/scheduling/services/api', () => ({
         failedItems: 0,
       },
     ]),
-    getMyAttendance: vi.fn().mockResolvedValue(null),
-    getShiftAttendance: vi.fn().mockResolvedValue([]),
-    getShift: vi.fn().mockResolvedValue(null),
-    getShiftHandoff: vi.fn().mockResolvedValue(null),
-    getEligiblePositions: vi.fn().mockResolvedValue({ positions: ['firefighter'], is_excluded: false }),
   },
 }));
 

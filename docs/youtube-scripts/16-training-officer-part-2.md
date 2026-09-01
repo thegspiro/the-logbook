@@ -5,7 +5,7 @@
 **Target Audience:** Training Officers, Safety Officers, Compliance Officers
 **Roles Covered:** training_officer, safety_officer
 **Chapters:** 4 (each designed as a standalone clip)
-**Requires permission:** `training.manage`
+**Requires permission:** `training.manage`. Since 2026-08-25 there is a narrower alternative, `training.configure`, which grants **the member-disclosure policy and nothing else**; every other training setting returns 403 without `training.manage`. **A take saying the visibility panel is behind "training management" is wrong; so is a take implying `training.configure` covers the module's other settings.**
 
 > **This is Part 2 of two.** [Part 1](./05-training-officer-guide.md) covers the
 > dashboard, building programs and requirements, and recording completions —

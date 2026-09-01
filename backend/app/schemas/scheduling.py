@@ -54,6 +54,11 @@ class ShiftCreate(BaseModel):
     min_staffing: Optional[int] = None
     notes: Optional[str] = None
     activities: Optional[Any] = None
+    # The template this shift was built from, when the caller built it from
+    # one. Recorded rather than only copied: the equipment checklists a shift
+    # carries are resolved through its template. Validated in-org before it is
+    # stored.
+    template_id: Optional[str] = None
 
     @model_validator(mode="after")
     def validate_shift_times(self) -> "ShiftCreate":
@@ -144,6 +149,9 @@ class ShiftResponse(UTCResponseBase):
     positions: Optional[List[PositionSlot | str]] = None
     apparatus_positions: Optional[List[PositionSlot | str]] = None
     min_staffing: Optional[int] = None
+    # The template this shift came from, when it came from one. NULL on ad-hoc
+    # shifts and on every shift created before the column existed.
+    template_id: Optional[UUID] = None
     station_id: Optional[str] = None
     shift_officer_id: Optional[UUID] = None
     shift_officer_name: Optional[str] = None
@@ -698,6 +706,10 @@ class ShiftTemplateCreate(BaseModel):
     apparatus_id: Optional[str] = None
     is_default: bool = False
     open_to_all_members: bool = False
+    # The equipment checklists shifts from this template carry. Naming any
+    # replaces apparatus-based resolution; leaving it empty or omitted keeps
+    # it. Every id is verified to be in the caller's org before it is stored.
+    equipment_check_template_ids: Optional[List[str]] = None
 
 
 class ShiftTemplateUpdate(BaseModel):
@@ -716,6 +728,11 @@ class ShiftTemplateUpdate(BaseModel):
     apparatus_id: Optional[str] = None
     is_default: Optional[bool] = None
     open_to_all_members: Optional[bool] = None
+    # Omitting the key leaves the links alone; sending [] clears them. The
+    # form owns this field, so it sends it on every save — an omitted key on
+    # an update means "leave this alone" (CLAUDE.md pitfall #1), which would
+    # silently keep checklists the officer had just unticked.
+    equipment_check_template_ids: Optional[List[str]] = None
 
 
 class ShiftTemplateResponse(UTCResponseBase):
@@ -737,6 +754,9 @@ class ShiftTemplateResponse(UTCResponseBase):
     is_default: bool = False
     is_active: bool = True
     open_to_all_members: bool = False
+    # Read off the ShiftTemplate.equipment_check_template_ids property, in the
+    # order an officer arranged them.
+    equipment_check_template_ids: List[str] = []
     created_at: datetime
     updated_at: datetime
     created_by: Optional[UUID] = None

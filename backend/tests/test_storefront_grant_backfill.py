@@ -16,7 +16,16 @@ from pathlib import Path
 
 import pytest
 
-from app.core.permissions import DEFAULT_POSITIONS
+from app.core.permissions import DEFAULT_POSITIONS, LEGACY_PERMISSION_ALIASES
+
+# Current name -> the spelling a migration frozen before the rename wrote.
+# Derived from the alias map so it cannot fall out of step with it.
+_RENAMED_SINCE: dict[str, str] = {
+    new: legacy
+    for legacy, replacements in LEGACY_PERMISSION_ALIASES.items()
+    if not legacy.endswith(".*")
+    for new in replacements
+}
 
 _MIGRATION = (
     Path(__file__).resolve().parents[1]
@@ -63,13 +72,18 @@ def _pristine_registry_set(slug: str) -> set[str]:
     trimming it to match a registry that moved on afterwards is what would stop
     it matching a pristine row and quietly turn the backfill into a no-op that
     still reports success.
+
+    A permission *rename* lands here for the same reason. ``ff8076f4987a``
+    renames ``equipment_check.*`` to ``inventory.check_*`` and also runs later
+    in the chain, so the rows this backfill meets still carry the old spelling.
+    The names are translated back rather than the snapshot being respelled.
     """
     permissions = set(DEFAULT_POSITIONS[slug].get("permissions") or [])
     for index, path in enumerate(_LATER_REVOCATIONS):
         revocation = _load_module(path, f"_later_revocation_{index}")
         if slug in revocation._SLUGS:
             permissions.add(revocation._PERMISSION)
-    return permissions
+    return {_RENAMED_SINCE.get(p, p) for p in permissions}
 
 
 def _registry_grants(slug: str) -> tuple[str, ...]:

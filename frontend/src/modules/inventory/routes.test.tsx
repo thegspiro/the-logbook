@@ -64,6 +64,36 @@ vi.mock('./pages/VariantGroupsPage', () => ({
 vi.mock('./pages/AllowancesPage', () => ({
   default: () => <div data-testid="allowances-page">Allowances</div>,
 }));
+vi.mock('./pages/EquipmentCheckTemplateBuilder', () => ({
+  default: () => <div data-testid="check-template-builder">TemplateBuilder</div>,
+}));
+vi.mock('./pages/EquipmentCheckReportsPage', () => ({
+  default: () => <div data-testid="check-reports-page">CheckReports</div>,
+}));
+vi.mock('./pages/SupplyExpiringPage', () => ({
+  default: () => <div data-testid="supply-expiring-page">SupplyExpiring</div>,
+}));
+vi.mock('./pages/FleetBoardPage', () => ({
+  default: () => <div data-testid="fleet-board-page">FleetBoard</div>,
+}));
+vi.mock('./pages/CheckLogPage', () => ({
+  default: () => <div data-testid="check-log-page">CheckLog</div>,
+}));
+vi.mock('./pages/ApparatusDetailPage', () => ({
+  default: () => <div data-testid="apparatus-detail-page">ApparatusDetail</div>,
+}));
+vi.mock('./pages/ApparatusInventoryPage', () => ({
+  default: () => <div data-testid="apparatus-inventory-page">ApparatusInventory</div>,
+}));
+vi.mock('./pages/MyChecklistsPage', () => ({
+  default: () => <div data-testid="my-checklists-page">MyChecklists</div>,
+}));
+vi.mock('./pages/ChecklistsAdminPage', () => ({
+  default: () => <div data-testid="checklists-admin-page">ChecklistsAdmin</div>,
+}));
+vi.mock('./pages/ChecklistSettingsPage', () => ({
+  default: () => <div data-testid="checklist-settings-page">ChecklistSettings</div>,
+}));
 vi.mock('../../components/ProtectedRoute', () => ({
   ProtectedRoute: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
@@ -152,5 +182,81 @@ describe('getInventoryRoutes', () => {
   it('renders AllowancesPage at /inventory/admin/allowances', async () => {
     renderRoute('/inventory/admin/allowances');
     expect(await screen.findByTestId('allowances-page')).toBeInTheDocument();
+  });
+
+  // Equipment checklists — moved here from Scheduling. Authoring and oversight
+  // are Inventory's; performing a check stays on the shift screen.
+  it('renders the template builder at /inventory/admin/checklists/templates/new', async () => {
+    renderRoute('/inventory/admin/checklists/templates/new');
+    expect(await screen.findByTestId('check-template-builder')).toBeInTheDocument();
+  });
+
+  it('renders the template builder for an existing template', async () => {
+    renderRoute('/inventory/admin/checklists/templates/tpl-1');
+    expect(await screen.findByTestId('check-template-builder')).toBeInTheDocument();
+  });
+
+  it('renders check reports at /inventory/admin/checklists/reports', async () => {
+    renderRoute('/inventory/admin/checklists/reports');
+    expect(await screen.findByTestId('check-reports-page')).toBeInTheDocument();
+  });
+
+  it('renders expiring supply at /inventory/admin/checklists/supply', async () => {
+    renderRoute('/inventory/admin/checklists/supply');
+    expect(await screen.findByTestId('supply-expiring-page')).toBeInTheDocument();
+  });
+
+  // The settings that decide when crews are prompted moved here from
+  // Scheduling > Settings > Shift Reports > Checklist Timing.
+  it('renders checklist settings at /inventory/admin/checklists/settings', async () => {
+    renderRoute('/inventory/admin/checklists/settings');
+    expect(await screen.findByTestId('checklist-settings-page')).toBeInTheDocument();
+  });
+
+  it('renders the fleet board at /inventory/checklists', async () => {
+    renderRoute('/inventory/checklists');
+    expect(await screen.findByTestId('fleet-board-page')).toBeInTheDocument();
+  });
+
+  it('renders the check log at /inventory/checklists/log', async () => {
+    renderRoute('/inventory/checklists/log');
+    expect(await screen.findByTestId('check-log-page')).toBeInTheDocument();
+  });
+
+  it('renders apparatus inventory at /inventory/checklists/apparatus-inventory', async () => {
+    renderRoute('/inventory/checklists/apparatus-inventory');
+    expect(await screen.findByTestId('apparatus-inventory-page')).toBeInTheDocument();
+  });
+
+  it('renders apparatus detail at /inventory/checklists/apparatus/:apparatusId', async () => {
+    renderRoute('/inventory/checklists/apparatus/eng-1');
+    expect(await screen.findByTestId('apparatus-detail-page')).toBeInTheDocument();
+  });
+
+  // The literal segments are declared before the dynamic apparatus route.
+  // Declared the other way round, /log and /apparatus-inventory would both be
+  // swallowed as apparatus ids and render the detail page instead.
+  it('does not let the dynamic apparatus route swallow the literal segments', async () => {
+    renderRoute('/inventory/checklists/log');
+    expect(await screen.findByTestId('check-log-page')).toBeInTheDocument();
+    expect(screen.queryByTestId('apparatus-detail-page')).not.toBeInTheDocument();
+  });
+
+  it("renders a member's own checklists at /inventory/checklists/my", async () => {
+    // Every member's route to the checks they owe. It carries no permission
+    // gate, and it is the only way there now that the Scheduling tab is gone.
+    renderRoute('/inventory/checklists/my');
+    expect(await screen.findByTestId('my-checklists-page')).toBeInTheDocument();
+  });
+
+  it('renders the checklists admin index at /inventory/admin/checklists', async () => {
+    renderRoute('/inventory/admin/checklists');
+    expect(await screen.findByTestId('checklists-admin-page')).toBeInTheDocument();
+  });
+
+  it('does not let /checklists/my be swallowed by the apparatus route', async () => {
+    renderRoute('/inventory/checklists/my');
+    expect(await screen.findByTestId('my-checklists-page')).toBeInTheDocument();
+    expect(screen.queryByTestId('apparatus-detail-page')).not.toBeInTheDocument();
   });
 });

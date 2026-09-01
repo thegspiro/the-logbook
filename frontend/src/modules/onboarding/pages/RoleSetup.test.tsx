@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 
-import { buildPositionTemplates } from './RoleSetup';
+import { buildPositionTemplates } from './positionTemplates';
 import { MODULE_REGISTRY } from '../config/moduleRegistry';
 import type { OrganizationType } from '../store';
 

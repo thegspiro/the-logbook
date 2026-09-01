@@ -65,9 +65,9 @@ ELEVATED = _elevated()
 ALLOWED: dict[tuple[str, str], str] = {
     # The one case this rule flagged when it was introduced (2026-08-24), and
     # it is NOT settled. `/supply/item-deployments/{id}` takes
-    # `equipment_check.view` OR `inventory.view`, while the sibling its own
+    # `inventory.check_view` OR `inventory.view`, while the sibling its own
     # docstring calls "the reverse" of it — `/supply/expiring-items` — takes
-    # `equipment_check.view` OR `inventory.manage`. One of the two is wrong.
+    # `inventory.check_view` OR `inventory.manage`. One of the two is wrong.
     #
     # Left alone here because tightening it is a behaviour change, not a
     # guard: the endpoint feeds StockLotsPanel on the item-detail page, which
@@ -217,8 +217,8 @@ def test_no_baseline_grant_is_the_only_way_into_an_officer_endpoint():
     own pages already run on.
 
     A gate is fine, too, when it names a baseline grant from the *same* module
-    as its officer grant — ``equipment_check.submit`` beside
-    ``equipment_check.view`` on the apparatus-inventory reads means that
+    as its officer grant — ``inventory.check_submit`` beside
+    ``inventory.check_view`` on the apparatus-inventory reads means that
     endpoint is deliberately crew-facing, and its own comment says so. A
     second baseline grant from elsewhere adds no exposure there.
 

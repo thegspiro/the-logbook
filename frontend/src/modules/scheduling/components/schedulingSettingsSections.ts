@@ -18,7 +18,7 @@ export const SCHEDULING_SETTINGS_SECTIONS: SettingsSection<SettingsTab>[] = [
   { key: 'platoons', label: 'Platoons', icon: Users, description: 'Platoon rosters and assignments' },
   { key: 'eligibility', label: 'Eligibility', icon: Shield, description: 'Who may sign up for a shift' },
   { key: 'notifications', label: 'Notifications', icon: Bell, description: 'Shift reminders and alerts' },
-  { key: 'equipment', label: 'Equipment', icon: ClipboardCheck, description: 'Check requirements and templates' },
+  { key: 'equipment', label: 'Equipment', icon: ClipboardCheck, description: 'Where checklists are managed' },
   { key: 'shift-reports', label: 'Shift Reports', icon: FileBarChart, description: 'End-of-shift reporting options' },
 ];
 
@@ -27,4 +27,4 @@ export const SCHEDULING_SETTINGS_SECTIONS: SettingsSection<SettingsTab>[] = [
  * written by its footer Save button. Every other section owns its own save
  * control, so showing the footer there claimed to save work it never touched.
  */
-export const LOCALLY_SAVED_SECTIONS: SettingsTab[] = ['general', 'apparatus', 'equipment'];
+export const LOCALLY_SAVED_SECTIONS: SettingsTab[] = ['general', 'apparatus'];

@@ -1,0 +1,551 @@
+/**
+ * Check Log — expected-vs-actual check history.
+ *
+ * Two views over one dataset, answering two different questions:
+ *
+ * * **Grid** — "is the pattern okay?" A matrix of apparatus against duty days,
+ *   read by colour. A block of amber on one row says something a list of
+ *   individual rows never would.
+ * * **Log** — "what happened on that one?" The same occasions chronologically,
+ *   with who, when, and what they found.
+ *
+ * Rows for checks that *did not happen* are the reason this page exists;
+ * `shift_equipment_checks` alone can only ever report 100% completion. The
+ * server reconstructs the expected side, so a missed check arrives here as an
+ * entry with no `checkId`.
+ *
+ * Used at two scopes. Fleet-wide as its own route, and scoped to one
+ * apparatus as the Check log tab of the apparatus detail — same component,
+ * `apparatusId` pinned.
+ */
+
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { Link, useSearchParams } from 'react-router';
+import { AlertTriangle, CalendarDays, ClipboardList, Grid3x3, List, Loader2, Search, X } from 'lucide-react';
+import toast from 'react-hot-toast';
+import { equipmentCheckService } from '@/modules/inventory/services/equipmentCheckApi';
+import type { CheckLogEntry, CheckLogResponse, CheckOutcome } from '../../../modules/inventory/types/equipmentCheck';
+import { CHECK_OUTCOME_LABELS } from '../../../modules/inventory/types/equipmentCheck';
+import {
+  OUTCOME_LEGEND,
+  OUTCOME_PILL,
+  OUTCOME_SWATCH,
+  TIMING_LABELS,
+  TIMING_SHORT,
+  formatRate,
+} from '../../../modules/inventory/utils/checkOutcome';
+import { formatCalendarDate, formatTime } from '../../../utils/dateFormatting';
+import { useTimezone } from '../../../hooks/useTimezone';
+import { getErrorMessage } from '../../../utils/errorHandling';
+import { useRegisterPullToRefresh } from '../../../hooks/useRegisterPullToRefresh';
+import { EmptyState } from '../../../components/ux';
+
+const WINDOW_OPTIONS = [7, 14, 30] as const;
+
+interface CheckLogPageProps {
+  /** Pins the log to one apparatus — the apparatus detail's Check log tab. */
+  apparatusId?: string;
+  /** Hidden when the page already sits under an apparatus header. */
+  showHeader?: boolean;
+}
+
+type ViewMode = 'grid' | 'log';
+
+export const CheckLogPage: React.FC<CheckLogPageProps> = ({ apparatusId, showHeader = true }) => {
+  const tz = useTimezone();
+  const [data, setData] = useState<CheckLogResponse | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [windowDates, setWindowDates] = useState<number>(14);
+  const [view, setView] = useState<ViewMode>('grid');
+  const [search, setSearch] = useState('');
+
+  /**
+   * `?status=` narrows the log to one or more outcomes, comma-separated.
+   *
+   * The chief dashboard's failed-checks card has linked here since the
+   * checklist move and nothing read the parameter, so the card counted
+   * exceptions and then dropped the officer into an unfiltered fortnight to
+   * find them by eye.
+   *
+   * It takes a **list** because one outcome cannot express what that card
+   * counts. The card counts `overall_status in (fail, incomplete)`, and
+   * `EquipmentReadinessService._status_for_check` collapses those to three
+   * different log outcomes: an incomplete check reads as `partial`, and any
+   * check holding an out-of-service item reads as `out_of_service` whatever
+   * its overall status. Filtering on `failed` alone would hide records the
+   * card counted — a department whose exceptions are all incomplete checks
+   * would click a non-zero count and land on an empty log, which is worse
+   * than the unfiltered list this set out to fix.
+   *
+   * Validated with `hasOwnProperty`, not `in`: `in` walks the prototype
+   * chain, so `?status=constructor` would pass and then index the label map
+   * with a function, which React throws on rendering.
+   */
+  const [searchParams, setSearchParams] = useSearchParams();
+  const statusFilter = useMemo<CheckOutcome[]>(() => {
+    const raw = searchParams.get('status');
+    if (!raw) return [];
+    const seen: CheckOutcome[] = [];
+    for (const part of raw.split(',')) {
+      const value = part.trim();
+      if (!Object.prototype.hasOwnProperty.call(CHECK_OUTCOME_LABELS, value)) continue;
+      const outcome = value as CheckOutcome;
+      if (!seen.includes(outcome)) seen.push(outcome);
+    }
+    return seen;
+  }, [searchParams]);
+  const hasStatusFilter = statusFilter.length > 0;
+
+  /**
+   * `?submitted=1` narrows to occasions a crew actually submitted.
+   *
+   * `out_of_service` is the one outcome with two sources.
+   * `_build_occasions` uses it both for a submitted check holding an
+   * out-of-service item and for a day when the rig was unavailable and *no
+   * check exists at all*. The dashboard card counts only persisted
+   * `ShiftEquipmentCheck` rows, so linking on status alone padded its count
+   * with "the truck was in the shop" rows nobody had recorded a check for.
+   *
+   * A submitted occasion is exactly one with a `checkId` — the server leaves
+   * it unset for anything it reconstructed. Kept as its own parameter rather
+   * than folded into the status list, because "which outcomes" and "did
+   * anyone actually do it" are different questions, and `?status=missed`
+   * still has to work for the occasions that by definition have no check.
+   */
+  const submittedOnly = ['1', 'true'].includes((searchParams.get('submitted') ?? '').toLowerCase());
+
+  const clearStatusFilter = useCallback(() => {
+    const next = new URLSearchParams(searchParams);
+    next.delete('status');
+    next.delete('submitted');
+    // replace: the filter came from a link on another page, so backing out of
+    // it should return there rather than stepping through filter states.
+    setSearchParams(next, { replace: true });
+    // Stay on the log. Clearing the filter widens what is listed; it is not a
+    // request to leave the list for the matrix, and `view` still holds the
+    // 'grid' default nobody chose while the toggle was withdrawn.
+    setView('log');
+  }, [searchParams, setSearchParams]);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const result = await equipmentCheckService.getCheckLog({
+        dates: windowDates,
+        ...(apparatusId ? { apparatus_id: apparatusId } : {}),
+      });
+      setData(result);
+      // A member scoped to their own checks gets no grid, so the toggle would
+      // land on an empty view. Move them to the one that has content.
+      if (result.scope === 'own') setView('log');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Failed to load check log'));
+    } finally {
+      setLoading(false);
+    }
+  }, [windowDates, apparatusId]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  useRegisterPullToRefresh(load);
+
+  const entries = useMemo(() => {
+    let rows = data?.entries ?? [];
+    if (hasStatusFilter) rows = rows.filter((e) => statusFilter.includes(e.status));
+    if (submittedOnly) rows = rows.filter((e) => Boolean(e.checkId));
+    const q = search.trim().toLowerCase();
+    if (!q) return rows;
+    return rows.filter(
+      (e) =>
+        e.unitLabel.toLowerCase().includes(q) ||
+        e.templateName.toLowerCase().includes(q) ||
+        (e.checkedByName ?? '').toLowerCase().includes(q) ||
+        e.findings.some((f) => f.toLowerCase().includes(q))
+    );
+  }, [data, search, statusFilter, hasStatusFilter, submittedOnly]);
+
+  /**
+   * The grid is a rig-by-day matrix with no status dimension, so it cannot
+   * honour the filter. Rather than forcing `view` to 'log' in an effect —
+   * which left the Grid button live, so one click showed the unfiltered
+   * matrix under a "Showing only" banner that now contradicted it — the
+   * toggle is withdrawn while filtering and the rendered view is derived.
+   */
+  const isFiltered = hasStatusFilter || submittedOnly;
+  const canShowGrid = data?.scope === 'fleet' && data.rows.length > 0 && !isFiltered;
+  const effectiveView: ViewMode = isFiltered ? 'log' : view;
+  const summary = data?.summary;
+
+  return (
+    <div className="space-y-4">
+      {showHeader && (
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-3">
+            <ClipboardList className="text-theme-text-primary h-6 w-6 shrink-0" aria-hidden="true" />
+            <div>
+              <h1 className="text-theme-text-primary text-xl font-bold">Check log</h1>
+              <p className="text-theme-text-muted text-xs">
+                {data?.scope === 'own'
+                  ? 'Checks you performed'
+                  : 'Every expected check, including the ones that did not happen'}
+              </p>
+            </div>
+          </div>
+          <Link
+            to="/inventory/checklists"
+            className="border-theme-surface-border bg-theme-surface text-theme-text-secondary hover:bg-theme-surface-hover inline-flex items-center gap-1.5 self-start rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors"
+          >
+            &larr; Fleet
+          </Link>
+        </div>
+      )}
+
+      {/* Window + view controls */}
+      <div className="flex flex-wrap items-center gap-2">
+        <div
+          className="border-theme-surface-border bg-theme-surface flex items-center gap-0.5 rounded-lg border p-0.5"
+          role="group"
+          aria-label="Window length"
+        >
+          <CalendarDays className="text-theme-text-muted ml-1.5 h-3.5 w-3.5" aria-hidden="true" />
+          {WINDOW_OPTIONS.map((option) => (
+            <button
+              key={option}
+              type="button"
+              onClick={() => setWindowDates(option)}
+              aria-pressed={windowDates === option}
+              className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
+                windowDates === option
+                  ? 'bg-blue-600 text-white'
+                  : 'text-theme-text-muted hover:text-theme-text-primary'
+              }`}
+            >
+              Last {option}
+            </button>
+          ))}
+        </div>
+
+        {canShowGrid && (
+          <div
+            className="border-theme-surface-border bg-theme-surface flex items-center gap-0.5 rounded-lg border p-0.5"
+            role="group"
+            aria-label="View"
+          >
+            <button
+              type="button"
+              onClick={() => setView('grid')}
+              aria-pressed={effectiveView === 'grid'}
+              className={`inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
+                effectiveView === 'grid'
+                  ? 'bg-blue-600 text-white'
+                  : 'text-theme-text-muted hover:text-theme-text-primary'
+              }`}
+            >
+              <Grid3x3 className="h-3.5 w-3.5" aria-hidden="true" /> Grid
+            </button>
+            <button
+              type="button"
+              onClick={() => setView('log')}
+              aria-pressed={effectiveView === 'log'}
+              className={`inline-flex items-center gap-1 rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
+                effectiveView === 'log'
+                  ? 'bg-blue-600 text-white'
+                  : 'text-theme-text-muted hover:text-theme-text-primary'
+              }`}
+            >
+              <List className="h-3.5 w-3.5" aria-hidden="true" /> Log
+            </button>
+          </div>
+        )}
+
+        <div className="relative ml-auto min-w-[12rem] flex-1 sm:max-w-xs sm:flex-none">
+          <label htmlFor="check-log-search" className="sr-only">
+            Filter the log
+          </label>
+          <Search
+            className="text-theme-text-muted absolute top-1/2 left-2.5 h-3.5 w-3.5 -translate-y-1/2"
+            aria-hidden="true"
+          />
+          <input
+            id="check-log-search"
+            type="text"
+            autoCapitalize="none"
+            autoCorrect="off"
+            spellCheck={false}
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Filter by rig, member, item..."
+            className="form-input-sm pr-3 pl-8"
+          />
+        </div>
+      </div>
+
+      {/* An active status filter has to be visible and removable. Arriving
+          from the dashboard on a filtered log that looked unfiltered would
+          read as "the fortnight only had three checks in it". */}
+      {isFiltered && (
+        // role=status so the narrowing is announced, not just drawn — the
+        // filter arrives from a link on another page, so a screen-reader user
+        // never saw it being applied.
+        <div className="flex flex-wrap items-center gap-2" role="status" aria-label="Active filter">
+          <span className="text-theme-text-muted text-xs">Showing only</span>
+          {statusFilter.map((outcome) => (
+            <span key={outcome} className={`badge border ${OUTCOME_PILL[outcome]}`}>
+              {CHECK_OUTCOME_LABELS[outcome]}
+            </span>
+          ))}
+          {submittedOnly && (
+            <span className="badge border-theme-surface-border text-theme-text-secondary border">
+              checks someone submitted
+            </span>
+          )}
+          <button
+            type="button"
+            onClick={clearStatusFilter}
+            className="text-theme-text-muted hover:text-theme-text-primary mobile-touch-target inline-flex items-center gap-1 text-xs font-medium underline-offset-2 hover:underline"
+          >
+            <X className="h-3.5 w-3.5" aria-hidden="true" />
+            Show all checks
+          </button>
+        </div>
+      )}
+
+      {/* Summary */}
+      {summary && (
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          <LogTile label="Checks completed" value={formatRate(summary.completionRate)} tone="ok" />
+          <LogTile label="Missed entirely" value={String(summary.missed)} tone={summary.missed > 0 ? 'crit' : ''} />
+          <LogTile
+            label="Found a problem"
+            value={String(summary.withFindings)}
+            tone={summary.withFindings > 0 ? 'warn' : ''}
+          />
+          <LogTile label="Expected in window" value={String(summary.expected)} tone="" />
+        </div>
+      )}
+
+      {loading ? (
+        <div className="flex items-center justify-center py-12" role="status" aria-live="polite">
+          <Loader2 className="text-theme-text-muted h-5 w-5 animate-spin" aria-hidden="true" />
+          <span className="text-theme-text-muted ml-2 text-sm">Loading check log...</span>
+        </div>
+      ) : !data || (data.entries.length === 0 && data.rows.length === 0) ? (
+        <EmptyState
+          icon={ClipboardList}
+          title="Nothing in this window"
+          description="No checks were expected on any apparatus over these duty days. Check templates are set up per apparatus or apparatus type."
+        />
+      ) : effectiveView === 'grid' && canShowGrid ? (
+        <CheckGrid data={data} />
+      ) : (
+        <CheckEntries entries={entries} tz={tz} scoped={Boolean(apparatusId)} />
+      )}
+    </div>
+  );
+};
+
+// ---------------------------------------------------------------------------
+// Grid
+// ---------------------------------------------------------------------------
+
+const CheckGrid: React.FC<{ data: CheckLogResponse }> = ({ data }) => (
+  <div className="space-y-3">
+    <div className="border-theme-surface-border bg-theme-surface overflow-x-auto rounded-lg border p-3">
+      <table className="w-full border-collapse text-sm">
+        <caption className="sr-only">Check outcomes by apparatus over the last {data.dates.length} duty days</caption>
+        <thead>
+          <tr>
+            <th
+              scope="col"
+              className="text-theme-text-muted pr-3 pb-2 text-left font-mono text-[10px] tracking-wider uppercase"
+            >
+              Apparatus
+            </th>
+            {data.dates.map((day) => (
+              <th
+                key={day}
+                scope="col"
+                className="text-theme-text-muted px-0.5 pb-2 text-center font-mono text-[10px] font-semibold whitespace-nowrap"
+              >
+                {formatCalendarDate(day, { day: 'numeric' })}
+              </th>
+            ))}
+            <th
+              scope="col"
+              className="text-theme-text-muted pb-2 pl-3 text-right font-mono text-[10px] tracking-wider uppercase"
+            >
+              Rate
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {data.rows.map((row) => (
+            <tr key={row.apparatusId} className="border-theme-surface-border border-t">
+              <th scope="row" className="py-1.5 pr-3 text-left whitespace-nowrap">
+                <Link
+                  to={`/inventory/checklists/apparatus/${row.apparatusId}`}
+                  className="text-theme-text-primary font-mono text-xs font-bold hover:text-blue-600"
+                >
+                  {row.unitLabel}
+                </Link>
+              </th>
+              {row.cells.map((cell) => (
+                <td key={cell.date} className="px-0.5 py-1.5">
+                  <div className="flex justify-center gap-[2px]">
+                    {cell.checks.length === 0 ? (
+                      <span
+                        className="bg-theme-surface-border/40 block h-5 w-3.5 rounded-[3px]"
+                        title={`${formatCalendarDate(cell.date, {
+                          month: 'short',
+                          day: 'numeric',
+                        })} — no check scheduled`}
+                      />
+                    ) : (
+                      cell.checks.map((check, index) => (
+                        <span
+                          key={`${cell.date}-${check.checkId ?? index}`}
+                          className={`block h-5 w-3.5 rounded-[3px] ${OUTCOME_SWATCH[check.status]}`}
+                          title={`${formatCalendarDate(cell.date, { month: 'short', day: 'numeric' })} · ${
+                            TIMING_SHORT[check.checkTiming] ?? check.checkTiming
+                          } — ${CHECK_OUTCOME_LABELS[check.status]}${
+                            check.findingCount > 0 ? ` (${check.findingCount})` : ''
+                          }`}
+                        />
+                      ))
+                    )}
+                  </div>
+                </td>
+              ))}
+              <td className="text-theme-text-secondary py-1.5 pl-3 text-right font-mono text-xs tabular-nums">
+                {formatRate(row.completionRate)}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+
+    <div className="text-theme-text-muted flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs">
+      {OUTCOME_LEGEND.map(({ status, label }) => (
+        <span key={status} className="inline-flex items-center gap-1.5">
+          <span className={`h-2.5 w-2.5 rounded-[2px] ${OUTCOME_SWATCH[status]}`} aria-hidden="true" />
+          {label}
+        </span>
+      ))}
+      <span className="inline-flex items-center gap-1.5">
+        <span className="bg-theme-surface-border/40 h-2.5 w-2.5 rounded-[2px]" aria-hidden="true" />
+        Not scheduled
+      </span>
+      {/* Says why a weekly rig's row is mostly blank and still reads 100%. */}
+      <span className="ml-auto">Each column is a duty day; a rate counts only the checks that apparatus expected.</span>
+    </div>
+  </div>
+);
+
+// ---------------------------------------------------------------------------
+// Log
+// ---------------------------------------------------------------------------
+
+const CheckEntries: React.FC<{ entries: CheckLogEntry[]; tz: string; scoped: boolean }> = ({ entries, tz, scoped }) => {
+  if (entries.length === 0) {
+    return (
+      <EmptyState
+        icon={Search}
+        title="No matching checks"
+        description="Nothing in this window matches the filter. Try a shorter search or a longer window."
+      />
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      {entries.map((entry) => {
+        return (
+          <div
+            key={`${entry.shiftId}-${entry.templateId}`}
+            className={`bg-theme-surface border-theme-surface-border flex flex-col gap-2 rounded-lg border border-l-[3px] px-3 py-2.5 sm:flex-row sm:items-center ${
+              entry.status === 'passed'
+                ? 'border-l-green-500'
+                : entry.status === 'missed' || entry.status === 'out_of_service'
+                  ? 'border-l-red-500'
+                  : 'border-l-amber-500'
+            }`}
+          >
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                {!scoped && (
+                  <span className="text-theme-text-primary font-mono text-xs font-bold">{entry.unitLabel}</span>
+                )}
+                <span className="text-theme-text-primary text-sm font-medium">{entry.templateName}</span>
+                <span
+                  className={`rounded-full border px-1.5 py-0.5 text-[11px] font-semibold ${
+                    OUTCOME_PILL[entry.status]
+                  }`}
+                >
+                  {CHECK_OUTCOME_LABELS[entry.status]}
+                </span>
+              </div>
+              <div className="text-theme-text-muted mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs">
+                <span>{formatCalendarDate(entry.shiftDate, { month: 'short', day: 'numeric' })}</span>
+                {entry.checkedAt && <span>{formatTime(entry.checkedAt, tz)}</span>}
+                <span>&middot;</span>
+                <span>{TIMING_LABELS[entry.checkTiming] ?? entry.checkTiming}</span>
+                {entry.checkedByName && (
+                  <>
+                    <span>&middot;</span>
+                    <span>{entry.checkedByName}</span>
+                  </>
+                )}
+                {entry.totalItems !== null && entry.totalItems !== undefined && (
+                  <>
+                    <span>&middot;</span>
+                    <span>
+                      {entry.completedItems ?? 0} of {entry.totalItems} items
+                    </span>
+                  </>
+                )}
+                {/* A missed check has nobody to name and no items to count —
+                    the row exists because the check does not. The server sets
+                    this status only where it found no submission, so the
+                    absent checkId needs no separate test. */}
+                {entry.status === 'missed' && <span>&middot; nobody submitted this check</span>}
+              </div>
+              {entry.findings.length > 0 && (
+                <p className="mt-1 flex items-start gap-1.5 text-xs text-amber-700 dark:text-amber-400">
+                  <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" aria-hidden="true" />
+                  <span>
+                    {entry.findings.join(', ')}
+                    {entry.findingCount > entry.findings.length
+                      ? ` +${entry.findingCount - entry.findings.length} more`
+                      : ''}
+                  </span>
+                </p>
+              )}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+};
+
+const LOG_TILE_TONES: Record<string, string> = {
+  ok: 'border-l-green-500',
+  warn: 'border-l-amber-500',
+  crit: 'border-l-red-500',
+};
+
+const LogTile: React.FC<{ label: string; value: string; tone: string }> = ({ label, value, tone }) => (
+  <div
+    className={`border-theme-surface-border bg-theme-surface rounded-lg border border-l-[3px] px-3 py-2 ${
+      LOG_TILE_TONES[tone] ?? 'border-l-theme-surface-border'
+    }`}
+  >
+    <p className="text-theme-text-primary text-xl leading-tight font-bold tabular-nums">{value}</p>
+    <p className="text-theme-text-muted text-[11px]">{label}</p>
+  </div>
+);
+
+export default CheckLogPage;

@@ -37,15 +37,6 @@ class ResourceTypeDefaultsSchema(BaseModel):
     label: str = Field(..., min_length=1, max_length=100)
 
 
-class EquipmentCheckSettingsSchema(BaseModel):
-    model_config = _camel_config
-
-    enabled: bool
-    require_signature: bool
-    default_expiration_warning_days: int = Field(..., ge=1, le=365)
-    block_shift_start_on_fail: bool
-
-
 class ShiftSettingsSchema(BaseModel):
     """The full department-wide shift settings object.
 
@@ -66,7 +57,6 @@ class ShiftSettingsSchema(BaseModel):
     custom_positions: List[CustomPositionSchema] = Field(..., max_length=100)
     apparatus_type_defaults: Dict[str, ApparatusTypeDefaultsSchema]
     resource_type_defaults: Dict[str, ResourceTypeDefaultsSchema]
-    equipment_check_settings: EquipmentCheckSettingsSchema
 
 
 class ShiftSettingsResponse(BaseModel):

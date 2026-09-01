@@ -108,14 +108,34 @@ describe('AdminHoursPage', () => {
     expect(params?.userId).toBe('member-1');
   });
 
-  it('opens on all time, with no period bounds on either request', async () => {
+  it('opens on the current month, bounding both requests to it', async () => {
     renderWithRouter(<AdminHoursPage />);
 
     await waitFor(() => expect(fetchMySummary).toHaveBeenCalled());
-    for (const [params] of fetchMySummary.mock.calls) {
-      expect(params.startDate).toBeUndefined();
-      expect(params.endDate).toBeUndefined();
-    }
+    // The month a member is currently reporting against is what they open the
+    // page to check; landing on their whole history buries it.
+    expect(screen.getByLabelText(/showing/i)).toHaveValue('month');
+
+    const summaryParams = fetchMySummary.mock.calls[0]?.[0];
+    const entryParams = fetchMyEntries.mock.calls[0]?.[0];
+    // The bound is a real UTC instant derived from a department-local
+    // midnight on the first of the month, not a bare calendar date.
+    expect(summaryParams?.startDate).toMatch(/^\d{4}-\d{2}-01T\d{2}:\d{2}/);
+    expect(summaryParams?.startDate).toBe(entryParams?.startDate);
+    expect(summaryParams?.endDate).toBe(entryParams?.endDate);
+  });
+
+  it('drops the bounds entirely when the member widens to all time', async () => {
+    renderWithRouter(<AdminHoursPage />);
+    await waitFor(() => expect(fetchMySummary).toHaveBeenCalled());
+    fetchMySummary.mockClear();
+    fetchMyEntries.mockClear();
+
+    fireEvent.change(screen.getByLabelText(/showing/i), { target: { value: 'all' } });
+
+    await waitFor(() => expect(fetchMySummary).toHaveBeenCalled());
+    expect(fetchMySummary.mock.calls[0]?.[0]?.startDate).toBeUndefined();
+    expect(fetchMySummary.mock.calls[0]?.[0]?.endDate).toBeUndefined();
     expect(fetchMyEntries.mock.calls[0]?.[0]?.startDate).toBeUndefined();
     expect(fetchMyEntries.mock.calls[0]?.[0]?.endDate).toBeUndefined();
   });
@@ -150,7 +170,7 @@ describe('AdminHoursPage', () => {
   it('names the categories with no hours instead of tiling a zero for each', async () => {
     renderWithRouter(<AdminHoursPage />);
 
-    expect(await screen.findByText(/No hours yet for: Community outreach/)).toBeInTheDocument();
+    expect(await screen.findByText(/No hours this month for: Community outreach/)).toBeInTheDocument();
   });
 
   it('renders requirement progress when the department has set requirements', async () => {
@@ -260,7 +280,50 @@ describe('AdminHoursPage', () => {
 
     renderWithRouter(<AdminHoursPage />);
 
-    expect(await screen.findByText(/No hours logged yet/)).toBeInTheDocument();
+    expect(await screen.findByText(/No hours logged this month/)).toBeInTheDocument();
     expect(screen.queryByText('Where my hours went')).not.toBeInTheDocument();
+  });
+});
+
+describe('AdminHoursPage manual entry times', () => {
+  beforeEach(() => {
+    mySummary = populatedSummary;
+    vi.clearAllMocks();
+    getUserCompliance.mockReset();
+    getUserCompliance.mockResolvedValue([]);
+  });
+
+  /** Opens the form and returns its two date inputs. */
+  const openForm = async () => {
+    renderWithRouter(<AdminHoursPage />);
+    fireEvent.click(screen.getByRole('button', { name: /log hours manually/i }));
+    return {
+      start: await screen.findByLabelText(/start time/i),
+      end: screen.getByLabelText(/end time/i),
+    };
+  };
+
+  it('lands the end on the day the member just picked for the start', async () => {
+    const { start, end } = await openForm();
+
+    fireEvent.change(start, { target: { value: '2026-09-01' } });
+
+    // Re-typing the same date on the End field was the entire complaint.
+    expect(end.value).toBe('2026-09-01');
+  });
+
+  it('sets the end from the start when a duration is pressed', async () => {
+    const { start } = await openForm();
+    fireEvent.change(start, { target: { value: '2026-09-01' } });
+
+    fireEvent.click(screen.getByRole('button', { name: '2 hours' }));
+
+    expect(await screen.findByText('2h 0m')).toBeInTheDocument();
+  });
+
+  it('will not offer a duration before there is a start to measure from', async () => {
+    await openForm();
+
+    expect(screen.getByRole('button', { name: '2 hours' })).toBeDisabled();
   });
 });

@@ -198,7 +198,7 @@ async def test_the_module_lookup_happens_once_per_request():
 EXPECTED_GATES = {
     "/api/v1/apparatus": "apparatus",
     "/api/v1/elections": "elections",
-    "/api/v1/equipment-checks": "scheduling",
+    "/api/v1/equipment-checks": "inventory",
     "/api/v1/facilities": "facilities",
     "/api/v1/finance": "finance",
     "/api/v1/grants": "grants",

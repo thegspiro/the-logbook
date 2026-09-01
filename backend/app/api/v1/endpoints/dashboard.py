@@ -470,7 +470,7 @@ OPERATIONS_SECTION_PERMISSIONS: dict[str, tuple[str, ...]] = {
         "meetings.manage",
         "minutes.manage",
         "scheduling.manage",
-        "equipment_check.manage",
+        "inventory.check_manage",
         "notifications.manage",
     ),
     "membership_health": ("members.manage",),
@@ -552,7 +552,7 @@ async def get_operations_dashboard(
                         severity="info",
                         count=count,
                         oldest_age_days=_age_days(oldest, local_today),
-                        href="/scheduling/manage",
+                        href="/scheduling",
                     )
                 ],
             )
@@ -578,7 +578,7 @@ async def get_operations_dashboard(
                 count=count,
                 oldest_age_days=_age_days(oldest, local_today),
                 most_urgent="Next shift without an officer" if count else None,
-                href="/scheduling/manage?filter=missing-officer",
+                href="/scheduling",
             )
         )
     if "minutes" in enabled and user_has_permission(current_user, "meetings.manage"):
@@ -633,8 +633,10 @@ async def get_operations_dashboard(
                 href="/action-items?source=minutes&status=overdue",
             )
         )
-    if "scheduling" in enabled and user_has_permission(
-        current_user, "equipment_check.manage"
+    # Inventory, not Scheduling: failed checks are Inventory's data now, so a
+    # department running Inventory without Scheduling should still see the card.
+    if "inventory" in enabled and user_has_permission(
+        current_user, "inventory.check_manage"
     ):
         count, oldest = await _count_and_oldest(
             db,
@@ -651,7 +653,26 @@ async def get_operations_dashboard(
                 count=count,
                 oldest_age_days=_age_days(oldest, local_today),
                 most_urgent="Oldest unresolved equipment check" if count else None,
-                href="/equipment-checks?status=failed",
+                # All three outcomes this count can become, and only rows a
+                # crew actually submitted.
+                #
+                # _status_for_check collapses a submitted check to one
+                # outcome: an ``incomplete`` one reads as ``partial``, and any
+                # check holding an out-of-service item reads as
+                # ``out_of_service`` whatever its overall status. Linking with
+                # ``failed`` alone hid records this card had just counted, and
+                # showed an empty log to a department whose exceptions were
+                # all incomplete checks.
+                #
+                # ``submitted=1`` is the other half. ``_build_occasions`` also
+                # assigns ``out_of_service`` to a day the rig was unavailable
+                # and *no check exists*, which this count — persisted
+                # ShiftEquipmentCheck rows only — never included. Without it
+                # the link padded the number with "in the shop" rows.
+                href=(
+                    "/inventory/checklists/log"
+                    "?status=failed,partial,out_of_service&submitted=1"
+                ),
             )
         )
     if "notifications" in enabled and user_has_permission(
