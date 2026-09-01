@@ -1846,21 +1846,21 @@ export const SHOTS = [
     doc: "03-scheduling.md",
     line: 1304,
     anchor: 'Screenshot of the Dashboard "My Upcoming Shifts" panel',
-    alt: "The dashboard's Next 7 Days timeline, listing the member's own shifts alongside open slots and events",
+    alt: "The dashboard's Next 30 Days timeline, listing the member's own shifts alongside open slots and events",
     auth: "member",
     route: "/dashboard",
     prepare: async (page) => {
-      // The dashboard redesign merged "My Upcoming Shifts" into the Next 7
-      // Days timeline — one seven-day list of the member's shifts, open slots
+      // The dashboard redesign merged "My Upcoming Shifts" into the Next 30
+      // Days timeline — one thirty-day list of the member's shifts, open slots
       // and events. It is a <section class="card">, not a div.
       const panel = page
-        .locator("section.card:has(h3:has-text('Next 7 Days'))")
+        .locator("section.card:has(h3:has-text('Next 30 Days'))")
         .first();
       await panel.waitFor({ timeout: 20_000 });
       await panel.evaluate((el) => el.scrollIntoView({ block: "center" }));
       await page.waitForTimeout(1200);
     },
-    selector: "section.card:has(h3:has-text('Next 7 Days'))",
+    selector: "section.card:has(h3:has-text('Next 30 Days'))",
   },
   {
     id: "03-62-dashboard-signup-positions",
@@ -1874,9 +1874,9 @@ export const SHOTS = [
       // The eligibility check happens on press, not on render — every open
       // shift shows Sign Up regardless of rank — so the dropdown this pictures
       // only exists after the card is expanded. Open slots live inside the
-      // Next 7 Days timeline since the dashboard redesign.
+      // Next 30 Days timeline since the dashboard redesign.
       const panel = page
-        .locator("section.card:has(h3:has-text('Next 7 Days'))")
+        .locator("section.card:has(h3:has-text('Next 30 Days'))")
         .first();
       await panel.waitFor({ timeout: 20_000 });
       await panel.evaluate((el) => el.scrollIntoView({ block: "center" }));
@@ -1889,7 +1889,7 @@ export const SHOTS = [
       await panel.locator("select").first().waitFor({ timeout: 15_000 });
       await page.waitForTimeout(400);
     },
-    selector: "section.card:has(h3:has-text('Next 7 Days'))",
+    selector: "section.card:has(h3:has-text('Next 30 Days'))",
   },
   {
     id: "03-63-offline-banner",

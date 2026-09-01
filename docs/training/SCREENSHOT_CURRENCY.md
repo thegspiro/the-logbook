@@ -1,28 +1,45 @@
 # Screenshot currency
 
-## The dashboard timeline went from seven days to thirty (2026-09-01)
+## Captured 2026-09-01 — the dashboard timeline at thirty days, and the manifest that pointed at the old heading
 
-`03-60-dashboard-my-shifts.png` now contradicts the section it illustrates.
-The card's heading is **Next 30 Days**, its control reads **All Shifts** and
-opens `/scheduling?view=month`, and the footer ends "in the following month".
-The image still shows "Next 7 Days", "Full Schedule" and "later this month" —
-so a member following the guide looks for a control that no longer exists, and
-the prose and the picture teach two different screens.
+Two shots re-taken against the running application:
+`03-60-dashboard-my-shifts.png` and `03-62-dashboard-signup-positions.png`.
+Both now show the **Next 30 Days** heading and the **All Shifts** control; the
+first also shows the footer's "42 more through Sep 30", which the seven-day
+card could not have produced.
 
-Recorded rather than re-shot: the capture tool needs a bootstrapped and seeded
-demo stack with both servers up, which is not available in the session that
-made the change. The prose and alt text in `03-scheduling.md` were updated
-with the change; only the PNG is outstanding.
+**The manifest had to be fixed before either could be shot.** Both entries
+locate the panel by its heading text — `section.card:has(h3:has-text('Next 7
+Days'))` — in a `prepare` locator and again in a `selector`, four live
+references that the rename left pointing at nothing. A stale selector here does
+not capture the wrong element, it times out at 20s, so the re-capture this
+entry was opened for could not have run until the manifest was corrected. The
+`alt` mattered too: `apply_placeholders.py` writes each guide's alt from the
+manifest, so leaving it stale would have quietly reverted `03-scheduling.md` to
+"Next 7 Days" on the next run.
 
-### Replace
+**Budget an hour, and turn the limiter off.** The blocker was not the
+environment — database, cache, both servers and a pre-installed Chromium were
+all reachable — it was `Throttle`. `seed_demo_data.py` paces itself at ~119s a
+batch to stay under the admin password-reset ceiling, because tripping it costs
+a 15-minute lockout per account, and a 22-member roster then sleeps through
+most of a session. The seeder documents the way out and it works: start the
+backend with `RATE_LIMIT_ENABLED=false` and run the seeder with
+`SEED_ADMIN_RESET_WINDOW_SECONDS=0`.
+
+Also worth knowing for the next run: read progress from row counts, not the
+seeder's log. Python block-buffers to a redirected file, so the log sat at
+"count-only calls" long after the run had moved on.
+
+### Still not shot
 
 | Image area | Why |
 | --- | --- |
-| **Dashboard** "Next 7 Days" timeline (`03-60-dashboard-my-shifts.png`) | Heading is now Next 30 Days; the control is All Shifts, not Full Schedule; footer reads "in the following month" |
+| `03-60-report-used-sheet` | Blocked upstream: "no crewed past shift to file against" — the seeder's platoon-roster and scheduling-request steps report no platoon has members |
+| `03-62-flagged-queue` | Same run, `locator.click` timeout — the queue it pictures has nothing in it for the same reason |
 
-Any other capture showing the dashboard's personal tab carries the same
-heading and control, so check the shot before trusting it — this is the only
-one referenced from a guide by that name.
+Neither is caused by the timeline change; both matched the `--only 03-60,03-62`
+prefix filter by coincidence of id.
 
 ## Eight unreferenced images, triaged rather than swept (2026-08-31)
 
