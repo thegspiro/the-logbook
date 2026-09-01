@@ -117,6 +117,20 @@ class SecurityMonitoringService:
         self.alerts: List[SecurityAlert] = []
         self._login_attempts: Dict[str, List[datetime]] = defaultdict(list)
         self._session_ips: Dict[str, List[Tuple[str, datetime]]] = defaultdict(list)
+        # The trusted comparison baseline for detect_session_hijack, kept
+        # separate from _session_ips (below). _session_ips is the full
+        # observed-IP log (audit/forensics, every request incl. attacker
+        # ones); this dict holds only the single IP/timestamp a hijack
+        # decision is actually made against, and it is deliberately NOT
+        # updated to an IP that itself just triggered an alert (Codex, PR
+        # #2132, round 6 — see the comment in detect_session_hijack). Its
+        # stored timestamp IS refreshed on every call, alert or not, so
+        # that the 5-minute leniency check measures time since this
+        # session was last evaluated, not time since the trusted IP's
+        # original confirmation (Codex, PR #2132, round 7 — same method).
+        self._session_trusted_ip: Dict[str, List[Tuple[str, datetime]]] = defaultdict(
+            list
+        )
         self._data_transfers: Dict[str, List[Tuple[int, datetime]]] = defaultdict(list)
         self._api_calls: Dict[str, List[datetime]] = defaultdict(list)
         self._external_endpoints: set = set()
@@ -189,6 +203,7 @@ class SecurityMonitoringService:
             self._api_calls,
             self._login_attempts,
             self._session_ips,
+            self._session_trusted_ip,
             self._data_transfers,
         ):
             if len(tracker) > self._MAX_TRACKING_KEYS:
@@ -251,6 +266,12 @@ class SecurityMonitoringService:
             entries = self._session_ips[key]
             if not entries or entries[-1][1] < cutoff:
                 del self._session_ips[key]
+
+        # Evict _session_trusted_ip keys with no recent entries
+        for key in list(self._session_trusted_ip):
+            entries = self._session_trusted_ip[key]
+            if not entries or entries[-1][1] < cutoff:
+                del self._session_trusted_ip[key]
 
         # Evict _data_transfers keys with no recent entries
         day_cutoff = datetime.now(timezone.utc) - timedelta(days=2)
@@ -400,30 +421,56 @@ class SecurityMonitoringService:
         """
         Check for rate limit violations that might indicate attacks
         """
-        # Periodically evict stale keys to bound memory usage
-        self._evict_stale_tracking_keys()
-
         now = datetime.now(timezone.utc)
         minute_ago = now - timedelta(minutes=1)
 
-        # Clean old entries
-        self._api_calls[ip] = [ts for ts in self._api_calls[ip] if ts > minute_ago]
-
-        # Add current call
+        # Add the current call and capture the filtered 1-minute window into
+        # a local variable BEFORE eviction runs below, rather than re-reading
+        # self._api_calls[ip] after it. _evict_stale_tracking_keys() ->
+        # _enforce_key_caps() can evict this exact ip's key when
+        # the tracker is over its cap and this ip is the least-recently-
+        # active one (e.g. it already has calls toward the threshold but
+        # went quiet while other ips filled the tracker) -- a dict lookup
+        # after that would silently come back as a fresh empty list,
+        # undercounting the call rate and never reaching the threshold. Same
+        # read-after-evict shape Codex found in detect_session_hijack (PR
+        # #2128, round 3) and already fixed there and in detect_brute_force /
+        # detect_data_exfiltration; this method had the same bug, unfixed,
+        # because it evicts via _evict_stale_tracking_keys() rather than a
+        # direct _enforce_key_caps() call, which the earlier fixes did not
+        # touch.
         self._api_calls[ip].append(now)
+        calls = [ts for ts in self._api_calls[ip] if ts > minute_ago]
+
+        # Periodically evict stale keys to bound memory usage.
+        self._evict_stale_tracking_keys()
+
+        # Write the filtered window back AFTER eviction, not before it. The
+        # read above protects this call's own decision from a corrupted
+        # value, but eviction can still delete `ip`'s entry from the dict as
+        # part of its batch -- if the write happened before eviction (as it
+        # did through PR #2132 round 4), that delete goes through anyway,
+        # and the *next* call from this ip finds no entry at all: not a
+        # miscount, a missing baseline, indistinguishable from a first-ever
+        # call. Writing here, after eviction has already run, guarantees the
+        # tracker ends every call holding a live, current entry for the
+        # calling key -- and since that entry now carries this call's
+        # timestamp, it will also be among the least likely to be evicted on
+        # the *next* call's sweep (round-5 fix, Codex, PR #2132).
+        self._api_calls[ip] = calls
 
         # Check threshold
-        if len(self._api_calls[ip]) > self.thresholds.api_calls_per_minute:
+        if len(calls) > self.thresholds.api_calls_per_minute:
             alert = SecurityAlert(
                 id=secrets.token_hex(16),
                 alert_type=AlertType.RATE_LIMIT_EXCEEDED,
                 threat_level=ThreatLevel.MEDIUM,
                 timestamp=now,
-                description=f"Rate limit exceeded: {len(self._api_calls[ip])} calls/min",
+                description=f"Rate limit exceeded: {len(calls)} calls/min",
                 source_ip=ip,
                 user_id=user_id,
                 details={
-                    "calls_per_minute": len(self._api_calls[ip]),
+                    "calls_per_minute": len(calls),
                     "threshold": self.thresholds.api_calls_per_minute,
                 },
             )
@@ -442,18 +489,15 @@ class SecurityMonitoringService:
         """
         Detect brute force login attempts
         """
-        # Brute-force / credential-stuffing is exactly the burst that fills
-        # _login_attempts (keyed by attacker-controlled ip + user id), so bound
-        # it here too — _check_rate_limit isn't always on this path. Only the
-        # hard cap (not the time-based sweep) so this stays cheap on the hot
-        # login path.
-        self._enforce_key_caps()
-
         if success:
-            # Clear attempts on successful login
+            # Clear attempts on successful login. This branch only overwrites
+            # (never reads prior entries to decide anything), so it carries
+            # none of the read-after-evict risk below -- cap enforcement can
+            # run here in any position.
             self._login_attempts[ip] = []
             if user_id:
                 self._login_attempts[f"user:{user_id}"] = []
+            self._enforce_key_caps()
             return None
 
         now = datetime.now(timezone.utc)
@@ -461,20 +505,50 @@ class SecurityMonitoringService:
 
         # Track by IP
         self._login_attempts[ip].append(now)
-        self._login_attempts[ip] = [
-            ts for ts in self._login_attempts[ip] if ts > hour_ago
-        ]
+        ip_attempts = [ts for ts in self._login_attempts[ip] if ts > hour_ago]
 
         # Track by user if provided
+        user_attempts: List[datetime] = []
+        user_key: Optional[str] = None
         if user_id:
-            key = f"user:{user_id}"
-            self._login_attempts[key].append(now)
-            self._login_attempts[key] = [
-                ts for ts in self._login_attempts[key] if ts > hour_ago
+            user_key = f"user:{user_id}"
+            self._login_attempts[user_key].append(now)
+            user_attempts = [
+                ts for ts in self._login_attempts[user_key] if ts > hour_ago
             ]
 
+        # Cap enforcement runs after the reads above, captured into
+        # ip_attempts/user_attempts, rather than before them. Brute-force /
+        # credential-stuffing is exactly the burst that fills _login_attempts
+        # (keyed by attacker-controlled ip + user id), so bound it here too —
+        # _check_rate_limit isn't always on this path. But enforcing the cap
+        # BEFORE this call's own read can evict the exact ip/user key just
+        # appended to, and every lookup below reads straight from the dict —
+        # so an evicted key would silently come back empty and never reach
+        # the threshold. That is the same read-after-evict shape Codex found
+        # in detect_session_hijack (PR #2128, round 3), and this method is
+        # the one most likely to hit it: a wide credential-stuffing burst
+        # across many attacker IPs is exactly the traffic that fills the
+        # tracker to its cap. Only the hard cap (not the time-based sweep) so
+        # this stays cheap on the hot login path.
+        self._enforce_key_caps()
+
+        # Write the filtered windows back AFTER cap enforcement, not before
+        # it. Reading before eviction (above) protects this call's own
+        # threshold decision, but eviction can still delete ip's (and/or
+        # user_key's) entry from the dict as part of its batch -- writing
+        # before eviction ran (as this did through PR #2132 round 4) lets
+        # that delete stand, so the *next* attempt from the same ip/user
+        # finds no history at all and is scored as attempt #1, not a
+        # continuation. Writing here guarantees the tracker ends this call
+        # holding a live, current entry for every key this call touched
+        # (round-5 fix, Codex, PR #2132).
+        self._login_attempts[ip] = ip_attempts
+        if user_key is not None:
+            self._login_attempts[user_key] = user_attempts
+
         # Check IP threshold
-        if len(self._login_attempts[ip]) >= self.thresholds.failed_logins_per_hour:
+        if len(ip_attempts) >= self.thresholds.failed_logins_per_hour:
             alert = SecurityAlert(
                 id=secrets.token_hex(16),
                 alert_type=AlertType.BRUTE_FORCE,
@@ -484,7 +558,7 @@ class SecurityMonitoringService:
                 source_ip=ip,
                 user_id=user_id,
                 details={
-                    "failed_attempts": len(self._login_attempts[ip]),
+                    "failed_attempts": len(ip_attempts),
                     "time_window": "1 hour",
                     "threshold": self.thresholds.failed_logins_per_hour,
                 },
@@ -505,8 +579,7 @@ class SecurityMonitoringService:
 
         # Check per-user threshold
         if user_id:
-            key = f"user:{user_id}"
-            if len(self._login_attempts[key]) >= self.thresholds.failed_logins_per_user:
+            if len(user_attempts) >= self.thresholds.failed_logins_per_user:
                 alert = SecurityAlert(
                     id=secrets.token_hex(16),
                     alert_type=AlertType.BRUTE_FORCE,
@@ -516,7 +589,7 @@ class SecurityMonitoringService:
                     source_ip=ip,
                     user_id=user_id,
                     details={
-                        "failed_attempts": len(self._login_attempts[key]),
+                        "failed_attempts": len(user_attempts),
                         "time_window": "1 hour",
                         "threshold": self.thresholds.failed_logins_per_user,
                     },
@@ -548,19 +621,46 @@ class SecurityMonitoringService:
         """
         Detect potential session hijacking by monitoring IP/UA changes
         """
-        # Called on requests, not logins — detect_brute_force's cap-enforcement
-        # never fires for SSO/OAuth-only orgs, where nothing else bounds this
-        # dict's growth. Hard cap only (cheap), matching detect_brute_force.
-        self._enforce_key_caps()
-
         now = datetime.now(timezone.utc)
         key = f"session:{session_id}"
 
-        # Get previous session data
+        # Get previous session data BEFORE cap enforcement below.
+        # _enforce_key_caps() evicts the least-recently-active keys in
+        # _session_ips, and this exact session can be one of them if it has
+        # gone quiet while the tracker filled up elsewhere. Reading after
+        # eviction would find no prior IP for this session, treat a genuine
+        # hijack as a first-ever observation, silently reset the baseline,
+        # and never fire the alert (Codex, PR #2128, round 3 — a regression
+        # introduced in round 1's commit 3b6b65e4, widened in round 2's
+        # df7438e0, which added the call below).
         session_data = self._session_ips.get(key, [])
 
-        if session_data:
-            last_ip, last_time = session_data[-1]
+        # The trusted comparison baseline (see _session_trusted_ip's
+        # declaration in __init__) is a *separate* tracker from the full
+        # observed-IP log above, and is read before eviction for the same
+        # reason: it is capped and swept by the same _enforce_key_caps()
+        # call below.
+        trusted_data = self._session_trusted_ip.get(key, [])
+
+        # Called on requests, not logins — detect_brute_force's cap-enforcement
+        # never fires for SSO/OAuth-only orgs, where nothing else bounds this
+        # dict's growth. Hard cap only (cheap), matching detect_brute_force.
+        # Runs after the read above so eviction can never remove the history
+        # this call is about to compare against.
+        self._enforce_key_caps()
+
+        alert: Optional[SecurityAlert] = None
+        # Defaults to promoting this call's own IP as the new trusted
+        # baseline -- correct for a first-ever observation, for an IP that
+        # matches the existing baseline (refreshes its timestamp), and for
+        # an IP change slow enough (>= 5 minutes) not to be flagged as
+        # suspicious. The one case that overrides this default, below, is a
+        # hijack alert actually firing.
+        new_trusted_ip = current_ip
+        new_trusted_time = now
+
+        if trusted_data:
+            last_ip, last_time = trusted_data[-1]
 
             # Check if IP changed within a short time (potential hijack)
             if last_ip != current_ip:
@@ -584,28 +684,121 @@ class SecurityMonitoringService:
                         },
                     )
 
-                    await log_audit_event(
-                        db=db,
-                        event_type="session_hijack_suspected",
-                        event_category="security",
-                        severity="critical",
-                        event_data=alert.__dict__,
-                        ip_address=current_ip,
-                        user_id=user_id,
-                        session_id=session_id,
-                    )
+                    # Do NOT promote the alerting IP to "trusted". Round 5
+                    # (commit 90e373cc) made the tracker write unconditional
+                    # -- including on the alert path -- to fix a real bug
+                    # (see the comment below), but it wrote `current_ip`
+                    # itself back as the new baseline. That silently
+                    # laundered the attacker's IP into the session's known-
+                    # good history: the very next request from that same
+                    # attacker IP then matched "an IP already seen for this
+                    # session" and fired no alert at all, so an ongoing
+                    # hijack was detected exactly once. Keeping the baseline
+                    # at the pre-alert IP (instead of the default set above)
+                    # means the same attacker IP keeps tripping the alert on
+                    # every subsequent request, until a genuinely different,
+                    # non-suspicious observation (a slow IP change, or the
+                    # legitimate IP returning) actually earns the promotion
+                    # (Codex, PR #2132, round 6).
+                    new_trusted_ip = last_ip
+                    # But DO refresh the timestamp to `now`, even though the
+                    # IP is being kept unchanged. Round 6 left this as
+                    # `last_time` (the timestamp of the last CONFIRMED-good
+                    # sighting of `last_ip`), which reads as "when was the
+                    # trusted IP last seen" but is actually consulted by the
+                    # `time_diff < 300` check above as "how long has it been
+                    # since we last evaluated this session" -- and those are
+                    # only the same thing while the session is idle. Under
+                    # sustained attacker traffic they diverge: `last_time`
+                    # stays pinned to the pre-hijack confirmation while real
+                    # wall-clock time keeps advancing on every subsequent
+                    # attacker call, so eventually `time_diff` on some later
+                    # attacker call crosses 300s purely because enough time
+                    # has passed since the ORIGINAL legitimate sighting -- not
+                    # because the session went idle -- and the 5-minute
+                    # leniency (meant for "IP changed after a genuine gap in
+                    # activity, probably roaming") wrongly kicks in and
+                    # silently waves the attacker's now-longstanding IP
+                    # through with no alert (Codex, PR #2132, round 7).
+                    #
+                    # Refreshing to `now` here makes the stored timestamp
+                    # mean "the last time this session was evaluated,
+                    # regardless of which IP made that call" -- so the next
+                    # call's `time_diff` measures the gap since THIS call,
+                    # not since the session's last idle period ended. A
+                    # continuously-attacking session therefore never
+                    # accumulates elapsed time toward the leniency window
+                    # (each attacker call keeps the gap tiny), while a
+                    # genuinely idle session (no calls from anyone for 5+
+                    # minutes) still earns the leniency exactly as before,
+                    # because nothing refreshes the timestamp during a gap
+                    # with no calls at all.
+                    new_trusted_time = now
 
-                    await self._add_alert(db, alert)
-                    return alert
+        # Write the trusted baseline back after cap enforcement (read-before
+        # /write-after-evict, same shape as _session_ips below): a single
+        # entry is enough since only the most recent trusted IP is ever
+        # compared against.
+        self._session_trusted_ip[key] = [(new_trusted_ip, new_trusted_time)]
 
-        # Track this request
-        self._session_ips[key].append((current_ip, now))
+        # Track this request unconditionally -- including when an alert just
+        # fired above -- built from `session_data` (captured before eviction)
+        # plus this call's own entry, rather than appending to
+        # self._session_ips[key] in place. Two distinct bugs made that the
+        # wrong shape: (1) the old code returned early the moment an alert
+        # fired, skipping this append entirely, so a session's tracker entry
+        # never advanced past its pre-hijack IP; (2) even without that early
+        # return, appending to self._session_ips[key] reads whatever cap
+        # enforcement above left behind, which can be nothing at all if this
+        # key was evicted in the batch. Rebuilding from the pre-eviction
+        # `session_data` and writing the result back is what actually fixes
+        # both: the tracker always ends this call holding a live, current
+        # entry for the session, so the *next* call has a real baseline to
+        # compare against.
+        #
+        # This tracker (the full audit log, unlike _session_trusted_ip above)
+        # always records `current_ip` -- including an attacker's -- because
+        # it exists for forensics: an investigator reviewing a hijacked
+        # session needs to see every IP that touched it, not just the ones
+        # that were never flagged.
+        self._session_ips[key] = (session_data + [(current_ip, now)])[-10:]
 
-        # Keep only last 10 entries
-        if len(self._session_ips[key]) > 10:
-            self._session_ips[key] = self._session_ips[key][-10:]
+        # Both tracker writes above happen BEFORE the alert-dispatch awaits
+        # below, not after -- deliberately, and unlike the two blocks'
+        # position in every revision through round 8. `log_audit_event()`
+        # and `_add_alert()` are real `await` points (DB I/O), and this
+        # method runs on every authenticated request via the ASGI
+        # middleware (security_middleware.py), against the single
+        # module-level `security_monitor` instance. A second concurrent
+        # request for the SAME session_id -- routine for this SPA, which
+        # fires several API calls in parallel on one page load, not just an
+        # attacker replaying a stolen cookie -- can run its own read/decide/
+        # write while this call is suspended mid-await. With the tracker
+        # write sitting *after* the awaits (the old order), that second
+        # call's write would land first and then be silently clobbered by
+        # this call resuming with its own now-stale `new_trusted_ip` /
+        # `new_trusted_time` / `session_data` snapshot -- corrupting the
+        # forensic IP log and, since this call's `now` was captured before
+        # the other call's, potentially moving the trusted baseline's
+        # timestamp backward. Writing first removes the only await between
+        # this call's read and its write, so there is nothing left for a
+        # concurrent call to interleave with (Codex, PR #2132, round 9;
+        # see TestSessionHijackConcurrentInterleaving).
+        if alert is not None:
+            await log_audit_event(
+                db=db,
+                event_type="session_hijack_suspected",
+                event_category="security",
+                severity="critical",
+                event_data=alert.__dict__,
+                ip_address=current_ip,
+                user_id=user_id,
+                session_id=session_id,
+            )
 
-        return None
+            await self._add_alert(db, alert)
+
+        return alert
 
     async def detect_data_exfiltration(
         self,
@@ -624,23 +817,44 @@ class SecurityMonitoringService:
         - Bulk record access
         - Transfers to external/unknown destinations
         """
-        # Called on requests, not logins — detect_brute_force's cap-enforcement
-        # never fires for SSO/OAuth-only orgs, where nothing else bounds this
-        # dict's growth. Hard cap only (cheap), matching detect_brute_force.
-        self._enforce_key_caps()
-
         now = datetime.now(timezone.utc)
         day_ago = now - timedelta(days=1)
 
-        # Track data transfers
+        # Track data transfers, keeping the filtered 24h window in a local
+        # variable rather than re-reading self._data_transfers[user_id] below.
+        # _enforce_key_caps() (called after this block, see comment there) can
+        # evict this exact user's key, and a dict lookup after that would
+        # silently come back as a fresh empty list, undercounting the running
+        # total and the transfer count in the alert below (same read-after-
+        # evict shape Codex found in detect_session_hijack — PR #2128, round
+        # 3).
         self._data_transfers[user_id].append((data_size_bytes, now))
-        self._data_transfers[user_id] = [
+        transfers = [
             (size, ts) for size, ts in self._data_transfers[user_id] if ts > day_ago
         ]
 
-        # Calculate total transferred in last 24 hours
-        total_transferred = sum(size for size, _ in self._data_transfers[user_id])
+        # Calculate total transferred in last 24 hours from the local list
+        # captured above, not another dict lookup — see comment above.
+        total_transferred = sum(size for size, _ in transfers)
         total_mb = total_transferred / (1024 * 1024)
+
+        # Called on requests, not logins — detect_brute_force's cap-enforcement
+        # never fires for SSO/OAuth-only orgs, where nothing else bounds this
+        # dict's growth. Hard cap only (cheap), matching detect_brute_force.
+        # Runs after the transfer history above is captured into `transfers`
+        # so eviction can never wipe the data this call needs to decide with.
+        self._enforce_key_caps()
+
+        # Write the filtered 24h window back AFTER cap enforcement, not
+        # before it. Reading before eviction (above) protects this call's own
+        # total/alert decision, but eviction can still delete user_id's entry
+        # from the dict as part of its batch -- writing before eviction ran
+        # (as this did through PR #2132 round 4) lets that delete stand, so
+        # the *next* transfer from the same user finds no history and the
+        # running 24h total silently resets to just that one transfer.
+        # Writing here guarantees the tracker ends this call holding a live,
+        # current entry for user_id (round-5 fix, Codex, PR #2132).
+        self._data_transfers[user_id] = transfers
 
         alerts = []
 
@@ -697,7 +911,7 @@ class SecurityMonitoringService:
                 user_id=user_id,
                 details={
                     "total_24h_mb": total_mb,
-                    "transfer_count": len(self._data_transfers[user_id]),
+                    "transfer_count": len(transfers),
                 },
             )
             alerts.append(alert)

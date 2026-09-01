@@ -7,7 +7,8 @@ pattern matching (SQLi / XSS / path traversal), per-IP API rate limiting,
 and brute-force login detection. The audit-log call is stubbed. DB mocked.
 """
 
-from datetime import datetime, timezone
+import asyncio
+from datetime import datetime, timedelta, timezone
 from unittest import mock
 from unittest.mock import AsyncMock, MagicMock
 
@@ -30,6 +31,35 @@ def _db():
 
 def _svc():
     return SecurityMonitoringService()
+
+
+class _FrozenClock:
+    """A small controllable clock standing in for freezegun (not a project
+    dependency) for tests that need `detect_session_hijack`'s internal
+    `now = datetime.now(timezone.utc)` to advance under test control,
+    without a real sleep. Pair with `_install_fake_now` below.
+    """
+
+    def __init__(self, start: datetime):
+        self.current = start
+
+    def advance(self, delta: timedelta) -> datetime:
+        self.current += delta
+        return self.current
+
+
+def _install_fake_now(monkeypatch, clock: "_FrozenClock") -> None:
+    """Patch `app.services.security_monitoring.datetime` so every
+    `datetime.now(...)` call in that module returns `clock.current`
+    instead of the real wall clock.
+    """
+
+    class _FakeDateTime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return clock.current
+
+    monkeypatch.setattr("app.services.security_monitoring.datetime", _FakeDateTime)
 
 
 class TestInjectionPatterns:
@@ -211,6 +241,860 @@ class TestTrackerCaps:
             )
 
         assert len(svc._external_endpoints) <= svc._MAX_EXTERNAL_ENDPOINTS
+
+
+class TestReadBeforeEvictOrdering:
+    """PR #2128 round 3 (Codex): the round-2 fix (commit 3b6b65e4) added an
+    unconditional ``self._enforce_key_caps()`` call to the TOP of
+    detect_session_hijack / detect_data_exfiltration -- BEFORE either method
+    read its own tracker's prior entries for this exact key. If that key
+    happened to be the coldest (least-recently-active) one in an
+    over-the-cap tracker, the batch eviction deleted its history first, and
+    the read that followed silently found nothing: a genuine hijack looked
+    like a first-ever observation, a genuine cumulative transfer looked like
+    a lone new one, and no alert fired. detect_brute_force has always had
+    the same shape (enforce_key_caps ran before the ip/user append+filter),
+    just never flagged.
+
+    Each test below fills the relevant tracker past its cap with the victim
+    key as the single oldest entry, then drives the call through the real
+    method (not the eviction helper directly) and asserts the alert that
+    should fire still does. Each test fails against commit df7438e0 (no
+    alert -- the read finds an empty/reset history) and passes after the
+    read-before-evict reordering.
+    """
+
+    async def test_session_hijack_alert_survives_batch_eviction_of_the_victim_session(
+        self,
+    ):
+        svc = _svc()
+        svc._MAX_TRACKING_KEYS = 10
+
+        victim_session = "victim-session"
+        victim_key = f"session:{victim_session}"
+        now = datetime.now(timezone.utc)
+        # Victim's last activity is a few seconds old -- recent enough to
+        # still be "within 5 minutes" for the hijack check, but older than
+        # every filler entry below, so it is the batch-eviction target.
+        # Comparison reads from _session_trusted_ip (the dedicated baseline
+        # tracker -- see its docstring in __init__), not from the tail of
+        # _session_ips, so both must be seeded and filled past the cap for
+        # this to actually exercise the read-before-evict protection.
+        svc._session_ips[victim_key] = [("1.1.1.1", now - timedelta(seconds=10))]
+        svc._session_trusted_ip[victim_key] = [("1.1.1.1", now - timedelta(seconds=10))]
+
+        for i in range(20):
+            svc._session_ips[f"session:filler-{i}"] = [("2.2.2.2", now)]
+            svc._session_trusted_ip[f"session:filler-{i}"] = [("2.2.2.2", now)]
+
+        assert len(svc._session_ips) > svc._MAX_TRACKING_KEYS
+        assert len(svc._session_trusted_ip) > svc._MAX_TRACKING_KEYS
+
+        alert = await svc.detect_session_hijack(
+            _db(),
+            session_id=victim_session,
+            current_ip="9.9.9.9",
+            user_agent="ua",
+            user_id="u1",
+        )
+
+        assert alert is not None, (
+            "session-hijack alert was skipped -- the victim session's prior "
+            "IP was evicted before detect_session_hijack could read and "
+            "compare it"
+        )
+        assert alert.alert_type.value == "session_hijack"
+        assert alert.details["previous_ip"] == "1.1.1.1"
+        assert alert.details["current_ip"] == "9.9.9.9"
+
+    async def test_brute_force_threshold_survives_batch_eviction_of_the_attacker_ip(
+        self,
+    ):
+        svc = _svc()
+        svc._MAX_TRACKING_KEYS = 10
+        svc.thresholds.failed_logins_per_hour = 3
+
+        attacker_ip = "203.0.113.9"
+        now = datetime.now(timezone.utc)
+        # Two prior failed attempts, both within the last hour, the most
+        # recent of which is still older than every filler IP below.
+        svc._login_attempts[attacker_ip] = [
+            now - timedelta(minutes=5),
+            now - timedelta(minutes=3),
+        ]
+
+        for i in range(20):
+            svc._login_attempts[f"filler-ip-{i}"] = [now]
+
+        assert len(svc._login_attempts) > svc._MAX_TRACKING_KEYS
+
+        # Third failed attempt for the attacker IP -- should reach the
+        # threshold of 3 (2 prior + this one).
+        alert = await svc.detect_brute_force(_db(), attacker_ip, success=False)
+
+        assert alert is not None, (
+            "brute-force alert was skipped -- the attacker IP's prior failed "
+            "attempts were evicted before detect_brute_force could count them"
+        )
+        assert alert.alert_type.value == "brute_force"
+        assert alert.details["failed_attempts"] == 3
+
+    async def test_data_exfiltration_cumulative_alert_survives_batch_eviction(self):
+        svc = _svc()
+        svc._MAX_TRACKING_KEYS = 10
+        svc.thresholds.large_data_export_mb = 10  # cumulative alert at > 50MB/24h
+
+        victim_user = "victim-user"
+        now = datetime.now(timezone.utc)
+        mb = 1024 * 1024
+        # 45MB already transferred, most recent entry older than every
+        # filler user below, so this is the batch-eviction target.
+        svc._data_transfers[victim_user] = [
+            (15 * mb, now - timedelta(minutes=10)),
+            (15 * mb, now - timedelta(minutes=7)),
+            (15 * mb, now - timedelta(minutes=5)),
+        ]
+
+        for i in range(20):
+            svc._data_transfers[f"filler-user-{i}"] = [(1, now)]
+
+        assert len(svc._data_transfers) > svc._MAX_TRACKING_KEYS
+
+        # 10MB more -- alone it's not > the 10MB single-transfer threshold,
+        # but 45 + 10 = 55MB is > the 50MB cumulative threshold.
+        alert = await svc.detect_data_exfiltration(
+            db=_db(),
+            user_id=victim_user,
+            data_size_bytes=10 * mb,
+            endpoint="/api/v1/some/export",
+            ip_address="203.0.113.5",
+        )
+
+        assert alert is not None, (
+            "cumulative data-exfiltration alert was skipped -- the victim "
+            "user's transfer history was evicted before it could be summed"
+        )
+        assert alert.alert_type.value == "data_exfiltration"
+        assert alert.details["total_24h_mb"] == pytest.approx(55.0)
+
+    async def test_rate_limit_alert_survives_batch_eviction_of_the_victim_ip(self):
+        """PR #2132 round 4 (Codex): _check_rate_limit has the identical
+        read-after-evict shape as the three methods above, missed by the
+        round-3 fix because it evicts via ``_evict_stale_tracking_keys()``
+        (not a direct ``_enforce_key_caps()`` call) at the very top of the
+        method, before it reads/appends to ``self._api_calls[ip]``. If this
+        ip is the coldest key in an over-the-cap tracker, batch eviction
+        deletes its prior calls first, the subsequent append+filter reads
+        from a fresh empty list, and the request is undercounted as call #1
+        -- no rate-limit alert, even though it is really call #3 against a
+        threshold of 2.
+        """
+        svc = _svc()
+        svc._MAX_TRACKING_KEYS = 10
+        svc.thresholds.api_calls_per_minute = 2
+
+        victim_ip = "203.0.113.9"
+        now = datetime.now(timezone.utc)
+        # Two prior calls within the last minute, both older than every
+        # filler ip below, so this ip is the batch-eviction target.
+        svc._api_calls[victim_ip] = [
+            now - timedelta(seconds=30),
+            now - timedelta(seconds=20),
+        ]
+
+        for i in range(20):
+            svc._api_calls[f"filler-ip-{i}"] = [datetime.now(timezone.utc)]
+
+        assert len(svc._api_calls) > svc._MAX_TRACKING_KEYS
+
+        # Third call for the victim ip -- should exceed the threshold of 2
+        # (2 prior + this one = 3 > 2).
+        alert = await svc._check_rate_limit(_db(), victim_ip, "u1")
+
+        assert alert is not None, (
+            "rate-limit alert was skipped -- the victim ip's prior calls "
+            "were evicted before _check_rate_limit could count them"
+        )
+        assert alert.alert_type.value == "rate_limit_exceeded"
+        assert alert.details["calls_per_minute"] == 3
+        assert alert.details["threshold"] == 2
+
+
+class TestWriteAfterEvictOrdering:
+    """PR #2132 round 5 (Codex): the round-4 fix (read the current key's
+    tracker entry into a local variable BEFORE calling _enforce_key_caps())
+    correctly protects THAT call's own decision, but nothing re-inserted the
+    current key's entry into the tracker AFTER eviction ran.
+
+    **Confirmed exploitable, in commit 95db016b, in exactly one of the four
+    methods: detect_session_hijack.** Its read (the prior IP/timestamp) and
+    its write (this call's new IP/timestamp) are two separate steps, with
+    eviction running in between and the write gated behind "no alert fired
+    this call" via an early `return alert`. So when the hijack alert fires
+    correctly (using the pre-eviction local copy), the method returns before
+    ever writing this call's own contribution -- and if this session's key
+    was also the batch-eviction target, the tracker is left holding NO entry
+    at all for it. The next call from the same hijacked session finds no
+    baseline, is scored as a first-ever observation, and the alert stream
+    for an ongoing hijack goes silent after its first (correctly fired)
+    alert. `test_session_hijack_detects_a_second_and_third_ip_change_in_a_row`
+    below fails against 95db016b for exactly this reason.
+
+    **Not reproducible the same way in `_check_rate_limit`,
+    `detect_brute_force`, or `detect_data_exfiltration`.** In 95db016b all
+    three already write this call's filtered window back to the dict in the
+    same statement block that reads/appends it -- *before* calling
+    `_enforce_key_caps()` -- so by the time eviction runs, this call's own
+    key already carries the freshest timestamp in the tracker and cannot be
+    among the "oldest N" keys eviction selects; it always survives its own
+    call's eviction pass. Traced and confirmed empirically (see PR
+    description / commit message): the three tests below for these methods
+    pass unmodified against 95db016b too. The fix still moves their writes
+    to run after `_enforce_key_caps()`, matching the read-old/write-new
+    shape applied everywhere else -- not because 95db016b is broken here,
+    but so the invariant ("the tracker always ends a call holding a live
+    entry for the calling key") holds by construction rather than by an
+    incidental ordering property that a future refactor (e.g. adding an
+    early return, exactly what happened to detect_session_hijack) could
+    silently break again. These three tests are regression guards against
+    that future break, not reproductions of a currently-live bug.
+    """
+
+    async def test_session_hijack_detects_a_second_and_third_ip_change_in_a_row(
+        self,
+    ):
+        """Three calls in a row, not just two -- the fix must be general,
+        not just patch the exact two-call reproduction Codex gave. Each call
+        changes IP again, simulating an attacker continuing to use the
+        hijacked session after the first alert fired.
+
+        `previous_ip` stays "1.1.1.1" on every call, not the previous call's
+        (attacker-controlled) `current_ip`. Round 5 (95db016b/90e373cc)
+        promoted whatever IP a call arrived with -- including an alerting
+        one -- to the comparison baseline for the *next* call; round 6
+        (Codex, PR #2132) found that this let a hijack alert fire once and
+        then go silent the moment the same attacker IP repeated (never
+        exercised by this test, since 9.9.9.9/8.8.8.8/7.7.7.7 are all
+        distinct -- see
+        TestSessionHijackTrustedBaseline.test_repeated_attacker_ip_keeps_alerting
+        below for that exact case). The fix keeps the baseline pinned at the
+        pre-hijack IP until a non-alerting observation earns the promotion,
+        so every one of these three distinct attacker IPs is compared
+        against the same original "1.1.1.1", not against each other.
+        """
+        svc = _svc()
+        svc._MAX_TRACKING_KEYS = 10
+
+        victim_session = "victim-session"
+        victim_key = f"session:{victim_session}"
+        now = datetime.now(timezone.utc)
+        # Comparison reads from _session_trusted_ip, not the tail of
+        # _session_ips -- both are seeded and filled past the cap so the
+        # write-after-evict protection is exercised on the tracker that
+        # actually drives the decision.
+        svc._session_ips[victim_key] = [("1.1.1.1", now - timedelta(seconds=10))]
+        svc._session_trusted_ip[victim_key] = [("1.1.1.1", now - timedelta(seconds=10))]
+
+        for i in range(20):
+            svc._session_ips[f"session:filler-{i}"] = [("2.2.2.2", now)]
+            svc._session_trusted_ip[f"session:filler-{i}"] = [("2.2.2.2", now)]
+
+        assert len(svc._session_ips) > svc._MAX_TRACKING_KEYS
+        assert len(svc._session_trusted_ip) > svc._MAX_TRACKING_KEYS
+
+        # Call 1: victim_session is the batch-eviction target. The alert
+        # fires correctly (round-4 fix already covers this), but round-4
+        # left the tracker with no entry at all for victim_key afterward.
+        alert1 = await svc.detect_session_hijack(
+            _db(),
+            session_id=victim_session,
+            current_ip="9.9.9.9",
+            user_agent="ua",
+            user_id="u1",
+        )
+        assert alert1 is not None
+        assert alert1.details["previous_ip"] == "1.1.1.1"
+        assert alert1.details["current_ip"] == "9.9.9.9"
+
+        # No further growth past the cap between calls, so no more eviction
+        # happens below -- these two calls isolate the write-after-evict gap
+        # itself, not a second batch eviction.
+        assert len(svc._session_ips) <= svc._MAX_TRACKING_KEYS
+        assert len(svc._session_trusted_ip) <= svc._MAX_TRACKING_KEYS
+
+        # Call 2: same session, IP changes again. Against 95db016b this
+        # finds no entry for victim_key at all (round-4 fixed the read, but
+        # nothing wrote the call-1 IP back after eviction deleted it), so
+        # session_data is `[]`, the hijack looks like a first-ever
+        # observation, and no alert fires.
+        alert2 = await svc.detect_session_hijack(
+            _db(),
+            session_id=victim_session,
+            current_ip="8.8.8.8",
+            user_agent="ua",
+            user_id="u1",
+        )
+        assert alert2 is not None, (
+            "session-hijack alert did not fire on the second call -- the "
+            "tracker lost its baseline for this session after the first "
+            "call's alert, even though the first call correctly detected "
+            "the hijack"
+        )
+        assert alert2.details["previous_ip"] == "1.1.1.1"
+        assert alert2.details["current_ip"] == "8.8.8.8"
+
+        # Call 3: continue the chain one step further to prove the fix does
+        # not merely special-case the two-call reproduction.
+        alert3 = await svc.detect_session_hijack(
+            _db(),
+            session_id=victim_session,
+            current_ip="7.7.7.7",
+            user_agent="ua",
+            user_id="u1",
+        )
+        assert alert3 is not None, (
+            "session-hijack alert did not fire on the third call -- the "
+            "fix must keep restoring a live baseline on every call, not "
+            "just the one immediately after an eviction"
+        )
+        assert alert3.details["previous_ip"] == "1.1.1.1"
+        assert alert3.details["current_ip"] == "7.7.7.7"
+
+    async def test_brute_force_second_attempt_after_batch_eviction_still_counts(
+        self,
+    ):
+        svc = _svc()
+        svc._MAX_TRACKING_KEYS = 10
+        svc.thresholds.failed_logins_per_hour = 3
+
+        attacker_ip = "203.0.113.9"
+        now = datetime.now(timezone.utc)
+        svc._login_attempts[attacker_ip] = [
+            now - timedelta(minutes=5),
+            now - timedelta(minutes=3),
+        ]
+
+        for i in range(20):
+            svc._login_attempts[f"filler-ip-{i}"] = [now]
+
+        assert len(svc._login_attempts) > svc._MAX_TRACKING_KEYS
+
+        # Call 1 (3rd failed attempt): attacker_ip is the batch-eviction
+        # target; the alert correctly fires at the threshold of 3.
+        alert1 = await svc.detect_brute_force(_db(), attacker_ip, success=False)
+        assert alert1 is not None
+        assert alert1.details["failed_attempts"] == 3
+        assert len(svc._login_attempts) <= svc._MAX_TRACKING_KEYS
+
+        # Call 2 (4th failed attempt, same attacker): asserts the count keeps
+        # accumulating rather than resetting. Passes against 95db016b too --
+        # detect_brute_force already writes attacker_ip's filtered window
+        # back to the dict in the same statement block that reads it,
+        # *before* calling _enforce_key_caps(), so this call's own entry is
+        # always the freshest in the tracker and cannot be evicted by its
+        # own call's eviction pass. Kept as a regression guard: the fix below
+        # moves the write to run after cap enforcement so this holds by
+        # construction, not by that ordering coincidence.
+        alert2 = await svc.detect_brute_force(_db(), attacker_ip, success=False)
+        assert alert2 is not None, (
+            "brute-force alert did not fire on the second call -- the "
+            "tracker lost the attacker ip's history after the first call's "
+            "alert fired"
+        )
+        assert alert2.details["failed_attempts"] == 4
+
+    async def test_data_exfiltration_second_transfer_after_batch_eviction_still_sums(
+        self,
+    ):
+        svc = _svc()
+        svc._MAX_TRACKING_KEYS = 10
+        svc.thresholds.large_data_export_mb = 10
+
+        victim_user = "victim-user"
+        now = datetime.now(timezone.utc)
+        mb = 1024 * 1024
+        svc._data_transfers[victim_user] = [
+            (15 * mb, now - timedelta(minutes=10)),
+            (15 * mb, now - timedelta(minutes=7)),
+            (15 * mb, now - timedelta(minutes=5)),
+        ]
+
+        for i in range(20):
+            svc._data_transfers[f"filler-user-{i}"] = [(1, now)]
+
+        assert len(svc._data_transfers) > svc._MAX_TRACKING_KEYS
+
+        # Call 1: victim_user is the batch-eviction target. 45MB prior +
+        # 10MB this call = 55MB, correctly over the 50MB cumulative
+        # threshold -- the alert fires.
+        alert1 = await svc.detect_data_exfiltration(
+            db=_db(),
+            user_id=victim_user,
+            data_size_bytes=10 * mb,
+            endpoint="/api/v1/some/export",
+            ip_address="203.0.113.5",
+        )
+        assert alert1 is not None
+        assert alert1.details["total_24h_mb"] == pytest.approx(55.0)
+        assert len(svc._data_transfers) <= svc._MAX_TRACKING_KEYS
+
+        # Call 2: another 10MB transfer from the same user, asserting the
+        # 24h total keeps accumulating rather than resetting. Passes against
+        # 95db016b too -- detect_data_exfiltration already writes
+        # victim_user's filtered window back to the dict in the same
+        # statement block that reads it, *before* calling
+        # _enforce_key_caps(), so this call's own entry is always the
+        # freshest in the tracker and cannot be evicted by its own call's
+        # eviction pass. Kept as a regression guard: the fix below moves the
+        # write to run after cap enforcement so this holds by construction,
+        # not by that ordering coincidence.
+        alert2 = await svc.detect_data_exfiltration(
+            db=_db(),
+            user_id=victim_user,
+            data_size_bytes=10 * mb,
+            endpoint="/api/v1/some/export",
+            ip_address="203.0.113.5",
+        )
+        assert alert2 is not None, (
+            "cumulative data-exfiltration alert did not fire on the second "
+            "call -- the tracker lost the victim user's transfer history "
+            "after the first call's alert fired"
+        )
+        assert alert2.details["total_24h_mb"] == pytest.approx(65.0)
+        assert alert2.details["transfer_count"] == 5
+
+    async def test_rate_limit_second_call_after_batch_eviction_still_counts(self):
+        svc = _svc()
+        svc._MAX_TRACKING_KEYS = 10
+        svc.thresholds.api_calls_per_minute = 2
+
+        victim_ip = "203.0.113.9"
+        now = datetime.now(timezone.utc)
+        svc._api_calls[victim_ip] = [
+            now - timedelta(seconds=30),
+            now - timedelta(seconds=20),
+        ]
+
+        for i in range(20):
+            svc._api_calls[f"filler-ip-{i}"] = [datetime.now(timezone.utc)]
+
+        assert len(svc._api_calls) > svc._MAX_TRACKING_KEYS
+
+        # Call 1 (3rd call): victim_ip is the batch-eviction target. The
+        # alert correctly fires: 3 calls > the threshold of 2.
+        alert1 = await svc._check_rate_limit(_db(), victim_ip, "u1")
+        assert alert1 is not None
+        assert alert1.details["calls_per_minute"] == 3
+        assert len(svc._api_calls) <= svc._MAX_TRACKING_KEYS
+
+        # Call 2 (4th call, same ip), asserting the count keeps accumulating
+        # rather than resetting. Passes against 95db016b too --
+        # _check_rate_limit already writes victim_ip's filtered window back
+        # to the dict in the same statement block that reads it, *before*
+        # calling _evict_stale_tracking_keys() -> _enforce_key_caps(), so
+        # this call's own entry is always the freshest in the tracker and
+        # cannot be evicted by its own call's eviction pass. Kept as a
+        # regression guard: the fix below moves the write to run after
+        # eviction so this holds by construction, not by that ordering
+        # coincidence.
+        alert2 = await svc._check_rate_limit(_db(), victim_ip, "u1")
+        assert alert2 is not None, (
+            "rate-limit alert did not fire on the second call -- the "
+            "tracker lost the victim ip's call history after the first "
+            "call's alert fired"
+        )
+        assert alert2.details["calls_per_minute"] == 4
+        assert alert2.details["threshold"] == 2
+
+
+class TestSessionHijackTrustedBaseline:
+    """PR #2132 round 6 (Codex): round 5 (commit 90e373cc) made
+    detect_session_hijack's tracker write unconditional -- including on the
+    alert path -- to fix a real write-after-evict bug (see
+    TestWriteAfterEvictOrdering above). But it wrote `current_ip` itself
+    back as the new comparison baseline on *every* call, alert or not. That
+    silently promoted the attacker's own IP into the session's "known IPs"
+    history: the very next request from that same attacker IP then matched
+    an IP already on file for the session and fired no alert at all, so an
+    ongoing hijack was detected exactly once and then went silent.
+
+    Confirmed absent from every version of this method before round 5: the
+    original implementation (pre PR #2128) and every round-1-through-4
+    revision `return alert` immediately inside the "IP changed within 5
+    minutes" branch, *before* ever reaching the tracker-append line -- so
+    the attacker's IP was never written back on the alert path at all, and
+    the pre-hijack IP stayed the comparison baseline by construction. This
+    is not a pre-existing gap the eviction-fix rounds' scrutiny happened to
+    surface; it is new in round 5, introduced by the specific mechanics of
+    that fix (removing the early return to guarantee the tracker is always
+    rewritten, without distinguishing "rewrite the audit log" from
+    "promote this call's IP to trusted").
+
+    The fix separates the two: `_session_ips` remains a full observed-IP
+    log (every call, including alerting ones, for audit/forensics) and a
+    new `_session_trusted_ip` tracker holds only the IP a hijack decision is
+    actually compared against, which is deliberately *not* advanced to an
+    IP that itself just triggered an alert.
+    """
+
+    async def test_repeated_attacker_ip_keeps_alerting(self):
+        """The exact sequence Codex's review comment describes: a trusted
+        IP, an attacker IP that fires the first alert, then the SAME
+        attacker IP again. Against 90e373cc, the second attacker call finds
+        its own IP already recorded as "last seen" (written back by the
+        first call) and returns None -- no second alert for an ongoing
+        hijack.
+        """
+        svc = _svc()
+
+        session_id = "victim-session"
+        db = _db()
+
+        # Call 1: establishes the trusted baseline, no alert (first-ever
+        # observation for this session).
+        alert1 = await svc.detect_session_hijack(
+            db,
+            session_id=session_id,
+            current_ip="1.1.1.1",
+            user_agent="ua",
+            user_id="u1",
+        )
+        assert alert1 is None
+
+        # Call 2: a different (attacker) IP, well within the 5-minute
+        # window -- fires the hijack alert.
+        alert2 = await svc.detect_session_hijack(
+            db,
+            session_id=session_id,
+            current_ip="6.6.6.6",
+            user_agent="ua",
+            user_id="u1",
+        )
+        assert alert2 is not None
+        assert alert2.details["previous_ip"] == "1.1.1.1"
+        assert alert2.details["current_ip"] == "6.6.6.6"
+
+        # Call 3: the SAME attacker IP as call 2. Must also alert -- this is
+        # the exact silencing behavior Codex found: 90e373cc returns None
+        # here because call 2 wrote "6.6.6.6" back as the trusted IP, so
+        # call 3 sees no change.
+        alert3 = await svc.detect_session_hijack(
+            db,
+            session_id=session_id,
+            current_ip="6.6.6.6",
+            user_agent="ua",
+            user_id="u1",
+        )
+        assert alert3 is not None, (
+            "session-hijack alert did not fire on the third call, even "
+            "though it is the same attacker IP from the second (alerting) "
+            "call -- the attacker's IP was silently promoted to the "
+            "session's trusted baseline after the first alert"
+        )
+        assert alert3.details["previous_ip"] == "1.1.1.1"
+        assert alert3.details["current_ip"] == "6.6.6.6"
+
+    async def test_legitimate_ip_returning_after_attacker_ip_does_not_alert(self):
+        """Full four-step trace: trusted IP A, attacker IP B (alerts),
+        attacker IP B again (must still alert, per the test above), then
+        legitimate IP A again -- must NOT alert. A's return must not look
+        like a hijack just because B was interleaved, which it would if B
+        had been promoted to the baseline at any point in the sequence.
+        """
+        svc = _svc()
+        session_id = "victim-session"
+        db = _db()
+
+        alert1 = await svc.detect_session_hijack(
+            db,
+            session_id=session_id,
+            current_ip="1.1.1.1",
+            user_agent="ua",
+            user_id="u1",
+        )
+        assert alert1 is None
+
+        alert2 = await svc.detect_session_hijack(
+            db,
+            session_id=session_id,
+            current_ip="6.6.6.6",
+            user_agent="ua",
+            user_id="u1",
+        )
+        assert alert2 is not None
+
+        alert3 = await svc.detect_session_hijack(
+            db,
+            session_id=session_id,
+            current_ip="6.6.6.6",
+            user_agent="ua",
+            user_id="u1",
+        )
+        assert alert3 is not None
+
+        # Call 4: the original, legitimate IP returns.
+        alert4 = await svc.detect_session_hijack(
+            db,
+            session_id=session_id,
+            current_ip="1.1.1.1",
+            user_agent="ua",
+            user_id="u1",
+        )
+        assert alert4 is None, (
+            "the legitimate IP's return was flagged as a hijack -- the "
+            "trusted baseline must have stayed pinned at '1.1.1.1' "
+            "throughout, not drifted to the attacker IP '6.6.6.6' seen in "
+            "between"
+        )
+
+
+class TestSessionHijackLeniencyWindow:
+    """PR #2132 round 7 (Codex): round 6 (commit 56620c9e) correctly
+    stopped the attacker's IP from replacing the trusted IP on the alert
+    path, but left the trusted entry's TIMESTAMP pinned to whenever the
+    trusted IP was last CONFIRMED-good. That stored timestamp is exactly
+    what `time_diff < 300` reads on the *next* call to decide "alert or
+    lenient" -- so under continuous attacker traffic, real wall-clock time
+    keeps advancing on every call while the stored timestamp does not.
+    Once enough real time elapses since the trusted IP's ORIGINAL
+    confirmation (not since this session was last evaluated), `time_diff`
+    crosses 300s on some later attacker call, and the method's own "IP
+    changed but it's been a while, probably roaming" leniency (meant for a
+    session that genuinely went idle) silently takes over: no alert fires,
+    and the default path then promotes the attacker's now-longstanding IP
+    to trusted -- purely because enough time passed while the attacker was
+    the only one using the session.
+
+    The fix refreshes the trusted entry's timestamp to `now` on every
+    call, alert or not (the IP itself still only changes on a non-alert
+    call, per round 6) -- so `time_diff` always measures the gap since
+    this session was last evaluated, not since the last legitimate
+    sighting. A continuously-attacked session never accumulates elapsed
+    time toward the leniency window; a genuinely idle session still earns
+    it, because nothing refreshes the timestamp while no calls occur.
+    """
+
+    async def test_continuous_attacker_traffic_never_earns_the_leniency_window(
+        self, monkeypatch
+    ):
+        """The exact bypass Codex found: attacker IP B alerts at t=0, then
+        keeps calling every minute through t=10min. Every one of those
+        calls must still alert -- none may be silently waved through just
+        because 5+ minutes have passed since B's *first* call -- and the
+        trusted baseline must still be the legitimate IP A when it
+        returns at t=11min.
+        """
+        svc = _svc()
+        session_id = "victim-session"
+        db = _db()
+        key = f"session:{session_id}"
+
+        clock = _FrozenClock(datetime(2026, 1, 1, tzinfo=timezone.utc))
+        _install_fake_now(monkeypatch, clock)
+
+        # t=0: trusted IP A establishes the baseline, no alert (first-ever
+        # observation for this session).
+        alert = await svc.detect_session_hijack(
+            db,
+            session_id=session_id,
+            current_ip="1.1.1.1",
+            user_agent="ua",
+            user_id="u1",
+        )
+        assert alert is None
+
+        # Attacker IP B hits the session every minute from t=+1min through
+        # t=+10min. Each individual gap between consecutive calls is only
+        # 60s (well under the 300s threshold), but cumulative real elapsed
+        # time since the t=0 confirmation crosses 300s partway through --
+        # against the pre-fix code, that is what wrongly silences the
+        # alert.
+        for minute in range(1, 11):
+            clock.advance(timedelta(minutes=1))
+            alert = await svc.detect_session_hijack(
+                db,
+                session_id=session_id,
+                current_ip="6.6.6.6",
+                user_agent="ua",
+                user_id="u1",
+            )
+            assert alert is not None, (
+                f"attacker call at t=+{minute}min was silently waved "
+                "through with no alert -- the trusted entry's timestamp "
+                "was not refreshed on the alert path, so elapsed "
+                "wall-clock time since the ORIGINAL trusted-IP "
+                "confirmation wrongly satisfied the 5-minute leniency "
+                "window even though the session has been under "
+                "continuous attack, not idle"
+            )
+            assert alert.details["previous_ip"] == "1.1.1.1"
+            assert alert.details["current_ip"] == "6.6.6.6"
+
+        # After ten straight minutes of attacker traffic, the trusted
+        # baseline must still be the legitimate IP -- never promoted to
+        # the attacker's.
+        trusted_ip, _ = svc._session_trusted_ip[key][-1]
+        assert trusted_ip == "1.1.1.1", (
+            "the attacker's IP was silently promoted to the trusted "
+            "baseline once enough wall-clock time passed"
+        )
+
+        # t=+11min: the legitimate IP returns. It matches the (still
+        # preserved) trusted IP, so this must NOT alert.
+        clock.advance(timedelta(minutes=1))
+        final_alert = await svc.detect_session_hijack(
+            db,
+            session_id=session_id,
+            current_ip="1.1.1.1",
+            user_agent="ua",
+            user_id="u1",
+        )
+        assert final_alert is None, (
+            "the legitimate IP's return after sustained attacker traffic "
+            "was itself flagged as a hijack"
+        )
+
+    async def test_genuinely_idle_session_still_gets_the_leniency_on_return(
+        self, monkeypatch
+    ):
+        """The leniency window's original purpose must survive the fix: a
+        session with NO activity at all (neither legitimate nor attacker)
+        for 5+ minutes, followed by a legitimate IP change (e.g. the user
+        roamed onto a new network), must still be treated as non-suspicious.
+        """
+        svc = _svc()
+        session_id = "victim-session"
+        db = _db()
+
+        clock = _FrozenClock(datetime(2026, 1, 1, tzinfo=timezone.utc))
+        _install_fake_now(monkeypatch, clock)
+
+        alert = await svc.detect_session_hijack(
+            db,
+            session_id=session_id,
+            current_ip="1.1.1.1",
+            user_agent="ua",
+            user_id="u1",
+        )
+        assert alert is None
+
+        # Ten idle minutes: nobody touches the session at all.
+        clock.advance(timedelta(minutes=10))
+
+        # The same user returns from a new IP (e.g. switched networks).
+        alert = await svc.detect_session_hijack(
+            db,
+            session_id=session_id,
+            current_ip="9.9.9.9",
+            user_agent="ua",
+            user_id="u1",
+        )
+        assert alert is None, (
+            "a legitimate IP change after a genuine 10-minute idle gap "
+            "with no intervening activity was flagged as a hijack -- the "
+            "leniency window this fix preserves exists exactly for this "
+            "case"
+        )
+
+
+class TestSessionHijackConcurrentInterleaving:
+    """PR #2132 round 9 (Codex): `detect_session_hijack` is `async def` and,
+    on the alert-firing path, awaits `log_audit_event()` before writing its
+    decision back to `_session_trusted_ip` / `_session_ips`. Those trackers
+    live on the module-level `security_monitor` singleton
+    (`app/services/security_monitoring.py`) that every authenticated request
+    shares via the ASGI middleware (`security_middleware.py`), and this SPA
+    routinely fires several concurrent API calls carrying the same session
+    cookie -- so two concurrent calls for the SAME session_id are an
+    ordinary occurrence, not just an attacker replaying a stolen cookie.
+
+    While one call (A) is suspended inside that await, a second call (B) for
+    the same session can run its own read-decide-write cycle to completion.
+    When A resumes, it was still holding its OWN pre-await snapshot of
+    `session_data` and its own locally-computed `new_trusted_ip` /
+    `new_trusted_time` -- so its write overwrites B's, erasing B's forensic
+    log entry and (since A's `now` was captured before B's) potentially
+    moving the trusted-IP timestamp backward.
+
+    The fix moves both tracker writes to before the alert-dispatch awaits,
+    matching this file's own established pattern in `_check_rate_limit`,
+    `detect_brute_force`, and `detect_data_exfiltration`, all three of which
+    already write their tracker state before doing anything that awaits.
+    That leaves no await between this method's read and its write, so there
+    is nothing left for a concurrent call to interleave with.
+    """
+
+    async def test_concurrent_calls_do_not_clobber_each_others_write(self, monkeypatch):
+        svc = _svc()
+        db = _db()
+        session_id = "sess-race"
+        key = f"session:{session_id}"
+
+        baseline_time = datetime.now(timezone.utc)
+        svc._session_trusted_ip[key] = [("10.0.0.1", baseline_time)]
+        svc._session_ips[key] = [("10.0.0.1", baseline_time)]
+
+        a_reached_await = asyncio.Event()
+        release_a = asyncio.Event()
+
+        async def _stalling_log_audit_event(*args, **kwargs):
+            # Stands in for the real DB-I/O await inside log_audit_event.
+            # Only call A ever reaches this (B's IP change is legitimate --
+            # outside the 5-minute window -- and never fires an alert).
+            a_reached_await.set()
+            await release_a.wait()
+
+        monkeypatch.setattr(
+            "app.services.security_monitoring.log_audit_event",
+            _stalling_log_audit_event,
+        )
+
+        async def call_a():
+            # "Attacker" / second-IP request: within the 5-minute window,
+            # fires the hijack alert and stalls mid-dispatch.
+            return await svc.detect_session_hijack(
+                db,
+                session_id=session_id,
+                current_ip="10.0.0.2",
+                user_agent="ua",
+                user_id="u1",
+            )
+
+        async def call_b():
+            # Runs while A is suspended. Move the recorded trusted-IP
+            # timestamp back so B's own read of the (still pre-A-write)
+            # baseline falls outside the 5-minute hijack window -- B is a
+            # legitimate, non-alerting IP change (e.g. mobile network
+            # handoff), not a second attacker.
+            await a_reached_await.wait()
+            ip, ts = svc._session_trusted_ip[key][-1]
+            svc._session_trusted_ip[key] = [(ip, ts - timedelta(minutes=10))]
+            result = await svc.detect_session_hijack(
+                db,
+                session_id=session_id,
+                current_ip="10.0.0.3",
+                user_agent="ua",
+                user_id="u1",
+            )
+            release_a.set()
+            return result
+
+        alert_a, alert_b = await asyncio.gather(call_a(), call_b())
+
+        assert alert_a is not None, "call A's hijack alert should have fired"
+        assert alert_b is None, "call B's legitimate IP change should not alert"
+
+        final_ip, _final_ts = svc._session_trusted_ip[key][-1]
+        assert final_ip == "10.0.0.3", (
+            "call A's stale post-await write clobbered call B's legitimate "
+            "trusted-IP update made while A was suspended"
+        )
+
+        observed_ips = [ip for ip, _ in svc._session_ips[key]]
+        assert "10.0.0.3" in observed_ips, (
+            "call B's observed-IP entry was erased from the forensic log by "
+            "call A's stale post-await write"
+        )
 
 
 class TestReportPrivilegeEscalation:

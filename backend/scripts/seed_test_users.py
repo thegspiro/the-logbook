@@ -17,17 +17,16 @@ from datetime import date
 # Add backend to path so we can import app modules
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
-from sqlalchemy.orm import sessionmaker
-
-from app.core.utils import generate_uuid
-
 # ---------------------------------------------------------------------------
 # Password hashing — we use argon2 directly to avoid pulling in the full
 # app.core.security module (which requires env vars for encryption keys).
 # ---------------------------------------------------------------------------
 from argon2 import PasswordHasher
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+from sqlalchemy.orm import sessionmaker
+
+from app.core.utils import generate_uuid
 
 _hasher = PasswordHasher(
     time_cost=3,

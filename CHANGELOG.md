@@ -7,6 +7,166 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### A concurrent request for the same session could silently erase another request's session-hijack tracking data (2026-09-01)
+
+**Fixed**
+
+- **`detect_session_hijack` awaited the audit-log write and alert dispatch
+  BEFORE writing its decision back to the in-memory session trackers, and
+  those trackers are shared by every request through a single process-wide
+  security-monitoring instance.** This app's frontend routinely fires
+  several concurrent API calls under one session cookie (parallel data
+  fetches on page load), so two concurrent requests for the same session
+  were ordinary, not rare. When one such request's IP-change check fired a
+  hijack alert, it would suspend mid-request to log the alert to the
+  database — and if a second concurrent request for the same session
+  finished its own (legitimate) update to the tracker while the first was
+  suspended, the first request would resume and overwrite the second
+  request's update with its own, now-stale snapshot: silently erasing an
+  entry from the session's forensic IP history and, in some orderings,
+  moving the trusted-IP baseline's recorded time backward. Neither
+  request's own alert-or-not decision was affected — only the tracker data
+  used to evaluate the _next_ request for that session. Fixed by writing
+  the tracker state before dispatching the alert (matching the order this
+  file's three other tracking methods already used), so there is no longer
+  a gap in which a concurrent request's update can be silently discarded. 1
+  new regression test drives two genuinely concurrent requests for the same
+  session, one deliberately stalled mid-dispatch while the other completes,
+  and confirms the completed request's update survives; verified to fail
+  against the prior commit and pass after the fix.
+
+### A session-hijack alert could be silently waved through once enough real time passed, even under continuous attack (2026-09-01)
+
+**Fixed**
+
+- **The trusted-IP fix below (`detect_session_hijack`) correctly stopped an
+  alerting call from promoting the attacker's IP as the new trusted
+  baseline, but left that entry's stored TIMESTAMP unrefreshed on the same
+  path — and that timestamp is exactly what the method's own 5-minute
+  "IP changed, but it's been a while, probably roaming" leniency check
+  reads.** Under continuous attacker traffic, the stored timestamp stayed
+  pinned to whenever the trusted IP was last legitimately seen, while real
+  wall-clock time kept advancing on every subsequent attacker request —
+  so once enough time elapsed since that original sighting (regardless of
+  how many attacker requests happened in between), the leniency check
+  wrongly concluded the session must have gone idle, stopped alerting, and
+  silently promoted the attacker's now-longstanding IP to trusted. Fixed by
+  refreshing the stored timestamp to the current time on every call — alert
+  or not — while still leaving the trusted IP itself unchanged on the alert
+  path. The stored timestamp now means "the last time this session was
+  evaluated, by any IP," so the leniency window measures the gap since the
+  last time the session was looked at, not since its last legitimate
+  sighting — a continuously-attacked session never accumulates elapsed time
+  toward the leniency window, while a genuinely idle session (no requests
+  from anyone for 5+ minutes) still earns it exactly as before. 2 new
+  regression tests simulate ten minutes of continuous attacker traffic
+  (asserting every request still alerts and the legitimate IP's return is
+  still correctly recognized) and a genuinely idle 10-minute gap followed by
+  a legitimate IP change (asserting that case still does not alert); both
+  verified against the prior fix's commit.
+
+### A session-hijack alert silenced itself after firing once, because its own fix trusted the attacker's IP (2026-09-01)
+
+**Fixed**
+
+- **The write-after-evict fix below (`detect_session_hijack`) closed a real
+  gap but introduced a new one: on the path where a hijack alert fired, it
+  wrote the _attacker's_ IP back as the tracker's newest entry, and the next
+  comparison read only that newest entry.** So the very next request from
+  the same attacker IP compared its own IP against itself, found no change,
+  and returned no alert — an ongoing hijack was detected exactly once, then
+  went silent for as long as the attacker kept reusing the one IP. This bug
+  did not exist in any version of the method before that fix: every prior
+  revision returned immediately on the alert path, before ever reaching the
+  line that wrote the current IP back, so the tracker kept the pre-hijack IP
+  as the comparison baseline and a repeat attacker IP correctly re-alerted.
+  Fixed by splitting the full observed-IP audit log (unchanged — every
+  request is still recorded, attacker IPs included, for forensics) from a
+  new, separate tracker holding only the IP a hijack decision is actually
+  compared against. That trusted tracker advances to the current IP after a
+  call that does not fire an alert (a first observation, a matching IP, or
+  an IP change slow enough not to be flagged as suspicious) but is
+  deliberately left unchanged after a call that does — so an IP that just
+  triggered an alert is never promoted to "known good," and the same
+  attacker IP keeps triggering the alert on every subsequent request, while
+  a legitimate IP returning after an attacker IP was seen in between is
+  still correctly recognized and not flagged. 2 new regression tests
+  reproduce the exact silencing behavior (including the legitimate-IP-
+  returns case) and are verified to fail before this fix and pass after.
+
+### An evicted session lost its hijack baseline right after correctly firing its first alert (2026-09-01)
+
+**Fixed**
+
+- **The read-before-evict fix below (`detect_session_hijack` and three other
+  methods) was necessary but not sufficient: it protected the alert decision
+  on the call that fired, but nothing wrote that call's own contribution
+  back into the tracker afterward.** If the session's key was also this
+  call's batch-eviction target, `detect_session_hijack` correctly detected
+  the IP change and raised the `session_hijack` alert (using the protected
+  pre-eviction read) — but then returned without ever recording this call's
+  own IP, because the write only ran on the no-alert path. The tracker was
+  left holding no entry at all for that session. The very next request from
+  the same hijacked session found no baseline, was scored as a first-ever
+  observation, and no further alerts fired for an attack that was still
+  ongoing. Fixed by always rebuilding the session's tracker entry from its
+  pre-eviction history plus this call's own IP, regardless of which path was
+  taken — the tracker now always ends a call holding a live entry for the
+  session, so the next call has a real baseline. The same defensive
+  restructuring (write the current call's contribution back to the tracker
+  after eviction runs, not before) was applied to the other three affected
+  methods (`_check_rate_limit`, `detect_brute_force`,
+  `detect_data_exfiltration`) for consistency, though those three were
+  verified not to be exploitable the same way — they already wrote before
+  evicting, which incidentally protected them. 4 new regression tests
+  (including a three-call chain for the session-hijack case) reproduce the
+  exact failure shape and are verified to fail before this fix and pass
+  after.
+
+### Rate-limit alerts could also silently skip under tracker churn (2026-09-01)
+
+**Fixed**
+
+- **The same read-after-evict shape below (`detect_session_hijack`/
+  `detect_brute_force`/`detect_data_exfiltration`) was also present in
+  `_check_rate_limit`, missed by that fix.** It evicted stale tracking keys
+  before reading/appending to the current IP's call history rather than
+  after, via a different code path than the other three methods
+  (`_evict_stale_tracking_keys()` rather than a direct call to the shared
+  cap-enforcement helper) — which is why a review of the other three did not
+  also catch this one. If the requesting IP happened to be the
+  least-recently-active key in an over-capacity tracker, its prior calls
+  were evicted before the current request was counted, undercounting the
+  request as the first call from that IP and silently skipping a rate-limit
+  alert it should have raised. Fixed the same way: the current call is
+  captured into a local variable before eviction runs, so a same-call
+  eviction can no longer erase the count the alert decision depends on. 1
+  new regression test reproduces the exact failure shape and is verified to
+  fail before this fix and pass after.
+
+### Session-hijack/brute-force/data-exfiltration alerts could silently skip under tracker churn (2026-09-01)
+
+**Fixed**
+
+- **A regression in the same-day tracker-cap fix below could suppress a real
+  security alert.** That fix made `detect_session_hijack` (and, for the same
+  reason, `detect_data_exfiltration`) run cap-enforcement on entry, before
+  the method read its own tracker's prior entry for the session/user being
+  checked. If that exact entry happened to be evicted in the same call —
+  plausible under the sustained request churn the cap exists to survive —
+  the method found no prior history, silently treated an ongoing session
+  hijack as a first-ever observation, and never raised the alert.
+  `detect_brute_force` had the identical shape since the cap was first
+  introduced (predating the same-day fix) and undercounted failed-login
+  attempts the same way. This landed on `main` unfixed for a window between
+  the prior fix's merge and this one. Fixed by having each method capture
+  its own tracker read into a local variable before cap-enforcement runs, so
+  a same-call eviction can no longer erase the data the alert decision
+  depends on. 3 new regression tests reproduce the exact failure shape
+  (tracker filled above its cap with the affected session/IP/user as the
+  single oldest entry) and are verified to fail before this fix and pass
+  after.
+
 ### Security monitoring trackers are capped on every write path (2026-09-01)
 
 **Fixed**

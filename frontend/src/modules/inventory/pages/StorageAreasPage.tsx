@@ -217,6 +217,7 @@ const TreeRow: React.FC<TreeRowProps> = ({
     <>
       <div
         data-storage-area-row={node.id}
+        data-testid="storage-area-row"
         className={`hover:bg-theme-surface-hover active:bg-theme-surface-hover group flex w-full items-center gap-2 rounded-lg px-3 py-2.5 transition-colors ${
           isDesktop ? '' : 'border-theme-surface-border border-l-2'
         }`}
@@ -244,6 +245,7 @@ const TreeRow: React.FC<TreeRowProps> = ({
             className="text-theme-text-primary block truncate text-sm font-medium"
             title={pathLabel}
             aria-label={pathLabel}
+            data-testid="storage-area-row-path"
           >
             <span aria-hidden="true">
               {isDesktop ? (
