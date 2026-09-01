@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Rate-limit alerts could also silently skip under tracker churn (2026-09-01)
+
+**Fixed**
+
+- **The same read-after-evict shape below (`detect_session_hijack`/
+  `detect_brute_force`/`detect_data_exfiltration`) was also present in
+  `_check_rate_limit`, missed by that fix.** It evicted stale tracking keys
+  before reading/appending to the current IP's call history rather than
+  after, via a different code path than the other three methods
+  (`_evict_stale_tracking_keys()` rather than a direct call to the shared
+  cap-enforcement helper) — which is why a review of the other three did not
+  also catch this one. If the requesting IP happened to be the
+  least-recently-active key in an over-capacity tracker, its prior calls
+  were evicted before the current request was counted, undercounting the
+  request as the first call from that IP and silently skipping a rate-limit
+  alert it should have raised. Fixed the same way: the current call is
+  captured into a local variable before eviction runs, so a same-call
+  eviction can no longer erase the count the alert decision depends on. 1
+  new regression test reproduces the exact failure shape and is verified to
+  fail before this fix and pass after.
+
 ### Session-hijack/brute-force/data-exfiltration alerts could silently skip under tracker churn (2026-09-01)
 
 **Fixed**

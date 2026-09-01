@@ -16,18 +16,22 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**Feature 00 (Cross-cutting baseline), pass 3, round 3 follow-up** —
+**Feature 00 (Cross-cutting baseline), pass 3, round 3+4 follow-up** —
 [#2132](https://github.com/thegspiro/the-logbook/pull/2132), branch
 `claude/security-review-sec00-pass3-round3-fix`.
 [#2128](https://github.com/thegspiro/the-logbook/pull/2128) (rounds 1–2)
 **merged to `main` at commit `2b3231a3`** before Codex's round-3 review
-landed, so round 3's fixes are a **separate PR**, not a further push to
-`claude/security-review-sec00-pass3` — per Pitfall #24 ("Do Not Reuse a
-Branch Name After Its Pull Request Merges"), that branch's remote ref is
-gone and its PR is closed. See the round-3 log entry below for what Codex
-found this time, including a real regression (not just a gap) in round 2's
-own fix that shipped to `main` unfixed for a window — the timeline matters
-here, not just the diff, so read that entry rather than only the summary.
+landed, so round 3 (and this PR's own round 4) are pushed to a **separate
+PR**, not a further push to `claude/security-review-sec00-pass3` — per
+Pitfall #24 ("Do Not Reuse a Branch Name After Its Pull Request Merges"),
+that branch's remote ref is gone and its PR is closed. See the round-3 and
+round-4 log entries below for what Codex found each time, including a real
+regression (not just a gap) in round 1's own ordering that shipped to `main`
+unfixed for a window, and — round 4 — the **same regression shape found a
+fourth time**, in a method round 3's own "checked every method" pass missed,
+plus a correction to this file's own (and `SEC-00`'s) prior misattribution of
+which round introduced the bug. The timeline matters here, not just the
+diff, so read those entries rather than only the summary.
 
 **Prior rounds on #2128 (now merged), for reference:** re-verified pass 1/2's
 five standing sweeps against current code (399 Alembic revisions, 1536
@@ -45,13 +49,120 @@ eviction on a genuine hot path (a full `O(n log n)` sort of the tracker on
 every call once saturated, not just when the cap was first hit) and a fifth
 tracker (`_external_endpoints`, a `set()`) that the fix's own
 cap-enforcement helper never touched at all, left capped only by a dead code
-path. Both fixed. See `SEC-00-cross-cutting-baseline.md`'s Pass 3 section for
-the full write-up of every correction across all three rounds.
+path. Both fixed. **Round 4** found the identical read-after-evict shape in a
+fourth method (`_check_rate_limit`) that round 3's own "checked every method"
+pass missed, and corrected this file's (and `SEC-00`'s) misattribution of the
+regression's origin to round 2 — it was round 1. See
+`SEC-00-cross-cutting-baseline.md`'s Pass 3 section for the full write-up of
+every correction across all four rounds.
 
 A duplicate close-out PR, [#2119](https://github.com/thegspiro/the-logbook/pull/2119),
 was opened against round 1's now-stale base (before round 2/3 landed) and
 closed without merging — merging it would have overwritten this section
 with round-1-only text and dropped the round 2/3 record.
+
+---
+
+### 2026-09-01 — Feature 00 (Cross-cutting baseline, pass 3) — Codex round 4: the same false-negative-alerting bug found a fourth time, plus an attribution correction
+
+**Four rounds of Codex review on this same file's tracker-cap sweep now,
+across two PRs (#2128, #2132). Said plainly rather than folded into "more
+polish": round 1 fixed a real gap, round 2 fixed two gaps in round 1's own
+fix, round 3 fixed a false-negative-alerting regression that (per this
+round's own correction, below) actually dated to round 1, and round 4 —
+this entry — found the _identical_ bug shape a fourth time, in a method
+round 3's own explicit "checked every method, not just the one Codex named"
+pass did not catch.** That pattern — a "complete" audit missing a same-shaped
+instance three rounds running — is the headline finding of this round, not a
+footnote to it.
+
+**Finding 1 (P2, real bug): `_check_rate_limit` had the same read-after-evict
+ordering bug as the three methods round 3 fixed.** It calls
+`self._evict_stale_tracking_keys()` (which calls `self._enforce_key_caps()`
+internally) as its first statement, before reading or appending to
+`self._api_calls[ip]` — the identical shape Codex found in
+`detect_session_hijack`/`detect_data_exfiltration`/`detect_brute_force` last
+round. When `_api_calls` is over its key cap and the current IP is the
+least-recently-active key (e.g. it already has calls toward the threshold),
+eviction deletes its history before the append, the request is undercounted
+as call #1, and no `rate_limit_exceeded` alert fires. Reproduced by Codex
+with a 10-key cap, the victim IP holding 2 prior calls toward a 3-call
+threshold as the oldest tracker entry, and 20 newer filler IPs.
+
+Likely missed by round 3 because `_check_rate_limit` evicts through
+`_evict_stale_tracking_keys()` (a wrapper that also runs the throttled
+time-based sweep) rather than a direct `_enforce_key_caps()` call the way the
+other three methods do — a review scanning for direct `_enforce_key_caps()`
+call sites would not have surfaced it.
+
+**Fixed the same way as round 3:** the current call is appended and the
+filtered 1-minute window is captured into a local variable (`calls`) before
+`_evict_stale_tracking_keys()` runs; every subsequent read (threshold check,
+alert details) uses that local variable. 1 new regression test,
+`test_rate_limit_alert_survives_batch_eviction_of_the_victim_ip` in
+`TestReadBeforeEvictOrdering`, verified to **fail** against the pre-round-4
+code and **pass** after; `test_security_monitoring.py` **18/18**, up from 17.
+
+**Final exhaustive audit performed this round, not skipped:** every method
+that reads any of the five in-memory trackers for a specific key _and_ has an
+eviction call anywhere in its own body was listed and individually checked.
+Five methods have that shape (`_check_rate_limit`, `detect_brute_force`'s two
+branches, `detect_session_hijack`, `detect_data_exfiltration`); all five are
+now correctly ordered, and no other method in the file calls either eviction
+function. See `SEC-00-cross-cutting-baseline.md`'s round-4 write-up for the
+full table.
+
+**Finding 2 (P2, doc accuracy): the AST sweep script sweep 9 claimed was
+"checked into `docs/security-review/`" did not exist anywhere in the repo.**
+Confirmed via `git ls-tree`, `rg --files`, and `find` — no
+`json_column_ast_sweep.py` or equivalent, under `docs/` or anywhere else. This
+defeated the sweep's stated purpose: a future reviewer re-deriving the method
+by hand is exactly the failure mode that produced sweep 9's three prior
+miscounts (132 → wrong scope, wrong name list, structurally incomplete name
+list). **Fixed:** the script now exists at
+`backend/scripts/json_column_ast_sweep.py` (next to the project's other
+verification scripts, matching `backend/scripts/README.md`'s existing
+convention, rather than under `docs/`) and reproduces the claimed figures
+exactly — `python3 scripts/json_column_ast_sweep.py` prints **179 distinct
+attribute names, 230 `Column(...)` declarations referencing JSON** on the
+current tree. `SEC-00-cross-cutting-baseline.md` and `backend/scripts/
+README.md` both updated to reference the real path and command.
+
+**Finding 3 (P2, doc accuracy — historical-record correction): this file
+(and `SEC-00-cross-cutting-baseline.md`) misattributed the read-after-evict
+regression to round 2 (commit `df7438e0`).** Codex checked the actual
+commits; that attribution is wrong. `git show 3b6b65e4 --
+app/services/security_monitoring.py` shows round 1 is the commit that first
+added `self._enforce_key_caps()` to the top of `detect_session_hijack` and
+`detect_data_exfiltration`, before either method's own tracker read —
+predating round 2 entirely. `git show df7438e0 --
+app/services/security_monitoring.py` shows round 2 touches only
+`_enforce_key_caps()`'s internal eviction strategy (one-key-at-a-time →
+90%-of-cap batch) and folds in `_external_endpoints` capping; it does not
+add, move, or touch the call sites inside either affected method at all —
+their diffs in that commit are empty. The corrected framing: **introduced in
+round 1's `3b6b65e4`, widened (more keys evicted per over-cap call, raising
+the odds any given current key is caught) in round 2's `df7438e0`, fixed in
+round 3.** Every place in `SEC-00-cross-cutting-baseline.md` and this file
+that carried the round-2-only attribution has been corrected to this framing.
+Historical PR bodies on #2128/#2132 are left as the record of what was
+believed at the time rather than rewritten after the fact — this doc-level
+correction is the authoritative account going forward.
+
+**Completion gate (round 4 — full re-run):** `flake8`/`black --check`/
+`isort --check-only` clean on `app/ tests/ alembic/` (including the new
+`backend/scripts/json_column_ast_sweep.py`); `validate_migrations.py
+--strict` unchanged (399 revisions, single head, no migration touched);
+`pytest tests/ -m "not integration and not slow and not docker"` (matching
+CI's Backend Unit Tests invocation) all pass including
+`test_security_monitoring.py` **18/18**; `cd frontend && npm run typecheck`
+(aliased 7.0.2 compiler) 0 errors; `cd frontend && npm run lint` 0 errors, 0
+warnings. Files changed this round: `app/services/security_monitoring.py`
+(the `_check_rate_limit` reordering) and its test file;
+`backend/scripts/json_column_ast_sweep.py` (new) and `backend/scripts/
+README.md`; `docs/security-review/SEC-00-cross-cutting-baseline.md` and this
+file (attribution correction + script reference + this log entry);
+`CHANGELOG.md`. Same branch, same PR #2132.
 
 ---
 
@@ -61,20 +172,27 @@ with round-1-only text and dropped the round 2/3 record.
 sweep-7/sweep-9 write-ups — worth stating plainly rather than folding into
 "more polish."** Round 1 fixed a genuine gap. Round 2 fixed two more gaps in
 round 1's own fix. Round 3 is different in kind: it caught an actual
-**regression** — a false negative in security alerting — introduced by round
-2's own fix, not merely an incomplete one. And by the time Codex's review
-landed, **PR #2128 (rounds 1–2) had already been merged to `main`** at merge
-commit `2b3231a3`, so this regression was live and unfixed on `main` for the
-window between that merge and this follow-up PR's merge. That window is a
-real gap, not a process footnote — see the "Live-on-`main` window" note
+**regression** — a false negative in security alerting — that (per the
+round-4 correction above) dated to round 1's own fix, not merely an
+incomplete one; round 2 only widened it. And by the time Codex's round-3
+review landed, **PR #2128 (rounds 1–2) had already been merged to `main`** at
+merge commit `2b3231a3`, so this regression was live and unfixed on `main`
+for the window between that merge and this follow-up PR's merge. That window
+is a real gap, not a process footnote — see the "Live-on-`main` window" note
 below.
 
 **Finding 1 (P2 in the bot's own severity, but the most serious of the
-three): `detect_session_hijack` silently skipped its own alert.** Round 2
+three): `detect_session_hijack` silently skipped its own alert.** Round 1
 (commit `3b6b65e4`) added `self._enforce_key_caps()` to the top of
 `detect_session_hijack`, `detect_data_exfiltration`, and (already present
-since the cap was first introduced, predating round 2) `detect_brute_force`
-already had it there too. In all three, the eviction call ran **before** the
+since the cap was first introduced, predating round 1) `detect_brute_force`
+already had it there too. **Corrected on round 4 review** — an earlier
+version of this entry, and of `SEC-00-cross-cutting-baseline.md`, attributed
+this to round 2 (commit `df7438e0`); `git show` on both commits confirms
+`3b6b65e4` is the one that added the call at the top of each method, and
+`df7438e0` only changed `_enforce_key_caps()`'s internal eviction batching,
+without touching either call site. In all three, the eviction call ran
+**before** the
 method read/built its own tracker entry for the current key. `_enforce_key_
 caps()` evicts the least-recently-active keys once a tracker is over its
 5,000-key cap — a decision about the _whole_ tracker, unrelated to whether

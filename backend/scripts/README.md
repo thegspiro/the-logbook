@@ -269,6 +269,51 @@ a partial fix is still a fix, and the leftover is reported.
 
 ---
 
+## Security Review Tooling
+
+### `json_column_ast_sweep.py`
+
+Enumerates every model attribute declared as `Column(JSON, ...)` or
+`Column(MutableDict.as_mutable(JSON), ...)` across `app/models/*.py`, by
+parsing each file with the `ast` module rather than scanning source lines.
+
+**Purpose**: a line-anchored regex (`^\s*(\w+)\s*=\s*Column\(.*JSON`) cannot
+see a multiline declaration such as `report_email_recipients = Column(\n
+JSON, ...\n)` — the assignment target and the `JSON` reference land on
+different source lines. Three rounds of `docs/security-review/SEC-00-cross-
+cutting-baseline.md`'s sweep 9 were corrected because the JSON-column count
+behind it was produced by hand-derived, ad hoc methods each time. This script
+is the authoritative, structural method, checked into the repo so it can be
+re-run rather than re-derived.
+
+**Usage:**
+
+```bash
+cd backend
+python3 scripts/json_column_ast_sweep.py            # summary counts only
+python3 scripts/json_column_ast_sweep.py --list      # every attribute name + location
+python3 scripts/json_column_ast_sweep.py --by-file   # every declaration grouped by model file
+```
+
+**Expected Output:**
+
+```
+179 distinct attribute names, 230 Column(...) declarations referencing JSON,
+across 44 files in .../backend/app/models.
+```
+
+**Exit Codes:**
+
+- `0`: always — this is a reporting tool, not a gate. Pipe `--list` into a
+  diff against a recorded baseline if a future change wants CI to fail on
+  drift in the JSON-column set.
+
+**Requirements:**
+
+- No database needed — reads `app/models/*.py` source only
+
+---
+
 ## Deployment Setup
 
 ### `generate_vapid_keys.py`

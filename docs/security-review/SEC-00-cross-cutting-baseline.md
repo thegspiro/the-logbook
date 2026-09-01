@@ -28,26 +28,48 @@ of Codex catching a real gap in the same tracker-cap sweep in the same PR —
 said plainly rather than undersold. Both fixed; see sweep 7's write-up below
 for the full account of both rounds.
 
-**Revised a third time after Codex review round 3 — on commit `df7438e0`
-(round 2's own fix), and this round found an actual regression, not just an
-incomplete fix:** the batched eviction round 2 added to
-`_enforce_key_caps()` ran, on `detect_session_hijack`, **before** the method
-read the current session's own prior IP history — so if that exact session
-happened to be among the least-recently-active entries the batch picked for
-eviction, its history was deleted a few lines before it was read, the method
-saw no prior IP, silently treated an ongoing hijack as a first-ever
-observation, and never raised the alert. **PR #2128 had already been merged
-to `main` (commit `2b3231a3`) by the time this was caught**, so this
-regression was live and unfixed on `main` between the round-2 merge and the
-follow-up fix landing — see `docs/security-review/PROGRESS.md` for the
-timeline and the follow-up PR. Codex also flagged the count behind sweep 9's
-"132 distinct JSON/`MutableDict`-typed model attributes" as still wrong (a
-regex/line-based scan that missed multiline `Column(...)` declarations), and
-a process conflict in this file's own completion-gate write-up between
-CLAUDE.md's "fix every warning, in the same commit" rule and the "8
-pre-existing, unrelated" framing used to wave 8 ESLint warnings through. All
-three verified against real code and fixed; see sweep 7's round-3 write-up,
-the corrected sweep 9 write-up, and the completion-gate section below.
+**Revised a third time after Codex review round 3 — on the code as it stood at
+commit `df7438e0` (round 2's fix, the version live on `main` at the time), and
+this round found an actual regression, not just an incomplete fix:**
+`self._enforce_key_caps()` ran, on `detect_session_hijack`, **before** the
+method read the current session's own prior IP history — so if that exact
+session happened to be among the least-recently-active entries the batch
+picked for eviction, its history was deleted a few lines before it was read,
+the method saw no prior IP, silently treated an ongoing hijack as a
+first-ever observation, and never raised the alert. That call-site
+placement — before the read — was introduced by **round 1**, commit
+`3b6b65e4`, not round 2; round 2 (`df7438e0`) changed only what
+`_enforce_key_caps()` does internally (batched eviction), which widened how
+many keys a single over-cap call could evict and so widened the odds of the
+current key being caught, but did not move the call or introduce the
+ordering bug. (This paragraph's own earlier revision — and `PROGRESS.md`'s —
+attributed the bug's introduction to round 2 alone; corrected on a later
+Codex pass, round 4 — see "Attribution correction" in the round-3 write-up
+below.) **PR #2128 had already been merged to `main` (commit `2b3231a3`) by
+the time this was caught**, so this regression was live and unfixed on
+`main` between the round-2 merge and the follow-up fix landing — see
+`docs/security-review/PROGRESS.md` for the timeline and the follow-up PR.
+Codex also flagged the count behind sweep 9's "132 distinct
+JSON/`MutableDict`-typed model attributes" as still wrong (a regex/line-based
+scan that missed multiline `Column(...)` declarations), and a process
+conflict in this file's own completion-gate write-up between CLAUDE.md's "fix
+every warning, in the same commit" rule and the "8 pre-existing, unrelated"
+framing used to wave 8 ESLint warnings through. All three verified against
+real code and fixed; see sweep 7's round-3 write-up, the corrected sweep 9
+write-up, and the completion-gate section below.
+
+**Revised a fourth time after Codex review round 4 — three more findings, on
+the round-3 fix itself and on this file's own historical record:** `_check_
+rate_limit` had the identical read-after-evict shape as the three methods
+round 3 fixed, missed there because it evicts through a different helper
+(`_evict_stale_tracking_keys()`, not a direct `_enforce_key_caps()` call) —
+the fourth time in this PR/its predecessor that this exact bug shape has been
+found unfixed after a "checked every method" pass. This file's attribution of
+the bug's introduction to round 2 was also wrong, per Codex — it was round 1.
+And the AST sweep script sweep 9 describes as "checked into
+`docs/security-review/`" did not actually exist in the repo. All three fixed;
+see sweep 7's round-4 write-up, the "Attribution correction" note in the
+round-3 write-up, and sweep 9's corrected script reference below.
 
 Re-verified pass 1/2's five standing sweeps against current code (backend grew
 to 399 Alembic revisions, 1536 routes across 80 `app/api/` files, from pass
@@ -276,16 +298,24 @@ live, unfixed bug on `main`, not just an open-PR finding — see
 
 [**`_enforce_key_caps()` ran before the read it was meant to protect, in
 both `detect_session_hijack` and `detect_data_exfiltration`.**](https://github.com/thegspiro/the-logbook/pull/2128)
-Round 2 added the batched-eviction call to the very top of each method, ahead
-of the code that reads that method's own tracker for the current key. The
-eviction picks the least-recently-active keys in the _entire_ tracker once it
-is over cap — a decision that has nothing to do with whether the specific key
-this call is about to use is "cold" in absolute terms, only whether it ranks
-in the bottom slice relative to whatever else is in the tracker right now.
-Concretely, in `detect_session_hijack`:
+**Round 1** (commit `3b6b65e4`) added the eviction call to the very top of
+each method, ahead of the code that reads that method's own tracker for the
+current key — round 2 (`df7438e0`) did not move that call; it only changed
+`_enforce_key_caps()`'s internal eviction strategy from one key at a time to
+a 90%-of-cap batch, which widened how many keys a single over-cap call could
+take and so widened the window in which the current key could be caught, but
+the ordering itself dates to round 1. (See "Attribution correction" below —
+an earlier revision of this section, and of `PROGRESS.md`, credited round 2
+with introducing the ordering bug; Codex caught that misattribution on a
+later review, round 4.) The eviction picks the least-recently-active keys in
+the _entire_ tracker once it is over cap — a decision that has nothing to do
+with whether the specific key this call is about to use is "cold" in
+absolute terms, only whether it ranks in the bottom slice relative to
+whatever else is in the tracker right now. Concretely, in
+`detect_session_hijack`, from `3b6b65e4` onward:
 
 ```python
-# df7438e0 — WRONG order
+# 3b6b65e4 (round 1) onward — WRONG order, unchanged by round 2's df7438e0
 self._enforce_key_caps()                       # can delete _session_ips[key]
 ...
 session_data = self._session_ips.get(key, [])  # now reads [] — looks like
@@ -355,6 +385,129 @@ the version that was live on `main` at the time — checked out standalone,
 `alert is None` in every case) and **pass** after the reordering fix; full
 file **17/17**.
 
+**Attribution correction (round 4, Codex review):** this write-up, and
+`PROGRESS.md`'s log entry for round 3, originally credited **round 2**
+(commit `df7438e0`) with introducing the read-after-evict ordering bug. Codex
+checked the actual commits and that is wrong. Verified directly with `git show
+3b6b65e4 -- app/services/security_monitoring.py` and `git show df7438e0 --
+app/services/security_monitoring.py`:
+
+- `3b6b65e4` (**round 1**) is the commit that first added
+  `self._enforce_key_caps()` to the top of `detect_session_hijack` and
+  `detect_data_exfiltration`, ahead of each method's own tracker read — the
+  diff adds exactly four lines (the call plus its comment) immediately after
+  each method's docstring, before the `now = datetime.now(...)` line that
+  starts the read. The ordering bug exists from this commit forward.
+- `df7438e0` (**round 2**) touches only `_enforce_key_caps()` itself (adds
+  `_EVICTION_TARGET_RATIO` and switches its four-tracker loop from
+  evict-one-key-at-a-time to evict-down-to-90%-of-cap) and folds
+  `_external_endpoints` capping into the same helper. It does not add, move,
+  or otherwise touch the call sites inside `detect_session_hijack` /
+  `detect_data_exfiltration` at all — those two methods' diffs in `df7438e0`
+  are empty.
+
+So the accurate framing is: **introduced in round 1's commit `3b6b65e4`,
+widened in round 2's `df7438e0`** (a larger batch means more keys evicted per
+over-cap call, which raises the odds any given current key is among them —
+under round 1's one-at-a-time eviction the bug could only bite when the
+current key was _exactly_ the single least-recently-active entry at the
+moment the tracker first crossed 5,001; round 2's batch widened that to any
+of up to ~500 keys per eviction), **fixed in round 3**. Every other place in
+this file that referred to the bug's origin has been corrected to this
+framing (see the Pass 3 summary above and the round-3 write-up immediately
+above this note); `PROGRESS.md`'s round-3 entry is corrected the same way.
+Historical PR bodies on #2128/#2132 are left as the record of what was
+believed at the time rather than rewritten — this doc-level correction is the
+authoritative account going forward.
+
+**Round 4 (Codex review): `_check_rate_limit` had the identical
+read-after-evict shape, missed by round 3's "checked every method" pass.**
+Counting methods rather than rounds: round 3 found this shape in three
+methods at once (`detect_session_hijack`/`detect_data_exfiltration`/
+`detect_brute_force`) despite round 1/2 having already touched two of them;
+`_check_rate_limit` is the **fourth method** in this file found to carry the
+same shape, and round 4 is the **third separate round** in which a Codex
+review disproved a prior round's own "checked every method"/"fixed"
+completeness claim on this exact bug (round 2 disproved round 1's fix as
+incomplete in a different way; round 3 disproved round 1's ordering as
+buggy from the start; round 4 disproves round 3's "checked every method"
+claim) — worth stating plainly rather than as routine follow-up.
+
+`_check_rate_limit` calls `self._evict_stale_tracking_keys()` (which calls
+`self._enforce_key_caps()` internally) as its first statement, before reading
+or appending to `self._api_calls[ip]`:
+
+```python
+# pre-round-4 — WRONG order, same shape as the three round-3 fixes
+self._evict_stale_tracking_keys()  # -> _enforce_key_caps() can delete
+                                    #    self._api_calls[ip]
+...
+self._api_calls[ip] = [ts for ts in self._api_calls[ip] if ts > minute_ago]
+self._api_calls[ip].append(now)    # defaultdict silently starts a fresh
+                                    # list — the evicted history is gone
+if len(self._api_calls[ip]) > threshold:  # now undercounted by however
+    ...                                    # many calls were evicted
+```
+
+Round 3's own write-up ("Also checked, per the review instruction not to
+assume only `detect_session_hijack` was affected") explicitly checked
+`detect_brute_force` for this shape and missed `_check_rate_limit`, likely
+because `_check_rate_limit` evicts via `_evict_stale_tracking_keys()` — a
+wrapper that also runs the throttled time-based sweep — rather than calling
+`_enforce_key_caps()` directly the way the other three methods do; a review
+grepping for direct `_enforce_key_caps()` calls would not have surfaced it.
+Codex reproduced this with a 10-key cap, the victim IP holding 2 prior calls
+(the oldest entry in the tracker) toward a 3-call threshold, and 20 newer
+filler IPs pushing the tracker over its cap — the buggy order evicted the
+victim IP's key before the append, so the request was undercounted as call #1
+and no alert fired. This file's regression test reproduces the same shape
+(10-key cap, victim IP as the oldest entry, 20 filler IPs) against a
+threshold of 2 rather than 3, so the 3rd call (2 prior + this one) exceeds the
+threshold under `_check_rate_limit`'s strict `>` comparison: the buggy order
+still evicted the victim IP's 2 prior calls before the append, undercounting
+the request as call #1 and skipping the `rate_limit_exceeded` alert.
+
+**Fixed the same way as round 3's three fixes:** `_check_rate_limit` now
+appends the current call and captures the filtered 1-minute window into a
+local variable (`calls`) **before** `_evict_stale_tracking_keys()` runs, and
+every subsequent read (the alert's `description`/`calls_per_minute` details,
+the threshold check) uses that local variable rather than re-reading
+`self._api_calls[ip]`.
+
+**Final exhaustive audit, round 4:** re-read the full file and listed every
+method that (a) reads any of the five trackers (`_api_calls`,
+`_login_attempts`, `_session_ips`, `_data_transfers`, `_external_endpoints`)
+for a specific key, and (b) has an eviction call (`_enforce_key_caps()` or
+`_evict_stale_tracking_keys()`) anywhere in its own body — direct or via a
+helper it calls. Every call site of either eviction function in the file
+(there are 6: one inside `_evict_stale_tracking_keys()` itself, and one each
+in `_check_rate_limit`, the success branch of `detect_brute_force`, the
+failure branch of `detect_brute_force`, `detect_session_hijack`, and
+`detect_data_exfiltration`) was checked against the read(s) in the same
+method:
+
+| Method                                | Reads tracker for this call's key                       | Evicts                         | Order                                                      |
+| ------------------------------------- | ------------------------------------------------------- | ------------------------------ | ---------------------------------------------------------- |
+| `_check_rate_limit`                   | `self._api_calls[ip]`                                   | `_evict_stale_tracking_keys()` | **fixed this round** — read/append captured before evict   |
+| `detect_brute_force` (success branch) | none — only overwrites `self._login_attempts[...] = []` | `_enforce_key_caps()`          | order irrelevant — no read to protect (documented in-line) |
+| `detect_brute_force` (failure branch) | `self._login_attempts[ip]` / `[f"user:{user_id}"]`      | `_enforce_key_caps()`          | correct since round 3 — read/append before evict           |
+| `detect_session_hijack`               | `self._session_ips[key]`                                | `_enforce_key_caps()`          | correct since round 3 — read before evict                  |
+| `detect_data_exfiltration`            | `self._data_transfers[user_id]`                         | `_enforce_key_caps()`          | correct since round 3 — read/append before evict           |
+
+Five methods have the read+evict shape; all five are now correctly ordered.
+`_external_endpoints` (the fifth tracker) has no per-key read to protect — it
+is a `set()` grown by `.add()`, not a dict keyed by request identity, and the
+only place it is read is `len()` in `get_security_status` (a count, not a
+lookup by key) — so no method reading it "for a specific key" exists; its
+eviction (covered in sweep 7's round-2 write-up above) has no ordering hazard
+to have. No other method in the file calls either eviction function.
+
+**Verification, round 4:** 1 new test,
+`test_rate_limit_alert_survives_batch_eviction_of_the_victim_ip` in
+`TestReadBeforeEvictOrdering`, reproducing the same shape as round 3's three
+tests. Verified to **fail** against the pre-round-4 code (`alert is None`)
+and **pass** after the reordering fix; full file **18/18**.
+
 **Sweep 9 correction, round 2 (Codex review):** Codex re-checked round 2's
 own correction to this sweep (immediately below) and found the "132 distinct
 JSON/`MutableDict`-typed model attributes" figure was itself produced by a
@@ -374,16 +527,40 @@ below (two directories instead of the whole tree that time; single-line
 declarations only, this time) — worth naming plainly, since it is the
 **third** time this exact sweep's method has needed correcting in this PR.
 
-Re-swept with a structural method instead: `json_column_ast_sweep.py`
-(described below) parses every `backend/app/models/*.py` file with the `ast`
-module and walks every `ast.Assign`/`ast.AnnAssign` in a class body whose
-value is a `Call` — either `Column(...)` directly, or `Column(...)` wrapped
-in `MutableDict.as_mutable(...)` (recursed into, so nesting depth doesn't
-matter) — checking whether `JSON` appears anywhere in that call's arguments
-via a recursive `ast.walk` over the call subtree, not a substring match on
-one line. Because this walks the parsed syntax tree rather than source lines,
-a multiline declaration is included exactly like a single-line one; nothing
-about the walk depends on how the declaration happens to be formatted.
+Re-swept with a structural method instead:
+[`backend/scripts/json_column_ast_sweep.py`](../../backend/scripts/json_column_ast_sweep.py)
+parses every `backend/app/models/*.py` file with the `ast` module and walks,
+for every `ast.ClassDef`, that class's direct-body `ast.Assign`/`ast.AnnAssign`
+statements whose value is a `Call` named `Column` — checking whether `JSON`
+appears anywhere in that call's argument subtree via a recursive `ast.walk`,
+which is what makes `Column(MutableDict.as_mutable(JSON), ...)` match
+identically to a bare `Column(JSON, ...)` regardless of how deep the wrapping
+nests, not a substring match on one line. Because this walks the parsed
+syntax tree rather than source lines, a multiline declaration is included
+exactly like a single-line one; nothing about the walk depends on how the
+declaration happens to be formatted.
+
+**Round 4 correction (Codex review):** an earlier version of this section
+claimed this script was "checked into `docs/security-review/`" — it was not;
+no such file existed anywhere in the repo (confirmed via `git ls-tree` /
+`rg --files` / `find` at the time, and by this file's own prior text never
+actually linking to one). The script now exists at
+`backend/scripts/json_column_ast_sweep.py` — alongside the project's other
+verification scripts (`backend/scripts/validate_migrations.py`,
+`verify_database_enums.py`, etc.) rather than under `docs/`, matching where
+every other runnable sweep tool in this codebase lives — and is documented in
+`backend/scripts/README.md`. Run it with:
+
+```bash
+cd backend
+python3 scripts/json_column_ast_sweep.py            # prints the summary line
+python3 scripts/json_column_ast_sweep.py --list      # every name + location
+python3 scripts/json_column_ast_sweep.py --by-file   # grouped by model file
+```
+
+which reproduces the **179 distinct names, 230 declarations** figure below
+exactly, on demand, rather than requiring a future reviewer to re-derive the
+AST-walking method from this prose.
 
 **Corrected count: 179 distinct attribute names, across 230 `Column(...)`
 declarations that reference `JSON`** (some names — e.g. templated columns
@@ -398,8 +575,8 @@ members`/`required_positions`/`recurrence_exceptions`, and 39 more). The
 132-vs-137 gap between the previously-claimed figure and this regex baseline
 is not reconciled here — likely a slightly different ad hoc pattern used the
 first time — but is moot: the AST walk is now the authoritative, structural
-method, checked into `docs/security-review/` alongside this file's sweep
-tooling rather than re-derived by hand each round.
+method, checked into `backend/scripts/json_column_ast_sweep.py` (see the
+round-4 correction above) rather than re-derived by hand each round.
 
 Re-ran the actual bug-detection sweep — nested bracket mutation (a) and
 shallow-copy-then-reassign (b) — against the **full corrected 179-name
@@ -468,19 +645,27 @@ from 16 sites / 3 names / 2 directories. (That 132-name figure was itself
 corrected to 179 on round-2 review — see "Sweep 9 correction, round 2"
 above; the bug-detection conclusion did not change.)
 
-Five findings across this pass's three Codex review rounds, all in
+Eight findings across this pass's four Codex review rounds, all in
 `SecurityMonitoringService` or this file's own write-up of it (sweep 7's
-tracker-cap fix across rounds 1–3; sweep 9's JSON-attribute count across
-rounds 1–2; the completion-gate warning-count policy conflict, round 3) — see
-each sweep's write-up above for the full account of what changed and why,
-including round 3 catching an actual regression (not just an incomplete fix)
-in round 2's own code. All nine invariants otherwise hold — five re-verified
+tracker-cap fix across rounds 1–4 — the fourth round found the _same bug
+shape_, a fourth time, in a method the round-3 "checked every method" pass
+missed; sweep 9's JSON-attribute count and missing sweep script across
+rounds 1–2 and 4; the completion-gate warning-count policy conflict, round 3;
+this file's own misattribution of the round-1/round-2 regression, corrected
+round 4) — see each sweep's write-up above for the full account of what
+changed and why, including round 3 catching an actual regression (not just an
+incomplete fix) in round 1's ordering, only fully corrected in round 4. All
+nine invariants otherwise hold — five re-verified
 against 399 revisions / 1536 routes, four checked for the first time as an
 explicit whole-codebase sweep in this file (two of the four — sweeps 6 and 8
-— were already correct; sweep 7 needed three rounds of fixes, the third of
-which was a regression in the second's own fix, and sweep 9 needed its method
-broadened twice — first in scope, then in structural completeness — before it
-could be trusted).
+— were already correct; sweep 7 needed four rounds of fixes — round 1 fixed a
+real gap, round 2 fixed two gaps in round 1's own fix, round 3 fixed a
+read-after-evict regression that dated to round 1, and round 4 found the
+identical regression, still unfixed, in a fourth method round 3's own
+"checked every method" pass missed — and sweep 9 needed its method broadened
+twice — first in scope, then in structural completeness — before it could be
+trusted, plus a round-4 correction once its claimed script turned out not to
+exist in the repo).
 
 **Completion-gate policy correction (Codex review, round 3):** every prior
 revision of this section reported the 8 ESLint warnings below as "pre-
@@ -586,6 +771,31 @@ sweep 7 above) and its test file; `StorageAreasPage.tsx`/`.test.tsx`,
 `DocumentsPage.tsx`/`.test.tsx`, `RoleSetup.tsx`/`.test.tsx`/`.membership.
 test.ts`, and the new `positionTemplates.ts` (the 8-warning fix above);
 everything else is documentation.
+
+**Completion gate (pass 3, round 4 — full re-run):** `flake8`/`black
+--check`/`isort --check-only` clean across `app/ tests/ alembic/` (including
+the new `backend/scripts/json_column_ast_sweep.py` — also fixed two
+unrelated pre-existing `black`/`isort` violations discovered by this same
+gate run, in `scripts/verify_database_enums.py` and
+`scripts/seed_test_users.py`, neither touched by this round's own change, per
+CLAUDE.md's "no acceptable pre-existing errors" rule); `validate_migrations.py
+--strict` passed (399 revisions, single head `4e7e125cb00f` — unchanged, no
+migration touched this round); the full backend unit-test suite matching
+CI's `Backend Unit Tests` job exactly (`pytest tests/ -m "not integration and
+not slow and not docker" --cov=app --cov-fail-under=51`): **8097 passed, 2
+skipped, 58.65% coverage** (well over the 51% floor), including
+`test_security_monitoring.py` (**18/18**, up from 17 — the 1 new
+`test_rate_limit_alert_survives_batch_eviction_of_the_victim_ip` test proving
+the round-4 fix, verified to fail against the pre-round-4 code and pass
+after); `cd frontend && npm run typecheck` (the aliased 7.0.2 compiler) **0
+errors**; `cd frontend && npm run lint` **0 errors, 0 warnings**. Files
+changed this round: `app/services/security_monitoring.py` (the
+`_check_rate_limit` read-before-evict reordering) and its test file;
+`backend/scripts/json_column_ast_sweep.py` (new) and `backend/scripts/
+README.md`; `scripts/verify_database_enums.py` and `scripts/
+seed_test_users.py` (pre-existing black/isort fixes, unrelated to this
+round's finding); `CHANGELOG.md`; everything else is documentation
+(this file and `PROGRESS.md`).
 
 **Completion-gate command correction (Codex review, round 1):** this section
 originally reported `tsc --noEmit`

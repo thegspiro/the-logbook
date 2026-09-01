@@ -340,6 +340,48 @@ class TestReadBeforeEvictOrdering:
         assert alert.alert_type.value == "data_exfiltration"
         assert alert.details["total_24h_mb"] == pytest.approx(55.0)
 
+    async def test_rate_limit_alert_survives_batch_eviction_of_the_victim_ip(self):
+        """PR #2132 round 4 (Codex): _check_rate_limit has the identical
+        read-after-evict shape as the three methods above, missed by the
+        round-3 fix because it evicts via ``_evict_stale_tracking_keys()``
+        (not a direct ``_enforce_key_caps()`` call) at the very top of the
+        method, before it reads/appends to ``self._api_calls[ip]``. If this
+        ip is the coldest key in an over-the-cap tracker, batch eviction
+        deletes its prior calls first, the subsequent append+filter reads
+        from a fresh empty list, and the request is undercounted as call #1
+        -- no rate-limit alert, even though it is really call #3 against a
+        threshold of 2.
+        """
+        svc = _svc()
+        svc._MAX_TRACKING_KEYS = 10
+        svc.thresholds.api_calls_per_minute = 2
+
+        victim_ip = "203.0.113.9"
+        now = datetime.now(timezone.utc)
+        # Two prior calls within the last minute, both older than every
+        # filler ip below, so this ip is the batch-eviction target.
+        svc._api_calls[victim_ip] = [
+            now - timedelta(seconds=30),
+            now - timedelta(seconds=20),
+        ]
+
+        for i in range(20):
+            svc._api_calls[f"filler-ip-{i}"] = [datetime.now(timezone.utc)]
+
+        assert len(svc._api_calls) > svc._MAX_TRACKING_KEYS
+
+        # Third call for the victim ip -- should exceed the threshold of 2
+        # (2 prior + this one = 3 > 2).
+        alert = await svc._check_rate_limit(_db(), victim_ip, "u1")
+
+        assert alert is not None, (
+            "rate-limit alert was skipped -- the victim ip's prior calls "
+            "were evicted before _check_rate_limit could count them"
+        )
+        assert alert.alert_type.value == "rate_limit_exceeded"
+        assert alert.details["calls_per_minute"] == 3
+        assert alert.details["threshold"] == 2
+
 
 class TestReportPrivilegeEscalation:
     """The convenience wrapper wired into the role/permission grant ceilings."""

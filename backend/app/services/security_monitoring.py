@@ -400,30 +400,45 @@ class SecurityMonitoringService:
         """
         Check for rate limit violations that might indicate attacks
         """
-        # Periodically evict stale keys to bound memory usage
-        self._evict_stale_tracking_keys()
-
         now = datetime.now(timezone.utc)
         minute_ago = now - timedelta(minutes=1)
 
-        # Clean old entries
-        self._api_calls[ip] = [ts for ts in self._api_calls[ip] if ts > minute_ago]
-
-        # Add current call
+        # Add the current call and capture the filtered 1-minute window into
+        # a local variable BEFORE eviction runs below, rather than re-reading
+        # self._api_calls[ip] after it. _evict_stale_tracking_keys() ->
+        # _enforce_key_caps() can evict this exact ip's key when
+        # the tracker is over its cap and this ip is the least-recently-
+        # active one (e.g. it already has calls toward the threshold but
+        # went quiet while other ips filled the tracker) -- a dict lookup
+        # after that would silently come back as a fresh empty list,
+        # undercounting the call rate and never reaching the threshold. Same
+        # read-after-evict shape Codex found in detect_session_hijack (PR
+        # #2128, round 3) and already fixed there and in detect_brute_force /
+        # detect_data_exfiltration; this method had the same bug, unfixed,
+        # because it evicts via _evict_stale_tracking_keys() rather than a
+        # direct _enforce_key_caps() call, which the earlier fixes did not
+        # touch.
         self._api_calls[ip].append(now)
+        calls = [ts for ts in self._api_calls[ip] if ts > minute_ago]
+        self._api_calls[ip] = calls
+
+        # Periodically evict stale keys to bound memory usage. Runs after the
+        # read/write above, captured into `calls`, so eviction can never
+        # remove the entry this call just appended for `ip`.
+        self._evict_stale_tracking_keys()
 
         # Check threshold
-        if len(self._api_calls[ip]) > self.thresholds.api_calls_per_minute:
+        if len(calls) > self.thresholds.api_calls_per_minute:
             alert = SecurityAlert(
                 id=secrets.token_hex(16),
                 alert_type=AlertType.RATE_LIMIT_EXCEEDED,
                 threat_level=ThreatLevel.MEDIUM,
                 timestamp=now,
-                description=f"Rate limit exceeded: {len(self._api_calls[ip])} calls/min",
+                description=f"Rate limit exceeded: {len(calls)} calls/min",
                 source_ip=ip,
                 user_id=user_id,
                 details={
-                    "calls_per_minute": len(self._api_calls[ip]),
+                    "calls_per_minute": len(calls),
                     "threshold": self.thresholds.api_calls_per_minute,
                 },
             )
