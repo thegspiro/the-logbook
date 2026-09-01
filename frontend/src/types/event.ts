@@ -81,6 +81,10 @@ export interface Event {
    * queue (1-based). Position is null unless the caller is waitlisted. */
   waitlist_count?: number | null;
   user_waitlist_position?: number | null;
+  /** True when the caller is waitlisted with a party larger than the event
+   * holds. Promotion passes such a party over, so they have no position and
+   * must not be told a spot will open for them. */
+  user_waitlist_exceeds_capacity?: boolean;
   /** Seats taken. See EventListItem.occupied_seats. */
   occupied_seats?: number | null;
 
@@ -141,6 +145,10 @@ export interface EventListItem {
    * `max_attendees` caps. Capacity UI uses this; `going_count` is the people
    * count. */
   occupied_seats?: number | null;
+  /** Which responses this event accepts. The list surfaces RSVP controls, and
+   * hardcoding Going/Not Going rendered a button the API always rejected on an
+   * event configured for, say, 'maybe' only. */
+  allowed_rsvp_statuses?: RSVPStatus[] | null;
   user_rsvp_status?: RSVPStatus;
 
   /**

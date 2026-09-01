@@ -323,6 +323,9 @@ def _to_list_item(row: dict) -> EventListItem:
         going_count=row["going_count"],
         waitlist_count=row.get("waitlist_count"),
         occupied_seats=row.get("occupied_seats"),
+        allowed_rsvp_statuses=(
+            event.allowed_rsvp_statuses or DEFAULT_ALLOWED_RSVP_STATUSES
+        ),
         user_rsvp_status=row["user_rsvp_status"],
         rsvp_deadline=event.rsvp_deadline,
         max_attendees=event.max_attendees,
@@ -998,10 +1001,24 @@ async def get_event(
     # column promote_from_waitlist promotes on; ordering by updated_at would
     # send a member to the back of the line for editing a note, and would make
     # the position we display disagree with who actually gets promoted.
-    waitlisted = sorted(
+    #
+    # Filtered to the parties promotion can actually reach, using the same
+    # rule promote_from_waitlist applies: a party needing more seats than the
+    # event holds is passed over there, so counting it here would put a
+    # position on somebody who will never be promoted and shift everybody
+    # behind them by one. The two have to agree or the number is a guess.
+    # (New RSVPs of that size are refused outright; these rows exist only where
+    # an organizer lowered max_attendees after somebody had already queued.)
+    all_waitlisted = sorted(
         (r for r in (event.rsvps or []) if r.status == RSVPStatus.WAITLISTED),
         key=lambda r: r.responded_at,
     )
+    if event.max_attendees:
+        waitlisted = [
+            r for r in all_waitlisted if 1 + (r.guest_count or 0) <= event.max_attendees
+        ]
+    else:
+        waitlisted = all_waitlisted
     waitlist_count = len(waitlisted)
     # Seats, not members: the cap counts 1 + guest_count per going RSVP, so the
     # capacity bar has to as well or it reports room the RSVP path will refuse.
@@ -1018,6 +1035,13 @@ async def get_event(
         ),
         None,
     )
+    # Distinguishes "waiting, position unknown" from "waiting for something
+    # that cannot happen". Without it a member whose party outgrew the event
+    # would be told they will be moved up automatically, which is not true for
+    # them — they need to hear that their party is too large, not a reassurance.
+    user_waitlist_exceeds_capacity = any(
+        str(r.user_id) == str(current_user.id) for r in all_waitlisted
+    ) and not any(str(r.user_id) == str(current_user.id) for r in waitlisted)
 
     # Resolved only on the detail view, which is the one screen that shows who
     # closed the event. Rows backfilled from the pre-column marker carry no
@@ -1056,6 +1080,7 @@ async def get_event(
         ),
         waitlist_count=waitlist_count,
         user_waitlist_position=user_waitlist_position,
+        user_waitlist_exceeds_capacity=user_waitlist_exceeds_capacity,
         occupied_seats=occupied_seats,
         user_rsvp=(
             UserRSVPSummary(

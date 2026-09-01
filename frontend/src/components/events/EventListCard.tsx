@@ -25,6 +25,7 @@ import {
   X,
 } from 'lucide-react';
 import type { EventListItem } from '../../types/event';
+import { RSVPStatus as RSVPStatusEnum } from '../../constants/enums';
 import type { EventUrgency } from '../../utils/eventHelpers';
 import {
   downloadICSFile,
@@ -98,7 +99,13 @@ const EventListCardBase: React.FC<EventListCardProps> = ({
   // thing that removes the controls is the event being cancelled.
   // is_draft matters because EventsPage includes drafts for managers and the
   // API refuses every draft RSVP outright, so the controls could never succeed.
-  const rsvpAvailable = !event.is_cancelled && !event.is_draft;
+  // The same reasoning covers allowed_rsvp_statuses: this card only ever
+  // submits going / not_going, so on an event that accepts neither there is
+  // nothing here that can succeed and the member is better served by the link.
+  const allowedStatuses = event.allowed_rsvp_statuses ?? [RSVPStatusEnum.GOING, RSVPStatusEnum.NOT_GOING];
+  const canAnswerGoing = allowedStatuses.includes(RSVPStatusEnum.GOING);
+  const canAnswerNotGoing = allowedStatuses.includes(RSVPStatusEnum.NOT_GOING);
+  const rsvpAvailable = !event.is_cancelled && !event.is_draft && (canAnswerGoing || canAnswerNotGoing);
   const showRsvpPair = rsvpAvailable && (!event.user_rsvp_status || isChangingRsvp);
 
   const stripMeta = ((): string | null => {
@@ -357,24 +364,28 @@ const EventListCardBase: React.FC<EventListCardProps> = ({
             </button>
           ) : (
             <>
-              <button
-                type="button"
-                onClick={() => onQuickRSVP(event.id, 'going')}
-                disabled={rsvpLoading}
-                className={`${urgency === 'action' ? 'btn-primary' : 'btn-secondary'} ${FOOTER_BUTTON_CLASS}`}
-              >
-                <Check className="h-4 w-4" aria-hidden="true" />
-                Going
-              </button>
-              <button
-                type="button"
-                onClick={() => onQuickRSVP(event.id, 'not_going')}
-                disabled={rsvpLoading}
-                className={`btn-secondary ${FOOTER_BUTTON_CLASS}`}
-              >
-                <X className="h-4 w-4" aria-hidden="true" />
-                Not Going
-              </button>
+              {canAnswerGoing && (
+                <button
+                  type="button"
+                  onClick={() => onQuickRSVP(event.id, 'going')}
+                  disabled={rsvpLoading}
+                  className={`${urgency === 'action' ? 'btn-primary' : 'btn-secondary'} ${FOOTER_BUTTON_CLASS}`}
+                >
+                  <Check className="h-4 w-4" aria-hidden="true" />
+                  Going
+                </button>
+              )}
+              {canAnswerNotGoing && (
+                <button
+                  type="button"
+                  onClick={() => onQuickRSVP(event.id, 'not_going')}
+                  disabled={rsvpLoading}
+                  className={`btn-secondary ${FOOTER_BUTTON_CLASS}`}
+                >
+                  <X className="h-4 w-4" aria-hidden="true" />
+                  Not Going
+                </button>
+              )}
               {isChangingRsvp && (
                 <button
                   type="button"

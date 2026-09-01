@@ -42,6 +42,7 @@ import { useAuthStore } from '../stores/authStore';
 import { useTimezone } from '../hooks/useTimezone';
 import { formatShortDateTime, getTodayLocalDate } from '../utils/dateFormatting';
 import { getErrorMessage } from '../utils/errorHandling';
+import { errorTracker } from '../services/errorTracking';
 import { buildCsv, downloadCsv } from '../utils/csv';
 import { Breadcrumbs, SkeletonCardGrid, EmptyState, Pagination } from '../components/ux';
 import { NfcTapButton } from '../components/nfc/NfcTapButton';
@@ -309,61 +310,85 @@ export const EventsPage: React.FC = () => {
     }
   }, [tz]);
 
-  const fetchEvents = useCallback(async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      const params = showPastEvents
-        ? { end_before: new Date().toISOString(), include_drafts: canManage }
-        : { end_after: new Date().toISOString(), include_drafts: canManage };
-      const data = await eventService.getEvents(params);
-      setEvents(data);
-    } catch (_err) {
-      setError('Failed to load events. Please try again later.');
-    } finally {
-      setLoading(false);
-    }
-  }, [showPastEvents, canManage]);
-
-  useRegisterPullToRefresh(fetchEvents);
-
-  const handleQuickRSVP = useCallback(async (eventId: string, status: 'going' | 'not_going') => {
-    try {
-      setRsvpLoading((prev) => ({ ...prev, [eventId]: true }));
-      const rsvpData: RSVPCreate = { status, guest_count: 0 };
-      const saved = await eventService.createOrUpdateRSVP(eventId, rsvpData);
-      // The server's status, not the requested one. Asking to go to a full
-      // event returns `waitlisted`, and echoing the request back would show
-      // the member a confident "Going" for a seat they did not get.
-      const savedStatus = saved.status ?? status;
-      setEvents((prev) =>
-        prev.map((e) =>
-          e.id === eventId
-            ? {
-                ...e,
-                user_rsvp_status: savedStatus,
-                going_count:
-                  savedStatus === 'going'
-                    ? (e.going_count ?? 0) + (e.user_rsvp_status === 'going' ? 0 : 1)
-                    : (e.going_count ?? 0) - (e.user_rsvp_status === 'going' ? 1 : 0),
-              }
-            : e
-        )
-      );
-      if (savedStatus === 'waitlisted') {
-        toast('This event is full — you have been added to the waitlist.', { icon: '⏳' });
+  /**
+   * @param background - refresh in place, for a list already on screen.
+   *
+   * The initial-load path swaps the whole grid for skeletons and, on failure,
+   * replaces it with the full-page error. That is right when there is nothing
+   * to show yet and wrong afterwards: a member who has just RSVP'd would watch
+   * their answer vanish into skeletons, and a transient refresh failure would
+   * replace a *saved* response with "Failed to load events". In background mode
+   * the existing list stays put and a refresh failure is logged rather than
+   * shown, because the RSVP itself succeeded and the only casualty is a
+   * slightly stale seat count.
+   */
+  const fetchEvents = useCallback(
+    async (background = false) => {
+      try {
+        if (!background) {
+          setLoading(true);
+          setError(null);
+        }
+        const params = showPastEvents
+          ? { end_before: new Date().toISOString(), include_drafts: canManage }
+          : { end_after: new Date().toISOString(), include_drafts: canManage };
+        const data = await eventService.getEvents(params);
+        setEvents(data);
+      } catch (err: unknown) {
+        if (background) {
+          errorTracker.logError(
+            err instanceof Error ? err : new Error(getErrorMessage(err, 'Failed to refresh events')),
+            { additionalContext: { operation: 'fetchEvents:background' } }
+          );
+          return;
+        }
+        setError('Failed to load events. Please try again later.');
+      } finally {
+        if (!background) setLoading(false);
       }
-      setRsvpChanging((prev) => ({ ...prev, [eventId]: false }));
-    } catch (err: unknown) {
-      // The card is only updated on success, so without this the tap looks
-      // exactly like a tap that never registered — the member re-taps and
-      // assumes the button is broken rather than that the RSVP was refused
-      // (event locked, roster full, session expired).
-      toast.error(getErrorMessage(err, 'Could not save your RSVP'));
-    } finally {
-      setRsvpLoading((prev) => ({ ...prev, [eventId]: false }));
-    }
-  }, []);
+    },
+    [showPastEvents, canManage]
+  );
+
+  // Pull-to-refresh is a deliberate reload, so it keeps the full-load UI.
+  useRegisterPullToRefresh(() => fetchEvents());
+
+  const handleQuickRSVP = useCallback(
+    async (eventId: string, status: 'going' | 'not_going') => {
+      try {
+        setRsvpLoading((prev) => ({ ...prev, [eventId]: true }));
+        const rsvpData: RSVPCreate = { status, guest_count: 0 };
+        const saved = await eventService.createOrUpdateRSVP(eventId, rsvpData);
+        // The server's status, not the requested one. Asking to go to a full
+        // event returns `waitlisted`, and echoing the request back would show
+        // the member a confident "Going" for a seat they did not get.
+        const savedStatus = saved.status ?? status;
+        // Reflect the answer immediately so the card does not look unresponsive,
+        // then refetch. going_count, occupied_seats and waitlist_count are
+        // interdependent and the client cannot derive occupied_seats at all — it
+        // does not know the member's prior guest count, which a detail-page RSVP
+        // may have set above zero. Patching two of three and guessing the third
+        // is how the capacity label drifts further, not less.
+        setEvents((prev) => prev.map((e) => (e.id === eventId ? { ...e, user_rsvp_status: savedStatus } : e)));
+        if (savedStatus === 'waitlisted') {
+          toast('This event is full — you have been added to the waitlist.', { icon: '⏳' });
+        }
+        setRsvpChanging((prev) => ({ ...prev, [eventId]: false }));
+        // Background: the answer is already saved and on screen, so a refresh
+        // must not swap the grid for skeletons or bury it under a page error.
+        await fetchEvents(true);
+      } catch (err: unknown) {
+        // The card is only updated on success, so without this the tap looks
+        // exactly like a tap that never registered — the member re-taps and
+        // assumes the button is broken rather than that the RSVP was refused
+        // (event locked, roster full, session expired).
+        toast.error(getErrorMessage(err, 'Could not save your RSVP'));
+      } finally {
+        setRsvpLoading((prev) => ({ ...prev, [eventId]: false }));
+      }
+    },
+    [fetchEvents]
+  );
 
   const handleStartChangeRsvp = useCallback((eventId: string) => {
     setRsvpChanging((prev) => ({ ...prev, [eventId]: true }));

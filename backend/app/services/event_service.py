@@ -51,6 +51,12 @@ DEFAULT_ALLOWED_RSVP_STATUSES = ["going", "not_going"]
 
 BULK_ADD_MAX_SIZE = 200
 
+# Ceiling on how many waitlisted parties one seat release may promote. Freeing
+# N seats can legitimately admit N members, so this is generous rather than
+# tight — it exists only so a regression in promote_from_waitlist's "no longer
+# fits" condition cannot turn one RSVP into an unbounded loop.
+MAX_WAITLIST_PROMOTIONS_PER_RELEASE = 50
+
 
 def resolve_attendee_visibility(
     event: Any, org_settings: Optional[Dict[str, Any]]
@@ -301,10 +307,23 @@ class EventService:
         # deliberately not here: ranking per row needs a window function, and
         # the card already knows the member is waitlisted from
         # user_rsvp_status. Position belongs on the detail page.
+        #
+        # The seat filter is the same one promote_from_waitlist and the detail
+        # endpoint apply: a party bigger than the whole event is passed over by
+        # promotion, so counting it here would make the card disagree with the
+        # detail page the member opens next ("5 waiting", then "#1 of 4"). An
+        # absent or zero cap means no cap, matching `if event.max_attendees:`
+        # on the other two paths.
         waitlist_count_sq = (
             select(func.count(EventRSVP.id))
             .where(EventRSVP.event_id == Event.id)
             .where(EventRSVP.status == RSVPStatus.WAITLISTED)
+            .where(
+                or_(
+                    func.coalesce(Event.max_attendees, 0) == 0,
+                    1 + EventRSVP.guest_count <= Event.max_attendees,
+                )
+            )
             .correlate(Event)
             .scalar_subquery()
             .label("waitlist_count")
@@ -1304,6 +1323,27 @@ class EventService:
             requested_guests = 0
             rsvp_data = rsvp_data.model_copy(update={"guest_count": 0})
 
+        # Refused here, with the other guards, rather than down at the capacity
+        # check — and the position matters as much as the rule. Every return
+        # below this point happens *after* the RSVP row has been added to or
+        # mutated in the session, so a late rejection leaves dirty state the
+        # next commit would persist. That is not hypothetical: rsvp_to_series
+        # calls this in a loop and commits per occurrence, so one refused
+        # occurrence would be written by the next one's commit while being
+        # excluded from the reported count.
+        #
+        # A party that does not fit even an empty event has no queue position
+        # to wait for, and since promote_from_waitlist refuses to skip the head
+        # of the queue, admitting one would block everybody behind it.
+        if event.max_attendees and rsvp_data.status == RSVPStatus.GOING.value:
+            party_size = 1 + (rsvp_data.guest_count or 0)
+            if party_size > event.max_attendees:
+                return (
+                    None,
+                    f"This event holds {event.max_attendees} people, so a party "
+                    f"of {party_size} cannot be accommodated.",
+                )
+
         # Soft pipeline phase gate — warn (overridable) when RSVPing to a session
         # ahead of the member's current phase. Only when actually attending.
         if not override and rsvp_data.status == "going":
@@ -1385,7 +1425,9 @@ class EventService:
 
             # ">" against the party size, not ">=" against the tally: the old
             # row count only had to ask "is the roster already full", but a
-            # party of three does not fit a one-seat gap.
+            # party of three does not fit a one-seat gap. (A party too big for
+            # the event at all was already refused above, before this function
+            # touched the session.)
             requested_seats = 1 + (rsvp_data.guest_count or 0)
             if occupied_seats + requested_seats > event.max_attendees:
                 # Auto-waitlist instead of rejecting
@@ -1426,7 +1468,16 @@ class EventService:
             1 + (rsvp.guest_count or 0) if final_status == RSVPStatus.GOING.value else 0
         )
         if event.max_attendees and current_seats < previous_seats:
-            await self.promote_from_waitlist(event_id, organization_id)
+            # Looped, because one release can admit several parties: a party of
+            # four declining frees four seats, and promoting a single solo
+            # member would leave three idle until some unrelated write happened
+            # to trigger promotion again. promote_from_waitlist returns None as
+            # soon as the head of the queue no longer fits, so this terminates
+            # on its own; the bound is only so a bug in that condition cannot
+            # spin the request.
+            for _ in range(MAX_WAITLIST_PROMOTIONS_PER_RELEASE):
+                if not await self.promote_from_waitlist(event_id, organization_id):
+                    break
 
         return rsvp, None
 
@@ -1531,11 +1582,20 @@ class EventService:
         # waitlist position is computed on the same column, and if the two ever
         # disagree the app tells a member they are next and then promotes
         # somebody else.
+        #
+        # The seat filter excludes parties that can *never* fit — bigger than
+        # the whole event. create_or_update_rsvp now rejects those outright,
+        # but rows predating that check exist, and an organizer who lowers
+        # max_attendees after somebody queued creates one at any time. Filtering
+        # here rather than checking after the fetch is what actually lets the
+        # queue move: the head of the line becomes the earliest *promotable*
+        # party, instead of an impossible one that blocks everyone behind it.
         result = await self.db.execute(
             select(EventRSVP)
             .where(EventRSVP.event_id == str(event_id))
             .where(EventRSVP.organization_id == str(organization_id))
             .where(EventRSVP.status == RSVPStatus.WAITLISTED)
+            .where(1 + EventRSVP.guest_count <= event.max_attendees)
             .order_by(EventRSVP.responded_at.asc())
             .limit(1)
             .with_for_update()
@@ -1560,8 +1620,11 @@ class EventService:
         occupied_seats = occupied_result.scalar() or 0
 
         # Whoever is first in line stays first in line. Skipping past a party
-        # that does not fit to promote a smaller one behind them would silently
-        # reorder the queue and contradict the position the member was shown.
+        # that does not fit *yet* to promote a smaller one behind them would
+        # silently reorder the queue and contradict the position the member was
+        # shown. (A party that can never fit was already excluded by the query
+        # above — that is a different case, and the only one worth passing
+        # over.)
         needed_seats = 1 + (waitlisted_rsvp.guest_count or 0)
         if occupied_seats + needed_seats > event.max_attendees:
             return None
@@ -1613,7 +1676,21 @@ class EventService:
         """
         RSVP to all future, non-cancelled events in a recurring series.
 
-        Returns the count of RSVPs created/updated.
+        Each occurrence goes through :meth:`create_or_update_rsvp` rather than
+        being written here directly. This used to hand-roll the insert, which
+        meant the series path had no capacity tally, no event-row lock, and no
+        allow_guests, deadline or draft guard — a member applying to a series
+        was saved as "going" on a full occurrence, and a guest party overbooked
+        it by several seats. Delegating restores all of those at once, along
+        with RSVP history and waitlist promotion, and leaves exactly one write
+        path to keep correct.
+
+        The cost is one locked transaction per occurrence instead of a single
+        bulk commit. That is the deliberate trade: duplicating the capacity and
+        locking logic in a second place is how these two drifted far enough
+        apart for the gap to go unnoticed.
+
+        Returns the count of occurrences the response was actually applied to.
         """
         now = datetime.now(dt_timezone.utc)
 
@@ -1631,44 +1708,44 @@ class EventService:
             )
         )
         series_events = result.scalars().all()
+        event_ids = [event.id for event in series_events]
 
         rsvp_count = 0
-        for event in series_events:
-            # No requires_rsvp gate, matching create_or_update_rsvp: the flag
-            # means a response is expected, not that one is accepted. Leaving
-            # it here made "apply to all future events" on an optional
-            # recurring event report zero updated and save nothing at all.
-
-            # A finalized occurrence is skipped rather than failing the batch —
-            # the member is answering for the rest of the series, not asking to
-            # reopen one closed date.
-            if attendance_is_finalized(event):
-                continue
-
-            # Check for existing RSVP
-            existing_result = await self.db.execute(
-                select(EventRSVP)
-                .where(EventRSVP.event_id == event.id)
-                .where(EventRSVP.user_id == str(user_id))
+        for event_id in event_ids:
+            # An occurrence that refuses the response — finalized, full past
+            # what this party needs, guests not allowed, deadline gone — is
+            # skipped rather than failing the batch. The member is answering
+            # for the rest of the series, not asking to force one date.
+            #
+            # override=True: the member confirmed the training phase-gate
+            # warning once for the series, and there is no way to prompt them
+            # again per occurrence.
+            rsvp, error = await self.create_or_update_rsvp(
+                # Passed through as stored. create_or_update_rsvp stringifies
+                # whatever it is given, so coercing to UUID here would only add
+                # a way for a non-canonical id to raise.
+                event_id=event_id,
+                user_id=user_id,
+                rsvp_data=rsvp_data,
+                organization_id=organization_id,
+                override=True,
             )
-            existing_rsvp = existing_result.scalar_one_or_none()
-
-            if existing_rsvp:
-                for field, value in rsvp_data.model_dump().items():
-                    setattr(existing_rsvp, field, value)
-                existing_rsvp.updated_at = now
-            else:
-                new_rsvp = EventRSVP(
-                    organization_id=organization_id,
-                    event_id=event.id,
-                    user_id=user_id,
-                    **rsvp_data.model_dump(),
+            if error or rsvp is None:
+                # Roll back before moving on. create_or_update_rsvp commits its
+                # own successful writes, so this discards only what a refusal
+                # left uncommitted — and without it, any error path that ever
+                # returns after the row is added would be persisted by the
+                # *next* occurrence's commit rather than dropped.
+                await self.db.rollback()
+                logger.info(
+                    "Series RSVP skipped event {}: {}",
+                    event_id,
+                    error or "no RSVP returned",
                 )
-                self.db.add(new_rsvp)
+                continue
 
             rsvp_count += 1
 
-        await self.db.commit()
         return rsvp_count
 
     async def list_event_rsvps(
