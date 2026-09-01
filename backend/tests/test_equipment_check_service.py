@@ -1515,3 +1515,78 @@ class TestShiftCheckStatusItemCount:
         assert len(summaries) == 1
         # Five template rows, of which a header and a text row are captions.
         assert summaries[0]["total_items"] == 3
+
+
+class TestSnapshottedTargetQuantity:
+    """The filed record's ``required_quantity`` is the target this service
+    means, not half of it.
+
+    ``_target_quantity`` is ``required_quantity or expected_quantity``. The
+    snapshot used to take the column alone, which gave the service two
+    definitions of "short": ``_compute_check_status`` and ``update_check``'s
+    recompute read this snapshot, while ``_is_short`` and ``swap_item_lot``'s
+    submitter limits read the resolved value. A position carrying
+    ``required_quantity = 0`` beside a positive ``expected_quantity`` was short
+    by one rule and full by the other.
+    """
+
+    @staticmethod
+    def template_item(**overrides):
+        values = {
+            "name": "4x4 gauze",
+            "_check_compartment_name": "Cab",
+            "check_type": "count",
+            "required_quantity": None,
+            "expected_quantity": None,
+            "critical_minimum_quantity": None,
+            "level_unit": None,
+            "serial_number": None,
+            "lot_number": None,
+            "expiration_date": None,
+        }
+        values.update(overrides)
+        return SimpleNamespace(**values)
+
+    def test_a_zero_minimum_falls_through_to_the_expected_count(self):
+        item = {}
+        EquipmentCheckService._snapshot_from_template(
+            item, self.template_item(required_quantity=0, expected_quantity=4)
+        )
+        assert item["required_quantity"] == 4
+
+    def test_a_required_minimum_still_outranks_the_expected_count(self):
+        item = {}
+        EquipmentCheckService._snapshot_from_template(
+            item, self.template_item(required_quantity=6, expected_quantity=4)
+        )
+        assert item["required_quantity"] == 6
+
+    def test_an_uncounted_position_snapshots_no_target(self):
+        item = {}
+        EquipmentCheckService._snapshot_from_template(item, self.template_item())
+        assert item["required_quantity"] is None
+
+    def test_the_shortfall_verdict_now_agrees_with_is_short(self):
+        # The point of the change. Counting 1 against a position whose real
+        # target is 4 is a shortfall by `_is_short`, and the filed record has
+        # to say so rather than passing because the raw column read 0.
+        template = self.template_item(required_quantity=0, expected_quantity=4)
+        item = {"template_item_id": "ti-1", "status": "pass", "quantity_found": 1}
+        EquipmentCheckService._snapshot_from_template(item, template)
+
+        _, _, failed, overall = EquipmentCheckService._compute_check_status([item])
+
+        assert item["status"] == "fail"
+        assert failed == 1
+        assert overall == "fail"
+
+    def test_a_position_at_its_expected_count_still_passes(self):
+        template = self.template_item(required_quantity=0, expected_quantity=4)
+        item = {"template_item_id": "ti-1", "status": "pass", "quantity_found": 4}
+        EquipmentCheckService._snapshot_from_template(item, template)
+
+        _, _, failed, overall = EquipmentCheckService._compute_check_status([item])
+
+        assert item["status"] == "pass"
+        assert failed == 0
+        assert overall == "pass"
