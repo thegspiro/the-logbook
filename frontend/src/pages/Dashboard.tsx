@@ -69,7 +69,6 @@ import {
   formatTime,
   formatTimeOfDay,
   getTodayLocalDate,
-  toLocalDateString,
   toLocalISODate,
 } from '../utils/dateFormatting';
 import { useAuthStore } from '../stores/authStore';
@@ -85,25 +84,52 @@ import { useNotificationCountStore } from '../hooks/useNotificationCount';
 /**
  * Main Dashboard Component — "station board"
  *
- * Two answers, in this order: what needs me, and what am I doing this week.
+ * Two answers, in this order: what needs me, and what am I doing next.
  * Everything the member is on the hook for collects in one "Needs you" panel;
- * shifts, open slots and events merge into one seven-day list rather than
+ * shifts, open slots and events merge into one thirty-day list rather than
  * three parallel ones. Organization-wide reporting lives behind the
  * Organization tab so
  * it does not outrank a member's own work.
  */
 const INSTALL_BANNER_DISMISSED_KEY = 'installBannerDismissed';
 
-/** Days the "Next 7 Days" list covers, counting today as day one. */
-const TIMELINE_DAYS = 7;
+/** Days the "Next 30 Days" list covers, counting today as day one. */
+const TIMELINE_DAYS = 30;
 
-/** Rows the seven-day list renders before deferring to the full schedule. */
+/**
+ * How far past the visible window the open-shift fetch reaches.
+ *
+ * The footer offers "N more open shifts after that", and it can only count
+ * what it was given: with the fetch window equal to the display window that
+ * line is dead on every department, silently, because zero is also what an
+ * empty schedule looks like. Reaching further is what leaves it able to say
+ * there is more.
+ */
+const TIMELINE_LOOKAHEAD_DAYS = 60;
+
+/**
+ * Ceilings for the two fetches that feed the list.
+ *
+ * Both sit far above what a month of either can hold. They are here to bound
+ * a runaway response, not to trim the list — trimming is the window filter's
+ * job, and a limit low enough to do that as well truncates the wrong end,
+ * which is the bug this pair replaced: `limit: 5` applied before the filter.
+ *
+ * `/events` refuses anything above 500, so the event ceiling is that cap. The
+ * pagination dependency behind `/scheduling/my-shifts` allows up to 1000, but
+ * one member's own shifts inside a month cannot approach even 200 — asking
+ * for the maximum would only make a runaway response larger.
+ */
+const EVENT_FETCH_LIMIT = 500;
+const SHIFT_FETCH_LIMIT = 200;
+
+/** Rows the list renders before deferring to the full schedule. */
 const TIMELINE_ROWS_SHOWN = 6;
 
 /**
- * Rows the seven-day list shows on a phone before collapsing the rest onto one
+ * Rows the list shows on a phone before collapsing the rest onto one
  * tap-through line. Six rows of shift detail push the three quick actions —
- * which sit below the week on a phone, in the thumb's reach — off the first
+ * which sit below the list on a phone, in the thumb's reach — off the first
  * screen; two keep them on it, and the line names what is being held back.
  */
 const TIMELINE_ROWS_SHOWN_MOBILE = 2;
@@ -435,14 +461,28 @@ const Dashboard: React.FC = () => {
 
   const loadUpcomingEvents = async () => {
     try {
+      // Bounded to the window the list renders, and to a limit that can hold
+      // it. The old shape asked for the 5 soonest events of any future date
+      // and truncated *before* the window filter ran, so five socials spread
+      // across the next six months were enough to hide every drill in the
+      // coming month behind them — on a card whose subtitle promises drills.
+      //
+      // The bound is a plain instant a day past the window rather than the
+      // window's own last day resolved in the organization's timezone. That
+      // is deliberate on both counts: it over-fetches by a day so no calendar
+      // day near the edge can fall outside it whatever the offset, and it
+      // keeps this loader free of reactive values, which is what lets the
+      // mount effect below run once rather than on every timezone-carrying
+      // render. The window filter, which does resolve the timezone, remains
+      // the authority on what is actually shown.
       const data = await eventService.getEvents({
         end_after: new Date().toISOString(),
-        limit: 5,
+        start_before: new Date(Date.now() + (TIMELINE_DAYS + 1) * 24 * 60 * 60 * 1000).toISOString(),
+        limit: EVENT_FETCH_LIMIT,
       });
-      // Sort by start date ascending and take first 5
-      const sorted = data
-        .sort((a, b) => new Date(a.start_datetime).getTime() - new Date(b.start_datetime).getTime())
-        .slice(0, 5);
+      const sorted = [...data].sort(
+        (a, b) => new Date(a.start_datetime).getTime() - new Date(b.start_datetime).getTime()
+      );
       setUpcomingEvents(sorted);
     } catch {
       // Upcoming events are non-critical
@@ -546,11 +586,12 @@ const Dashboard: React.FC = () => {
     }
     try {
       const today = getTodayLocalDate(tz);
-      const nextMonth = toLocalDateString(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), tz);
       const data = await schedulingService.getMyShifts({
         start_date: today,
-        end_date: nextMonth,
-        limit: 5,
+        // A day of slack past the window, for the same reason the event fetch
+        // takes it: the window filter is the authority on what is shown.
+        end_date: addCalendarDays(today, TIMELINE_DAYS),
+        limit: SHIFT_FETCH_LIMIT,
       });
       setMyShifts(data.shifts || []);
     } catch {
@@ -568,10 +609,10 @@ const Dashboard: React.FC = () => {
     }
     try {
       const today = getTodayLocalDate(tz);
-      const nextMonth = toLocalDateString(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), tz);
       const data = await schedulingService.getOpenShifts({
         start_date: today,
-        end_date: nextMonth,
+        // Past the visible window on purpose — see TIMELINE_LOOKAHEAD_DAYS.
+        end_date: addCalendarDays(today, TIMELINE_LOOKAHEAD_DAYS),
       });
       setOpenShifts(data);
     } catch {
@@ -728,10 +769,10 @@ const Dashboard: React.FC = () => {
   const totalHours = sumHoursToQuarter([hours.training, hours.standby, hours.administrative]);
   const monthLabel = formatDateCustom(new Date(), { month: 'long' }, tz);
 
-  // ── The seven-day list ────────────────────────────────────────────────────
-  // My shifts, open slots and events are one question — "what am I doing this
-  // week" — so they merge into one date-ordered list rather than three panels
-  // the reader has to interleave by hand.
+  // ── The thirty-day list ───────────────────────────────────────────────────
+  // My shifts, open slots and events are one question — "what am I doing next"
+  // — so they merge into one date-ordered list rather than three panels the
+  // reader has to interleave by hand.
   const windowStart = getTodayLocalDate(tz);
   const windowEnd = addCalendarDays(windowStart, TIMELINE_DAYS - 1);
 
@@ -818,7 +859,7 @@ const Dashboard: React.FC = () => {
 
   const visibleTimeline = timeline.slice(0, TIMELINE_ROWS_SHOWN);
   const timelineCollapsedOnMobile = !timelineExpandedOnMobile && timeline.length > TIMELINE_ROWS_SHOWN_MOBILE;
-  // Counted from the whole week rather than the six rows the list renders: the
+  // Counted from the whole window rather than the six rows the list renders: the
   // footer that discloses entries past the desktop cap is itself held back
   // while collapsed, so this line is the only thing left saying they exist.
   const timelineHiddenOnMobile = timelineCollapsedOnMobile ? timeline.slice(TIMELINE_ROWS_SHOWN_MOBILE) : [];
@@ -1255,20 +1296,27 @@ const Dashboard: React.FC = () => {
               </div>
 
               {/* One time list: my shifts, open slots and events, merged */}
-              <section className="card order-2 overflow-hidden" aria-labelledby="next-seven-days-heading">
+              <section className="card order-2 overflow-hidden" aria-labelledby="next-thirty-days-heading">
                 <div className="border-theme-surface-border flex items-center gap-3 border-b px-4 py-3.5 sm:px-5">
                   <Calendar className="text-theme-text-secondary h-4.5 w-4.5 shrink-0" aria-hidden="true" />
-                  <h3 id="next-seven-days-heading" className="text-theme-text-primary text-base font-bold">
-                    Next 7 Days
+                  <h3 id="next-thirty-days-heading" className="text-theme-text-primary text-base font-bold">
+                    Next 30 Days
                   </h3>
                   <span className="text-theme-text-muted ml-auto hidden text-xs lg:inline">
                     Your shifts, drills and open slots in one list
                   </span>
+                  {/* "All Shifts", not "Full Schedule": this list carries
+                      drills and events too, and /scheduling carries neither —
+                      a label promising the whole schedule sends a member
+                      looking for Thursday's drill somewhere it cannot be.
+                      `view=month` because the list now spans thirty days, and
+                      because the phone grid draws a month whatever the view
+                      says while `week` fetches only seven days of data. */}
                   <button
-                    onClick={() => void navigate('/scheduling')}
+                    onClick={() => void navigate('/scheduling?view=month')}
                     className="text-theme-accent-red ml-auto inline-flex min-h-11 shrink-0 items-center gap-1 py-2 pl-2 text-sm font-semibold lg:ml-4"
                   >
-                    Full Schedule
+                    All Shifts
                     <ChevronRight className="h-4 w-4" aria-hidden="true" />
                   </button>
                 </div>
@@ -1323,7 +1371,7 @@ const Dashboard: React.FC = () => {
                             >
                               {laterOpenShifts} more open shift{laterOpenShifts === 1 ? '' : 's'}
                             </button>{' '}
-                            later this month
+                            after that
                           </>
                         )}
                       </p>
