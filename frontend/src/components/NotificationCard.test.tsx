@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen } from '@testing-library/react';
+import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { renderWithRouter } from '../test/utils';
 import { useLocation } from 'react-router';
@@ -151,7 +151,12 @@ describe('NotificationCard', () => {
       await user.click(screen.getByRole('button', { name: /Read Message/ }));
 
       expect(calls).toEqual(['notif-1']);
-      expect(screen.getByTestId('location')).toHaveTextContent('/messages/msg-1');
+      // waitFor, because the navigation is on the far side of an await:
+      // handleNavigate awaits onMarkRead and only then navigates, so the
+      // router state settles in a microtask after the click's act() has
+      // returned. A bare getBy passed on an idle machine and failed in a full
+      // suite run, which is the one way it is always run.
+      await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent('/messages/msg-1'));
     });
 
     it('marks read on collapse, not on expand', async () => {

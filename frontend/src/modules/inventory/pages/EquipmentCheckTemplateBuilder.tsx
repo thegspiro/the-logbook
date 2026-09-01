@@ -347,6 +347,20 @@ function compartmentFormFromResponse(compartment: CheckTemplateCompartment): Com
   };
 }
 
+function compartmentCreateFromForm(comp: CompartmentFormState, sortOrder: number): CheckTemplateCompartmentCreate {
+  return {
+    name: comp.name,
+    description: comp.description.trim() || undefined,
+    sort_order: sortOrder,
+    image_url: comp.imageUrl.trim() || undefined,
+    is_header: comp.isHeader || undefined,
+    container_type: comp.containerType || undefined,
+    is_sealed: comp.isSealed,
+    parent_compartment_id: comp.parentCompartmentId || undefined,
+    items: comp.items.map((item, itemIdx) => itemCreateFromForm(item, itemIdx)),
+  };
+}
+
 // ============================================================================
 // Template Form State
 // ============================================================================
@@ -1818,35 +1832,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     try {
       const compartmentPayloads: CheckTemplateCompartmentCreate[] = compartments
         .filter((c) => !c.id) // Only include unsaved compartments in create payload
-        .map((c, idx) => ({
-          name: c.name,
-          description: c.description.trim() || undefined,
-          sort_order: idx,
-          image_url: c.imageUrl.trim() || undefined,
-          is_header: c.isHeader || undefined,
-          container_type: c.containerType || undefined,
-          is_sealed: c.isSealed,
-          parent_compartment_id: c.parentCompartmentId || undefined,
-          items: c.items.map((item, itemIdx) => ({
-            name: item.name,
-            description: item.description.trim() || undefined,
-            sort_order: itemIdx,
-            check_type: item.checkType,
-            is_required: item.isRequired,
-            required_quantity: item.requiredQuantity ? Number(item.requiredQuantity) : undefined,
-            expected_quantity: item.expectedQuantity ? Number(item.expectedQuantity) : undefined,
-            critical_minimum_quantity: item.criticalMinimumQuantity ? Number(item.criticalMinimumQuantity) : undefined,
-            min_level: item.minLevel ? Number(item.minLevel) : undefined,
-            level_unit: item.levelUnit.trim() || undefined,
-            serial_number: item.serialNumber.trim() || undefined,
-            lot_number: item.lotNumber.trim() || undefined,
-            inventory_item_id: item.inventoryItemId || undefined,
-            image_url: item.imageUrl.trim() || undefined,
-            has_expiration: item.hasExpiration,
-            expiration_date: item.expirationDate.trim() || undefined,
-            expiration_warning_days: item.expirationWarningDays ? Number(item.expirationWarningDays) : undefined,
-          })),
-        }));
+        .map(compartmentCreateFromForm);
 
       if (isEditing && templateId) {
         await equipmentCheckService.updateEquipmentCheckTemplate(templateId, {
@@ -1938,37 +1924,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           apparatus_type: form.apparatusType || undefined,
           apparatus_id: form.apparatusId || undefined,
           is_active: publish,
-          compartments: compartments.map((c, idx) => ({
-            name: c.name,
-            description: c.description.trim() || undefined,
-            sort_order: idx,
-            image_url: c.imageUrl.trim() || undefined,
-            is_header: c.isHeader || undefined,
-            container_type: c.containerType || undefined,
-            is_sealed: c.isSealed,
-            parent_compartment_id: c.parentCompartmentId || undefined,
-            items: c.items.map((item, itemIdx) => ({
-              name: item.name,
-              description: item.description.trim() || undefined,
-              sort_order: itemIdx,
-              check_type: item.checkType,
-              is_required: item.isRequired,
-              required_quantity: item.requiredQuantity ? Number(item.requiredQuantity) : undefined,
-              expected_quantity: item.expectedQuantity ? Number(item.expectedQuantity) : undefined,
-              critical_minimum_quantity: item.criticalMinimumQuantity
-                ? Number(item.criticalMinimumQuantity)
-                : undefined,
-              min_level: item.minLevel ? Number(item.minLevel) : undefined,
-              level_unit: item.levelUnit.trim() || undefined,
-              serial_number: item.serialNumber.trim() || undefined,
-              lot_number: item.lotNumber.trim() || undefined,
-              inventory_item_id: item.inventoryItemId || undefined,
-              image_url: item.imageUrl.trim() || undefined,
-              has_expiration: item.hasExpiration,
-              expiration_date: item.expirationDate.trim() || undefined,
-              expiration_warning_days: item.expirationWarningDays ? Number(item.expirationWarningDays) : undefined,
-            })),
-          })),
+          compartments: compartments.map(compartmentCreateFromForm),
         };
         const created = await equipmentCheckService.createEquipmentCheckTemplate(createPayload);
         setIsDirty(false);
@@ -2074,27 +2030,38 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
    */
   const replaceAllCompartments = async (next: CompartmentFormState[]): Promise<boolean> => {
     const persisted = compartments.map((comp) => comp.id).filter((id): id is string => Boolean(id));
+    let staged = next;
     // An id only exists on a compartment loaded from a saved template, so
     // `persisted` is non-empty only when there is a templateId to name.
+    //
+    // The discard travels WITH the replacement, in one server transaction.
+    // Sent on its own it commits an empty template while the new contents
+    // exist only in this tab until the next Save — so a crash, a closed lid or
+    // a failed save in between leaves the department with a checklist that has
+    // no contents at all, and this screen showing contents nothing persisted.
+    // The saved rows come back with ids, so Save then updates them instead of
+    // creating a second copy.
     if (persisted.length > 0 && templateId) {
       try {
         await ensureDraftBeforeStructureEdit();
-        await equipmentCheckService.deleteCompartmentsBulk(templateId, persisted);
+        const saved = await equipmentCheckService.replaceCompartments(templateId, next.map(compartmentCreateFromForm));
+        staged = saved.map(compartmentFormFromResponse);
       } catch (err: unknown) {
         toast.error(getErrorMessage(err, 'Failed to replace the template contents'));
         return false;
       }
     }
-    setCompartments(next);
-    // Marked here rather than at each call site: replacing the contents is an
-    // unsaved change on every path that does it, and the vehicle-preset branch
-    // was the one that forgot. With the guard left disabled, navigating away
-    // after the success toast left the server-side template empty — the old
-    // compartments are already deleted by this point — and discarded the
-    // preset the screen was showing, without a warning.
+    setCompartments(staged);
+    // Marked here rather than at each call site: replacing the contents leaves
+    // a save outstanding on every path that does it, and the vehicle-preset
+    // branch was the one that forgot. On an unsaved template the replacement
+    // is local and would simply be lost; on a saved one the swap is persisted
+    // but the template has been demoted to a draft on the way, so it stays
+    // unpublished until this save runs. Either way, leaving without warning
+    // is wrong.
     markDirty();
     const expanded = new Set<string>();
-    next.forEach((c) => expanded.add(c.id ?? c.clientKey));
+    staged.forEach((c) => expanded.add(c.id ?? c.clientKey));
     setExpandedCompartments(expanded);
     return true;
   };

@@ -963,6 +963,33 @@ class TestRevokedRowsAreOutOfTheLiveFigures:
         assert report["recipients"][-1]["removed_from_audience"] is True
         assert report["recipients"][-1]["is_read"] is True
 
+    async def test_the_flag_reaches_the_client(self):
+        """A key the response model does not declare never leaves the server.
+
+        The endpoint returns this report through ``AckReportResponse``, and
+        Pydantic drops anything the schema has no field for — so the admin
+        screen's "removed from audience" label rendered for nobody, and the
+        list showed a revoked receipt as an ordinary current-audience row
+        while the totals below it excluded that member. The service and the
+        schema have to be asserted together; either one alone passes.
+        """
+        svc = _svc()
+        svc.get_message_by_id = AsyncMock(
+            return_value=SimpleNamespace(id="m1", requires_acknowledgment=True)
+        )
+        svc._attach_author_names = AsyncMock()
+        svc.db.execute = AsyncMock(
+            return_value=self._rows(
+                self._record(read=True, revoked=True),
+                self._record(),
+            )
+        )
+
+        report = await svc.get_acknowledgment_report("m1", "org-1")
+        served = messages_endpoint.AckReportResponse.model_validate(report)
+
+        assert [r.removed_from_audience for r in served.recipients] == [False, True]
+
     async def test_the_stats_denominator_is_the_live_audience(self):
         svc = _svc()
         svc.get_message_by_id = AsyncMock(return_value=SimpleNamespace(id="m1"))

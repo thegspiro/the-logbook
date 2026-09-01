@@ -9,7 +9,7 @@ import hashlib
 import json
 import math
 from datetime import date, datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional, Sequence, Set
+from typing import Any, Dict, List, Optional, Sequence, Set, Tuple
 from uuid import NAMESPACE_URL, uuid5
 
 from sqlalchemy import and_, func, or_, select, update
@@ -590,66 +590,98 @@ class EquipmentCheckService:
         await self.db.commit()
         return True
 
-    async def delete_compartments_bulk(
-        self, template_id: str, organization_id: str, compartment_ids: List[str]
-    ) -> Optional[List[str]]:
-        """Delete a named set of a template's compartments in one transaction.
+    async def replace_compartments(
+        self,
+        template_id: str,
+        organization_id: str,
+        compartments: List[Dict[str, Any]],
+    ) -> Optional[Tuple[List[Tuple[str, str]], List[CheckTemplateCompartment]]]:
+        """Swap a template's whole compartment tree in one transaction.
 
         The builder's three bulk-replacement paths — vehicle preset, JSON
         import, CSV import — each promise to discard everything currently on
-        the template. Driving that as one DELETE per compartment commits each
-        one separately, so a failure part-way through leaves the template
-        half-erased with no way back, while the builder still shows the
-        contents it thinks are there.
+        the template and put the new contents in its place. Both halves are
+        one request because they are one decision: discarding on its own
+        commits an empty template, with the replacement existing nowhere but
+        the browser until the next Save. A closed tab or a failure in between
+        leaves the department with a checklist that has no contents at all,
+        and the screen showing contents that were never persisted.
 
-        **Idempotent, and that is load-bearing.** If the server commits and the
-        response is lost, the builder reports failure while the template is
-        already empty — and it still holds every old compartment id in local
-        state. Rejecting an id that no longer exists would make the retry fail
-        too, and the only way out would be a reload that reveals the loss. So
-        an id that resolves to nothing is treated as already deleted, and the
-        retry succeeds having done nothing. That is what the id means here: the
-        request asks for a state ("these are gone"), not for an event.
+        Everything the new contents reference is validated before anything is
+        deleted, so a rejected item leaves the old tree exactly as it was.
 
-        An id that resolves to a compartment on a *different* template is a
-        different matter and is still refused — it names something real that
-        this call has no business destroying.
+        An empty list is a valid request: it clears the template.
 
-        Returns None when the template is not the caller's.
+        Replacement compartments cannot name a parent. Every compartment on
+        the template is being replaced, so a parent id could only point at a
+        row this call is deleting; the three callers send flat lists.
+
+        Returns None when the template is not the caller's, otherwise the
+        (id, name) pairs it discarded and the compartments it created — the
+        endpoint's audit trail names the discarded rows, and after the swap
+        there is nothing left to read a name from.
         """
         template = await self.get_template(template_id, organization_id)
         if not template:
             return None
-        if not compartment_ids:
-            return []
-        if len(set(compartment_ids)) != len(compartment_ids):
-            raise ValueError("Compartment IDs must be unique")
 
-        # Resolved without the template filter, so a live compartment belonging
-        # to another template is seen and refused rather than quietly skipped
-        # alongside the ids that are genuinely gone.
-        result = await self.db.execute(
+        for entry in compartments:
+            if entry.get("parent_compartment_id"):
+                raise ValueError(
+                    "A replacement compartment cannot name a parent compartment"
+                )
+            # EC2-4: nested items carry client-supplied inventory_item_id /
+            # equipment_id, exactly as add_compartment's do.
+            for item_data in entry.get("items") or []:
+                await self._validate_item_fks(item_data, organization_id)
+
+        existing = await self.db.execute(
             select(CheckTemplateCompartment)
-            .join(
-                EquipmentCheckTemplate,
-                EquipmentCheckTemplate.id == CheckTemplateCompartment.template_id,
-            )
-            .where(
-                EquipmentCheckTemplate.organization_id == organization_id,
-                CheckTemplateCompartment.id.in_(compartment_ids),
-            )
-            .with_for_update(of=CheckTemplateCompartment)
+            .where(CheckTemplateCompartment.template_id == template_id)
+            .with_for_update()
         )
-        found = list(result.scalars().all())
-        foreign = [c for c in found if str(c.template_id) != str(template_id)]
-        if foreign:
-            raise ValueError("Every compartment must belong to the specified template")
-
-        for comp in found:
+        doomed = list(existing.scalars().all())
+        discarded = [(str(comp.id), comp.name) for comp in doomed]
+        for comp in doomed:
             await self.db.delete(comp)
+        await self.db.flush()
+
+        created_ids: List[str] = []
+        for index, entry in enumerate(compartments):
+            data = dict(entry)
+            items_data = data.pop("items", None) or []
+            data.pop("parent_compartment_id", None)
+            # Position comes from the list order the caller sent. A preset or
+            # an import describes a sequence, and trusting a sort_order that
+            # every entry may have left at its default would collapse it.
+            data["sort_order"] = index
+            compartment = CheckTemplateCompartment(
+                id=generate_uuid(),
+                template_id=template_id,
+                **data,
+            )
+            self.db.add(compartment)
+            await self.db.flush()
+
+            for item_data in items_data:
+                self._create_item(compartment.id, item_data)
+            created_ids.append(str(compartment.id))
+
         await self._advance_content_revision(template_id)
         await self.db.commit()
-        return [str(comp.id) for comp in found]
+
+        if not created_ids:
+            return discarded, []
+
+        # Re-fetch with eager-loaded relationships to avoid MissingGreenlet
+        # errors when FastAPI serializes the response outside the async context.
+        result = await self.db.execute(
+            select(CheckTemplateCompartment)
+            .options(selectinload(CheckTemplateCompartment.items))
+            .where(CheckTemplateCompartment.id.in_(created_ids))
+            .order_by(CheckTemplateCompartment.sort_order)
+        )
+        return discarded, list(result.scalars().all())
 
     async def clone_compartment(
         self, compartment_id: str, organization_id: str, sort_order: int

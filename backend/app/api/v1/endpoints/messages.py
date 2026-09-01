@@ -125,6 +125,13 @@ class AckReportRecipient(BaseModel):
     read_at: str | None = None
     is_acknowledged: bool
     acknowledged_at: str | None = None
+    # Declared, not incidental: the report lists a member whose audience
+    # membership was withdrawn after they had already read or acknowledged,
+    # because that receipt is the only record they saw the notice — but the
+    # totals exclude them. Without this field Pydantic drops the distinction
+    # on the way out and the row reads as current audience, leaving the list
+    # longer than its own denominator with nothing to explain the gap.
+    removed_from_audience: bool = False
 
 
 class AckReportResponse(BaseModel):

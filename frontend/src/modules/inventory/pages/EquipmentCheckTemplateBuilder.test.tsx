@@ -15,7 +15,8 @@ const {
   addCheckItemsBulk,
   deleteCheckItemsBulk,
   deleteCheckItem,
-  deleteCompartmentsBulk,
+  replaceCompartments,
+  addCompartment,
   createEquipmentCheckTemplate,
   updateEquipmentCheckTemplate,
   toastSuccess,
@@ -30,7 +31,8 @@ const {
   addCheckItemsBulk: vi.fn(),
   deleteCheckItemsBulk: vi.fn(),
   deleteCheckItem: vi.fn(),
-  deleteCompartmentsBulk: vi.fn(),
+  replaceCompartments: vi.fn(),
+  addCompartment: vi.fn(),
   createEquipmentCheckTemplate: vi.fn(),
   updateEquipmentCheckTemplate: vi.fn(),
   toastSuccess: vi.fn(),
@@ -59,7 +61,8 @@ vi.mock('@/modules/inventory/services/equipmentCheckApi', () => ({
     getCsvSampleUrl: vi.fn().mockReturnValue('/sample.csv'),
     deleteCheckItemsBulk: (...args: unknown[]) => deleteCheckItemsBulk(...args),
     deleteCheckItem: (...args: unknown[]) => deleteCheckItem(...args),
-    deleteCompartmentsBulk: (...args: unknown[]) => deleteCompartmentsBulk(...args),
+    replaceCompartments: (...args: unknown[]) => replaceCompartments(...args),
+    addCompartment: (...args: unknown[]) => addCompartment(...args),
     createEquipmentCheckTemplate: (...args: unknown[]) => createEquipmentCheckTemplate(...args),
     updateEquipmentCheckTemplate: (...args: unknown[]) => updateEquipmentCheckTemplate(...args),
   },
@@ -1489,7 +1492,25 @@ describe('EquipmentCheckTemplateBuilder replacing a saved template’s contents'
   beforeEach(() => {
     vi.clearAllMocks();
     getTemplate.mockResolvedValue(structuredClone(vehicleTemplate));
-    deleteCompartmentsBulk.mockResolvedValue(['cab', 'bag', 'section']);
+    // Echoes the request back as saved rows, which is what the endpoint does:
+    // the replacement is persisted in the same transaction as the discard and
+    // comes back with ids, so Save updates those rows instead of creating a
+    // second copy beside them.
+    replaceCompartments.mockReset();
+    replaceCompartments.mockImplementation((_templateId: unknown, payload: unknown) =>
+      Promise.resolve(
+        (payload as { name: string; items?: { name: string; check_type: string }[] }[]).map((comp, idx) => ({
+          id: `saved-${idx}`,
+          name: comp.name,
+          items: (comp.items ?? []).map((item, itemIdx) => ({
+            id: `saved-${idx}-${itemIdx}`,
+            name: item.name,
+            checkType: item.check_type,
+            isRequired: true,
+          })),
+        }))
+      )
+    );
     updateEquipmentCheckTemplate.mockResolvedValue(vehicleTemplate);
     mockViewport('phone');
   });
@@ -1501,15 +1522,39 @@ describe('EquipmentCheckTemplateBuilder replacing a saved template’s contents'
     await user.click(await screen.findByRole('button', { name: 'Load preset' }));
   };
 
-  it('deletes the compartments it says it discards', async () => {
+  it('sends the replacement in the same request as the discard', async () => {
     const user = userEvent.setup();
     renderBuilder();
 
     await loadEnginePreset(user);
 
-    // One request, not one per compartment: a loop commits each delete
-    // separately and a failure on the third leaves the first two gone.
-    await waitFor(() => expect(deleteCompartmentsBulk).toHaveBeenCalledWith('template-1', ['cab', 'bag', 'section']));
+    // One request carrying both halves. A discard on its own commits an empty
+    // template while the preset exists only in this tab until Save, so a
+    // closed lid in between costs the department the checklist it had.
+    await waitFor(() => expect(replaceCompartments).toHaveBeenCalledTimes(1));
+    const [templateArg, payload] = replaceCompartments.mock.calls[0] as [string, { name: string }[]];
+    expect(templateArg).toBe('template-1');
+    expect(payload.length).toBeGreaterThan(0);
+    expect(payload.every((comp) => Boolean(comp.name))).toBe(true);
+    // The old contents are named nowhere in the request: the server discards
+    // whatever the template holds, so a stale id in this tab cannot make the
+    // retry fail.
+    expect(JSON.stringify(payload)).not.toContain('"cab"');
+  });
+
+  it('adopts the saved ids so a later save does not duplicate the preset', async () => {
+    const user = userEvent.setup();
+    renderBuilder();
+
+    await loadEnginePreset(user);
+    await waitFor(() => expect(replaceCompartments).toHaveBeenCalledTimes(1));
+
+    await user.click(screen.getByRole('button', { name: /Save draft/ }));
+
+    // Persisted already, so Save updates them. Creating them again would leave
+    // the template holding the preset twice.
+    await waitFor(() => expect(updateEquipmentCheckTemplate).toHaveBeenCalled());
+    expect(addCompartment).not.toHaveBeenCalled();
   });
 
   it('marks the template unsaved so the preset is not lost on navigation', async () => {
@@ -1533,10 +1578,12 @@ describe('EquipmentCheckTemplateBuilder replacing a saved template’s contents'
     expect(await screen.findByText('Leave without saving?')).toBeInTheDocument();
   }, 15_000);
 
-  it('keeps the template intact when the discard fails', async () => {
-    // Deleted before the swap, so a failure leaves the template as it was
-    // rather than half-replaced with no way back.
-    deleteCompartmentsBulk.mockRejectedValue({ response: { data: { detail: 'Compartment is in use' } } });
+  it('keeps the template intact when the replacement fails', async () => {
+    // Nothing is deleted until the whole replacement has been accepted, so a
+    // failure leaves the template as it was rather than half-replaced with no
+    // way back.
+    replaceCompartments.mockReset();
+    replaceCompartments.mockRejectedValue({ response: { data: { detail: 'Compartment is in use' } } });
     const user = userEvent.setup();
     renderBuilder();
 
@@ -1700,9 +1747,7 @@ describe('EquipmentCheckTemplateBuilder flushing debounced edits on save', () =>
   it('sends the pending edit rather than letting Save race it', async () => {
     await editThenSaveImmediately();
 
-    await waitFor(() =>
-      expect(updateCheckItem).toHaveBeenCalledWith('radio', { is_required: false })
-    );
+    await waitFor(() => expect(updateCheckItem).toHaveBeenCalledWith('radio', { is_required: false }));
   });
 
   it('reports a failed flush through the save error toast', async () => {

@@ -245,18 +245,25 @@ export const equipmentCheckService = {
     await api.delete(`/equipment-checks/compartments/${compartmentId}`);
   },
   /**
-   * Discard a template's compartments in one transaction.
+   * Swap a template's whole contents in one transaction.
    *
-   * The builder's bulk-replacement paths clear the template before loading a
-   * preset or an import. A loop of single deletes commits each separately, so
-   * a failure part-way through half-erases the template with no way back.
+   * The builder's bulk-replacement paths clear the template and load a preset
+   * or an import in its place. The discard travels with the replacement
+   * because they are one decision: sent on its own it commits an empty
+   * template, leaving the new contents in the browser until the next Save —
+   * a closed tab in between costs the department the checklist it had.
+   *
+   * An empty list is a valid request: it clears the template.
    */
-  async deleteCompartmentsBulk(templateId: string, compartmentIds: string[]): Promise<string[]> {
-    const response = await api.post<{ deletedCompartmentIds: string[] }>(
-      `/equipment-checks/templates/${templateId}/compartments/bulk-delete`,
-      { compartment_ids: compartmentIds }
+  async replaceCompartments(
+    templateId: string,
+    compartments: CheckTemplateCompartmentCreate[]
+  ): Promise<CheckTemplateCompartment[]> {
+    const response = await api.post<CheckTemplateCompartment[]>(
+      `/equipment-checks/templates/${templateId}/compartments/replace`,
+      { compartments }
     );
-    return response.data.deletedCompartmentIds;
+    return response.data;
   },
   async cloneCompartment(compartmentId: string, sortOrder: number): Promise<CheckTemplateCompartment> {
     const response = await api.post<CheckTemplateCompartment>(`/equipment-checks/compartments/${compartmentId}/clone`, {
