@@ -2447,7 +2447,14 @@ export const SHOTS = [
         .first()
         .click({ timeout: 15_000 });
       await page.waitForTimeout(900);
-      const dialog = page.locator("div.fixed.inset-0");
+      // Union, because this codebase now has three dialog shapes: the shared
+      // `modal-overlay` utility (which carries its own fixed positioning),
+      // role="dialog" from the shared Modal, and the older hand-rolled
+      // `fixed inset-0`. Safe as a container -- every lookup below takes
+      // .first() -- where it would fail strict mode as a clip selector.
+      const dialog = page
+        .locator("div.modal-overlay, div[role='dialog'], div.fixed.inset-0")
+        .first();
       await dialog
         .getByPlaceholder(/e\.g\.|name/i)
         .first()
@@ -2621,7 +2628,14 @@ export const SHOTS = [
       await page.waitForTimeout(800);
       // Filled in, so the shot shows what a group is rather than an empty
       // form: a turnout coat carried in sizes S–4XL.
-      const dialog = page.locator("div.fixed.inset-0");
+      // Union, because this codebase now has three dialog shapes: the shared
+      // `modal-overlay` utility (which carries its own fixed positioning),
+      // role="dialog" from the shared Modal, and the older hand-rolled
+      // `fixed inset-0`. Safe as a container -- every lookup below takes
+      // .first() -- where it would fail strict mode as a clip selector.
+      const dialog = page
+        .locator("div.modal-overlay, div[role='dialog'], div.fixed.inset-0")
+        .first();
       await dialog
         .getByPlaceholder("e.g. Class A Dress Uniform")
         .fill("Structural Coat");
@@ -3231,7 +3245,9 @@ export const SHOTS = [
         .first()
         .click();
       await page.waitForTimeout(1200);
-      const dialog = page.locator("div.fixed.inset-0").first();
+      const dialog = page
+        .locator("div.modal-overlay, div[role='dialog'], div.fixed.inset-0")
+        .first();
       // The eligible members sort first, so the first three rows are a
       // selection the Enroll button will count. Selecting mutates nothing —
       // only the button does, and it is deliberately not pressed.
