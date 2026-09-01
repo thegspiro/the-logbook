@@ -94,8 +94,13 @@ const PATH_LABELS: Record<string, string> = {
 
   // Scheduling module
   patterns: 'Patterns',
-  'equipment-check-templates': 'Equipment Check Templates',
-  'equipment-check-reports': 'Equipment Check Reports',
+
+  // Equipment checklists (Inventory). The segments are shared with the rest of
+  // Inventory, so these are deliberately generic: /inventory/checklists,
+  // /inventory/admin/checklists/templates/:id, .../reports, .../supply.
+  checklists: 'Equipment Checklists',
+  'apparatus-inventory': 'Apparatus Inventory',
+  supply: 'Supply',
 
   // Other modules
   'action-items': 'Action Items',

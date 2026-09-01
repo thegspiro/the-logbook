@@ -45,6 +45,9 @@ function templateToInitialData(template: EventTemplate): Partial<EventCreate> {
     max_attendees: template.max_attendees || undefined,
     is_mandatory: template.is_mandatory,
     allow_guests: template.allow_guests,
+    // ?? rather than ||: null here means "inherit the org default" and is a
+    // real choice, so it must survive rather than being coerced away.
+    attendee_visibility: template.attendee_visibility ?? null,
     check_in_window_type: template.check_in_window_type || undefined,
     check_in_minutes_before: template.check_in_minutes_before ?? undefined,
     check_in_minutes_after: template.check_in_minutes_after ?? undefined,

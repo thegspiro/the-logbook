@@ -1375,3 +1375,180 @@ on the shift roster; paper comes out of the watch-desk printer.]**
 **Production:** show **RFC 5737 documentation addresses** (`192.0.2.x`) on
 screen. Never a real department's printer address — that is an internal network
 detail and this video is public.
+
+---
+
+## SHORT 8AM: Who Do I Ask About This?
+
+**Length:** 40 seconds
+**Extracted From:** Script 4, "Who runs what"; Script 6, "Who do I ask?"
+**Added:** 2026-08-31
+
+**[0:00 — SCREEN: A new member holding a uniform problem, scrolling a member
+directory of two hundred names, giving up.]**
+
+> "Six weeks in, something goes wrong with your gear, and you have no idea who
+> to take it to. So you ask whoever you happen to see, and they don't know
+> either."
+
+**[0:12 — SCREEN: Governance → Organizational Chart, outline view, already
+showing several levels. **There is no expand/collapse** — the outline renders
+its levels statically — so pan or scroll rather than staging an expansion.]**
+
+> "Governance, Organizational Chart. Your department's chain of command, drawn
+> out — who runs training, who runs the trucks, who owns uniforms."
+
+**[0:22 — SCREEN: Hold on a seat card. **Do not stage a tap** — for an ordinary
+member the card is static: `OrgChartSeatCard` renders responsibility and contact
+links directly and shows controls only when the viewer can manage the chart.
+Point to the details already on the card.]**
+
+> "The card tells you what that seat is responsible for and how to reach whoever
+> holds it — no tapping, it's right there. And a seat can hold more than one
+> person, so two deputy chiefs share one box instead of you guessing which one
+> to email."
+
+**[0:32 — CALLOUT: "No permission needed. That's the point."]**
+
+> "Every member can open it. If it's empty, nobody's drawn it yet — go nudge
+> your officers."
+
+**Production:** the demo chart needs a shared seat visible. Shoot the outline
+view; the diagram view is a separate short if you want one.
+
+---
+
+## SHORT 8AN: The Ballot That Skipped the Life Members
+
+**Length:** 40 seconds
+**Extracted From:** Script 12, per-item eligibility; Script 4, elections insert
+**Added:** 2026-08-31 · **Rewritten 2026-08-31** (see production note)
+
+**[0:00 — SCREEN: A ballot dispatch summary. A fifty-year life member is not on
+the recipient list for an item restricted to regular members.]**
+
+> "Your bylaws put this one to the regular members. Your life members didn't
+> get it. Nobody noticed, because nothing said so."
+
+**[0:12 — SCREEN: The old single "Membership type" field, value `life`.]**
+
+> "One field held two different facts — what kind of member you are, and where
+> you are on the ladder. 'Life' and 'regular' were competing values, so earning
+> life membership quietly took you _out_ of 'regular'."
+
+**[0:24 — SCREEN: Class: Operational · Status: Life. The same ballot, life
+member now on the list.]**
+
+> "They're two fields now, so both are true at once. Your life members are back
+> in the regular electorate."
+
+**[0:33 — CALLOUT: "Check your next ballot's recipient list."]**
+
+> "It moves the other way too — an administrative member with regular standing
+> no longer gets that ballot. Worth checking against your roster once."
+
+**Production:** **there is no new UI to shoot.** The member screens still show a
+single Membership Type selector; the class/status pair is derived from it. Shoot
+the _ballot recipient list_, which is where the change is visible. Do not
+reconstruct a fake profile screen showing two fields — none exists.
+
+**[PRODUCTION NOTE — this short originally claimed the split made life and
+probationary members eligible for **operational** ballots. It does not:
+`operational` requires regular standing, unchanged. The real change is the
+`regular` category. Verify against `ElectionService._user_has_role_type`.]**
+
+## SHORT 8AO: Where Did /testing Go?
+
+**Length:** 35 seconds
+**Extracted From:** Script 3, Chapter 10
+**Added:** 2026-08-31
+
+**[0:00 — SCREEN: Somebody typing `/testing`, getting a refusal, checking their
+permissions, finding nothing wrong.]**
+
+> "You were halfway through walking every screen before go-live. You upgrade.
+> The page is gone. And your permissions haven't changed, so you go looking in
+> entirely the wrong place."
+
+**[0:14 — SCREEN: Settings → Modules. Testing Checklist, switched off.]**
+
+> "It's a module now, and the upgrade leaves it off. Settings, Modules, Testing
+> Checklist."
+
+**[0:24 — SCREEN: `/testing` back, with every previous mark still in place.]**
+
+> "**Anything on the server is still there** — every mark, every note, back the
+> moment you switch it on."
+
+**[0:28 — SCREEN: The old browser-stored checklist, and an export button.]**
+
+> "One catch, and it's the one that costs you a walkthrough: if you're on a
+> build from before the checklist moved to the server, your marks are in the
+> **browser**, and nothing imports them. **Export before you upgrade.**"
+
+**[0:31 — CALLOUT: "Off by default. Not gone."]**
+
+---
+
+## SHORT 8AP: Build a Check Template in One List
+
+**Length:** 45 seconds
+**Extracted From:** Script 3 / Script 5, template builder
+**Added:** 2026-08-31
+
+**[0:00 — SCREEN: The old builder — sidebar, three-step progress strip,
+"Template readiness" card, mode toggle.]**
+
+> "Building a check template used to mean four places at once. A sidebar for
+> the details, a progress strip along the top, a readiness score, and a mode
+> toggle you had to get right before you could type."
+
+**[0:14 — SCREEN: The new canvas — one list, sections, locations and items in
+walking order.]**
+
+> "It's one list now, in the order the crew walks the rig. Name, answer type,
+> and the number it's graded against — all on the row."
+
+**[0:26 — SCREEN: Type an item, press Enter. Paste a list; the preview names
+every line.]**
+
+> "One box per location. Type and press Enter, or paste the whole list and
+> confirm a preview."
+
+**[0:36 — SCREEN: Publish greyed out; the blockers list; clicking one jumps to
+the row and puts the cursor in the empty field.]**
+
+> "And when you can't publish, it doesn't give you a score — it gives you the
+> list. Click one, and it takes you to the row, opens the location, and puts
+> your cursor in the field that's empty."
+
+**Production:** **the "before" state no longer exists in any build.** Either
+source it from an archived capture or drop the opening beat and start on the
+canvas — do not reconstruct the old screen.
+
+---
+
+## SHORT 8AQ: Thread Colour on a Brass Plate
+
+**Length:** 30 seconds
+**Extracted From:** Script 13, personalization
+**Added:** 2026-08-31
+
+**[0:00 — SCREEN: An engraved award plaque in the store, asking the member to
+choose a thread colour.]**
+
+> "This is an engraved brass plate. It's asking what colour thread you'd like."
+
+**[0:10 — SCREEN: The personalization panel, method selector: Embroidery /
+Engraving.]**
+
+> "Embroidery and engraving shared one field, so every personalized item asked
+> the same questions whether they made sense or not."
+
+**[0:20 — SCREEN: Embroidery selected — thread swatch present. Engraving
+selected — swatch gone.]**
+
+> "They're separate now. Thread colour only where there's actually thread."
+
+**Production:** two captures, one per method. A single capture cannot show the
+change.

@@ -38,6 +38,7 @@ import StarRating from '../../modules/scheduling/components/StarRating';
 import { shiftCompletionService, trainingModuleConfigService } from '../../services/api';
 import { userService } from '../../services/api';
 import { schedulingService } from '../../modules/scheduling/services/api';
+import { positionLabel } from '../../modules/scheduling/utils/positionLabels';
 import type { ShiftRecord } from '../../modules/scheduling/services/api';
 import { useAuthStore } from '../../stores/authStore';
 import { SubmissionStatus } from '../../constants/enums';
@@ -1772,7 +1773,9 @@ export const ShiftReportsTab: React.FC = () => {
                             <div className="min-w-0 flex-1">
                               <div className="flex items-center gap-2">
                                 <span className="text-theme-text-primary text-sm font-medium">{member.user_name}</span>
-                                <span className="text-theme-text-muted text-xs capitalize">{member.position}</span>
+                                <span className="text-theme-text-muted text-xs capitalize">
+                                  {positionLabel(member.position)}
+                                </span>
                                 {isTrainee && (
                                   <span className="rounded-full border border-violet-500/20 bg-violet-500/10 px-2 py-0.5 text-xs font-medium text-violet-700 dark:text-violet-400">
                                     Trainee — {member.program_name}

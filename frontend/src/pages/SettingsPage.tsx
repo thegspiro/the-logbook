@@ -1031,7 +1031,7 @@ export const SettingsPage: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => logoInputRef.current?.click()}
-                  className="text-theme-accent-blue inline-flex items-center gap-1.5 text-sm hover:opacity-80"
+                  className="text-theme-accent-blue inline-flex items-center gap-1.5 text-sm hover:opacity-80 max-md:min-h-[44px]"
                 >
                   <Upload className="h-3.5 w-3.5" />
                   Upload logo

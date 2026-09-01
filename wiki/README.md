@@ -31,6 +31,18 @@ This directory contains all the wiki pages for The Logbook project. These pages 
 - **Development-Frontend.md** - React/TypeScript frontend development
 - **Contributing.md** - Contribution guidelines
 
+### Modules
+
+Per-module pages are listed in full in `_Sidebar.md`. Added most recently:
+
+- **Module-Governance-Org-Chart.md** — the department's chain of command (`/governance/org-chart`), added 2026-08-24
+- **Module-Testing-Checklist.md** — the pre-launch walkthrough, which became a switched-off-by-default module on 2026-08-27
+
+### Release handoffs
+
+One page per change window, newest first. The current one is
+**Recent-Changes-2026-08-24-to-31.md**; `_Sidebar.md` links the rest.
+
 ### Security
 
 - **Security-Overview.md** - Security policy and compliance

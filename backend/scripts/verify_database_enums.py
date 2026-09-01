@@ -26,11 +26,13 @@ from pathlib import Path
 # Add parent directory to path to import app modules
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+import enum
+
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
+
 from app.core.config import settings
-from app.models.user import OrganizationType, IdentifierType
-import enum
+from app.models.user import IdentifierType, OrganizationType
 
 
 class EnumVerifier:
@@ -68,10 +70,10 @@ class EnumVerifier:
         result = self.session.execute(
             query,
             {
-                'schema': settings.MYSQL_DATABASE,
-                'table': table_name,
-                'column': column_name
-            }
+                "schema": settings.MYSQL_DATABASE,
+                "table": table_name,
+                "column": column_name,
+            },
         ).fetchone()
 
         if not result:
@@ -79,11 +81,12 @@ class EnumVerifier:
 
         # Parse enum('value1','value2','value3') format
         column_type = result[0]
-        if not column_type.startswith('enum('):
+        if not column_type.startswith("enum("):
             return []
 
         # Extract values between quotes
         import re
+
         values = re.findall(r"'([^']+)'", column_type)
         return values
 
@@ -92,7 +95,7 @@ class EnumVerifier:
         enum_class: type[enum.Enum],
         table_name: str,
         column_name: str,
-        display_name: str
+        display_name: str,
     ) -> bool:
         """
         Verify a single enum against database.
@@ -113,7 +116,9 @@ class EnumVerifier:
         actual_values = set(self.get_mysql_enum_values(table_name, column_name))
 
         if not actual_values:
-            print(f"⚠️  {display_name}: No enum found in database (table: {table_name}, column: {column_name})")
+            print(
+                f"⚠️  {display_name}: No enum found in database (table: {table_name}, column: {column_name})"
+            )
             return False
 
         # Compare
@@ -153,9 +158,9 @@ class EnumVerifier:
         results.append(
             self.verify_enum(
                 OrganizationType,
-                'organizations',
-                'organization_type',
-                'OrganizationType (organizations.organization_type)'
+                "organizations",
+                "organization_type",
+                "OrganizationType (organizations.organization_type)",
             )
         )
 
@@ -165,9 +170,9 @@ class EnumVerifier:
         results.append(
             self.verify_enum(
                 IdentifierType,
-                'organizations',
-                'identifier_type',
-                'IdentifierType (organizations.identifier_type)'
+                "organizations",
+                "identifier_type",
+                "IdentifierType (organizations.identifier_type)",
             )
         )
 
@@ -183,7 +188,9 @@ class EnumVerifier:
             print()
             print("RECOMMENDED ACTIONS:")
             print("1. Check if a migration needs to be run: alembic upgrade head")
-            print("2. If migration is current, create a new migration to fix enum values")
+            print(
+                "2. If migration is current, create a new migration to fix enum values"
+            )
             print("3. Review migration files for case mismatches")
 
         print("=" * 70)
@@ -208,6 +215,7 @@ def main():
     except Exception as e:
         print(f"❌ Verification failed with error: {e}")
         import traceback
+
         traceback.print_exc()
         verifier.close()
         sys.exit(2)

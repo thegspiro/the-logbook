@@ -7,6 +7,646 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### The dashboard's seven-day list is now thirty days, and its control says where it goes (2026-09-01)
+
+**Changed**
+
+- The dashboard card that merges a member's own shifts, open slots and events
+  covers **thirty days** rather than seven, and is titled **Next 30 Days**. It
+  was already a rolling window anchored to today, so it simply reaches further;
+  the six-row cap and the "N more through <date>" footer are unchanged.
+- **Its control is now "All Shifts", not "Full Schedule", and it opens the
+  month view.** The card lists drills and events alongside shifts, but
+  `/scheduling` holds shifts only — every tab there is shift-scoped and the
+  calendar endpoints return shifts — so a member who saw Thursday's drill on
+  the card and followed a promise of the _full_ schedule arrived somewhere it
+  could not be. Opening on the month view also fixes a phone mismatch: that
+  grid draws a month at every width, while the week view fetched only seven
+  days to fill it.
+- **Drills stop being crowded off the list.** The card's events and own-shifts
+  requests were capped at five records each, and the cap applied _before_ the
+  window filter rather than after — so five socials spread across the next six
+  months were enough to hide every drill in the coming month, on a card whose
+  own subtitle promises drills. Both requests now ask for the window the card
+  renders.
+- The footer's "N more open shifts" line **names the horizon it counts**. The
+  open-shift request deliberately reaches past the visible window so that line
+  has something to report, but it stops at sixty days; the wording no longer
+  implies it covers everything beyond the window.
+
+**Fixed**
+
+- The **"Take a Shift"** quick action counted open shifts up to sixty days out,
+  well past the window the card advertises — a number members read as "what is
+  open now", attached to a button that opens a schedule not showing those
+  shifts. Its count, and the short-staffed tally beside it, are now scoped to
+  the visible window; only the footer's "more later" line reads the longer
+  reach it was added for.
+
+### The member roster showed every member the membership coordinator's screen (2026-09-01)
+
+**Changed**
+
+- `/members` carries no permission gate — it is the department directory, open
+  to everyone — but it was rendering the coordinator's working screen to
+  everyone too: a username under each name, a hire date column, a per-row
+  Actions column, bulk-selection checkboxes with Print Badges and Export
+  Selected, a CSV export of the whole roster, and the title "Membership
+  Management — Manage department members and records". A firefighter looking up
+  who is on B platoon was reading a personnel management table. Those elements
+  are now shown only to holders of `members.manage`, the same grant that
+  already gated Add Member, Import CSV and Delete on this page; for a
+  coordinator nothing has changed. Everyone still gets the status counters, the
+  contact column their department has chosen to publish, search, filtering and
+  pagination, and the page is titled "Member Directory".
+- Search no longer matches a username for members who cannot see one. It is not
+  displayed anywhere on their page, so a row returned for "ladams" had no
+  visible reason to be there. Name, membership number and email — the three the
+  search box has always advertised — are unchanged, for everyone.
+- **Clicking a member's row opens their profile.** The only way in used to be
+  the pencil in the Actions column, which is now gone for most of the
+  department, so the row and the phone card carry it instead — for coordinators
+  as well, who keep the pencil. The member's name is a real link rather than
+  the row being a tab stop: a screen reader gets one target per row instead of
+  twenty-five, and the name can be middle-clicked or opened in a new tab.
+  Clicks that land on a checkbox or an action button are still theirs, so
+  selecting a member no longer risks navigating away from the list.
+
+**Note**
+
+This is a change to what the page _shows_, not to what the server _sends_. The
+member list endpoint still returns usernames and hire dates to anyone with
+`members.view`, so this declutters the screen — it is not a confidentiality
+boundary.
+
+### The schedule named a crew seat by its stored token, so the EMT seat read as "EMS" (2026-09-01)
+
+**Fixed**
+
+- **A shift built from a template with two EMT seats listed them as "EMS" on
+  the schedule.** The seat's stored token and its name on screen are two
+  different things: the token is canonical and lowercase (`ems`) because it is
+  what the signup API grants against, and the label is what a firefighter
+  reads, which everywhere the seat is _chosen_ — the template form, the
+  eligibility settings, the rank editor — is "EMT". The board, the phone day
+  sheet, My Shifts, the shift report crew list and both template summaries
+  printed the token instead, so the same seat had two names depending on which
+  screen you were standing on, and "EMS" reads as a different seat rather than
+  as the same one spelled another way. Every screen that shows a seat name now
+  resolves it through one helper (`positionLabel`), so there is no second copy
+  of the mapping left to drift. Custom seats a department defines itself are
+  not in that mapping — their labels live in the department's scheduling
+  settings, read by the screens that offer them — and are unchanged.
+- **The same token reached print and email.** A printed shift roster's
+  right-hand column and the shift-reminder emails' crew list were built from
+  the token as well ("EMS", "Ems"), and a shift assignment notification told a
+  member they had been assigned to the "ems position". These now go through
+  `position_label` in `app/utils/positions.py`, the backend half of the same
+  mapping, asserted against the frontend's copy from source so the two cannot
+  disagree. On a 32-character receipt a label wider than the seat column falls
+  back to its first word, because the renderer's mid-word cut
+  ("DRIVER/OPERA") reads as a printer fault.
+- **`POSITION_LABELS` held three keys for one seat** — `EMS`, `ems` and `EMT`,
+  all mapping to "EMT" — which is also why the shift assign dropdown, built by
+  iterating that map, offered "EMT" three times, two of them tokens no member
+  can actually be signed up as. The map is now one entry per seat, keyed by the
+  canonical token, and the alias folding lives in the helper next to the
+  backend's own.
+
+### A concurrency race in the previous TOTP-replay fix let the same code complete two independent logins, three related MFA/brute-force gaps, and the identical race found one field over on re-review (2026-09-01)
+
+**Fixed**
+
+- **The just-landed fix for cross-endpoint TOTP replay had its own race:**
+  `_verify_and_consume_totp` read and later wrote `user.mfa_last_timestep`
+  with no row lock, so two concurrent requests carrying the SAME valid code
+  (e.g. a phishing relay racing a captured code against an attacker's own
+  `/mfa/login` and the legitimate holder's request elsewhere) could both
+  pass the replay check and both complete a session before either committed.
+  Fixed with a locking re-read (`.with_for_update()` +
+  `populate_existing=True`) before the check, the same pattern already used
+  elsewhere in this codebase for read-then-write races. Verified with two
+  real, independently-committing database sessions racing the identical code
+  — confirmed only one succeeds.
+- **`login`'s brute-force-detector reset fired on a correct password alone,
+  silently erasing the tally the MFA-failure wiring above had just started
+  accumulating.** The reset now only fires once a correct password is full
+  authentication (MFA disabled) — an MFA-enabled account's tally is reset
+  only by a successful second factor, matching the invariant this codebase
+  already enforces for the separate suspicious-IP counter.
+- **A transient failure persisting a security alert could turn an intended
+  401 into an unhandled 500** and lose the login attempt's other side
+  effects, because the failure — though caught — left the shared database
+  session unable to commit anything afterward. Fixed by isolating the alert
+  write in its own savepoint, the same pattern already used for audit-log
+  writes.
+- **Disabling MFA and immediately re-enrolling with a new authenticator
+  secret could spuriously reject a legitimate first code as a "replay,"**
+  because the replay-prevention marker from the old secret was never
+  cleared. Fixed by clearing it whenever a user's MFA secret changes.
+- **The identical concurrency race as the first fix above, one field over:**
+  a follow-up review of the whole change before it shipped found that
+  `/mfa/login`'s recovery-code check had the exact same unlocked
+  read-then-write shape as the TOTP race — sitting directly next to the code
+  that had just been fixed for it. A recovery code has no ~30–90s expiry to
+  outrun, so this was, if anything, an easier target. Fixed the same way:
+  a locking re-read before checking/consuming the code.
+
+5 new regression-test classes (7 tests), each individually confirmed to fail
+against the pre-fix code. Full write-up:
+`docs/security-review/AUTH-01-auth-session.md` (AUTH-9 through AUTH-13).
+
+### A TOTP code verified at an MFA management route could replay at login, and the MFA-code brute-force alert was unwired (2026-09-01)
+
+**Fixed**
+
+- **`mfa_verify_setup`, `mfa_disable`, and `POST /mfa/recovery-codes` verified
+  a live TOTP code without ever recording it as consumed, leaving that same
+  code still valid at `/mfa/login` for the rest of its ~30–90s window.** Only
+  `mfa_login` recorded the matched time-step (`user.mfa_last_timestep`); the
+  three management routes called the plain, stateless `verify_totp` check
+  instead. An attacker who already holds an account's password (a
+  prerequisite either way for any MFA-bypass discussion) gets a valid
+  `mfa_pending` challenge token for free from the password step alone; if
+  they then observe a code the legitimate user is actively using at one of
+  the three management routes (shoulder-surfing, a compromised endpoint, a
+  phishing-relay page), they could replay that same code at `/mfa/login` and
+  open a fully independent session of their own — nothing had marked the
+  code's time-step spent. Fixed by routing every TOTP-verifying route through
+  one shared `_verify_and_consume_totp()` primitive that always records the
+  consumed step on a match, closing the gap for all four routes at once. 3
+  new regression tests, including one that drives the real
+  `mfa_regenerate_recovery_codes` and `mfa_login` handlers end-to-end and is
+  confirmed to fail against the pre-fix code.
+- **`mfa_login` never fed `security_monitor.detect_brute_force`, so guessing
+  the second factor generated no history for this HIGH-severity alert.** The
+  per-account lockout and the suspicious-IP throttle already enforced against
+  MFA-code guessing and still do — this closes a purely alerting/audit gap,
+  not an enforcement one. `mfa_login`'s failure and success paths now call
+  `detect_brute_force` with `success=False`/`True`, mirroring `login`'s own
+  password-step wiring exactly. 2 new regression tests assert the call on
+  both paths.
+
+Full write-up: `docs/security-review/AUTH-01-auth-session.md` (AUTH-7,
+AUTH-8). A related non-idempotency gap in the recovery-codes regeneration
+endpoint (a retried request silently overwrites the codes shown on a prior
+call) was investigated and flagged, not fixed — see
+`docs/KNOWN_LIMITATIONS.md`.
+
+### A concurrent request for the same session could silently erase another request's session-hijack tracking data (2026-09-01)
+
+**Fixed**
+
+- **`detect_session_hijack` awaited the audit-log write and alert dispatch
+  BEFORE writing its decision back to the in-memory session trackers, and
+  those trackers are shared by every request through a single process-wide
+  security-monitoring instance.** This app's frontend routinely fires
+  several concurrent API calls under one session cookie (parallel data
+  fetches on page load), so two concurrent requests for the same session
+  were ordinary, not rare. When one such request's IP-change check fired a
+  hijack alert, it would suspend mid-request to log the alert to the
+  database — and if a second concurrent request for the same session
+  finished its own (legitimate) update to the tracker while the first was
+  suspended, the first request would resume and overwrite the second
+  request's update with its own, now-stale snapshot: silently erasing an
+  entry from the session's forensic IP history and, in some orderings,
+  moving the trusted-IP baseline's recorded time backward. Neither
+  request's own alert-or-not decision was affected — only the tracker data
+  used to evaluate the _next_ request for that session. Fixed by writing
+  the tracker state before dispatching the alert (matching the order this
+  file's three other tracking methods already used), so there is no longer
+  a gap in which a concurrent request's update can be silently discarded. 1
+  new regression test drives two genuinely concurrent requests for the same
+  session, one deliberately stalled mid-dispatch while the other completes,
+  and confirms the completed request's update survives; verified to fail
+  against the prior commit and pass after the fix.
+
+### A session-hijack alert could be silently waved through once enough real time passed, even under continuous attack (2026-09-01)
+
+**Fixed**
+
+- **The trusted-IP fix below (`detect_session_hijack`) correctly stopped an
+  alerting call from promoting the attacker's IP as the new trusted
+  baseline, but left that entry's stored TIMESTAMP unrefreshed on the same
+  path — and that timestamp is exactly what the method's own 5-minute
+  "IP changed, but it's been a while, probably roaming" leniency check
+  reads.** Under continuous attacker traffic, the stored timestamp stayed
+  pinned to whenever the trusted IP was last legitimately seen, while real
+  wall-clock time kept advancing on every subsequent attacker request —
+  so once enough time elapsed since that original sighting (regardless of
+  how many attacker requests happened in between), the leniency check
+  wrongly concluded the session must have gone idle, stopped alerting, and
+  silently promoted the attacker's now-longstanding IP to trusted. Fixed by
+  refreshing the stored timestamp to the current time on every call — alert
+  or not — while still leaving the trusted IP itself unchanged on the alert
+  path. The stored timestamp now means "the last time this session was
+  evaluated, by any IP," so the leniency window measures the gap since the
+  last time the session was looked at, not since its last legitimate
+  sighting — a continuously-attacked session never accumulates elapsed time
+  toward the leniency window, while a genuinely idle session (no requests
+  from anyone for 5+ minutes) still earns it exactly as before. 2 new
+  regression tests simulate ten minutes of continuous attacker traffic
+  (asserting every request still alerts and the legitimate IP's return is
+  still correctly recognized) and a genuinely idle 10-minute gap followed by
+  a legitimate IP change (asserting that case still does not alert); both
+  verified against the prior fix's commit.
+
+### A session-hijack alert silenced itself after firing once, because its own fix trusted the attacker's IP (2026-09-01)
+
+**Fixed**
+
+- **The write-after-evict fix below (`detect_session_hijack`) closed a real
+  gap but introduced a new one: on the path where a hijack alert fired, it
+  wrote the _attacker's_ IP back as the tracker's newest entry, and the next
+  comparison read only that newest entry.** So the very next request from
+  the same attacker IP compared its own IP against itself, found no change,
+  and returned no alert — an ongoing hijack was detected exactly once, then
+  went silent for as long as the attacker kept reusing the one IP. This bug
+  did not exist in any version of the method before that fix: every prior
+  revision returned immediately on the alert path, before ever reaching the
+  line that wrote the current IP back, so the tracker kept the pre-hijack IP
+  as the comparison baseline and a repeat attacker IP correctly re-alerted.
+  Fixed by splitting the full observed-IP audit log (unchanged — every
+  request is still recorded, attacker IPs included, for forensics) from a
+  new, separate tracker holding only the IP a hijack decision is actually
+  compared against. That trusted tracker advances to the current IP after a
+  call that does not fire an alert (a first observation, a matching IP, or
+  an IP change slow enough not to be flagged as suspicious) but is
+  deliberately left unchanged after a call that does — so an IP that just
+  triggered an alert is never promoted to "known good," and the same
+  attacker IP keeps triggering the alert on every subsequent request, while
+  a legitimate IP returning after an attacker IP was seen in between is
+  still correctly recognized and not flagged. 2 new regression tests
+  reproduce the exact silencing behavior (including the legitimate-IP-
+  returns case) and are verified to fail before this fix and pass after.
+
+### An evicted session lost its hijack baseline right after correctly firing its first alert (2026-09-01)
+
+**Fixed**
+
+- **The read-before-evict fix below (`detect_session_hijack` and three other
+  methods) was necessary but not sufficient: it protected the alert decision
+  on the call that fired, but nothing wrote that call's own contribution
+  back into the tracker afterward.** If the session's key was also this
+  call's batch-eviction target, `detect_session_hijack` correctly detected
+  the IP change and raised the `session_hijack` alert (using the protected
+  pre-eviction read) — but then returned without ever recording this call's
+  own IP, because the write only ran on the no-alert path. The tracker was
+  left holding no entry at all for that session. The very next request from
+  the same hijacked session found no baseline, was scored as a first-ever
+  observation, and no further alerts fired for an attack that was still
+  ongoing. Fixed by always rebuilding the session's tracker entry from its
+  pre-eviction history plus this call's own IP, regardless of which path was
+  taken — the tracker now always ends a call holding a live entry for the
+  session, so the next call has a real baseline. The same defensive
+  restructuring (write the current call's contribution back to the tracker
+  after eviction runs, not before) was applied to the other three affected
+  methods (`_check_rate_limit`, `detect_brute_force`,
+  `detect_data_exfiltration`) for consistency, though those three were
+  verified not to be exploitable the same way — they already wrote before
+  evicting, which incidentally protected them. 4 new regression tests
+  (including a three-call chain for the session-hijack case) reproduce the
+  exact failure shape and are verified to fail before this fix and pass
+  after.
+
+### Rate-limit alerts could also silently skip under tracker churn (2026-09-01)
+
+**Fixed**
+
+- **The same read-after-evict shape below (`detect_session_hijack`/
+  `detect_brute_force`/`detect_data_exfiltration`) was also present in
+  `_check_rate_limit`, missed by that fix.** It evicted stale tracking keys
+  before reading/appending to the current IP's call history rather than
+  after, via a different code path than the other three methods
+  (`_evict_stale_tracking_keys()` rather than a direct call to the shared
+  cap-enforcement helper) — which is why a review of the other three did not
+  also catch this one. If the requesting IP happened to be the
+  least-recently-active key in an over-capacity tracker, its prior calls
+  were evicted before the current request was counted, undercounting the
+  request as the first call from that IP and silently skipping a rate-limit
+  alert it should have raised. Fixed the same way: the current call is
+  captured into a local variable before eviction runs, so a same-call
+  eviction can no longer erase the count the alert decision depends on. 1
+  new regression test reproduces the exact failure shape and is verified to
+  fail before this fix and pass after.
+
+### Session-hijack/brute-force/data-exfiltration alerts could silently skip under tracker churn (2026-09-01)
+
+**Fixed**
+
+- **A regression in the same-day tracker-cap fix below could suppress a real
+  security alert.** That fix made `detect_session_hijack` (and, for the same
+  reason, `detect_data_exfiltration`) run cap-enforcement on entry, before
+  the method read its own tracker's prior entry for the session/user being
+  checked. If that exact entry happened to be evicted in the same call —
+  plausible under the sustained request churn the cap exists to survive —
+  the method found no prior history, silently treated an ongoing session
+  hijack as a first-ever observation, and never raised the alert.
+  `detect_brute_force` had the identical shape since the cap was first
+  introduced (predating the same-day fix) and undercounted failed-login
+  attempts the same way. This landed on `main` unfixed for a window between
+  the prior fix's merge and this one. Fixed by having each method capture
+  its own tracker read into a local variable before cap-enforcement runs, so
+  a same-call eviction can no longer erase the data the alert decision
+  depends on. 3 new regression tests reproduce the exact failure shape
+  (tracker filled above its cap with the affected session/IP/user as the
+  single oldest entry) and are verified to fail before this fix and pass
+  after.
+
+### Security monitoring trackers are capped on every write path (2026-09-01)
+
+**Fixed**
+
+- **Two of `SecurityMonitoringService`'s four in-memory trackers were never
+  capped for SSO/OAuth-only organizations.** `_session_ips` and
+  `_data_transfers` grow on every authenticated request, but the only code
+  path that enforced the process-wide size cap on them
+  (`detect_brute_force`) is reachable exclusively from the password
+  `/auth/login` endpoint. An organization authenticating entirely through
+  Google/Azure AD SSO never calls it, so those two dicts would grow without
+  bound for the life of the process. `detect_session_hijack` and
+  `detect_data_exfiltration` — the methods that actually write to them — now
+  enforce the cap themselves on entry, matching the existing pattern.
+- **Codex caught two more real problems in that same fix, same day.**
+  First: the cap-enforcement above runs unthrottled on a genuine hot path —
+  `detect_session_hijack` fires on every authenticated response — and the
+  eviction it added evicted exactly one key at a time. Once a tracker
+  reached its 5,000-key cap, every subsequent distinct session/IP/user
+  re-triggered a full `O(n log n)` sort of the entire tracker just to evict
+  the one key that had pushed it over, immediately putting it right back at
+  the cap for the next call. Sustained session churn turned a lightweight
+  memory safeguard into a persistent per-request CPU cost. Eviction now
+  drops a tracker to 90% of its cap in one batch, buying headroom (500
+  entries) before the sort has to run again — amortized instead of
+  per-call. Second: `_external_endpoints` — a fifth tracker, a `set()` that
+  `detect_data_exfiltration` grows with every distinct external destination
+  seen — was never actually capped by the fix above at all. The
+  cap-enforcement helper only iterated the four _dict_ trackers; the
+  200-entry cap that existed for the set lived in a different method whose
+  own application path turned out to be dead code (nothing on the set's
+  real growth path ever called it), so the set could grow unbounded exactly
+  like the bug this same fix was supposed to have closed. Both are now
+  fixed in the same cap-enforcement helper, on the same code path that
+  grows every tracker. `tests/test_security_monitoring.py` gained 4 tests
+  proving both fixes (bounded growth under simulated churn, batched
+  eviction, and the external-endpoint set staying capped through its real
+  call path); all 14 tests pass, and all 4 fail against the pre-fix code.
+
+### Adding a checklist item to the inventory catalog (2026-08-31)
+
+**Added**
+
+- A checklist position's **Linked Inventory Item** field can now create the
+  item it links to. Previously it only searched, and nothing seeds the catalog
+  — so on a new department the field always answered "No matching items." and
+  offered nothing further, on the one control whose purpose is making that
+  link. Typing a name with no match now offers to add it to the catalog and
+  link it in a single step, for anyone who can manage inventory.
+
+  The new catalog entry carries the name and nothing else. One catalog item is
+  stocked in many places — gauze in a jump bag, a cabinet and two rigs — each
+  counted on its own, so the position's required quantity and minimum stay with
+  that position and never become a department-wide reorder point.
+
+**Fixed**
+
+- The equivalent "Create … in inventory" action already offered by the
+  compartment's add-item bar had never worked: it created the item with no
+  stock on hand, which the catalog refused even though editing an item to the
+  same value had always been allowed. A pool item can now be created with
+  nothing on hand, which is what a catalog entry added from a checklist knows.
+
+### Settings screens are usable on a phone (2026-08-31)
+
+**Fixed**
+
+- The section row across the top of every settings screen (Organization,
+  Scheduling, Elections, Events, Email Templates, Checklist Settings and your
+  own account) rendered its pills at 36px tall, under the 44px a finger
+  reliably hits. They now grow to 44px on phones.
+- On a screen with enough sections to overflow a phone — Organization Settings
+  has six — the last pill sat off the right edge of the screen with no way to
+  reach it: the row scrolled sideways, but nothing told the browser it was a
+  scroll region, so a keyboard could not reach it and the overflow read as a
+  layout fault rather than a strip. Both the section row and the sub-page rail
+  beneath it now declare themselves as scrollable and are keyboard-reachable.
+- Organization Settings' "Upload logo" button was a 20px-tall text link.
+
+**Internal**
+
+Organization Settings was in the mobile presentation pass but the fixture
+account lacked `settings.manage`, so the pass had been measuring the dashboard
+under that route's name and reporting it green. It now signs in with the grant
+and measures the real page; `/account` joins it, so two of the seven screens
+built on the shared settings shell are exercised rather than none.
+
+### Frontend shared re-verification fixes (2026-08-31)
+
+**Fixed**
+
+- Entering a wrong or expired MFA code was treated as an expired session:
+  the app purged local data and hard-redirected to the login screen instead
+  of showing "invalid code, try again."
+- Loading your profile after an offline or interrupted connection could
+  silently discard unsynced shift-report drafts and equipment-check
+  submissions — now only a confirmed sign-out clears local data.
+
+### Equipment checklists moved from Scheduling to Inventory (2026-08-31)
+
+**Changed — action required**
+
+Equipment checklists are now part of the **Inventory** module rather than
+Shift Scheduling. A checklist is a list of inventory items — a checklist
+position already pointed at an item in the catalog, and the lots aboard a truck
+are drawn from the same stock — so the feature now lives with the things it
+tracks. Crews still start and complete checks from their shift; only authoring,
+reporting and the fleet views moved.
+
+Three things change for existing departments:
+
+- **The pages have new addresses, and the old ones no longer work.** Bookmarks
+  and links in previously-sent emails will land on the dashboard.
+
+  | Was                                       | Is now                                      |
+  | ----------------------------------------- | ------------------------------------------- |
+  | `/scheduling/equipment-check-templates/…` | `/inventory/admin/checklists/templates/…`   |
+  | `/scheduling/equipment-check-reports`     | `/inventory/admin/checklists/reports`       |
+  | `/scheduling/supply/expiring`             | `/inventory/admin/checklists/supply`        |
+  | `/scheduling/equipment`                   | `/inventory/checklists`                     |
+  | `/scheduling/equipment/checks`            | `/inventory/checklists/log`                 |
+  | `/scheduling/equipment/{id}`              | `/inventory/checklists/apparatus/{id}`      |
+  | `/scheduling/apparatus-inventory`         | `/inventory/checklists/apparatus-inventory` |
+  | `/scheduling?tab=equipment-checks`        | `/inventory/checklists/my`                  |
+
+- **The Equipment Checks tab is gone from the shift screen**, and with it the
+  Check Reports and Supply shortcuts in Officer tools. Equipment checks are no
+  longer part of Shift Scheduling in any sense — the whole feature is in
+  Inventory, and Scheduling links to it.
+
+  **Members now find their checklists in the navigation**, under Operations →
+  **My Checklists**. That row is new, and it is a genuine improvement: before
+  this, a member's only route to the checks they owed was a tab inside Shift
+  Scheduling. Officers get **Fleet Readiness** beside it.
+
+  From a shift itself nothing changes in practice: check-in and the shift
+  detail panel still offer "Start checklist", and shift finalization still
+  refuses to close on outstanding end-of-shift checks.
+
+  One consequence worth knowing: end-of-shift reminder notifications already
+  sitting in members' bells carry the old address and will land on the
+  dashboard. New ones point at the right place. These reminders age out within
+  a few days.
+
+- **The permissions were renamed** from `equipment_check.view` / `.manage` /
+  `.submit` to `inventory.check_view` / `inventory.check_manage` /
+  `inventory.check_submit`. Every position keeps exactly the authority it had —
+  a migration renames the stored grants, and the old names keep working for any
+  row it cannot reach. One consequence worth knowing: a position holding the
+  `inventory.*` wildcard now also grants the checklist permissions, as it
+  already did for medical supplies.
+
+- **Checklists now require the Inventory module.** A department that had
+  switched Inventory off has it switched back on automatically if it uses
+  equipment checks. If Inventory is later switched off deliberately, the
+  Equipment Checks tab disappears from the shift screen rather than erroring.
+
+**Added**
+
+- A shift template can now **name the equipment checklists its shifts carry**,
+  instead of every shift working them out from its vehicle. Naming them
+  replaces the vehicle's own; leaving them unticked keeps today's behaviour, so
+  nothing changes until a department uses it. Edit them on the shift template,
+  under the vehicle picker.
+
+- **Checklist settings now live with the checklists**, at Gear Admin >
+  Equipment Checklists > Checklist settings. These are the four that decide
+  when crews are prompted — start-of-shift and end-of-shift checklists, and how
+  early or late a member may still check in. They were edited from the shift
+  module's settings; the values themselves are unchanged and carried over
+  automatically, so nothing needs re-entering.
+
+**Removed**
+
+- **Four equipment-check settings that did nothing have been removed** —
+  "Enable equipment checks for shifts", "Require signature on completion",
+  "Block shift start when required items fail" and "Default expiration warning
+  (days)", all previously on Scheduling > Settings > Equipment. Every one of
+  them was stored, reported as saved, and read by no code anywhere: there is no
+  signature field on the check form to require, nothing consulted the warning
+  default (30 days was hardcoded), and a failed required item never blocked a
+  shift start. Switching any of them made no difference before and makes none
+  now, but the app no longer claims otherwise. The Equipment section of shift
+  settings is now a signpost to Inventory and shows no Save button, because it
+  has nothing left to save.
+
+### Checklist links, and who the `inventory.*` wildcard now covers (2026-08-31)
+
+**Changed — check your custom positions**
+
+- **A position granting `inventory.*` now also grants the equipment-checklist
+  permissions.** Those three grants used to be `equipment_check.view` /
+  `.manage` / `.submit`, which the `inventory.*` wildcard did not reach. Moving
+  checklists into Inventory renamed them to `inventory.check_view` /
+  `.check_manage` / `.check_submit`, and a module wildcard covers everything in
+  its module — so anyone holding `inventory.*` can now author and submit
+  equipment checklists. No seeded position or rank grants `inventory.*`, so
+  this only affects positions a department built for itself, typically a
+  quartermaster. If that is wider than you intend, replace `inventory.*` on
+  that position with the specific `inventory.` grants you want. The behaviour
+  is deliberate — a checklist is a list of inventory items — and is now pinned
+  by a test so it cannot drift unnoticed.
+
+**Fixed**
+
+- **Checklist shortcuts are no longer shown to people the destination turns
+  away.** Three links advertised pages their viewer could not open: "Manage
+  equipment checklists" in Scheduling's Equipment settings needs
+  `inventory.check_manage`, and "Check reports" and "Expiring on apparatus" on
+  the Equipment Checklists admin page need grants that authoring a checklist
+  does not imply — the seeded President position holds `check_manage` without
+  `check_view`, so Check reports was a dead end for them. Each link is now
+  shown only to whoever its page admits, matching the "Checklist settings" link
+  that already worked this way.
+
+### Checklist review follow-ups (2026-08-31)
+
+**Fixed**
+
+- **"Failed checks" on the chief dashboard now opens a filtered log.** The card
+  counted failures and linked to `/inventory/checklists/log?status=failed`, but
+  nothing read that filter — the officer landed on an unfiltered fortnight and
+  had to find the failures by eye. The log now honours `?status=`, says which
+  outcome it is showing, and offers one click back to all checks.
+- **Fleet Readiness has its own icon in the sidebar.** It shared one with "My
+  Checklists" directly above it, which is indistinguishable when the rail is
+  collapsed to icons.
+
+### Shift template checklist fixes (2026-08-31)
+
+**Fixed**
+
+- **A rejected shift template is no longer created anyway.** Naming a checklist
+  the department does not own reported "Unable to create template" — and left
+  the template behind regardless, so every retry added another copy. The
+  checklist ids are now checked before anything is written.
+- **Crews see the checklists in the order the officer arranged them.** A shift
+  template's checklists were shown to the crew in the checklists' own catalogue
+  order instead, so the running order on the truck could disagree with the one
+  named in the shift reminder. Both now follow the template.
+
+### A new crew experience for the equipment check (2026-08-31)
+
+**Added**
+
+- Crews can walk an equipment check one stop at a time instead of scrolling a
+  list of compartments. Each stop carries a map of the truck across the top
+  showing what is done, what has a fault and where you are; a single claim for
+  the whole stop where one is honest ("All 4 counts at par"); and a jump sheet
+  to reach any stop out of order, or read every item as one list. The check
+  finishes on the exceptions — the faults, the gaps and the restock lines —
+  rather than on 130 lines to scroll past. Not yet switched on for crews: the
+  template builder's preview shows it so departments can see it against their
+  own templates first.
+- A bag is now walked as a bag. Its pockets are a strip of numbered chips with
+  one pocket open at a time, and the claim, the restock line and the "read n
+  more gauges" hold all speak for the pocket in front of you rather than the
+  whole bag.
+- Counts carry forward from the last check. Twelve found against a par of ten
+  stays twelve for the next crew rather than resetting to par, and a carried
+  number is shown greyed until somebody confirms it, so a check cannot be
+  submitted complete on numbers nobody looked at.
+
+**Fixed**
+
+- A sealed container whose tag nobody had read yet had its contents counted as
+  already answered. A seal is evidence only once a crew has looked at it, so
+  the counting now waits for the tag to be confirmed.
+- An intact tamper seal no longer vouches for a container holding something
+  expired or due to be pulled. The check says which item, whether it has
+  expired or is inside its pull window, and which tag to re-seal with — a seal
+  proves nothing was taken, not that what is left is still usable.
+- On the equipment check, the "Out of service" and "Pass" buttons did not have
+  enough contrast against their labels to be read comfortably in sunlight or by
+  members with low vision, while "Fail" beside them did. All three now meet the
+  same standard, along with the submit button and the expiry and status badges.
+  The check also follows the high-contrast theme properly, which it previously
+  ignored.
+
+### Core infrastructure re-verification fixes (2026-08-31)
+
+**Fixed**
+
+- Several unauthenticated public endpoints (calendar, legal, kiosk display,
+  finance-approval token lookups, and three inbound webhook receivers)
+  effectively lost their rate limiting during a Redis outage — the
+  in-memory fallback reset an attacker's full request allowance on almost
+  every over-limit request instead of actually limiting them.
+- A public form/event-request/guest-check-in daily submission cap could get
+  permanently stuck denying legitimate traffic (instead of resetting the
+  next day) if a transient Redis error hit at exactly the wrong moment.
+- A failed database-engine shutdown could leave the app reporting itself as
+  still connected to a database it had actually lost.
+
 ### Locations & kiosk guest check-in hardening (2026-08-31)
 
 **Fixed**
@@ -1236,13 +1876,41 @@ the "kept in lockstep with the frontend" comment that nothing had been enforcing
   no way to record a _probationary treasurer_, and nothing said whether a _life
   member_ still rides.
 
-  The clearest symptom was in elections. `ElectionService` could only answer
-  "is this member operational" as `membership_type == "active"`, because that
-  was the one value that meant it — so a bylaws question put to the operational
-  members never reached anyone who had earned life membership, or anyone still
-  on probation. It now reads the member's **class**, and every operational
-  standing counts. "regular", "life" and "probationary" stay **status** checks,
-  because they name a status.
+  Elections is where the fused field showed most. `ElectionService` could only
+  answer "is this member operational" as `membership_type == "active"`.
+
+  **Correction (2026-08-31).** This entry originally said the `operational`
+  category now "reads the member's class, and every operational standing
+  counts". That was true of `7204f9134` and **false ninety minutes later**:
+  `f65e4e7ae` ("Fix election voter category authorization", the same day)
+  reverted the widening because it was a disclosure — reading class alone
+  admitted probationary and retired members to a restricted ballot. The entry
+  was never updated, and the claim was propagated into the training guides,
+  the wiki and two video scripts before being caught on PR #2096.
+
+  **What the shipped code does**, per
+  `ElectionService._user_has_role_type`:
+
+  | Category         | Requires                                        |
+  | ---------------- | ----------------------------------------------- |
+  | `operational`    | operational class **and** regular status        |
+  | `regular`        | operational class **and** (regular **or** life) |
+  | `life`           | operational class **and** life status           |
+  | `probationary`   | operational class **and** probationary status   |
+  | `administrative` | administrative class                            |
+  | `social`         | social class                                    |
+
+  So the built-in categories **keep their legacy meaning**, and the real
+  changes are narrower than first written, one of them a tightening:
+
+  - **A life member now receives a `regular` ballot.** With one fused field
+    `life` and `regular` were mutually exclusive values, so they could not.
+  - **Every status category now also requires the operational class**, so an
+    administrative member with regular standing no longer receives ballots
+    restricted to active/life members. That is a **tightening**, and it is the
+    reason the widening was reverted.
+  - `administrative` and `social` are answered by class rather than by a value
+    that had to mean both things at once.
 
   `membership_type` is kept and kept correct: ~160 call sites read it, and it
   is now derived from the pair by `app/utils/membership.py`, reconciled on
@@ -1848,6 +2516,43 @@ check the consent itself.
   rotation (35 iterations, ordered by risk) with a per-iteration checklist,
   findings template, and a `/security-review` command that opens one pull
   request per feature and tends it to green before starting the next.
+
+### Governance: the department's organizational chart (2026-08-24)
+
+**Added**
+
+- **`/governance/org-chart`** — the department's chain of command, as an
+  outline or as a diagram. New tables `org_chart_nodes` and
+  `org_chart_node_holders`; `GET /org-chart`, `POST /org-chart/nodes`,
+  `PUT /org-chart/nodes/{id}`, `POST /org-chart/nodes/{id}/move`,
+  `DELETE /org-chart/nodes/{id}`.
+
+- **Reading is gated on authentication alone, deliberately.** The chart exists
+  so any member can work out who is in charge of an area without asking around;
+  a permission here would leave the general membership — the audience — outside
+  the one screen built for them. Editing is `orgchart.manage` OR
+  `settings.manage`, enforced server-side, and the page renders read-only
+  without either rather than offering controls that fail.
+
+- **A seat holds several people.** `org_chart_node_holders` is a separate
+  table for exactly this: a department with two deputy chiefs puts both in one
+  box instead of inventing two boxes that mean the same thing.
+
+- **A holder need not be a member.** `user_id` is nullable and `display_name`
+  carries a name with no account behind it, for the town attorney, a
+  mutual-aid liaison or a county fire marshal. Nothing else about that person
+  is stored and they gain no access.
+
+- **`position_id` assists a seat rather than defining it.** Linking a seat to a
+  position fills its holders from that position's assignees; **unlinking leaves
+  them in place.** An earlier draft made the position the seat's definition,
+  which meant a seat could not hold anyone the position did not — and a
+  department whose org chart differs from its permission structure, which is
+  most of them, could not draw its real chain of command.
+
+- **The chart starts empty and nothing is inferred.** A permission structure is
+  not an org chart. A guessed diagram is one nobody recognises, and correcting
+  it costs more than drawing it.
 
 ### Attendance finalization: the lock is atomic, and reopening reconciles what it undoes (2026-08-24)
 

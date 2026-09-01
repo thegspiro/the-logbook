@@ -677,6 +677,13 @@
   /* One section pill. Colour, hover and focus come from settings-nav-item;
      this contributes only the box, so the two levels cannot drift apart. */
   @apply settings-nav-item inline-flex shrink-0 items-center gap-2 rounded-lg px-3.5 py-2 text-sm font-medium whitespace-nowrap duration-150 ease-out;
+
+  /* Touch minimum, as on settings-subnav-item below. py-2 renders 36px, which
+     is the size a finger misses — and every settings screen in the product
+     navigates through this pill, so the shortfall was on all seven at once. */
+  @media (max-width: 767px) {
+    min-height: 44px;
+  }
 }
 
 @utility settings-subnav-item {

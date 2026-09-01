@@ -294,23 +294,6 @@ SCHEDULING_REPORT = Permission(
     PermissionCategory.SCHEDULING,
 )
 
-# Equipment Checks (under scheduling category)
-EQUIPMENT_CHECK_VIEW = Permission(
-    "equipment_check.view",
-    "View equipment check templates and results",
-    PermissionCategory.SCHEDULING,
-)
-EQUIPMENT_CHECK_MANAGE = Permission(
-    "equipment_check.manage",
-    "Create and edit equipment check templates",
-    PermissionCategory.SCHEDULING,
-)
-EQUIPMENT_CHECK_SUBMIT = Permission(
-    "equipment_check.submit",
-    "Submit equipment checks on shifts",
-    PermissionCategory.SCHEDULING,
-)
-
 # Inventory — gear and uniforms
 INVENTORY_VIEW = Permission(
     "inventory.view", "View gear and uniforms", PermissionCategory.INVENTORY
@@ -334,6 +317,33 @@ INVENTORY_VIEW_MEDICAL = Permission(
 INVENTORY_MANAGE_MEDICAL = Permission(
     "inventory.manage_medical",
     "Manage medical supplies, stock lots, and expiration tracking",
+    PermissionCategory.INVENTORY,
+)
+
+# Inventory — apparatus equipment checklists.
+#
+# A checklist is a list of inventory items: ``check_template_items`` carries an
+# ``inventory_item_id`` into the catalog and ``check_item_deployed_lots``
+# snapshots ``inventory_lots``, so the grants live with the stock they describe
+# rather than with the shift somebody happens to walk them on. Renamed here from
+# ``equipment_check.*`` — see ``LEGACY_PERMISSION_ALIASES`` for the stored rows
+# the rename has to keep honouring.
+#
+# Being in the inventory namespace, these are granted by the ``inventory.*``
+# module wildcard, exactly as ``view_medical``/``manage_medical`` above are.
+INVENTORY_CHECK_VIEW = Permission(
+    "inventory.check_view",
+    "View equipment check templates and results",
+    PermissionCategory.INVENTORY,
+)
+INVENTORY_CHECK_MANAGE = Permission(
+    "inventory.check_manage",
+    "Create and edit equipment check templates",
+    PermissionCategory.INVENTORY,
+)
+INVENTORY_CHECK_SUBMIT = Permission(
+    "inventory.check_submit",
+    "Submit equipment checks on shifts",
     PermissionCategory.INVENTORY,
 )
 
@@ -669,13 +679,13 @@ ALL_PERMISSIONS: list[Permission] = [
     SCHEDULING_ASSIGN,
     SCHEDULING_SWAP,
     SCHEDULING_REPORT,
-    EQUIPMENT_CHECK_VIEW,
-    EQUIPMENT_CHECK_MANAGE,
-    EQUIPMENT_CHECK_SUBMIT,
     INVENTORY_VIEW,
     INVENTORY_MANAGE,
     INVENTORY_VIEW_MEDICAL,
     INVENTORY_MANAGE_MEDICAL,
+    INVENTORY_CHECK_VIEW,
+    INVENTORY_CHECK_MANAGE,
+    INVENTORY_CHECK_SUBMIT,
     STOREFRONT_VIEW,
     STOREFRONT_ORDER,
     STOREFRONT_MANAGE,
@@ -773,9 +783,16 @@ def permission_matches(required: str, granted: set[str]) -> bool:
     1. Global wildcard: ``"*"`` grants everything.
     2. Exact match: ``"settings.edit"`` matches ``"settings.edit"``.
     3. Module wildcard: ``"settings.*"`` matches any ``"settings.<action>"``.
+
+    Retired permission names are resolved first, so a row written before a
+    rename still authorizes. This is the choke point every server-side check
+    reaches — the HTTP dependency layer, the role service and the admin
+    checks — which is why the compatibility lives here rather than in each of
+    the three places that assemble a granted set independently.
     """
     if "*" in granted:
         return True
+    granted = expand_legacy_permissions(granted)
     if required in granted:
         return True
     if "." in required:
@@ -824,6 +841,60 @@ ROLES_DELETE = POSITIONS_DELETE
 ROLES_MANAGE_PERMISSIONS = POSITIONS_MANAGE_PERMISSIONS
 USERS_UPDATE_ROLES = USERS_UPDATE_POSITIONS
 MEMBERS_ASSIGN_ROLES = MEMBERS_ASSIGN_POSITIONS
+
+
+# Stored permission STRINGS that no longer exist, mapped to the ones that
+# replaced them. The aliases above rename Python constants, which costs nothing
+# because both names point at the same ``Permission``; this map exists because
+# ``equipment_check.*`` was renamed to ``inventory.check_*`` as a *value*, and
+# a value lives in ``positions.permissions`` JSON on every department's
+# database.
+#
+# The rename migration rewrites those rows, but this map is what makes the
+# rename safe regardless: a row the migration could not reach — a database
+# restored from an older backup, a position created by an integration against
+# the old vocabulary — keeps granting what its author intended instead of
+# silently dropping to no access. Expanded in
+# ``app.api.dependencies._collect_user_permissions``, the single point every
+# permission check funnels through.
+#
+# ``equipment_check.*`` is the module wildcard, which ``permission_matches``
+# can no longer resolve on its own: the module segment changed, so
+# ``inventory.*`` is not something the old wildcard implies. It is listed
+# explicitly and expands to all three grants.
+LEGACY_PERMISSION_ALIASES: dict[str, tuple[str, ...]] = {
+    "equipment_check.view": (INVENTORY_CHECK_VIEW.name,),
+    "equipment_check.manage": (INVENTORY_CHECK_MANAGE.name,),
+    "equipment_check.submit": (INVENTORY_CHECK_SUBMIT.name,),
+    "equipment_check.*": (
+        INVENTORY_CHECK_VIEW.name,
+        INVENTORY_CHECK_MANAGE.name,
+        INVENTORY_CHECK_SUBMIT.name,
+    ),
+}
+
+
+_LEGACY_PERMISSION_KEYS = frozenset(LEGACY_PERMISSION_ALIASES)
+
+
+def expand_legacy_permissions(granted: set[str]) -> set[str]:
+    """Add the current name of any retired permission string in *granted*.
+
+    Additive on purpose: the old string is left in place rather than swapped
+    out, so a caller that reports a user's raw grants still shows what is
+    actually stored.
+
+    ``permission_matches`` calls this on every check, so the common case — a
+    grant set with nothing retired in it — returns the original set after one
+    intersection, without building a copy.
+    """
+    if not _LEGACY_PERMISSION_KEYS & granted:
+        return granted
+    expanded = set(granted)
+    for legacy, replacements in LEGACY_PERMISSION_ALIASES.items():
+        if legacy in granted:
+            expanded.update(replacements)
+    return expanded
 
 
 # ============================================
@@ -884,8 +955,8 @@ _LEADERSHIP_VIEW_PERMISSIONS = [
     TRAINING_VIEW_ALL.name,
     COMPLIANCE_VIEW.name,
     SCHEDULING_VIEW.name,
-    EQUIPMENT_CHECK_VIEW.name,
-    EQUIPMENT_CHECK_SUBMIT.name,
+    INVENTORY_CHECK_VIEW.name,
+    INVENTORY_CHECK_SUBMIT.name,
     INVENTORY_VIEW.name,
     STOREFRONT_VIEW.name,
     STOREFRONT_ORDER.name,
@@ -980,7 +1051,7 @@ OPERATIONAL_RANKS: dict[str, dict] = {
             SCHEDULING_ASSIGN.name,
             SCHEDULING_SWAP.name,
             SCHEDULING_REPORT.name,
-            EQUIPMENT_CHECK_MANAGE.name,
+            INVENTORY_CHECK_MANAGE.name,
             INVENTORY_MANAGE.name,
             INVENTORY_VIEW_MEDICAL.name,
             INVENTORY_MANAGE_MEDICAL.name,
@@ -1048,7 +1119,7 @@ OPERATIONAL_RANKS: dict[str, dict] = {
             SCHEDULING_ASSIGN.name,
             SCHEDULING_SWAP.name,
             SCHEDULING_REPORT.name,
-            EQUIPMENT_CHECK_MANAGE.name,
+            INVENTORY_CHECK_MANAGE.name,
             INVENTORY_MANAGE.name,
             INVENTORY_VIEW_MEDICAL.name,
             INVENTORY_MANAGE_MEDICAL.name,
@@ -1110,7 +1181,7 @@ OPERATIONAL_RANKS: dict[str, dict] = {
             SCHEDULING_ASSIGN.name,
             SCHEDULING_SWAP.name,
             SCHEDULING_REPORT.name,
-            EQUIPMENT_CHECK_MANAGE.name,
+            INVENTORY_CHECK_MANAGE.name,
             INVENTORY_MANAGE.name,
             INVENTORY_VIEW_MEDICAL.name,
             INVENTORY_MANAGE_MEDICAL.name,
@@ -1160,7 +1231,7 @@ OPERATIONAL_RANKS: dict[str, dict] = {
             SCHEDULING_ASSIGN.name,
             SCHEDULING_SWAP.name,
             SCHEDULING_REPORT.name,
-            EQUIPMENT_CHECK_MANAGE.name,
+            INVENTORY_CHECK_MANAGE.name,
             EVENTS_CREATE.name,
             EVENTS_EDIT.name,
             APPARATUS_EDIT.name,
@@ -1179,7 +1250,7 @@ OPERATIONAL_RANKS: dict[str, dict] = {
             SCHEDULING_ASSIGN.name,
             SCHEDULING_SWAP.name,
             SCHEDULING_REPORT.name,
-            EQUIPMENT_CHECK_MANAGE.name,
+            INVENTORY_CHECK_MANAGE.name,
             EVENTS_CREATE.name,
             EVENTS_EDIT.name,
             APPARATUS_MAINTENANCE.name,
@@ -1437,7 +1508,7 @@ DEFAULT_POSITIONS: dict[str, dict] = {
             SCHEDULING_ASSIGN.name,
             SCHEDULING_SWAP.name,
             SCHEDULING_REPORT.name,
-            EQUIPMENT_CHECK_MANAGE.name,
+            INVENTORY_CHECK_MANAGE.name,
             INVENTORY_VIEW.name,
             STOREFRONT_VIEW.name,
             STOREFRONT_ORDER.name,
@@ -1703,8 +1774,8 @@ DEFAULT_POSITIONS: dict[str, dict] = {
             # Both halves of the shelf-to-truck loop: stock is only useful if
             # the same officer can put it on the apparatus checklist and see
             # what is expiring out there.
-            EQUIPMENT_CHECK_VIEW.name,
-            EQUIPMENT_CHECK_MANAGE.name,
+            INVENTORY_CHECK_VIEW.name,
+            INVENTORY_CHECK_MANAGE.name,
             APPARATUS_VIEW.name,
             LOCATIONS_VIEW.name,
         ],
@@ -1814,9 +1885,9 @@ DEFAULT_POSITIONS: dict[str, dict] = {
             # was written, and held none of these — lieutenants, captains and
             # the scheduling officer could build a rig's checklist but the
             # apparatus officer could not open one.
-            EQUIPMENT_CHECK_VIEW.name,
-            EQUIPMENT_CHECK_MANAGE.name,
-            EQUIPMENT_CHECK_SUBMIT.name,
+            INVENTORY_CHECK_VIEW.name,
+            INVENTORY_CHECK_MANAGE.name,
+            INVENTORY_CHECK_SUBMIT.name,
             APPARATUS_VIEW.name,
             APPARATUS_CREATE.name,
             APPARATUS_EDIT.name,
@@ -2004,9 +2075,9 @@ DEFAULT_POSITIONS: dict[str, dict] = {
             SCHEDULING_ASSIGN.name,
             SCHEDULING_SWAP.name,
             SCHEDULING_REPORT.name,
-            EQUIPMENT_CHECK_VIEW.name,
-            EQUIPMENT_CHECK_MANAGE.name,
-            EQUIPMENT_CHECK_SUBMIT.name,
+            INVENTORY_CHECK_VIEW.name,
+            INVENTORY_CHECK_MANAGE.name,
+            INVENTORY_CHECK_SUBMIT.name,
             EVENTS_VIEW.name,
             NOTIFICATIONS_VIEW.name,
         ],
@@ -2077,7 +2148,7 @@ DEFAULT_POSITIONS: dict[str, dict] = {
             # read endpoints are gated view-OR-submit (EC-7) — submit is the
             # baseline "do checks" grant; view stays leadership-only because
             # it also opens the compliance/failure reports.
-            EQUIPMENT_CHECK_SUBMIT.name,
+            INVENTORY_CHECK_SUBMIT.name,
             INVENTORY_VIEW.name,
             STOREFRONT_VIEW.name,
             STOREFRONT_ORDER.name,

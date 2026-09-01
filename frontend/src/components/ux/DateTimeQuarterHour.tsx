@@ -16,6 +16,12 @@ interface DateTimeQuarterHourProps {
   className?: string;
   id?: string;
   required?: boolean;
+  /**
+   * Department timezone. Without it, a member who picks a time before picking
+   * a date gets the *browser's* today, which is a day out either side of
+   * midnight for anyone not in the department's own timezone.
+   */
+  timezone?: string | undefined;
 }
 
 function snapToQuarter(time: string): string {
@@ -26,7 +32,14 @@ function snapToQuarter(time: string): string {
   return `${h}:${String(snapped).padStart(2, '0')}`;
 }
 
-const DateTimeQuarterHour: React.FC<DateTimeQuarterHourProps> = ({ value, onChange, className, id, required }) => {
+const DateTimeQuarterHour: React.FC<DateTimeQuarterHourProps> = ({
+  value,
+  onChange,
+  className,
+  id,
+  required,
+  timezone,
+}) => {
   const { datePart, timePart } = useMemo(() => {
     if (!value) return { datePart: '', timePart: '' };
     const sep = value.includes('T') ? 'T' : ' ';
@@ -40,7 +53,7 @@ const DateTimeQuarterHour: React.FC<DateTimeQuarterHourProps> = ({ value, onChan
   };
 
   const handleTimeChange = (newTime: string) => {
-    const date = datePart || getTodayLocalDate();
+    const date = datePart || getTodayLocalDate(timezone);
     onChange(`${date}T${newTime}`);
   };
 

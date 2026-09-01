@@ -7,7 +7,7 @@
 
 import React, { useState } from 'react';
 import { Pencil } from 'lucide-react';
-import { POSITION_LABELS } from '../../constants/enums';
+import { positionLabel } from '../../modules/scheduling/utils/positionLabels';
 
 interface PositionEditorProps {
   assignmentId: string;
@@ -55,7 +55,7 @@ export const PositionEditor: React.FC<PositionEditorProps> = ({
     );
   }
 
-  const label = displayLabel || POSITION_LABELS[currentPosition] || currentPosition;
+  const label = displayLabel || positionLabel(currentPosition);
 
   return (
     <button

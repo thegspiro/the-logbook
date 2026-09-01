@@ -27,6 +27,7 @@ import { enumLabel } from '../utils/displayValue';
 import { schedulingService, useSchedulingStore } from '../modules/scheduling';
 import type { ShiftRecord, ShiftTemplateRecord } from '../modules/scheduling';
 import { resolveTemplatePositions } from '../modules/scheduling/services/api';
+import { positionLabel } from '../modules/scheduling/utils/positionLabels';
 import { trainingModuleConfigService } from '../services/api';
 import { lazyWithRetry } from '../utils/lazyWithRetry';
 import TimeQuarterHour from '../components/ux/TimeQuarterHour';
@@ -39,12 +40,11 @@ const OpenShiftsTab = lazyWithRetry(() => import('./scheduling/OpenShiftsTab'));
 const RequestsTab = lazyWithRetry(() => import('./scheduling/RequestsTab'));
 const ShiftDetailPanel = lazyWithRetry(() => import('./scheduling/ShiftDetailPanel'));
 const ShiftReportsTab = lazyWithRetry(() => import('./scheduling/ShiftReportsTab'));
-const EquipmentChecksTab = lazyWithRetry(() => import('./scheduling/EquipmentChecksTab'));
 
-type TabId = 'schedule' | 'my-shifts' | 'open-shifts' | 'requests' | 'equipment-checks' | 'shift-reports';
+type TabId = 'schedule' | 'my-shifts' | 'open-shifts' | 'requests' | 'shift-reports';
 type ViewMode = 'week' | 'month';
 
-const TAB_IDS: TabId[] = ['schedule', 'my-shifts', 'open-shifts', 'requests', 'equipment-checks', 'shift-reports'];
+const TAB_IDS: TabId[] = ['schedule', 'my-shifts', 'open-shifts', 'requests', 'shift-reports'];
 
 const isTabId = (value: string | null): value is TabId => value !== null && (TAB_IDS as string[]).includes(value);
 const isViewMode = (value: string | null): value is ViewMode => value === 'week' || value === 'month';
@@ -120,7 +120,6 @@ const TAB_CONFIG: {
   { id: 'my-shifts', label: 'My Shifts', icon: Clock },
   { id: 'open-shifts', label: 'Open Shifts', icon: UserPlus },
   { id: 'requests', label: 'Requests', icon: ArrowLeftRight },
-  { id: 'equipment-checks', label: 'Equipment Checks', icon: ClipboardList },
   { id: 'shift-reports', label: 'Shift Reports', icon: FileText },
 ];
 
@@ -134,18 +133,11 @@ const ADMIN_LINKS: {
   { label: 'Patterns', path: '/scheduling/patterns', icon: Repeat, description: 'Configure shift patterns' },
   { label: 'Reports', path: '/scheduling/reports', icon: BarChart3, description: 'View scheduling reports' },
   {
-    label: 'Check Reports',
-    path: '/scheduling/equipment-check-reports',
-    icon: ClipboardList,
-    description: 'Equipment compliance',
-  },
-  {
     label: 'Qualifications',
     path: '/scheduling/qualifications',
     icon: ShieldCheck,
     description: 'Who is cleared per position',
   },
-  { label: 'Supply', path: '/scheduling/supply/expiring', icon: Truck, description: 'Expiring items & stock' },
   { label: 'Settings', path: '/scheduling/settings', icon: Settings, description: 'Department settings' },
 ];
 
@@ -161,26 +153,9 @@ const SchedulingPage: React.FC = () => {
   const tz = useTimezone();
   const canManage = checkPermission('scheduling.manage');
 
-  // Expiring-item count for the "Supply" admin card badge.
-  const [supplyCount, setSupplyCount] = useState<number | null>(null);
-  useEffect(() => {
-    if (!canManage) return;
-    let cancelled = false;
-    void schedulingService
-      .getSupplyExpiringItems(30)
-      .then((res) => {
-        if (!cancelled) setSupplyCount(res.total);
-      })
-      .catch(() => {
-        /* non-critical — badge just won't show */
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [canManage]);
   const [shiftReportsEnabled, setShiftReportsEnabled] = useState(true);
   const visibleTabs = useMemo(
-    () => (shiftReportsEnabled ? TAB_CONFIG : TAB_CONFIG.filter((tab) => tab.id !== 'shift-reports')),
+    () => TAB_CONFIG.filter((tab) => shiftReportsEnabled || tab.id !== 'shift-reports'),
     [shiftReportsEnabled]
   );
   const [searchParams, setSearchParams] = useSearchParams();
@@ -231,6 +206,16 @@ const SchedulingPage: React.FC = () => {
     },
     [searchParams, setSearchParams]
   );
+
+  // A tab can disappear after the page has already opened it: both the module
+  // switch and the shift-reports flag resolve asynchronously, and ?tab= is
+  // deep-linked from notification emails that were sent while the tab existed.
+  // Without this the tab strip loses the button and the body renders nothing,
+  // which reads as a broken page rather than a disabled feature.
+  useEffect(() => {
+    if (visibleTabs.some((tab) => tab.id === activeTab)) return;
+    handleTabChange('schedule');
+  }, [visibleTabs, activeTab, handleTabChange]);
 
   const handleTabKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLButtonElement>, currentTab: TabId) => {
@@ -298,7 +283,7 @@ const SchedulingPage: React.FC = () => {
   const [selectedShift, setSelectedShift] = useState<ShiftRecord | null>(null);
 
   // Deep-link: open shift detail panel when ?shift=<id> is in the URL.
-  // Skip if a specific tab is targeted (e.g. equipment-checks from a notification)
+  // Skip if a specific tab is targeted (e.g. shift-reports from a notification)
   // so the shift panel doesn't obscure the tab content.
   useEffect(() => {
     const shiftId = searchParams.get('shift');
@@ -525,7 +510,6 @@ const SchedulingPage: React.FC = () => {
             <div className="hscroll flex gap-2">
               {adminLinks.map((link) => {
                 const Icon = link.icon;
-                const isSupply = link.path === '/scheduling/supply/expiring';
                 return (
                   <Link
                     key={link.path}
@@ -535,11 +519,6 @@ const SchedulingPage: React.FC = () => {
                   >
                     <Icon className="h-4 w-4 shrink-0 text-violet-500" aria-hidden="true" />
                     {link.label}
-                    {isSupply && supplyCount != null && supplyCount > 0 && (
-                      <span className="inline-flex shrink-0 items-center rounded-full bg-amber-500/15 px-1.5 py-0.5 text-[11px] font-semibold text-amber-700 dark:text-amber-400">
-                        {supplyCount} expiring
-                      </span>
-                    )}
                   </Link>
                 );
               })}
@@ -616,7 +595,6 @@ const SchedulingPage: React.FC = () => {
             {activeTab === 'my-shifts' && <MyShiftsTab onViewShift={handleShiftClick} />}
             {activeTab === 'open-shifts' && <OpenShiftsTab onViewShift={handleShiftClick} />}
             {activeTab === 'requests' && <RequestsTab />}
-            {activeTab === 'equipment-checks' && <EquipmentChecksTab />}
             {activeTab === 'shift-reports' && <ShiftReportsTab />}
           </Suspense>
         )}
@@ -808,7 +786,7 @@ const SchedulingPage: React.FC = () => {
                                       key={i}
                                       className={`rounded-sm px-2 py-0.5 text-[10px] font-medium capitalize ${slot.required ? 'bg-violet-500/10 text-violet-700 dark:text-violet-300' : 'bg-theme-surface-hover text-theme-text-muted'}`}
                                     >
-                                      {slot.position}
+                                      {positionLabel(slot.position)}
                                       {!slot.required && ' (opt)'}
                                     </span>
                                   ))}

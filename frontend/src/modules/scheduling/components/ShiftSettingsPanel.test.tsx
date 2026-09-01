@@ -71,6 +71,17 @@ vi.mock('./ShiftReportsSettingsPanel', () => ({
 }));
 vi.mock('./PlatoonRosterPanel', () => ({ PlatoonRosterPanel: () => <div>PlatoonRosterPanel</div> }));
 
+// The Equipment section is a signpost into Inventory, and each of its links is
+// gated on the grant its destination requires. Defaults to granting nothing,
+// which is what the real store yields here anyway — the block that cares
+// installs its own grants.
+const mockCheckPermission = vi.fn();
+vi.mock('../../../stores/authStore', () => ({
+  useAuthStore: () => ({
+    checkPermission: (...a: unknown[]) => mockCheckPermission(...a) as boolean,
+  }),
+}));
+
 import { ShiftSettingsPanel } from './ShiftSettingsPanel';
 
 const renderPanel = (activeTab: SettingsTab) =>
@@ -104,7 +115,7 @@ describe('ShiftSettingsPanel', () => {
   // The footer writes only the locally-stored settings object. It used to show
   // on every section, so switching to Notifications or Shift Reports offered a
   // Save button that flashed "Settings saved" without touching their values.
-  describe.each<SettingsTab>(['general', 'apparatus', 'equipment'])('on the %s section', (tab) => {
+  describe.each<SettingsTab>(['general', 'apparatus'])('on the %s section', (tab) => {
     it('offers the Save/Reset footer', () => {
       renderPanel(tab);
 
@@ -113,7 +124,10 @@ describe('ShiftSettingsPanel', () => {
     });
   });
 
-  describe.each<SettingsTab>(['platoons', 'eligibility', 'notifications', 'shift-reports'])(
+  // 'equipment' belongs in this list, not the one above: its four settings were
+  // stored and read by nothing, so they were deleted and the section is now a
+  // signpost to Inventory. A Save button there would write nothing.
+  describe.each<SettingsTab>(['platoons', 'eligibility', 'notifications', 'shift-reports', 'equipment'])(
     'on the %s section',
     (tab) => {
       it('hides the Save/Reset footer it would not act on', () => {
@@ -176,5 +190,60 @@ describe('ShiftSettingsPanel', () => {
     await user.click(toggle);
 
     await waitFor(() => expect(mockUpdateFeatureSettings).toHaveBeenCalledWith({ enforce_evoc: false }));
+  });
+
+  /**
+   * Both links here point into Inventory, and a scheduling officer does not
+   * automatically hold either grant. Showing one to somebody the destination
+   * refuses turns a signpost into a dead end — which is what "Manage equipment
+   * checklists" was, while its sibling "Checklist settings" had been gated
+   * from the start.
+   */
+  describe('the Equipment signpost links', () => {
+    // Reset before installing the default, so a grant set from one test cannot
+    // survive into the next (CLAUDE.md pitfall #28).
+    beforeEach(() => {
+      mockCheckPermission.mockReset();
+      mockCheckPermission.mockReturnValue(false);
+    });
+
+    const grant = (...held: string[]) =>
+      mockCheckPermission.mockImplementation((p: unknown) => held.includes(p as string));
+
+    it('explains where checklists live even when neither link is offered', () => {
+      renderPanel('equipment');
+
+      expect(screen.getByText(/Checklists are managed in Inventory/i)).toBeInTheDocument();
+      expect(screen.queryByRole('link', { name: /Manage equipment checklists/i })).toBeNull();
+      expect(screen.queryByRole('link', { name: /Checklist settings/i })).toBeNull();
+    });
+
+    it('offers the authoring link only to a holder of inventory.check_manage', () => {
+      grant('inventory.check_manage');
+      renderPanel('equipment');
+
+      expect(screen.getByRole('link', { name: /Manage equipment checklists/i })).toHaveAttribute(
+        'href',
+        '/inventory/admin/checklists'
+      );
+      // A separate grant, so it stays hidden.
+      expect(screen.queryByRole('link', { name: /Checklist settings/i })).toBeNull();
+    });
+
+    it('offers the settings link only to a holder of the department-settings grant', () => {
+      grant('settings.manage');
+      renderPanel('equipment');
+
+      expect(screen.getByRole('link', { name: /Checklist settings/i })).toBeInTheDocument();
+      expect(screen.queryByRole('link', { name: /Manage equipment checklists/i })).toBeNull();
+    });
+
+    it('offers both to somebody holding both', () => {
+      grant('inventory.check_manage', 'organization.update_settings');
+      renderPanel('equipment');
+
+      expect(screen.getByRole('link', { name: /Manage equipment checklists/i })).toBeInTheDocument();
+      expect(screen.getByRole('link', { name: /Checklist settings/i })).toBeInTheDocument();
+    });
   });
 });

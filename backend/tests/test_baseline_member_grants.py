@@ -103,7 +103,7 @@ def test_compliance_view_is_not_a_baseline_grant():
       any member could read any other member's compliance progress.
 
     The codebase already reasons this way one line below the removal site,
-    where ``equipment_check.view`` is withheld from members precisely because
+    where ``inventory.check_view`` is withheld from members precisely because
     "it also opens the compliance/failure reports". Same argument, same answer.
     """
     for label, registry, slug, field in BASELINE_SOURCES:

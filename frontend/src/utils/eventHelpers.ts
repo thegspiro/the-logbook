@@ -258,9 +258,16 @@ export function getEventUrgency(event: EventListItem, now: Date = new Date()): E
  * `going_count` counts confirmed attendance only, which is what
  * `max_attendees` caps — a waitlisted or declined RSVP does not consume a slot.
  */
+/** Whether the event has no seats left.
+ *
+ * Measured in seats rather than members, because that is what `max_attendees`
+ * caps: a member bringing two guests fills three places. Using `going_count`
+ * here reported eight of ten on a full ten-seat event and offered a Going
+ * button the server would only waitlist. Falls back to `going_count` for
+ * payloads predating the aggregate. */
 export function isRosterFull(event: EventListItem): boolean {
   if (!event.max_attendees || event.max_attendees <= 0) return false;
-  return (event.going_count ?? 0) >= event.max_attendees;
+  return (event.occupied_seats ?? event.going_count ?? 0) >= event.max_attendees;
 }
 
 /** Format a span as "2h", "1h 30m" or "45m". Returns '' for a bad span. */

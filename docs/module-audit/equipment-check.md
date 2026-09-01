@@ -1,5 +1,14 @@
 # Module Audit — Equipment Check / Shift Completion
 
+> **Moved 2026-08-31.** Equipment checklists are part of the **Inventory**
+> module now, not Scheduling. The router's module gate is `inventory`, the
+> permissions are `inventory.check_view` / `.check_manage` / `.check_submit`
+> (renamed from `equipment_check.*`), and the frontend lives under
+> `/inventory/checklists`. The findings below are unchanged and still apply:
+> the file names in them (`equipment_check.py`, `equipment_check_service.py`)
+> and the API paths did not move. Permission names quoted in the fixes are
+> the pre-rename ones where the fix predates the move.
+
 **Files:** `app/api/v1/endpoints/equipment_check.py` (1,280 L, 34 endpoints),
 `app/api/v1/endpoints/shift_completion.py` (707 L, 21 endpoints),
 `app/services/equipment_check_service.py` (2,245 L),

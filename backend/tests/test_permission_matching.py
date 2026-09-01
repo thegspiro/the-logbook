@@ -9,8 +9,16 @@ diverge — previously the role service and admin check only honored the global
 ``*`` and exact matches.
 """
 
-from app.api.dependencies import _has_permission
-from app.core.permissions import permission_matches, permission_matches_any
+from types import SimpleNamespace
+
+from app.api.dependencies import _collect_user_permissions, _has_permission
+from app.core.permissions import (
+    ALL_PERMISSIONS,
+    LEGACY_PERMISSION_ALIASES,
+    expand_legacy_permissions,
+    permission_matches,
+    permission_matches_any,
+)
 
 
 class TestPermissionMatches:
@@ -65,3 +73,97 @@ class TestDependencyWrapperDelegates:
 
     def test_denied(self):
         assert _has_permission("users.view", {"events.view"}) is False
+
+
+class TestLegacyPermissionAliases:
+    """A renamed permission keeps working for rows the migration didn't reach.
+
+    ``equipment_check.*`` became ``inventory.check_*`` when equipment
+    checklists moved to the Inventory module. The rename migration rewrites
+    ``positions.permissions``, but a database restored from an older backup —
+    or a row written by an integration still using the old vocabulary — would
+    otherwise drop to no access, silently. These assert the safety net, not
+    the migration.
+    """
+
+    def test_every_alias_target_is_a_real_permission(self):
+        """A typo'd target would alias to a grant nothing ever checks."""
+        known = {p.name for p in ALL_PERMISSIONS}
+        targets = {t for ts in LEGACY_PERMISSION_ALIASES.values() for t in ts}
+        assert targets <= known, sorted(targets - known)
+
+    def test_no_alias_key_is_still_a_live_permission(self):
+        """An alias for a name that still exists would be a rename half-done."""
+        known = {p.name for p in ALL_PERMISSIONS}
+        assert not (set(LEGACY_PERMISSION_ALIASES) & known)
+
+    def test_retired_name_expands_to_its_replacement(self):
+        expanded = expand_legacy_permissions({"equipment_check.manage"})
+        assert permission_matches("inventory.check_manage", expanded)
+
+    def test_retired_module_wildcard_expands_to_all_three(self):
+        """``equipment_check.*`` cannot match ``inventory.*`` on its own.
+
+        The module segment changed, so the wildcard has to be listed
+        explicitly rather than left to ``permission_matches``.
+        """
+        expanded = expand_legacy_permissions({"equipment_check.*"})
+        for name in (
+            "inventory.check_view",
+            "inventory.check_manage",
+            "inventory.check_submit",
+        ):
+            assert permission_matches(name, expanded), name
+
+    def test_expansion_is_additive(self):
+        """The stored string survives, so a grants readout stays truthful."""
+        expanded = expand_legacy_permissions({"equipment_check.view"})
+        assert "equipment_check.view" in expanded
+
+    def test_unrelated_grants_are_untouched(self):
+        assert expand_legacy_permissions({"events.view"}) == {"events.view"}
+
+    def test_collect_user_permissions_applies_the_alias(self):
+        """The expansion has to happen where every check funnels through."""
+        user = SimpleNamespace(
+            positions=[SimpleNamespace(permissions=["equipment_check.submit"])],
+            rank=None,
+        )
+        assert permission_matches(
+            "inventory.check_submit", _collect_user_permissions(user)
+        )
+
+
+class TestInventoryWildcardCoversChecklists:
+    """``inventory.*`` grants the checklist permissions, deliberately.
+
+    This is a real widening, not a tautology worth asserting for its own sake.
+    Before the move these were ``equipment_check.*``, which ``inventory.*``
+    did not reach; renaming them into the inventory namespace put them under
+    that wildcard. A department that had built its own position granting
+    ``inventory.*`` — a quartermaster, typically — gained the ability to
+    author and submit equipment checklists on upgrade, without anyone
+    choosing that for them.
+
+    It is the intended behaviour (the grants live with the stock they
+    describe, exactly as ``view_medical``/``manage_medical`` do), so it is
+    pinned here rather than left implicit: moving any of these three back out
+    of the ``inventory`` namespace, or adding a fourth the wildcard should not
+    cover, has to fail a test and be argued for.
+    """
+
+    CHECK_PERMISSIONS = (
+        "inventory.check_view",
+        "inventory.check_manage",
+        "inventory.check_submit",
+    )
+
+    def test_inventory_wildcard_grants_every_checklist_permission(self):
+        for name in self.CHECK_PERMISSIONS:
+            assert permission_matches(name, {"inventory.*"}), name
+
+    def test_a_narrow_inventory_grant_does_not_imply_them(self):
+        """``inventory.view`` is not a wildcard, so it grants none of these —
+        the widening is the wildcard's doing, not the namespace's."""
+        for name in self.CHECK_PERMISSIONS:
+            assert not permission_matches(name, {"inventory.view"}), name

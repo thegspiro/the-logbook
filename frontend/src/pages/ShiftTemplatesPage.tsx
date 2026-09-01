@@ -184,6 +184,11 @@ export const ShiftTemplatesPage: React.FC = () => {
       category: (t.category as TemplateCategory) || 'standard',
       apparatus_type: t.apparatus_type || '',
       apparatus_id: t.apparatus_id || '',
+      // Seeded even when the Inventory module is off and the picker is
+      // hidden: the form sends this field on every save, so dropping it here
+      // would delete a template's checklist links the first time anyone edited
+      // it in that state.
+      equipment_check_template_ids: t.equipment_check_template_ids ?? [],
       event_type: eventType,
       resources,
     };

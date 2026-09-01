@@ -8882,37 +8882,6 @@ export const SHOTS = [
     // entries are at the top, which is what the section describes.
     fullPage: false,
   },
-  {
-    id: "15-06-applicant-drawer",
-    doc: "15-prospective-members.md",
-    line: 226,
-    anchor:
-      "Screenshot of the applicant detail drawer showing the overview tab with applicant",
-    alt: "Applicant detail drawer with contact details and current stage",
-    route: "/prospective-members",
-    prepare: async (page) => {
-      // Search first, then click. The board shows the newest 200 applicants,
-      // so on a pipeline padded by `--bulk-prospects` these named ones are not
-      // on screen at all and a bare click times out. Narrowing the list makes
-      // the shot work at either size.
-      const search = page.getByPlaceholder(/search applicants/i);
-      if (await search.isVisible().catch(() => false)) {
-        await search.fill("Rivera");
-        await page.waitForTimeout(900);
-      }
-      await page
-        .locator("[class*='cursor-pointer']")
-        .filter({ hasText: /Rivera|Fields|Okafor/ })
-        .first()
-        .click({ timeout: 10_000 });
-    },
-    fullPage: true,
-    // The board spreads seven applicants across six stages, so some columns
-    // read "No applicants", and a drawer for an applicant who has uploaded
-    // nothing reads "No documents yet". Both are honest; the populated
-    // check is Total Active.
-    allowEmptyState: true,
-  },
 
   // ── Sixth batch: documents, forms and department messaging ─────────
   {
@@ -10204,15 +10173,15 @@ export const SHOTS = [
     id: "02-67-competency-matrix",
     doc: "02-training.md",
     line: 1156,
-    anchor:
-      "Screenshot of the Competency Matrix showing a heat-map grid with member names",
-    alt: "Competency matrices listing the department's readiness definitions",
+    // The holdBack this entry carried was against the old placeholder, which
+    // described a member-by-competency heat-map. That screen does not exist,
+    // the guide now says so in prose, and the marker is gone — so the capture
+    // of what the tab actually is became the right picture rather than a
+    // mismatched one. Applied by hand on 2026-08-31.
+    anchor: "Not yet built: the department-wide member-by-competency heat-map",
+    alt: "The Competency tab: the Dreyfus legend above one card per matrix, each naming its position and how many skills it requires, with Add Matrix beside the heading",
     route: "/training/admin?page=enhancements&tab=competency",
     fullPage: true,
-    holdBack:
-      "the tab lists matrix definitions per position, not the member-by-competency " +
-      "heat-map with a station/rank filter bar the placeholder describes — and its " +
-      "legend is the Dreyfus scale, not the green/yellow/red mapping in the prose",
   },
   {
     id: "02-68-recertification-pathways",
@@ -10659,26 +10628,6 @@ export const SHOTS = [
     fullPage: true,
   },
   {
-    id: "08-35-notifications-show-read",
-    doc: "08-admin-reports.md",
-    line: 1219,
-    anchor:
-      'Screenshot of the Notifications inbox showing the "Show read" toggle',
-    alt: "Notifications inbox with read notifications revealed",
-    route: "/notifications?tab=inbox",
-    prepare: async (page) => {
-      await page
-        .getByLabel(/show read/i)
-        .first()
-        .check({ timeout: 10_000 });
-    },
-    fullPage: true,
-    holdBack:
-      "revealing read notifications surfaces the ones this demo database " +
-      "recorded before the position-label fix, whose bodies read " +
-      "'ShiftPosition.FIREFIGHTER position'; capturable on a fresh seed",
-  },
-  {
     id: "08-34-email-templates",
     doc: "08-admin-reports.md",
     line: 1383,
@@ -10707,28 +10656,17 @@ export const SHOTS = [
     // subject -- an admin capture would show the working page and teach the
     // opposite of the caption.
     id: "19-01-platoons-permission-error",
-    doc: "19-august-2026-release-changes.md",
-    line: 446,
-    anchor: "the permission error a member without",
+    // Applied in guide 03, not guide 19. The shot was originally applied to
+    // guide 19's own marker; a merge on 2026-08-18 dropped both the image and
+    // the marker, and the topic now lives in guide 03's "Who Can See the
+    // Platoon Roster". Re-applied there on 2026-08-31, keeping the id.
+    doc: "03-scheduling.md",
+    line: 635,
+    anchor: "This removed access somebody already had",
     alt: "Platoon Management refusing a member who does not hold scheduling.manage",
     route: "/scheduling/platoons",
     auth: "member",
     fullPage: false,
-  },
-  {
-    // The cards read "0 attendees - 0 action items" over meetings that had
-    // both until the 2026-08-17 fix. The existing guide-04 capture pictures the
-    // defect, so this replaces rather than supplements it.
-    id: "19-02-minutes-card-counts",
-    doc: "19-august-2026-release-changes.md",
-    line: 559,
-    anchor: "the Minutes page card grid with populated",
-    alt: "Meeting cards showing real attendee and action-item counts",
-    // /minutes is the page; /meetings is the API it was rebuilt onto. Visiting
-    // /meetings silently lands on the dashboard, which is a screenshot of the
-    // wrong screen rather than an error.
-    route: "/minutes",
-    fullPage: true,
   },
   {
     // The rewrite's whole claim is in the first screen: the department, not the
@@ -11015,8 +10953,11 @@ export const SHOTS = [
     id: "08-76-org-dashboard-without-finance",
     doc: "08-admin-reports.md",
     line: 2141,
+    // Applied by hand beside 08-75 on 2026-08-31: the applier consumed the one
+    // marker with 08-75 alone, so the pair's second half never landed and the
+    // guide taught half a comparison the marker had asked for whole.
     anchor: "__paired-with-08-75__",
-    alt: "The same dashboard as a member without finance.manage: Department pulse is not rendered at all, rather than shown with empty money cards",
+    alt: "The same dashboard as a member holding none of finance.manage, fundraising.view or events.manage: Department pulse is not rendered at all, rather than shown with empty money cards",
     route: "/dashboard",
     auth: "member",
     fullPage: true,

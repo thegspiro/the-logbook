@@ -20,6 +20,7 @@ import {
   shiftStatusInfo,
   statusBadgeLabel,
 } from '../../../modules/scheduling/utils/shiftBoard';
+import { positionLabel } from '../../../modules/scheduling/utils/positionLabels';
 import { formatTime } from '../../../utils/dateFormatting';
 import { STATUS_STYLES } from './statusStyles';
 
@@ -83,7 +84,7 @@ export const ShiftSeatList: React.FC<ShiftSeatListProps> = ({
       <ul className="mb-3 flex flex-col gap-1.5">
         {seats.map((seat, index) => {
           const key = seat.member?.assignment_id ?? `open-${index}`;
-          const label = seat.position ? seat.position.replace(/_/g, ' ') : 'Open seat';
+          const label = seat.position ? positionLabel(seat.position) : 'Open seat';
 
           if (seat.member) {
             return (

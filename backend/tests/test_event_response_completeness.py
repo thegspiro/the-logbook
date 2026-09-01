@@ -47,6 +47,17 @@ CALLER_SUPPLIED = {
     # is the honest value everywhere else, including the rows backfilled from
     # the pre-column marker, which recorded no actor at all.
     "attendance_finalized_by_name",
+    # Waitlist standing and the caller's own RSVP: per-user, not per-event, so
+    # there is no Event column for the builder to read. Computed on the detail
+    # endpoint from the already eager-loaded rsvps and passed in. Their default
+    # of None is correct on every other response, where no single caller is
+    # implied.
+    "waitlist_count",
+    "user_waitlist_position",
+    "user_rsvp",
+    # Seats taken, aggregated from the eager-loaded rsvps on the detail
+    # endpoint. Like the counts above it is not an Event column.
+    "occupied_seats",
 }
 
 

@@ -106,12 +106,11 @@ describe('DocumentsPage', () => {
     await user.click(folderButton);
 
     await screen.findByText('Uploaded.pdf');
-    const generatedCard = screen.getByText('Meeting Minutes').closest('div.stat-card');
-    expect(generatedCard).not.toBeNull();
-    expect(within(generatedCard as HTMLElement).queryByTitle('Download document')).not.toBeInTheDocument();
+    const generatedCard = screen.getByTestId('document-card-d-generated');
+    expect(within(generatedCard).queryByTitle('Download document')).not.toBeInTheDocument();
 
-    const uploadedCard = screen.getByText('Uploaded.pdf').closest('div.stat-card');
-    expect(within(uploadedCard as HTMLElement).getByTitle('Download document')).toBeInTheDocument();
+    const uploadedCard = screen.getByTestId('document-card-d-upload');
+    expect(within(uploadedCard).getByTitle('Download document')).toBeInTheDocument();
   });
 
   it('downloads a document via the service when Download is clicked', async () => {

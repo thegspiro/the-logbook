@@ -96,7 +96,7 @@ def _user_display_name(user: User) -> str:
 async def create_template(
     data: EquipmentCheckTemplateCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("equipment_check.manage")),
+    current_user: User = Depends(require_permission("inventory.check_manage")),
 ):
     """Create a new equipment check template with optional compartments."""
     service = EquipmentCheckService(db)
@@ -139,9 +139,9 @@ async def list_templates(
     # otherwise edit templates it cannot list.
     current_user: User = Depends(
         require_permission(
-            "equipment_check.view",
-            "equipment_check.submit",
-            "equipment_check.manage",
+            "inventory.check_view",
+            "inventory.check_submit",
+            "inventory.check_manage",
         )
     ),
 ):
@@ -152,8 +152,8 @@ async def list_templates(
     # Manage is unrestricted like view: a role that may edit every template
     # must not have its listing narrowed to its own shift positions.
     if not (
-        _has_permission("equipment_check.view", permissions)
-        or _has_permission("equipment_check.manage", permissions)
+        _has_permission("inventory.check_view", permissions)
+        or _has_permission("inventory.check_manage", permissions)
     ):
         visible_positions = await service.get_user_check_positions(
             str(current_user.id), str(current_user.organization_id)
@@ -182,9 +182,9 @@ async def get_template(
     # able to fetch (see list_templates).
     current_user: User = Depends(
         require_permission(
-            "equipment_check.view",
-            "equipment_check.submit",
-            "equipment_check.manage",
+            "inventory.check_view",
+            "inventory.check_submit",
+            "inventory.check_manage",
         )
     ),
 ):
@@ -194,8 +194,8 @@ async def get_template(
     visible_positions = None
     # Manage is unrestricted like view (see list_templates).
     if not (
-        _has_permission("equipment_check.view", permissions)
-        or _has_permission("equipment_check.manage", permissions)
+        _has_permission("inventory.check_view", permissions)
+        or _has_permission("inventory.check_manage", permissions)
     ):
         visible_positions = await service.get_user_check_positions(
             str(current_user.id), str(current_user.organization_id)
@@ -221,7 +221,7 @@ async def update_template(
     template_id: str,
     data: EquipmentCheckTemplateUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("equipment_check.manage")),
+    current_user: User = Depends(require_permission("inventory.check_manage")),
 ):
     """Update template metadata."""
     service = EquipmentCheckService(db)
@@ -255,7 +255,7 @@ async def update_template(
 async def delete_template(
     template_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("equipment_check.manage")),
+    current_user: User = Depends(require_permission("inventory.check_manage")),
 ):
     """Delete a template and all its compartments/items."""
     service = EquipmentCheckService(db)
@@ -299,7 +299,7 @@ async def clone_template(
     template_id: str,
     target_apparatus_id: str = Query(...),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("equipment_check.manage")),
+    current_user: User = Depends(require_permission("inventory.check_manage")),
 ):
     """Clone a template to a specific apparatus."""
     service = EquipmentCheckService(db)
@@ -329,14 +329,14 @@ async def clone_template(
 async def suggest_inventory_matches(
     template_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("equipment_check.manage")),
+    current_user: User = Depends(require_permission("inventory.check_manage")),
 ):
     """Propose a catalog item for each unlinked position on this template.
 
     Read-only — nothing is linked until the reviewed set comes back through
     ``POST /templates/{id}/inventory-links``.
 
-    **Requires permission: equipment_check.manage**
+    **Requires permission: inventory.check_manage**
     """
     service = EquipmentCheckService(db)
     result = await service.suggest_inventory_matches(
@@ -355,11 +355,11 @@ async def link_inventory_items(
     template_id: str,
     data: InventoryLinkRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("equipment_check.manage")),
+    current_user: User = Depends(require_permission("inventory.check_manage")),
 ):
     """Apply a reviewed set of catalog links to this template's items.
 
-    **Requires permission: equipment_check.manage**
+    **Requires permission: inventory.check_manage**
     """
     service = EquipmentCheckService(db)
     try:
@@ -395,7 +395,7 @@ async def add_compartment(
     template_id: str,
     data: CheckTemplateCompartmentCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("equipment_check.manage")),
+    current_user: User = Depends(require_permission("inventory.check_manage")),
 ):
     """Add a compartment to a template."""
     service = EquipmentCheckService(db)
@@ -431,7 +431,7 @@ async def update_compartment(
     compartment_id: str,
     data: CheckTemplateCompartmentUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("equipment_check.manage")),
+    current_user: User = Depends(require_permission("inventory.check_manage")),
 ):
     """Update a compartment."""
     service = EquipmentCheckService(db)
@@ -465,7 +465,7 @@ async def update_compartment(
 async def delete_compartment(
     compartment_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("equipment_check.manage")),
+    current_user: User = Depends(require_permission("inventory.check_manage")),
 ):
     """Delete a compartment and its items."""
     service = EquipmentCheckService(db)
@@ -505,7 +505,7 @@ async def clone_compartment(
     compartment_id: str,
     data: CheckTemplateCompartmentClone,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("equipment_check.manage")),
+    current_user: User = Depends(require_permission("inventory.check_manage")),
 ):
     """Atomically clone a compartment and its complete item graph."""
     compartment = await EquipmentCheckService(db).clone_compartment(
@@ -521,7 +521,7 @@ async def reorder_compartments(
     template_id: str,
     data: ReorderRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("equipment_check.manage")),
+    current_user: User = Depends(require_permission("inventory.check_manage")),
 ):
     """Reorder compartments within a template."""
     service = EquipmentCheckService(db)
@@ -547,7 +547,7 @@ async def add_item(
     compartment_id: str,
     data: CheckTemplateItemCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("equipment_check.manage")),
+    current_user: User = Depends(require_permission("inventory.check_manage")),
 ):
     """Add an item to a compartment."""
     from app.models.apparatus import CheckTemplateCompartment as CTC
@@ -591,7 +591,7 @@ async def add_items_bulk(
     compartment_id: str,
     data: CheckTemplateItemBulkCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("equipment_check.manage")),
+    current_user: User = Depends(require_permission("inventory.check_manage")),
 ):
     """Create an ordered item batch atomically; safe to retry with the same key."""
     service = EquipmentCheckService(db)
@@ -622,7 +622,7 @@ async def update_item(
     item_id: str,
     data: CheckTemplateItemUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("equipment_check.manage")),
+    current_user: User = Depends(require_permission("inventory.check_manage")),
 ):
     """Update a check template item."""
     from app.models.apparatus import CheckTemplateCompartment as CTC
@@ -663,7 +663,7 @@ async def update_item(
 async def delete_item(
     item_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("equipment_check.manage")),
+    current_user: User = Depends(require_permission("inventory.check_manage")),
 ):
     """Delete a check template item."""
     from app.models.apparatus import CheckTemplateCompartment as CTC
@@ -706,7 +706,7 @@ async def delete_items_bulk(
     compartment_id: str,
     data: CheckTemplateItemBulkDelete,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("equipment_check.manage")),
+    current_user: User = Depends(require_permission("inventory.check_manage")),
 ):
     """Delete an org-scoped compartment's item batch atomically."""
     service = EquipmentCheckService(db)
@@ -734,7 +734,7 @@ async def reorder_items(
     compartment_id: str,
     data: ReorderRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("equipment_check.manage")),
+    current_user: User = Depends(require_permission("inventory.check_manage")),
 ):
     """Reorder items within a compartment."""
     service = EquipmentCheckService(db)
@@ -759,10 +759,10 @@ async def get_shift_checklists(
     shift_id: str,
     db: AsyncSession = Depends(get_db),
     # EC-7: read endpoints accept view OR submit — members hold
-    # equipment_check.submit (default member position) so the check-performing
+    # inventory.check_submit (default member position) so the check-performing
     # flow keeps working, while report endpoints stay view-only.
     current_user: User = Depends(
-        require_permission("equipment_check.view", "equipment_check.submit")
+        require_permission("inventory.check_view", "inventory.check_submit")
     ),
 ):
     """Get all applicable checklists for the current user on a shift."""
@@ -786,7 +786,7 @@ async def submit_check(
     data: ShiftEquipmentCheckCreate,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(
-        require_permission("equipment_check.submit", "equipment_check.manage")
+        require_permission("inventory.check_submit", "inventory.check_manage")
     ),
 ):
     """Submit an equipment check for a shift."""
@@ -798,7 +798,7 @@ async def submit_check(
             checked_by=str(current_user.id),
             data=data.model_dump(exclude_unset=True),
             allow_manage=_has_permission(
-                "equipment_check.manage", _collect_user_permissions(current_user)
+                "inventory.check_manage", _collect_user_permissions(current_user)
             ),
         )
         return check
@@ -819,7 +819,7 @@ async def submit_standalone_check(
     data: StandaloneEquipmentCheckCreate,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(
-        require_permission("equipment_check.submit", "equipment_check.manage")
+        require_permission("inventory.check_submit", "inventory.check_manage")
     ),
 ):
     """Submit a standalone equipment check not tied to a shift."""
@@ -844,7 +844,7 @@ async def complete_incomplete_check(
     data: EquipmentCheckCompleteItems,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(
-        require_permission("equipment_check.submit", "equipment_check.manage")
+        require_permission("inventory.check_submit", "inventory.check_manage")
     ),
 ):
     """Complete remaining items on an incomplete check."""
@@ -852,7 +852,7 @@ async def complete_incomplete_check(
     # Only the member who started the check may complete it; managers may
     # complete any check in their org (supervisory correction / shift handover).
     allow_any = _has_permission(
-        "equipment_check.manage", _collect_user_permissions(current_user)
+        "inventory.check_manage", _collect_user_permissions(current_user)
     )
     try:
         check = await service.complete_incomplete_check(
@@ -880,7 +880,7 @@ async def get_shift_checks(
     db: AsyncSession = Depends(get_db),
     # EC-7: view OR submit (see get_shift_checklists)
     current_user: User = Depends(
-        require_permission("equipment_check.view", "equipment_check.submit")
+        require_permission("inventory.check_view", "inventory.check_submit")
     ),
 ):
     """Get all completed equipment checks for a shift."""
@@ -899,7 +899,7 @@ async def get_check(
     db: AsyncSession = Depends(get_db),
     # EC-7: view OR submit (see get_shift_checklists)
     current_user: User = Depends(
-        require_permission("equipment_check.view", "equipment_check.submit")
+        require_permission("inventory.check_view", "inventory.check_submit")
     ),
 ):
     """Get a single completed equipment check with item details."""
@@ -917,7 +917,7 @@ async def get_item_history(
     db: AsyncSession = Depends(get_db),
     # EC-7: view OR submit (see get_shift_checklists)
     current_user: User = Depends(
-        require_permission("equipment_check.view", "equipment_check.submit")
+        require_permission("inventory.check_view", "inventory.check_submit")
     ),
 ):
     """Get check history for a specific template item."""
@@ -934,7 +934,7 @@ async def get_last_check_results(
     db: AsyncSession = Depends(get_db),
     # EC-7: view OR submit (see get_shift_checklists)
     current_user: User = Depends(
-        require_permission("equipment_check.view", "equipment_check.submit")
+        require_permission("inventory.check_view", "inventory.check_submit")
     ),
 ):
     """Get item results from the most recent completed check for a template.
@@ -955,7 +955,7 @@ async def get_last_check_seals(
     db: AsyncSession = Depends(get_db),
     # EC-7: view OR submit, matching last-results — the same crew reads both.
     current_user: User = Depends(
-        require_permission("equipment_check.view", "equipment_check.submit")
+        require_permission("inventory.check_view", "inventory.check_submit")
     ),
 ):
     """Get the seal each sealed container carried at the last completed check.
@@ -1067,12 +1067,12 @@ async def get_fleet_readiness(
     strip_dates: int = Query(7, ge=1, le=90),
     expiring_days: int = Query(30, ge=1, le=365),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("equipment_check.view")),
+    current_user: User = Depends(require_permission("inventory.check_view")),
 ):
     """Readiness roll-up for every apparatus the department runs.
 
     Officer-level: this reports on other people's checks and on apparatus the
-    caller may not ride, so it sits behind ``equipment_check.view`` rather than
+    caller may not ride, so it sits behind ``inventory.check_view`` rather than
     the submit permission that opens a member's own checklist.
     """
     service = EquipmentReadinessService(db)
@@ -1099,13 +1099,13 @@ async def get_check_log(
     """Expected-vs-actual check history over the most recent duty days.
 
     Open to every member, but the scope is not the same for everyone: a caller
-    holding ``equipment_check.view`` gets the fleet grid and every member's
+    holding ``inventory.check_view`` gets the fleet grid and every member's
     rows, and one without it gets only the checks they performed themselves.
     The narrower scope is still strictly more than the old my-checks accordion
     offered, which could not be filtered by apparatus or date at all.
     """
     service = EquipmentReadinessService(db)
-    can_view_fleet = user_has_permission(current_user, "equipment_check.view")
+    can_view_fleet = user_has_permission(current_user, "inventory.check_view")
     try:
         payload = await service.get_check_log(
             str(current_user.organization_id),
@@ -1266,7 +1266,7 @@ async def get_compliance_report(
     date_from: date | None = Query(None),
     date_to: date | None = Query(None),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("equipment_check.view")),
+    current_user: User = Depends(require_permission("inventory.check_view")),
 ):
     """Aggregated compliance stats by apparatus + date range."""
     service = EquipmentCheckService(db)
@@ -1289,7 +1289,7 @@ async def get_failure_log(
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("equipment_check.view")),
+    current_user: User = Depends(require_permission("inventory.check_view")),
 ):
     """Paginated failure log with filters."""
     service = EquipmentCheckService(db)
@@ -1314,7 +1314,7 @@ async def get_item_trends(
     date_to: date | None = Query(None),
     interval: str = Query("weekly"),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("equipment_check.view")),
+    current_user: User = Depends(require_permission("inventory.check_view")),
 ):
     """Per-item pass/fail trend over time."""
     service = EquipmentCheckService(db)
@@ -1335,7 +1335,7 @@ async def export_csv(
     apparatus_id: str | None = Query(None),
     template_item_id: str | None = Query(None),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("equipment_check.view")),
+    current_user: User = Depends(require_permission("inventory.check_view")),
 ):
     """Export report data as CSV."""
     import io
@@ -1462,7 +1462,7 @@ async def export_pdf(
     apparatus_id: str | None = Query(None),
     check_id: str | None = Query(None),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_permission("equipment_check.view")),
+    current_user: User = Depends(require_permission("inventory.check_view")),
 ):
     """Export report data as PDF."""
     from starlette.responses import Response
@@ -1570,7 +1570,7 @@ async def export_pdf(
 @router.get(
     "/templates/{template_id}/changelog",
     response_model=TemplateChangeLogListResponse,
-    dependencies=[Depends(require_permission("equipment_check.manage"))],
+    dependencies=[Depends(require_permission("inventory.check_manage"))],
 )
 async def get_template_changelog(
     template_id: str,
@@ -1627,7 +1627,7 @@ async def get_supply_expiring_items(
     days_ahead: int = Query(30, ge=1, le=365),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(
-        require_permission("equipment_check.view", "inventory.manage")
+        require_permission("inventory.check_view", "inventory.manage")
     ),
 ):
     """Checklist items expiring soon on apparatus, with ready replacement
@@ -1646,12 +1646,12 @@ async def get_supply_expiring_items(
 async def get_apparatus_inventory(
     apparatus_id: str,
     db: AsyncSession = Depends(get_db),
-    # equipment_check.submit is the default member position: recording what you
+    # inventory.check_submit is the default member position: recording what you
     # just used is crew work, not officer work, and gating it behind a manage
     # permission is what leaves the gap for the next morning's check to find.
     current_user: User = Depends(
         require_permission(
-            "equipment_check.view", "equipment_check.submit", "inventory.view"
+            "inventory.check_view", "inventory.check_submit", "inventory.view"
         )
     ),
 ):
@@ -1680,7 +1680,7 @@ async def report_item_used(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(
         require_permission(
-            "equipment_check.submit", "equipment_check.manage", "inventory.manage"
+            "inventory.check_submit", "inventory.check_manage", "inventory.manage"
         )
     ),
 ):
@@ -1711,7 +1711,7 @@ async def get_item_deployed_lots(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(
         require_permission(
-            "equipment_check.view", "equipment_check.submit", "inventory.view"
+            "inventory.check_view", "inventory.check_submit", "inventory.view"
         )
     ),
 ):
@@ -1741,7 +1741,7 @@ async def update_deployed_lot(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(
         require_permission(
-            "equipment_check.submit", "equipment_check.manage", "inventory.manage"
+            "inventory.check_submit", "inventory.check_manage", "inventory.manage"
         )
     ),
 ):
@@ -1758,7 +1758,7 @@ async def update_deployed_lot(
     # raises PermissionError only when a submitted value actually differs.
     permissions = _collect_user_permissions(current_user)
     can_manage_lot_metadata = _has_permission(
-        "equipment_check.manage", permissions
+        "inventory.check_manage", permissions
     ) or _has_permission("inventory.manage", permissions)
 
     service = EquipmentCheckService(db)
@@ -1790,7 +1790,7 @@ async def set_item_quantity(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(
         require_permission(
-            "equipment_check.submit", "equipment_check.manage", "inventory.manage"
+            "inventory.check_submit", "inventory.check_manage", "inventory.manage"
         )
     ),
 ):
@@ -1823,7 +1823,7 @@ async def clear_item_restock(
     template_item_id: str,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(
-        require_permission("equipment_check.manage", "inventory.manage")
+        require_permission("inventory.check_manage", "inventory.manage")
     ),
 ):
     """Withdraw a restock report — restocked by hand, or raised in error."""
@@ -1846,7 +1846,7 @@ async def get_item_deployments(
     inventory_item_id: str,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(
-        require_permission("equipment_check.view", "inventory.view")
+        require_permission("inventory.check_view", "inventory.view")
     ),
 ):
     """Which apparatus checklists carry this inventory item, and what is on
@@ -1872,7 +1872,7 @@ async def swap_item_lot(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(
         require_permission(
-            "equipment_check.submit", "equipment_check.manage", "inventory.manage"
+            "inventory.check_submit", "inventory.check_manage", "inventory.manage"
         )
     ),
 ):
@@ -1885,7 +1885,7 @@ async def swap_item_lot(
     records the disposition the crew reports for it; omitting it tops the
     position up without retiring anything.
 
-    Open to ``equipment_check.submit``, not officers alone. Replacing expired
+    Open to ``inventory.check_submit``, not officers alone. Replacing expired
     stock is the crew's job at the truck, and a gate they could not pass left
     them looking at an expired unit, ready stock on the shelf, and no action
     but to find an officer — while the item stayed force-failed. EC-3, which
@@ -1902,7 +1902,7 @@ async def swap_item_lot(
     # linked; they may not create the link.
     permissions = _collect_user_permissions(current_user)
     can_link_catalog = _has_permission(
-        "equipment_check.manage", permissions
+        "inventory.check_manage", permissions
     ) or _has_permission("inventory.manage", permissions)
 
     service = EquipmentCheckService(db)

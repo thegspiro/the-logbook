@@ -41,10 +41,38 @@ export const useRSVPForm = ({ eventId, event, onSuccess }: UseRSVPFormOptions) =
     setSubmitError(null);
   }, []);
 
+  /**
+   * Seed the form from the member's existing RSVP, falling back to defaults
+   * when they have not responded yet.
+   *
+   * This is not a convenience. The form previously reset on every open, so
+   * "Update RSVP" came up blank and submitting it discarded whatever the
+   * member had entered. That was quiet data loss for notes; once guests began
+   * consuming event capacity it became a capacity bug, because a member with
+   * two guests who opened the modal to fix a typo would submit guest_count: 0
+   * and silently release two seats to somebody else.
+   */
   const openModal = useCallback(() => {
-    resetForm();
+    const existing = event?.user_rsvp;
+    if (existing) {
+      // `waitlisted` is server-generated and is normally absent from
+      // allowed_rsvp_statuses, so seeding it would leave no radio selected and
+      // submitting would be rejected as a disallowed status. A waitlisted
+      // member is queued *for* going, so that is what their form opens on.
+      setRsvpStatus(existing.status === RSVPStatusEnum.WAITLISTED ? RSVPStatusEnum.GOING : existing.status);
+      setGuestCount(existing.guest_count ?? 0);
+      setRsvpNotes(existing.notes ?? '');
+      // Accommodation fields are not echoed back by the API — they are PHI and
+      // event detail is cacheable — so they start empty, as they always did.
+      setRsvpDietaryRestrictions('');
+      setRsvpAccessibilityNeeds('');
+      setRsvpApplyToSeries(false);
+      setSubmitError(null);
+    } else {
+      resetForm();
+    }
     setShowRSVPModal(true);
-  }, [resetForm]);
+  }, [event, resetForm]);
 
   const closeModal = useCallback(() => {
     setShowRSVPModal(false);

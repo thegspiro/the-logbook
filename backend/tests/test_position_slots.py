@@ -17,8 +17,10 @@ import pytest
 from app.schemas.scheduling import ShiftPosition
 from app.utils.positions import (
     CANONICAL_POSITIONS,
+    POSITION_LABELS,
     canonical_position,
     normalize_stored_positions,
+    position_label,
 )
 
 
@@ -568,3 +570,60 @@ class TestSeatVocabularyMatchesTheWire:
         assert (
             seats <= CANONICAL_POSITIONS
         ), f"non-canonical default seats: {seats - CANONICAL_POSITIONS}"
+
+
+class TestSeatDisplayNames:
+    """The seat's stored token and its name on screen are two things.
+
+    A department builds a template with two EMT seats and the board listed
+    them as "EMS", because the token ("ems") was printed where the label
+    belonged. Everything that shows a member a seat name goes through
+    `position_label`, so the template screen and the board cannot disagree
+    about what one seat is called.
+    """
+
+    def test_the_ems_seat_is_called_emt(self):
+        assert position_label("ems") == "EMT"
+
+    def test_aliases_resolve_to_the_same_name(self):
+        # Rows written before the backend settled on one spelling.
+        assert position_label("EMT") == "EMT"
+        assert position_label("EMS") == "EMT"
+        assert position_label(" emt ") == "EMT"
+
+    def test_enum_members_resolve(self):
+        assert position_label(ShiftPosition.EMS) == "EMT"
+        assert position_label(ShiftPosition.DRIVER) == "Driver/Operator"
+
+    def test_a_departments_own_seat_is_returned_readable(self):
+        # Custom seats are not in the map; a slug is still better than blank,
+        # which would leave the seat nameless on a printed roster.
+        assert position_label("medic_student") == "Medic Student"
+
+    def test_no_position_names_nothing(self):
+        assert position_label(None) == ""
+        assert position_label("") == ""
+
+    def test_every_canonical_seat_has_a_label(self):
+        # A seat added to the vocabulary with no label renders as its slug.
+        assert set(POSITION_LABELS) == set(CANONICAL_POSITIONS)
+
+    def test_frontend_labels_agree(self):
+        # Two copies of one mapping, in two languages: a shift roster printed
+        # by the backend and the same roster on screen have to name the seat
+        # identically, so the frontend map is asserted from source.
+        source = (
+            Path(__file__).resolve().parents[2]
+            / "frontend"
+            / "src"
+            / "constants"
+            / "enums.ts"
+        ).read_text()
+        block = re.search(
+            r"export const POSITION_LABELS: Record<string, string> = \{(.*?)\n\};",
+            source,
+            re.S,
+        )
+        assert block, "POSITION_LABELS not found in enums.ts"
+        frontend = dict(re.findall(r"(\w+): '([^']+)'", block.group(1)))
+        assert frontend == POSITION_LABELS
