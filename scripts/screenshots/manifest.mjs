@@ -2759,7 +2759,7 @@ export const SHOTS = [
     // Clipped to the panel, on a viewport tall enough to hold every class:
     // at 900px the fifth row falls below the fold and the course library
     // shows through above and below the modal.
-    selector: "div.fixed.inset-0 > div",
+    selector: "div[role='dialog']",
     viewport: { width: 1440, height: 1400 },
   },
   {
@@ -3253,7 +3253,7 @@ export const SHOTS = [
       });
       await page.waitForTimeout(600);
     },
-    selector: "div.fixed.inset-0 > div",
+    selector: "div[role='dialog']",
   },
   {
     id: "02-102-shift-report-crew-form",
@@ -3372,7 +3372,7 @@ export const SHOTS = [
     },
     // Stops short of pressing Reopen: doing so would clear the one expired
     // enrollment the demo has.
-    selector: "div.fixed.inset-0 > div",
+    selector: "div[role='dialog']",
   },
   {
     id: "02-98-requirement-prerequisite",
@@ -3566,7 +3566,7 @@ export const SHOTS = [
       await panel.evaluate((el) => el.scrollIntoView({ block: "center" }));
       await page.waitForTimeout(600);
     },
-    selector: "div.fixed.inset-0 > div",
+    selector: "div[role='dialog']",
   },
   {
     id: "02-94-officer-progress-detail",
@@ -3694,7 +3694,7 @@ export const SHOTS = [
     // its list open, and the control clipped on its own is three lines of text
     // with nothing to say which form they belong to — the three options are
     // enumerated in the prose above.
-    selector: "div.fixed.inset-0 > div",
+    selector: "div[role='dialog']",
   },
   {
     id: "05-66-my-equipment",
@@ -4948,7 +4948,7 @@ export const SHOTS = [
     },
     // Clipped to the dialog: the profile behind it is a different section's
     // subject, and the panel it happens to sit over is an empty table.
-    selector: "div.fixed.inset-0 > div",
+    selector: "div[role='dialog']",
   },
   {
     id: "01-30-evoc-operator-modal",
