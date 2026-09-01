@@ -13,6 +13,9 @@ import {
   localToUTC,
   getTodayLocalDate,
   toLocalDateString,
+  toLocalISODate,
+  formatDateCustom,
+  daysBetween,
   daysUntil,
   calculateDurationMinutes,
   isPastDate,
@@ -567,5 +570,116 @@ describe('calendarDaysBetween', () => {
     expect(calendarDaysBetween('2026-08-12', null)).toBeNull();
     expect(calendarDaysBetween('', '2026-08-12')).toBeNull();
     expect(calendarDaysBetween('not-a-date', '2026-08-12')).toBeNull();
+  });
+});
+
+// A MySQL DATE column ("hire_date", "expiration_date", a due date) reaches the
+// frontend as a bare "YYYY-MM-DD". It is a square on a calendar, not an
+// instant, so it must read the same for a department in New York, one in
+// Tokyo, and a browser with no configured timezone at all. Before this was
+// handled, "2020-12-06" printed as 12/5/2020 anywhere west of UTC -- and
+// formatDateCustom named the wrong weekday with it, which on a schedule is
+// worse than a wrong number.
+//
+// The other half matters just as much: a value carrying a time IS an instant,
+// and must still convert. Every block below asserts both halves, so a future
+// change cannot fix one by breaking the other.
+describe('calendar dates (bare YYYY-MM-DD) are never timezone-shifted', () => {
+  const DATE_ONLY = '2020-12-06';
+  // 02:00Z is the previous evening in New York and the same morning in Tokyo,
+  // which is what makes it a real test of instant conversion.
+  const LATE_UTC_INSTANT = '2024-06-16T02:00:00Z';
+
+  describe('formatDate', () => {
+    it('shows the written day in any timezone', () => {
+      expect(formatDate(DATE_ONLY, 'America/New_York')).toBe('12/6/2020');
+      expect(formatDate(DATE_ONLY, 'Asia/Tokyo')).toBe('12/6/2020');
+      expect(formatDate(DATE_ONLY, UTC_TZ)).toBe('12/6/2020');
+    });
+
+    it('shows the written day when no timezone is given', () => {
+      // Without an explicit UTC pin the browser's own offset reintroduces the
+      // shift, so the no-timezone path needs its own assertion.
+      expect(formatDate(DATE_ONLY)).toBe('12/6/2020');
+    });
+
+    it('still converts a real instant to the viewer timezone', () => {
+      expect(formatDate(LATE_UTC_INSTANT, 'America/New_York')).toBe('6/15/2024');
+      expect(formatDate(LATE_UTC_INSTANT, 'Asia/Tokyo')).toBe('6/16/2024');
+    });
+  });
+
+  describe('formatDateCustom', () => {
+    it('names the weekday the calendar date actually falls on', () => {
+      expect(formatDateCustom(DATE_ONLY, { weekday: 'long' }, 'America/New_York')).toBe('Sunday');
+      expect(formatDateCustom(DATE_ONLY, { weekday: 'long' }, 'Asia/Tokyo')).toBe('Sunday');
+    });
+
+    it('still converts a real instant', () => {
+      expect(formatDateCustom(LATE_UTC_INSTANT, { weekday: 'long' }, 'America/New_York')).toBe('Saturday');
+      expect(formatDateCustom(LATE_UTC_INSTANT, { weekday: 'long' }, 'Asia/Tokyo')).toBe('Sunday');
+    });
+  });
+
+  describe('toLocalISODate', () => {
+    it('returns a calendar date unchanged', () => {
+      expect(toLocalISODate(DATE_ONLY, 'America/New_York')).toBe('2020-12-06');
+      expect(toLocalISODate(DATE_ONLY, 'Asia/Tokyo')).toBe('2020-12-06');
+    });
+
+    it('still converts a real instant', () => {
+      expect(toLocalISODate(LATE_UTC_INSTANT, 'America/New_York')).toBe('2024-06-15');
+      expect(toLocalISODate(LATE_UTC_INSTANT, 'Asia/Tokyo')).toBe('2024-06-16');
+    });
+  });
+
+  describe('daysBetween', () => {
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('counts whole days to a calendar date without losing one', () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2026-09-01T12:00:00Z'));
+      expect(daysBetween('2026-09-15', 'America/New_York')).toBe(14);
+      expect(daysBetween('2026-09-15', 'Asia/Tokyo')).toBe(14);
+    });
+
+    it('is zero on the calendar date itself', () => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2026-09-01T12:00:00Z'));
+      expect(daysBetween('2026-09-01', 'America/New_York')).toBe(0);
+    });
+
+    it('still measures a real instant against the viewer timezone', () => {
+      vi.useFakeTimers();
+      // 03:00Z is still Aug 31 in New York, so the same instant is "tomorrow"
+      // there and "today" in Tokyo.
+      vi.setSystemTime(new Date('2026-09-01T03:00:00Z'));
+      expect(daysBetween('2026-09-01T03:00:00Z', 'America/New_York')).toBe(0);
+      expect(daysBetween('2026-09-02T03:00:00Z', 'America/New_York')).toBe(1);
+    });
+  });
+
+  describe('a Date object is always an instant', () => {
+    it('converts, because the date-only origin is gone once it is a Date', () => {
+      // Nothing can recover "this came from a DATE column" from a Date, so the
+      // instant behaviour is preserved rather than guessed at.
+      expect(formatDate(new Date(LATE_UTC_INSTANT), 'America/New_York')).toBe('6/15/2024');
+      expect(formatDate(new Date(LATE_UTC_INSTANT), 'Asia/Tokyo')).toBe('6/16/2024');
+    });
+  });
+
+  describe('values that only look like calendar dates', () => {
+    it('treats a padded midnight as an instant, not a calendar date', () => {
+      // "2020-12-06T00:00:00Z" is a real instant someone chose to send; only a
+      // bare date is treated as calendar-space.
+      expect(formatDate('2020-12-06T00:00:00Z', 'America/New_York')).toBe('12/5/2020');
+    });
+
+    it('still returns N/A for junk', () => {
+      expect(formatDate('not-a-date', 'America/New_York')).toBe('N/A');
+      expect(formatDate('2020-13-45', 'America/New_York')).toBe('N/A');
+    });
   });
 });

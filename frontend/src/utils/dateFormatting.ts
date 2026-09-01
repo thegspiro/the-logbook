@@ -7,6 +7,19 @@
  * All formatting functions accept an optional timezone parameter.
  * When provided, dates are displayed in that timezone (e.g., "America/New_York").
  * When omitted, the browser's local timezone is used.
+ *
+ * ONE EXCEPTION, and it is the important one: a bare "YYYY-MM-DD" is a
+ * *calendar date*, not an instant, and is never timezone-shifted — see
+ * `isCalendarDate` below. A MySQL `DATE` column arrives in exactly that shape,
+ * so `formatDate("2020-12-06", tz)` reads 12/6/2020 for every viewer rather
+ * than rolling back to the 5th for anyone west of UTC. A value carrying a time
+ * is an instant and still converts, which is what the timezone parameter is
+ * for.
+ *
+ * `formatCalendarDate` and friends further down remain the clearest way to say
+ * "this is a calendar date" at a call site, and are still preferred where the
+ * author knows that. The rule above is what stops a call site that does not
+ * know it from being silently wrong.
  */
 
 /**
@@ -20,6 +33,43 @@ const parseDate = (value: string | Date | undefined | null): Date | null => {
   return date;
 };
 
+/** A bare "YYYY-MM-DD", with no time and no zone. */
+const DATE_ONLY_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * Is this value a calendar date rather than an instant?
+ *
+ * A MySQL `DATE` column — `hire_date`, `expiration_date`, a due date — reaches
+ * the frontend as "2020-12-06": no time, no zone. It is not a moment that
+ * happened somewhere, it is a square on a calendar, and it is the same square
+ * for every viewer.
+ *
+ * Only a bare "YYYY-MM-DD" counts. Anything carrying a time is a real instant
+ * and must still be converted to the viewer's zone, which is the whole point
+ * of the `timezone` parameter. A `Date` object cannot be judged at all — the
+ * date-only origin is lost the moment it is constructed — so it is treated as
+ * an instant, as before.
+ */
+const isCalendarDate = (value: string | Date | undefined | null): boolean =>
+  typeof value === 'string' && DATE_ONLY_PATTERN.test(value.trim());
+
+/**
+ * The zone a value should be *displayed* in.
+ *
+ * `new Date("2020-12-06")` is UTC midnight — that part the language gets
+ * right. The damage is done at the formatting step: rendering that instant in
+ * a zone west of UTC rolls it back to the 5th, so a hire date of 2020-12-06
+ * printed "12/5/2020" for a department in New York and "12/6/2020" for one in
+ * Berlin. There is no conversion of a calendar date that is correct, because
+ * there is nothing to convert — so it is pinned to UTC on both ends, parse and
+ * format, and the day written in the string is the day on the screen.
+ *
+ * Note this returns UTC even when the caller passed no timezone: without it
+ * the browser's own offset applies and reintroduces the same shift.
+ */
+const displayTimeZone = (value: string | Date | undefined | null, timezone?: string): string | undefined =>
+  isCalendarDate(value) ? 'UTC' : timezone;
+
 /**
  * Format a date string to localized date
  * @param dateString - ISO date string or Date object
@@ -30,7 +80,8 @@ export const formatDate = (dateString?: string | Date | null, timezone?: string)
   const date = parseDate(dateString);
   if (!date) return 'N/A';
   const opts: Intl.DateTimeFormatOptions = {};
-  if (timezone) opts.timeZone = timezone;
+  const tz = displayTimeZone(dateString, timezone);
+  if (tz) opts.timeZone = tz;
   return date.toLocaleDateString('en-US', opts);
 };
 
@@ -51,7 +102,8 @@ export const formatDateTime = (dateString?: string | Date | null, timezone?: str
     hour: 'numeric',
     minute: '2-digit',
   };
-  if (timezone) opts.timeZone = timezone;
+  const tz = displayTimeZone(dateString, timezone);
+  if (tz) opts.timeZone = tz;
   return date.toLocaleString('en-US', opts);
 };
 
@@ -70,7 +122,8 @@ export const formatShortDateTime = (dateString?: string | Date | null, timezone?
     hour: 'numeric',
     minute: '2-digit',
   };
-  if (timezone) opts.timeZone = timezone;
+  const tz = displayTimeZone(dateString, timezone);
+  if (tz) opts.timeZone = tz;
   return date.toLocaleString('en-US', opts);
 };
 
@@ -87,7 +140,8 @@ export const formatTime = (dateString?: string | Date | null, timezone?: string)
     hour: 'numeric',
     minute: '2-digit',
   };
-  if (timezone) opts.timeZone = timezone;
+  const tz = displayTimeZone(dateString, timezone);
+  if (tz) opts.timeZone = tz;
   return date.toLocaleTimeString('en-US', opts);
 };
 
@@ -109,7 +163,8 @@ export const formatForDateTimeInput = (dateString?: string | Date | null, timezo
     minute: '2-digit',
     hour12: false,
   };
-  if (timezone) formatOpts.timeZone = timezone;
+  const tz = displayTimeZone(dateString, timezone);
+  if (tz) formatOpts.timeZone = tz;
   // Use Intl to format in the target timezone (or browser local when omitted)
   const parts = new Intl.DateTimeFormat('en-CA', formatOpts).formatToParts(date);
   const get = (type: string) => parts.find((p) => p.type === type)?.value || '';
@@ -280,7 +335,8 @@ export const toLocalISODate = (dateString?: string | Date | null, timezone?: str
     month: '2-digit',
     day: '2-digit',
   };
-  if (timezone) opts.timeZone = timezone;
+  const tz = displayTimeZone(dateString, timezone);
+  if (tz) opts.timeZone = tz;
   return new Intl.DateTimeFormat('en-CA', opts).format(date);
 };
 
@@ -301,7 +357,8 @@ export const formatDateCustom = (
   const date = parseDate(dateString);
   if (!date) return 'N/A';
   const opts = { ...options };
-  if (timezone) opts.timeZone = timezone;
+  const tz = displayTimeZone(dateString, timezone);
+  if (tz) opts.timeZone = tz;
   return date.toLocaleString('en-US', opts);
 };
 
@@ -493,9 +550,14 @@ export const formatCurrency = (value: number | null | undefined, includeSymbol =
 export const daysBetween = (dateString: string | Date, timezone?: string): number => {
   const targetDate = parseDate(dateString);
   if (!targetDate) return NaN;
-  // Get today's date string and target date string in the timezone
+  // Get today's date string and target date string in the timezone.
+  //
+  // The ORIGINAL value goes to toLocalISODate, not the parsed Date: a Date
+  // cannot say whether it came from a calendar date, so handing over
+  // `targetDate` would drop that signal and put a "days until" count for a
+  // MySQL DATE (a certification expiry, a due date) one day out west of UTC.
   const todayStr = getTodayLocalDate(timezone);
-  const targetStr = toLocalISODate(targetDate, timezone);
+  const targetStr = toLocalISODate(dateString, timezone);
   // Parse as date-only values (no time component) and compute difference
   const todayMs = new Date(todayStr + 'T00:00:00Z').getTime();
   const targetMs = new Date(targetStr + 'T00:00:00Z').getTime();
