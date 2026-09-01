@@ -33,7 +33,7 @@ undo or block the message that was already created.
 
 import html as _html
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import List, Optional, Set, Union
 
 from loguru import logger
@@ -61,6 +61,16 @@ _SMS_MAX_LEN = 300
 # admin account can't blast the whole department (SMS especially costs money).
 # The limiter fails open: if Redis is unavailable, urgent alerts still go out —
 # dropping a real safety notification is worse than an occasional over-send.
+# How long a claim may sit unresolved before another worker may take it
+# over. A claim is written and committed before the send, so a worker that
+# dies in between leaves a row nothing revisits — and the unique idempotency
+# key then makes every later attempt skip that member, on the channel of
+# record. Generous next to the longest legitimate send (a 300-member batch
+# paces at 0.25s per message, so ~2 minutes) because the cost of being wrong
+# is asymmetric: reclaiming too eagerly sends somebody a second copy,
+# reclaiming too late is indistinguishable from never.
+_STALE_CLAIM_AFTER = timedelta(minutes=30)
+
 _ESCALATION_WINDOW_SECONDS = 3600
 _EMAIL_ESCALATION_LIMIT = 30
 _SMS_ESCALATION_LIMIT = 10
@@ -139,7 +149,50 @@ class MessageDeliveryService:
         except IntegrityError:
             # A concurrent worker (or a retry after success) owns this key.
             await self.db.rollback()
+            return await self._reclaim_stale_delivery(key)
+
+    async def _reclaim_stale_delivery(
+        self, key: str
+    ) -> Optional[DepartmentMessageDelivery]:
+        """Take over a claim whose worker never came back.
+
+        Only a *pending* row older than ``_STALE_CLAIM_AFTER`` is reclaimable.
+        A delivered one is done, and a failed one carries a recorded outcome
+        that a retry would overwrite without being asked to.
+
+        The row is locked and re-stamped inside one transaction, so two
+        workers scanning the same abandoned claim cannot both take it: the
+        second blocks, then re-reads an ``attempted_at`` the first has just
+        refreshed and finds nothing stale.
+        """
+        result = await self.db.execute(
+            select(DepartmentMessageDelivery)
+            .where(DepartmentMessageDelivery.idempotency_key == key)
+            .with_for_update()
+        )
+        attempt = result.scalar_one_or_none()
+        cutoff = datetime.now(timezone.utc) - _STALE_CLAIM_AFTER
+        attempted_at = getattr(attempt, "attempted_at", None) if attempt else None
+        if attempted_at is not None and attempted_at.tzinfo is None:
+            attempted_at = attempted_at.replace(tzinfo=timezone.utc)
+        if (
+            attempt is None
+            or attempt.status != "pending"
+            or attempted_at is None
+            or attempted_at > cutoff
+        ):
+            # Releases the lock either way; nothing was changed.
+            await self.db.rollback()
             return None
+
+        attempt.attempted_at = datetime.now(timezone.utc)
+        await self.db.commit()
+        logger.info(
+            "Reclaimed an abandoned delivery claim ({}) for message {}",
+            attempt.channel,
+            attempt.message_id,
+        )
+        return attempt
 
     async def _finish_delivery(
         self,

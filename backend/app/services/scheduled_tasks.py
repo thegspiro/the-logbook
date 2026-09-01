@@ -96,7 +96,7 @@ Recommended crontab (add to host or container cron):
 import copy
 import html as _html
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Set
 
 from loguru import logger
 from sqlalchemy import or_, select
@@ -324,6 +324,12 @@ SCHEDULE = {
         "frequency": "every 15 minutes",
         "recommended_time": "*/15",
         "cron": "*/15 * * * *",
+    },
+    "recover_stranded_message_deliveries": {
+        "description": "Re-deliver department messages whose per-recipient claims were left pending by an interrupted worker",
+        "frequency": "every 30 minutes",
+        "recommended_time": "*/30",
+        "cron": "*/30 * * * *",
     },
     "series_end_reminders": {
         "description": "Send email reminders 6 months before recurring event series end dates",
@@ -3841,6 +3847,109 @@ async def run_publish_scheduled_messages(db: AsyncSession) -> Dict[str, Any]:
     }
 
 
+# A claim older than this is treated as abandoned by the worker that wrote it.
+# Kept a little above MessageDeliveryService's own reclaim window so the sweep
+# never hands the service a row it will refuse.
+_STRANDED_CLAIM_AFTER_MINUTES = 35
+
+# One pass re-delivers at most this many stranded claims. A department message
+# fan-out is network work per recipient; a runaway backlog is better worked
+# down across several ticks than in one pass that outlives its own worker.
+_STRANDED_CLAIM_SCAN_LIMIT = 500
+
+
+async def run_recover_stranded_message_deliveries(db: AsyncSession) -> Dict[str, Any]:
+    """Re-deliver department messages whose claims were never resolved.
+
+    ``MessageDeliveryService._claim_delivery`` writes one ``pending`` row per
+    recipient and commits it *before* the send, which is what makes a delivery
+    auditable and stops two workers emailing the same member twice. The cost
+    is a window: a worker that dies between claiming and recording the result
+    leaves rows nothing revisits, and the unique idempotency key then makes
+    every later attempt skip those members. Nobody is emailed, the audit row
+    says an attempt is still in flight, and the message is suppressed
+    permanently — on the channel of record (CLAUDE.md pitfall #18).
+
+    Sending the batch through one connection widened that window from a single
+    member to a whole department, which is what makes a sweep necessary rather
+    than merely tidy.
+
+    Re-delivery is safe to repeat: the in-app write is guarded by its unique
+    (message, recipient, channel) key, and the delivery claim is reclaimed
+    rather than duplicated. A member may receive a second copy if the original
+    worker was merely slow past the cutoff; that is the deliberate direction to
+    err, since the alternative is a notice they never get.
+    """
+    from datetime import timedelta
+    from datetime import timezone as dt_timezone
+
+    from app.models.notification import DepartmentMessage, DepartmentMessageDelivery
+    from app.services.message_delivery_service import MessageDeliveryService
+
+    cutoff = datetime.now(dt_timezone.utc) - timedelta(
+        minutes=_STRANDED_CLAIM_AFTER_MINUTES
+    )
+    result = await db.execute(
+        select(
+            DepartmentMessageDelivery.message_id,
+            DepartmentMessageDelivery.recipient_id,
+        )
+        .where(
+            DepartmentMessageDelivery.status == "pending",
+            DepartmentMessageDelivery.attempted_at < cutoff,
+        )
+        .order_by(DepartmentMessageDelivery.attempted_at.asc())
+        .limit(_STRANDED_CLAIM_SCAN_LIMIT)
+    )
+    stranded: Dict[str, Set[str]] = {}
+    for message_id, recipient_id in result.all():
+        stranded.setdefault(str(message_id), set()).add(str(recipient_id))
+
+    if not stranded:
+        return {"task": "recover_stranded_message_deliveries", "messages": 0}
+
+    delivery = MessageDeliveryService(db)
+    recovered = 0
+    failed = 0
+    for message_id, user_ids in stranded.items():
+        try:
+            message = (
+                await db.execute(
+                    select(DepartmentMessage).where(
+                        DepartmentMessage.id == message_id,
+                        DepartmentMessage.deleted_at.is_(None),
+                    )
+                )
+            ).scalar_one_or_none()
+            if message is None:
+                continue
+            # deliver() never raises and re-resolves the audience itself, so a
+            # member who has since left the targeting is not re-notified.
+            await delivery.deliver(message, only_user_ids=user_ids)
+            recovered += 1
+        except Exception as e:  # pragma: no cover - defensive
+            logger.warning(
+                "Failed to recover stranded deliveries for message {}: {}",
+                message_id,
+                e,
+            )
+            failed += 1
+            try:
+                await db.rollback()
+            except Exception:
+                pass
+
+    if recovered:
+        logger.info(
+            "Re-delivered {} department message(s) with abandoned claims", recovered
+        )
+    return {
+        "task": "recover_stranded_message_deliveries",
+        "messages": recovered,
+        "failed": failed,
+    }
+
+
 async def run_storefront_window_lifecycle(db: AsyncSession) -> Dict[str, Any]:
     """
     Open and close department-store order windows that have reached their
@@ -5740,6 +5849,7 @@ TASK_RUNNERS = {
     "compliance_auto_reports": run_compliance_auto_reports,
     "message_history_cleanup": run_message_history_cleanup,
     "publish_scheduled_messages": run_publish_scheduled_messages,
+    "recover_stranded_message_deliveries": run_recover_stranded_message_deliveries,
     "series_end_reminders": run_series_end_reminders,
     "rolling_recurrence_extend": run_rolling_recurrence_extend,
     "shift_auto_checkout": run_shift_auto_checkout,
@@ -5781,6 +5891,7 @@ TASK_INTERVALS_SECONDS: Dict[str, int] = {
     "end_of_shift_checklist_reminders": 1800,
     "end_of_shift_summary": 1800,
     "external_training_auto_sync": 1800,
+    "recover_stranded_message_deliveries": 1800,
     "salesforce_auto_sync": 1800,
     # Daily (checked each loop tick; runs at most once per interval)
     "cert_expiration_alerts": 86400,
