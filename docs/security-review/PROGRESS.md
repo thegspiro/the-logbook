@@ -16,14 +16,44 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**Feature 02 (Permissions & roles), pass 3** —
-[#2136](https://github.com/thegspiro/the-logbook/pull/2136), branch
-`claude/security-review-perm-pass3`. Diff-since-pass-2 review, corrected
-mid-review by Codex to use merge-commit ancestry instead of a date cutoff —
-four commits in scope, not three; still no code-level finding, but the
-write-up's own overclaim (wildcard authority, completion-gate baseline) was
-narrowed. See the log entries below and `PERM-02-permissions-roles.md`'s
-Pass 3 section.
+**Feature 03 (Public surface & webhooks), pass 3** — branch
+`claude/security-review-pub-pass3`, PR link recorded in the next log entry
+once opened. Diff since pass 2's merge (`36ce7595..HEAD`, correct
+merge-commit ancestry) touches only `display.py`, via a fix already made
+and reviewed under feature 32's own rotation pass; no new findings. See the
+log entry below and `PUB-03-public-surface-webhooks.md`'s Pass 3 section.
+
+---
+
+### 2026-09-01 — Feature 03 (Public surface & webhooks, pass 3) — no new findings
+
+`git log 36ce7595..HEAD -- backend/app/api/public/` (`36ce7595` is pass 2's
+own closing merge commit, used as the lower bound per the ancestry-based
+scoping method PERM-02 pass 3 established) found one commit, `b2b2c53c`,
+touching only `display.py` — a reorder of `guest_check_in`'s rejection
+gates ahead of its daily-cap check, already made and guard-tested under
+feature 32's (Locations & kiosk) own rotation pass (LOC-32-4), cited and
+re-verified here rather than re-derived. File count (12) and route count
+(20) both unchanged. The other 11 files are byte-identical to pass 2; PUB-1,
+PUB-2, and PUB-4's fixes re-verified present; PUB-3 remains an accepted,
+documented `create_all`-only table. No backend/frontend source touched by
+this pass itself; `flake8 app/ tests/ alembic/` and `validate_migrations.py
+--strict` re-run directly to confirm the baseline is clean, with this pass's
+own PR's CI run as the authority for the full gate.
+
+Full write-up: `docs/security-review/PUB-03-public-surface-webhooks.md`
+(Pass 3 section). Rotation row 03 → ⏳ (awaiting PR merge). Next: 04
+Storefront & payments, once this PR merges.
+
+---
+
+### 2026-09-01 — Feature 02 (Permissions & roles, pass 3) ✅ merged — PR #2136
+
+All three Codex round-1 findings (missed commit from a date-based scoping
+bug, an overclaimed wildcard-authority statement, a wrong completion-gate
+baseline citation) fixed and resolved; CI green on the final head, no merge
+conflict. No code-level security finding. Rotation row 02 → ✅. Next: 03
+Public surface & webhooks.
 
 ---
 
@@ -5604,8 +5634,8 @@ pass 3 — each row's prior PR is recorded in the Log, not repeated here.
 | --- | ------------------------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
 | 00  | Cross-cutting baseline    | SEC    | whole-codebase sweeps; see `SEC-00-cross-cutting-baseline.md`                                                                                   | ✅     |
 | 01  | Auth & session lifecycle  | AUTH   | `endpoints/auth.py`, `auth_service.py`, `mfa_service.py`, `oauth_service.py`                                                                    | ✅     |
-| 02  | Permissions & roles       | PERM   | `dependencies.py`, `core/permissions.py`, `roles.py`, `operational_ranks.py`, `officers.py`, `org_chart.py`                                     | ⏳     |
-| 03  | Public surface & webhooks | PUB    | `api/public/*` (20 unauth routes), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`                                      | ⬜     |
+| 02  | Permissions & roles       | PERM   | `dependencies.py`, `core/permissions.py`, `roles.py`, `operational_ranks.py`, `officers.py`, `org_chart.py`                                     | ✅     |
+| 03  | Public surface & webhooks | PUB    | `api/public/*` (20 unauth routes), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`                                      | ⏳     |
 | 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                              | ⬜     |
 | 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                     | ⬜     |
 | 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | ⬜     |

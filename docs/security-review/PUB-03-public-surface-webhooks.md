@@ -1,6 +1,50 @@
 # Security Review — Public Surface & Webhooks
 
-**Prefix:** `PUB` · **Iteration:** 03 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2) · **PR:** #1806 (pass 1)
+**Prefix:** `PUB` · **Iteration:** 03 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-01 (pass 3) · **PR:** #1806 (pass 1)
+
+---
+
+## Pass 3 (2026-09-01) — re-verified, no new findings
+
+**Scope.** `git log 36ce7595..HEAD -- backend/app/api/public/` (`36ce7595` is
+pass 2's own closing merge — the actual merge commit used as the lower
+bound, not a date, per the methodology correction PERM-02's pass 3 recorded
+after Codex caught a missed commit there). One commit in range:
+`b2b2c53c`, touching only `display.py`. File count unchanged at 12; route
+count unchanged at 20 (`grep -rc "@router\."` across all 12 files).
+
+- **`b2b2c53c` — reorders `guest_check_in`'s rejection gates ahead of the
+  per-event daily cap.** This is feature 32's (Locations & kiosk) own
+  round-2 fix (LOC-32-4), not new work from this pass — cited and
+  re-verified rather than re-derived. Before: the daily-cap check (an atomic
+  Redis `INCR`, so asking the question spends an allowance slot) ran before
+  the check-in-window-open and attendance-finalized checks, so refused
+  traffic (before the window opens, or after attendance closes) could
+  exhaust the day's cap and deny legitimate guests. After: both rejection
+  gates run first; the cap is only spent by a request that would otherwise
+  be accepted — the same ordering `event_requests.py`'s public submission
+  endpoint already uses (EV-19). Confirmed the reorder is complete (both
+  gates precede the cap check in the current file) and that it doesn't
+  touch org/location scoping, which is resolved earlier in the same handler
+  and unaffected by this diff. Already covered by a guard test in the
+  originating PR; not re-added here.
+
+**No new findings.** Pass 1/2's "Verified good" conclusions for the other
+11 files (`portal.py`, `core/public_portal_security.py`, `calendar.py`,
+`integrations_webhook.py`, `forms.py`, `paypal_webhook.py`,
+`finance_approvals.py`, `legal.py`, `responses.py`, `salesforce_webhook.py`,
+`security_txt.py`) stand — byte-identical since pass 2, confirmed via the
+git log above. PUB-1, PUB-2, PUB-4 remain fixed; PUB-3 remains an accepted,
+documented `create_all`-only table (not a defect).
+
+**Completion gate:** no backend or frontend source file was modified by
+this pass (the one code change in scope, `b2b2c53c`, predates this pass and
+belongs to feature 32). `flake8 app/ tests/ alembic/` and
+`python3 scripts/validate_migrations.py --strict` re-run directly to
+confirm the baseline this pass sits on is clean; this pass's own PR's CI run
+is the authority for the frontend gates and the full test suite, per the
+same correction PERM-02 pass 3 recorded (cite the PR's own current-tree CI
+run, not a prior PR's).
 
 ---
 
