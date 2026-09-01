@@ -298,44 +298,57 @@ class SecurityMonitoringService:
         if len(self.alerts) > self._MAX_IN_MEMORY_ALERTS:
             self.alerts = self.alerts[-self._MAX_IN_MEMORY_ALERTS :]
         try:
-            from app.models.security_alert import AlertType as DBAlertType
-            from app.models.security_alert import ThreatLevel as DBThreatLevel
+            # Use a savepoint (nested transaction) so a failure persisting
+            # this alert rolls back only the alert write, not the caller's
+            # outer transaction — same pattern as AuditLogger.create_log_entry
+            # (app/core/audit.py). Without it, a flush failure here (e.g. a
+            # transient DB error) leaves the caller's AsyncSession in
+            # SQLAlchemy's "pending rollback" state even though the
+            # exception is caught right here: the caller's own later
+            # `db.commit()` (persisting failed_login_attempts, lockout, etc.
+            # from the same request) then raises instead of completing,
+            # turning what should be a routine 401 into an unhandled 500 and
+            # losing every side effect the caller had already staged.
+            async with db.begin_nested():
+                from app.models.security_alert import AlertType as DBAlertType
+                from app.models.security_alert import ThreatLevel as DBThreatLevel
 
-            # Serialize details — convert non-serializable types
-            serializable_details = {}
-            for k, v in alert.details.items():
-                if isinstance(v, datetime):
-                    serializable_details[k] = v.isoformat()
-                elif isinstance(v, Enum):
-                    serializable_details[k] = v.value
-                else:
-                    serializable_details[k] = v
+                # Serialize details — convert non-serializable types
+                serializable_details = {}
+                for k, v in alert.details.items():
+                    if isinstance(v, datetime):
+                        serializable_details[k] = v.isoformat()
+                    elif isinstance(v, Enum):
+                        serializable_details[k] = v.value
+                    else:
+                        serializable_details[k] = v
 
-            # Attribute the alert to the owning tenant so it is only visible to
-            # (and acknowledgeable by) that org. Derived from the alert's user;
-            # user-less alerts (pre-auth / IP-only) stay NULL = platform-level.
-            organization_id = None
-            if alert.user_id:
-                org_result = await db.execute(
-                    select(User.organization_id).where(User.id == alert.user_id)
+                # Attribute the alert to the owning tenant so it is only
+                # visible to (and acknowledgeable by) that org. Derived from
+                # the alert's user; user-less alerts (pre-auth / IP-only)
+                # stay NULL = platform-level.
+                organization_id = None
+                if alert.user_id:
+                    org_result = await db.execute(
+                        select(User.organization_id).where(User.id == alert.user_id)
+                    )
+                    organization_id = org_result.scalar_one_or_none()
+
+                record = SecurityAlertRecord(
+                    id=alert.id,
+                    alert_type=DBAlertType(alert.alert_type.value),
+                    threat_level=DBThreatLevel(alert.threat_level.value),
+                    timestamp=alert.timestamp,
+                    description=alert.description,
+                    source_ip=alert.source_ip,
+                    user_id=alert.user_id,
+                    organization_id=organization_id,
+                    details=serializable_details,
+                    acknowledged=alert.acknowledged,
+                    resolved=alert.resolved,
                 )
-                organization_id = org_result.scalar_one_or_none()
-
-            record = SecurityAlertRecord(
-                id=alert.id,
-                alert_type=DBAlertType(alert.alert_type.value),
-                threat_level=DBThreatLevel(alert.threat_level.value),
-                timestamp=alert.timestamp,
-                description=alert.description,
-                source_ip=alert.source_ip,
-                user_id=alert.user_id,
-                organization_id=organization_id,
-                details=serializable_details,
-                acknowledged=alert.acknowledged,
-                resolved=alert.resolved,
-            )
-            db.add(record)
-            await db.flush()
+                db.add(record)
+                await db.flush()
         except Exception as e:
             logger.warning(f"Failed to persist security alert {alert.id}: {e}")
 
