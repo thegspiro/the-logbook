@@ -42,6 +42,7 @@ import { useAuthStore } from '../stores/authStore';
 import { useTimezone } from '../hooks/useTimezone';
 import { formatShortDateTime, getTodayLocalDate } from '../utils/dateFormatting';
 import { getErrorMessage } from '../utils/errorHandling';
+import { errorTracker } from '../services/errorTracking';
 import { buildCsv, downloadCsv } from '../utils/csv';
 import { Breadcrumbs, SkeletonCardGrid, EmptyState, Pagination } from '../components/ux';
 import { NfcTapButton } from '../components/nfc/NfcTapButton';
@@ -309,23 +310,48 @@ export const EventsPage: React.FC = () => {
     }
   }, [tz]);
 
-  const fetchEvents = useCallback(async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      const params = showPastEvents
-        ? { end_before: new Date().toISOString(), include_drafts: canManage }
-        : { end_after: new Date().toISOString(), include_drafts: canManage };
-      const data = await eventService.getEvents(params);
-      setEvents(data);
-    } catch (_err) {
-      setError('Failed to load events. Please try again later.');
-    } finally {
-      setLoading(false);
-    }
-  }, [showPastEvents, canManage]);
+  /**
+   * @param background - refresh in place, for a list already on screen.
+   *
+   * The initial-load path swaps the whole grid for skeletons and, on failure,
+   * replaces it with the full-page error. That is right when there is nothing
+   * to show yet and wrong afterwards: a member who has just RSVP'd would watch
+   * their answer vanish into skeletons, and a transient refresh failure would
+   * replace a *saved* response with "Failed to load events". In background mode
+   * the existing list stays put and a refresh failure is logged rather than
+   * shown, because the RSVP itself succeeded and the only casualty is a
+   * slightly stale seat count.
+   */
+  const fetchEvents = useCallback(
+    async (background = false) => {
+      try {
+        if (!background) {
+          setLoading(true);
+          setError(null);
+        }
+        const params = showPastEvents
+          ? { end_before: new Date().toISOString(), include_drafts: canManage }
+          : { end_after: new Date().toISOString(), include_drafts: canManage };
+        const data = await eventService.getEvents(params);
+        setEvents(data);
+      } catch (err: unknown) {
+        if (background) {
+          errorTracker.logError(
+            err instanceof Error ? err : new Error(getErrorMessage(err, 'Failed to refresh events')),
+            { additionalContext: { operation: 'fetchEvents:background' } }
+          );
+          return;
+        }
+        setError('Failed to load events. Please try again later.');
+      } finally {
+        if (!background) setLoading(false);
+      }
+    },
+    [showPastEvents, canManage]
+  );
 
-  useRegisterPullToRefresh(fetchEvents);
+  // Pull-to-refresh is a deliberate reload, so it keeps the full-load UI.
+  useRegisterPullToRefresh(() => fetchEvents());
 
   const handleQuickRSVP = useCallback(
     async (eventId: string, status: 'going' | 'not_going') => {
@@ -348,7 +374,9 @@ export const EventsPage: React.FC = () => {
           toast('This event is full — you have been added to the waitlist.', { icon: '⏳' });
         }
         setRsvpChanging((prev) => ({ ...prev, [eventId]: false }));
-        await fetchEvents();
+        // Background: the answer is already saved and on screen, so a refresh
+        // must not swap the grid for skeletons or bury it under a page error.
+        await fetchEvents(true);
       } catch (err: unknown) {
         // The card is only updated on success, so without this the tap looks
         // exactly like a tap that never registered — the member re-taps and

@@ -307,10 +307,23 @@ class EventService:
         # deliberately not here: ranking per row needs a window function, and
         # the card already knows the member is waitlisted from
         # user_rsvp_status. Position belongs on the detail page.
+        #
+        # The seat filter is the same one promote_from_waitlist and the detail
+        # endpoint apply: a party bigger than the whole event is passed over by
+        # promotion, so counting it here would make the card disagree with the
+        # detail page the member opens next ("5 waiting", then "#1 of 4"). An
+        # absent or zero cap means no cap, matching `if event.max_attendees:`
+        # on the other two paths.
         waitlist_count_sq = (
             select(func.count(EventRSVP.id))
             .where(EventRSVP.event_id == Event.id)
             .where(EventRSVP.status == RSVPStatus.WAITLISTED)
+            .where(
+                or_(
+                    func.coalesce(Event.max_attendees, 0) == 0,
+                    1 + EventRSVP.guest_count <= Event.max_attendees,
+                )
+            )
             .correlate(Event)
             .scalar_subquery()
             .label("waitlist_count")
@@ -1310,6 +1323,27 @@ class EventService:
             requested_guests = 0
             rsvp_data = rsvp_data.model_copy(update={"guest_count": 0})
 
+        # Refused here, with the other guards, rather than down at the capacity
+        # check — and the position matters as much as the rule. Every return
+        # below this point happens *after* the RSVP row has been added to or
+        # mutated in the session, so a late rejection leaves dirty state the
+        # next commit would persist. That is not hypothetical: rsvp_to_series
+        # calls this in a loop and commits per occurrence, so one refused
+        # occurrence would be written by the next one's commit while being
+        # excluded from the reported count.
+        #
+        # A party that does not fit even an empty event has no queue position
+        # to wait for, and since promote_from_waitlist refuses to skip the head
+        # of the queue, admitting one would block everybody behind it.
+        if event.max_attendees and rsvp_data.status == RSVPStatus.GOING.value:
+            party_size = 1 + (rsvp_data.guest_count or 0)
+            if party_size > event.max_attendees:
+                return (
+                    None,
+                    f"This event holds {event.max_attendees} people, so a party "
+                    f"of {party_size} cannot be accommodated.",
+                )
+
         # Soft pipeline phase gate — warn (overridable) when RSVPing to a session
         # ahead of the member's current phase. Only when actually attending.
         if not override and rsvp_data.status == "going":
@@ -1391,19 +1425,10 @@ class EventService:
 
             # ">" against the party size, not ">=" against the tally: the old
             # row count only had to ask "is the roster already full", but a
-            # party of three does not fit a one-seat gap.
+            # party of three does not fit a one-seat gap. (A party too big for
+            # the event at all was already refused above, before this function
+            # touched the session.)
             requested_seats = 1 + (rsvp_data.guest_count or 0)
-            if requested_seats > event.max_attendees:
-                # Rejected, not waitlisted. A party that does not fit even an
-                # empty event has no queue position to wait for, and since
-                # promote_from_waitlist deliberately refuses to skip the head
-                # of the queue, letting one in would block every member behind
-                # it indefinitely.
-                return (
-                    None,
-                    f"This event holds {event.max_attendees} people, so a party "
-                    f"of {requested_seats} cannot be accommodated.",
-                )
             if occupied_seats + requested_seats > event.max_attendees:
                 # Auto-waitlist instead of rejecting
                 rsvp.status = RSVPStatus.WAITLISTED
@@ -1706,6 +1731,12 @@ class EventService:
                 override=True,
             )
             if error or rsvp is None:
+                # Roll back before moving on. create_or_update_rsvp commits its
+                # own successful writes, so this discards only what a refusal
+                # left uncommitted — and without it, any error path that ever
+                # returns after the row is added would be persisted by the
+                # *next* occurrence's commit rather than dropped.
+                await self.db.rollback()
                 logger.info(
                     "Series RSVP skipped event {}: {}",
                     event_id,

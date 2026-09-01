@@ -1248,6 +1248,22 @@ describe('EventDetailPage', () => {
       expect(await screen.findByText(/#2 of 5 on the waitlist/i)).toBeInTheDocument();
     });
 
+    it('tells a party too large for the event the truth, not a promise', async () => {
+      // Promotion passes such a party over, so "you'll be moved up
+      // automatically" is a promise the server will never keep. Arises when an
+      // organizer lowers the cap below a party that had already queued.
+      vi.mocked(eventService.getEvent).mockResolvedValue({
+        ...mockEvent,
+        user_rsvp_status: 'waitlisted',
+        user_waitlist_exceeds_capacity: true,
+      });
+
+      renderWithRouter(<EventDetailPage />);
+
+      expect(await screen.findByText(/larger than this event can hold/i)).toBeInTheDocument();
+      expect(screen.queryByText(/automatically moved/i)).not.toBeInTheDocument();
+    });
+
     it('falls back to the vaguer sentence when no position came back', async () => {
       vi.mocked(eventService.getEvent).mockResolvedValue({
         ...mockEvent,
