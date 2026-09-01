@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**263 tables · 4453 columns · 848 foreign keys**
+**263 tables · 4454 columns · 848 foreign keys**
 
 ---
 
@@ -423,7 +423,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 |---|---|---|---|
 | [`department_message_deliveries`](#department_message_deliveries) | `DepartmentMessageDelivery` | 9 | Durable, per-recipient claim and result for an external delivery. |
 | [`department_message_reads`](#department_message_reads) | `DepartmentMessageRead` | 5 | Tracks which users have read/acknowledged a department message. |
-| [`department_message_recipients`](#department_message_recipients) | `DepartmentMessageRecipient` | 6 | Durable, queryable delivery and resolution state for one recipient. |
+| [`department_message_recipients`](#department_message_recipients) | `DepartmentMessageRecipient` | 7 | Durable, queryable delivery and resolution state for one recipient. |
 | [`department_messages`](#department_messages) | `DepartmentMessage` | 19 | Department Message model |
 | [`notification_logs`](#notification_logs) | `NotificationLog` | 20 | Notification Log model |
 | [`notification_rules`](#notification_rules) | `NotificationRule` | 12 | Notification Rule model |
@@ -6191,6 +6191,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `organization_id` | VARCHAR(36) | no | FK, IDX |  | → `organizations.id` ON DELETE CASCADE |
 | `read_at` | DATETIME | yes |  |  |  |
 | `acknowledged_at` | DATETIME | yes |  |  |  |
+| `revoked_at` | DATETIME | yes |  |  |  |
 
 **Indexes**
 

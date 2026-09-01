@@ -882,6 +882,46 @@ class TestGetInboxMessage:
         assert "users.organization_id = :organization_id_1" in str(author_query)
 
 
+class TestRevokedRowsGrantNothing:
+    """Every query that authorizes a member against a message must exclude a
+    row kept only as a receipt. They are separate queries with no shared
+    builder, so each is checked: missing the filter on any one of them leaves
+    a removed member with the inbox list, the badge, or the message itself."""
+
+    @staticmethod
+    async def _captured(coro_factory):
+        svc = _svc()
+        captured = []
+
+        async def _execute(query, *args, **kwargs):
+            captured.append(str(query))
+            result = MagicMock()
+            result.scalar.return_value = 0
+            result.scalar_one_or_none.return_value = None
+            result.all.return_value = []
+            result.scalars.return_value.all.return_value = []
+            return result
+
+        svc.db.execute = _execute
+        await coro_factory(svc)
+        return captured
+
+    async def test_inbox_list_excludes_revoked_rows(self):
+        queries = await self._captured(lambda svc: svc.get_inbox("org1", "u1"))
+        assert any("revoked_at IS NULL" in q for q in queries), queries
+
+    async def test_unread_badge_excludes_revoked_rows(self):
+        queries = await self._captured(lambda svc: svc.get_unread_count("org1", "u1"))
+        assert any("revoked_at IS NULL" in q for q in queries), queries
+
+    async def test_the_visibility_gate_excludes_revoked_rows(self):
+        # Backs the detail screen, mark-as-read and acknowledge.
+        queries = await self._captured(
+            lambda svc: svc._visible_message_or_none("m1", "u1", "org1")
+        )
+        assert any("revoked_at IS NULL" in q for q in queries), queries
+
+
 class TestInboxDetailRoute:
     def test_detail_route_is_declared_before_the_admin_by_id_route(self):
         """/inbox/{message_id} must not be shadowed, and the literal
@@ -907,9 +947,12 @@ class TestReconcileRecipients:
     """
 
     @staticmethod
-    def _row(user_id, read_at=None, acknowledged_at=None):
+    def _row(user_id, read_at=None, acknowledged_at=None, revoked_at=None):
         return SimpleNamespace(
-            user_id=user_id, read_at=read_at, acknowledged_at=acknowledged_at
+            user_id=user_id,
+            read_at=read_at,
+            acknowledged_at=acknowledged_at,
+            revoked_at=revoked_at,
         )
 
     async def _reconcile(self, existing_rows, targeted_ids):
@@ -958,6 +1001,46 @@ class TestReconcileRecipients:
         deleted = await self._reconcile([signed], targeted_ids=["still-here"])
 
         assert signed not in deleted
+
+    async def test_a_retained_row_stops_granting_access(self):
+        """The row kept for evidence was also the row granting access.
+
+        Every visibility query — inbox list, unread badge, and the gate behind
+        read/acknowledge and the detail screen — joins to the recipient row
+        and asks nothing else. So narrowing a published message's audience
+        removed nobody who had already opened it: the notice stayed in their
+        inbox, and stayed openable by id.
+        """
+        signed = self._row(
+            "gone-signed",
+            read_at=datetime(2026, 8, 1, tzinfo=timezone.utc),
+            acknowledged_at=datetime(2026, 8, 1, tzinfo=timezone.utc),
+        )
+        await self._reconcile([signed], targeted_ids=["still-here"])
+
+        assert signed.revoked_at is not None
+        # The receipt itself is untouched — that is what it is kept for.
+        assert signed.acknowledged_at == datetime(2026, 8, 1, tzinfo=timezone.utc)
+
+    async def test_returning_to_the_audience_restores_access(self):
+        """A member widened back in must see the message again, and must not
+        be re-notified: they were told the first time."""
+        back = self._row(
+            "returning",
+            read_at=datetime(2026, 8, 1, tzinfo=timezone.utc),
+            revoked_at=datetime(2026, 8, 2, tzinfo=timezone.utc),
+        )
+        await self._reconcile([back], targeted_ids=["returning"])
+
+        assert back.revoked_at is None
+        assert self.last_added == set()
+
+    async def test_a_row_carrying_nothing_is_still_deleted_not_revoked(self):
+        empty = self._row("gone-unread")
+        deleted = await self._reconcile([empty], targeted_ids=["still-here"])
+
+        assert empty in deleted
+        assert empty.revoked_at is None
 
     async def test_retains_a_read_row_dropped_from_the_audience(self):
         seen = self._row("gone-read", read_at=datetime(2026, 8, 1, tzinfo=timezone.utc))

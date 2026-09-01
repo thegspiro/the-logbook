@@ -382,6 +382,9 @@ class MessagingService:
             .where(
                 DepartmentMessageRecipient.organization_id == organization_id,
                 DepartmentMessageRecipient.user_id == user_id,
+                # A row kept only as a receipt after the author narrowed the
+                # audience is evidence, not access.
+                DepartmentMessageRecipient.revoked_at.is_(None),
                 DepartmentMessage.organization_id == organization_id,
                 DepartmentMessage.is_active.is_(True),
                 DepartmentMessage.deleted_at.is_(None),
@@ -549,6 +552,7 @@ class MessagingService:
             .where(
                 DepartmentMessageRecipient.organization_id == organization_id,
                 DepartmentMessageRecipient.user_id == user_id,
+                DepartmentMessageRecipient.revoked_at.is_(None),
                 DepartmentMessage.organization_id == organization_id,
                 DepartmentMessage.is_active.is_(True),
                 DepartmentMessage.deleted_at.is_(None),
@@ -617,6 +621,7 @@ class MessagingService:
         )
         existing = {str(row.user_id): row for row in result.scalars().all()}
         added = targeted - existing.keys()
+        now = datetime.now(timezone.utc)
         for user_id in added:
             self.db.add(
                 DepartmentMessageRecipient(
@@ -638,6 +643,17 @@ class MessagingService:
             # acknowledgment with them. Prune only rows that carry nothing.
             if row.read_at is None and row.acknowledged_at is None:
                 await self.db.delete(row)
+            else:
+                # Keeping the row kept their access with it: every visibility
+                # query authorizes on the row's existence alone. An author who
+                # narrows a published audience means to take the message away,
+                # so the retained row becomes evidence and stops being a grant.
+                row.revoked_at = now
+        for user_id in targeted & existing.keys():
+            # Back in the audience — restore the access the revocation took,
+            # without re-notifying: they were already told the first time.
+            if existing[user_id].revoked_at is not None:
+                existing[user_id].revoked_at = None
         return added
 
     @staticmethod
@@ -735,7 +751,8 @@ class MessagingService:
         """Return a currently live message only when targeted to the caller.
 
         Read/acknowledge records are compliance evidence, so inactive, expired,
-        scheduled, deleted, cross-org, and untargeted messages all fail closed.
+        scheduled, deleted, cross-org, revoked, and untargeted messages all
+        fail closed.
         """
         now = datetime.now(timezone.utc)
         message_result = await self.db.execute(
@@ -747,6 +764,7 @@ class MessagingService:
             .where(
                 DepartmentMessageRecipient.organization_id == organization_id,
                 DepartmentMessageRecipient.user_id == user_id,
+                DepartmentMessageRecipient.revoked_at.is_(None),
                 DepartmentMessage.id == message_id,
                 DepartmentMessage.organization_id == organization_id,
                 DepartmentMessage.is_active.is_(True),

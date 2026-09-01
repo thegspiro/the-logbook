@@ -581,4 +581,79 @@ describe('authStore', () => {
       expect(getState().error).toBeNull();
     });
   });
+
+  // ---- device ownership boundary ----
+
+  describe('offline data at the account boundary', () => {
+    /** Simulate the browser processing Set-Cookie headers from a login response. */
+    function simulateLoginCookies(): void {
+      document.cookie = `csrf_token=${Math.random().toString(36)}; Path=/`;
+    }
+
+    async function signIn(): Promise<void> {
+      mockLogin.mockImplementation(async () => {
+        simulateLoginCookies();
+        return { token_type: 'bearer', expires_in: 1800 };
+      });
+      mockGetCurrentUser.mockResolvedValue(fakeUser);
+      await act(async () => {
+        await getState().login({ username: 'testuser', password: 'password123' });
+      });
+    }
+
+    it('discards the previous member’s work when a different member signs in', async () => {
+      // Shift-report drafts and the equipment-check queue live in the browser
+      // profile, and only logout cleared them. A station laptop whose session
+      // ended without one — a crash, a closed lid — handed the next member
+      // everything the last one had queued, to sync under their own name.
+      localStorage.setItem('device_member_id', 'someone-else');
+
+      await signIn();
+
+      expect(mockPurgeLocalMemberData).toHaveBeenCalled();
+      expect(localStorage.getItem('device_member_id')).toBe('u1');
+    });
+
+    it('keeps a member’s own queued work when they sign back in', async () => {
+      localStorage.setItem('device_member_id', 'u1');
+
+      await signIn();
+
+      expect(mockPurgeLocalMemberData).not.toHaveBeenCalled();
+    });
+
+    it('purges on a sign-in to a device whose owner was never recorded', async () => {
+      // Provenance is unknown, so it cannot be handed to the person signing
+      // in. This is the one-time cost of the upgrade to owner tracking.
+      await signIn();
+
+      expect(mockPurgeLocalMemberData).toHaveBeenCalled();
+    });
+
+    it('leaves a live session’s own work alone across a page reload', async () => {
+      // The counterpart to the case above: a member already signed in when
+      // this shipped must not lose their drafts to the first refresh.
+      localStorage.setItem('has_session', '1');
+      mockGetCurrentUser.mockResolvedValue(fakeUser);
+
+      await act(async () => {
+        await getState().loadUser();
+      });
+
+      expect(mockPurgeLocalMemberData).not.toHaveBeenCalled();
+      expect(localStorage.getItem('device_member_id')).toBe('u1');
+    });
+
+    it('purges on a reload when the recorded owner is a different member', async () => {
+      localStorage.setItem('has_session', '1');
+      localStorage.setItem('device_member_id', 'someone-else');
+      mockGetCurrentUser.mockResolvedValue(fakeUser);
+
+      await act(async () => {
+        await getState().loadUser();
+      });
+
+      expect(mockPurgeLocalMemberData).toHaveBeenCalled();
+    });
+  });
 });

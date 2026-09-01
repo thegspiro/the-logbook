@@ -184,6 +184,34 @@ class TestStateInvariantRepair:
         InventoryService._enforce_state_invariant(item)
         assert item.status == ItemStatus.AVAILABLE
 
+    def test_enforce_leaves_issued_gear_assigned(self):
+        """ASSIGNED is only invalid when nobody holds the item.
+
+        The helper defaults assigned_to_user_id to None, so passing the item's
+        status and condition alone made every assigned item fail the
+        "requires an assigned user" rule. Completing a maintenance record on
+        gear that is out with a member then rewrote its status to AVAILABLE
+        while the assignment stayed on the row — the turnout coat is listed as
+        ready to issue and is on somebody's back.
+        """
+        item = _make_item(
+            status=ItemStatus.ASSIGNED,
+            condition=ItemCondition.GOOD,
+            assigned_to_user_id=str(uuid4()),
+        )
+        InventoryService._enforce_state_invariant(item)
+        assert item.status == ItemStatus.ASSIGNED
+
+    def test_enforce_still_rescues_an_assigned_item_with_no_holder(self):
+        """The rule is not disabled, only given the assignee it asks about."""
+        item = _make_item(
+            status=ItemStatus.ASSIGNED,
+            condition=ItemCondition.GOOD,
+            assigned_to_user_id=None,
+        )
+        InventoryService._enforce_state_invariant(item)
+        assert item.status == ItemStatus.AVAILABLE
+
     def test_combination_check_can_be_skipped_but_the_user_rule_cannot(self):
         """check_combination=False is for an update that touches neither field.
         The assigned-user rule is about the resulting state, so it still runs."""

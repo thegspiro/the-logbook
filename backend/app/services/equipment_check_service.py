@@ -4117,7 +4117,12 @@ class EquipmentCheckService:
             )
             if linked_ids:
                 explicit = True
-                fetched = await self.list_templates(
+                # Drafts are dropped here too, and `explicit` is already
+                # True: it is set from the link rows, not from what they
+                # resolve to. A template whose links all point at deactivated
+                # checklists therefore resolves to nothing rather than
+                # falling through to the apparatus's — see the docstring.
+                fetched = await self._active_templates(
                     organization_id, template_ids=linked_ids
                 )
                 # Back into the officer's order. list_templates sorts by the

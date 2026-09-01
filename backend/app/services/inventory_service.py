@@ -670,8 +670,18 @@ class InventoryService:
         poor/damaged/out-of-service. That is not merely inconsistent: assign
         and checkout gate on status alone, so the item stays distributable
         while recorded as unsafe, and the item edit form can no longer save it.
+
+        The item's own assignee has to be handed to the validator. Leaving it
+        at the default None makes every ASSIGNED item read as invalid — the
+        status requires an assignee — so completing maintenance on gear that
+        is out with a member rewrote it to AVAILABLE while the assignment row
+        stayed put, listing issued gear as ready to hand to somebody else.
         """
-        if cls._validate_item_state(item.status, item.condition):
+        if cls._validate_item_state(
+            item.status,
+            item.condition,
+            getattr(item, "assigned_to_user_id", None),
+        ):
             item.status = cls._status_from_condition(item.condition)
 
     async def _validate_category_requirements(

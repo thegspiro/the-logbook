@@ -42,6 +42,9 @@ _TARGET = (
     / "config"
     / "seededPositionGrants.ts"
 )
+# The wizard's position templates, extracted out of RoleSetup.tsx when the
+# builder grew its own module. The list is what the test reads; the screen
+# that renders it is not.
 _ROLE_SETUP = (
     _BACKEND.parent
     / "frontend"
@@ -49,7 +52,7 @@ _ROLE_SETUP = (
     / "modules"
     / "onboarding"
     / "pages"
-    / "RoleSetup.tsx"
+    / "positionTemplates.ts"
 )
 
 
