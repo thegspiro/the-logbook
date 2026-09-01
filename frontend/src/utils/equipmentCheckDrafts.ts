@@ -131,7 +131,8 @@ export async function loadEquipmentCheckDraft<T>(
 export async function deleteEquipmentCheckDraft(identity: EquipmentCheckDraftIdentity): Promise<void> {
   const db = await openOfflineDb();
   await new Promise<void>((resolve, reject) => {
-    const store = db.transaction(STORE_EQUIPMENT_CHECK_DRAFTS, 'readwrite').objectStore(STORE_EQUIPMENT_CHECK_DRAFTS);
+    const tx = db.transaction(STORE_EQUIPMENT_CHECK_DRAFTS, 'readwrite');
+    const store = tx.objectStore(STORE_EQUIPMENT_CHECK_DRAFTS);
     const request = store.getAll();
     request.onerror = () => reject(request.error ?? new Error('Failed to delete equipment-check draft'));
     request.onsuccess = () => {
@@ -141,21 +142,35 @@ export async function deleteEquipmentCheckDraft(identity: EquipmentCheckDraftIde
         // the member actually holding the device.
         if (sameChecklist(draft, identity) && sameOwner(draft, identity)) store.delete(draft.id);
       }
-      resolve();
     };
+    // Settled on the transaction, not on the deletes being queued. Resolving
+    // from `onsuccess` reports success while the writes are still in flight,
+    // so an abort left the draft in place and the caller went on to submit —
+    // and the next time the member opened that checklist it offered them
+    // answers from the check they had already filed.
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error ?? new Error('Failed to delete equipment-check draft'));
+    tx.onabort = () => reject(tx.error ?? new Error('Equipment-check draft deletion was aborted'));
   });
 }
 
 export async function clearAllEquipmentCheckDrafts(): Promise<number> {
   const db = await openOfflineDb();
   return new Promise((resolve, reject) => {
-    const store = db.transaction(STORE_EQUIPMENT_CHECK_DRAFTS, 'readwrite').objectStore(STORE_EQUIPMENT_CHECK_DRAFTS);
+    const tx = db.transaction(STORE_EQUIPMENT_CHECK_DRAFTS, 'readwrite');
+    const store = tx.objectStore(STORE_EQUIPMENT_CHECK_DRAFTS);
     const count = store.count();
     count.onerror = () => reject(count.error ?? new Error('Failed to count equipment-check drafts'));
     count.onsuccess = () => {
       const clear = store.clear();
-      clear.onsuccess = () => resolve(count.result);
       clear.onerror = () => reject(clear.error ?? new Error('Failed to clear equipment-check drafts'));
     };
+    // Same rule as the delete above, and it matters more here: this runs when
+    // a device changes hands, and a count returned before the clear committed
+    // would report the previous member's drafts as purged while they are
+    // still on the tablet.
+    tx.oncomplete = () => resolve(count.result);
+    tx.onerror = () => reject(tx.error ?? new Error('Failed to clear equipment-check drafts'));
+    tx.onabort = () => reject(tx.error ?? new Error('Equipment-check draft purge was aborted'));
   });
 }

@@ -32,6 +32,7 @@ import { useRanks } from '../../../hooks/useRanks';
 import { useTimezone } from '../../../hooks/useTimezone';
 import { formatDate } from '../../../utils/dateFormatting';
 import { getErrorMessage } from '../../../utils/errorHandling';
+import { onHandQuantity } from '../utils/onHand';
 import { RETURN_CONDITION_OPTIONS } from '../../../constants/enums';
 import { Modal } from '../../../components/Modal';
 import { VariantCapsules } from '../components/VariantCapsules';
@@ -641,7 +642,7 @@ const MyEquipmentPage: React.FC = () => {
               {reqSelected && (
                 <p className="text-theme-text-muted mt-1 text-xs">
                   Selected: <span className="text-theme-text-primary font-medium">{reqSelected.name}</span>
-                  {reqSelected.tracking_type === 'pool' && ` (pool — ${reqSelected.quantity} available)`}
+                  {reqSelected.tracking_type === 'pool' && ` (pool — ${onHandQuantity(reqSelected)} available)`}
                 </p>
               )}
             </div>
@@ -670,11 +671,14 @@ const MyEquipmentPage: React.FC = () => {
 
             {reqSelected?.tracking_type === 'pool' && (
               <div>
-                <label className={labelClass}>Quantity</label>
+                <label className={labelClass} htmlFor="request-quantity">
+                  Quantity
+                </label>
                 <input
+                  id="request-quantity"
                   type="number"
                   min={1}
-                  max={reqSelected.quantity}
+                  max={onHandQuantity(reqSelected)}
                   value={reqQty}
                   onChange={(e) => setReqQty(Number(e.target.value))}
                   className={inputClass}

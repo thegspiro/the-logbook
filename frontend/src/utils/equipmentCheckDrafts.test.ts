@@ -1,6 +1,6 @@
 import { IDBFactory } from 'fake-indexeddb';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { OFFLINE_DB_NAME } from './offlineDb';
+import { OFFLINE_DB_NAME, STORE_EQUIPMENT_CHECK_DRAFTS, openOfflineDb } from './offlineDb';
 import {
   clearAllEquipmentCheckDrafts,
   deleteEquipmentCheckDraft,
@@ -26,6 +26,43 @@ describe('equipment-check drafts', () => {
       request.onsuccess = () => resolve();
       request.onerror = () => resolve();
     });
+  });
+
+  it('reports a deletion that did not commit', async () => {
+    // What a real failure looks like: the deletes are queued, the transaction
+    // rolls back, and the draft is still there. Resolving from the getAll
+    // handler told the caller cleanup had succeeded while the writes were
+    // still in flight — so submission went ahead, and the next time the member
+    // opened that checklist it offered them answers from the check they had
+    // already filed.
+    await saveEquipmentCheckDraft(base, { answer: 'pass' }, 1_000);
+
+    // Taken off a live store rather than imported: fake-indexeddb's
+    // `lib/FDBObjectStore` subpath ships no types, so importing the class
+    // turns every use of it into an unsafe-any lint warning.
+    const db = await openOfflineDb();
+    const proto = Object.getPrototypeOf(
+      db.transaction(STORE_EQUIPMENT_CHECK_DRAFTS, 'readonly').objectStore(STORE_EQUIPMENT_CHECK_DRAFTS)
+    ) as IDBObjectStore;
+    const realDelete = proto.delete;
+    const spy = vi.spyOn(proto, 'delete').mockImplementation(function (this: IDBObjectStore, key: IDBValidKey) {
+      const request = realDelete.call(this, key);
+      this.transaction.abort();
+      return request;
+    });
+
+    // Restored even when the assertion fails. A prototype spy left installed
+    // aborts every transaction the rest of the file opens, so one real failure
+    // here would present as six.
+    try {
+      await expect(deleteEquipmentCheckDraft(base)).rejects.toThrow();
+    } finally {
+      spy.mockRestore();
+    }
+
+    // And it is still there, which is exactly why the caller must not be told
+    // otherwise.
+    expect(await loadEquipmentCheckDraft(base, 2_000)).not.toBeNull();
   });
 
   it('restores a current draft for the same user and organization', async () => {
