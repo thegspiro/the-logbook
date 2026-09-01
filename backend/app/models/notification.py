@@ -474,9 +474,9 @@ class DepartmentMessageRecipient(Base):
     )
     # When this member entered the message's audience. The audience is
     # mutable after publication — a widened targeting rule adds rows, a
-    # narrowed one revokes them — so without this the row cannot say whether
-    # the member was addressed by the original send or added later, and every
-    # other stamp here is a state change against a row already present.
+    # narrowed one revokes them — so this diverges from the message's own
+    # created_at, which is the case the delivery path has to tell apart, and
+    # every other stamp here is a state change against a row already present.
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     read_at = Column(DateTime(timezone=True), nullable=True)
     acknowledged_at = Column(DateTime(timezone=True), nullable=True)
@@ -486,10 +486,6 @@ class DepartmentMessageRecipient(Base):
     # this, because they authorize on the row's existence alone and an author
     # who removes somebody from an audience means to remove their access too.
     revoked_at = Column(DateTime(timezone=True), nullable=True)
-    # When this member entered the audience. Distinct from the message's own
-    # created_at once an audience is widened after publication, which is the
-    # case the delivery path has to tell apart.
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     message = relationship("DepartmentMessage", back_populates="recipients")
     user = relationship("User", foreign_keys=[user_id])
