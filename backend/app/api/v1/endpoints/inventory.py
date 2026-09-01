@@ -103,6 +103,7 @@ from app.schemas.inventory import (
     InventoryItemBulkCreate,
     InventoryItemBulkResult,
     InventoryItemCreate,
+    InventoryItemCreateIfAbsentResult,
     InventoryItemResponse,
     InventoryItemUpdate,
     InventoryLotBulkCreate,
@@ -180,7 +181,7 @@ from app.schemas.inventory import (
     WriteOffReview,
 )
 from app.services.departure_clearance_service import DepartureClearanceService
-from app.services.inventory_service import InventoryService
+from app.services.inventory_service import InventoryService, is_pool_without_stock
 from app.services.label_service import LabelService
 from app.services.organization_service import OrganizationService
 from app.utils import label_renderer
@@ -797,6 +798,65 @@ async def create_items_bulk(
     )
 
 
+@router.post(
+    "/items/create-if-absent", response_model=InventoryItemCreateIfAbsentResult
+)
+async def create_item_if_absent(
+    item: InventoryItemCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("inventory.manage")),
+):
+    """
+    Create a catalog item, or return the one already carrying the name.
+
+    Declared above `/items/{item_id}` so the literal path wins the match.
+
+    For create-and-link screens. The gear list they search excludes medical
+    types and returns one page, so "no match on screen" is not "not in the
+    catalog", and a caller that checks from the browser and then posts leaves
+    seconds in which somebody else files the same name. Both roads end at one
+    item stored as two rows, its checklist links and replacement lots split
+    between them. Deciding it here, in one request, is what keeps the answer
+    and the write together.
+
+    `created` reports which happened, so the caller can say whether it added
+    the item or found it.
+
+    **Authentication required**
+    **Requires permission: inventory.manage**
+    """
+    service = InventoryService(db)
+    new_item, created, error = await service.create_item_if_absent(
+        organization_id=current_user.organization_id,
+        item_data=item.model_dump(exclude_unset=True),
+        created_by=current_user.id,
+    )
+
+    if error or not new_item:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=sanitize_error_message(error or "Could not create the item"),
+        )
+
+    if created:
+        await log_audit_event(
+            db=db,
+            event_type="inventory_item_created",
+            event_category="inventory",
+            severity="info",
+            event_data={"item_id": str(new_item.id), "item_name": new_item.name},
+            user_id=str(current_user.id),
+            username=current_user.username,
+        )
+        await _publish_inventory_event(
+            str(current_user.organization_id),
+            "item_created",
+            {"item_id": str(new_item.id), "item_name": new_item.name},
+        )
+
+    return InventoryItemCreateIfAbsentResult(item=new_item, created=created)
+
+
 @router.get("/items/export")
 async def export_items_csv(
     category_id: UUID | None = None,
@@ -1385,6 +1445,23 @@ async def import_items_csv(
                 unmatched_key = vendor_raw.lower()
 
         item_data.pop("barcode", None)
+
+        # A stock list entering counts is a different contract from a single
+        # catalog row created by hand: a pool line with no quantity is a
+        # mis-parsed spreadsheet, not an out-of-stock item. `create_item` used
+        # to enforce this for every caller and no longer does, so the rule
+        # lives with the callers that want it — here and in
+        # `create_items_bulk`, the two list-oriented paths.
+        if is_pool_without_stock(item_data):
+            errors.append(
+                {
+                    "row": row_num,
+                    "error": "Pool items must have a quantity of 1 or more",
+                }
+            )
+            failed += 1
+            continue
+
         new_item, error = await service.create_item(
             organization_id=current_user.organization_id,
             item_data=item_data,
@@ -1396,10 +1473,11 @@ async def import_items_csv(
             failed += 1
         else:
             imported += 1
-            # Recorded only now. create_item still rejects rows the CSV parse
-            # accepted — a duplicate serial, a pool item with no quantity — and
-            # a name banked before that is known would send the reader to
-            # Attach for rows that were never written.
+            # Recorded only now. Rows the CSV parse accepted are still
+            # rejected after it — a duplicate serial by create_item, a pool
+            # item with no quantity by the check just above — and a name
+            # banked before that is known would send the reader to Attach for
+            # rows that were never written.
             if unmatched_key:
                 unmatched_vendors.setdefault(unmatched_key, vendor_raw)
 
