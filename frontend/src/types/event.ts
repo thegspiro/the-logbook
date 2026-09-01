@@ -141,6 +141,10 @@ export interface EventListItem {
    * `max_attendees` caps. Capacity UI uses this; `going_count` is the people
    * count. */
   occupied_seats?: number | null;
+  /** Which responses this event accepts. The list surfaces RSVP controls, and
+   * hardcoding Going/Not Going rendered a button the API always rejected on an
+   * event configured for, say, 'maybe' only. */
+  allowed_rsvp_statuses?: RSVPStatus[] | null;
   user_rsvp_status?: RSVPStatus;
 
   /**

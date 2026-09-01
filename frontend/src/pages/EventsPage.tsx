@@ -327,43 +327,40 @@ export const EventsPage: React.FC = () => {
 
   useRegisterPullToRefresh(fetchEvents);
 
-  const handleQuickRSVP = useCallback(async (eventId: string, status: 'going' | 'not_going') => {
-    try {
-      setRsvpLoading((prev) => ({ ...prev, [eventId]: true }));
-      const rsvpData: RSVPCreate = { status, guest_count: 0 };
-      const saved = await eventService.createOrUpdateRSVP(eventId, rsvpData);
-      // The server's status, not the requested one. Asking to go to a full
-      // event returns `waitlisted`, and echoing the request back would show
-      // the member a confident "Going" for a seat they did not get.
-      const savedStatus = saved.status ?? status;
-      setEvents((prev) =>
-        prev.map((e) =>
-          e.id === eventId
-            ? {
-                ...e,
-                user_rsvp_status: savedStatus,
-                going_count:
-                  savedStatus === 'going'
-                    ? (e.going_count ?? 0) + (e.user_rsvp_status === 'going' ? 0 : 1)
-                    : (e.going_count ?? 0) - (e.user_rsvp_status === 'going' ? 1 : 0),
-              }
-            : e
-        )
-      );
-      if (savedStatus === 'waitlisted') {
-        toast('This event is full — you have been added to the waitlist.', { icon: '⏳' });
+  const handleQuickRSVP = useCallback(
+    async (eventId: string, status: 'going' | 'not_going') => {
+      try {
+        setRsvpLoading((prev) => ({ ...prev, [eventId]: true }));
+        const rsvpData: RSVPCreate = { status, guest_count: 0 };
+        const saved = await eventService.createOrUpdateRSVP(eventId, rsvpData);
+        // The server's status, not the requested one. Asking to go to a full
+        // event returns `waitlisted`, and echoing the request back would show
+        // the member a confident "Going" for a seat they did not get.
+        const savedStatus = saved.status ?? status;
+        // Reflect the answer immediately so the card does not look unresponsive,
+        // then refetch. going_count, occupied_seats and waitlist_count are
+        // interdependent and the client cannot derive occupied_seats at all — it
+        // does not know the member's prior guest count, which a detail-page RSVP
+        // may have set above zero. Patching two of three and guessing the third
+        // is how the capacity label drifts further, not less.
+        setEvents((prev) => prev.map((e) => (e.id === eventId ? { ...e, user_rsvp_status: savedStatus } : e)));
+        if (savedStatus === 'waitlisted') {
+          toast('This event is full — you have been added to the waitlist.', { icon: '⏳' });
+        }
+        setRsvpChanging((prev) => ({ ...prev, [eventId]: false }));
+        await fetchEvents();
+      } catch (err: unknown) {
+        // The card is only updated on success, so without this the tap looks
+        // exactly like a tap that never registered — the member re-taps and
+        // assumes the button is broken rather than that the RSVP was refused
+        // (event locked, roster full, session expired).
+        toast.error(getErrorMessage(err, 'Could not save your RSVP'));
+      } finally {
+        setRsvpLoading((prev) => ({ ...prev, [eventId]: false }));
       }
-      setRsvpChanging((prev) => ({ ...prev, [eventId]: false }));
-    } catch (err: unknown) {
-      // The card is only updated on success, so without this the tap looks
-      // exactly like a tap that never registered — the member re-taps and
-      // assumes the button is broken rather than that the RSVP was refused
-      // (event locked, roster full, session expired).
-      toast.error(getErrorMessage(err, 'Could not save your RSVP'));
-    } finally {
-      setRsvpLoading((prev) => ({ ...prev, [eventId]: false }));
-    }
-  }, []);
+    },
+    [fetchEvents]
+  );
 
   const handleStartChangeRsvp = useCallback((eventId: string) => {
     setRsvpChanging((prev) => ({ ...prev, [eventId]: true }));

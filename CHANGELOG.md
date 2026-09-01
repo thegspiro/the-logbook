@@ -7,6 +7,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### A member can now see who's going, RSVP without being asked, and know where they stand on a waitlist (2026-09-01)
+
+**Added**
+
+- **The going list is visible to members.** An event's attendee list was
+  reachable only with `events.manage`, so an ordinary member saw aggregate
+  counts and nothing else. It is now shareable — names and going status only,
+  never contact details, RSVP notes, dietary restrictions, accessibility needs,
+  guest counts or check-in times, which stay in the organizer view. Who may see
+  it is an organization default with a per-event override in either direction.
+  **The default ships as managers-only**, so nothing changes for an existing
+  department until it opts in.
+- **A member can respond to an event that does not require a response.**
+  `requires_rsvp` now means "a response is expected" — it still drives the
+  Required badge, the deadline and the non-respondent reminder audience — and
+  no longer means "responses are permitted". Previously the API refused
+  outright, which left members with nothing to do on the majority of events.
+- **Waitlist standing.** The detail page says "You're #2 of 5 on the waitlist"
+  rather than only that a waitlist exists, ordered by the same column the
+  server actually promotes on.
+- **Inline RSVP from the dashboard**, matching the sign-up open shifts already
+  offered there.
+
+**Fixed**
+
+- **Guests occupy seats.** `allow_guests` had been on the model since the
+  beginning and was read nowhere, so guests were accepted on events that forbade
+  them; and capacity counted going _rows_, leaving guests out entirely, so a
+  capped event could be oversubscribed by however many guests attendees brought.
+  Capacity is now a sum of seats. **A capped event will fill sooner than it used
+  to** — that is the correction, not a regression — and existing events already
+  over the seat count are left alone rather than retroactively waitlisted; they
+  simply admit nobody new.
+- **The waitlist queue moves.** Releasing several seats now promotes several
+  members rather than one, and a party larger than the whole event is refused at
+  RSVP time instead of sitting at the head of the queue blocking everyone behind
+  it.
+- **"Apply to all future events" works on an optional series**, and now goes
+  through the same guarded write path as a single RSVP, so capacity, guests and
+  deadlines are enforced on every occurrence rather than none.
+- The RSVP modal opens with the member's existing response rather than blank —
+  which had quietly discarded their notes, and, once guests consumed capacity,
+  silently released the seats those guests were holding.
+
 ### The dashboard's seven-day list is now thirty days, and its control says where it goes (2026-09-01)
 
 **Changed**
