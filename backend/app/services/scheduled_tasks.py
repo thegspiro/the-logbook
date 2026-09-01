@@ -113,6 +113,7 @@ from app.services.call_tracking_service import CallTrackingService
 from app.services.email_service import _redact_email
 from app.services.shift_eligibility_service import ShiftEligibilityService
 from app.utils.hours import hours_from_minutes
+from app.utils.positions import position_label
 from app.utils.sql_search import LIKE_ESCAPE_CHAR
 
 
@@ -2002,7 +2003,7 @@ async def run_shift_reminders(db: AsyncSession) -> Dict[str, Any]:
                             "first_name": user.first_name,
                             "email": user.email,
                             "position": pos_value,
-                            "position_label": pos_value.replace("_", " ").title(),
+                            "position_label": position_label(pos_value),
                         }
                     )
 

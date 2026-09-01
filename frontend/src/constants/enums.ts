@@ -419,13 +419,24 @@ export const COURSE_QUALIFICATIONS: { value: string; label: string }[] = [
   { value: 'paramedic', label: 'Paramedic' },
 ];
 
+/**
+ * The built-in crew seats, keyed by the canonical token the signup API
+ * grants against. Keys mirror CANONICAL_POSITIONS in
+ * `backend/app/utils/positions.py`, one entry per seat — the `EMS` and `EMT`
+ * alias keys that used to sit alongside `ems` made this map three seats where
+ * the department has one, and `Object.entries` over it offered "EMT" three
+ * times in the assign dropdown, two of them tokens no member can be signed up
+ * as.
+ *
+ * Resolve a stored value through `positionLabel()`
+ * (`modules/scheduling/utils/positionLabels.ts`) rather than indexing this map
+ * directly: it folds those aliases, so a legacy row still names its seat.
+ */
 export const POSITION_LABELS: Record<string, string> = {
   officer: 'Officer',
   driver: 'Driver/Operator',
   firefighter: 'Firefighter',
-  EMS: 'EMT',
   ems: 'EMT',
-  EMT: 'EMT',
   paramedic: 'Paramedic',
   captain: 'Captain',
   lieutenant: 'Lieutenant',

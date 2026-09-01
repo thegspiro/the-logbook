@@ -11,6 +11,7 @@ import { Calendar, Check, ChevronLeft, Info, Repeat } from 'lucide-react';
 import type { ShiftRecord } from '../../../modules/scheduling';
 import type { SwapRequest } from '../../../types/scheduling';
 import { buildSeats, memberInitials, shiftCrewName, toDateKey } from '../../../modules/scheduling/utils/shiftBoard';
+import { positionLabel } from '../../../modules/scheduling/utils/positionLabels';
 import { formatCalendarDate, formatTime } from '../../../utils/dateFormatting';
 import ShiftSeatList from './ShiftSeatList';
 
@@ -109,7 +110,7 @@ export const PhoneDaySheet: React.FC<PhoneDaySheetProps> = ({
                   </span>
                   {seat.position && (
                     <span className="text-theme-text-muted ml-auto shrink-0 text-[11px] font-bold tracking-[0.08em] uppercase">
-                      {seat.position.replace(/_/g, ' ')}
+                      {positionLabel(seat.position)}
                     </span>
                   )}
                 </li>

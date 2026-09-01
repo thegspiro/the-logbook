@@ -9,9 +9,10 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { Shield, Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
-import { MembershipType, POSITION_LABELS } from '../../../constants/enums';
+import { MembershipType } from '../../../constants/enums';
 import { getErrorMessage } from '../../../utils/errorHandling';
 import { schedulingService } from '../services/api';
+import { positionLabel } from '../utils/positionLabels';
 
 const MEMBERSHIP_TYPE_LABELS: Record<string, string> = {
   prospective: 'Prospective',
@@ -25,7 +26,7 @@ const MEMBERSHIP_TYPE_LABELS: Record<string, string> = {
 
 const ALL_MEMBERSHIP_TYPES = Object.values(MembershipType);
 
-// Deduplicated position keys (exclude alias entries like EMS/EMT)
+// The built-in seats this card can open to everyone.
 const POSITION_KEYS = [
   'officer',
   'driver',
@@ -152,7 +153,7 @@ export const EligibilitySettingsCard: React.FC = () => {
                     : 'bg-theme-surface-hover/50 border-theme-surface-border text-theme-text-muted hover:text-theme-text-primary'
                 }`}
               >
-                {POSITION_LABELS[pos] ?? pos}
+                {positionLabel(pos)}
               </button>
             );
           })}

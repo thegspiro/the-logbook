@@ -65,7 +65,7 @@ from app.utils.apparatus_ref import (
 from app.utils.hours import hours_from_minutes
 from app.utils.membership import is_administrative
 from app.utils.org_timezone import resolve_scheduling_timezone
-from app.utils.positions import normalize_stored_positions
+from app.utils.positions import normalize_stored_positions, position_label
 
 
 def _position_label(position) -> str:
@@ -78,9 +78,16 @@ def _position_label(position) -> str:
     "ShiftPosition.FIREFIGHTER position". Reading `.value` off whatever arrives
     is indifferent to which class it came from, and also covers the ORM
     attribute, whose `str()` is the same repr.
+
+    The value is then the seat *token*, which is not always what the department
+    calls the seat: the EMT seat is stored as "ems", so a body built from the
+    token told a member they were assigned to the "ems position" for a seat
+    every screen calls EMT.
     """
     value = getattr(position, "value", position)
-    return str(value) if value else "unspecified"
+    if not value:
+        return "unspecified"
+    return position_label(value)
 
 
 class SchedulingService:

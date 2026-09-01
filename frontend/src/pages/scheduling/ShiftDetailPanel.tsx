@@ -65,6 +65,7 @@ import { formatHours } from '../../utils/hoursFormatting';
 import { DriverBlockedDialog } from './DriverBlockedDialog';
 import { DRIVER_NOT_QUALIFIED_CODE } from '../../constants/enums';
 import { POSITION_LABELS, ASSIGNMENT_STATUS_COLORS, AssignmentStatus } from '../../constants/enums';
+import { positionLabel } from '../../modules/scheduling/utils/positionLabels';
 import { NfcTagWriter } from '../../components/nfc/NfcTagWriter';
 import { PrintDocumentButton } from '../../components/PrintDocumentButton';
 import { StationDocument } from '../../services/stationDocumentService';
@@ -258,7 +259,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
     () =>
       hasApparatusPositions
         ? apparatusPositions.map(({ position: name }) => {
-            return [name, POSITION_LABELS[name] || name.charAt(0).toUpperCase() + name.slice(1)] as [string, string];
+            return [name, positionLabel(name)] as [string, string];
           })
         : Object.entries(POSITION_LABELS),
     [hasApparatusPositions, apparatusPositions]
@@ -600,7 +601,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
         });
         successCount++;
       } catch (err) {
-        toast.error(`Failed to assign ${position}: ${getErrorMessage(err, 'Unknown error')}`);
+        toast.error(`Failed to assign ${positionLabel(position)}: ${getErrorMessage(err, 'Unknown error')}`);
       }
     }
     if (successCount > 0) {
@@ -2159,7 +2160,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
                   <p className="text-theme-text-muted text-xs">Select a member for each open position.</p>
                   <div className="space-y-2">
                     {openPositions.map((pos) => {
-                      const label = POSITION_LABELS[pos] ?? pos;
+                      const label = positionLabel(pos);
                       return (
                         <div key={pos} className="flex items-center gap-2">
                           <span className="text-theme-text-secondary w-24 shrink-0 text-xs font-medium capitalize">
