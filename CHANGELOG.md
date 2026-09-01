@@ -7,6 +7,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### The member roster showed every member the membership coordinator's screen (2026-09-01)
+
+**Changed**
+
+- `/members` carries no permission gate — it is the department directory, open
+  to everyone — but it was rendering the coordinator's working screen to
+  everyone too: a username under each name, a hire date column, a per-row
+  Actions column, bulk-selection checkboxes with Print Badges and Export
+  Selected, a CSV export of the whole roster, and the title "Membership
+  Management — Manage department members and records". A firefighter looking up
+  who is on B platoon was reading a personnel management table. Those elements
+  are now shown only to holders of `members.manage`, the same grant that
+  already gated Add Member, Import CSV and Delete on this page; for a
+  coordinator nothing has changed. Everyone still gets the status counters, the
+  contact column their department has chosen to publish, search, filtering and
+  pagination, and the page is titled "Member Directory".
+- Search no longer matches a username for members who cannot see one. It is not
+  displayed anywhere on their page, so a row returned for "ladams" had no
+  visible reason to be there. Name, membership number and email — the three the
+  search box has always advertised — are unchanged, for everyone.
+- **Clicking a member's row opens their profile.** The only way in used to be
+  the pencil in the Actions column, which is now gone for most of the
+  department, so the row and the phone card carry it instead — for coordinators
+  as well, who keep the pencil. The member's name is a real link rather than
+  the row being a tab stop: a screen reader gets one target per row instead of
+  twenty-five, and the name can be middle-clicked or opened in a new tab.
+  Clicks that land on a checkbox or an action button are still theirs, so
+  selecting a member no longer risks navigating away from the list.
+
+**Note**
+
+This is a change to what the page _shows_, not to what the server _sends_. The
+member list endpoint still returns usernames and hire dates to anyone with
+`members.view`, so this declutters the screen — it is not a confidentiality
+boundary.
+
 ### The schedule named a crew seat by its stored token, so the EMT seat read as "EMS" (2026-09-01)
 
 **Fixed**
