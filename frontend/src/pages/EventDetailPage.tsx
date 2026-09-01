@@ -48,6 +48,8 @@ import { SimpleMarkdown } from '../utils/simpleMarkdown';
 import { EventAttachmentsList } from '../components/event-detail/EventAttachmentsList';
 import { EventRecurrenceInfo } from '../components/event-detail/EventRecurrenceInfo';
 import { EventNotificationPanel } from '../components/event-detail/EventNotificationPanel';
+import { errorTracker } from '../services/errorTracking';
+import { getErrorMessage } from '../utils/errorHandling';
 import { EventRSVPSection } from '../components/event-detail/EventRSVPSection';
 import { EventAttendeesCard } from '../components/event-detail/EventAttendeesCard';
 import EventRSVPModal from '../components/event-detail/EventRSVPModal';
@@ -125,6 +127,9 @@ export const EventDetailPage: React.FC = () => {
   const [rsvps, setRsvps] = useState<RSVP[]>([]);
   const [attendees, setAttendees] = useState<EventAttendee[]>([]);
   const [attendeesLoading, setAttendeesLoading] = useState(false);
+  // Distinguishes "the roster failed to load" from "nobody is going". Without
+  // it an outage renders an empty list that reads as fact.
+  const [attendeesFailed, setAttendeesFailed] = useState(false);
   const [stats, setStats] = useState<EventStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -167,6 +172,9 @@ export const EventDetailPage: React.FC = () => {
   const { confirm } = useConfirm();
 
   // Extracted hooks for RSVP form, notifications, and override attendance
+  // Refreshes the shared roster alongside the event after the member responds.
+  // fetchAttendees otherwise runs only on mount, so a member who joined stayed
+  // absent from the list they were looking at until a reload.
   const rsvpForm = useRSVPForm({
     eventId,
     event,
@@ -175,6 +183,8 @@ export const EventDetailPage: React.FC = () => {
       if (canManage) {
         await fetchRSVPs();
         await fetchStats();
+      } else {
+        await fetchAttendees();
       }
     },
   });
@@ -265,15 +275,24 @@ export const EventDetailPage: React.FC = () => {
 
     try {
       setAttendeesLoading(true);
+      setAttendeesFailed(false);
       const data = await eventService.getEventAttendees(eventId);
       // Coerced rather than trusted: this card is supplementary, and a
       // malformed roster payload must not be able to take down the whole
       // event page for a member who was only reading it.
       setAttendees(Array.isArray(data) ? data : []);
-    } catch {
-      // Supplementary. A real failure here should not put an error toast in
-      // front of a member who was only reading the event.
+    } catch (err: unknown) {
+      // getEventAttendees already turns 403/404 — "you may not see this" — into
+      // an empty list, so anything reaching here is a genuine network or server
+      // failure. Rendering an empty roster for one would tell the member
+      // nobody is coming, which is a wrong answer rather than a safe one, so
+      // the card is suppressed and the failure is recorded.
+      errorTracker.logError(err instanceof Error ? err : new Error(getErrorMessage(err, 'Failed to load attendees')), {
+        eventId,
+        additionalContext: { operation: 'fetchAttendees' },
+      });
       setAttendees([]);
+      setAttendeesFailed(true);
     } finally {
       setAttendeesLoading(false);
     }
@@ -678,6 +697,9 @@ export const EventDetailPage: React.FC = () => {
   // that would hit those endpoints are not rendered at all — an enabled button
   // that always 409s is worse than an absent one.
   const isAttendanceFinalized = Boolean(event.attendance_finalized_at);
+  // Seats taken, which is what max_attendees caps. Falls back to the member
+  // count for payloads predating the aggregate.
+  const occupiedSeats = event.occupied_seats ?? event.going_count ?? 0;
   // No requires_rsvp here, deliberately. That flag means "a response is
   // expected" — it drives the Required row in the sidebar, the deadline
   // countdown and the non-respondent reminder audience — not "responses are
@@ -1501,7 +1523,7 @@ export const EventDetailPage: React.FC = () => {
                 entirely when the API returned nothing, which is also what a
                 403 looks like — a member who may not see the list is not told
                 there is a list. */}
-            {!canManage && attendees.length > 0 && (
+            {!canManage && !attendeesFailed && attendees.length > 0 && (
               <EventAttendeesCard
                 attendees={attendees}
                 loading={attendeesLoading}
@@ -1576,10 +1598,10 @@ export const EventDetailPage: React.FC = () => {
                       </div>
                       {event.max_attendees && (
                         <p className="text-theme-text-muted mt-1 text-xs">
-                          {event.going_count ?? 0} / {event.max_attendees} spots filled
+                          {occupiedSeats} / {event.max_attendees} spots filled
                         </p>
                       )}
-                      {event.max_attendees && (event.going_count ?? 0) >= event.max_attendees && (
+                      {event.max_attendees && occupiedSeats >= event.max_attendees && (
                         <span className="mt-2 inline-flex items-center rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-700 dark:bg-red-500/20 dark:text-red-300">
                           Event Full
                         </span>
@@ -1610,16 +1632,18 @@ export const EventDetailPage: React.FC = () => {
                     )}
                     {event.max_attendees &&
                       (() => {
-                        const goingCount = event.going_count ?? 0;
-                        const pct = Math.min(Math.round((goingCount / event.max_attendees) * 100), 100);
-                        const isFull = goingCount >= event.max_attendees;
+                        // Seats, not members: max_attendees caps seats, so a
+                        // bar drawn from the member count promises room the
+                        // RSVP path will refuse.
+                        const pct = Math.min(Math.round((occupiedSeats / event.max_attendees) * 100), 100);
+                        const isFull = occupiedSeats >= event.max_attendees;
                         const barColor = pct >= 90 ? 'bg-red-800' : pct >= 75 ? 'bg-amber-500' : 'bg-green-500';
                         return (
                           <div>
                             <div className="mb-1 flex justify-between">
                               <p className="text-theme-text-secondary text-sm">Capacity</p>
                               <p className="text-theme-text-primary text-sm font-medium">
-                                {goingCount} / {event.max_attendees}
+                                {occupiedSeats} / {event.max_attendees}
                               </p>
                             </div>
                             <div className="bg-theme-surface h-2 w-full rounded-full">
@@ -1629,7 +1653,7 @@ export const EventDetailPage: React.FC = () => {
                               ></div>
                             </div>
                             <p className="text-theme-text-muted mt-1 text-xs">
-                              {goingCount} / {event.max_attendees} spots filled
+                              {occupiedSeats} / {event.max_attendees} spots filled
                             </p>
                             {isFull && (
                               <span className="mt-2 inline-flex items-center rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-700 dark:bg-red-500/20 dark:text-red-300">
@@ -1817,6 +1841,10 @@ export const EventDetailPage: React.FC = () => {
                   if (event.location) templateData.default_location = event.location;
                   if (event.location_details) templateData.default_location_details = event.location_details;
                   if (event.max_attendees) templateData.max_attendees = event.max_attendees;
+                  // Carried so a template made from a roster-published event
+                  // does not quietly revert to the org default. Assigned
+                  // unconditionally: null is the inherit state, not an absence.
+                  templateData.attendee_visibility = event.attendee_visibility ?? null;
                   if (event.check_in_window_type) templateData.check_in_window_type = event.check_in_window_type;
                   if (event.check_in_minutes_before != null)
                     templateData.check_in_minutes_before = event.check_in_minutes_before;

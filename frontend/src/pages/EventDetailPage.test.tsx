@@ -1149,6 +1149,38 @@ describe('EventDetailPage', () => {
       expect(screen.queryByText('Peanut allergy')).not.toBeInTheDocument();
     });
 
+    it('hides the card when the roster genuinely fails to load', async () => {
+      // getEventAttendees already turns 403/404 into an empty list, so a
+      // rejection here is a real failure. Rendering an empty roster for one
+      // would tell the member nobody is coming, which is a wrong answer rather
+      // than a safe one.
+      vi.mocked(eventService.getEventAttendees).mockRejectedValue(new Error('network'));
+
+      renderWithRouter(<EventDetailPage />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Monthly Business Meeting')).toBeInTheDocument();
+      });
+      expect(screen.queryByRole('heading', { name: /who's going/i })).not.toBeInTheDocument();
+      expect(screen.queryByText(/nobody yet/i)).not.toBeInTheDocument();
+    });
+
+    it('refreshes the roster after the member responds', async () => {
+      // fetchAttendees otherwise runs only on mount, so a member who joined
+      // stayed absent from the list they were looking at until a reload.
+      const user = userEvent.setup();
+      vi.mocked(eventService.createOrUpdateRSVP).mockResolvedValue({ status: 'going' } as never);
+
+      renderWithRouter(<EventDetailPage />);
+
+      await user.click(await screen.findByRole('button', { name: /rsvp now|i'm coming/i }));
+      await user.click(await screen.findByRole('button', { name: /submit rsvp/i }));
+
+      await waitFor(() => {
+        expect(eventService.getEventAttendees).toHaveBeenCalledTimes(2);
+      });
+    });
+
     it('does not fetch the member roster for a manager', async () => {
       // Managers get EventRSVPSection, which is strictly richer. Two rosters
       // on one page reads as a bug.
@@ -1242,8 +1274,6 @@ describe('EventDetailPage', () => {
           status: 'going',
           guest_count: 2,
           notes: 'Bringing the projector',
-          dietary_restrictions: null,
-          accessibility_needs: null,
         },
       });
 
@@ -1253,6 +1283,27 @@ describe('EventDetailPage', () => {
 
       expect(await screen.findByDisplayValue('Bringing the projector')).toBeInTheDocument();
       expect(screen.getByLabelText(/number of guests/i)).toHaveValue(2);
+    });
+
+    it('opens a waitlisted member on Going rather than an unselectable status', async () => {
+      // `waitlisted` is server-generated and absent from allowed_rsvp_statuses,
+      // so seeding it left no radio selected and submitting was rejected as a
+      // disallowed status. A waitlisted member is queued *for* going.
+      const user = userEvent.setup();
+      vi.mocked(eventService.getEvent).mockResolvedValue({
+        ...mockEvent,
+        user_rsvp_status: 'waitlisted',
+        user_rsvp: { status: 'waitlisted', guest_count: 1, notes: null },
+      });
+
+      renderWithRouter(<EventDetailPage />);
+
+      await user.click(await screen.findByRole('button', { name: /update rsvp/i }));
+
+      // Exact name: /going/i would also match "Not Going".
+      const going = await screen.findByRole('radio', { name: 'Going' });
+      expect(going).toBeChecked();
+      expect(screen.getByLabelText(/number of guests/i)).toHaveValue(1);
     });
   });
 });

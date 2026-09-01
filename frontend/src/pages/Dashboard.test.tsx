@@ -463,6 +463,29 @@ describe('Dashboard', () => {
       expect(await screen.findByRole('button', { name: /can.t/i })).toBeInTheDocument();
     });
 
+    it('falls back to a link once the RSVP deadline has passed', async () => {
+      // The API rejects these outright, and a prominent dashboard button that
+      // can never succeed is worse than a link to the event.
+      mockGetEvents.mockResolvedValue([
+        {
+          id: 'evt-1',
+          title: 'Ladder Ops Drill',
+          event_type: 'training',
+          start_datetime: `${inWindow(3)}T14:00:00Z`,
+          end_datetime: `${inWindow(3)}T17:00:00Z`,
+          requires_rsvp: true,
+          rsvp_deadline: '2020-01-01T00:00:00Z',
+          is_mandatory: false,
+          is_cancelled: false,
+        },
+      ]);
+
+      renderWithRouter(<Dashboard />);
+
+      expect(await screen.findByRole('button', { name: /^open$/i })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /^going$/i })).not.toBeInTheDocument();
+    });
+
     it("shows the server's status, not the one that was asked for", async () => {
       // A full event answers a "going" request with "waitlisted". Echoing the
       // request back would tell the member they have a seat they did not get.

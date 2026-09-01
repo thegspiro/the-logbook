@@ -395,16 +395,25 @@ class UserRSVPSummary(UTCResponseBase):
     had typed — and, once guests began consuming capacity, silently released
     the seats their guests were holding.
 
-    Unlike ``EventAttendeeResponse`` this is the caller's *own* record, so the
-    accommodation fields belong here. It must never be used to describe anyone
-    else.
+    Carries the caller's own record, but deliberately NOT their
+    ``dietary_restrictions`` or ``accessibility_needs``. Those are
+    accommodation data, and ``GET /events/{id}`` is a cacheable response — the
+    frontend keeps GETs in an in-memory stale-while-revalidate cache, and
+    nothing excludes ordinary event detail from it. Putting them here turned
+    the app's most-visited endpoint into a PHI-bearing one.
+
+    Their absence costs only that those two boxes start empty when the modal
+    reopens, which is what happened before prefill existed. ``guest_count`` is
+    the field prefill was actually for: without it a member editing a note
+    silently released the seats their guests were holding.
+
+    If these are ever needed on screen, they belong behind an endpoint listed
+    in ``UNCACHEABLE_PREFIXES`` — not here.
     """
 
     status: str
     guest_count: int = 0
     notes: Optional[str] = None
-    dietary_restrictions: Optional[str] = None
-    accessibility_needs: Optional[str] = None
 
     model_config = _response_config
 
@@ -458,6 +467,8 @@ class EventResponse(EventBase, UTCResponseBase):
     # promote_from_waitlist actually promotes in.
     waitlist_count: Optional[int] = None
     user_waitlist_position: Optional[int] = None
+    # Seats taken (sum of 1 + guest_count over going RSVPs). See EventListItem.
+    occupied_seats: Optional[int] = None
 
     # The caller's own RSVP in full, so "Update RSVP" can open prefilled
     # instead of blank. Their own record, so the accommodation fields are fine
@@ -494,6 +505,10 @@ class EventListItem(UTCResponseBase):
     # function, and the card already knows *that* the member is waitlisted
     # from user_rsvp_status. Position lives on the detail response.
     waitlist_count: Optional[int] = None
+    # Seats taken, not members going: a member with two guests fills three.
+    # Capacity UI must use this against max_attendees; going_count remains the
+    # people count.
+    occupied_seats: Optional[int] = None
     user_rsvp_status: Optional[str] = None
 
     # Fields the member-facing list needs to tell an urgent event from a

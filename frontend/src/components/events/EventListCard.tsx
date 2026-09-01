@@ -96,7 +96,9 @@ const EventListCardBase: React.FC<EventListCardProps> = ({
   // what drives the deadline and the Needs You band — not whether responses
   // are accepted at all. A member may always say they are coming, so the only
   // thing that removes the controls is the event being cancelled.
-  const rsvpAvailable = !event.is_cancelled;
+  // is_draft matters because EventsPage includes drafts for managers and the
+  // API refuses every draft RSVP outright, so the controls could never succeed.
+  const rsvpAvailable = !event.is_cancelled && !event.is_draft;
   const showRsvpPair = rsvpAvailable && (!event.user_rsvp_status || isChangingRsvp);
 
   const stripMeta = ((): string | null => {
@@ -119,7 +121,9 @@ const EventListCardBase: React.FC<EventListCardProps> = ({
   const rosterLine = ((): string | null => {
     if (event.max_attendees && event.max_attendees > 0) {
       if (rosterFull && !event.user_rsvp_status) return "Roster full — you'd be waitlisted";
-      return `${event.going_count ?? 0} of ${event.max_attendees} slots filled`;
+      // Seats, matching what max_attendees caps — see isRosterFull.
+      const taken = event.occupied_seats ?? event.going_count ?? 0;
+      return `${taken} of ${event.max_attendees} slots filled`;
     }
     return `${event.going_count ?? 0} going`;
   })();

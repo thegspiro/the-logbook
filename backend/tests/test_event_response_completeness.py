@@ -55,6 +55,9 @@ CALLER_SUPPLIED = {
     "waitlist_count",
     "user_waitlist_position",
     "user_rsvp",
+    # Seats taken, aggregated from the eager-loaded rsvps on the detail
+    # endpoint. Like the counts above it is not an Event column.
+    "occupied_seats",
 }
 
 

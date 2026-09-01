@@ -115,6 +115,24 @@ class TestRsvpGuards:
         assert rsvp is None
         assert err == "This event does not allow guests"
 
+    async def test_a_legacy_guest_party_can_still_decline(self):
+        """The guard is scoped to a going response, and for a reason.
+
+        Existing installations hold rows with guests on allow_guests=false
+        events, because the old code never enforced the flag. The modal
+        prefills that historical count, so an unconditional guard rejected the
+        member's decline outright and left them holding seats they had tried to
+        give back.
+        """
+        db = _db([_one(_event(allow_guests=False)), _one(None)])
+        rsvp, err = await self._svc(db).create_or_update_rsvp(
+            "e1", "u1", RSVPCreate(status="not_going", guest_count=2), "org-1"
+        )
+        assert err is None
+        assert rsvp is not None
+        # And the stale party is zeroed, so it stops occupying seats.
+        assert rsvp.guest_count == 0
+
     async def test_zero_guests_is_fine_when_the_event_disallows_them(self):
         """The guard keys off the incoming count, so the common path is untouched."""
         db = _db([_one(_event(allow_guests=False)), _one(None)])
@@ -230,6 +248,133 @@ class TestRsvpCapacity:
         )
         assert err is None
         assert rsvp.status == "going"
+
+
+class TestSeatReleaseTriggersPromotion:
+    """Promotion fires whenever this write frees seats, not only on a decline.
+
+    Three paths release capacity and only the first used to be covered:
+    declining, lowering a guest count while staying going, and being waitlisted
+    after asking for a larger party than fits. Missing the latter two stranded
+    waitlisted members behind seats that were already empty.
+    """
+
+    @staticmethod
+    def _svc(db):
+        svc = EventService(db)
+        svc._evaluate_session_phase_warning = AsyncMock(return_value=None)
+        svc.promote_from_waitlist = AsyncMock(return_value=None)
+        return svc
+
+    def _existing(self, guest_count, status=RSVPStatus.GOING):
+        return SimpleNamespace(
+            id="r1",
+            status=status,
+            guest_count=guest_count,
+            notes=None,
+            dietary_restrictions=None,
+            accessibility_needs=None,
+            updated_at=None,
+        )
+
+    async def test_lowering_a_guest_count_promotes(self):
+        """3 seats down to 1 frees two, without the status ever changing."""
+        ev = _event(max_attendees=10)
+        db = _db([_one(ev), _one(self._existing(2)), _scalar(4)])
+        svc = self._svc(db)
+        await svc.create_or_update_rsvp(
+            "e1", "u1", RSVPCreate(status="going", guest_count=0), "org-1"
+        )
+        svc.promote_from_waitlist.assert_awaited_once()
+
+    async def test_raising_a_guest_count_does_not_promote(self):
+        ev = _event(max_attendees=10)
+        db = _db([_one(ev), _one(self._existing(0)), _scalar(1)])
+        svc = self._svc(db)
+        await svc.create_or_update_rsvp(
+            "e1", "u1", RSVPCreate(status="going", guest_count=2), "org-1"
+        )
+        svc.promote_from_waitlist.assert_not_awaited()
+
+    async def test_declining_still_promotes(self):
+        ev = _event(max_attendees=10)
+        db = _db([_one(ev), _one(self._existing(1))])
+        svc = self._svc(db)
+        await svc.create_or_update_rsvp(
+            "e1", "u1", RSVPCreate(status="not_going"), "org-1"
+        )
+        svc.promote_from_waitlist.assert_awaited_once()
+
+    async def test_being_waitlisted_for_a_larger_party_promotes(self):
+        """The seats they held are released even though they asked for more.
+
+        A member going alone in a full event who then asks to bring two guests
+        is waitlisted — and the one seat they had is now free, which is exactly
+        the case that used to strand the queue.
+        """
+        ev = _event(max_attendees=5)
+        db = _db([_one(ev), _one(self._existing(0)), _scalar(4)])
+        svc = self._svc(db)
+        rsvp, err = await svc.create_or_update_rsvp(
+            "e1", "u1", RSVPCreate(status="going", guest_count=2), "org-1"
+        )
+        assert err is None
+        assert rsvp.status == RSVPStatus.WAITLISTED
+        svc.promote_from_waitlist.assert_awaited_once()
+
+
+class TestRsvpToSeries:
+    """The series path must accept the same responses the single-event path does.
+
+    It carried its own `if not event.requires_rsvp: continue`, so on an
+    optional recurring event "Apply to all future events in this series"
+    iterated every occurrence, skipped every one, reported zero updated, and
+    saved nothing at all — including the response for the event the member was
+    actually looking at.
+    """
+
+    @staticmethod
+    def _series_db(events):
+        db = MagicMock()
+        scalars = MagicMock(all=MagicMock(return_value=events))
+        first = MagicMock(scalars=MagicMock(return_value=scalars))
+        # The series query, then one existing-RSVP lookup per occurrence.
+        db.execute = AsyncMock(side_effect=[first] + [_one(None)] * len(events))
+        db.add = MagicMock()
+        db.commit = AsyncMock()
+        return db
+
+    async def test_optional_occurrences_are_included(self):
+        events = [
+            _event(requires_rsvp=False),
+            _event(requires_rsvp=False),
+        ]
+        for index, ev in enumerate(events):
+            ev.id = f"e{index}"
+            ev.attendance_finalized_at = None
+        db = self._series_db(events)
+
+        count = await EventService(db).rsvp_to_series(
+            "parent-1", "u1", "org-1", RSVPCreate(status="going")
+        )
+
+        assert count == 2
+        assert db.add.call_count == 2
+
+    async def test_a_finalized_occurrence_is_still_skipped(self):
+        """The only per-occurrence skip that survives."""
+        events = [_event(requires_rsvp=False), _event(requires_rsvp=False)]
+        for index, ev in enumerate(events):
+            ev.id = f"e{index}"
+            ev.attendance_finalized_at = None
+        events[0].attendance_finalized_at = datetime.now(tz.utc)
+        db = self._series_db(events)
+
+        count = await EventService(db).rsvp_to_series(
+            "parent-1", "u1", "org-1", RSVPCreate(status="going")
+        )
+
+        assert count == 1
 
 
 class TestPromoteFromWaitlist:

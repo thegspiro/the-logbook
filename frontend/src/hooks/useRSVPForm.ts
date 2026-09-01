@@ -55,11 +55,17 @@ export const useRSVPForm = ({ eventId, event, onSuccess }: UseRSVPFormOptions) =
   const openModal = useCallback(() => {
     const existing = event?.user_rsvp;
     if (existing) {
-      setRsvpStatus(existing.status);
+      // `waitlisted` is server-generated and is normally absent from
+      // allowed_rsvp_statuses, so seeding it would leave no radio selected and
+      // submitting would be rejected as a disallowed status. A waitlisted
+      // member is queued *for* going, so that is what their form opens on.
+      setRsvpStatus(existing.status === RSVPStatusEnum.WAITLISTED ? RSVPStatusEnum.GOING : existing.status);
       setGuestCount(existing.guest_count ?? 0);
       setRsvpNotes(existing.notes ?? '');
-      setRsvpDietaryRestrictions(existing.dietary_restrictions ?? '');
-      setRsvpAccessibilityNeeds(existing.accessibility_needs ?? '');
+      // Accommodation fields are not echoed back by the API — they are PHI and
+      // event detail is cacheable — so they start empty, as they always did.
+      setRsvpDietaryRestrictions('');
+      setRsvpAccessibilityNeeds('');
       setRsvpApplyToSeries(false);
       setSubmitError(null);
     } else {

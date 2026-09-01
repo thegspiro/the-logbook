@@ -310,7 +310,27 @@ class EventService:
             .label("waitlist_count")
         )
 
-        columns = [Event, rsvp_count_sq, going_count_sq, waitlist_count_sq]
+        # Seats occupied, as opposed to members going: a member with two guests
+        # fills three places. The cap is enforced in seats, so any UI that talks
+        # about capacity ("N of M slots filled", roster-full) has to use this,
+        # or it will promise room the RSVP path then refuses. going_count stays
+        # the member count, which is what "N going" means.
+        occupied_seats_sq = (
+            select(func.coalesce(func.sum(1 + EventRSVP.guest_count), 0))
+            .where(EventRSVP.event_id == Event.id)
+            .where(EventRSVP.status == RSVPStatus.GOING)
+            .correlate(Event)
+            .scalar_subquery()
+            .label("occupied_seats")
+        )
+
+        columns = [
+            Event,
+            rsvp_count_sq,
+            going_count_sq,
+            waitlist_count_sq,
+            occupied_seats_sq,
+        ]
 
         # Optionally include current user's RSVP status and attendance
         if user_id:
@@ -403,16 +423,17 @@ class EventService:
                 "rsvp_count": row[1] or 0,
                 "going_count": row[2] or 0,
                 "waitlist_count": row[3] or 0,
+                "occupied_seats": row[4] or 0,
                 "user_rsvp_status": None,
                 "user_attended": False,
             }
             if user_id:
-                raw_status = row[4]
+                raw_status = row[5]
                 if raw_status is not None:
                     item["user_rsvp_status"] = (
                         raw_status.value if hasattr(raw_status, "value") else raw_status
                     )
-                item["user_attended"] = bool(row[5])
+                item["user_attended"] = bool(row[6])
             items.append(item)
 
         await self._annotate_list_items(items, organization_id)
@@ -1266,10 +1287,22 @@ class EventService:
         # nowhere: guest_count was accepted on every event regardless, and then
         # left out of the capacity count below, so an event that forbade guests
         # could be filled with them and a capped event could be oversubscribed.
-        # Gate on the incoming value rather than the stored row so a member who
-        # already has guests on record can still edit them back down to zero.
-        if rsvp_data.guest_count and not event.allow_guests:
-            return None, "This event does not allow guests"
+        # Scoped to a going response, for two reasons. A member declining is not
+        # asking to bring anybody, and existing installations can hold rows with
+        # guests on an allow_guests=false event because the old code never
+        # enforced the flag — the modal prefills that historical count, so an
+        # unconditional guard rejected their decline outright and left them
+        # holding seats they had tried to give back.
+        requested_guests = rsvp_data.guest_count or 0
+        if rsvp_data.status == RSVPStatus.GOING.value:
+            if requested_guests and not event.allow_guests:
+                return None, "This event does not allow guests"
+        else:
+            # A party that is not attending occupies no seats. Normalizing here
+            # rather than leaving the stale count is what lets a legacy guest
+            # party actually release its capacity by declining.
+            requested_guests = 0
+            rsvp_data = rsvp_data.model_copy(update={"guest_count": 0})
 
         # Soft pipeline phase gate — warn (overridable) when RSVPing to a session
         # ahead of the member's current phase. Only when actually attending.
@@ -1285,6 +1318,15 @@ class EventService:
             .where(EventRSVP.user_id == str(user_id))
         )
         existing_rsvp = existing_result.scalar_one_or_none()
+
+        # Seats this member held before the write, for the promotion decision
+        # below. Reducing a guest count while staying "going" frees capacity
+        # just as surely as declining does.
+        previous_seats = (
+            1 + (existing_rsvp.guest_count or 0)
+            if existing_rsvp and existing_rsvp.status == RSVPStatus.GOING
+            else 0
+        )
 
         old_status = None
         if existing_rsvp:
@@ -1313,9 +1355,8 @@ class EventService:
         # snapshot taken at this transaction's first read, so it can still
         # report the tally from before the RSVP that beat us committed. The
         # count below is a locking read for that reason.
-        old_status_was_going = (
-            existing_rsvp and existing_rsvp.status == RSVPStatus.GOING
-        )
+        # (previous_seats above already records what this member held, which is
+        # what the promotion decision after the commit compares against.)
         if rsvp_data.status == RSVPStatus.GOING.value and event.max_attendees:
             # Seats, not rows: a member bringing two guests occupies three
             # places. func.sum over (1 + guest_count) rather than func.count for
@@ -1371,12 +1412,20 @@ class EventService:
         await self.db.commit()
         await self.db.refresh(rsvp)
 
-        # Auto-promote from waitlist if someone changed from going to not_going
-        if (
-            old_status_was_going
-            and rsvp_data.status != RSVPStatus.GOING.value
-            and event.max_attendees
-        ):
+        # Promote whenever this write *released* seats — not merely when the
+        # status moved away from going. Three paths free capacity and only the
+        # first used to be covered: declining, lowering a guest count while
+        # staying going, and being waitlisted after asking for a larger party
+        # than fits. Missing the latter two stranded waitlisted members behind
+        # seats that were already empty, until some unrelated action happened
+        # to trigger promotion.
+        final_status = (
+            rsvp.status.value if hasattr(rsvp.status, "value") else rsvp.status
+        )
+        current_seats = (
+            1 + (rsvp.guest_count or 0) if final_status == RSVPStatus.GOING.value else 0
+        )
+        if event.max_attendees and current_seats < previous_seats:
             await self.promote_from_waitlist(event_id, organization_id)
 
         return rsvp, None
@@ -1585,8 +1634,10 @@ class EventService:
 
         rsvp_count = 0
         for event in series_events:
-            if not event.requires_rsvp:
-                continue
+            # No requires_rsvp gate, matching create_or_update_rsvp: the flag
+            # means a response is expected, not that one is accepted. Leaving
+            # it here made "apply to all future events" on an optional
+            # recurring event report zero updated and save nothing at all.
 
             # A finalized occurrence is skipped rather than failing the batch —
             # the member is answering for the rest of the series, not asking to

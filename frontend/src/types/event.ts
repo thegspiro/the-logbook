@@ -81,6 +81,8 @@ export interface Event {
    * queue (1-based). Position is null unless the caller is waitlisted. */
   waitlist_count?: number | null;
   user_waitlist_position?: number | null;
+  /** Seats taken. See EventListItem.occupied_seats. */
+  occupied_seats?: number | null;
 
   /** The caller's own RSVP, so the modal can open prefilled rather than
    * resetting and silently discarding what they had entered. */
@@ -89,15 +91,15 @@ export interface Event {
 
 /** The current user's own RSVP, echoed back on the event detail response.
  *
- * This is their own record, which is why it carries the accommodation fields
- * that {@link EventAttendee} deliberately does not. Never use it to describe
- * anyone else. */
+ * Deliberately carries neither dietary restrictions nor accessibility needs.
+ * Event detail is a cacheable GET, and putting accommodation data on it made
+ * the app's most-visited endpoint PHI-bearing. Those two fields simply start
+ * empty when the modal reopens, as they did before prefill existed;
+ * `guest_count` is the one prefill was actually for. */
 export interface UserRSVP {
   status: RSVPStatus;
   guest_count: number;
   notes?: string | null;
-  dietary_restrictions?: string | null;
-  accessibility_needs?: string | null;
 }
 
 /** One row of the member-visible going list.
@@ -135,6 +137,10 @@ export interface EventListItem {
    * list payload — it needs a window function per row, and the card already
    * knows the member is waitlisted from user_rsvp_status. */
   waitlist_count?: number | null;
+  /** Seats taken (1 + guest_count per going RSVP), which is what
+   * `max_attendees` caps. Capacity UI uses this; `going_count` is the people
+   * count. */
+  occupied_seats?: number | null;
   user_rsvp_status?: RSVPStatus;
 
   /**

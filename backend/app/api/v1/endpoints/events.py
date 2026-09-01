@@ -322,6 +322,7 @@ def _to_list_item(row: dict) -> EventListItem:
         rsvp_count=row["rsvp_count"],
         going_count=row["going_count"],
         waitlist_count=row.get("waitlist_count"),
+        occupied_seats=row.get("occupied_seats"),
         user_rsvp_status=row["user_rsvp_status"],
         rsvp_deadline=event.rsvp_deadline,
         max_attendees=event.max_attendees,
@@ -1002,6 +1003,13 @@ async def get_event(
         key=lambda r: r.responded_at,
     )
     waitlist_count = len(waitlisted)
+    # Seats, not members: the cap counts 1 + guest_count per going RSVP, so the
+    # capacity bar has to as well or it reports room the RSVP path will refuse.
+    occupied_seats = sum(
+        1 + (r.guest_count or 0)
+        for r in (event.rsvps or [])
+        if r.status == RSVPStatus.GOING
+    )
     user_waitlist_position = next(
         (
             index + 1
@@ -1048,6 +1056,7 @@ async def get_event(
         ),
         waitlist_count=waitlist_count,
         user_waitlist_position=user_waitlist_position,
+        occupied_seats=occupied_seats,
         user_rsvp=(
             UserRSVPSummary(
                 status=(
@@ -1057,8 +1066,6 @@ async def get_event(
                 ),
                 guest_count=user_rsvp.guest_count or 0,
                 notes=user_rsvp.notes,
-                dietary_restrictions=user_rsvp.dietary_restrictions,
-                accessibility_needs=user_rsvp.accessibility_needs,
             )
             if user_rsvp
             else None
