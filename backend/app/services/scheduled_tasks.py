@@ -3917,6 +3917,11 @@ async def run_recover_stranded_message_deliveries(db: AsyncSession) -> Dict[str,
                 await db.execute(
                     select(DepartmentMessage).where(
                         DepartmentMessage.id == message_id,
+                        # Both, matching deliver_department_message: a message
+                        # leadership deactivated is gone from the live inbox,
+                        # and recovering a claim is no reason to mail out a
+                        # notice they took down.
+                        DepartmentMessage.is_active.is_(True),
                         DepartmentMessage.deleted_at.is_(None),
                     )
                 )

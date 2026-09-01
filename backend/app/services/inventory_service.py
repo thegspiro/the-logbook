@@ -5809,13 +5809,24 @@ class InventoryService:
                     ).strip()
 
             req.status = ReturnRequestStatus.INSPECTED
-            item.condition = condition
             unsafe = condition in {
                 ItemCondition.POOR,
                 ItemCondition.DAMAGED,
                 ItemCondition.OUT_OF_SERVICE,
             }
-            item.status = ItemStatus.IN_MAINTENANCE if unsafe else ItemStatus.AVAILABLE
+            # A pool row is a catalog entry for many physical units, not one of
+            # them, so one member's damaged glove says nothing about the other
+            # ninety-nine. Copying the observed condition onto the row used to
+            # be merely wrong on the screen; with issuance now refusing an
+            # unsafe status or condition, it would take the whole pool out of
+            # service. The returned units are already out of the issuable
+            # balance — they are written off rather than restored — and the
+            # issuance row carries the condition that was observed.
+            if item.tracking_type != TrackingType.POOL:
+                item.condition = condition
+                item.status = (
+                    ItemStatus.IN_MAINTENANCE if unsafe else ItemStatus.AVAILABLE
+                )
 
             chosen = follow_up
             if chosen == "auto":

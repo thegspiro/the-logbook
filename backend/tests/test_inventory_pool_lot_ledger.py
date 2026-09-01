@@ -510,6 +510,37 @@ class TestTheReviewedReturnUsesTheSameLedger:
         )
         assert item.quantity_issued == 0
 
+    async def test_one_damaged_return_does_not_take_the_pool_out_of_service(
+        self, db_session
+    ):
+        """A pool row is a catalog entry for many units, not one of them.
+
+        Copying a returned unit's observed condition onto that row used to be
+        merely wrong on the screen. With issuance refusing an unsafe status or
+        condition, it takes the whole pool down: one damaged glove returned
+        from a hundred stops the other ninety-nine being issued.
+        """
+        org = await _org(db_session)
+        user = await _user(db_session, org)
+        item = await _item(db_session, org, quantity=0)
+        await _lot(db_session, org, item, quantity=100)
+
+        issuance, err = await _issue(db_session, org, user, item, 2)
+        assert err is None
+
+        req = await _return_request(db_session, org, user, item, issuance, 1)
+        ok, err = await _review(db_session, org, user, req, 1, condition="damaged")
+        assert ok, err
+
+        await db_session.refresh(item)
+        assert item.status != ItemStatus.IN_MAINTENANCE
+        assert item.condition != ItemCondition.DAMAGED
+
+        # The real assertion: the untouched stock is still issuable.
+        again, err = await _issue(db_session, org, user, item, 5)
+        assert err is None, err
+        assert again is not None
+
     async def test_an_unsafe_return_is_not_put_back_on_the_shelf(self, db_session):
         """Same rule as the direct path: a lot has no condition of its own, so
         a damaged unit credited back to its lot is issuable again — at the

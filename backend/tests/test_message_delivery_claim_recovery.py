@@ -167,6 +167,35 @@ class TestTheSweepFindsThem:
         assert result["messages"] == 1
         assert calls == [(str(message.id), {str(stranded_member.id)})]
 
+    async def test_a_deactivated_message_is_not_re_delivered(
+        self, db_session, monkeypatch
+    ):
+        """Recovering a claim is no reason to mail out a notice leadership
+        took down. The normal entry point requires an active message; the
+        sweep has to apply the same rule."""
+        from app.services import scheduled_tasks
+
+        org = await _org(db_session)
+        author = await _user(db_session, org)
+        member = await _user(db_session, org)
+        message = await _message(db_session, org, author)
+        message.is_active = False
+        await _claim_row(db_session, message, member)
+
+        calls = []
+
+        async def _capture(self, msg, only_user_ids=None):
+            calls.append(str(msg.id))
+
+        monkeypatch.setattr(MessageDeliveryService, "deliver", _capture)
+
+        result = await scheduled_tasks.run_recover_stranded_message_deliveries(
+            db_session
+        )
+
+        assert result["messages"] == 0
+        assert calls == []
+
     async def test_a_fresh_claim_is_not_swept(self, db_session, monkeypatch):
         from app.services import scheduled_tasks
 
