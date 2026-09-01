@@ -6,7 +6,11 @@ import { renderWithRouter } from '../../../test/utils';
 const mockGetEquipmentCheckTemplates = vi.fn();
 vi.mock('../../inventory/services/equipmentCheckApi', () => ({
   equipmentCheckService: {
-    getEquipmentCheckTemplates: (...a: unknown[]) => mockGetEquipmentCheckTemplates(...a),
+    // `as unknown` is the documented store-mock shape (CLAUDE.md, Frontend
+    // Test Patterns): a bare vi.fn() returns `any`, which trips
+    // @typescript-eslint/no-unsafe-return and spends one of the ten warnings
+    // the lint budget allows.
+    getEquipmentCheckTemplates: (...a: unknown[]) => mockGetEquipmentCheckTemplates(...a) as unknown,
   },
 }));
 
