@@ -46,6 +46,23 @@ def _sanitize_header(value: str) -> str:
     return _HEADER_INJECTION_RE.sub("", value)
 
 
+# ``MessageHistory.to_email`` is String(320) — one address' worth. A batch send
+# joins every recipient into that one column, so a handful of members with long
+# addresses overflows it and, under a strict sql_mode, the row is rejected
+# outright. The true figure is already kept in ``recipient_count``, so the
+# column only has to stay readable, not exhaustive.
+_TO_EMAIL_MAX = 320
+
+
+def _summarize_recipients(to_emails: List[str]) -> str:
+    """The recipient list for MessageHistory, guaranteed to fit the column."""
+    joined = ", ".join(to_emails)
+    if len(joined) <= _TO_EMAIL_MAX:
+        return joined
+    suffix = f" (+{len(to_emails) - 1} more)"
+    return to_emails[0][: _TO_EMAIL_MAX - len(suffix)] + suffix
+
+
 def _redact_email(address: str) -> str:
     """Redact an email address for safe logging (HIPAA)."""
     if "@" in address:
@@ -1205,7 +1222,7 @@ class EmailService:
         history = MessageHistory(
             id=generate_uuid(),
             organization_id=org_id,
-            to_email=", ".join(to_emails),
+            to_email=_summarize_recipients(to_emails),
             cc_emails=cc_emails,
             bcc_emails=bcc_emails,
             subject=subject,
@@ -1218,8 +1235,15 @@ class EmailService:
             history.error_message = (
                 f"Failed to deliver to all {failure_count} recipient(s)"
             )
-        db.add(history)
-        await db.flush()
+        # Inside a SAVEPOINT so a rejected insert cannot take the caller's
+        # session with it. Callers treat history as best-effort and swallow the
+        # exception, but a failed flush leaves the shared session unusable, so
+        # everything the caller does *after* the send — recording per-member
+        # delivery status, and then the urgent-SMS escalation query — fails
+        # too. The email went out and the follow-on work silently did not.
+        async with db.begin_nested():
+            db.add(history)
+            await db.flush()
         self.last_message_history_id = history.id
 
     async def render_ballot_notification(

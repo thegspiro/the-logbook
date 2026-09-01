@@ -409,13 +409,13 @@ class MessageDeliveryService:
             # deliver()), which is the invariant that makes the filter safe.
             from app.services.notification_channels import (
                 SmsAlert,
-                resolve_sms_recipients,
+                resolve_sms_deliveries,
             )
 
-            numbers = await resolve_sms_recipients(
+            deliveries = await resolve_sms_deliveries(
                 self.db, recipients, SmsAlert.URGENT_DEPARTMENT_MESSAGE
             )
-            if not numbers:
+            if not deliveries:
                 return
 
             from app.core.security import is_rate_limited
@@ -441,19 +441,13 @@ class MessageDeliveryService:
             from app.services.sms_service import SMSService
 
             sms = SMSService()
-            # A list of pairs, not a dict keyed on the number: two members
-            # sharing a phone (a married couple on one handset is ordinary in a
-            # volunteer department) collapsed to one entry, and the delivery
-            # row was attributed to whichever of them came last — including one
-            # who had never given TCPA consent.
-            remaining = list(numbers)
-            pairs: List[tuple] = []
-            for user in recipients:
-                number = getattr(user, "mobile", None) or getattr(user, "phone", None)
-                if number in remaining:
-                    remaining.remove(number)
-                    pairs.append((number, str(user.id)))
-            for number, user_id in pairs:
+            # The identity comes back paired with the number rather than being
+            # recovered from it. Two members sharing one handset is ordinary in
+            # a volunteer department, and searching the roster for whoever
+            # carries a number finds the first of them — so when only the
+            # second consented, the text and its TCPA audit row were filed
+            # against the member who had refused.
+            for user_id, number in deliveries:
                 attempt = await self._claim_delivery(message.id, user_id, "sms")
                 if attempt is None:
                     continue

@@ -13,6 +13,7 @@ import pytest
 from app.services.consent_service import ConsentService
 from app.services.notification_channels import (
     SmsAlert,
+    resolve_sms_deliveries,
     resolve_sms_recipients,
     wants_channel,
 )
@@ -104,6 +105,46 @@ class TestOptInGates:
         users = [_user("u1", mobile="+1555", prefs={"email_notifications": True})]
         with _patch_sms_enabled(), _patch_consent("u1"):
             assert await resolve_sms_recipients(MagicMock(), users, URGENT) == ["+1555"]
+
+
+class TestSharedPhoneNumbers:
+    """A number does not identify a member, so it must not be used to find one.
+
+    Two members on one handset is ordinary in a volunteer department. The
+    delivery path used to get back numbers only and recover the member by
+    searching the roster for whoever carried each one — which finds the first
+    such member. When only the second consented, the text and its TCPA audit
+    row were filed against the member who had refused, and the member who
+    agreed got no record at all.
+    """
+
+    async def test_the_consenting_member_is_the_one_paired_with_the_number(self):
+        shared = "+15550001"
+        users = [
+            _user("refused", mobile=shared),
+            _user("consented", mobile=shared),
+        ]
+        with _patch_sms_enabled(), _patch_consent("consented"):
+            deliveries = await resolve_sms_deliveries(MagicMock(), users, URGENT)
+
+        assert deliveries == [("consented", shared)]
+
+    async def test_both_members_get_their_own_pair_when_both_consented(self):
+        shared = "+15550001"
+        users = [_user("a", mobile=shared), _user("b", mobile=shared)]
+        with _patch_sms_enabled(), _patch_consent("a", "b"):
+            deliveries = await resolve_sms_deliveries(MagicMock(), users, URGENT)
+
+        assert deliveries == [("a", shared), ("b", shared)]
+
+    async def test_resolve_sms_recipients_still_returns_bare_numbers(self):
+        """The older helper keeps its contract for callers that only send."""
+        users = [_user("u1", mobile="+1555"), _user("u2", phone="+1666")]
+        with _patch_sms_enabled(), _patch_consent("u1", "u2"):
+            assert await resolve_sms_recipients(MagicMock(), users, URGENT) == [
+                "+1555",
+                "+1666",
+            ]
 
 
 class TestWantsChannel:

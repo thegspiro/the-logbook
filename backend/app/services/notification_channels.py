@@ -34,7 +34,7 @@ texts.
 """
 
 import enum
-from typing import Any, List, Optional, Sequence
+from typing import Any, List, Optional, Sequence, Tuple
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -62,21 +62,25 @@ def wants_channel(preferences: Optional[dict], key: str) -> bool:
     return (preferences or {}).get(key, True) is not False
 
 
-async def resolve_sms_recipients(
+async def resolve_sms_deliveries(
     db: AsyncSession,
     users: Sequence[Any],
     alert: SmsAlert,
-) -> List[str]:
-    """Phone numbers that may be texted for *alert*, in *users* order.
+) -> List[Tuple[str, str]]:
+    """``(user_id, number)`` for each recipient that may be texted for *alert*.
 
-    Returns an empty list — meaning "email only, and that is the correct
-    outcome" — when the alert is not SMS-eligible, Twilio is not configured,
-    or no recipient cleared both opt-in gates.
+    Same gates as :func:`resolve_sms_recipients`, which is this function with
+    the identities dropped. Prefer this one wherever the caller records who was
+    texted.
 
-    Raises ``ValueError`` if *alert* is not an :class:`SmsAlert` member. A
-    plain string reaching here means a call site invented its own alert name to
-    get around the allowlist; fan-out callers guard their channel methods, so
-    this surfaces as a logged warning and no texts, not a failed notification.
+    **A phone number does not identify a member.** Two members sharing one
+    handset is ordinary in a volunteer department, and once the number is all
+    that comes back, the only way to name the recipient again is to search the
+    roster for whoever carries it — which finds the *first* such member, not
+    the one the number was returned for. When only the second of them consented,
+    that attributes the text, and its TCPA audit row, to the member who
+    refused, and leaves the member who agreed with no record at all. Keeping
+    the pair together is what makes that unrepresentable.
     """
     if not isinstance(alert, SmsAlert):
         raise ValueError(
@@ -100,11 +104,36 @@ async def resolve_sms_recipients(
     )
 
     return [
-        number
+        (str(u.id), number)
         for u in users
         if (number := (getattr(u, "mobile", None) or getattr(u, "phone", None)))
         and str(u.id) in consented
         and wants_channel(
             getattr(u, "notification_preferences", None), "sms_notifications"
         )
+    ]
+
+
+async def resolve_sms_recipients(
+    db: AsyncSession,
+    users: Sequence[Any],
+    alert: SmsAlert,
+) -> List[str]:
+    """Phone numbers that may be texted for *alert*, in *users* order.
+
+    Returns an empty list — meaning "email only, and that is the correct
+    outcome" — when the alert is not SMS-eligible, Twilio is not configured,
+    or no recipient cleared both opt-in gates.
+
+    Raises ``ValueError`` if *alert* is not an :class:`SmsAlert` member. A
+    plain string reaching here means a call site invented its own alert name to
+    get around the allowlist; fan-out callers guard their channel methods, so
+    this surfaces as a logged warning and no texts, not a failed notification.
+
+    For a caller that records *who* was texted, use
+    :func:`resolve_sms_deliveries` instead — see the note there on why a number
+    cannot be turned back into a member.
+    """
+    return [
+        number for _user_id, number in await resolve_sms_deliveries(db, users, alert)
     ]
