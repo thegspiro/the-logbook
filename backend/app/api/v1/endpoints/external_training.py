@@ -47,9 +47,7 @@ from app.schemas.training import (
     SyncResponse,
 )
 from app.schemas.training import SyncStatus as SyncStatusEnum
-from app.schemas.training import (
-    TestConnectionResponse,
-)
+from app.schemas.training import TestConnectionResponse
 from app.services.external_training_service import ExternalTrainingSyncService
 from app.utils.model_updates import apply_updates
 from app.utils.org_scoping import is_in_org

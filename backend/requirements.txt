@@ -155,9 +155,11 @@ flake8==7.3.0
 flake8-pytest-style==2.2.0
 mypy==2.3.1
 isort==9.0.1
-# pylint 3.x caps isort at <7, which makes this file unresolvable against the
-# isort pin above. 4.x widens the cap to <9.
-pylint==4.0.7
+# pylint declares a hard upper bound on isort, so the two only move together:
+# an isort bump on its own makes this file unresolvable. 3.x capped it at <7,
+# 4.0.7 at <9, and 4.0.8 widens it to <10. Raise pylint past the cap in the
+# same commit that raises isort.
+pylint==4.0.8
 
 # ============================================
 # Utilities
