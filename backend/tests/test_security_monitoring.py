@@ -14,7 +14,12 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from app.services.security_monitoring import SecurityMonitoringService
+from app.services.security_monitoring import (
+    AlertType,
+    SecurityAlert,
+    SecurityMonitoringService,
+    ThreatLevel,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -1095,6 +1100,85 @@ class TestSessionHijackConcurrentInterleaving:
             "call B's observed-IP entry was erased from the forensic log by "
             "call A's stale post-await write"
         )
+
+
+@pytest.mark.asyncio
+class TestAddAlertSavepointIsolation:
+    """PR #2133 round 2 (Codex): a failure persisting a `SecurityAlertRecord`
+    inside `_add_alert` was caught by its own `except Exception`, but that
+    catch did nothing to undo the failure's effect on the caller's shared
+    `AsyncSession`. Once a real `flush()` fails against the database (not
+    merely a Python-level exception -- the DBAPI transaction itself is left
+    needing a rollback), SQLAlchemy refuses every further operation on that
+    Session, including `commit()`, until it is rolled back. Every caller of
+    `detect_brute_force` (`login`, `mfa_login` in app/api/v1/endpoints/
+    auth.py) unconditionally commits shortly afterward to persist
+    `failed_login_attempts`/lockout state -- so a transient alert-write
+    failure, though caught right here, surfaced as an unhandled 500 on the
+    caller's own later commit instead of the endpoint's intended 401, and
+    lost every side effect (failed_login_attempts, suspicious-IP recording)
+    the caller had already staged in the same request.
+
+    Reproduced with a REAL constraint violation against the real test
+    database (SecurityAlertRecord.description is NOT NULL; the in-memory
+    SecurityAlert dataclass does not enforce that at construction, so it can
+    carry None through to the flush) rather than a mocked flush() raising a
+    plain exception -- a mock never touches the DBAPI transaction, so it
+    could not reproduce the actual "session needs rollback" state this bug
+    depends on.
+
+    Fixed by wrapping the write in `db.begin_nested()` (a SAVEPOINT), the
+    same pattern `AuditLogger.create_log_entry` (app/core/audit.py) already
+    uses: a failure there rolls back only the savepoint, leaving the outer
+    session/transaction perfectly usable.
+    """
+
+    async def test_alert_write_failure_does_not_poison_the_callers_commit(
+        self, db_session
+    ):
+        from sqlalchemy import select
+
+        from app.models.security_alert import SecurityAlertRecord
+        from app.models.user import Organization
+
+        svc = _svc()
+        alert = SecurityAlert(
+            id="alert-savepoint-test",
+            alert_type=AlertType.BRUTE_FORCE,
+            threat_level=ThreatLevel.HIGH,
+            timestamp=datetime.now(timezone.utc),
+            # NOT NULL at the DB level; the dataclass has no runtime check,
+            # so this reaches flush() and fails there, same as any other
+            # transient write failure would.
+            description=None,  # type: ignore[arg-type]
+            source_ip="203.0.113.9",
+            user_id=None,
+        )
+
+        # _add_alert must swallow the failure -- it already did, that isn't
+        # new -- but the caller's session must remain usable afterward.
+        await svc._add_alert(db_session, alert)
+
+        # Stand in for the caller's own subsequent write (e.g.
+        # failed_login_attempts) and its own unconditional commit. Before the
+        # fix, this raises sqlalchemy.exc.PendingRollbackError because the
+        # failed flush above left the whole session -- not just the alert
+        # write -- needing a rollback.
+        db_session.add(
+            Organization(
+                name="Savepoint Test Org",
+                organization_type="fire_department",
+                slug="savepoint-test-org",
+                timezone="UTC",
+            )
+        )
+        await db_session.commit()
+
+        # And the alert write really was rolled back, not partially applied.
+        result = await db_session.execute(
+            select(SecurityAlertRecord).where(SecurityAlertRecord.id == alert.id)
+        )
+        assert result.scalar_one_or_none() is None
 
 
 class TestReportPrivilegeEscalation:

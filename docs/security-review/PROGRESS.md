@@ -21,7 +21,13 @@ feature. The rotation cannot outrun its own review queue.
 `claude/security-review-auth-pass3`. Codex round 1 addressed: a P1
 cross-endpoint TOTP replay gap (AUTH-7) and a P2 brute-force-detector wiring
 gap (AUTH-8) that pass 3's own "Verified good" write-up had wrongly cleared.
-Both fixed; see the log entry immediately below.
+Codex round 2 (reviewing round 1's own fix commit) then found a real P1
+concurrency race inside the AUTH-7 fix itself (AUTH-9), a P2 gap that
+silently defeated AUTH-8's own fix (AUTH-10), and two more P2s (AUTH-11,
+AUTH-12). All four fixed. This round's own required adversarial re-read
+before pushing then found a fifth, unreported issue of the identical shape
+as AUTH-9 in the adjacent recovery-code path (AUTH-13), also fixed. See the
+log entries below.
 
 ---
 
@@ -95,6 +101,130 @@ errors; `npm run lint` 0 errors/warnings (no frontend files changed).
 
 Full write-up: `docs/security-review/AUTH-01-auth-session.md` (AUTH-7,
 AUTH-8, and the struck-through correction note under Pass 3).
+
+---
+
+### 2026-09-01 — Feature 01 (Auth & session lifecycle, pass 3) — Codex round 2: a real P1 concurrency race inside round 1's own fix, plus three more P2s, plus a second P1 of the same shape found on this round's own adversarial re-read
+
+Codex reviewed round 1's fix commit (`2640733a`) itself and found four more
+issues, one of them another P1 — in the very code round 1 had just landed to
+close AUTH-7. Verified each against the real code before acting, per this
+rotation's rule that a wrong fix in an auth path is worse than an honest
+finding; all four turned out to be real, and all four were fixed.
+
+- **AUTH-9 (P1, FIXED):** `_verify_and_consume_totp` (AUTH-7's own new
+  primitive) read `user.mfa_last_timestep` off whatever ORM object the
+  caller already held and wrote the consumed step back onto it, with no row
+  lock and no compare-and-set — a plain read-then-later-write. Two
+  concurrent requests racing the SAME valid code (Codex's scenario: a
+  phishing relay races a captured code against an attacker's own
+  `/mfa/login` and the legitimate holder's request to any of the other three
+  routes) could both load the row before either committed, both pass the
+  replay check, and both commit — defeating AUTH-7's single-use guarantee in
+  the very commit that introduced it. **Fix:** the helper now re-fetches the
+  row with `.with_for_update().execution_options(populate_existing=True)`
+  before checking/consuming — the same locking-read pattern this codebase
+  already uses everywhere else for this shape of race (CLAUDE.md Pitfall
+  #27; `quorum_service.py`, `users.py`, `membership_pipeline_service.py`).
+  `populate_existing` is required alongside the lock, not optional:
+  `expire_on_commit=False` means the lock alone would be acquired correctly
+  but leave the second request evaluating the replay check against a stale
+  cached value. Reproduced and verified with two REAL, independently-
+  committing `AsyncSession`s racing the identical code against a real row in
+  the test database (a mocked `db` cannot exercise a genuine InnoDB row
+  lock) — both returned `True` pre-fix, only the first returns `True`
+  post-fix.
+- **AUTH-10 (P2, FIXED):** round 1's AUTH-8 fix wired `mfa_login`'s failure
+  path into `detect_brute_force(success=False)`, but deliberately left
+  `login`'s own pre-existing `success=True` call unchanged, calling it
+  out-of-scope. That call fires on password-correct alone, **before** the
+  `mfa_enabled` branch — so for an MFA-enabled account, an attacker who
+  already has the password can call `/login` again before every MFA guess
+  (ordinary client behavior, re-establishing the `mfa_pending` token) and
+  wipe the very tally AUTH-8 had just wired `mfa_login` to accumulate. The
+  two calls fought each other; AUTH-8's fix was real but its effect was
+  silently erased on every cycle. **Fix:** moved `login`'s `success=True`
+  call below the `mfa_enabled` branch, so it only fires when a correct
+  password IS full authentication — mirroring the invariant
+  `clear_auth_failures` immediately below it already enforced. Verified with
+  a test driving 5 real `login()` + wrong-MFA-code cycles against a fresh
+  detector instance, asserting the tally climbs `1, 2, 3, 4, 5` instead of
+  resetting to `1` every cycle; confirmed to reproduce the "stuck at 1"
+  failure against the pre-fix ordering.
+- **AUTH-11 (P2, FIXED):** `_add_alert` (`security_monitoring.py`) already
+  caught its own DB-write failures, but catching does not undo the effect on
+  the **session** — a real `flush()` failure leaves the `AsyncSession`
+  needing a rollback, and the caller's own later `db.commit()` (persisting
+  `failed_login_attempts`/lockout on the same session) then raises
+  `PendingRollbackError` instead of completing, turning an intended 401 into
+  an unhandled 500 and losing every side effect the caller had staged.
+  Checked PR #2132's extensive rework of this same file first — that work
+  fixed several in-memory tracker races but never touched this DB-write
+  path. **Fix:** wrapped the write in `db.begin_nested()` (a SAVEPOINT), the
+  exact pattern `AuditLogger.create_log_entry` (`core/audit.py`) already
+  uses for the identical problem. Verified with a REAL constraint violation
+  (`SecurityAlert.description=None`, a genuine `IntegrityError` at flush)
+  against the real test database, not a mocked exception — a mock never
+  touches the DBAPI transaction and cannot reproduce the state this bug
+  depends on; confirmed the caller's subsequent commit raises
+  `PendingRollbackError` verbatim pre-fix, and succeeds post-fix.
+- **AUTH-12 (P2, FIXED):** `mfa_disable` cleared the secret but left
+  `mfa_last_timestep` untouched; timesteps are unix-time-derived, not
+  secret-derived, so a user who disables MFA and immediately re-enrolls with
+  a new secret could hit `/mfa/verify-setup` with a legitimate first code
+  that lands in the same raw timestep as whatever was last recorded against
+  the OLD secret, and get rejected as a "replay" of a code that shares no
+  secret with it. A real, narrow availability bug, not a security gap.
+  **Fix:** both `mfa_disable` and `mfa_setup` (the only two places a user's
+  secret changes) now clear `mfa_last_timestep` alongside the secret.
+  Verified end-to-end: disable with an old-secret code, re-enroll with a new
+  secret, submit the new secret's code in the same wall-clock timestep —
+  rejected pre-fix, accepted post-fix.
+
+- **AUTH-13 (P1, FIXED, found by this round's own adversarial re-read, not
+  Codex):** the required final "look hard for anything else the same shape"
+  pass over the full PR diff (per this round's own instructions) found the
+  identical unlocked read-then-write race as AUTH-9, one field over:
+  `mfa_login`'s recovery-code branch read `user.mfa_backup_codes` off the
+  caller's already-loaded, unlocked object and wrote the filtered list back
+  with no lock — sitting directly below the `_verify_and_consume_totp` call
+  AUTH-9 had just fixed. A recovery code has no ~30–90s expiry to outrun
+  (unlike TOTP), so this was, if anything, a more attractive target. **Fix:**
+  extracted `_verify_and_consume_recovery_code`, structurally identical to
+  AUTH-9's fix. Verified with the same two-real-session race shape; also
+  verified against the pre-fix shape via a throwaway reproduction script
+  (deleted after use, not left in the tree) since the fixed helper's minimal
+  test stub doesn't carry the attributes the old inline code needed —
+  printed `result_a=True result_b=True`, confirming both concurrent requests
+  consumed the same code.
+
+Replied to and resolved all four Codex review comments on PR #2133, with the
+mechanism and reasoning mirrored into
+`docs/security-review/AUTH-01-auth-session.md` (AUTH-9 through AUTH-13).
+
+**Guard tests (7 new):** `TestVerifyAndConsumeTotpConcurrency` (real
+two-session DB race), `TestLoginBruteForceResetGating` (real detector
+instance, 5-cycle accumulation), `TestMfaLastTimestepClearedOnSecretChange`
+(3 tests), `TestVerifyAndConsumeRecoveryCodeConcurrency` (real two-session
+DB race, recovery codes) in `backend/tests/test_auth_mfa_endpoints.py`; and
+`TestAddAlertSavepointIsolation` (real constraint violation against the test
+database) in `backend/tests/test_security_monitoring.py`. Every one
+individually confirmed to fail against `2640733a` (or the equivalent
+pre-fix shape for AUTH-13) and pass after its fix — by temporarily
+reverting only that finding's change and re-running.
+
+**Completion gate (Codex round 2 + AUTH-13, full re-run):** `flake8`/`black
+--check`/`isort --check-only` on `app/ tests/ alembic/` clean;
+`validate_migrations.py --strict` passed (399 revisions, single head, no
+migrations touched); scoped backend tests (`-k "auth or mfa or oauth or
+consent or suspicious_ip"`) 227 passed, 1 skipped (pre-existing, missing
+optional `pywebpush`); `backend/tests/test_security_monitoring.py` (run
+directly — outside the keyword filter, but AUTH-11's fix and guard test live
+here) 28 passed (1 new); `npm run typecheck` (native compiler wrapper) 0
+errors; `npm run lint` 0 errors/warnings (no frontend files changed).
+
+Full write-up: `docs/security-review/AUTH-01-auth-session.md` (AUTH-9
+through AUTH-13).
 
 ---
 

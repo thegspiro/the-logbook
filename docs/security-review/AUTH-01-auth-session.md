@@ -1,6 +1,6 @@
 # Security Review — Auth & Session Lifecycle
 
-**Prefix:** `AUTH` · **Iteration:** 01 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-01 (pass 3) · **PR:** #1804 (pass 1), #1929 (pass 2)
+**Prefix:** `AUTH` · **Iteration:** 01 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-01 (pass 3) · **PR:** #1804 (pass 1), #1929 (pass 2), #2133 (pass 3)
 
 ---
 
@@ -223,6 +223,282 @@ step specifically and doing so was not part of Codex's finding.
 successful one calls it with `success=True`, against the real `mfa_login`
 handler.
 
+### AUTH-9 — P1 — A real concurrency race in the AUTH-7 fix itself: `_verify_and_consume_totp` had no row lock — ✅ FIXED
+
+**What:** Codex reviewed the AUTH-7/AUTH-8 fix commit (`2640733a`) and found
+that `_verify_and_consume_totp` — the very primitive AUTH-7 introduced to
+make TOTP consumption atomic across routes — was not atomic across
+_concurrent requests_. It read `user.mfa_last_timestep` off whatever ORM
+object the caller had already loaded (via a plain, unlocked attribute
+access) and wrote the consumed step back onto that same in-memory object, with
+persistence deferred entirely to the caller's later `db.commit()`. Nothing
+between the read and the write locked the row or re-checked the DB's current
+value — a plain read-then-later-write, not a compare-and-set.
+
+**Where:** `app/api/v1/endpoints/auth.py` — `_verify_and_consume_totp`
+(former lines 778–799, pre-fix), called from all four TOTP-verifying routes
+(`mfa_login`, `mfa_verify_setup`, `mfa_disable`,
+`mfa_regenerate_recovery_codes`).
+
+**Failure scenario (Codex):** a phishing relay captures a valid TOTP code
+from a victim and races the SAME code against two requests simultaneously —
+the attacker's own `POST /mfa/login` and the victim's legitimate request to
+any of the other three management routes. Each request loads its own `User`
+row (each endpoint either queries fresh or receives `current_user` from
+`get_current_active_user`, both unlocked reads) before either commits. Both
+see the same, not-yet-consumed `mfa_last_timestep`, both pass
+`verify_totp_get_timestep`'s "newer than last consumed" check, and both
+commit — the attacker's session and the victim's own legitimate session both
+complete, defeating the exact single-use guarantee `_verify_and_consume_totp`'s
+own docstring claims to provide. This is not hypothetical: reproduced with two
+REAL, independently-committing `AsyncSession`s racing the identical code
+against a real row in the test database (see Guard test below) — against the
+pre-fix code, both concurrent calls returned `True`.
+
+**Fix:** `_verify_and_consume_totp` now re-fetches the user row with
+`.with_for_update().execution_options(populate_existing=True)` before
+checking or consuming the code — the same locking-read pattern this codebase
+already uses for every other read-then-write capacity/consistency check
+(`quorum_service.calculate_quorum`, `users.py`'s profile lock,
+`membership_pipeline_service.py`, `inventory_service.py`; CLAUDE.md Pitfall
+#27). The lock serializes the two requests: the second blocks on the SELECT
+until the first's transaction commits, then — critically —
+`populate_existing=True` forces the already-in-the-session's-identity-map
+`User` object to be refreshed from that fresh read rather than silently
+keeping the stale value `expire_on_commit=False` (`app/core/database.py`)
+would otherwise leave cached. Without `populate_existing`, the lock alone
+would be acquired correctly but bought nothing: the second request would
+still evaluate the replay check against the pre-lock in-memory value. The
+helper became `async` (it now issues its own `db.execute`); all four call
+sites updated to `await _verify_and_consume_totp(db, user, code)`.
+
+**Guard test:** `TestVerifyAndConsumeTotpConcurrency` in
+`backend/tests/test_auth_mfa_endpoints.py` —
+`test_two_real_sessions_racing_the_same_code_only_one_consumes` opens two
+independent connections from the app's real engine against a real row in the
+test database, uses `asyncio.Event` to hold call A's transaction open (and
+its row lock with it) until call B's own locking read has genuinely
+suspended waiting on that lock (polled, not a fixed sleep — the test fails
+loudly if B's read completes before A releases, meaning the run could not
+have distinguished the fix from the race), then releases A and asserts A
+returns `True` and B returns `False`. A mocked single `db` cannot exercise
+this — the fix depends on a real InnoDB row lock actually blocking a second
+session, which no mock reproduces. Confirmed to fail against the pre-fix
+code: temporarily reverting the helper's query to a plain unlocked SELECT
+(same signature, so the test needed no changes) made the guard assertion
+trip with `result_b == True` — both concurrent calls consumed the code.
+Three existing unit tests in `TestTotpConsumedAcrossMfaRoutes` needed a
+matching `db` stand-in for the helper's new locking re-SELECT
+(`_locking_db_for`, added) and an `await`, but their assertions are
+unchanged.
+
+### AUTH-10 — P2 — `login`'s brute-force-reset call fired on password-correct alone, silently defeating AUTH-8's own fix — ✅ FIXED
+
+**What:** AUTH-8 wired `mfa_login`'s failure path to
+`detect_brute_force(success=False)` so that guessing the second factor would
+accumulate toward this detector's per-user HIGH alert threshold
+(`failed_logins_per_user`, default 5). It deliberately left `login`'s own
+pre-existing `detect_brute_force(success=True)` call unchanged, reasoning it
+was a separate, lower-severity, out-of-scope inaccuracy. Codex's point: that
+call fires immediately on a correct password, **before** the
+`if user.mfa_enabled:` branch — including for MFA-enabled accounts, where a
+correct password is not full authentication. An attacker who already knows
+the password (a prerequisite for reaching the MFA step at all) can call
+`POST /login` again before every MFA guess — ordinary behavior for a client
+that re-establishes its `mfa_pending` token per attempt, not exotic — and
+each such call resets the very tally `mfa_login`'s `success=False` call was
+just wired to accumulate. The two calls fight each other: one MFA-guess
+failure accumulates one entry, then the next `/login` call zeroes it before
+the next guess. The alert threshold set by AUTH-8's own fix was therefore
+still unreachable in practice — AUTH-8 fixed the missing call, but not the
+adjacent call that kept erasing its effect.
+
+**Where:** `app/api/v1/endpoints/auth.py` — `login`, former lines 711–717
+(the `detect_brute_force(..., success=True)` call, positioned before the
+`if user.mfa_enabled:` branch at former line 721).
+
+**Failure scenario:** identical shape to the one CLAUDE.md's Attack
+Protection table already documents for the separate `clear_auth_failures`
+counter ("an attacker holding one leaked password for an MFA-protected
+account could zero the tally at will") — except this was the
+`detect_brute_force` detector, and AUTH-8 had just wired MFA failures into
+it specifically to close this class of gap. Reproduced empirically: a test
+driving five real `login()` + wrong-code `mfa_login()` cycles against a
+fresh `SecurityMonitoringService` instance shows the per-user tally stuck at
+`1` after every cycle, pre-fix — never reaching the threshold no matter how
+many wrong codes are guessed, so long as the attacker's script calls
+`/login` before each guess.
+
+**Fix:** moved the `success=True` call below the `if user.mfa_enabled:`
+branch, so it is only reached on the branch where a correct password _is_
+full authentication (MFA disabled) — mirroring the invariant
+`clear_auth_failures` immediately below it already enforced. No behavior
+change to the MFA-enabled response itself (still returns `mfa_required`); the
+detector's tally for an MFA-enabled account is now reset only by
+`mfa_login`'s own `success=True` call, once the second factor actually
+succeeds.
+
+**Guard test:** `TestLoginBruteForceResetGating` in
+`backend/tests/test_auth_mfa_endpoints.py` —
+`test_login_plus_wrong_mfa_code_cycling_still_accumulates` patches a fresh,
+unshared `SecurityMonitoringService` into `auth.py` (so the assertion isn't
+polluted by the module singleton's cross-test state), drives 5 real
+`login()` + wrong-code `mfa_login()` cycles, and asserts the per-user tally
+increases by exactly 1 on every cycle (`1, 2, 3, 4, 5`) rather than being
+reset back to `1` each time. Confirmed to fail against the pre-fix ordering:
+reverting just the call's position reproduces the exact "stuck at 1" failure
+the test's own message describes.
+
+### AUTH-11 — P2 — An alert-write failure inside `_add_alert` could poison the caller's own commit — ✅ FIXED
+
+**What:** `SecurityMonitoringService._add_alert` (`security_monitoring.py`)
+persists a `SecurityAlertRecord` and wraps the write in
+`try/except Exception: logger.warning(...)` — a failure there was already
+swallowed and never raised to the caller. Codex's point was narrower and
+correct: catching the exception does not undo its effect on the **session**.
+Once a real `flush()` fails against the database, SQLAlchemy marks that
+`AsyncSession`'s transaction as needing a rollback, and refuses every further
+operation on it — including `commit()` — until one happens
+(`sqlalchemy.exc.PendingRollbackError`). Both callers of `detect_brute_force`
+(`login`, `mfa_login`) unconditionally `db.commit()` shortly afterward to
+persist `failed_login_attempts`/lockout state on the **same** session. So a
+transient alert-write failure — caught right here, exactly as designed —
+still surfaced as an unhandled 500 on the caller's own later commit instead
+of the endpoint's intended 401, and lost every side effect
+(`failed_login_attempts`, suspicious-IP recording) the caller had already
+staged in the same request.
+
+**Where:** `app/services/security_monitoring.py` — `_add_alert` (former
+lines 290–340, pre-fix): the `db.add(record); await db.flush()` sequence ran
+directly against the caller's session, with no isolation.
+
+**Checked before assuming a fix was needed, per this rotation's own rule:**
+confirmed `_add_alert` had no savepoint/isolation handling despite the
+extensive PR #2132 rework of this same file — that work fixed several
+async-interleaving and read-after-evict races in the in-memory trackers, but
+never touched `_add_alert`'s DB-write path.
+
+**Fix:** wrapped the write in `db.begin_nested()` (a SAVEPOINT) — the exact
+pattern already established in `AuditLogger.create_log_entry`
+(`app/core/audit.py:190`, referenced in the #2132 work) for the identical
+problem (an audit-log write failure must not break the caller's own
+transaction). A failure now rolls back only the savepoint; the outer
+session/transaction, and everything the caller already staged on it, is
+untouched and `commit()`s normally afterward.
+
+**Guard test:** `TestAddAlertSavepointIsolation` in
+`backend/tests/test_security_monitoring.py` —
+`test_alert_write_failure_does_not_poison_the_callers_commit` uses the real
+`db_session` fixture (a real `AsyncSession` against the test MySQL database,
+not a mock — a mocked `flush()` raising a plain exception never touches the
+DBAPI transaction and cannot reproduce the "session needs rollback" state
+this bug depends on) and a **real** NOT NULL constraint violation
+(`SecurityAlert.description=None` — the in-memory dataclass has no runtime
+type check, so it reaches `flush()` and fails there as a genuine
+`IntegrityError`). After `_add_alert` swallows that failure, the test adds an
+unrelated row and commits — standing in for the caller's own
+`failed_login_attempts` write — and asserts that commit succeeds, plus that
+the alert row was not partially persisted. Confirmed to fail against the
+pre-fix code: reverting just the `begin_nested()` wrapper reproduces
+`sqlalchemy.exc.PendingRollbackError` on that second commit, verbatim.
+
+### AUTH-12 — P2 — MFA re-enrollment could spuriously fail with a false "replay" rejection — ✅ FIXED
+
+**What:** `mfa_disable` clears `mfa_secret`/`mfa_enabled`/`mfa_backup_codes`
+but, pre-fix, left `mfa_last_timestep` untouched. TOTP timesteps are
+unix-time-derived (`unix_time // 30`), not secret-derived — `mfa_setup`
+likewise left it untouched when installing a fresh secret. A user who
+disables MFA and immediately re-enrolls with a new secret could hit
+`/mfa/verify-setup` with a legitimate first code for the **new** secret that
+happens to land in the same 30s wall-clock window as whatever raw timestep
+number was last recorded against the **old** secret.
+`verify_totp_get_timestep` rejects any code whose step is `<=
+last_timestep` purely by comparing raw step numbers — it has no way to know
+the two codes verify against completely different secrets.
+
+**Where:** `app/api/v1/endpoints/auth.py` — `mfa_disable` (clearing the
+secret) and `mfa_setup` (installing a fresh secret); both leave
+`mfa_last_timestep` at whatever it was, pre-fix. (Checked whether a secret
+can be replaced anywhere else: `mfa_setup` is the only place that writes
+`mfa_secret` outside `mfa_disable`, and it can be called a second time on an
+still-unconfirmed enrollment — an abandoned first attempt overwritten by a
+second `/mfa/setup` call — which carries the identical exposure, so it needed
+the same fix.)
+
+**Failure scenario:** a real, if narrow, availability bug — not a security
+gap. Disable-then-immediately-re-enroll is a normal recovery flow (e.g. a
+user resetting MFA after losing their old authenticator app registration but
+keeping the same one installed), and a spurious rejection forces a wait for
+the next 30s window, worse under any clock skew. Reproduced end-to-end: a
+test disables MFA with a code for an OLD secret, re-enrolls with a NEW
+secret, and submits the NEW secret's current code in the same wall-clock
+timestep — pre-fix, `mfa_verify_setup` rejects it as a replay of the OLD
+code purely because the raw step number matches, even though the two codes
+share no secret in common.
+
+**Fix:** both `mfa_disable` and `mfa_setup` now set
+`current_user.mfa_last_timestep = None` alongside the secret change, so a
+freshly issued secret always starts with a clean replay-check baseline.
+
+**Guard test:** `TestMfaLastTimestepClearedOnSecretChange` in
+`backend/tests/test_auth_mfa_endpoints.py` — three tests: field-clearing
+on `mfa_disable` and on `mfa_setup` individually, plus
+`test_disable_then_reenroll_same_timestep_code_is_not_rejected`, the
+end-to-end reproduction described above. All three confirmed to fail
+against the pre-fix code (the two `mfa_last_timestep = None` lines removed):
+the field-clearing tests assert a stale value directly, and the end-to-end
+test reproduces the exact false-replay rejection.
+
+### AUTH-13 — P1 — Found in the adversarial re-read: the identical unlocked read-then-write race, one field over, in the recovery-code path — ✅ FIXED
+
+**What:** not a Codex finding — surfaced by this round's own required final
+adversarial pass ("look hard for anything else the same shape" as AUTH-9)
+before considering the round done. `mfa_login`'s recovery-code branch had
+the exact same shape as AUTH-9's TOTP race, just on `mfa_backup_codes`
+instead of `mfa_last_timestep`: it read `user.mfa_backup_codes` off the
+caller's already-loaded, unlocked object, found a match, and wrote the
+filtered list back with no row lock and no re-check against the database's
+current value.
+
+**Where:** `app/api/v1/endpoints/auth.py` — `mfa_login`'s recovery-code
+branch (former lines 938–944, immediately below the `_verify_and_consume_totp`
+call AUTH-9 had just fixed — the fix for one field sat directly above an
+identical bug in the next one).
+
+**Failure scenario:** if anything, a more attractive target than the TOTP
+race AUTH-9 fixed: a recovery code has no ~30–90s expiry to outrun, so an
+observed or phished recovery code stays exploitable indefinitely, not just
+within a narrow window. Two concurrent `/mfa/login` requests presenting the
+SAME recovery code could each load their own stale copy of
+`mfa_backup_codes`, each find the code present, each filter it out of their
+own in-memory copy, and each commit — both completing independent sessions
+with a code that is supposed to work exactly once. Reproduced with the same
+rigor as AUTH-9: two real, independently-loading sessions each performing an
+unlocked read-then-write on the same recovery code both returned success
+(verified via a throwaway reproduction script mirroring `mfa_login`'s actual
+per-request load pattern, then deleted — not left in the tree).
+
+**Fix:** extracted `_verify_and_consume_recovery_code(db, user, code) ->
+bool`, structurally identical to AUTH-9's `_verify_and_consume_totp` fix — a
+`.with_for_update().execution_options(populate_existing=True)` locking
+re-read before checking/filtering the stored codes. `mfa_login`'s
+recovery-code branch now calls it instead of inlining the read-check-write.
+
+**Guard test:** `TestVerifyAndConsumeRecoveryCodeConcurrency` in
+`backend/tests/test_auth_mfa_endpoints.py` —
+`test_two_real_sessions_racing_the_same_recovery_code_only_one_consumes`,
+same two-real-session, `asyncio.Event`-controlled-interleaving shape as
+AUTH-9's guard test (including the same "B's read must actually block on
+A's held lock" self-check), racing an identical recovery code instead of a
+TOTP code. Confirmed to fail against the pre-fix shape: a throwaway
+pytest-based reproduction using two full per-session `User` loads (matching
+what the removed inline code actually did — the fixed helper's own minimal
+`SimpleNamespace(id=...)` stub doesn't carry the attributes the unlocked
+code path needs, so the checked-in guard test's exact harness isn't reusable
+unmodified against the pre-fix shape, same as AUTH-9) printed
+`result_a=True result_b=True` — both concurrent requests consumed the same
+code — before being deleted.
+
 ### AUTH-5 — NIT — `validate-reset-token` docstring claimed the endpoint returns the email — ✅ FIXED (doc only)
 
 **What:** `auth.py`'s `validate_reset_token` docstring said "Returns whether
@@ -295,6 +571,27 @@ not the removed class method — so it required no change).
 | backend tests (`-k "auth or mfa or oauth or consent or suspicious_ip"`) | ✅ 221 passed (5 new), 1 skipped (pre-existing, missing `pywebpush`) |
 | `npm run typecheck` (native compiler wrapper)                           | ✅ 0 errors                                                          |
 | `npx eslint .`                                                          | ✅ 0 errors/warnings (no frontend files changed this correction)     |
+
+**Completion gate (AUTH-9 through AUTH-13, Codex round 2 on `2640733a` plus
+AUTH-13 from this round's own adversarial re-read):**
+
+| Check                                                                                                                                                                   | Result                                                                     |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                                                                                                                                           | ✅ 0 violations                                                            |
+| `black --check app/ tests/ alembic/`                                                                                                                                    | ✅ clean (1 file reformatted before commit — `test_auth_mfa_endpoints.py`) |
+| `isort --check-only app/ tests/ alembic/`                                                                                                                               | ✅ clean                                                                   |
+| `validate_migrations.py --strict`                                                                                                                                       | ✅ single head, 399 revisions (no migrations touched this round)           |
+| backend tests (`-k "auth or mfa or oauth or consent or suspicious_ip"`)                                                                                                 | ✅ 227 passed, 1 skipped (pre-existing, missing `pywebpush`)               |
+| `backend/tests/test_security_monitoring.py` (full file, run directly — the keyword filter above does not match this file's name/test IDs, and AUTH-11's fix lives here) | ✅ 28 passed (1 new)                                                       |
+| `npm run typecheck` (native compiler wrapper)                                                                                                                           | ✅ 0 errors                                                                |
+| `npm run lint`                                                                                                                                                          | ✅ 0 errors/warnings (no frontend files changed this round)                |
+
+7 new regression tests total (1 `TestVerifyAndConsumeTotpConcurrency`, 1
+`TestLoginBruteForceResetGating`, 3 `TestMfaLastTimestepClearedOnSecretChange`,
+1 `TestAddAlertSavepointIsolation`, 1
+`TestVerifyAndConsumeRecoveryCodeConcurrency`), each individually confirmed
+to fail against `2640733a` (or, for AUTH-13, against the equivalent pre-fix
+shape — see its own Guard test note) and pass after its fix.
 
 ---
 

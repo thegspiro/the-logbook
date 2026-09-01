@@ -7,6 +7,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### A concurrency race in the previous TOTP-replay fix let the same code complete two independent logins, three related MFA/brute-force gaps, and the identical race found one field over on re-review (2026-09-01)
+
+**Fixed**
+
+- **The just-landed fix for cross-endpoint TOTP replay had its own race:**
+  `_verify_and_consume_totp` read and later wrote `user.mfa_last_timestep`
+  with no row lock, so two concurrent requests carrying the SAME valid code
+  (e.g. a phishing relay racing a captured code against an attacker's own
+  `/mfa/login` and the legitimate holder's request elsewhere) could both
+  pass the replay check and both complete a session before either committed.
+  Fixed with a locking re-read (`.with_for_update()` +
+  `populate_existing=True`) before the check, the same pattern already used
+  elsewhere in this codebase for read-then-write races. Verified with two
+  real, independently-committing database sessions racing the identical code
+  — confirmed only one succeeds.
+- **`login`'s brute-force-detector reset fired on a correct password alone,
+  silently erasing the tally the MFA-failure wiring above had just started
+  accumulating.** The reset now only fires once a correct password is full
+  authentication (MFA disabled) — an MFA-enabled account's tally is reset
+  only by a successful second factor, matching the invariant this codebase
+  already enforces for the separate suspicious-IP counter.
+- **A transient failure persisting a security alert could turn an intended
+  401 into an unhandled 500** and lose the login attempt's other side
+  effects, because the failure — though caught — left the shared database
+  session unable to commit anything afterward. Fixed by isolating the alert
+  write in its own savepoint, the same pattern already used for audit-log
+  writes.
+- **Disabling MFA and immediately re-enrolling with a new authenticator
+  secret could spuriously reject a legitimate first code as a "replay,"**
+  because the replay-prevention marker from the old secret was never
+  cleared. Fixed by clearing it whenever a user's MFA secret changes.
+- **The identical concurrency race as the first fix above, one field over:**
+  a follow-up review of the whole change before it shipped found that
+  `/mfa/login`'s recovery-code check had the exact same unlocked
+  read-then-write shape as the TOTP race — sitting directly next to the code
+  that had just been fixed for it. A recovery code has no ~30–90s expiry to
+  outrun, so this was, if anything, an easier target. Fixed the same way:
+  a locking re-read before checking/consuming the code.
+
+5 new regression-test classes (7 tests), each individually confirmed to fail
+against the pre-fix code. Full write-up:
+`docs/security-review/AUTH-01-auth-session.md` (AUTH-9 through AUTH-13).
+
 ### A TOTP code verified at an MFA management route could replay at login, and the MFA-code brute-force alert was unwired (2026-09-01)
 
 **Fixed**
