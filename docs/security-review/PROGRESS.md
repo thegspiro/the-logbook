@@ -16,18 +16,181 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-None. Feature 34 (Frontend shared) is fully closed — round 1 merged as
-[#2112](https://github.com/thegspiro/the-logbook/pull/2112), rounds 2/3's
-Codex-caught fixes (FE3-34-1/3 fixed, FE3-34-2/4/5 flagged) merged as
-[#2118](https://github.com/thegspiro/the-logbook/pull/2118). That was the
-last ⏳ row: pass 2 is complete, and every row in the Rotation table below
-has been reset to ⬜ for pass 3 — the next iteration starts at feature 00
-(cross-cutting baseline).
+**Feature 00 (Cross-cutting baseline), pass 3** —
+[#2128](https://github.com/thegspiro/the-logbook/pull/2128), branch
+`claude/security-review-sec00-pass3`. Re-verified pass 1/2's five standing
+sweeps against current code (399 Alembic revisions, 1536 routes) and added
+four new sweep classes (`BaseHTTPMiddleware`, unbounded in-memory caches,
+`window.confirm`/`alert`/`prompt`, JSON shallow-copy-then-mutate). **Revised
+after Codex review (round 1):** the unbounded-tracker sweep had missed a real
+gap (`SecurityMonitoringService`'s instance-attribute trackers, two of four
+uncapped on the SSO-only path — fixed, one small source change) and the JSON
+shallow-copy sweep's method was too narrow (broadened, still clean);
+route-auth-coverage's method description and the completion gate's
+TypeScript command were also corrected (doc-only, same conclusions). **Revised
+again after Codex review (round 2), on the round-1 fix itself:** the
+tracker-cap fix just landed was, itself, incomplete in two ways —
+unthrottled one-key-at-a-time eviction on a genuine hot path (a full
+`O(n log n)` sort of the tracker on every call once saturated, not just when
+the cap was first hit) and a fifth tracker (`_external_endpoints`, a `set()`)
+that the fix's own cap-enforcement helper never touched at all, left capped
+only by a dead code path. Both fixed; see below and
+`SEC-00-cross-cutting-baseline.md`'s Pass 3 section for the full write-up of
+every correction across both rounds.
 
 A duplicate close-out PR, [#2119](https://github.com/thegspiro/the-logbook/pull/2119),
 was opened against round 1's now-stale base (before round 2/3 landed) and
 closed without merging — merging it would have overwritten this section
 with round-1-only text and dropped the round 2/3 record.
+
+---
+
+### 2026-09-01 — Feature 00 (Cross-cutting baseline, pass 3) — Codex review fixes on PR #2128
+
+Codex left 4 P2 comments on PR #2128, all legitimate methodology gaps in the
+same-day pass-3 sweeps. Verified each against real code and fixed:
+
+- **Tracker sweep (Pitfall #9) was scoped to module-level globals only.**
+  `SecurityMonitoringService` (`app/services/security_monitoring.py`) is a
+  process-wide singleton with four `self.<dict>` trackers
+  (`_login_attempts`/`_session_ips`/`_data_transfers`/`_api_calls`), invisible
+  to that grep. Read the code rather than trusting Codex's "happen to be
+  bounded" claim: all four share one cap (`_MAX_TRACKING_KEYS`), but
+  `detect_session_hijack`/`detect_data_exfiltration` never called the
+  eviction function themselves, and the only caller that did
+  (`detect_brute_force`) is reachable only from the password `/auth/login`
+  endpoint — an SSO/OAuth-only org would never enforce the cap on
+  `_session_ips`/`_data_transfers`, which grow on every request. **Fixed**
+  (2-line change): both methods now call `self._enforce_key_caps()` on
+  entry, mirroring the existing pattern. `test_security_monitoring.py`
+  (10/10) unchanged.
+- **JSON shallow-copy sweep (Pitfall #12) covered 3 field names in 2
+  directories.** Broadened to all 132 JSON/`MutableDict`-typed model
+  attributes across the whole `app/` tree, using field-name-agnostic
+  structural patterns (nested bracket mutation, shallow-copy idioms) rather
+  than a fixed name list. Codex's specific example
+  (`onboarding.py:815`, `.settings =` one directory above the original
+  scope) checked out safe (`copy.deepcopy()` at the top of the function) —
+  method broadened, conclusion unchanged: 0 bugs across ~40+ sites checked
+  (up from 16).
+- **Route-auth-coverage method description dropped a scan root.** The
+  `app/api/public/*` routers are mounted directly in `backend/main.py`, never
+  through `api/v1/api.py`; the doc's stated method (api.py-registrations
+  only) couldn't have found them, even though the number carried forward
+  (69) happened to still be right. Corrected the method to name both scan
+  roots explicitly, corrected the stale `public/*` subtotal (22 → verified
+  20, matching pass 1's own original count), and documented one AST
+  false-positive the wider scan surfaced (`inventory.py`'s `/ws` WebSocket
+  route authenticates in-body, not via `Depends()` — correctly gated, not a
+  gap).
+- **Completion gate quoted bare `tsc --noEmit`.** Per CLAUDE.md's two-
+  TypeScript-installs section, that resolves the 5.9.3 lint-compatibility
+  compiler, not the 7.0.2 one `npm run typecheck` forces via
+  `scripts/tsc-native.mjs`. Re-ran with the correct command — 0 errors — and
+  fixed the doc to say `npm run typecheck` throughout.
+
+Full completion gate re-run clean after the source fix: `flake8`/
+`black --check`/`isort --check-only` on `app/ tests/ alembic/`;
+`validate_migrations.py --strict` (399 revisions, single head); the five
+scoped test files (`test_like_escaping.py`, `test_database_schema.py`,
+`test_capacity_locking.py`, `test_migration_create_all_tables.py`,
+`test_security_monitoring.py`) all pass; `npm run typecheck` 0 errors;
+`eslint .` 0 errors / 8 pre-existing warnings. Same branch, same PR #2128.
+
+---
+
+### 2026-09-01 — Feature 00 (Cross-cutting baseline, pass 3) — Codex round 2: the round-1 fix itself had two more gaps
+
+Same day, same PR, same file. Codex reviewed the round-1 fix commit
+(`3b6b65e4`) itself and left 2 more P2 comments — this is the second time in
+one PR that Codex caught a real gap in this pass's own tracker-cap sweep, so
+it is recorded plainly rather than folded quietly into the round-1 writeup:
+
+- **The round-1 fix made `_enforce_key_caps()` run on a hot path, and the
+  eviction it did was one-key-at-a-time.** `detect_session_hijack` — which
+  now calls `_enforce_key_caps()` — fires on every authenticated response
+  through `security_middleware.py`. Once a tracker reached its 5,000-key
+  cap, the old eviction logic computed `overflow = len - cap` (which is 1,
+  the very next call after the cap is first hit), sorted the _entire_
+  ~5,000-entry tracker to find that one key, evicted it, then immediately
+  the caller added its own new entry — leaving the tracker back at exactly
+  the cap. Every subsequent distinct session under sustained churn repeated
+  the full `O(n log n)` sort. A memory safeguard had become a per-request
+  CPU cost on the hot path it was added to. **Fixed:** eviction is now
+  batched — once a tracker exceeds the cap, it is trimmed down to 90% of the
+  cap (`_EVICTION_TARGET_RATIO`) in one pass, buying ~500 entries of
+  headroom before the sort has to run again, instead of re-sorting on every
+  single call once saturated.
+- **`_external_endpoints` — a fifth tracker, missed entirely by round 1.**
+  It's a `set()`, not a dict, grown by `detect_data_exfiltration` adding
+  every distinct external `destination` seen. Round 1's fix made
+  `detect_data_exfiltration` call `_enforce_key_caps()`, but that helper's
+  loop only ever iterated the four _dict_ trackers — it never touched the
+  set. A 200-entry cap for it did exist, in `_evict_stale_tracking_keys()`,
+  but that method's own caller (`_check_rate_limit`, reachable only through
+  `analyze_request`) is never invoked anywhere in the running app —
+  dead code. So the fifth tracker could grow unbounded, on the exact same
+  growth path (`detect_data_exfiltration`) round 1 had just "fixed," for the
+  same underlying reason: a broadened sweep pattern that should have caught
+  a `set()` tracker did not get followed through to checking whether _this_
+  set specifically had an effective, reachable cap. **Fixed:**
+  `_enforce_key_caps()` now caps `_external_endpoints` too (arbitrary
+  eviction, since a set has no per-entry activity timestamp to sort by), on
+  the same call already made from `detect_data_exfiltration`'s entry. The
+  now-redundant (and, per the finding, unreachable) capping block inside
+  `_evict_stale_tracking_keys()` was removed rather than left as dead code
+  behind a real one.
+
+Both fixes are the smaller, safer diff consistent with the existing
+sort-and-evict structure — not a redesign (e.g. no switch to
+`collections.OrderedDict`). 4 new tests added to
+`test_security_monitoring.py`: batched-eviction-not-one-at-a-time, bounded
+growth under simulated sustained churn with the sort call count asserted
+amortized (not once per call), the external-endpoint set capped directly via
+`_enforce_key_caps()`, and the same proven end-to-end through
+`detect_data_exfiltration()` itself (its actual production growth path).
+All 4 verified to fail against the pre-round-2 code (`3b6b65e4`) and pass
+after; full suite 14/14. Full completion gate re-run clean (same commands as
+round 1, see above): `flake8`/`black --check`/`isort --check-only` clean on
+`app/ tests/ alembic/`; `validate_migrations.py --strict` still 399
+revisions, single head; the five scoped test files all pass; `npm run
+typecheck` 0 errors; `eslint .` 0 errors / 8 pre-existing warnings (same set
+as round 1, unrelated to this change).
+
+---
+
+### 2026-09-01 — Feature 00 (Cross-cutting baseline, pass 3) — 0 findings, 4 new sweep classes added
+
+Pass 3 opens the reset rotation. Re-verified all five of pass 1/2's standing
+sweeps against current code — codebase grew to 399 Alembic revisions (from 381) and 1536 routes across 80 `app/api/` files (from 1526/80): formula
+injection in CSV exports (clean, 0 raw `csv.writer` sites), `SET NULL`
+nullability (clean, guard test), proxy-IP attribution (clean, same 3 hits),
+Alembic chain integrity (clean, single head `4e7e125cb00f`), and LIKE-wildcard
+escaping (clean, `test_like_escaping.py` 2/2). Route auth coverage re-check:
+69 ungated routes, all within the same five already-accounted features
+(auth, event_requests public routes, elections token-scoped routes,
+onboarding bootstrap, `public/*`) — no new gap.
+
+Extended the file with four sweep classes named in the rotation's own
+"typical categories" list that SEC-00 had not yet run as an explicit
+whole-codebase pass, each a CLAUDE.md-documented recurring defect class:
+`BaseHTTPMiddleware` usage (Pitfall #4, clean — 0 imports), unbounded
+in-memory request-state trackers (Pitfall #9, clean — the two found both cap
+
+- evict), `window.confirm`/`alert`/`prompt` (Pitfall #16, clean — 0 raw calls,
+  ESLint rule still wired), and JSON-column shallow-copy-then-nested-mutate
+  (Pitfall #12, clean — all 16 `.settings`/`.positions`/`.config` reassignment
+  sites found across `app/services/` and `app/api/v1/endpoints/` either
+  `copy.deepcopy()` or mutate only a top-level key). **Zero findings** — every
+  invariant already held; this pass converts scattered per-feature correctness
+  into one standing cross-cutting sweep record. Docs-only, no source changes.
+  Completion gate green: `flake8`/`black --check`/`isort --check-only` clean on
+  `app/ tests/ alembic/`; `validate_migrations.py --strict` passed; the four
+  touched guard-test files (`test_like_escaping.py`,
+  `test_database_schema.py::test_set_null_fks_are_nullable`,
+  `test_capacity_locking.py`, `test_migration_create_all_tables.py`) all pass;
+  `tsc --noEmit` 0 errors; `eslint .` 0 errors / 8 pre-existing warnings. Next:
+  feature 01, Auth & session lifecycle.
 
 ---
 
@@ -4236,7 +4399,7 @@ pass 3 — each row's prior PR is recorded in the Log, not repeated here.
 
 | #   | Feature                   | Prefix | Principal code                                                                                                                                  | Status |
 | --- | ------------------------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
-| 00  | Cross-cutting baseline    | SEC    | whole-codebase sweeps; see `SEC-00-cross-cutting-baseline.md`                                                                                   | ⬜     |
+| 00  | Cross-cutting baseline    | SEC    | whole-codebase sweeps; see `SEC-00-cross-cutting-baseline.md`                                                                                   | ✅     |
 | 01  | Auth & session lifecycle  | AUTH   | `endpoints/auth.py`, `auth_service.py`, `mfa_service.py`, `oauth_service.py`                                                                    | ⬜     |
 | 02  | Permissions & roles       | PERM   | `dependencies.py`, `core/permissions.py`, `roles.py`, `operational_ranks.py`, `officers.py`, `org_chart.py`                                     | ⬜     |
 | 03  | Public surface & webhooks | PUB    | `api/public/*` (20 unauth routes), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`                                      | ⬜     |

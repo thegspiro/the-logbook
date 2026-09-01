@@ -102,6 +102,15 @@ class SecurityMonitoringService:
     _MAX_IN_MEMORY_ALERTS = 500
     _MAX_TRACKING_KEYS = 5_000
     _MAX_EXTERNAL_ENDPOINTS = 200
+    # When a tracker exceeds its cap, evict down to this fraction of the cap
+    # in one batch rather than back to exactly the cap. _enforce_key_caps runs
+    # unthrottled on every call on a genuine hot path (detect_session_hijack
+    # fires on every authenticated response) -- evicting one key at a time
+    # would leave a saturated tracker sitting at the cap after every call, so
+    # the very next addition re-triggers the full O(n log n) sort. A batch
+    # buys headroom (10% of the cap) before the sort has to run again
+    # (Codex, PR #2128).
+    _EVICTION_TARGET_RATIO = 0.9
 
     def __init__(self):
         self.thresholds = AnomalyThresholds()
@@ -158,14 +167,15 @@ class SecurityMonitoringService:
         self._last_eviction: float = 0.0
 
     def _enforce_key_caps(self) -> None:
-        """Hard-cap each tracking dict at ``_MAX_TRACKING_KEYS``.
+        """Hard-cap every tracker (four dicts plus the endpoint set).
 
         The time-based sweep below is throttled to once/60s and only drops keys
         older than the window, so a burst of many distinct attacker-controlled
         keys (source IPs / user ids during credential stuffing) could grow these
         dicts without bound *between* sweeps — the cap constant existed but was
         never enforced (pitfall #9). This runs on every call, unthrottled, and
-        evicts the least-recently-active keys first.
+        evicts the least-recently-active keys first, in a batch rather than one
+        at a time (see ``_EVICTION_TARGET_RATIO``).
         """
 
         def _last_ts(entries: list) -> datetime:
@@ -174,18 +184,36 @@ class SecurityMonitoringService:
             last = entries[-1]
             return last[1] if isinstance(last, tuple) else last
 
+        target_keys = int(self._MAX_TRACKING_KEYS * self._EVICTION_TARGET_RATIO)
         for tracker in (
             self._api_calls,
             self._login_attempts,
             self._session_ips,
             self._data_transfers,
         ):
-            overflow = len(tracker) - self._MAX_TRACKING_KEYS
-            if overflow > 0:
+            if len(tracker) > self._MAX_TRACKING_KEYS:
+                evict_count = len(tracker) - target_keys
                 for key in sorted(tracker, key=lambda k: _last_ts(tracker[k]))[
-                    :overflow
+                    :evict_count
                 ]:
                     del tracker[key]
+
+        # _external_endpoints is a set, not a dict keyed by request activity,
+        # so it has no per-entry timestamp to evict by — a separate branch,
+        # not folded into the loop above. Previously uncapped here entirely:
+        # detect_data_exfiltration (the only method that grows it) called
+        # this function but the four-tracker loop never touched the set, and
+        # its only other cap (in _evict_stale_tracking_keys, below) sits on a
+        # dead application path — nothing on the growth path ever calls that
+        # method (Codex, PR #2128). Order doesn't matter for a coarse memory
+        # safeguard like this one, so trim arbitrarily.
+        if len(self._external_endpoints) > self._MAX_EXTERNAL_ENDPOINTS:
+            target_endpoints = int(
+                self._MAX_EXTERNAL_ENDPOINTS * self._EVICTION_TARGET_RATIO
+            )
+            evict_count = len(self._external_endpoints) - target_endpoints
+            for _ in range(evict_count):
+                self._external_endpoints.pop()
 
     def _evict_stale_tracking_keys(self) -> None:
         """Remove stale keys from in-memory tracking dicts to bound memory.
@@ -231,12 +259,12 @@ class SecurityMonitoringService:
             if not entries or entries[-1][1] < day_cutoff:
                 del self._data_transfers[key]
 
-        # Cap _external_endpoints
-        if len(self._external_endpoints) > self._MAX_EXTERNAL_ENDPOINTS:
-            # Keep only the most recent entries (set is unordered, so just trim)
-            excess = len(self._external_endpoints) - self._MAX_EXTERNAL_ENDPOINTS
-            for _ in range(excess):
-                self._external_endpoints.pop()
+        # _external_endpoints is capped by the unconditional
+        # self._enforce_key_caps() call at the top of this method — no
+        # separate step needed here. (It used to have one; that block sat on
+        # this method's own throttled path, which nothing on
+        # detect_data_exfiltration's actual growth path ever reached — see
+        # _enforce_key_caps' docstring.)
 
     async def _add_alert(
         self,
@@ -520,6 +548,11 @@ class SecurityMonitoringService:
         """
         Detect potential session hijacking by monitoring IP/UA changes
         """
+        # Called on requests, not logins — detect_brute_force's cap-enforcement
+        # never fires for SSO/OAuth-only orgs, where nothing else bounds this
+        # dict's growth. Hard cap only (cheap), matching detect_brute_force.
+        self._enforce_key_caps()
+
         now = datetime.now(timezone.utc)
         key = f"session:{session_id}"
 
@@ -591,6 +624,11 @@ class SecurityMonitoringService:
         - Bulk record access
         - Transfers to external/unknown destinations
         """
+        # Called on requests, not logins — detect_brute_force's cap-enforcement
+        # never fires for SSO/OAuth-only orgs, where nothing else bounds this
+        # dict's growth. Hard cap only (cheap), matching detect_brute_force.
+        self._enforce_key_caps()
+
         now = datetime.now(timezone.utc)
         day_ago = now - timedelta(days=1)
 
