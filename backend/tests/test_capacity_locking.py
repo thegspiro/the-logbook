@@ -22,7 +22,10 @@ locking read (which makes the number current).
 """
 
 import inspect
+import io
 import re
+import textwrap
+import tokenize
 
 from app.services import (
     event_request_service,
@@ -33,18 +36,61 @@ from app.services import (
 )
 
 
+def _strip_comments(source: str) -> str:
+    """Blank out comment text, preserving every line and column.
+
+    The scan below is a regex over source, so a comment that merely *mentions*
+    ``func.count`` or ``func.sum`` would otherwise register as a capacity query
+    and throw the expected-count assertions off. That is not hypothetical: the
+    comment explaining why the RSVP capacity check sums seats instead of
+    counting rows names both aggregates, and tripped this file the moment it
+    was written.
+
+    Columns are preserved (comments become spaces rather than being deleted) so
+    the parenthesis-balancing in _count_query_expressions still sees the same
+    statement boundaries.
+    """
+    lines = source.splitlines(keepends=True)
+    try:
+        tokens = list(tokenize.generate_tokens(io.StringIO(source).readline))
+    except (tokenize.TokenError, IndentationError):
+        # A partial source that will not tokenize is scanned as-is rather than
+        # silently returning nothing to check.
+        return source
+
+    for token in tokens:
+        if token.type != tokenize.COMMENT:
+            continue
+        row, col = token.start
+        line = lines[row - 1]
+        lines[row - 1] = (
+            line[:col] + " " * len(token.string) + line[col + len(token.string) :]
+        )
+    return "".join(lines)
+
+
 def _source_of(obj) -> str:
-    return inspect.getsource(obj)
+    # Dedented so a method body tokenizes; comments blanked so prose about a
+    # capacity check is never mistaken for one.
+    return _strip_comments(textwrap.dedent(inspect.getsource(obj)))
 
 
 def _count_query_expressions(source: str):
-    """Yield (assigned_name, expression_text) for every `func.count` query.
+    """Yield (assigned_name, expression_text) for every capacity-tally query.
+
+    Matches ``func.sum`` as well as ``func.count``. Both are how a cap gets
+    measured here, and which one a given site uses is an implementation detail
+    of what it counts: the event RSVP path moved from counting *rows* to
+    summing *seats* when guests began consuming capacity, and a count-only
+    detector would have quietly stopped covering it — the site would vanish
+    from the scan rather than fail, and the invariant would retire itself
+    without anyone deciding to retire it.
 
     The expression is extracted by balancing parentheses from the start of the
     statement, so a multi-line query builder is captured whole rather than by
-    the line the count happens to sit on.
+    the line the aggregate happens to sit on.
     """
-    for match in re.finditer(r"func\.count\b", source):
+    for match in re.finditer(r"func\.(?:count|sum)\b", source):
         start = source.rfind("\n", 0, match.start()) + 1
         # Walk back over continuation lines to the statement that opens the
         # expression — the first line at or above this one whose parentheses
@@ -121,6 +167,30 @@ class TestTheExtractionItself:
 
     def test_a_plain_count_is_rejected(self):
         source = "q = select(func.count()).where(x)\n"
+        name, expression = next(iter(_count_query_expressions(source)))
+        assert not _count_is_locking(source, name, expression)
+
+    def test_a_seat_sum_is_detected(self):
+        """A capacity tally written as a sum is still a capacity tally.
+
+        The RSVP path counts seats (1 + guest_count) rather than rows, so a
+        detector that only knew func.count would have silently stopped
+        watching it.
+        """
+        source = (
+            "q = (\n"
+            "    select(func.coalesce(func.sum(1 + EventRSVP.guest_count), 0))\n"
+            "    .where(x)\n"
+            "    .with_for_update()\n"
+            ")\n"
+        )
+        found = list(_count_query_expressions(source))
+        assert len(found) == 1
+        name, expression = found[0]
+        assert _count_is_locking(source, name, expression)
+
+    def test_a_plain_seat_sum_is_rejected(self):
+        source = "q = select(func.coalesce(func.sum(1 + x.guests), 0)).where(y)\n"
         name, expression = next(iter(_count_query_expressions(source)))
         assert not _count_is_locking(source, name, expression)
 

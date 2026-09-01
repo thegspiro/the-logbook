@@ -472,6 +472,12 @@ class DepartmentMessageRecipient(Base):
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
     )
+    # When this member entered the message's audience. The audience is
+    # mutable after publication — a widened targeting rule adds rows, a
+    # narrowed one revokes them — so without this the row cannot say whether
+    # the member was addressed by the original send or added later, and every
+    # other stamp here is a state change against a row already present.
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
     read_at = Column(DateTime(timezone=True), nullable=True)
     acknowledged_at = Column(DateTime(timezone=True), nullable=True)
     # Set when a published message's audience was narrowed and this member

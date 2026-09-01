@@ -131,6 +131,12 @@ export const EventEditPage: React.FC = () => {
     allowed_rsvp_statuses: event.allowed_rsvp_statuses ?? undefined,
     is_mandatory: event.is_mandatory,
     allow_guests: event.allow_guests,
+    // ?? null, not ?? undefined: null is the "inherit the org default" state
+    // and has to reach the form as a real value. Omitting it left the select
+    // showing "Use organization default" for an event that actually overrode
+    // it — and because that option was already displayed, choosing it fired no
+    // change event, so the override could not be cleared either.
+    attendee_visibility: event.attendee_visibility ?? null,
     send_reminders: event.send_reminders,
     reminder_target: event.reminder_target,
     reminder_schedule: event.reminder_schedule,
