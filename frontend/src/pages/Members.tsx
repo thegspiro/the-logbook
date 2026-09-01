@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { useNavigate } from 'react-router';
+import { useNavigate, Link } from 'react-router';
 import {
   Users,
   UserPlus,
@@ -36,6 +36,12 @@ const Members: React.FC = () => {
   const { user: currentUser, checkPermission } = useAuthStore();
   // The directory itself is open to every member (members.view), but the
   // add/import/delete controls call members.manage-gated pages/endpoints.
+  //
+  // It also decides how much of the roster is administrative furniture rather
+  // than a directory: usernames, hire dates, the row actions, bulk selection
+  // and the CSV export exist for the membership coordinator's workflow and
+  // mean nothing to a member looking someone up. A member without the grant
+  // gets a directory; a coordinator gets the management table unchanged.
   const canManageMembers = checkPermission('members.manage');
   const [members, setMembers] = useState<User[]>([]);
   const [stats, setStats] = useState<MemberStats>({
@@ -142,9 +148,12 @@ const Members: React.FC = () => {
       const fullName = `${member.first_name || ''} ${member.last_name || ''}`.toLowerCase();
       const searchLower = searchQuery.toLowerCase();
 
+      // Username is only searchable where it is also displayed: a member who
+      // cannot see "@ladams" anywhere on the page cannot account for the row
+      // that a search for "ladams" returns.
       const matchesSearch =
         fullName.includes(searchLower) ||
-        (member.username && member.username.toLowerCase().includes(searchLower)) ||
+        (canManageMembers && !!member.username && member.username.toLowerCase().includes(searchLower)) ||
         (member.membership_number && member.membership_number.toLowerCase().includes(searchLower)) ||
         (member.email && member.email.toLowerCase().includes(searchLower));
 
@@ -170,7 +179,7 @@ const Members: React.FC = () => {
     });
 
     return result;
-  }, [members, searchQuery, filterStatus, sortField, sortDirection]);
+  }, [members, searchQuery, filterStatus, sortField, sortDirection, canManageMembers]);
 
   // Paginated subset (#11)
   const paginatedMembers = useMemo(() => {
@@ -222,6 +231,28 @@ const Members: React.FC = () => {
     downloadCsv(buildCsv([headers, ...rows]), `members-${getTodayLocalDate(tz)}.csv`);
   }, [filteredMembers, selectedIds, tz]);
 
+  const openMemberProfile = useCallback(
+    (memberId: string) => {
+      void navigate(`/members/${memberId}`);
+    },
+    [navigate]
+  );
+
+  /**
+   * Row-level click-to-open. The member's name is a real link inside the row,
+   * so keyboard and assistive-technology users have a focusable target without
+   * 25 extra tab stops; this only widens the mouse target to the rest of the
+   * row. Clicks that land on the name link, the selection checkbox or an
+   * action button are theirs to handle, not the row's.
+   */
+  const handleRowClick = useCallback(
+    (event: React.MouseEvent<HTMLElement>, memberId: string) => {
+      if ((event.target as HTMLElement).closest('a, button, input, label')) return;
+      openMemberProfile(memberId);
+    },
+    [openMemberProfile]
+  );
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case UserStatus.ACTIVE:
@@ -249,11 +280,15 @@ const Members: React.FC = () => {
               <Users className="h-6 w-6 text-white" />
             </div>
             <div>
-              <h1 className="text-theme-text-primary text-xl font-bold sm:text-2xl">Membership Management</h1>
-              <p className="text-theme-text-muted hidden text-sm sm:block">Manage department members and records</p>
+              <h1 className="text-theme-text-primary text-xl font-bold sm:text-2xl">
+                {canManageMembers ? 'Membership Management' : 'Member Directory'}
+              </h1>
+              <p className="text-theme-text-muted hidden text-sm sm:block">
+                {canManageMembers ? 'Manage department members and records' : 'Find and contact department members'}
+              </p>
             </div>
           </div>
-          {filteredMembers.length > 0 && (
+          {canManageMembers && filteredMembers.length > 0 && (
             <button
               onClick={handleExportCSV}
               className="btn-secondary btn-auto inline-flex items-center gap-2"
@@ -401,9 +436,14 @@ const Members: React.FC = () => {
         ) : (
           <>
             {/* Mobile card view */}
-            <div className="space-y-3 md:hidden">
+            <div className="space-y-3 md:hidden" role="list" aria-label="Members">
               {paginatedMembers.map((member) => (
-                <div key={member.id} className="card p-4">
+                <div
+                  key={member.id}
+                  role="listitem"
+                  className="card cursor-pointer p-4 transition-colors"
+                  onClick={(e) => handleRowClick(e, member.id)}
+                >
                   <div className="flex items-center justify-between">
                     <div className="flex min-w-0 flex-1 items-center">
                       <Avatar
@@ -413,10 +453,13 @@ const Members: React.FC = () => {
                         size="md"
                       />
                       <div className="ml-3 min-w-0">
-                        <div className="text-theme-text-primary truncate font-medium">
+                        <Link
+                          to={`/members/${member.id}`}
+                          className="text-theme-text-primary hover:text-theme-text-primary block truncate font-medium hover:underline"
+                        >
                           {member.first_name} {member.last_name}
-                        </div>
-                        <div className="text-theme-text-muted text-sm">@{member.username}</div>
+                        </Link>
+                        {canManageMembers && <div className="text-theme-text-muted text-sm">@{member.username}</div>}
                       </div>
                     </div>
                     <span
@@ -441,31 +484,35 @@ const Members: React.FC = () => {
                         </div>
                       )}
                     </div>
-                    <div className="flex shrink-0 items-center space-x-1">
-                      <button
-                        onClick={() => void navigate(`/members/${member.id}`)}
-                        className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-sm p-2 text-blue-700 transition-colors hover:bg-blue-500/10 dark:text-blue-400"
-                        title={canManageMembers ? 'View/Edit Profile' : 'View Profile'}
-                      >
-                        <Edit className="h-4 w-4" />
-                      </button>
-                      {canManageMembers && currentUser?.id !== member.id && (
+                    {canManageMembers && (
+                      <div className="flex shrink-0 items-center space-x-1">
                         <button
-                          onClick={() => handleDeleteMember(member)}
-                          className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-sm p-2 text-red-700 transition-colors hover:bg-red-500/10 dark:text-red-400"
-                          title="Delete"
+                          onClick={() => openMemberProfile(member.id)}
+                          className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-sm p-2 text-blue-700 transition-colors hover:bg-blue-500/10 dark:text-blue-400"
+                          title="View/Edit Profile"
+                          aria-label={`View or edit ${member.first_name} ${member.last_name}`}
                         >
-                          <Trash2 className="h-4 w-4" />
+                          <Edit className="h-4 w-4" />
                         </button>
-                      )}
-                    </div>
+                        {currentUser?.id !== member.id && (
+                          <button
+                            onClick={() => handleDeleteMember(member)}
+                            className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-sm p-2 text-red-700 transition-colors hover:bg-red-500/10 dark:text-red-400"
+                            title="Delete"
+                            aria-label={`Delete ${member.first_name} ${member.last_name}`}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
               ))}
             </div>
 
             {/* Bulk action bar (#33) */}
-            {selectedIds.size > 0 && (
+            {canManageMembers && selectedIds.size > 0 && (
               <div className="mb-3 hidden items-center gap-3 rounded-lg border border-blue-500/30 bg-blue-500/10 px-4 py-2 md:flex">
                 <span className="text-sm font-medium text-blue-700 dark:text-blue-300">
                   {selectedIds.size} selected
@@ -501,15 +548,17 @@ const Members: React.FC = () => {
                 <table className="w-full">
                   <thead className="bg-theme-input-bg border-theme-surface-border border-b">
                     <tr>
-                      <th scope="col" className="w-10 py-3 pr-1 pl-4">
-                        <input
-                          type="checkbox"
-                          checked={paginatedMembers.length > 0 && selectedIds.size === paginatedMembers.length}
-                          onChange={toggleSelectAll}
-                          className="border-theme-input-border focus:ring-theme-focus-ring rounded-sm text-blue-600"
-                          aria-label="Select all members"
-                        />
-                      </th>
+                      {canManageMembers && (
+                        <th scope="col" className="w-10 py-3 pr-1 pl-4">
+                          <input
+                            type="checkbox"
+                            checked={paginatedMembers.length > 0 && selectedIds.size === paginatedMembers.length}
+                            onChange={toggleSelectAll}
+                            className="border-theme-input-border focus:ring-theme-focus-ring rounded-sm text-blue-600"
+                            aria-label="Select all members"
+                          />
+                        </th>
+                      )}
                       <th scope="col" className="px-6 py-3 text-left">
                         <SortableHeader
                           label="Member"
@@ -545,38 +594,45 @@ const Members: React.FC = () => {
                           onSort={handleSort}
                         />
                       </th>
-                      <th scope="col" className="px-6 py-3 text-left">
-                        <SortableHeader
-                          label="Hire Date"
-                          field="hire_date"
-                          currentSort={sortField}
-                          currentDirection={sortDirection}
-                          onSort={handleSort}
-                        />
-                      </th>
-                      <th
-                        scope="col"
-                        className="text-theme-text-secondary px-6 py-3 text-right text-xs font-medium tracking-wider uppercase"
-                      >
-                        Actions
-                      </th>
+                      {canManageMembers && (
+                        <th scope="col" className="px-6 py-3 text-left">
+                          <SortableHeader
+                            label="Hire Date"
+                            field="hire_date"
+                            currentSort={sortField}
+                            currentDirection={sortDirection}
+                            onSort={handleSort}
+                          />
+                        </th>
+                      )}
+                      {canManageMembers && (
+                        <th
+                          scope="col"
+                          className="text-theme-text-secondary px-6 py-3 text-right text-xs font-medium tracking-wider uppercase"
+                        >
+                          Actions
+                        </th>
+                      )}
                     </tr>
                   </thead>
                   <tbody className="divide-theme-surface-border divide-y">
                     {paginatedMembers.map((member) => (
                       <tr
                         key={member.id}
-                        className={`hover:bg-theme-surface-secondary transition-colors ${selectedIds.has(member.id) ? 'bg-blue-500/5' : ''}`}
+                        onClick={(e) => handleRowClick(e, member.id)}
+                        className={`hover:bg-theme-surface-secondary cursor-pointer transition-colors ${selectedIds.has(member.id) ? 'bg-blue-500/5' : ''}`}
                       >
-                        <td className="w-10 py-4 pr-1 pl-4">
-                          <input
-                            type="checkbox"
-                            checked={selectedIds.has(member.id)}
-                            onChange={() => toggleSelect(member.id)}
-                            className="border-theme-input-border focus:ring-theme-focus-ring rounded-sm text-blue-600"
-                            aria-label={`Select ${member.first_name} ${member.last_name}`}
-                          />
-                        </td>
+                        {canManageMembers && (
+                          <td className="w-10 py-4 pr-1 pl-4">
+                            <input
+                              type="checkbox"
+                              checked={selectedIds.has(member.id)}
+                              onChange={() => toggleSelect(member.id)}
+                              className="border-theme-input-border focus:ring-theme-focus-ring rounded-sm text-blue-600"
+                              aria-label={`Select ${member.first_name} ${member.last_name}`}
+                            />
+                          </td>
+                        )}
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="flex items-center">
                             <Avatar
@@ -586,10 +642,15 @@ const Members: React.FC = () => {
                               size="md"
                             />
                             <div className="ml-3">
-                              <div className="text-theme-text-primary font-medium">
+                              <Link
+                                to={`/members/${member.id}`}
+                                className="text-theme-text-primary hover:text-theme-text-primary font-medium hover:underline"
+                              >
                                 {member.first_name} {member.last_name}
-                              </div>
-                              <div className="text-theme-text-muted text-sm">@{member.username}</div>
+                              </Link>
+                              {canManageMembers && (
+                                <div className="text-theme-text-muted text-sm">@{member.username}</div>
+                              )}
                             </div>
                           </div>
                         </td>
@@ -635,31 +696,37 @@ const Members: React.FC = () => {
                             {member.status.replace('_', ' ').toUpperCase()}
                           </span>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="text-theme-text-secondary text-sm">
-                            {member.hire_date ? formatDate(member.hire_date, tz) : '-'}
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 text-right whitespace-nowrap">
-                          <div className="flex items-center justify-end space-x-2">
-                            <button
-                              onClick={() => void navigate(`/members/${member.id}`)}
-                              className="rounded-sm p-2 text-blue-700 transition-colors hover:bg-blue-500/10 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
-                              title={canManageMembers ? 'View/Edit Profile' : 'View Profile'}
-                            >
-                              <Edit className="h-4 w-4" />
-                            </button>
-                            {canManageMembers && currentUser?.id !== member.id && (
+                        {canManageMembers && (
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="text-theme-text-secondary text-sm">
+                              {member.hire_date ? formatDate(member.hire_date, tz) : '-'}
+                            </div>
+                          </td>
+                        )}
+                        {canManageMembers && (
+                          <td className="px-6 py-4 text-right whitespace-nowrap">
+                            <div className="flex items-center justify-end space-x-2">
                               <button
-                                onClick={() => handleDeleteMember(member)}
-                                className="rounded-sm p-2 text-red-700 transition-colors hover:bg-red-500/10 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
-                                title="Delete"
+                                onClick={() => openMemberProfile(member.id)}
+                                className="rounded-sm p-2 text-blue-700 transition-colors hover:bg-blue-500/10 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
+                                title="View/Edit Profile"
+                                aria-label={`View or edit ${member.first_name} ${member.last_name}`}
                               >
-                                <Trash2 className="h-4 w-4" />
+                                <Edit className="h-4 w-4" />
                               </button>
-                            )}
-                          </div>
-                        </td>
+                              {currentUser?.id !== member.id && (
+                                <button
+                                  onClick={() => handleDeleteMember(member)}
+                                  className="rounded-sm p-2 text-red-700 transition-colors hover:bg-red-500/10 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
+                                  title="Delete"
+                                  aria-label={`Delete ${member.first_name} ${member.last_name}`}
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        )}
                       </tr>
                     ))}
                   </tbody>
