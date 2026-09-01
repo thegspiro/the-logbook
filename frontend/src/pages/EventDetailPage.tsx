@@ -1477,17 +1477,27 @@ export const EventDetailPage: React.FC = () => {
                     </button>
                   )}
                 </div>
-                {event.user_rsvp_status === RSVPStatusEnum.WAITLISTED && (
-                  <p className="mt-3 text-sm text-purple-600 dark:text-purple-400">
-                    {/* The position is what the member actually wants to know.
-                        It is 1-based over responded_at, the same order the
-                        server promotes in, so "you're next" means it. */}
-                    {event.user_waitlist_position != null
-                      ? `You're #${event.user_waitlist_position} of ${event.waitlist_count ?? event.user_waitlist_position} on the waitlist. `
-                      : "You're on the waitlist. "}
-                    You&apos;ll be automatically moved to &quot;Going&quot; if a spot opens up.
-                  </p>
-                )}
+                {event.user_rsvp_status === RSVPStatusEnum.WAITLISTED &&
+                  (event.user_waitlist_exceeds_capacity ? (
+                    /* Promotion passes this party over, so promising them a
+                       spot would be a promise the server will never keep.
+                       Arises when an organizer lowers the cap below a party
+                       that had already queued. */
+                    <p className="mt-3 text-sm text-amber-600 dark:text-amber-400">
+                      Your party is larger than this event can hold, so it cannot be moved up. Reduce your guest count
+                      or contact the event organizer.
+                    </p>
+                  ) : (
+                    <p className="mt-3 text-sm text-purple-600 dark:text-purple-400">
+                      {/* The position is what the member actually wants to know.
+                          It is 1-based over responded_at, the same order the
+                          server promotes in, so "you're next" means it. */}
+                      {event.user_waitlist_position != null
+                        ? `You're #${event.user_waitlist_position} of ${event.waitlist_count ?? event.user_waitlist_position} on the waitlist. `
+                        : "You're on the waitlist. "}
+                      You&apos;ll be automatically moved to &quot;Going&quot; if a spot opens up.
+                    </p>
+                  ))}
                 {rsvpCountdown && (
                   <div className={`mt-3 flex items-center gap-1.5 text-sm ${rsvpCountdown.color}`}>
                     <Clock className="h-4 w-4" />

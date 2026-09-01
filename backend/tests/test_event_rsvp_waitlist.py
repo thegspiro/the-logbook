@@ -406,6 +406,7 @@ class TestRsvpToSeries:
             return_value=MagicMock(scalars=MagicMock(return_value=scalars))
         )
         db.commit = AsyncMock()
+        db.rollback = AsyncMock()
         svc = EventService(db)
         svc.create_or_update_rsvp = AsyncMock(side_effect=results)
         return svc
@@ -460,6 +461,9 @@ class TestRsvpToSeries:
         # "applied to N events" toast is true rather than optimistic.
         assert svc.create_or_update_rsvp.await_count == 3
         assert count == 2
+        # And the refusal's uncommitted state is discarded rather than left for
+        # the next occurrence's commit to persist.
+        svc.db.rollback.assert_awaited_once()
 
     async def test_it_no_longer_writes_rsvps_itself(self):
         """The whole point of the change: one write path, not two."""

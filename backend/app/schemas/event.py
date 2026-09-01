@@ -467,6 +467,10 @@ class EventResponse(EventBase, UTCResponseBase):
     # promote_from_waitlist actually promotes in.
     waitlist_count: Optional[int] = None
     user_waitlist_position: Optional[int] = None
+    # True when the caller is waitlisted with a party larger than the event
+    # holds, so promotion will never reach them. They get no position, and the
+    # UI must say why rather than promising a spot that cannot open.
+    user_waitlist_exceeds_capacity: bool = False
     # Seats taken (sum of 1 + guest_count over going RSVPs). See EventListItem.
     occupied_seats: Optional[int] = None
 

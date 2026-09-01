@@ -580,6 +580,30 @@ describe('EventsPage', () => {
       vi.mocked(eventService.createOrUpdateRSVP).mockResolvedValue({ status: 'going' } as never);
     });
 
+    it('keeps the saved response on screen when the refresh fails', async () => {
+      // The RSVP succeeded; a transient refresh failure must not replace it
+      // with the full-page "Failed to load events" state, nor swap the grid
+      // for skeletons. The only casualty of a failed background refresh is a
+      // slightly stale seat count.
+      const user = userEvent.setup();
+      renderWithRouter(<EventsPage />);
+
+      // Let the initial load settle first, then break only the refresh. The
+      // mount effect can fire fetchEvents more than once (canManage resolves
+      // after auth), so a `...Once` chain would arm the rejection against a
+      // foreground load and prove nothing about background mode.
+      const [goingButton] = await screen.findAllByRole('button', { name: /^going$/i });
+      expect(goingButton).toBeDefined();
+      vi.mocked(eventService.getEvents).mockRejectedValue(new Error('network'));
+      await user.click(goingButton as HTMLElement);
+
+      await waitFor(() => {
+        expect(eventService.createOrUpdateRSVP).toHaveBeenCalled();
+      });
+      expect(screen.queryByText(/failed to load events/i)).not.toBeInTheDocument();
+      expect(await screen.findAllByRole('button', { name: /^going$/i })).not.toHaveLength(0);
+    });
+
     it('refetches the list so the seat aggregates do not go stale', async () => {
       // going_count, occupied_seats and waitlist_count are interdependent, and
       // the client cannot derive occupied_seats at all — it does not know the
