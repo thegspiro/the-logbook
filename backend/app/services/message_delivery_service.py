@@ -344,30 +344,52 @@ class MessageDeliveryService:
                 header_color=header_color,
             )
             email_svc = EmailService(organization=org)
+
+            # Claim every recipient first, then send once. A claim per member
+            # is what makes a delivery auditable and retryable, but doing the
+            # *send* per member too routed each one down EmailService's
+            # single-message path: one SMTP connect/quit per person, with none
+            # of the batch path's RSET, 0.25s pacing or reconnect-and-retry.
+            # Against a relay that caps connections per interval, a 300-member
+            # department starts getting refused partway through and the back
+            # half is never emailed — on the channel of record. Claims stay
+            # per member; the connection is shared.
+            claimed = []
             for user in email_recipients:
                 attempt = await self._claim_delivery(message.id, user.id, "email")
-                if attempt is None:
-                    continue
-                try:
-                    sent, failed = await email_svc.send_email(
-                        to_emails=[user.email],
-                        subject=subject,
-                        html_body=html_body,
-                        db=self.db,
-                        template_type=MESSAGE_CATEGORY,
-                    )
-                    if sent:
-                        await self._finish_delivery(attempt)
-                    else:
-                        await self._finish_delivery(
-                            attempt, f"email reported {failed} failed, 0 sent"
-                        )
-                        logger.warning(
-                            "Department message email not sent to {}", user.id
-                        )
-                except Exception as exc:
+                if attempt is not None and user.email:
+                    claimed.append((user, attempt))
+            if not claimed:
+                return
+
+            outcomes: List[bool] = []
+            try:
+                await email_svc.send_email(
+                    to_emails=[user.email for user, _ in claimed],
+                    subject=subject,
+                    html_body=html_body,
+                    db=self.db,
+                    template_type=MESSAGE_CATEGORY,
+                    results_out=outcomes,
+                )
+            except Exception as exc:
+                # The batch never ran. Every claim is an unsent email, and
+                # saying so is what leaves them retryable.
+                for _, attempt in claimed:
                     await self._finish_delivery(attempt, exc)
-                    logger.warning("Department message email send failed: {}", exc)
+                logger.warning("Department message email send failed: {}", exc)
+                return
+
+            for index, (user, attempt) in enumerate(claimed):
+                # A short results list means the send returned fewer answers
+                # than addresses; treat the unanswered as unsent rather than
+                # marking them delivered on no evidence.
+                delivered = outcomes[index] if index < len(outcomes) else False
+                if delivered:
+                    await self._finish_delivery(attempt)
+                else:
+                    await self._finish_delivery(attempt, "email reported not sent")
+                    logger.warning("Department message email not sent to {}", user.id)
         except Exception as e:  # pragma: no cover - defensive
             logger.warning("Department message email escalation failed: {}", e)
 

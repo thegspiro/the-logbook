@@ -276,6 +276,122 @@ class TestEmailRecipientFiltering:
         assert sent["to"] == ["in@fd.co", "out@fd.co"]
 
 
+class TestEmailGoesOutInOneBatch:
+    """One SMTP connection for the department, one claim per member.
+
+    A claim per member is what makes a delivery auditable and retryable, but
+    sending per member routed each one down EmailService's single-message
+    path: connect and quit per person, with none of the batch path's RSET,
+    0.25s pacing or reconnect-and-retry. Against a relay that caps
+    connections per interval, a 300-member department starts being refused
+    partway through and the back half is never emailed — on the channel of
+    record.
+    """
+
+    @staticmethod
+    def _svc_with(email_cls):
+        svc = MessageDeliveryService(_db())
+        claimed = []
+
+        async def _claim(message_id, user_id, channel):
+            attempt = SimpleNamespace(
+                status="pending",
+                error=None,
+                delivered_at=None,
+                channel=channel,
+                user_id=user_id,
+            )
+            claimed.append(attempt)
+            return attempt
+
+        svc._claim_delivery = _claim
+        return svc, claimed
+
+    @staticmethod
+    async def _run(svc, recipients, email_cls):
+        with patch("app.services.email_service.EmailService", email_cls), patch(
+            "app.services.email_service.wrap_email_body",
+            return_value="<html></html>",
+        ):
+            await svc._send_email(_facts(priority="urgent"), recipients, org=None)
+
+    async def test_one_send_carries_the_whole_department(self):
+        calls = []
+
+        class _Batching:
+            def __init__(self, organization=None):
+                pass
+
+            async def send_email(self, to_emails, results_out=None, **kwargs):
+                calls.append(list(to_emails))
+                if results_out is not None:
+                    results_out.extend([True] * len(to_emails))
+                return (len(to_emails), 0)
+
+        svc, claimed = self._svc_with(_Batching)
+        people = [_RecipientFacts(id=f"u{n}", email=f"m{n}@fd.co") for n in range(3)]
+
+        await self._run(svc, people, _Batching)
+
+        assert len(calls) == 1
+        assert calls[0] == ["m0@fd.co", "m1@fd.co", "m2@fd.co"]
+        # Still one auditable claim each.
+        assert [a.user_id for a in claimed] == ["u0", "u1", "u2"]
+        assert {a.status for a in claimed} == {"delivered"}
+
+    async def test_a_per_address_failure_lands_on_that_member(self):
+        class _PartlyFailing:
+            def __init__(self, organization=None):
+                pass
+
+            async def send_email(self, to_emails, results_out=None, **kwargs):
+                if results_out is not None:
+                    results_out.extend([True, False, True])
+                return (2, 1)
+
+        svc, claimed = self._svc_with(_PartlyFailing)
+        people = [_RecipientFacts(id=f"u{n}", email=f"m{n}@fd.co") for n in range(3)]
+
+        await self._run(svc, people, _PartlyFailing)
+
+        assert [a.status for a in claimed] == ["delivered", "failed", "delivered"]
+
+    async def test_a_raise_leaves_every_claim_retryable(self):
+        class _Exploding:
+            def __init__(self, organization=None):
+                pass
+
+            async def send_email(self, to_emails, results_out=None, **kwargs):
+                raise RuntimeError("relay refused the connection")
+
+        svc, claimed = self._svc_with(_Exploding)
+        people = [_RecipientFacts(id=f"u{n}", email=f"m{n}@fd.co") for n in range(2)]
+
+        await self._run(svc, people, _Exploding)
+
+        assert [a.status for a in claimed] == ["failed", "failed"]
+        assert all(a.delivered_at is None for a in claimed)
+
+    async def test_a_short_results_list_is_not_read_as_delivered(self):
+        """Fewer answers than addresses means unanswered, not sent."""
+
+        class _Terse:
+            def __init__(self, organization=None):
+                pass
+
+            async def send_email(self, to_emails, results_out=None, **kwargs):
+                if results_out is not None:
+                    results_out.append(True)
+                return (1, 0)
+
+        svc, claimed = self._svc_with(_Terse)
+        people = [_RecipientFacts(id=f"u{n}", email=f"m{n}@fd.co") for n in range(3)]
+
+        await self._run(svc, people, _Terse)
+
+        assert [a.status for a in claimed] == ["delivered", "failed", "failed"]
+
+
 class TestReportedFailuresAreNotRecordedAsDelivered:
     """A provider that reports failure instead of raising must not read as sent.
 

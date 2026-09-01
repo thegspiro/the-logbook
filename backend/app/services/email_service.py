@@ -980,6 +980,7 @@ class EmailService:
         sent_by: Optional[str] = None,
         reply_to: Optional[str] = None,
         list_unsubscribe: Optional[str] = None,
+        results_out: Optional[List[bool]] = None,
     ) -> tuple[int, int]:
         """
         Send an email to one or more recipients
@@ -1140,6 +1141,16 @@ class EmailService:
                     results = [False] * len(batch)
             else:
                 results = []
+
+        # One entry per address in `to_emails`, in order. A caller that tracks
+        # delivery per recipient needs this: the (sent, failed) counts alone
+        # cannot say *which* member was not reached, which is what pushed the
+        # department-message fan-out into one send_email call per person — and
+        # that takes the single-message SMTP path, opening and closing a
+        # connection per member with no pacing and no reconnect-retry.
+        if results_out is not None:
+            results_out.clear()
+            results_out.extend(results)
 
         success_count = sum(1 for r in results if r)
         failure_count = len(to_emails) - success_count
