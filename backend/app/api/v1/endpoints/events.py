@@ -30,12 +30,22 @@ from pydantic import BaseModel
 from sqlalchemy import String, cast, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.dependencies import get_current_user, require_permission
+from app.api.dependencies import (
+    get_current_user,
+    require_permission,
+    user_has_permission,
+)
 from app.core.audit import log_audit_event
 from app.core.database import get_db
 from app.core.error_codes import CodedHTTPException, ErrorCode
 from app.core.utils import generate_uuid, safe_error_detail
-from app.models.event import Event, EventExternalAttendee, EventType, RSVPStatus
+from app.models.event import (
+    AttendeeVisibility,
+    Event,
+    EventExternalAttendee,
+    EventType,
+    RSVPStatus,
+)
 from app.models.notification import NotificationChannel
 from app.models.user import Organization, User, UserStatus
 from app.schemas.documents import DocumentFolderResponse
@@ -49,6 +59,7 @@ from app.schemas.event import (
     CheckInRequest,
     EligibleMemberResponse,
     EndEventResponse,
+    EventAttendeeResponse,
     EventCancel,
     EventCreate,
     EventListItem,
@@ -75,6 +86,7 @@ from app.schemas.event import (
     RSVPToSeriesResponse,
     SelfCheckInRequest,
     SendRemindersResponse,
+    UserRSVPSummary,
     VisibleEventTypesResponse,
 )
 from app.schemas.organization import MembershipTierSettings
@@ -85,6 +97,7 @@ from app.services.event_service import (
     DEFAULT_ALLOWED_RSVP_STATUSES,
     PHASE_GATE_PREFIX,
     EventService,
+    resolve_attendee_visibility,
 )
 from app.services.guest_check_in_service import GuestCheckInService
 from app.services.integration_services.notification_dispatch import (
@@ -179,6 +192,7 @@ def _build_event_response(event: Event, **extra_fields) -> EventResponse:
         is_mandatory=event.is_mandatory,
         mandatory_membership_types=event.mandatory_membership_types,
         allow_guests=event.allow_guests,
+        attendee_visibility=event.attendee_visibility,
         send_reminders=event.send_reminders,
         reminder_target=event.reminder_target,
         reminder_schedule=event.reminder_schedule or [24],
@@ -228,6 +242,18 @@ def _build_event_response(event: Event, **extra_fields) -> EventResponse:
         updated_at=event.updated_at,
         **extra_fields,
     )
+
+
+def _display_name(user) -> Optional[str]:
+    """Human-readable name for a roster row, falling back to the username.
+
+    A member whose first/last names are both blank would otherwise appear as an
+    empty row on the attendee list — present, but nameless.
+    """
+    if not user:
+        return None
+    full_name = f"{user.first_name or ''} {user.last_name or ''}".strip()
+    return full_name or user.username
 
 
 def _build_rsvp_response(rsvp, user=None) -> RSVPResponse:
@@ -645,6 +671,10 @@ EVENT_SETTINGS_DEFAULTS = {
         "requires_rsvp": False,
         "allowed_rsvp_statuses": DEFAULT_ALLOWED_RSVP_STATUSES,
         "allow_guests": False,
+        # Ships as "managers", which is the behavior every installation had
+        # before the attendee list was reachable without events.manage. An org
+        # opts into member-visible rosters deliberately.
+        "attendee_visibility": AttendeeVisibility.MANAGERS.value,
         "is_mandatory": False,
         "send_reminders": True,
         "reminder_target": "going",
@@ -961,6 +991,25 @@ async def get_event(
         else 0
     )
 
+    # Waitlist standing, computed in Python from the already eager-loaded
+    # rsvps — no extra query. Ordered by responded_at because that is the
+    # column promote_from_waitlist promotes on; ordering by updated_at would
+    # send a member to the back of the line for editing a note, and would make
+    # the position we display disagree with who actually gets promoted.
+    waitlisted = sorted(
+        (r for r in (event.rsvps or []) if r.status == RSVPStatus.WAITLISTED),
+        key=lambda r: r.responded_at,
+    )
+    waitlist_count = len(waitlisted)
+    user_waitlist_position = next(
+        (
+            index + 1
+            for index, rsvp in enumerate(waitlisted)
+            if str(rsvp.user_id) == str(current_user.id)
+        ),
+        None,
+    )
+
     # Resolved only on the detail view, which is the one screen that shows who
     # closed the event. Rows backfilled from the pre-column marker carry no
     # actor, so this stays None and the badge reads "Attendance finalized"
@@ -992,6 +1041,23 @@ async def get_event(
                 user_rsvp.status.value
                 if hasattr(user_rsvp.status, "value")
                 else user_rsvp.status
+            )
+            if user_rsvp
+            else None
+        ),
+        waitlist_count=waitlist_count,
+        user_waitlist_position=user_waitlist_position,
+        user_rsvp=(
+            UserRSVPSummary(
+                status=(
+                    user_rsvp.status.value
+                    if hasattr(user_rsvp.status, "value")
+                    else user_rsvp.status
+                ),
+                guest_count=user_rsvp.guest_count or 0,
+                notes=user_rsvp.notes,
+                dietary_restrictions=user_rsvp.dietary_restrictions,
+                accessibility_needs=user_rsvp.accessibility_needs,
             )
             if user_rsvp
             else None
@@ -1551,6 +1617,72 @@ async def list_event_rsvps(
     )
 
     return [_build_rsvp_response(rsvp, user=rsvp.user) for rsvp in rsvps]
+
+
+@router.get("/{event_id}/attendees", response_model=list[EventAttendeeResponse])
+async def list_event_attendees(
+    event_id: UUID,
+    skip: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=500),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_permission("events.view")),
+):
+    """
+    List the members who are going to an event.
+
+    The member-facing counterpart to ``GET /{event_id}/rsvps``: a going-only
+    list of names, with none of the contact details, accommodation notes, guest
+    counts or check-in times that endpoint returns. Whether an ordinary member
+    may call it is decided per event, falling back to the organization's
+    ``events.defaults.attendee_visibility`` setting.
+
+    Note there is deliberately no ``status_filter`` parameter. Adding one is how
+    ``waitlisted`` and ``not_going`` would eventually become member-visible;
+    this endpoint returns exactly one status, always.
+
+    **Authentication required**
+    **Requires permission: events.view**
+    """
+    service = EventService(db)
+    event, rsvps = await service.list_event_attendees_for_member(
+        event_id=event_id,
+        organization_id=current_user.organization_id,
+        skip=skip,
+        limit=limit,
+    )
+
+    # Org-scoped miss. 404 rather than 403 so a foreign event id cannot be used
+    # to probe which ids exist in another organization (Pitfall #14a/#14b — the
+    # permission dependency above asserts nothing about *this* event).
+    if not event:
+        raise HTTPException(status_code=404, detail="Event not found")
+
+    org_result = await db.execute(
+        select(Organization).where(Organization.id == current_user.organization_id)
+    )
+    organization = org_result.scalar_one_or_none()
+    visibility = resolve_attendee_visibility(
+        event, organization.settings if organization else None
+    )
+
+    if visibility != AttendeeVisibility.MEMBERS and not user_has_permission(
+        current_user, "events.manage"
+    ):
+        raise HTTPException(
+            status_code=403,
+            detail="The attendee list for this event is not shared with members",
+        )
+
+    return [
+        EventAttendeeResponse(
+            user_id=rsvp.user_id,
+            user_name=_display_name(rsvp.user),
+            status=(
+                rsvp.status.value if hasattr(rsvp.status, "value") else rsvp.status
+            ),
+        )
+        for rsvp in rsvps
+    ]
 
 
 @router.get("/{event_id}/rsvp-history", response_model=list[RSVPHistoryResponse])

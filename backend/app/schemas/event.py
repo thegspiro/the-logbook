@@ -19,6 +19,7 @@ from pydantic import (
 )
 
 from app.models.event import (
+    AttendeeVisibility,
     CheckInWindowType,
     EventType,
     RecurrencePattern,
@@ -37,6 +38,7 @@ _EVENT_TYPES = {e.value for e in EventType}
 _CHECKIN_WINDOW_TYPES = {e.value for e in CheckInWindowType}
 _RECURRENCE_PATTERNS = {e.value for e in RecurrencePattern}
 _RSVP_STATUSES = {e.value for e in RSVPStatus}
+_ATTENDEE_VISIBILITIES = {e.value for e in AttendeeVisibility}
 
 
 def _enum_check(valid: set, field: str):
@@ -115,6 +117,9 @@ class EventDefaultsUpdate(BaseModel):
     _check_check_in_window_type = field_validator("check_in_window_type")(
         _enum_check(_CHECKIN_WINDOW_TYPES, "check_in_window_type")
     )
+    _check_attendee_visibility = field_validator("attendee_visibility")(
+        _enum_check(_ATTENDEE_VISIBILITIES, "attendee_visibility")
+    )
 
     event_type: Optional[str] = Field(None, max_length=100)
     check_in_window_type: Optional[str] = Field(None, max_length=50)
@@ -124,6 +129,10 @@ class EventDefaultsUpdate(BaseModel):
     requires_rsvp: Optional[bool] = None
     allowed_rsvp_statuses: Optional[List[str]] = None
     allow_guests: Optional[bool] = None
+    # The org-wide fallback for events that set no override of their own. Unlike
+    # the per-event column, this one has no "inherit" state — it is the bottom
+    # of the chain, so None here means "leave the setting unchanged".
+    attendee_visibility: Optional[str] = Field(None, max_length=20)
     is_mandatory: Optional[bool] = None
     send_reminders: Optional[bool] = None
     reminder_target: Optional[str] = Field(None, pattern="^(going|all|none)$")
@@ -213,6 +222,14 @@ class EventBase(BaseModel):
         description="Membership tier IDs required to attend; null means all member types",
     )
     allow_guests: bool = Field(default=False)
+    attendee_visibility: Optional[str] = Field(
+        default=None,
+        max_length=20,
+        description=(
+            "Who may see the attendee list: 'members' or 'managers'. "
+            "Null inherits the organization's events default."
+        ),
+    )
     send_reminders: bool = Field(default=True)
     reminder_target: str = Field(default="going", pattern="^(going|all|none)$")
     reminder_schedule: List[int] = Field(
@@ -273,6 +290,9 @@ class EventCreate(EventBase):
     _check_check_in_window_type = field_validator("check_in_window_type")(
         _enum_check(_CHECKIN_WINDOW_TYPES, "check_in_window_type")
     )
+    _check_attendee_visibility = field_validator("attendee_visibility")(
+        _enum_check(_ATTENDEE_VISIBILITIES, "attendee_visibility")
+    )
 
     @model_validator(mode="before")
     @classmethod
@@ -303,6 +323,9 @@ class EventUpdate(BaseModel):
     _check_check_in_window_type = field_validator("check_in_window_type")(
         _enum_check(_CHECKIN_WINDOW_TYPES, "check_in_window_type")
     )
+    _check_attendee_visibility = field_validator("attendee_visibility")(
+        _enum_check(_ATTENDEE_VISIBILITIES, "attendee_visibility")
+    )
 
     title: Optional[str] = Field(None, min_length=1, max_length=200)
     description: Optional[str] = None
@@ -325,6 +348,10 @@ class EventUpdate(BaseModel):
     is_mandatory: Optional[bool] = None
     mandatory_membership_types: Optional[List[str]] = None
     allow_guests: Optional[bool] = None
+    # An explicit null here means "go back to inheriting the org default" — a
+    # real value the organizer can choose, not an omission. The frontend must
+    # send it rather than dropping the key, and apply_updates writes it.
+    attendee_visibility: Optional[str] = Field(None, max_length=20)
     send_reminders: Optional[bool] = None
     reminder_target: Optional[str] = Field(None, pattern="^(going|all|none)$")
     reminder_schedule: Optional[List[int]] = None
@@ -358,6 +385,28 @@ class EventCancel(BaseModel):
     send_notifications: bool = Field(
         default=False, description="Send cancellation notifications to RSVPs"
     )
+
+
+class UserRSVPSummary(UTCResponseBase):
+    """The calling member's own RSVP, echoed back on the event detail response.
+
+    Exists so the RSVP modal can open prefilled. Before this, "Update RSVP"
+    reset to defaults every time, which quietly discarded whatever the member
+    had typed — and, once guests began consuming capacity, silently released
+    the seats their guests were holding.
+
+    Unlike ``EventAttendeeResponse`` this is the caller's *own* record, so the
+    accommodation fields belong here. It must never be used to describe anyone
+    else.
+    """
+
+    status: str
+    guest_count: int = 0
+    notes: Optional[str] = None
+    dietary_restrictions: Optional[str] = None
+    accessibility_needs: Optional[str] = None
+
+    model_config = _response_config
 
 
 class EventResponse(EventBase, UTCResponseBase):
@@ -402,6 +451,18 @@ class EventResponse(EventBase, UTCResponseBase):
     maybe_count: Optional[int] = None
     user_rsvp_status: Optional[str] = None  # Current user's RSVP status
     location_name: Optional[str] = None  # Name of the location if location_id is set
+
+    # Waitlist standing for the calling member. Both are per-request rather
+    # than per-event, so they are supplied by the endpoint, not read off the
+    # model. Position is 1-based over responded_at ascending — the same order
+    # promote_from_waitlist actually promotes in.
+    waitlist_count: Optional[int] = None
+    user_waitlist_position: Optional[int] = None
+
+    # The caller's own RSVP in full, so "Update RSVP" can open prefilled
+    # instead of blank. Their own record, so the accommodation fields are fine
+    # here — this is not the roster other members see.
+    user_rsvp: Optional["UserRSVPSummary"] = None
 
     model_config = _response_config
 
@@ -499,6 +560,26 @@ class RSVPResponse(RSVPBase, UTCResponseBase):
     override_duration_minutes: Optional[int] = None
     overridden_by: Optional[UUID] = None
     overridden_at: Optional[datetime] = None
+
+    model_config = _response_config
+
+
+class EventAttendeeResponse(UTCResponseBase):
+    """One row of the going-only roster an ordinary member may see.
+
+    Deliberately NOT built on ``RSVPBase``/``RSVPResponse``. Those carry
+    ``user_email``, ``notes``, ``dietary_restrictions``,
+    ``accessibility_needs``, ``guest_count`` and the whole check-in and
+    override block — contact details, medical/accommodation information and
+    attendance performance that belong to the organizer view alone. Inheriting
+    from them to save a few lines is exactly how those fields would reach every
+    member in the department, so this schema is a flat, explicit allowlist and
+    must stay one.
+    """
+
+    user_id: UUID
+    user_name: Optional[str] = None
+    status: str
 
     model_config = _response_config
 
