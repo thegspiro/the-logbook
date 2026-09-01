@@ -12056,6 +12056,11 @@ export const SHOTS = [
     prepare: async (page) => {
       await page
         .getByText(/Action Required: Validate attendance/)
+        // .first(): the seeder's validation fixture slides an event forward on
+        // every run, and the post-event task raises a notice for each event
+        // that ended unfinalized, so the inbox accumulates them -- 15 by the
+        // time this broke. A bare waitFor is strict and fails on the second.
+        .first()
         .waitFor({ state: "visible", timeout: 20_000 });
     },
     fullPage: true,
