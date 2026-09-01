@@ -2086,6 +2086,13 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       }
     }
     setCompartments(next);
+    // Marked here rather than at each call site: replacing the contents is an
+    // unsaved change on every path that does it, and the vehicle-preset branch
+    // was the one that forgot. With the guard left disabled, navigating away
+    // after the success toast left the server-side template empty — the old
+    // compartments are already deleted by this point — and discarded the
+    // preset the screen was showing, without a warning.
+    markDirty();
     const expanded = new Set<string>();
     next.forEach((c) => expanded.add(c.id ?? c.clientKey));
     setExpandedCompartments(expanded);
@@ -2280,7 +2287,6 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
         }));
 
         if (!(await replaceAllCompartments(imported))) return;
-        markDirty();
         toast.success(`Imported ${imported.length} compartment(s)`);
       } catch {
         toast.error('Failed to parse template file');
@@ -2411,7 +2417,6 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
 
     if (!(await replaceAllCompartments(imported))) return;
     setCsvPreview(null);
-    setIsDirty(true);
     toast.success(`Imported ${imported.length} compartment(s) with ${csvPreview.length} item(s) from CSV`);
     // Imported rows are names on a page, not catalog links. Saying so here is
     // what stops a template looking finished while tracking nothing — the

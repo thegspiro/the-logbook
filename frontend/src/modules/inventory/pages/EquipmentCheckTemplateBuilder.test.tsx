@@ -1512,6 +1512,27 @@ describe('EquipmentCheckTemplateBuilder replacing a saved template’s contents'
     await waitFor(() => expect(deleteCompartmentsBulk).toHaveBeenCalledWith('template-1', ['cab', 'bag', 'section']));
   });
 
+  it('marks the template unsaved so the preset is not lost on navigation', async () => {
+    // The JSON and CSV import branches marked it; the vehicle preset did not.
+    // On a published template that is masked, because
+    // ensureDraftBeforeStructureEdit demotes it to a draft and marks dirty on
+    // the way — so this starts from a template that is ALREADY a draft, where
+    // that helper returns early and nothing else marks anything. The old
+    // compartments are deleted by this point, so navigating away after the
+    // success toast left the server-side template empty and discarded the
+    // preset on screen, with the guard never firing.
+    getTemplate.mockResolvedValue({ ...structuredClone(vehicleTemplate), isActive: false });
+    const user = userEvent.setup();
+    renderBuilder();
+
+    await loadEnginePreset(user);
+    await screen.findByRole('button', { name: /Vehicle preset/ });
+
+    await user.click(screen.getByRole('button', { name: 'Back to templates' }));
+
+    expect(await screen.findByText('Leave without saving?')).toBeInTheDocument();
+  });
+
   it('keeps the template intact when the discard fails', async () => {
     // Deleted before the swap, so a failure leaves the template as it was
     // rather than half-replaced with no way back.

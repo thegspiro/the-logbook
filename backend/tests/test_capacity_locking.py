@@ -31,6 +31,7 @@ from app.services import (
     event_request_service,
     event_service,
     finance_service,
+    inventory_service,
     scheduling_service,
     testing_checklist_service,
 )
@@ -372,4 +373,42 @@ class TestTestingRunImplicitFirstRun:
             "the session's identity map from the plain read that preceded the "
             "lock, and without populate_existing the locked row is discarded "
             "in favour of the stale instance."
+        )
+
+
+class TestFirstLotLedgerTransition:
+    """An item crosses from the `quantity` column to the lot ledger exactly
+    once, when its first lot is recorded — and whatever was on the shelf is
+    copied into an opening-balance lot on the way. Read-then-write, so the
+    same shape as a seat count: two deliveries recorded in the same moment
+    both saw no lot, both read the same positive quantity, and both wrote it
+    into a lot of their own. That is not an over-count on a tally, it is stock
+    the department does not have, offered for issue.
+    """
+
+    def test_the_item_rows_are_locked(self):
+        source = _source_of(
+            inventory_service.InventoryService._carry_forward_column_stock
+        )
+        assert "with_for_update()" in source, (
+            "The item rows are what both deliveries share — the lot that "
+            "would conflict does not exist yet — so the transition serializes "
+            "on them or not at all."
+        )
+
+    def test_both_reads_are_locking(self):
+        """The lock alone is not enough; both halves of pitfall #27 apply.
+
+        Under REPEATABLE READ a plain SELECT answers from the snapshot taken
+        at the transaction's first read, which predates the lock. The item
+        read carries the `quantity > 0` filter that makes the loser of the
+        race carry nothing forward, and the lot-existence read has to be
+        current for the same reason.
+        """
+        source = _source_of(
+            inventory_service.InventoryService._carry_forward_column_stock
+        )
+        assert source.count("with_for_update()") == 2, (
+            "Both the item read and the lot-existence read must be locking "
+            f"reads; found {source.count('with_for_update()')}."
         )
