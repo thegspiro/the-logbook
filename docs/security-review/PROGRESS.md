@@ -78,6 +78,33 @@ Storefront & payments, once this PR merges.
 
 ---
 
+### 2026-09-01 — Feature 04 (Storefront & payments, pass 3) — Codex round 6: a schema change to a table storefront writes through, confirmed harmless
+
+Codex reviewed round 5's own fix and found one more real gap: round 5's
+"file changed, imported symbol didn't" check of `models/notification.py`
+covered the `NotificationChannel` enum but missed that `NotificationLog` —
+the table `StorefrontService.add_order_message` writes to via
+`NotificationsService.log_notification` — gained a new nullable
+`department_message_id` FK and a `UniqueConstraint("department_message_id",
+"recipient_id", "channel")` in the same diff.
+
+Checked whether that constraint can reject a storefront-originated insert:
+`add_order_message`'s `log_data` never sets `department_message_id`, so it
+takes its default (`NULL`). Under InnoDB (MySQL 8.0), a `UNIQUE` index
+treats `NULL` as distinct from every other `NULL`, including inside a
+composite key — two rows with `department_message_id IS NULL` never
+collide on that account, whatever `recipient_id`/`channel` they share. So a
+member getting several `storefront` in-app notices for one order still
+inserts every time, exactly as before this column existed. The constraint
+only activates between rows sharing a real, non-`NULL`
+`department_message_id`, which storefront's own call never sets. No
+storefront-reachable failure mode.
+
+Fixed in `docs/security-review/SF-04-storefront-payments.md`'s Pass 3
+section.
+
+---
+
 ### 2026-09-01 — Feature 04 (Storefront & payments, pass 3) — Codex round 5: a timing overstatement corrected, `permission_matches`'s own alias-expansion call named, three more imports verified at the symbol level
 
 Codex reviewed round 4's own fix and found three more real gaps, none a new

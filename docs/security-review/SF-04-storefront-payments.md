@@ -205,14 +205,44 @@ above already had to draw once. Checked precisely this time, per symbol:
 
 All three: the file changed, the imported symbol didn't. No finding.
 
+**Correction (Codex review on this PR, round 6): "the imported symbol
+didn't change" isn't the whole story for `NotificationLog` — the table
+itself changed, and storefront writes to it through a different symbol than
+the one checked.** `StorefrontService.add_order_message`
+(`storefront_service.py:2260`) calls `self.in_app_notifications
+.log_notification(...)`, which does `NotificationLog(organization_id=...,
+**log_data)` — an insert into the exact table the messaging-feature diff
+added `department_message_id` (a nullable FK) and a new
+`UniqueConstraint("department_message_id", "recipient_id", "channel")` to.
+Checking only that `NotificationChannel` (the enum) was untouched missed
+that the table it's a column _type_ for gained a new column and constraint.
+
+Checked whether that constraint can reject or otherwise disrupt a
+storefront-originated insert: `add_order_message`'s `log_data` dict
+(reproduced above) has no `department_message_id` key, so the new column
+takes its default — `NULL`, per its `nullable=True` declaration with no
+explicit default. Under InnoDB (MySQL 8.0, this app's database per
+CLAUDE.md), a `UNIQUE` index treats `NULL` as distinct from every other
+`NULL`, including in a composite key — two rows with `department_message_id
+IS NULL` never collide on that account, regardless of what
+`recipient_id`/`channel` they share. So an order-status notification to the
+same member on the same channel (routine — a member can get several
+`storefront` in-app notices for one order) still inserts every time, exactly
+as before this column existed; the constraint only ever activates between
+rows that share a real, non-`NULL` `department_message_id`, which
+`add_order_message` never sets. No finding — the new constraint has no
+storefront-reachable failure mode.
+
 **No new findings** beyond the corrections above (a wrong "doesn't reach it"
 authorization claim, restated with the actual mechanism; a lost `GET
 /permissions` exception; a wrong export line citation; two scope artifacts a
 filename filter missed; two shared-dependency changes reviewed and confirmed
 safe; two `dependencies.py`/`core/permissions.py` legacy-expansion call
 sites proven a no-op, with the "every request" timing corrected; three more
-imports verified unchanged at the symbol level) — all in this write-up
-across five Codex rounds, none in application code.
+imports verified unchanged at the symbol level; a schema change to a table
+storefront writes through, confirmed to have no storefront-reachable
+failure mode) — all in this write-up across six Codex rounds, none in
+application code.
 
 **Completion gate:** no backend or frontend source file was modified by
 this pass — the `git diff` above is definitive, not merely a `flake8`/
