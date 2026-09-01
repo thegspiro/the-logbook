@@ -1668,3 +1668,71 @@ describe('EquipmentCheckTemplateBuilder duplication identity', () => {
     expect(new Set(rowIds).size).toBe(2);
   }, 15_000);
 });
+
+describe('EquipmentCheckTemplateBuilder flushing debounced edits on save', () => {
+  // The flush of the 1.5s auto-save window used to run before setSaving and
+  // outside the try/catch, so a failure escaped as an unhandled rejection:
+  // no error toast, and the pending edits had already been consumed on the
+  // way out with nothing left to retry.
+  beforeEach(() => {
+    vi.clearAllMocks();
+    getTemplate.mockReset();
+    getTemplate.mockResolvedValue(structuredClone(template));
+    updateCheckItem.mockReset();
+    updateCheckItem.mockResolvedValue({});
+    updateCompartment.mockReset();
+    updateCompartment.mockResolvedValue({});
+    createEquipmentCheckTemplate.mockResolvedValue({ ...template, id: 'draft-1', isActive: false });
+    updateEquipmentCheckTemplate.mockReset();
+    updateEquipmentCheckTemplate.mockResolvedValue(template);
+    reorderItems.mockResolvedValue(undefined);
+  });
+
+  /** Queue a debounced item edit, then press Save inside the debounce window. */
+  const editThenSaveImmediately = async () => {
+    mockViewport('laptop');
+    renderBuilder();
+    fireEvent.click(await screen.findByRole('button', { name: 'Radio selection checkbox' }));
+    fireEvent.click(screen.getByRole('button', { name: /^Set (Required|Optional)$/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Save draft/ }));
+  };
+
+  it('sends the pending edit rather than letting Save race it', async () => {
+    await editThenSaveImmediately();
+
+    await waitFor(() =>
+      expect(updateCheckItem).toHaveBeenCalledWith('radio', { is_required: false })
+    );
+  });
+
+  it('reports a failed flush through the save error toast', async () => {
+    updateCheckItem.mockRejectedValue(new Error('Network Error'));
+
+    await editThenSaveImmediately();
+
+    await waitFor(() => expect(toastError).toHaveBeenCalled());
+    // The bulk action raises a success toast of its own; the save must not.
+    expect(toastSuccess).not.toHaveBeenCalledWith('Draft saved');
+  });
+
+  it('leaves the save button usable again after a failed flush', async () => {
+    updateCheckItem.mockRejectedValue(new Error('Network Error'));
+
+    await editThenSaveImmediately();
+
+    await waitFor(() => expect(toastError).toHaveBeenCalled());
+    await waitFor(() => expect(screen.getByRole('button', { name: /Save draft/ })).toBeEnabled());
+  });
+
+  it('does not save the template when the flush failed', async () => {
+    // The flush is the first thing inside the try, so a failure there must
+    // abort the save rather than persisting a template built from state the
+    // server never received.
+    updateCheckItem.mockRejectedValue(new Error('Network Error'));
+
+    await editThenSaveImmediately();
+
+    await waitFor(() => expect(toastError).toHaveBeenCalled());
+    expect(updateEquipmentCheckTemplate).not.toHaveBeenCalled();
+  });
+});

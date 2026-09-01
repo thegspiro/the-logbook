@@ -6781,6 +6781,15 @@ class InventoryService:
         item = await self._get_item_locked(UUID(str(row.item_id)), organization_id)
         if not item:
             return None, "Linked inventory item not found"
+        # Before the lot below exists, not after: creating it is what flips
+        # this item to the lot ledger, and from that moment every reader stops
+        # consulting item.quantity. A cupboard counted in the column — ten
+        # pairs of gloves recorded by hand — would otherwise vanish the instant
+        # a five-unit delivery was received against it, leaving five issuable
+        # where there are fifteen, and low-stock alerts firing on a full shelf.
+        await self._carry_forward_column_stock(
+            str(organization_id), [str(row.item_id)], current_user_id
+        )
         lot = InventoryLot(
             organization_id=str(organization_id),
             inventory_item_id=row.item_id,
