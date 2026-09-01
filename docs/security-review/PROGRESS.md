@@ -78,6 +78,51 @@ Storefront & payments, once this PR merges.
 
 ---
 
+### 2026-09-01 — Feature 04 (Storefront & payments, pass 3) — Codex round 2: the router-level module gate does reach storefront, the routing inventory dropped a known exception, and two dependency-graph files were missed by a filename filter
+
+Codex reviewed round 1's own fix commit and found three more real gaps —
+round 1's "doesn't reach it" claim about `a518957e` was itself wrong, not
+just under-scoped:
+
+- **`storefront.router` is mounted in `app/api/v1/api.py` with
+  `dependencies=module_gate("storefront", "The Department Store")`, and
+  `module_gate` → `require_module` → `Depends(get_request_enabled_modules)`
+  — so `a518957e` runs on every storefront request, contrary to round 1's
+  claim that it "doesn't reach this feature's routes at all."** Re-verified
+  the actual consequence rather than repeating the error: `require_module`'s
+  check passes through (no 403) when `get_request_enabled_modules` returns
+  `None` — including, post-`a518957e`, for an invalid/expired session, not
+  just an absent one. That sounds like a weakening, but every one of
+  storefront's 48 routes independently requires at least
+  `Depends(get_current_user)` (grep-confirmed), and `a518957e` explicitly
+  left that mandatory path rejecting invalid credentials with 401 unchanged
+  — so a caller the module gate lets through anonymously is rejected one
+  dependency later by the endpoint's own auth check regardless. For a
+  genuinely authenticated caller whose org has the module off, `enabled`
+  resolves to the org's real flag set (a518957e doesn't touch that path) and
+  the 403 still fires. No finding — but the correct statement is "reaches
+  every route and is a no-op for this route composition," not "doesn't
+  reach it."
+- **The routing-inventory correction itself dropped a real, already-documented
+  exception.** Restating "storefront's routes are permission-gated" without
+  qualification contradicts this document's own pass-1 record: `GET
+/permissions` (`storefront.py:1512-1521`) is a deliberate
+  `Depends(get_current_user)` self-probe, not `require_permission(...)`.
+  Restated with the exception preserved.
+- **Two files in this feature's real dependency graph aren't named
+  storefront/embroidery/personalization/thread, so round 1's filename filter
+  missed them:** `app/utils/embroidery.py` (imported by both
+  `storefront_service.py` and `schemas/storefront.py` — it isn't a
+  migration, so the migration-filename filter never had a chance to catch
+  it) and `20260825_1520_c6a3f8b41e29_settle_variant_size_order.py` (named
+  for what it does, not for "storefront"). Both diffed explicitly against
+  `d8c5e39e`: zero changes, same conclusion as everything else in scope.
+
+All three fixed in `docs/security-review/SF-04-storefront-payments.md`'s
+Pass 3 section.
+
+---
+
 ### 2026-09-01 — Feature 04 (Storefront & payments, pass 3) — Codex round 1: a feature-local diff can't clear shared authorization code, plus a wrong line citation
 
 Codex reviewed this PR's first commit and found two real gaps, neither a

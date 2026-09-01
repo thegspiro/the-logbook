@@ -20,36 +20,79 @@ under-scoping — all ten backend files (`storefront.py`,
 `storefront_service.py`, `storefront_notification_service.py`,
 `email_templates_storefront.py`, `storefront_preview_service.py`,
 `storefront_payments.py`, `paypal_webhook.py`, `models/storefront.py`,
-`schemas/storefront.py`, `utils/size_order.py`), the entire
-`frontend/src/modules/storefront/` tree, and `alembic/versions/` filtered
-for any storefront/embroidery/personalization/thread-named migration.
-**Zero changes across the entire feature-local domain** — `git diff --stat`
-returns nothing for any of it. SF-5 and SF-6's fixes, and every pass-1/2
-"Verified good" item, stand unmodified and unre-derived.
+`schemas/storefront.py`, `utils/size_order.py`), **plus two artifacts a
+filename-only filter missed on the first pass of this correction, caught by
+a second Codex round**: `app/utils/embroidery.py` (imported by both
+`storefront_service.py` and `schemas/storefront.py`, so part of this
+feature's real dependency graph even though its name doesn't match a
+storefront/embroidery/personalization/thread filename filter applied to
+`alembic/versions/` — it isn't a migration) and the
+`settle_variant_size_order` migration
+(`20260825_1520_c6a3f8b41e29_settle_variant_size_order.py`, named for what
+it does rather than for "storefront"), the entire
+`frontend/src/modules/storefront/` tree, and every other migration whose
+filename matches storefront/embroidery/personalization/thread. **Zero
+changes across the entire domain, now actually covering everything this
+feature depends on** — `git diff --stat` returns nothing for any of it. SF-5
+and SF-6's fixes, and every pass-1/2 "Verified good" item, stand unmodified
+and unre-derived.
 
-**Correction (Codex review on this PR): a feature-local diff cannot cover
-shared authorization code, and it isn't the whole story here.** The
-zero-diff conclusion above only speaks to the ten files this feature owns.
-Storefront's own routes are gated with `require_permission("storefront.view"
-| "storefront.order" | "storefront.manage")` (confirmed by grep —
-`storefront.py` calls neither `module_gate` nor `require_module`
-anywhere), so `a518957e`'s `get_request_enabled_modules` change (reviewed in
-`PERM-02-permissions-roles.md`'s pass 3, module-gate-only) doesn't reach
-this feature's routes at all. `core/permissions.py`'s diff since `d8c5e39e`
-does touch lines near `STOREFRONT_VIEW`/`STOREFRONT_ORDER`/
-`STOREFRONT_MANAGE` — checked precisely: every hit is adjacent-context noise
-from the unrelated `equipment_check.*` → `inventory.check_*` rename
-(`cf033864`, also reviewed in `PERM-02-permissions-roles.md`'s pass 3); none
-of the three storefront `Permission(...)` definitions themselves changed.
-The rename **did** reach this feature's own test suite, though:
-`test_corporate_storefront_grants.py` (+28/-1) and
-`test_storefront_grant_backfill.py` (+15/-1) both needed a
-`LEGACY_PERMISSION_ALIASES`-derived translation so their frozen
-pre-rename migration snapshots keep comparing against the old
-`equipment_check.*` spelling instead of silently matching nothing once the
-live registry moved to `inventory.check_*` — a downstream test-fixture
-adaptation of the already-reviewed rename, not a new behavior or a new
-finding; the backfill migrations' own logic is untouched by either diff.
+**Correction (Codex review on this PR, two rounds): the router-level module
+gate does reach every storefront request, and the routing/auth inventory had
+two errors.** Round 1 of this correction claimed `a518957e`'s
+`get_request_enabled_modules` change "doesn't reach this feature's routes at
+all," reasoning only from a grep of `storefront.py` itself. Round 2 found
+the real wiring: `app/api/v1/api.py` mounts `storefront.router` with
+`dependencies=module_gate("storefront", "The Department Store")`, and
+`module_gate` returns `[Depends(require_module(module, label))]` —
+`require_module`'s inner check depends on `get_request_enabled_modules`
+directly. So `a518957e` runs on **every** storefront request, contrary to
+round 1's claim.
+
+Re-verified what that actually means rather than repeating the same class of
+error: `require_module`'s check is `if enabled is None or module in
+enabled: return` — an unusable session (`enabled is None`, whether from no
+cookie at all or, post-`a518957e`, an invalid one) makes the module gate
+**pass through without checking the module flag**. That sounds like a
+weakening, but it doesn't change the outcome for storefront specifically, for
+a reason particular to this feature's routes: `module_gate` runs before an
+endpoint's own auth dependency in FastAPI's resolution order, but the
+endpoint's own dependency still runs immediately after and still uses the
+**mandatory** `get_current_user` (or `require_permission`, which calls it),
+which `a518957e` explicitly does not change — it still rejects a missing or
+invalid credential with 401. Storefront has no route that would proceed past
+that second check anonymously: all 48 routes require at least
+`Depends(get_current_user)` (grep-confirmed against the current file). So a caller with no session or an invalid one
+is rejected by the endpoint's own auth dependency regardless of what the
+module gate decided — the module-gate pass-through and the endpoint's own
+rejection land on the same outcome, just via a different one of the two
+checks. For a genuinely authenticated caller whose org has the module
+switched off, `enabled` resolves to the org's real flag set (unaffected by
+`a518957e`, which only touches the invalid/absent-session path) and the 403
+still fires normally. No finding — but "doesn't reach it" was wrong; the
+correct statement is "reaches it and is a no-op for this route composition."
+
+Round 2 also caught that round 1's authorization-inventory line — "every
+route is permission-gated" — is itself wrong and contradicts this
+document's own pass-1 "Verified good" section: `GET /permissions`
+(`storefront.py:1512-1521`) is a deliberate `Depends(get_current_user)`
+self-probe, not `require_permission(...)`, exactly as pass 1 already
+recorded. Restated correctly below and in `PROGRESS.md`.
+
+`core/permissions.py`'s diff since `d8c5e39e` does touch lines near
+`STOREFRONT_VIEW`/`STOREFRONT_ORDER`/`STOREFRONT_MANAGE` — checked
+precisely: every hit is adjacent-context noise from the unrelated
+`equipment_check.*` → `inventory.check_*` rename (`cf033864`, also reviewed
+in `PERM-02-permissions-roles.md`'s pass 3); none of the three storefront
+`Permission(...)` definitions themselves changed. The rename **did** reach
+this feature's own test suite, though: `test_corporate_storefront_grants.py`
+(+28/-1) and `test_storefront_grant_backfill.py` (+15/-1) both needed a
+`LEGACY_PERMISSION_ALIASES`-derived translation so their frozen pre-rename
+migration snapshots keep comparing against the old `equipment_check.*`
+spelling instead of silently matching nothing once the live registry moved
+to `inventory.check_*` — a downstream test-fixture adaptation of the
+already-reviewed rename, not a new behavior or a new finding; the backfill
+migrations' own logic is untouched by either diff.
 
 **Order export remains unbounded — carried forward again, still not
 fixed, and pass 2's own citation for it was wrong.** Pass 2 recorded this at
@@ -65,8 +108,11 @@ described, just at the range that actually contains it — a citation error
 carried unnoticed through one prior pass. Still needs a product decision (a
 row cap or a mandatory date window), not a drive-by fix.
 
-**No new findings** beyond the two citation/scope corrections above, both
-in this write-up rather than in application code.
+**No new findings** beyond the corrections above (a wrong "doesn't reach it"
+authorization claim, restated with the actual mechanism; a lost `GET
+/permissions` exception; a wrong export line citation; two scope artifacts a
+filename filter missed) — all in this write-up across two Codex rounds, none
+in application code.
 
 **Completion gate:** no backend or frontend source file was modified by
 this pass — the `git diff` above is definitive, not merely a `flake8`/
