@@ -112,6 +112,10 @@ const UNCACHEABLE_PREFIXES = [
  */
 const UNCACHEABLE_SUBSTRINGS = [
   '/rsvps', // event attendance roster (member names/status — PII)
+  '/attendees', // the member-facing half of the same roster: going-only member
+  // names. Served under a different noun, so '/rsvps' does not cover it, and a
+  // cached copy would stay readable for 90s after an organizer restricts the
+  // event's attendee visibility.
   '/rsvp-history', // per-member attendance/decline history (PII) — not matched by '/rsvps'
   '/eligible-members', // returns member first/last name + email (PII)
   '/external-attendees', // external attendee PII

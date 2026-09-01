@@ -231,6 +231,7 @@ const Dashboard: React.FC = () => {
   const [openShifts, setOpenShifts] = useState<ShiftRecord[]>([]);
   const [loadingOpenShifts, setLoadingOpenShifts] = useState(true);
   const [signingUpShiftId, setSigningUpShiftId] = useState<string | null>(null);
+  const [rsvpingEventId, setRsvpingEventId] = useState<string | null>(null);
   const [signupExpandedId, setSignupExpandedId] = useState<string | null>(null);
   const [dashboardSignupPosition, setDashboardSignupPosition] = useState('firefighter');
   const [dashboardEligiblePositions, setDashboardEligiblePositions] = useState<string[]>([]);
@@ -652,6 +653,33 @@ const Dashboard: React.FC = () => {
       toast.error(getErrorMessage(error, 'Failed to sign up for shift'));
     } finally {
       setSigningUpShiftId(null);
+    }
+  };
+
+  /**
+   * Inline RSVP from the timeline, so an event reaches the same parity as an
+   * open shift: respond where you are rather than navigating to the detail
+   * page and back. Simpler than the shift case — there is no position to
+   * choose, so there is no expand step.
+   */
+  const handleEventRSVP = async (eventId: string, status: 'going' | 'not_going') => {
+    setRsvpingEventId(eventId);
+    try {
+      const saved = await eventService.createOrUpdateRSVP(eventId, { status, guest_count: 0 });
+      // The server's status, not the requested one: a full event returns
+      // `waitlisted`, and showing "Going" for a seat they did not get is worse
+      // than showing nothing.
+      const savedStatus = saved.status ?? status;
+      setUpcomingEvents((prev) => prev.map((e) => (e.id === eventId ? { ...e, user_rsvp_status: savedStatus } : e)));
+      if (savedStatus === 'waitlisted') {
+        toast('This event is full — you have been added to the waitlist.', { icon: '⏳' });
+      } else {
+        toast.success(savedStatus === 'going' ? "You're going" : 'Response saved');
+      }
+    } catch (error) {
+      toast.error(getErrorMessage(error, 'Could not save your RSVP'));
+    } finally {
+      setRsvpingEventId(null);
     }
   };
 
@@ -1085,14 +1113,44 @@ const Dashboard: React.FC = () => {
               >
                 {getRSVPStatusLabel(evt.user_rsvp_status)}
               </span>
-            ) : (
+            ) : evt.is_cancelled || (evt.rsvp_deadline && new Date(evt.rsvp_deadline) <= new Date()) ? (
               <button
                 type="button"
                 onClick={() => void navigate(`/events/${evt.id}`)}
                 className="btn-secondary btn-auto inline-flex min-h-[44px] shrink-0 items-center text-sm font-semibold"
               >
-                {evt.requires_rsvp ? 'RSVP' : 'Open'}
+                Open
               </button>
+            ) : (
+              /* Inline, matching the open-shift row above: a member answers
+                 where they are instead of navigating to the detail page and
+                 back. requires_rsvp is not consulted — it says a response is
+                 expected, not that one is accepted. A passed rsvp_deadline is
+                 consulted, above: the API rejects those, and a prominent
+                 dashboard button that can never succeed is worse than a link. */
+              <div className="flex shrink-0 items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => void handleEventRSVP(evt.id, 'going')}
+                  disabled={rsvpingEventId === evt.id}
+                  className="btn-success btn-auto inline-flex min-h-[44px] shrink-0 items-center gap-1.5 px-3 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {rsvpingEventId === evt.id ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+                  ) : (
+                    <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" />
+                  )}
+                  <span>Going</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void handleEventRSVP(evt.id, 'not_going')}
+                  disabled={rsvpingEventId === evt.id}
+                  className="btn-secondary btn-auto inline-flex min-h-[44px] shrink-0 items-center px-3 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  Can&apos;t
+                </button>
+              </div>
             ))}
         </div>
 

@@ -6,7 +6,7 @@ Complete reference for every table, column, key and index defined by the SQLAlch
 cd backend && python scripts/generate_schema_docs.py
 ```
 
-**263 tables · 4453 columns · 848 foreign keys**
+**263 tables · 4455 columns · 848 foreign keys**
 
 ---
 
@@ -201,8 +201,8 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 |---|---|---|---|
 | [`event_external_attendees`](#event_external_attendees) | `EventExternalAttendee` | 17 | External (non-member) attendee at an event. |
 | [`event_rsvps`](#event_rsvps) | `EventRSVP` | 21 | Event RSVP model for tracking attendance |
-| [`event_templates`](#event_templates) | `EventTemplate` | 28 | Event Template model for reusable event configurations |
-| [`events`](#events) | `Event` | 52 | Event model for managing department events |
+| [`event_templates`](#event_templates) | `EventTemplate` | 29 | Event Template model for reusable event configurations |
+| [`events`](#events) | `Event` | 53 | Event model for managing department events |
 | [`rsvp_history`](#rsvp_history) | `RSVPHistory` | 8 | RSVP History model for tracking RSVP status changes. |
 
 ### Facilities
@@ -2623,6 +2623,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `max_attendees` | INTEGER | yes |  |  |  |
 | `is_mandatory` | BOOL | no |  | `0` |  |
 | `allow_guests` | BOOL | no |  | `0` |  |
+| `attendee_visibility` | VARCHAR(20) | yes |  |  |  |
 | `check_in_window_type` | ENUM(`flexible`, `strict`, `window`) | yes |  |  |  |
 | `check_in_minutes_before` | INTEGER | yes |  | `60` |  |
 | `check_in_minutes_after` | INTEGER | yes |  | `15` |  |
@@ -2666,6 +2667,7 @@ Some tables are *model-only*: they are created by `create_all()` and no migratio
 | `rsvp_deadline` | DATETIME | yes |  |  |  |
 | `max_attendees` | INTEGER | yes |  |  |  |
 | `allowed_rsvp_statuses` | JSON | yes |  |  |  |
+| `attendee_visibility` | VARCHAR(20) | yes |  |  |  |
 | `is_mandatory` | BOOL | no |  | `0` |  |
 | `mandatory_membership_types` | JSON | yes |  |  |  |
 | `allow_guests` | BOOL | no |  | `0` |  |

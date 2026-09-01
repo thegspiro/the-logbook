@@ -2,11 +2,13 @@
  * eventServices — extracted from services/api.ts
  */
 
+import type { AxiosError } from 'axios';
 import api from './apiClient';
 import type {
   CheckInMonitoringStats,
   CheckInRequest,
   Event,
+  EventAttendee,
   EventCancel,
   EventCreate,
   EventListItem,
@@ -186,6 +188,43 @@ export const eventService = {
     const params = status_filter ? { status_filter } : undefined;
     const response = await api.get<RSVP[]>(`/events/${eventId}/rsvps`, { params });
     return asArray(response.data);
+  },
+
+  /**
+   * The going-only attendee list an ordinary member is allowed to see.
+   *
+   * Distinct from `getEventRSVPs`, which needs `events.manage` and returns
+   * contact details and accommodation notes. Whether a member may see this at
+   * all is decided per event, falling back to an organization default, so a
+   * 403 is an ordinary answer rather than an error: it resolves to an empty
+   * list and the caller simply renders nothing.
+   */
+  async getEventAttendees(eventId: string): Promise<EventAttendee[]> {
+    // Paged rather than one shot: the endpoint caps a page at 500 and defaults
+    // to 100, so a single request silently truncated a large event's roster —
+    // the card would show "150" from going_count and only ever list 100 names.
+    const PAGE_SIZE = 200;
+    // A ceiling so a server that never returns a short page cannot spin here.
+    // 5000 attendees is far past any department event; if one exists, the card
+    // showing the first 5000 names is the right failure.
+    const MAX_PAGES = 25;
+    const all: EventAttendee[] = [];
+
+    try {
+      for (let page = 0; page < MAX_PAGES; page += 1) {
+        const response = await api.get<EventAttendee[]>(`/events/${eventId}/attendees`, {
+          params: { skip: page * PAGE_SIZE, limit: PAGE_SIZE },
+        });
+        const batch = asArray(response.data);
+        all.push(...batch);
+        if (batch.length < PAGE_SIZE) break;
+      }
+      return all;
+    } catch (err: unknown) {
+      const status = (err as AxiosError).response?.status;
+      if (status === 403 || status === 404) return [];
+      throw err;
+    }
   },
 
   /**

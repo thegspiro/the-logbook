@@ -247,14 +247,19 @@ describe('EventForm', () => {
   });
 
   describe('RSVP Settings', () => {
-    it('should hide RSVP options by default', () => {
+    it('hides only the deadline until a response is required', () => {
+      // Capacity, guests and roster visibility apply to an event that merely
+      // *accepts* RSVPs, so they stay available. Only a deadline is
+      // meaningless without an expectation to be late for.
       renderWithRouter(<EventForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} />);
 
       expect(screen.queryByLabelText(/rsvp deadline/i)).not.toBeInTheDocument();
-      expect(screen.queryByLabelText(/max attendees/i)).not.toBeInTheDocument();
+      expect(screen.getByLabelText(/max attendees/i)).toBeInTheDocument();
+      expect(screen.getByLabelText(/allow guests/i)).toBeInTheDocument();
+      expect(screen.getByLabelText(/who can see who's going/i)).toBeInTheDocument();
     });
 
-    it('should show RSVP options when Require RSVP is checked', async () => {
+    it('should show the deadline when Require RSVP is checked', async () => {
       renderWithRouter(<EventForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} />);
 
       const user = userEvent.setup();
@@ -266,6 +271,22 @@ describe('EventForm', () => {
         expect(screen.getByLabelText(/max attendees/i)).toBeInTheDocument();
         expect(screen.getByLabelText(/allow guests/i)).toBeInTheDocument();
       });
+    });
+
+    it('keeps capacity and guests when Require RSVP is turned back off', async () => {
+      // The submit path used to wipe max_attendees and allow_guests whenever
+      // requires_rsvp was false, which silently uncapped a voluntary event and
+      // revoked its guests on every save.
+      renderWithRouter(<EventForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} />);
+
+      const user = userEvent.setup();
+      await user.type(screen.getByLabelText(/max attendees/i), '10');
+      await user.click(screen.getByLabelText(/allow guests/i));
+      await user.click(screen.getByLabelText(/require rsvp/i));
+      await user.click(screen.getByLabelText(/require rsvp/i));
+
+      expect(screen.getByLabelText(/max attendees/i)).toHaveValue(10);
+      expect(screen.getByLabelText(/allow guests/i)).toBeChecked();
     });
 
     it('should show RSVP status options when RSVP is enabled', async () => {

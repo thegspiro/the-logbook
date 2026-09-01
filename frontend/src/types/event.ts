@@ -29,6 +29,9 @@ export interface Event {
   mandatory_membership_types?: string[];
 
   allow_guests: boolean;
+  /** Who may see the going list: 'members', 'managers', or null to inherit the
+   * organization's events default. */
+  attendee_visibility?: 'members' | 'managers' | null;
   send_reminders: boolean;
   reminder_target: 'going' | 'all' | 'none';
   reminder_schedule: number[];
@@ -73,6 +76,42 @@ export interface Event {
   not_going_count?: number;
   maybe_count?: number;
   user_rsvp_status?: RSVPStatus;
+
+  /** How many members are waiting, and where the current user sits in that
+   * queue (1-based). Position is null unless the caller is waitlisted. */
+  waitlist_count?: number | null;
+  user_waitlist_position?: number | null;
+  /** Seats taken. See EventListItem.occupied_seats. */
+  occupied_seats?: number | null;
+
+  /** The caller's own RSVP, so the modal can open prefilled rather than
+   * resetting and silently discarding what they had entered. */
+  user_rsvp?: UserRSVP | null;
+}
+
+/** The current user's own RSVP, echoed back on the event detail response.
+ *
+ * Deliberately carries neither dietary restrictions nor accessibility needs.
+ * Event detail is a cacheable GET, and putting accommodation data on it made
+ * the app's most-visited endpoint PHI-bearing. Those two fields simply start
+ * empty when the modal reopens, as they did before prefill existed;
+ * `guest_count` is the one prefill was actually for. */
+export interface UserRSVP {
+  status: RSVPStatus;
+  guest_count: number;
+  notes?: string | null;
+}
+
+/** One row of the member-visible going list.
+ *
+ * Three fields, on purpose. The manager roster (`RSVP`) additionally carries
+ * email, notes, dietary restrictions, accessibility needs, guest counts and
+ * check-in times; none of that is served to ordinary members, and widening
+ * this interface is how it would start being. */
+export interface EventAttendee {
+  user_id: string;
+  user_name?: string | null;
+  status: RSVPStatus;
 }
 
 export interface EventListItem {
@@ -94,6 +133,14 @@ export interface EventListItem {
   recurrence_parent_id?: string;
   rsvp_count?: number;
   going_count?: number;
+  /** How many members are waiting. The caller's own position is not on the
+   * list payload — it needs a window function per row, and the card already
+   * knows the member is waitlisted from user_rsvp_status. */
+  waitlist_count?: number | null;
+  /** Seats taken (1 + guest_count per going RSVP), which is what
+   * `max_attendees` caps. Capacity UI uses this; `going_count` is the people
+   * count. */
+  occupied_seats?: number | null;
   user_rsvp_status?: RSVPStatus;
 
   /**
@@ -130,6 +177,11 @@ export interface EventCreate {
   mandatory_membership_types?: string[] | undefined;
 
   allow_guests?: boolean | undefined;
+  /** null means "go back to inheriting the org default" and is a real value the
+   * organizer can pick. On an update it MUST be sent, not omitted: the backend
+   * dumps with exclude_unset, so an omitted key leaves the old override in
+   * place behind a success toast (CLAUDE.md pitfall #1). */
+  attendee_visibility?: 'members' | 'managers' | null | undefined;
   send_reminders?: boolean | undefined;
   reminder_target?: 'going' | 'all' | 'none' | undefined;
   reminder_schedule?: number[] | undefined;
@@ -162,6 +214,11 @@ export interface EventUpdate {
   mandatory_membership_types?: string[] | undefined;
 
   allow_guests?: boolean | undefined;
+  /** null means "go back to inheriting the org default" and is a real value the
+   * organizer can pick. On an update it MUST be sent, not omitted: the backend
+   * dumps with exclude_unset, so an omitted key leaves the old override in
+   * place behind a success toast (CLAUDE.md pitfall #1). */
+  attendee_visibility?: 'members' | 'managers' | null | undefined;
   send_reminders?: boolean | undefined;
   reminder_target?: 'going' | 'all' | 'none' | undefined;
   reminder_schedule?: number[] | undefined;
@@ -373,6 +430,8 @@ export interface EventTemplate {
   is_mandatory: boolean;
 
   allow_guests: boolean;
+  /** null inherits the organization's events default. */
+  attendee_visibility?: 'members' | 'managers' | null;
   check_in_window_type?: 'flexible' | 'strict' | 'window';
   check_in_minutes_before?: number;
   check_in_minutes_after?: number;
@@ -401,6 +460,7 @@ export interface EventTemplateCreate {
   is_mandatory?: boolean | undefined;
 
   allow_guests?: boolean | undefined;
+  attendee_visibility?: 'members' | 'managers' | null | undefined;
   check_in_window_type?: 'flexible' | 'strict' | 'window' | undefined;
   check_in_minutes_before?: number | undefined;
   check_in_minutes_after?: number | undefined;
@@ -435,6 +495,11 @@ export interface RecurringEventCreate {
   mandatory_membership_types?: string[] | undefined;
 
   allow_guests?: boolean | undefined;
+  /** null means "go back to inheriting the org default" and is a real value the
+   * organizer can pick. On an update it MUST be sent, not omitted: the backend
+   * dumps with exclude_unset, so an omitted key leaves the old override in
+   * place behind a success toast (CLAUDE.md pitfall #1). */
+  attendee_visibility?: 'members' | 'managers' | null | undefined;
   send_reminders?: boolean | undefined;
   reminder_target?: 'going' | 'all' | 'none' | undefined;
   reminder_schedule?: number[] | undefined;
@@ -512,6 +577,11 @@ export interface EventModuleSettings {
     requires_rsvp: boolean;
     allowed_rsvp_statuses: RSVPStatus[];
     allow_guests: boolean;
+    /** Fallback for events that set no override of their own. Unlike the
+     * per-event field this has no inherit state — it is the bottom of the
+     * chain. Ships as 'managers', which is how rosters behaved before they
+     * were shareable at all. */
+    attendee_visibility: 'members' | 'managers';
     is_mandatory: boolean;
     send_reminders: boolean;
     reminder_target: 'going' | 'all' | 'none';
