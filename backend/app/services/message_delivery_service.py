@@ -34,7 +34,7 @@ undo or block the message that was already created.
 import html as _html
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import List, Optional, Union
+from typing import List, Optional, Set, Union
 
 from loguru import logger
 from sqlalchemy import select
@@ -163,8 +163,16 @@ class MessageDeliveryService:
         attempt.delivered_at = None if error else datetime.now(timezone.utc)
         await self.db.commit()
 
-    async def deliver(self, message: DepartmentMessage) -> None:
+    async def deliver(
+        self,
+        message: DepartmentMessage,
+        only_user_ids: Optional[Set[str]] = None,
+    ) -> None:
         """Deliver ``message`` to its targeted audience across channels.
+
+        ``only_user_ids`` narrows the fan-out to those members — used when an
+        already-published message's audience is widened, so the people just
+        added are told without the original audience being notified twice.
 
         Never raises — the whole fan-out is guarded so that one message that
         errors (bad data, a transient DB/query failure) can't propagate out and
@@ -191,6 +199,8 @@ class MessageDeliveryService:
             )
             # Don't notify the author about their own post.
             recipients = [u for u in recipients if str(u.id) != str(message.posted_by)]
+            if only_user_ids is not None:
+                recipients = [u for u in recipients if str(u.id) in only_user_ids]
             if not recipients:
                 return
 
@@ -438,7 +448,11 @@ class MessageDeliveryService:
             logger.warning("Department message SMS escalation failed: {}", e)
 
 
-async def deliver_department_message(message_id: str, organization_id: str) -> None:
+async def deliver_department_message(
+    message_id: str,
+    organization_id: str,
+    only_user_ids: Optional[Set[str]] = None,
+) -> None:
     """Background-task entrypoint: load the message on a fresh session and
 
     deliver it. Runs after the HTTP response, so it must open its own session
@@ -461,6 +475,6 @@ async def deliver_department_message(message_id: str, organization_id: str) -> N
             message = result.scalar_one_or_none()
             if message is None:
                 return
-            await MessageDeliveryService(session).deliver(message)
+            await MessageDeliveryService(session).deliver(message, only_user_ids)
     except Exception as e:  # pragma: no cover - defensive
         logger.warning("Department message delivery task failed: {}", e)

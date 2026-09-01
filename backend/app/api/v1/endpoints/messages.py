@@ -354,6 +354,20 @@ async def update_message(
         background_tasks.add_task(
             deliver_department_message, message.id, current_user.organization_id
         )
+    else:
+        # An already-published message whose audience just widened: tell the
+        # members who were added, and only them. Without this they were given
+        # a recipient row and nothing else — counted as owing an
+        # acknowledgment for a notice that never reached them by email, the
+        # channel of record.
+        newly_targeted = getattr(message, "_newly_targeted", None)
+        if newly_targeted:
+            background_tasks.add_task(
+                deliver_department_message,
+                message.id,
+                current_user.organization_id,
+                set(newly_targeted),
+            )
     await log_audit_event(
         db=db,
         event_type="message_updated",

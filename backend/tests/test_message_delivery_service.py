@@ -197,6 +197,52 @@ class TestChannelRouting:
         fake_sms.send_bulk_sms.assert_not_awaited()
 
 
+class TestNarrowedDelivery:
+    """Widening a published message's audience tells only the members added.
+
+    `reconcile_recipients` used to add their rows and stop: no email, no
+    bell, no SMS. They then showed in the acknowledgment report as owing an
+    acknowledgment, and counted against `total_targeted`, for a notice that
+    had never reached them by the channel of record.
+    """
+
+    @staticmethod
+    async def _deliver(only_user_ids):
+        svc = MessageDeliveryService(_db())
+        svc._create_in_app = AsyncMock()
+        svc._send_email = AsyncMock()
+        svc._send_sms = AsyncMock()
+        audience = [
+            _user("original", email="orig@fd.co"),
+            _user("added", email="added@fd.co"),
+        ]
+        with _patch_recipients(audience):
+            await svc.deliver(_msg(priority="normal"), only_user_ids=only_user_ids)
+        return svc
+
+    async def test_only_the_added_members_are_told(self):
+        svc = await self._deliver({"added"})
+
+        told = [p.id for p in svc._create_in_app.await_args.args[1]]
+        assert told == ["added"]
+        assert [p.id for p in svc._send_email.await_args.args[1]] == ["added"]
+
+    async def test_the_whole_audience_is_told_when_no_narrowing_is_asked_for(self):
+        svc = await self._deliver(None)
+
+        assert [p.id for p in svc._create_in_app.await_args.args[1]] == [
+            "original",
+            "added",
+        ]
+
+    async def test_an_empty_narrowing_delivers_to_nobody(self):
+        """Not "everybody": an empty set is an answer, not a missing one."""
+        svc = await self._deliver(set())
+
+        svc._create_in_app.assert_not_awaited()
+        svc._send_email.assert_not_awaited()
+
+
 class TestEmailRecipientFiltering:
     async def test_email_ignores_opt_out_and_reaches_everyone_with_an_address(self):
         # Email is the record-of-notice channel, so the email_notifications

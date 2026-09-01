@@ -595,6 +595,44 @@ class TestRescheduleGuard:
         )
         assert err is None
 
+    async def test_widening_a_published_audience_reports_who_to_tell(self):
+        """The endpoint reads this to deliver to exactly the members added.
+
+        A published message whose audience widens is not "published by this
+        update" — `_published_by_update` is False — so the endpoint enqueued
+        nothing at all. The added members got a recipient row and no email.
+        """
+        published = SimpleNamespace(
+            scheduled_at=None,
+            target_type=None,
+            target_member_ids=None,
+            target_roles=None,
+            target_statuses=None,
+            organization_id="org-1",
+            id="m1",
+        )
+        db = self._db_with(published)
+        svc = MessagingService(db)
+        svc.reconcile_recipients = AsyncMock(return_value={"new-one"})
+
+        message, err = await svc.update_message("m1", "org-1", {"target_type": "all"})
+
+        assert err is None
+        assert message._published_by_update is False
+        assert message._newly_targeted == {"new-one"}
+
+    async def test_an_edit_that_touches_no_audience_field_tells_nobody(self):
+        published = SimpleNamespace(scheduled_at=None, title="Old title")
+        db = self._db_with(published)
+        svc = MessagingService(db)
+        svc.reconcile_recipients = AsyncMock()
+
+        message, err = await svc.update_message("m1", "org-1", {"title": "New title"})
+
+        assert err is None
+        assert message._newly_targeted == set()
+        svc.reconcile_recipients.assert_not_awaited()
+
     async def test_unrelated_edit_does_not_revalidate_legacy_audience(self):
         published = SimpleNamespace(scheduled_at=None, title="Old title")
         db = self._db_with(published)
@@ -857,8 +895,32 @@ class TestReconcileRecipients:
         result = MagicMock()
         result.scalars.return_value.all.return_value = existing_rows
         svc.db.execute = AsyncMock(return_value=result)
-        await svc.reconcile_recipients(SimpleNamespace(id="m1", organization_id="org1"))
+        added = await svc.reconcile_recipients(
+            SimpleNamespace(id="m1", organization_id="org1")
+        )
+        self.last_added = added
         return [call.args[0] for call in svc.db.delete.await_args_list]
+
+    async def test_reports_the_members_it_added(self):
+        """The caller needs them: a widened audience has to be told.
+
+        The rows went in and nothing else happened — no email, no bell, no
+        SMS. The added members then showed in the acknowledgment report as
+        owing an acknowledgment, and counted against `total_targeted`, for a
+        notice that had never reached them by the channel of record.
+        """
+        await self._reconcile(
+            [self._row("already-here")], targeted_ids=["already-here", "new-one"]
+        )
+
+        assert self.last_added == {"new-one"}
+
+    async def test_reports_nothing_added_when_the_audience_only_shrinks(self):
+        await self._reconcile(
+            [self._row("staying"), self._row("leaving")], targeted_ids=["staying"]
+        )
+
+        assert self.last_added == set()
 
     async def test_retains_an_acknowledged_row_dropped_from_the_audience(self):
         signed = self._row(

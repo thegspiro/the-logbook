@@ -6,7 +6,7 @@ Handles creation, targeting, delivery, and read tracking.
 """
 
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 from sqlalchemy import and_, desc, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -312,14 +312,19 @@ class MessagingService:
 
             audience_changed = bool(audience_fields.intersection(updates))
             published_by_update = was_pending and message.scheduled_at is None
+            newly_targeted: Set[str] = set()
             if published_by_update:
                 await self.materialize_recipients(message)
             elif audience_changed and message.scheduled_at is None:
-                await self.reconcile_recipients(message)
+                newly_targeted = await self.reconcile_recipients(message)
 
-            # The endpoint uses this transient flag to enqueue the same channel
-            # fan-out as a scheduler publication without persisting extra state.
+            # The endpoint uses these transient flags to enqueue the same
+            # channel fan-out as a scheduler publication without persisting
+            # extra state. `_newly_targeted` is the narrower case: the message
+            # was already published, and only the members just added to its
+            # audience still need telling.
             message._published_by_update = published_by_update
+            message._newly_targeted = newly_targeted
 
             await self.db.commit()
             await self.db.refresh(message)
@@ -590,8 +595,17 @@ class MessagingService:
             )
         return len(users)
 
-    async def reconcile_recipients(self, message: DepartmentMessage) -> int:
-        """Rebuild a live audience while retaining resolution for members kept."""
+    async def reconcile_recipients(self, message: DepartmentMessage) -> Set[str]:
+        """Rebuild a live audience while retaining resolution for members kept.
+
+        Returns the ids added by this pass. Widening a published message's
+        audience used to add the rows and stop there: no email, no bell, no
+        SMS. The newly-targeted members then showed in the acknowledgment
+        report as owing an acknowledgment, and counted against
+        ``total_targeted``, for a notice that had never reached them by the
+        channel of record — visible only if they happened to open the in-app
+        inbox. The caller uses this to deliver to exactly those members.
+        """
         users = await self._targeted_users(message, str(message.organization_id))
         targeted = {str(user.id) for user in users}
         result = await self.db.execute(
@@ -602,7 +616,8 @@ class MessagingService:
             )
         )
         existing = {str(row.user_id): row for row in result.scalars().all()}
-        for user_id in targeted - existing.keys():
+        added = targeted - existing.keys()
+        for user_id in added:
             self.db.add(
                 DepartmentMessageRecipient(
                     id=generate_uuid(),
@@ -623,7 +638,7 @@ class MessagingService:
             # acknowledgment with them. Prune only rows that carry nothing.
             if row.read_at is None and row.acknowledged_at is None:
                 await self.db.delete(row)
-        return len(targeted)
+        return added
 
     @staticmethod
     def _user_targeting_context(user) -> Tuple[List[str], List[str], str]:
