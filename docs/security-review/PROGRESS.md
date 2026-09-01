@@ -16,14 +16,28 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**Feature 04 (Storefront & payments), pass 3** —
-[#2138](https://github.com/thegspiro/the-logbook/pull/2138), branch
-`claude/security-review-sf-pass3`. `git diff` (not `git log` — this
-feature's history is squashed/rewritten, per pass 2's own correction)
-between pass 2's merge and `HEAD` across the full declared domain shows
-zero changes; no new findings. Order export's unbounded-export item
-carried forward again, still unfixed. See the log entry below and
-`SF-04-storefront-payments.md`'s Pass 3 section.
+None. [#2138](https://github.com/thegspiro/the-logbook/pull/2138) (Feature
+04, Storefront & payments, pass 3) merged after six Codex review rounds —
+see the Log below for detail. Rotation row 04 → ✅. Next: 05 Finance &
+approvals.
+
+---
+
+### 2026-09-01 — Feature 04 (Storefront & payments, pass 3) ✅ merged — PR #2138
+
+All six Codex rounds (a wrong export-line citation; the router-level
+`module_gate` reach corrected from "doesn't reach it" to "reaches it, is a
+no-op"; a dropped `GET /permissions` exception restored; two missed
+dependency-graph files; two more shared-dependency changes reviewed as safe;
+`_collect_user_permissions`'s and `permission_matches`'s own
+`expand_legacy_permissions` calls proven no-ops; three more imports verified
+unchanged at the symbol level; a `NotificationLog` schema change confirmed
+harmless) fixed, replied to, and resolved; CI and both Codex Code/Security
+Review passes green on the final head, no merge conflict. No application-code
+security finding — every correction was to this review's own write-up.
+`GET /orders/export`'s unbounded-export item remains carried forward,
+unfixed, pending a product decision. Rotation row 04 → ✅. Next: 05 Finance &
+approvals.
 
 ---
 
@@ -5889,7 +5903,7 @@ pass 3 — each row's prior PR is recorded in the Log, not repeated here.
 | 01  | Auth & session lifecycle  | AUTH   | `endpoints/auth.py`, `auth_service.py`, `mfa_service.py`, `oauth_service.py`                                                                    | ✅     |
 | 02  | Permissions & roles       | PERM   | `dependencies.py`, `core/permissions.py`, `roles.py`, `operational_ranks.py`, `officers.py`, `org_chart.py`                                     | ✅     |
 | 03  | Public surface & webhooks | PUB    | `api/public/*` (20 unauth routes), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`                                      | ✅     |
-| 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                              | ⏳     |
+| 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                              | ✅     |
 | 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                     | ⬜     |
 | 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | ⬜     |
 | 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ⬜     |
