@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Session-hijack/brute-force/data-exfiltration alerts could silently skip under tracker churn (2026-09-01)
+
+**Fixed**
+
+- **A regression in the same-day tracker-cap fix below could suppress a real
+  security alert.** That fix made `detect_session_hijack` (and, for the same
+  reason, `detect_data_exfiltration`) run cap-enforcement on entry, before
+  the method read its own tracker's prior entry for the session/user being
+  checked. If that exact entry happened to be evicted in the same call —
+  plausible under the sustained request churn the cap exists to survive —
+  the method found no prior history, silently treated an ongoing session
+  hijack as a first-ever observation, and never raised the alert.
+  `detect_brute_force` had the identical shape since the cap was first
+  introduced (predating the same-day fix) and undercounted failed-login
+  attempts the same way. This landed on `main` unfixed for a window between
+  the prior fix's merge and this one. Fixed by having each method capture
+  its own tracker read into a local variable before cap-enforcement runs, so
+  a same-call eviction can no longer erase the data the alert decision
+  depends on. 3 new regression tests reproduce the exact failure shape
+  (tracker filled above its cap with the affected session/IP/user as the
+  single oldest entry) and are verified to fail before this fix and pass
+  after.
+
 ### Security monitoring trackers are capped on every write path (2026-09-01)
 
 **Fixed**

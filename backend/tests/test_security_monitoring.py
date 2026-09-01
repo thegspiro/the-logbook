@@ -7,7 +7,7 @@ pattern matching (SQLi / XSS / path traversal), per-IP API rate limiting,
 and brute-force login detection. The audit-log call is stubbed. DB mocked.
 """
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from unittest import mock
 from unittest.mock import AsyncMock, MagicMock
 
@@ -211,6 +211,134 @@ class TestTrackerCaps:
             )
 
         assert len(svc._external_endpoints) <= svc._MAX_EXTERNAL_ENDPOINTS
+
+
+class TestReadBeforeEvictOrdering:
+    """PR #2128 round 3 (Codex): the round-2 fix (commit 3b6b65e4) added an
+    unconditional ``self._enforce_key_caps()`` call to the TOP of
+    detect_session_hijack / detect_data_exfiltration -- BEFORE either method
+    read its own tracker's prior entries for this exact key. If that key
+    happened to be the coldest (least-recently-active) one in an
+    over-the-cap tracker, the batch eviction deleted its history first, and
+    the read that followed silently found nothing: a genuine hijack looked
+    like a first-ever observation, a genuine cumulative transfer looked like
+    a lone new one, and no alert fired. detect_brute_force has always had
+    the same shape (enforce_key_caps ran before the ip/user append+filter),
+    just never flagged.
+
+    Each test below fills the relevant tracker past its cap with the victim
+    key as the single oldest entry, then drives the call through the real
+    method (not the eviction helper directly) and asserts the alert that
+    should fire still does. Each test fails against commit df7438e0 (no
+    alert -- the read finds an empty/reset history) and passes after the
+    read-before-evict reordering.
+    """
+
+    async def test_session_hijack_alert_survives_batch_eviction_of_the_victim_session(
+        self,
+    ):
+        svc = _svc()
+        svc._MAX_TRACKING_KEYS = 10
+
+        victim_session = "victim-session"
+        victim_key = f"session:{victim_session}"
+        now = datetime.now(timezone.utc)
+        # Victim's last activity is a few seconds old -- recent enough to
+        # still be "within 5 minutes" for the hijack check, but older than
+        # every filler entry below, so it is the batch-eviction target.
+        svc._session_ips[victim_key] = [("1.1.1.1", now - timedelta(seconds=10))]
+
+        for i in range(20):
+            svc._session_ips[f"session:filler-{i}"] = [("2.2.2.2", now)]
+
+        assert len(svc._session_ips) > svc._MAX_TRACKING_KEYS
+
+        alert = await svc.detect_session_hijack(
+            _db(),
+            session_id=victim_session,
+            current_ip="9.9.9.9",
+            user_agent="ua",
+            user_id="u1",
+        )
+
+        assert alert is not None, (
+            "session-hijack alert was skipped -- the victim session's prior "
+            "IP was evicted before detect_session_hijack could read and "
+            "compare it"
+        )
+        assert alert.alert_type.value == "session_hijack"
+        assert alert.details["previous_ip"] == "1.1.1.1"
+        assert alert.details["current_ip"] == "9.9.9.9"
+
+    async def test_brute_force_threshold_survives_batch_eviction_of_the_attacker_ip(
+        self,
+    ):
+        svc = _svc()
+        svc._MAX_TRACKING_KEYS = 10
+        svc.thresholds.failed_logins_per_hour = 3
+
+        attacker_ip = "203.0.113.9"
+        now = datetime.now(timezone.utc)
+        # Two prior failed attempts, both within the last hour, the most
+        # recent of which is still older than every filler IP below.
+        svc._login_attempts[attacker_ip] = [
+            now - timedelta(minutes=5),
+            now - timedelta(minutes=3),
+        ]
+
+        for i in range(20):
+            svc._login_attempts[f"filler-ip-{i}"] = [now]
+
+        assert len(svc._login_attempts) > svc._MAX_TRACKING_KEYS
+
+        # Third failed attempt for the attacker IP -- should reach the
+        # threshold of 3 (2 prior + this one).
+        alert = await svc.detect_brute_force(_db(), attacker_ip, success=False)
+
+        assert alert is not None, (
+            "brute-force alert was skipped -- the attacker IP's prior failed "
+            "attempts were evicted before detect_brute_force could count them"
+        )
+        assert alert.alert_type.value == "brute_force"
+        assert alert.details["failed_attempts"] == 3
+
+    async def test_data_exfiltration_cumulative_alert_survives_batch_eviction(self):
+        svc = _svc()
+        svc._MAX_TRACKING_KEYS = 10
+        svc.thresholds.large_data_export_mb = 10  # cumulative alert at > 50MB/24h
+
+        victim_user = "victim-user"
+        now = datetime.now(timezone.utc)
+        mb = 1024 * 1024
+        # 45MB already transferred, most recent entry older than every
+        # filler user below, so this is the batch-eviction target.
+        svc._data_transfers[victim_user] = [
+            (15 * mb, now - timedelta(minutes=10)),
+            (15 * mb, now - timedelta(minutes=7)),
+            (15 * mb, now - timedelta(minutes=5)),
+        ]
+
+        for i in range(20):
+            svc._data_transfers[f"filler-user-{i}"] = [(1, now)]
+
+        assert len(svc._data_transfers) > svc._MAX_TRACKING_KEYS
+
+        # 10MB more -- alone it's not > the 10MB single-transfer threshold,
+        # but 45 + 10 = 55MB is > the 50MB cumulative threshold.
+        alert = await svc.detect_data_exfiltration(
+            db=_db(),
+            user_id=victim_user,
+            data_size_bytes=10 * mb,
+            endpoint="/api/v1/some/export",
+            ip_address="203.0.113.5",
+        )
+
+        assert alert is not None, (
+            "cumulative data-exfiltration alert was skipped -- the victim "
+            "user's transfer history was evicted before it could be summed"
+        )
+        assert alert.alert_type.value == "data_exfiltration"
+        assert alert.details["total_24h_mb"] == pytest.approx(55.0)
 
 
 class TestReportPrivilegeEscalation:

@@ -442,18 +442,15 @@ class SecurityMonitoringService:
         """
         Detect brute force login attempts
         """
-        # Brute-force / credential-stuffing is exactly the burst that fills
-        # _login_attempts (keyed by attacker-controlled ip + user id), so bound
-        # it here too — _check_rate_limit isn't always on this path. Only the
-        # hard cap (not the time-based sweep) so this stays cheap on the hot
-        # login path.
-        self._enforce_key_caps()
-
         if success:
-            # Clear attempts on successful login
+            # Clear attempts on successful login. This branch only overwrites
+            # (never reads prior entries to decide anything), so it carries
+            # none of the read-after-evict risk below -- cap enforcement can
+            # run here in any position.
             self._login_attempts[ip] = []
             if user_id:
                 self._login_attempts[f"user:{user_id}"] = []
+            self._enforce_key_caps()
             return None
 
         now = datetime.now(timezone.utc)
@@ -461,20 +458,35 @@ class SecurityMonitoringService:
 
         # Track by IP
         self._login_attempts[ip].append(now)
-        self._login_attempts[ip] = [
-            ts for ts in self._login_attempts[ip] if ts > hour_ago
-        ]
+        ip_attempts = [ts for ts in self._login_attempts[ip] if ts > hour_ago]
+        self._login_attempts[ip] = ip_attempts
 
         # Track by user if provided
+        user_attempts: List[datetime] = []
         if user_id:
             key = f"user:{user_id}"
             self._login_attempts[key].append(now)
-            self._login_attempts[key] = [
-                ts for ts in self._login_attempts[key] if ts > hour_ago
-            ]
+            user_attempts = [ts for ts in self._login_attempts[key] if ts > hour_ago]
+            self._login_attempts[key] = user_attempts
+
+        # Cap enforcement runs after the reads above, captured into
+        # ip_attempts/user_attempts, rather than before them. Brute-force /
+        # credential-stuffing is exactly the burst that fills _login_attempts
+        # (keyed by attacker-controlled ip + user id), so bound it here too —
+        # _check_rate_limit isn't always on this path. But enforcing the cap
+        # BEFORE this call's own read can evict the exact ip/user key just
+        # appended to, and every lookup below reads straight from the dict —
+        # so an evicted key would silently come back empty and never reach
+        # the threshold. That is the same read-after-evict shape Codex found
+        # in detect_session_hijack (PR #2128, round 3), and this method is
+        # the one most likely to hit it: a wide credential-stuffing burst
+        # across many attacker IPs is exactly the traffic that fills the
+        # tracker to its cap. Only the hard cap (not the time-based sweep) so
+        # this stays cheap on the hot login path.
+        self._enforce_key_caps()
 
         # Check IP threshold
-        if len(self._login_attempts[ip]) >= self.thresholds.failed_logins_per_hour:
+        if len(ip_attempts) >= self.thresholds.failed_logins_per_hour:
             alert = SecurityAlert(
                 id=secrets.token_hex(16),
                 alert_type=AlertType.BRUTE_FORCE,
@@ -484,7 +496,7 @@ class SecurityMonitoringService:
                 source_ip=ip,
                 user_id=user_id,
                 details={
-                    "failed_attempts": len(self._login_attempts[ip]),
+                    "failed_attempts": len(ip_attempts),
                     "time_window": "1 hour",
                     "threshold": self.thresholds.failed_logins_per_hour,
                 },
@@ -505,8 +517,7 @@ class SecurityMonitoringService:
 
         # Check per-user threshold
         if user_id:
-            key = f"user:{user_id}"
-            if len(self._login_attempts[key]) >= self.thresholds.failed_logins_per_user:
+            if len(user_attempts) >= self.thresholds.failed_logins_per_user:
                 alert = SecurityAlert(
                     id=secrets.token_hex(16),
                     alert_type=AlertType.BRUTE_FORCE,
@@ -516,7 +527,7 @@ class SecurityMonitoringService:
                     source_ip=ip,
                     user_id=user_id,
                     details={
-                        "failed_attempts": len(self._login_attempts[key]),
+                        "failed_attempts": len(user_attempts),
                         "time_window": "1 hour",
                         "threshold": self.thresholds.failed_logins_per_user,
                     },
@@ -548,16 +559,25 @@ class SecurityMonitoringService:
         """
         Detect potential session hijacking by monitoring IP/UA changes
         """
-        # Called on requests, not logins — detect_brute_force's cap-enforcement
-        # never fires for SSO/OAuth-only orgs, where nothing else bounds this
-        # dict's growth. Hard cap only (cheap), matching detect_brute_force.
-        self._enforce_key_caps()
-
         now = datetime.now(timezone.utc)
         key = f"session:{session_id}"
 
-        # Get previous session data
+        # Get previous session data BEFORE cap enforcement below.
+        # _enforce_key_caps() evicts the least-recently-active keys in
+        # _session_ips, and this exact session can be one of them if it has
+        # gone quiet while the tracker filled up elsewhere. Reading after
+        # eviction would find no prior IP for this session, treat a genuine
+        # hijack as a first-ever observation, silently reset the baseline,
+        # and never fire the alert (Codex, PR #2128, round 3 — a regression
+        # introduced by the round-2 fix that added the call below).
         session_data = self._session_ips.get(key, [])
+
+        # Called on requests, not logins — detect_brute_force's cap-enforcement
+        # never fires for SSO/OAuth-only orgs, where nothing else bounds this
+        # dict's growth. Hard cap only (cheap), matching detect_brute_force.
+        # Runs after the read above so eviction can never remove the history
+        # this call is about to compare against.
+        self._enforce_key_caps()
 
         if session_data:
             last_ip, last_time = session_data[-1]
@@ -624,23 +644,34 @@ class SecurityMonitoringService:
         - Bulk record access
         - Transfers to external/unknown destinations
         """
-        # Called on requests, not logins — detect_brute_force's cap-enforcement
-        # never fires for SSO/OAuth-only orgs, where nothing else bounds this
-        # dict's growth. Hard cap only (cheap), matching detect_brute_force.
-        self._enforce_key_caps()
-
         now = datetime.now(timezone.utc)
         day_ago = now - timedelta(days=1)
 
-        # Track data transfers
+        # Track data transfers, keeping the filtered 24h window in a local
+        # variable rather than re-reading self._data_transfers[user_id] below.
+        # _enforce_key_caps() (called after this block, see comment there) can
+        # evict this exact user's key, and a dict lookup after that would
+        # silently come back as a fresh empty list, undercounting the running
+        # total and the transfer count in the alert below (same read-after-
+        # evict shape Codex found in detect_session_hijack — PR #2128, round
+        # 3).
         self._data_transfers[user_id].append((data_size_bytes, now))
-        self._data_transfers[user_id] = [
+        transfers = [
             (size, ts) for size, ts in self._data_transfers[user_id] if ts > day_ago
         ]
+        self._data_transfers[user_id] = transfers
 
-        # Calculate total transferred in last 24 hours
-        total_transferred = sum(size for size, _ in self._data_transfers[user_id])
+        # Calculate total transferred in last 24 hours from the local list
+        # captured above, not another dict lookup — see comment above.
+        total_transferred = sum(size for size, _ in transfers)
         total_mb = total_transferred / (1024 * 1024)
+
+        # Called on requests, not logins — detect_brute_force's cap-enforcement
+        # never fires for SSO/OAuth-only orgs, where nothing else bounds this
+        # dict's growth. Hard cap only (cheap), matching detect_brute_force.
+        # Runs after the transfer history above is captured into `transfers`
+        # so eviction can never wipe the data this call needs to decide with.
+        self._enforce_key_caps()
 
         alerts = []
 
@@ -697,7 +728,7 @@ class SecurityMonitoringService:
                 user_id=user_id,
                 details={
                     "total_24h_mb": total_mb,
-                    "transfer_count": len(self._data_transfers[user_id]),
+                    "transfer_count": len(transfers),
                 },
             )
             alerts.append(alert)

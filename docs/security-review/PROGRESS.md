@@ -16,32 +16,174 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**Feature 00 (Cross-cutting baseline), pass 3** —
-[#2128](https://github.com/thegspiro/the-logbook/pull/2128), branch
-`claude/security-review-sec00-pass3`. Re-verified pass 1/2's five standing
-sweeps against current code (399 Alembic revisions, 1536 routes) and added
-four new sweep classes (`BaseHTTPMiddleware`, unbounded in-memory caches,
-`window.confirm`/`alert`/`prompt`, JSON shallow-copy-then-mutate). **Revised
-after Codex review (round 1):** the unbounded-tracker sweep had missed a real
-gap (`SecurityMonitoringService`'s instance-attribute trackers, two of four
-uncapped on the SSO-only path — fixed, one small source change) and the JSON
-shallow-copy sweep's method was too narrow (broadened, still clean);
-route-auth-coverage's method description and the completion gate's
-TypeScript command were also corrected (doc-only, same conclusions). **Revised
-again after Codex review (round 2), on the round-1 fix itself:** the
-tracker-cap fix just landed was, itself, incomplete in two ways —
-unthrottled one-key-at-a-time eviction on a genuine hot path (a full
-`O(n log n)` sort of the tracker on every call once saturated, not just when
-the cap was first hit) and a fifth tracker (`_external_endpoints`, a `set()`)
-that the fix's own cap-enforcement helper never touched at all, left capped
-only by a dead code path. Both fixed; see below and
-`SEC-00-cross-cutting-baseline.md`'s Pass 3 section for the full write-up of
-every correction across both rounds.
+**Feature 00 (Cross-cutting baseline), pass 3, round 3 follow-up** —
+[#2128](https://github.com/thegspiro/the-logbook/pull/2128) (rounds 1–2)
+**merged to `main` at commit `2b3231a3`** before Codex's round-3 review
+landed, so round 3's fixes are a **separate PR**, not a further push to
+`claude/security-review-sec00-pass3` — per Pitfall #24 ("Do Not Reuse a
+Branch Name After Its Pull Request Merges"), that branch's remote ref is
+gone and its PR is closed. See the round-3 log entry below for what Codex
+found this time, including a real regression (not just a gap) in round 2's
+own fix that shipped to `main` unfixed for a window — the timeline matters
+here, not just the diff, so read that entry rather than only the summary.
+
+_(Placeholder until the follow-up PR is opened and this line is updated in
+the same push: PR number/URL TBD, branch `claude/security-review-sec00-
+pass3-round3-fix`.)_
+
+**Prior rounds on #2128 (now merged), for reference:** re-verified pass 1/2's
+five standing sweeps against current code (399 Alembic revisions, 1536
+routes) and added four new sweep classes (`BaseHTTPMiddleware`, unbounded
+in-memory caches, `window.confirm`/`alert`/`prompt`, JSON
+shallow-copy-then-mutate). **Round 1:** the unbounded-tracker sweep had
+missed a real gap (`SecurityMonitoringService`'s instance-attribute
+trackers, two of four uncapped on the SSO-only path — fixed, one small
+source change) and the JSON shallow-copy sweep's method was too narrow
+(broadened, still clean); route-auth-coverage's method description and the
+completion gate's TypeScript command were also corrected (doc-only, same
+conclusions). **Round 2, on round 1's own fix:** the tracker-cap fix just
+landed was, itself, incomplete in two ways — unthrottled one-key-at-a-time
+eviction on a genuine hot path (a full `O(n log n)` sort of the tracker on
+every call once saturated, not just when the cap was first hit) and a fifth
+tracker (`_external_endpoints`, a `set()`) that the fix's own
+cap-enforcement helper never touched at all, left capped only by a dead code
+path. Both fixed. See `SEC-00-cross-cutting-baseline.md`'s Pass 3 section for
+the full write-up of every correction across all three rounds.
 
 A duplicate close-out PR, [#2119](https://github.com/thegspiro/the-logbook/pull/2119),
 was opened against round 1's now-stale base (before round 2/3 landed) and
 closed without merging — merging it would have overwritten this section
 with round-1-only text and dropped the round 2/3 record.
+
+---
+
+### 2026-09-01 — Feature 00 (Cross-cutting baseline, pass 3) — Codex round 3: a real regression in round 2's own fix, plus two more corrections
+
+**This is the third round of Codex catching something real in this same PR's
+sweep-7/sweep-9 write-ups — worth stating plainly rather than folding into
+"more polish."** Round 1 fixed a genuine gap. Round 2 fixed two more gaps in
+round 1's own fix. Round 3 is different in kind: it caught an actual
+**regression** — a false negative in security alerting — introduced by round
+2's own fix, not merely an incomplete one. And by the time Codex's review
+landed, **PR #2128 (rounds 1–2) had already been merged to `main`** at merge
+commit `2b3231a3`, so this regression was live and unfixed on `main` for the
+window between that merge and this follow-up PR's merge. That window is a
+real gap, not a process footnote — see the "Live-on-`main` window" note
+below.
+
+**Finding 1 (P2 in the bot's own severity, but the most serious of the
+three): `detect_session_hijack` silently skipped its own alert.** Round 2
+(commit `3b6b65e4`) added `self._enforce_key_caps()` to the top of
+`detect_session_hijack`, `detect_data_exfiltration`, and (already present
+since the cap was first introduced, predating round 2) `detect_brute_force`
+already had it there too. In all three, the eviction call ran **before** the
+method read/built its own tracker entry for the current key. `_enforce_key_
+caps()` evicts the least-recently-active keys once a tracker is over its
+5,000-key cap — a decision about the _whole_ tracker, unrelated to whether
+this call's own key is meaningfully "cold." If the current session/IP/user
+happened to be picked in that eviction batch, its history was deleted a few
+lines before the method read it: `detect_session_hijack` saw no prior IP and
+silently treated an ongoing hijack as this session's first-ever observation
+(no alert); `detect_brute_force` saw an empty attempt list and undercounted
+threshold checks; `detect_data_exfiltration` undercounted the running 24h
+transfer total. This is a straightforward false negative in the alerting
+sense — an attacker riding a hijacked session became indistinguishable from
+a session simply never seen before.
+
+Per the review instruction not to assume the bug was confined to
+`detect_session_hijack`, all three methods with this "read the tracker for
+this call's own key, and also evict from that same tracker" shape were
+checked — not just the one Codex named — and all three had it.
+
+**Fixed by reordering, not by evicting less:** each method now reads (and,
+where relevant, appends to/filters) its own tracker entry into a local
+variable **before** `_enforce_key_caps()` runs, and uses that local variable
+for every subsequent decision rather than re-reading the dict (which a
+same-call eviction could have reset). `_enforce_key_caps()` still runs
+unconditionally on every non-early-return call — this is purely a reorder
+within each method, not a change to how often capping happens, so round 1's
+cap-enforcement guarantee is intact. 3 new tests
+(`TestReadBeforeEvictOrdering`), each reproducing the exact bug shape — fill
+the tracker above its cap with the victim key as the single oldest entry,
+call the real method, assert the alert that should fire still does — all
+verified to **fail** against the pre-round-3 commit `df7438e0` and **pass**
+after; `test_security_monitoring.py` **17/17**, up from 14.
+
+**Live-on-`main` window:** `df7438e0` (round 2) merged to `main` via #2128 at
+`2b3231a3` before this fix was ready. Between that merge and this follow-up
+PR merging, `detect_session_hijack`/`detect_brute_force`/`detect_data_
+exfiltration` on `main` could silently skip a real alert under sustained
+tracker churn — a false negative in production security monitoring, not a
+theoretical one. No mitigating factor beyond the window being whatever
+elapsed between the two merges; recorded here so the gap is visible in the
+history rather than only in a diff.
+
+**Finding 2: the "132 distinct JSON/`MutableDict`-typed model attributes"
+figure (round 2's own correction of round 1's sweep 9) was itself wrong.**
+It came from a regex/line-based scan that cannot see a multiline
+declaration:
+
+```python
+report_email_recipients = Column(
+    JSON, ...
+)
+```
+
+— third time this exact sweep's method needed correcting in this PR (round 1:
+too narrow a directory scope; round 2: too narrow a name list; round 3: the
+name list itself was structurally incomplete). Re-swept with an actual `ast`
+walk (`ast.parse` per `backend/app/models/*.py` file, walking `ast.Assign`/
+`ast.AnnAssign` nodes whose value is a `Column(...)` call — recursed through
+`MutableDict.as_mutable(...)` wrapping — checking for `JSON` anywhere in that
+call's arguments via a recursive subtree walk, not a line match). **Corrected
+count: 179 distinct names, 230 total declarations** — up from 132, an
+increase of 47, matching what a naive single-line-regex comparison run on the
+current tree also shows missing (42 names on a slightly different regex
+baseline of 137; the exact 132-vs-137 discrepancy against the original
+ad hoc method is not reconciled, and is moot next to the structural method
+replacing it). Re-ran the bug-detection sweep (nested bracket mutation +
+shallow-copy-then-reassign) against the full 179-name list, whole `app/`
+tree: the nested-mutation check is field-name-agnostic so its 12 hits are
+unchanged and already cleared; the shallow-copy check against the 42 newly-
+found names found zero shallow-copy sites and, on the 7 direct reassignment
+sites checked by hand, zero bugs (one list-copy-plus-append that's safe by
+construction, one already using `copy.deepcopy()`, five assigning a value
+built fresh rather than derived from the column's own prior value). **Clean
+— 0 bugs**, same conclusion as before, now resting on a method that won't
+need a fourth correction for the same reason.
+
+**Finding 3: this file's own completion-gate write-up conflicted with
+CLAUDE.md.** Every prior revision reported "eslint 0 errors, 8 pre-existing
+warnings, unrelated, well under `max-warnings 10`" and treated that as
+gate-passed. CLAUDE.md's "Fix All Errors — Non-Negotiable" section lists
+warnings alongside errors explicitly and says "if you discover it, you own
+it... by default in the same commit" — `max-warnings 10` is a CI threshold,
+not a carve-out from that rule, and "pre-existing, unrelated" is close to the
+exact phrase the doc calls out as not a valid reason to skip a fix. Per the
+Hard Stop clause (only for a fix that would "genuinely exceed the current
+task," its own example being "hundreds of strict-mode violations across
+unrelated files"), 8 warnings in 3 files did not meet that bar. All 8 were
+attempted and **all 8 were fixed** — 3× `testing-library/no-node-access` in
+`StorageAreasPage.test.tsx` (raw `querySelector`/`querySelectorAll` replaced
+with scoped `within(...)` queries plus two added `data-testid`s in the
+source component; same 17/17 tests, snapshot unchanged), 2× the same rule in
+`DocumentsPage.test.tsx` (`.closest('div.stat-card')` replaced with a
+`data-testid` on the card), and 1× `react-refresh/only-export-components` in
+`RoleSetup.tsx` (the non-component export `buildPositionTemplates`, plus its
+two exclusive helpers, moved to a new file, `positionTemplates.ts` — pure
+data/logic, no JSX or hooks, so a plain `.ts` module; two test files that
+referenced the old location updated to match). See
+`SEC-00-cross-cutting-baseline.md`'s completion-gate section for the
+per-warning detail. **Result: `eslint --max-warnings 10` now reports 0
+errors, 0 warnings — not "under the cap."**
+
+Full completion gate re-run clean: `flake8`/`black --check`/
+`isort --check-only` on `app/ tests/ alembic/`; `validate_migrations.py
+--strict` (399 revisions, single head, unchanged); the five scoped test files
+plus `test_security_monitoring.py` (17/17) all pass; `npm run typecheck` 0
+errors; `npm run lint` 0 errors, 0 warnings. Opened as a new PR/branch per
+Pitfall #24, not pushed to the merged-and-closed `claude/security-review-
+sec00-pass3` — see the Open PR section above for the link.
 
 ---
 

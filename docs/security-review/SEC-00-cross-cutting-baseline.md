@@ -28,6 +28,27 @@ of Codex catching a real gap in the same tracker-cap sweep in the same PR —
 said plainly rather than undersold. Both fixed; see sweep 7's write-up below
 for the full account of both rounds.
 
+**Revised a third time after Codex review round 3 — on commit `df7438e0`
+(round 2's own fix), and this round found an actual regression, not just an
+incomplete fix:** the batched eviction round 2 added to
+`_enforce_key_caps()` ran, on `detect_session_hijack`, **before** the method
+read the current session's own prior IP history — so if that exact session
+happened to be among the least-recently-active entries the batch picked for
+eviction, its history was deleted a few lines before it was read, the method
+saw no prior IP, silently treated an ongoing hijack as a first-ever
+observation, and never raised the alert. **PR #2128 had already been merged
+to `main` (commit `2b3231a3`) by the time this was caught**, so this
+regression was live and unfixed on `main` between the round-2 merge and the
+follow-up fix landing — see `docs/security-review/PROGRESS.md` for the
+timeline and the follow-up PR. Codex also flagged the count behind sweep 9's
+"132 distinct JSON/`MutableDict`-typed model attributes" as still wrong (a
+regex/line-based scan that missed multiline `Column(...)` declarations), and
+a process conflict in this file's own completion-gate write-up between
+CLAUDE.md's "fix every warning, in the same commit" rule and the "8
+pre-existing, unrelated" framing used to wave 8 ESLint warnings through. All
+three verified against real code and fixed; see sweep 7's round-3 write-up,
+the corrected sweep 9 write-up, and the completion-gate section below.
+
 Re-verified pass 1/2's five standing sweeps against current code (backend grew
 to 399 Alembic revisions, 1536 routes across 80 `app/api/` files, from pass
 2's 381 revisions / 1526 routes), and added four sweep classes named in the
@@ -247,7 +268,163 @@ its actual production growth path, not just the internal helper. All 4
 verified to **fail** against the pre-round-2 code (commit `3b6b65e4`,
 checked out standalone) and **pass** after the fix; full file 14/14.
 
-**Sweep 9 correction (Codex review):** the original method
+**Round 3 (Codex review on the round-2 fix commit `df7438e0` itself — a real
+regression, not a gap):** by the time Codex reviewed this, `df7438e0` had
+already merged to `main` (PR #2128, merge commit `2b3231a3`), so this was a
+live, unfixed bug on `main`, not just an open-PR finding — see
+`docs/security-review/PROGRESS.md` for the timeline.
+
+[**`_enforce_key_caps()` ran before the read it was meant to protect, in
+both `detect_session_hijack` and `detect_data_exfiltration`.**](https://github.com/thegspiro/the-logbook/pull/2128)
+Round 2 added the batched-eviction call to the very top of each method, ahead
+of the code that reads that method's own tracker for the current key. The
+eviction picks the least-recently-active keys in the _entire_ tracker once it
+is over cap — a decision that has nothing to do with whether the specific key
+this call is about to use is "cold" in absolute terms, only whether it ranks
+in the bottom slice relative to whatever else is in the tracker right now.
+Concretely, in `detect_session_hijack`:
+
+```python
+# df7438e0 — WRONG order
+self._enforce_key_caps()                       # can delete _session_ips[key]
+...
+session_data = self._session_ips.get(key, [])  # now reads [] — looks like
+                                                 # a brand-new session
+if session_data:                                # never enters this branch
+    ...                                          # the hijack alert lives here
+```
+
+If the victim session's tracker entry is picked in that eviction batch —
+plausible under exactly the sustained-churn traffic the cap exists to
+survive — the read that follows finds nothing, the method treats a genuine
+IP change mid-session as the session's first-ever observation, silently
+resets the baseline to the new IP, and **never raises the alert**. This is a
+false negative in the literal alerting sense: an attacker riding a hijacked
+session is indistinguishable, from this code's perspective, from a session
+that has simply never been seen before. `detect_data_exfiltration` had the
+same shape one step later — `_enforce_key_caps()` ran before the method built
+and summed the current 24-hour transfer window for `user_id`, so an evicted
+entry silently reset the running total, understating it and potentially
+missing the cumulative-transfer alert.
+
+**Also checked, per the review instruction not to assume only
+`detect_session_hijack` was affected: `detect_brute_force`.** It has called
+`self._enforce_key_caps()` at the top of the method since the cap was first
+introduced (predates round 2), in the same shape — the ip/user key it is
+about to append to and threshold-check is exactly the key the eviction batch
+can delete first. Fixed for the same reason, even though it was not part of
+round 2's diff: CLAUDE.md's "no acceptable pre-existing errors" rule applies
+to a bug discovered while editing this file, not only to bugs introduced in
+the commit under review.
+
+**Fixed in all three methods by reordering, not by skipping eviction:** each
+method now reads (and, for brute-force/exfiltration, appends to and filters)
+its own tracker entry for the current key **before** `_enforce_key_caps()`
+runs, capturing the result in a local variable so a later dict lookup can't
+be quietly answered by a fresh/evicted entry either. `_enforce_key_caps()`
+still runs unconditionally on every non-early-return call path — the fix is
+purely about ordering within the method, not about calling it less often, so
+the cap enforcement guarantee sweep 7 established in round 1 is unchanged.
+`detect_session_hijack`'s early-return-on-alert path still runs
+`_enforce_key_caps()` before that return (it was moved down to right after
+the read, not to the very end), so cap enforcement does not become
+conditional on whether this particular call happens to fire an alert.
+
+**Verification, round 3:** 3 new tests in a new `TestReadBeforeEvictOrdering`
+class, one per affected method, each reproducing the exact shape of the bug —
+fill the tracker above its cap with the victim key as the single oldest
+(least-recently-active) entry, drive the call through the real public method
+(not the eviction helper directly), and assert the alert that should fire
+still does:
+
+- `test_session_hijack_alert_survives_batch_eviction_of_the_victim_session` —
+  Codex's exact reproduction: victim session is the oldest of 21 entries in a
+  10-key-capped tracker, called with a changed IP; asserts a `session_hijack`
+  alert is raised with the correct `previous_ip`/`current_ip`.
+- `test_brute_force_threshold_survives_batch_eviction_of_the_attacker_ip` —
+  attacker IP already has 2 failed attempts recorded (the oldest entry in an
+  over-cap tracker); a 3rd call against a threshold of 3 must still alert.
+- `test_data_exfiltration_cumulative_alert_survives_batch_eviction` — victim
+  user already has 45MB transferred in the last 24h (the oldest entry in an
+  over-cap tracker); a 10MB transfer that alone is under the single-transfer
+  threshold but pushes the 24h cumulative total over its threshold must still
+  alert, with the correct `total_24h_mb`.
+
+All 3 verified to **fail** against the pre-round-3 code (commit `df7438e0` —
+the version that was live on `main` at the time — checked out standalone,
+`alert is None` in every case) and **pass** after the reordering fix; full
+file **17/17**.
+
+**Sweep 9 correction, round 2 (Codex review):** Codex re-checked round 2's
+own correction to this sweep (immediately below) and found the "132 distinct
+JSON/`MutableDict`-typed model attributes" figure was itself produced by a
+regex/line-based scan (`name = Column(JSON, ...)` matched per source line),
+which cannot see a multiline declaration such as
+
+```python
+report_email_recipients = Column(
+    JSON, ...
+)
+```
+
+— the assignment target and the `JSON` reference land on different lines, so
+a line-anchored regex never associates them. This is the same "the method was
+narrower than the write-up claimed" shape as sweep 9's round-1 correction
+below (two directories instead of the whole tree that time; single-line
+declarations only, this time) — worth naming plainly, since it is the
+**third** time this exact sweep's method has needed correcting in this PR.
+
+Re-swept with a structural method instead: `json_column_ast_sweep.py`
+(described below) parses every `backend/app/models/*.py` file with the `ast`
+module and walks every `ast.Assign`/`ast.AnnAssign` in a class body whose
+value is a `Call` — either `Column(...)` directly, or `Column(...)` wrapped
+in `MutableDict.as_mutable(...)` (recursed into, so nesting depth doesn't
+matter) — checking whether `JSON` appears anywhere in that call's arguments
+via a recursive `ast.walk` over the call subtree, not a substring match on
+one line. Because this walks the parsed syntax tree rather than source lines,
+a multiline declaration is included exactly like a single-line one; nothing
+about the walk depends on how the declaration happens to be formatted.
+
+**Corrected count: 179 distinct attribute names, across 230 `Column(...)`
+declarations that reference `JSON`** (some names — e.g. templated columns
+repeated across a handful of models — account for more than one
+declaration) — up from the 132 previously claimed, an increase of 47. A
+naive single-line regex re-run for comparison (`^\s*(\w+)\s*=\s*Column\(.*
+JSON`) found 137 names on the current tree, missing 42 of the AST method's
+179 — the exact multiline shape above, spread across 26 files (`compliance_
+config.py`'s `report_email_recipients`, `training_programs.py`'s `co_
+instructors`/`prerequisite_program_ids`, `event_requests.py`'s `assigned_
+members`/`required_positions`/`recurrence_exceptions`, and 39 more). The
+132-vs-137 gap between the previously-claimed figure and this regex baseline
+is not reconciled here — likely a slightly different ad hoc pattern used the
+first time — but is moot: the AST walk is now the authoritative, structural
+method, checked into `docs/security-review/` alongside this file's sweep
+tooling rather than re-derived by hand each round.
+
+Re-ran the actual bug-detection sweep — nested bracket mutation (a) and
+shallow-copy-then-reassign (b) — against the **full corrected 179-name
+list**, whole `app/` tree. (a) is field-name-agnostic by construction, so its
+12 hits are unchanged from the round-1 write-up below (already checked and
+cleared). (b) was re-run specifically against the 42 newly-discovered names:
+grepped the whole tree for `dict(...)`/`{**...}`/`.copy()`/`.setdefault(...)`
+idioms referencing any of the 42, found **zero** such shallow-copy sites, then
+separately traced every direct `.<name> =` reassignment of one of the 42
+outside `app/models/` (7 sites, in `scheduled_tasks.py`, `shift_completion_
+service.py` ×3, and `compliance_config_service.py` ×3) by hand: one
+(`report.review_history = history`, `scheduled_tasks.py:3232`) reassigns a
+`list(...)`-copied _list_ with only a top-level `.append()` — safe, since
+appending to the copy never mutates a shared nested object the old committed
+value could still reference; one (`shift_completion_service.py:1533`) already
+uses `copy.deepcopy()`; the remaining five (`requirements_progressed`×2,
+`report_data`, `summary`, `emailed_to`) assign a value built fresh from a
+helper call or request payload, never derived by copying-then-mutating the
+object's own prior column value, and three of those five are on a row that
+was `db.add()`-ed a few lines earlier in the same function (a new insert, not
+an update — no prior committed value to alias against). **Clean — 0 bugs
+found among the 42 newly-discovered names**, consistent with the round-1
+conclusion for the original 132.
+
+**Sweep 9 correction, round 1 (Codex review):** the original method
 ([flagged here](https://github.com/thegspiro/the-logbook/pull/2128#discussion_r3900139055))
 grepped only `.settings =` / `.positions =` / `.config =` across two
 directories (`app/services/`, `app/api/v1/endpoints/`) — Codex's specific
@@ -286,41 +463,131 @@ DB). Every single-level bracket mutation on a bare column reference
 `OnboardingSession.data`, the one column wrapped in `MutableDict.as_mutable
 (JSON)` specifically so `__setitem__` is auto-tracked without a copy —
 correct by design, not a gap. **Clean** — 0 bugs found, ~40+ sites checked
-across the whole tree and all 132 attribute names, up from 16 sites / 3 names
-/ 2 directories.
+across the whole tree and all 132 attribute names claimed at the time, up
+from 16 sites / 3 names / 2 directories. (That 132-name figure was itself
+corrected to 179 on round-2 review — see "Sweep 9 correction, round 2"
+above; the bug-detection conclusion did not change.)
 
-Three findings this pass, all in `SecurityMonitoringService`, all fixed across
-two Codex rounds on the same sweep (sweep 7, above — the round-2 write-up
-gives the full account, including why round 1's own fix needed a second
-correction). All nine invariants otherwise hold — five re-verified against
-399 revisions / 1536 routes, four checked for the first time as an explicit
-whole-codebase sweep in this file (two of the four — sweeps 6 and 8 — were
-already correct; sweep 7 needed two rounds of fixes and sweep 9 needed its
-method broadened before it could be trusted, all corrected in this revision
-after Codex review on PR #2128 — see each sweep's write-up above for what
-changed and why).
+Five findings across this pass's three Codex review rounds, all in
+`SecurityMonitoringService` or this file's own write-up of it (sweep 7's
+tracker-cap fix across rounds 1–3; sweep 9's JSON-attribute count across
+rounds 1–2; the completion-gate warning-count policy conflict, round 3) — see
+each sweep's write-up above for the full account of what changed and why,
+including round 3 catching an actual regression (not just an incomplete fix)
+in round 2's own code. All nine invariants otherwise hold — five re-verified
+against 399 revisions / 1536 routes, four checked for the first time as an
+explicit whole-codebase sweep in this file (two of the four — sweeps 6 and 8
+— were already correct; sweep 7 needed three rounds of fixes, the third of
+which was a regression in the second's own fix, and sweep 9 needed its method
+broadened twice — first in scope, then in structural completeness — before it
+could be trusted).
 
-**Completion gate (pass 3, revised — round 2):** `flake8`/`black --check`/
-`isort --check-only` clean across `app/ tests/ alembic/` (including the one
-touched file, `app/services/security_monitoring.py`, and its test file);
+**Completion-gate policy correction (Codex review, round 3):** every prior
+revision of this section reported the 8 ESLint warnings below as "pre-
+existing, unrelated to this pass — well under `max-warnings 10`" and treated
+that as gate-passed. Codex pointed out this is a direct conflict with
+CLAUDE.md's "Fix All Errors — Non-Negotiable" section, which names warnings
+explicitly alongside errors ("compilation errors, type errors, lint
+violations, warnings, or failing tests") and says plainly: "If you discover
+it, you own it... by default in the same commit" and "acknowledging an error
+and moving on is a violation." `max-warnings 10` is a CI gate threshold, not
+license under CLAUDE.md's own rule to leave a warning unfixed merely because
+the count sits under it — the two are answering different questions
+(would CI block the PR / does CLAUDE.md consider this task done), and
+conflating them is exactly what "pre-existing, unrelated" was doing silently.
+
+Per CLAUDE.md's Hard Stop clause, the correct question is not "does this fail
+CI" but "would fixing it exceed this task's scope" — and 8 warnings across 3
+files is not "hundreds of strict-mode violations across unrelated files," the
+Hard Stop's own example of a genuine escalation. All 8 were attempted, and
+**all 8 were fixed** — none needed escalating:
+
+- **`StorageAreasPage.test.tsx` (3× `testing-library/no-node-access`,
+  lines 24/25/27):** a helper snapshotted tree structure via
+  `tree.querySelector`/`querySelectorAll`/`row.querySelector`. Replaced with
+  scoped testing-library queries — `within(tree).queryByRole('button', {
+name: /^Back from/ })` for the back button (stronger than the old
+  `:scope > button` selector, which matched _any_ direct-child button and
+  merely assumed it was the back one), and `data-testid` added to the row and
+  path-label elements in `StorageAreasPage.tsx` (`storage-area-row` /
+  `storage-area-row-path`, the same `data-testid={`prefix-${id}`}` convention
+  already used in `CheckSweepStop.tsx` in the same module) so rows/labels are
+  found via `within(...).getAllByTestId(...)`/`getByTestId(...)` instead of
+  raw DOM traversal. `.getAttribute()`, `.dataset`, `.style`, `.classList` on
+  the _results_ of those queries are unaffected — the ESLint rule's banned
+  list (`PROPERTIES_RETURNING_NODES`/`METHODS_RETURNING_NODES` in
+  `eslint-plugin-testing-library`) covers node-traversal only
+  (`querySelector`, `closest`, `.children`, `.parentElement`, …), not
+  attribute/style reads. Verified: same 17/17 tests pass, snapshot file
+  (`__snapshots__/StorageAreasPage.test.tsx.snap`) unchanged byte-for-byte —
+  the fix changed how elements are found, not what the test asserts.
+- **`DocumentsPage.test.tsx` (2× the same rule, lines 109/113, each
+  double-reported):** `screen.getByText(name).closest('div.stat-card')` to
+  scope a card before checking for a Download button. `.closest()` has no
+  testing-library replacement (there's no "find the ancestor" query), so the
+  card itself needed a stable handle: added
+  `data-testid={`document-card-${doc.id}`}` to the grid-card `<div>` in
+  `DocumentsPage.tsx` (same convention as above), and the test now does
+  `screen.getByTestId('document-card-d-generated')` directly — simpler than
+  the original, not just compliant, since it targets the exact card by id
+  instead of trusting `.closest()` to have walked to the right ancestor.
+  Verified: same tests pass.
+- **`RoleSetup.tsx` (1× `react-refresh/only-export-components`, line 161):**
+  the file exported both the `RoleSetup`/`PositionSetup` component and a
+  plain function, `buildPositionTemplates` — Fast Refresh can only hot-reload
+  a module whose exports are all components, so every edit to this ~1300-line
+  wizard while iterating on it forced a full page reload instead of a hot
+  patch. Root cause, per the ESLint rule's own suggested fix ("Use a new file
+  to share constants or functions between components"): split
+  `buildPositionTemplates` (and the two helpers only it uses,
+  `buildAllPositionTemplates` and `generateRolePermissions` — traced by hand,
+  neither is called anywhere else in the file) into a new file,
+  `positionTemplates.ts`. Pure data/logic, no JSX, no hooks — a `.ts` module,
+  not `.tsx`. `RoleSetup.tsx` now imports `buildPositionTemplates` from it;
+  `applyAgencyVocabulary` and the `OrganizationType` type import, used only
+  inside the moved code, were dropped from `RoleSetup.tsx`'s own imports
+  (would otherwise have become unused-import errors, not warnings). Two test
+  files referenced the old location and needed the same update, not as an
+  afterthought but because they'd otherwise start failing: `RoleSetup.test.
+tsx` imports `buildPositionTemplates` from the new file now, and
+  `RoleSetup.membership.test.ts` — which walks `RoleSetup.tsx`'s raw source
+  text as a guard against re-adding retired membership-standing positions —
+  had two assertions (`id: '${slug}'` absence, `id: 'member'` presence) that
+  were checking text that moved; those now read `positionTemplates.ts`'s
+  source instead, while the assertions about `RoleSetup.tsx`'s own restore-
+  from-localStorage logic (`RETIRED_STANDING_SLUGS.has(posId)`, still genuinely
+  in that file) stayed put. Verified: all 42 tests across the 4 touched test
+  files pass, plus the full onboarding module suite (317 tests) as a check
+  against collateral breakage from the split.
+
+**Result: 0 errors, 0 warnings** (`eslint --max-warnings 10` on a clean tree
+now reports nothing at all, not "under the cap") — the framing this section
+should have used from pass 3 round 1 onward, and the one to keep using: a
+warning discovered while this rotation's own gate is being reported gets
+fixed in the same commit, or the specific reason it doesn't (a genuine Hard
+Stop) gets written down here rather than folded into "pre-existing,
+unrelated."
+
+**Completion gate (pass 3, round 3 — full re-run):** `flake8`/`black --check`/
+`isort --check-only` clean across `app/ tests/ alembic/`;
 `validate_migrations.py --strict` passed (399 revisions, single head
-`4e7e125cb00f` — unchanged by this round, no migration touched);
+`4e7e125cb00f` — unchanged, no migration touched this round);
 `test_like_escaping.py` (2/2), `test_database_schema.py::test_set_null_fks_
 are_nullable` (1/1), `test_capacity_locking.py` (17/17), `test_migration_
-create_all_tables.py` (clean), and `test_security_monitoring.py` (**14/14**,
-up from 10 — the 4 new `TestTrackerCaps` tests proving both round-2 fixes,
-each verified to fail against the pre-round-2 commit `3b6b65e4` and pass
-after) all pass; **`cd frontend && npm run typecheck`** (not bare
-`tsc`/`npx tsc` — see the completion-gate correction below) **0 errors**;
-`eslint .` 0 errors, 8 pre-existing warnings (all `testing-
-library/no-node-access` / `react-refresh/only-export-components`, unrelated
-to this pass — well under the `max-warnings 10` gate, same set as round 1: no
-frontend file changed in either round). One source file changed this pass:
-`app/services/security_monitoring.py` (round 1: 2-line fix; round 2: batched
-eviction + `_external_endpoints` capping, sweep 7 above); everything else is
-documentation and the one test file.
+create_all_tables.py` (clean), and `test_security_monitoring.py` (**17/17**,
+up from 14 — the 3 new `TestReadBeforeEvictOrdering` tests proving the
+round-3 fix, each verified to fail against the pre-round-3 commit `df7438e0`
+and pass after) all pass; `cd frontend && npm run typecheck` (the aliased
+7.0.2 compiler, not bare `tsc` — see the round-1 correction below) **0
+errors**; `cd frontend && npm run lint` **0 errors, 0 warnings** (see the
+policy correction above). Files changed this round:
+`app/services/security_monitoring.py` (the read-before-evict reordering,
+sweep 7 above) and its test file; `StorageAreasPage.tsx`/`.test.tsx`,
+`DocumentsPage.tsx`/`.test.tsx`, `RoleSetup.tsx`/`.test.tsx`/`.membership.
+test.ts`, and the new `positionTemplates.ts` (the 8-warning fix above);
+everything else is documentation.
 
-**Completion-gate command correction (Codex review):** this section
+**Completion-gate command correction (Codex review, round 1):** this section
 originally reported `tsc --noEmit`
 ([flagged here](https://github.com/thegspiro/the-logbook/pull/2128#discussion_r3900139067)).
 Per CLAUDE.md's "Two TypeScript installs" section, bare `tsc`/`npx tsc`
