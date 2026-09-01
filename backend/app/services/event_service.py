@@ -307,10 +307,23 @@ class EventService:
         # deliberately not here: ranking per row needs a window function, and
         # the card already knows the member is waitlisted from
         # user_rsvp_status. Position belongs on the detail page.
+        #
+        # The seat filter is the same one promote_from_waitlist and the detail
+        # endpoint apply: a party bigger than the whole event is passed over by
+        # promotion, so counting it here would make the card disagree with the
+        # detail page the member opens next ("5 waiting", then "#1 of 4"). An
+        # absent or zero cap means no cap, matching `if event.max_attendees:`
+        # on the other two paths.
         waitlist_count_sq = (
             select(func.count(EventRSVP.id))
             .where(EventRSVP.event_id == Event.id)
             .where(EventRSVP.status == RSVPStatus.WAITLISTED)
+            .where(
+                or_(
+                    func.coalesce(Event.max_attendees, 0) == 0,
+                    1 + EventRSVP.guest_count <= Event.max_attendees,
+                )
+            )
             .correlate(Event)
             .scalar_subquery()
             .label("waitlist_count")
