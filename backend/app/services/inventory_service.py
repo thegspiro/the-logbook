@@ -6015,27 +6015,49 @@ class InventoryService:
         """
         if not item_ids:
             return
+
+        # Pitfall #27, and this is the read-then-write it warns about: two
+        # deliveries recorded against the same item in the same moment both
+        # saw no lot, both read the same positive `quantity`, and both copied
+        # it into an opening-balance lot — doubling the stock on hand and
+        # letting the department issue units that are not there.
+        #
+        # Lock the item rows: they are the thing both requests already share,
+        # and the lots that would conflict do not exist yet, so there is
+        # nothing there to lock. The `quantity > 0` filter then does the rest
+        # of the work, because a locking read sees the latest committed
+        # version — the loser of the race re-reads the zero the winner wrote
+        # and carries nothing forward.
+        result = await self.db.execute(
+            select(InventoryItem)
+            .where(
+                InventoryItem.id.in_(item_ids),
+                InventoryItem.organization_id == organization_id,
+                InventoryItem.quantity > 0,
+            )
+            .with_for_update()
+        )
+        items = list(result.scalars().all())
+        if not items:
+            return
+
+        # Locking too, for the same reason the count in a capacity check has
+        # to be: under REPEATABLE READ a plain SELECT answers from the
+        # snapshot this transaction took at its *first* read, which predates
+        # the lock acquired above, so it would not see the lot the winner just
+        # committed.
         lotted = await self.db.execute(
             select(InventoryLot.inventory_item_id)
             .where(
                 InventoryLot.organization_id == organization_id,
-                InventoryLot.inventory_item_id.in_(item_ids),
+                InventoryLot.inventory_item_id.in_([str(i.id) for i in items]),
             )
-            .distinct()
+            .with_for_update()
         )
         already = {str(row) for row in lotted.scalars().all()}
-        pending = [i for i in item_ids if i not in already]
-        if not pending:
-            return
-
-        result = await self.db.execute(
-            select(InventoryItem).where(
-                InventoryItem.id.in_(pending),
-                InventoryItem.organization_id == organization_id,
-                InventoryItem.quantity > 0,
-            )
-        )
-        for item in result.scalars().all():
+        for item in items:
+            if str(item.id) in already:
+                continue
             self.db.add(
                 InventoryLot(
                     organization_id=organization_id,
