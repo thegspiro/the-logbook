@@ -1899,10 +1899,17 @@ export const SHOTS = [
       );
       await page.waitForTimeout(2500);
     },
-    // The letter-width sheet, not the browser tab around it. The page opens in
-    // the app shell — the print stylesheet drops the navigation, but on screen
-    // it is still there, and the sheet is what the placeholder is about.
-    selector: "div.max-w-\\[8\\.5in\\]",
+    // The sheet, not the browser tab around it. The page opens in the app
+    // shell — the print stylesheet drops the navigation, but on screen it is
+    // still there, and the sheet is what the placeholder is about.
+    //
+    // `article.shift-report-print` rather than the old `max-w-[8.5in]`: this
+    // page was rewritten onto named print classes, and the arbitrary width
+    // value it used to carry is gone. The other print pages
+    // (ProgramPrintPage, SkillSheetPrintPage, SkillTestScorecardPrintPage)
+    // still use the Tailwind form, so this is a per-page fact and not a
+    // sweep.
+    selector: "article.shift-report-print",
   },
   {
     id: "03-65-review-modal-full",

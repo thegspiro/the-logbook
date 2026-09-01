@@ -1,5 +1,73 @@
 # Screenshot currency
 
+## Repaired 2026-09-01 — 27 of the 35 stale shots, and what actually broke them
+
+The full re-capture left 35 shots unable to reach their screen, all keeping
+pre-palette images. 27 are fixed and verified together; the rest are not
+selector problems and are listed at the bottom.
+
+"Stale selectors" undersold it. The causes, by frequency:
+
+| Cause | Shots |
+| --- | --- |
+| wrapper moved to the shared `card` utility | 9 |
+| dialog clip: structural form -> `role="dialog"` | 6 |
+| dialog *container* now any of three shapes | 3 |
+| the email page lost its Preview tab and renamed a button | 2 |
+| panel is the `modal-overlay` utility | 2 |
+| a heading, a placeholder option, and a print sheet all renamed | 3 |
+| strict mode: fifteen matches where one was assumed | 1 |
+| an applicant no longer last in a pipeline that gained a stage | 1 |
+
+### There are three dialog shapes now, and guessing does not work
+
+`modal-overlay` (the shared utility, carrying its own fixed positioning),
+`role="dialog"` (the shared Modal), and older hand-rolled `fixed inset-0`.
+Which one a given dialog uses has to be **probed**: 03-98 and 04-39 are
+`role="dialog"`, while 01-29's Change Member Status dialog next door is still
+a hand-rolled panel inside `modal-overlay` with no role at all.
+
+So containers got a union of all three — safe, because every lookup beneath
+takes `.first()` — and clips were changed one at a time against what each page
+renders. A union as a *clip* would match two elements on any page carrying one
+of each and fail strict mode, which is why the tempting sweep is the wrong
+move.
+
+### Two things that were not shot problems at all
+
+**Guide 08 documented a button that does not exist.** It told readers to switch
+to a **Preview** tab and click **Send Test Email to Me**. The tab is gone —
+the preview renders beside the editor now — and the control reads **Send Test
+to Me**. Corrected in three places.
+
+**`15-02` is not broken.** Its own comment says it needs
+`--bulk-prospects`, which the ordinary seed deliberately does not create, and
+failing without that flag is the intended behaviour rather than a defect. It is
+excluded from the 35 rather than "fixed".
+
+### Selectors that were facts about the feature, not about the markup
+
+`expandFirstReportCard` anchored on `div.rounded-xl > button`. It now matches
+the only visible button on that screen whose label carries a duration, because
+a report row *has* a duration and its wrapper class is nobody's contract — it
+has changed once already. Likewise `01-35` no longer clicks "Riley Bishop": it
+finds whoever sits in the pipeline's last stage. Bishop was last when the shot
+was written and the pipeline has since gained an **Onboarding** stage, so the
+drawer offers Advance where the caption promises Convert. That one would have
+pictured the wrong action rather than failing, had the Convert wait not timed
+out first.
+
+### The eight left, none of them selector work
+
+`04-42`, `14-24`, `19-27` need an open election with a contested position; the
+seeded elections have closed with time. `06-21` and `06-23` need an
+Intermediate EVOC level that no longer exists. `01-08` needs audit events
+matching its filter. `02-96`'s picker and `15-02` are covered above. These are
+fixtures to rebuild, not selectors to repoint.
+
+Image audit clean across 521 images; 281 markdown files, 0 broken links; 514
+captured, 0 markers outstanding.
+
 ## Captured 2026-08-25 (twenty-third) — the last nine markers, and two more defects
 
 **514 of 514. No markers outstanding.** The nine that arrived with this
