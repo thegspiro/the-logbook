@@ -4574,8 +4574,41 @@ export const SHOTS = [
       // The applicant on the final stage: the action bar's last button reads
       // Convert rather than Advance there, which is the whole point of the
       // shot, and the documents seeded onto this same applicant are below it.
+      // Whoever is in the pipeline's *last* stage, discovered rather than
+      // named. This clicked Riley Bishop, who was final when the shot was
+      // written; the pipeline has since gained an "Onboarding" stage after
+      // "Membership Vote", so Bishop is mid-pipeline now and the drawer offers
+      // Advance where this caption promises Convert. A name is not the
+      // property this shot is about -- being last in the pipeline is.
+      const finalName = await page.evaluate(async () => {
+        const pipes = await (
+          await fetch("/api/v1/prospective-members/pipelines", {
+            credentials: "include",
+          })
+        ).json();
+        const first = (pipes.items ?? pipes)[0];
+        const detail = await (
+          await fetch(`/api/v1/prospective-members/pipelines/${first.id}`, {
+            credentials: "include",
+          })
+        ).json();
+        const steps = detail.steps ?? detail.stages ?? [];
+        const last = steps[steps.length - 1]?.name;
+        const people = await (
+          await fetch("/api/v1/prospective-members/prospects?limit=100", {
+            credentials: "include",
+          })
+        ).json();
+        const who = (people.items ?? people).find(
+          (x) => x.current_step_name === last,
+        );
+        return who ? `${who.first_name} ${who.last_name}` : null;
+      });
+      if (!finalName) {
+        throw new Error("01-35: no applicant sits in the final pipeline stage");
+      }
       await page
-        .locator("[role='button'][aria-label*='Bishop']")
+        .locator(`[role='button'][aria-label*='${finalName.split(" ").pop()}']`)
         .first()
         .click({ timeout: 20_000 });
       await page.waitForTimeout(2500);
@@ -4750,7 +4783,11 @@ export const SHOTS = [
         .first()
         .click({ timeout: 20_000 });
       await page.waitForTimeout(1200);
-      const modal = page.locator("div.fixed.inset-0 > div").first();
+      const modal = page
+        .locator(
+          "div.modal-overlay > div, div[role='dialog'], div.fixed.inset-0 > div",
+        )
+        .first();
       // A serving member's own name and address, which is what makes the check
       // fire. The dialog is raised *before* anything is written, so this stops
       // one click short of creating the duplicate it is warning about.
