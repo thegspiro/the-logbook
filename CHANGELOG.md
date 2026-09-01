@@ -7,6 +7,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### The dashboard's seven-day list is now thirty days, and its control says where it goes (2026-09-01)
+
+**Changed**
+
+- The dashboard card that merges a member's own shifts, open slots and events
+  covers **thirty days** rather than seven, and is titled **Next 30 Days**. It
+  was already a rolling window anchored to today, so it simply reaches further;
+  the six-row cap and the "N more through <date>" footer are unchanged.
+- **Its control is now "All Shifts", not "Full Schedule", and it opens the
+  month view.** The card lists drills and events alongside shifts, but
+  `/scheduling` holds shifts only — every tab there is shift-scoped and the
+  calendar endpoints return shifts — so a member who saw Thursday's drill on
+  the card and followed a promise of the _full_ schedule arrived somewhere it
+  could not be. Opening on the month view also fixes a phone mismatch: that
+  grid draws a month at every width, while the week view fetched only seven
+  days to fill it.
+- **Drills stop being crowded off the list.** The card's events and own-shifts
+  requests were capped at five records each, and the cap applied _before_ the
+  window filter rather than after — so five socials spread across the next six
+  months were enough to hide every drill in the coming month, on a card whose
+  own subtitle promises drills. Both requests now ask for the window the card
+  renders.
+- The footer's "N more open shifts" line **names the horizon it counts**. The
+  open-shift request deliberately reaches past the visible window so that line
+  has something to report, but it stops at sixty days; the wording no longer
+  implies it covers everything beyond the window.
+
+**Fixed**
+
+- The **"Take a Shift"** quick action counted open shifts up to sixty days out,
+  well past the window the card advertises — a number members read as "what is
+  open now", attached to a button that opens a schedule not showing those
+  shifts. Its count, and the short-staffed tally beside it, are now scoped to
+  the visible window; only the footer's "more later" line reads the longer
+  reach it was added for.
+
 ### The member roster showed every member the membership coordinator's screen (2026-09-01)
 
 **Changed**
