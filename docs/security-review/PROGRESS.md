@@ -78,6 +78,44 @@ Storefront & payments, once this PR merges.
 
 ---
 
+### 2026-09-01 — Feature 04 (Storefront & payments, pass 3) — Codex round 5: a timing overstatement corrected, `permission_matches`'s own alias-expansion call named, three more imports verified at the symbol level
+
+Codex reviewed round 4's own fix and found three more real gaps, none a new
+application-code finding:
+
+- **"Runs on literally every storefront request" overstated when.**
+  `PermissionChecker.__call__` (backing `require_permission`) takes
+  `current_user: User = Depends(get_current_user)` as its own dependency, so
+  FastAPI resolves authentication before the function body — which calls
+  `_collect_user_permissions` — ever runs; the router-level `module_gate`
+  dependency resolves before any endpoint dependency too. Corrected: it runs
+  for every request that reaches an actual permission decision, after
+  authentication and the module gate both pass — not unconditionally on
+  every request.
+- **`core/permissions.py:permission_matches` also calls
+  `expand_legacy_permissions` directly**, independent of
+  `_collect_user_permissions`'s call — round 4 named only the aggregation
+  call site. Both were already noted together as "redundant but harmless"
+  in `PERM-02-permissions-roles.md`'s pass 3; round 4 just didn't carry the
+  second one into this document. Same no-op conclusion applies to both, for
+  the same reason (the alias map is `equipment_check.*`-only).
+- **Three more imports from changed files, now checked at the symbol level
+  rather than the file level:** `get_db` (`app/core/database.py` — the
+  file's diff is confined to an unrelated `disconnect()` method; `get_db`
+  itself doesn't appear in it), `safe_error_detail` (`app/core/utils.py` —
+  the diff is a pure addition, a new `sanitize_connector_error` function
+  this feature doesn't call; `safe_error_detail` itself doesn't appear in
+  the diff), and `NotificationChannel` (`app/models/notification.py` — a
+  +99/-1 diff for an unrelated messaging feature; the enum's own class
+  definition doesn't appear in the diff, only a reference to it inside a
+  new column on a different table). All three: file changed, imported
+  symbol didn't.
+
+All three fixed in `docs/security-review/SF-04-storefront-payments.md`'s
+Pass 3 section.
+
+---
+
 ### 2026-09-01 — Feature 04 (Storefront & payments, pass 3) — Codex round 4: `dependencies.py`'s permission-aggregation change reaches every storefront request too, proven a no-op
 
 Codex reviewed round 3's own fix and found one more real gap:

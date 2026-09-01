@@ -121,29 +121,46 @@ to `inventory.check_*` — a downstream test-fixture adaptation of the
 already-reviewed rename, not a new behavior or a new finding; the backfill
 migrations' own logic is untouched by either diff.
 
-**Correction (Codex review on this PR, round 4): `dependencies.py`'s other
-change reaches every storefront route too, and wasn't reviewed for what it
-actually does here.** `cf033864` didn't only touch `core/permissions.py` —
-it also added a call to `expand_legacy_permissions` inside
-`_collect_user_permissions` (`app/api/dependencies.py`), the function that
-assembles a user's full granted-permission set. Both `require_permission`
-(47 of storefront's 48 routes) and `user_has_permission` (the `GET
-/permissions` self-probe, confirmed by reading its body — it calls
-`_collect_user_permissions` too) resolve through this function, so it runs
-on literally every storefront request, not zero of them. Checked what that
-actually does to a storefront decision rather than stopping at "it's
-called": `expand_legacy_permissions` only adds an entry when the user's
-granted set contains one of `LEGACY_PERMISSION_ALIASES`' keys, and every
-key in that map is `equipment_check.*`-shaped — confirmed by re-reading the
-map (already quoted above) — a namespace with no `storefront.*` entry on
-either side of it. Whatever a given storefront caller's granted set
-contains from elsewhere (a customized position still holding a legacy
-`equipment_check.view` string, say), expanding it can only ever add
-`inventory.check_*` names to that set; it cannot add, remove, or alter
-`storefront.view`/`storefront.order`/`storefront.manage`, so
-`permission_matches("storefront.*", granted)` sees the identical answer
-before and after this change for every caller. Exercised on every request,
-provably a no-op for every storefront authorization decision.
+**Correction (Codex review on this PR, round 4, precision fixed in round
+5): `dependencies.py`'s other change reaches storefront's permission
+decisions too, and wasn't reviewed for what it actually does here.**
+`cf033864` didn't only touch `core/permissions.py` — it also added a call
+to `expand_legacy_permissions` inside `_collect_user_permissions` (`app/api/
+dependencies.py`), the function that assembles a user's full
+granted-permission set. Both `require_permission` (47 of storefront's 48
+routes, via `PermissionChecker.__call__`) and `user_has_permission` (the
+`GET /permissions` self-probe, confirmed by reading its body) resolve
+through it. **Round 4 overstated when**: `PermissionChecker.__call__` takes
+`current_user: User = Depends(get_current_user)` as its own parameter, so
+FastAPI resolves authentication first and a missing/invalid credential
+never reaches the function body at all; the router-level `module_gate`
+dependency likewise runs before any endpoint dependency, so a request an
+authenticated caller's disabled module rejects never gets there either.
+Correct statement: `_collect_user_permissions` runs for every storefront
+request that reaches an actual permission decision — after authentication
+and the module gate both pass, not unconditionally on every request.
+
+`core/permissions.py:permission_matches` — the function every one of those
+permission decisions ultimately calls — **also** calls
+`expand_legacy_permissions` directly, on its own `granted` parameter,
+independent of `_collect_user_permissions`'s call (missed in round 4's
+correction, caught in round 5; both were already noted as the same
+double-call in `PERM-02-permissions-roles.md`'s pass 3, "redundant but
+harmless since expansion is idempotent" — round 4 named only the first of
+the two call sites). Same conclusion applies to both, for the same reason:
+`expand_legacy_permissions` only adds an entry when the input set contains
+one of `LEGACY_PERMISSION_ALIASES`' keys, and every key in that map is
+`equipment_check.*`-shaped — confirmed by re-reading the map (already
+quoted above) — a namespace with no `storefront.*` entry on either side of
+it. Whatever a given storefront caller's granted set contains from
+elsewhere (a customized position still holding a legacy
+`equipment_check.view` string, say), expanding it — at either call site —
+can only ever add `inventory.check_*` names to that set; it cannot add,
+remove, or alter `storefront.view`/`storefront.order`/`storefront.manage`,
+so `permission_matches("storefront.*", granted)` returns the identical
+answer before and after this change for every caller who reaches it.
+Provably a no-op for every storefront authorization decision, at both call
+sites, whenever one is reached.
 
 **Order export remains unbounded — carried forward again, still not
 fixed, and pass 2's own citation for it was wrong.** Pass 2 recorded this at
@@ -159,13 +176,43 @@ described, just at the range that actually contains it — a citation error
 carried unnoticed through one prior pass. Still needs a product decision (a
 row cap or a mandatory date window), not a drive-by fix.
 
+**Correction (Codex review on this PR, round 5): three more imports from
+changed files, each verified at the level of the actual imported symbol
+rather than the file.** `storefront.py`/`paypal_webhook.py` import `get_db`
+from `app/core/database.py` and `safe_error_detail` from `app/core/
+utils.py`; `storefront_service.py` imports `NotificationChannel` from
+`app/models/notification.py`. All three files changed since `d8c5e39e` —
+but a changed file is not the same claim as a changed symbol, the exact
+distinction the `core/permissions.py`/`STOREFRONT_*` context-noise check
+above already had to draw once. Checked precisely this time, per symbol:
+
+- `database.py`'s diff is confined to `DatabaseManager.disconnect()` (an
+  app-shutdown method, unrelated to any request path) gaining exception
+  handling so `self.engine`/`self.session_factory` reset even when
+  `dispose()` itself fails. `get_db()` (line 252, what this feature actually
+  imports and calls per-request) does not appear in the diff at all.
+- `core/utils.py`'s diff is a pure addition: a new function,
+  `sanitize_connector_error`, for integration-connector failures — grep
+  confirms neither `storefront.py`, `paypal_webhook.py`, nor
+  `storefront_service.py` calls it. `safe_error_detail` (what this feature
+  actually imports) does not appear in the diff at all.
+- `models/notification.py`'s +99/-1 diff is new tables, columns, and
+  relationships for an unrelated messaging feature
+  (`DepartmentMessageDelivery` and friends). `class NotificationChannel`
+  (what `storefront_service.py` actually imports — the enum's own
+  definition) does not appear in the diff at all; it's referenced only
+  inside a new column declaration on an unrelated table.
+
+All three: the file changed, the imported symbol didn't. No finding.
+
 **No new findings** beyond the corrections above (a wrong "doesn't reach it"
 authorization claim, restated with the actual mechanism; a lost `GET
 /permissions` exception; a wrong export line citation; two scope artifacts a
 filename filter missed; two shared-dependency changes reviewed and confirmed
-safe; a second `dependencies.py` change proven a no-op for this feature's
-permission checks) — all in this write-up across four Codex rounds, none
-in application code.
+safe; two `dependencies.py`/`core/permissions.py` legacy-expansion call
+sites proven a no-op, with the "every request" timing corrected; three more
+imports verified unchanged at the symbol level) — all in this write-up
+across five Codex rounds, none in application code.
 
 **Completion gate:** no backend or frontend source file was modified by
 this pass — the `git diff` above is definitive, not merely a `flake8`/
