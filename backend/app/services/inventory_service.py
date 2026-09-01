@@ -126,6 +126,19 @@ _UNISSUABLE_CONDITIONS = {
 }
 
 
+def _append_note(existing: Optional[str], addition: Optional[str]) -> Optional[str]:
+    """Join a note onto whatever the row already carries.
+
+    Both return paths record a write-off on the issuance before they settle
+    its return notes, and both then *assigned* those notes — erasing the only
+    record that the returned units did not rejoin stock, in exactly the case
+    it exists for (a full return of unserviceable gear). A full return also
+    landed on top of any earlier partial return's note.
+    """
+    parts = [part.strip() for part in (existing, addition) if part and part.strip()]
+    return "\n".join(parts) or None
+
+
 def _enum_member(value):
     """An ItemCondition however the caller spelled it, or None.
 
@@ -2291,6 +2304,57 @@ class InventoryService:
             )
         )
 
+    async def _return_units_to_stock(
+        self,
+        issuance,
+        item,
+        organization_id: str,
+        quantity: int,
+        return_condition,
+        returned_by: str,
+    ) -> None:
+        """Put returned units back where this item's readers will look for them.
+
+        Shared by both return paths — the direct one and the quartermaster's
+        review of a member's return request — because they are the same
+        decision made on two screens, and they had already drifted: the review
+        path credited ``item.quantity`` unconditionally, which for a
+        lot-stocked item is a column no reader consults, so approving a return
+        recorded it as received, reduced ``quantity_issued``, and left the
+        units missing from on-hand stock.
+
+        Unserviceable units do not rejoin ready stock. A lot carries no
+        condition of its own, so crediting a damaged return back to the lot it
+        came from puts it at the front of the FEFO queue with a lot number and
+        an expiry — issuable again, and swappable onto an apparatus during a
+        check. The issuance row keeps the return and its condition, which is
+        the record; the units are written off the issuable balance rather than
+        being quietly re-offered.
+
+        ``lot_allocations`` is left alone in that case: it says how many units
+        are still owed back to which lots, and a written-off unit is never
+        coming back. A later return of the serviceable remainder repays only
+        itself, because each pass repays at most what it returns.
+        """
+        if _enum_member(return_condition) in _UNISSUABLE_CONDITIONS:
+            write_off = f"{quantity} unit(s) written off on return: not serviceable"
+            issuance.return_notes = (
+                (issuance.return_notes or "") + "\n" + write_off
+            ).strip()
+        elif issuance.lot_allocations:
+            # Back to the ledger it came out of. Crediting `quantity` for an
+            # item whose stock lives in lots puts the units in a column no
+            # reader consults — issuance, low-stock and the checklist swap all
+            # go to the lots — so returned gear simply disappeared from
+            # available stock, permanently.
+            await self._restore_to_lots(issuance, organization_id, quantity)
+        elif await self._item_is_lot_stocked(str(item.id), organization_id):
+            self._restore_without_allocations(
+                str(item.id), organization_id, quantity, returned_by
+            )
+        else:
+            item.quantity = (item.quantity or 0) + quantity
+
     async def _restore_to_lots(
         self, issuance, organization_id: str, quantity: int
     ) -> None:
@@ -2526,37 +2590,14 @@ class InventoryService:
             if not item:
                 return False, "Associated pool item not found"
 
-            # Unserviceable units do not rejoin ready stock. A lot carries no
-            # condition of its own, so crediting a damaged return back to the
-            # lot it came from puts it at the front of the FEFO queue with a
-            # lot number and an expiry — issuable again, and swappable onto an
-            # apparatus during a check. The issuance row keeps the return and
-            # its condition, which is the record; the units are written off the
-            # issuable balance rather than being quietly re-offered.
-            #
-            # `lot_allocations` is left alone: it says how many units are still
-            # owed back to which lots, and a written-off unit is never coming
-            # back. A later return of the serviceable remainder repays only
-            # itself, because each pass repays at most what it returns.
-            unsafe = _enum_member(return_condition) in _UNISSUABLE_CONDITIONS
-            if unsafe:
-                write_off = f"{qty} unit(s) written off on return: not serviceable"
-                issuance.return_notes = (
-                    (issuance.return_notes or "") + "\n" + write_off
-                ).strip()
-            elif issuance.lot_allocations:
-                # Back to the ledger it came out of. Crediting `quantity` for
-                # an item whose stock lives in lots puts the units in a column
-                # no reader consults — issuance, low-stock and the checklist
-                # swap all go to the lots — so returned gear simply
-                # disappeared from available stock, permanently.
-                await self._restore_to_lots(issuance, str(organization_id), qty)
-            elif await self._item_is_lot_stocked(str(item.id), str(organization_id)):
-                self._restore_without_allocations(
-                    str(item.id), str(organization_id), qty, str(returned_by)
-                )
-            else:
-                item.quantity += qty
+            await self._return_units_to_stock(
+                issuance,
+                item,
+                str(organization_id),
+                qty,
+                return_condition,
+                str(returned_by),
+            )
             # Down either way: the member is not holding them any more.
             item.quantity_issued = max(0, (item.quantity_issued or 0) - qty)
 
@@ -2578,7 +2619,9 @@ class InventoryService:
                 issuance.returned_at = datetime.now(timezone.utc)
                 issuance.returned_by = returned_by
                 issuance.return_condition = return_condition
-                issuance.return_notes = return_notes
+                issuance.return_notes = _append_note(
+                    issuance.return_notes, return_notes
+                )
 
             # Queue notification
             await self._queue_inventory_notification(
@@ -5744,12 +5787,20 @@ class InventoryService:
                     raise ValueError(
                         f"Cannot receive {qty}; only {issuance.quantity_issued} remain issued"
                     )
-                item.quantity = (item.quantity or 0) + qty
+                await self._return_units_to_stock(
+                    issuance,
+                    item,
+                    str(organization_id),
+                    qty,
+                    condition,
+                    str(reviewer_id),
+                )
                 item.quantity_issued = max(0, (item.quantity_issued or 0) - qty)
                 if qty == issuance.quantity_issued:
                     issuance.is_returned = True
                     issuance.returned_at, issuance.returned_by = now, str(reviewer_id)
-                    issuance.return_condition, issuance.return_notes = condition, note
+                    issuance.return_condition = condition
+                    issuance.return_notes = _append_note(issuance.return_notes, note)
                 else:
                     issuance.quantity_issued -= qty
                     issuance.return_notes = (

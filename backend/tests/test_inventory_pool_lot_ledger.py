@@ -22,6 +22,9 @@ from app.models.inventory import (
     InventoryLot,
     ItemCondition,
     ItemStatus,
+    ReturnRequest,
+    ReturnRequestStatus,
+    ReturnRequestType,
     TrackingType,
 )
 from app.models.user import Organization, User
@@ -322,6 +325,10 @@ class TestReturnsGoBackToTheLedgerTheyCameFrom:
         # Not parked in the column either — it is not stock any more.
         assert item.quantity == 0
         assert item.quantity_issued == 0
+        # And the write-off survives the return notes being settled. A full
+        # return used to *assign* them, wiping the only record that these
+        # units left stock rather than rejoining it.
+        assert "written off" in (issuance.return_notes or "")
 
     async def test_an_unserviceable_column_return_is_written_off_too(self, db_session):
         org = await _org(db_session)
@@ -435,3 +442,93 @@ class TestQuarantinedPoolStockIsNotIssued:
 
         assert err is None
         assert issuance is not None
+
+
+async def _return_request(db, org, user, item, issuance, quantity):
+    req = ReturnRequest(
+        id=str(uuid.uuid4()),
+        organization_id=org.id,
+        requester_id=user.id,
+        return_type=ReturnRequestType.ISSUANCE,
+        item_id=item.id,
+        item_name=item.name,
+        issuance_id=issuance.id,
+        quantity_returning=quantity,
+        reported_condition=ItemCondition.GOOD,
+        status=ReturnRequestStatus.REQUESTED,
+    )
+    db.add(req)
+    await db.flush()
+    return req
+
+
+async def _review(db, org, reviewer, req, quantity, condition="good"):
+    return await InventoryService(db).review_return_request(
+        uuid.UUID(req.id),
+        uuid.UUID(org.id),
+        uuid.UUID(reviewer.id),
+        "received",
+        observed_condition=condition,
+        received_quantity=quantity,
+    )
+
+
+class TestTheReviewedReturnUsesTheSameLedger:
+    """A return arrives by one of two doors and must land in one place.
+
+    A member can hand gear back directly, or file a return request that a
+    quartermaster inspects and receives. The second path credited
+    `item.quantity` whatever ledger the item kept its stock in — so for a
+    lot-stocked item the receipt was recorded, `quantity_issued` came down,
+    and the units were left in a column that issuance, low-stock and the
+    checklist swap never read. Approving a return made the stock vanish.
+    """
+
+    async def test_an_approved_return_credits_the_lot_it_was_issued_from(
+        self, db_session
+    ):
+        org = await _org(db_session)
+        user = await _user(db_session, org)
+        item = await _item(db_session, org, quantity=0)
+        lot = await _lot(db_session, org, item, quantity=10)
+
+        issuance, err = await _issue(db_session, org, user, item, 4)
+        assert err is None
+        await db_session.refresh(lot)
+        assert lot.quantity == 6
+
+        req = await _return_request(db_session, org, user, item, issuance, 4)
+        ok, err = await _review(db_session, org, user, req, 4)
+
+        assert ok, err
+        await db_session.refresh(lot)
+        assert lot.quantity == 10
+        await db_session.refresh(item)
+        assert item.quantity == 0, (
+            "the units belong in the lot they came from; in `quantity` they "
+            "are invisible to every reader of a lot-stocked item"
+        )
+        assert item.quantity_issued == 0
+
+    async def test_an_unsafe_return_is_not_put_back_on_the_shelf(self, db_session):
+        """Same rule as the direct path: a lot has no condition of its own, so
+        a damaged unit credited back to its lot is issuable again — at the
+        front of the FEFO queue, carrying that lot's number and expiry."""
+        org = await _org(db_session)
+        user = await _user(db_session, org)
+        item = await _item(db_session, org, quantity=0)
+        lot = await _lot(db_session, org, item, quantity=10)
+
+        issuance, err = await _issue(db_session, org, user, item, 4)
+        assert err is None
+
+        req = await _return_request(db_session, org, user, item, issuance, 4)
+        ok, err = await _review(db_session, org, user, req, 4, condition="damaged")
+
+        assert ok, err
+        await db_session.refresh(lot)
+        assert lot.quantity == 6, "written off, not returned to ready stock"
+        await db_session.refresh(item)
+        assert item.quantity == 0
+        assert item.quantity_issued == 0
+        assert "written off" in (issuance.return_notes or "")
