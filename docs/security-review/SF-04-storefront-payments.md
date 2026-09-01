@@ -23,22 +23,50 @@ under-scoping — all ten backend files (`storefront.py`,
 `schemas/storefront.py`, `utils/size_order.py`), the entire
 `frontend/src/modules/storefront/` tree, and `alembic/versions/` filtered
 for any storefront/embroidery/personalization/thread-named migration.
-**Zero changes across the entire domain** — `git diff --stat` returns
-nothing for any of it. SF-5 and SF-6's fixes, and every pass-1/2 "Verified
-good" item, stand unmodified and unre-derived.
+**Zero changes across the entire feature-local domain** — `git diff --stat`
+returns nothing for any of it. SF-5 and SF-6's fixes, and every pass-1/2
+"Verified good" item, stand unmodified and unre-derived.
+
+**Correction (Codex review on this PR): a feature-local diff cannot cover
+shared authorization code, and it isn't the whole story here.** The
+zero-diff conclusion above only speaks to the ten files this feature owns.
+Storefront's own routes are gated with `require_permission("storefront.view"
+| "storefront.order" | "storefront.manage")` (confirmed by grep —
+`storefront.py` calls neither `module_gate` nor `require_module`
+anywhere), so `a518957e`'s `get_request_enabled_modules` change (reviewed in
+`PERM-02-permissions-roles.md`'s pass 3, module-gate-only) doesn't reach
+this feature's routes at all. `core/permissions.py`'s diff since `d8c5e39e`
+does touch lines near `STOREFRONT_VIEW`/`STOREFRONT_ORDER`/
+`STOREFRONT_MANAGE` — checked precisely: every hit is adjacent-context noise
+from the unrelated `equipment_check.*` → `inventory.check_*` rename
+(`cf033864`, also reviewed in `PERM-02-permissions-roles.md`'s pass 3); none
+of the three storefront `Permission(...)` definitions themselves changed.
+The rename **did** reach this feature's own test suite, though:
+`test_corporate_storefront_grants.py` (+28/-1) and
+`test_storefront_grant_backfill.py` (+15/-1) both needed a
+`LEGACY_PERMISSION_ALIASES`-derived translation so their frozen
+pre-rename migration snapshots keep comparing against the old
+`equipment_check.*` spelling instead of silently matching nothing once the
+live registry moved to `inventory.check_*` — a downstream test-fixture
+adaptation of the already-reviewed rename, not a new behavior or a new
+finding; the backfill migrations' own logic is untouched by either diff.
 
 **Order export remains unbounded — carried forward again, still not
-fixed.** `GET /orders/export` (`storefront_service.py:2916-2953,2980-3015`
-per pass 2's line numbers, unchanged since the file is byte-identical)
-still pages through every matching order into one in-memory list before
-building the CSV, with no row cap or required date window. This was first
-recorded in `docs/app-review/storefront.md`, carried into SF-04 pass 2
-explicitly so the item wouldn't silently drop out of the record, and is
-carried forward again here for the same reason — it needs a product
-decision (a cap or a mandatory date window), not a drive-by fix in a
-re-verification pass with zero other code changes in scope.
+fixed, and pass 2's own citation for it was wrong.** Pass 2 recorded this at
+`storefront_service.py:2916-2953,2980-3015`; re-checking those ranges
+against current (byte-identical-to-pass-2) code shows they are
+`_order_rollup`/`get_window_rollups`/`get_dashboard` — dashboard summary
+code, not the export. The actual unbounded accumulation is
+`export_orders_csv` (`storefront_service.py:3035-3072`): a `while True` loop
+(`page += 1`) that extends one in-memory `orders` list until
+`list_orders(...)` returns fewer than a full page, with no cap on the
+number of pages or total rows before the CSV is built. Same defect pass 2
+described, just at the range that actually contains it — a citation error
+carried unnoticed through one prior pass. Still needs a product decision (a
+row cap or a mandatory date window), not a drive-by fix.
 
-**No new findings.**
+**No new findings** beyond the two citation/scope corrections above, both
+in this write-up rather than in application code.
 
 **Completion gate:** no backend or frontend source file was modified by
 this pass — the `git diff` above is definitive, not merely a `flake8`/

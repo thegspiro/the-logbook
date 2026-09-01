@@ -78,6 +78,36 @@ Storefront & payments, once this PR merges.
 
 ---
 
+### 2026-09-01 — Feature 04 (Storefront & payments, pass 3) — Codex round 1: a feature-local diff can't clear shared authorization code, plus a wrong line citation
+
+Codex reviewed this PR's first commit and found two real gaps, neither a
+new application-code finding:
+
+- **The zero-diff conclusion only covered the ten feature-owned files, not
+  shared code storefront's routes depend on.** Checked explicitly:
+  `storefront.py` gates every route with `require_permission(...)`, never
+  `module_gate`/`require_module`, so `a518957e`'s module-gate change
+  (already reviewed in PERM-02 pass 3) doesn't reach it. `core/permissions.py`'s
+  diff touches lines adjacent to the three `STOREFRONT_*` permissions, but
+  precisely checked — it's context noise from the unrelated
+  `equipment_check.*` → `inventory.check_*` rename (`cf033864`, also
+  already reviewed in PERM-02 pass 3); none of the three definitions
+  themselves changed. That rename did reach this feature's own test suite:
+  `test_corporate_storefront_grants.py` and `test_storefront_grant_backfill.py`
+  both needed a `LEGACY_PERMISSION_ALIASES` translation so their frozen
+  pre-rename migration snapshots keep matching the old spelling — a
+  downstream adaptation of an already-reviewed rename, not new behavior.
+- **Pass 2's own citation for the carried-forward unbounded-export finding
+  was wrong.** `storefront_service.py:2916-2953,2980-3015` is dashboard
+  rollup code (`_order_rollup`/`get_window_rollups`/`get_dashboard`); the
+  actual `while True` unbounded-accumulation loop is `export_orders_csv` at
+  `storefront_service.py:3035-3072`. Same defect, correct range now.
+
+Both fixed in `docs/security-review/SF-04-storefront-payments.md`'s Pass 3
+section and in the entry below.
+
+---
+
 ### 2026-09-01 — Feature 04 (Storefront & payments, pass 3) — no new findings
 
 `git diff` (not `git log`) between pass 2's closing merge (`d8c5e39e`) and
