@@ -12,7 +12,7 @@ import { eventService, meetingsService } from '../services/api';
 import { electionService } from '../services/electionService';
 import type { ElectionListItem } from '../types/election';
 import { getStatusBadgeClass } from '../utils/electionHelpers';
-import type { Event, EventListItem, RSVP, EventStats, RSVPHistory } from '../types/event';
+import type { Event, EventAttendee, EventListItem, RSVP, EventStats, RSVPHistory } from '../types/event';
 import { useAuthStore } from '../stores/authStore';
 import { LoadingSpinner } from '../components/LoadingSpinner';
 import { EventTypeBadge } from '../components/EventTypeBadge';
@@ -49,6 +49,7 @@ import { EventAttachmentsList } from '../components/event-detail/EventAttachment
 import { EventRecurrenceInfo } from '../components/event-detail/EventRecurrenceInfo';
 import { EventNotificationPanel } from '../components/event-detail/EventNotificationPanel';
 import { EventRSVPSection } from '../components/event-detail/EventRSVPSection';
+import { EventAttendeesCard } from '../components/event-detail/EventAttendeesCard';
 import EventRSVPModal from '../components/event-detail/EventRSVPModal';
 import EventCancelModal from '../components/event-detail/EventCancelModal';
 import EventCancelSeriesModal from '../components/event-detail/EventCancelSeriesModal';
@@ -122,6 +123,8 @@ export const EventDetailPage: React.FC = () => {
   const navigate = useNavigate();
   const [event, setEvent] = useState<Event | null>(null);
   const [rsvps, setRsvps] = useState<RSVP[]>([]);
+  const [attendees, setAttendees] = useState<EventAttendee[]>([]);
+  const [attendeesLoading, setAttendeesLoading] = useState(false);
   const [stats, setStats] = useState<EventStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -210,6 +213,11 @@ export const EventDetailPage: React.FC = () => {
         void fetchRSVPs();
         void fetchStats();
         void fetchRSVPHistory();
+      } else {
+        // Outside the canManage branch on purpose: this is the one roster an
+        // ordinary member can see. A 403 (the event is not shared) resolves to
+        // an empty list in the service, so there is nothing to handle here.
+        void fetchAttendees();
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -249,6 +257,25 @@ export const EventDetailPage: React.FC = () => {
       setRsvps(data);
     } catch {
       toast.error('Failed to load RSVPs');
+    }
+  };
+
+  const fetchAttendees = async () => {
+    if (!eventId) return;
+
+    try {
+      setAttendeesLoading(true);
+      const data = await eventService.getEventAttendees(eventId);
+      // Coerced rather than trusted: this card is supplementary, and a
+      // malformed roster payload must not be able to take down the whole
+      // event page for a member who was only reading it.
+      setAttendees(Array.isArray(data) ? data : []);
+    } catch {
+      // Supplementary. A real failure here should not put an error toast in
+      // front of a member who was only reading the event.
+      setAttendees([]);
+    } finally {
+      setAttendeesLoading(false);
     }
   };
 
@@ -651,9 +678,15 @@ export const EventDetailPage: React.FC = () => {
   // that would hit those endpoints are not rendered at all — an enabled button
   // that always 409s is worse than an absent one.
   const isAttendanceFinalized = Boolean(event.attendance_finalized_at);
+  // No requires_rsvp here, deliberately. That flag means "a response is
+  // expected" — it drives the Required row in the sidebar, the deadline
+  // countdown and the non-respondent reminder audience — not "responses are
+  // permitted". A member may always tell the department they are coming.
+  // is_draft is included because the API refuses drafts outright, and an
+  // enabled button that always 400s is worse than an absent one.
   const canRSVP =
-    event.requires_rsvp &&
     !event.is_cancelled &&
+    !event.is_draft &&
     !isPastEvent &&
     !isAttendanceFinalized &&
     (!event.rsvp_deadline || new Date(event.rsvp_deadline) > new Date());
@@ -802,7 +835,7 @@ export const EventDetailPage: React.FC = () => {
                     onClick={rsvpForm.openModal}
                     className="btn-primary inline-flex items-center rounded-md text-sm font-medium"
                   >
-                    {event.user_rsvp_status ? 'Update RSVP' : 'RSVP Now'}
+                    {event.user_rsvp_status ? 'Update RSVP' : event.requires_rsvp ? 'RSVP Now' : "I'm coming"}
                   </button>
                 )}
                 {rsvpCountdown && !event.user_rsvp_status && (
@@ -1424,8 +1457,13 @@ export const EventDetailPage: React.FC = () => {
                 </div>
                 {event.user_rsvp_status === RSVPStatusEnum.WAITLISTED && (
                   <p className="mt-3 text-sm text-purple-600 dark:text-purple-400">
-                    You&apos;re on the waitlist. You&apos;ll be automatically moved to &quot;Going&quot; if a spot opens
-                    up.
+                    {/* The position is what the member actually wants to know.
+                        It is 1-based over responded_at, the same order the
+                        server promotes in, so "you're next" means it. */}
+                    {event.user_waitlist_position != null
+                      ? `You're #${event.user_waitlist_position} of ${event.waitlist_count ?? event.user_waitlist_position} on the waitlist. `
+                      : "You're on the waitlist. "}
+                    You&apos;ll be automatically moved to &quot;Going&quot; if a spot opens up.
                   </p>
                 )}
                 {rsvpCountdown && (
@@ -1455,6 +1493,19 @@ export const EventDetailPage: React.FC = () => {
                 onPrintRoster={printRoster}
                 onExportCSV={exportAttendanceCSV}
                 attendanceFinalized={isAttendanceFinalized}
+              />
+            )}
+            {/* The member-facing counterpart. Managers are excluded rather
+                than shown both: EventRSVPSection above is strictly richer, and
+                two rosters on one page reads as a bug. The card is hidden
+                entirely when the API returned nothing, which is also what a
+                403 looks like — a member who may not see the list is not told
+                there is a list. */}
+            {!canManage && attendees.length > 0 && (
+              <EventAttendeesCard
+                attendees={attendees}
+                loading={attendeesLoading}
+                goingCount={event.going_count ?? undefined}
               />
             )}
             {/* Notifications Panel (for managers) */}

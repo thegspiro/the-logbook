@@ -321,6 +321,7 @@ def _to_list_item(row: dict) -> EventListItem:
         recurrence_parent_id=event.recurrence_parent_id,
         rsvp_count=row["rsvp_count"],
         going_count=row["going_count"],
+        waitlist_count=row.get("waitlist_count"),
         user_rsvp_status=row["user_rsvp_status"],
         rsvp_deadline=event.rsvp_deadline,
         max_attendees=event.max_attendees,

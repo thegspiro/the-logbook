@@ -489,6 +489,11 @@ class EventListItem(UTCResponseBase):
     recurrence_parent_id: Optional[UUID] = None
     rsvp_count: Optional[int] = None
     going_count: Optional[int] = None
+    # How many are waiting, for the "N waiting" line on a waitlisted card.
+    # Position is not here on purpose — ranking per row needs a window
+    # function, and the card already knows *that* the member is waitlisted
+    # from user_rsvp_status. Position lives on the detail response.
+    waitlist_count: Optional[int] = None
     user_rsvp_status: Optional[str] = None
 
     # Fields the member-facing list needs to tell an urgent event from a
@@ -839,6 +844,9 @@ class EventTemplateCreate(BaseModel):
     _check_check_in_window_type = field_validator("check_in_window_type")(
         _enum_check(_CHECKIN_WINDOW_TYPES, "check_in_window_type")
     )
+    _check_attendee_visibility = field_validator("attendee_visibility")(
+        _enum_check(_ATTENDEE_VISIBILITIES, "attendee_visibility")
+    )
 
     @model_validator(mode="before")
     @classmethod
@@ -864,6 +872,7 @@ class EventTemplateCreate(BaseModel):
     max_attendees: Optional[int] = Field(None, ge=1)
     is_mandatory: bool = False
     allow_guests: bool = False
+    attendee_visibility: Optional[str] = Field(None, max_length=20)
     check_in_window_type: Optional[str] = None
     check_in_minutes_before: Optional[int] = Field(default=60, ge=0)
     check_in_minutes_after: Optional[int] = Field(default=15, ge=0)
@@ -883,6 +892,9 @@ class EventTemplateUpdate(BaseModel):
     _check_check_in_window_type = field_validator("check_in_window_type")(
         _enum_check(_CHECKIN_WINDOW_TYPES, "check_in_window_type")
     )
+    _check_attendee_visibility = field_validator("attendee_visibility")(
+        _enum_check(_ATTENDEE_VISIBILITIES, "attendee_visibility")
+    )
 
     name: Optional[str] = Field(None, min_length=1, max_length=200)
     description: Optional[str] = None
@@ -897,6 +909,7 @@ class EventTemplateUpdate(BaseModel):
     max_attendees: Optional[int] = Field(None, ge=1)
     is_mandatory: Optional[bool] = None
     allow_guests: Optional[bool] = None
+    attendee_visibility: Optional[str] = Field(None, max_length=20)
     check_in_window_type: Optional[str] = None
     check_in_minutes_before: Optional[int] = Field(None, ge=0)
     check_in_minutes_after: Optional[int] = Field(None, ge=0)
@@ -928,6 +941,7 @@ class EventTemplateResponse(UTCResponseBase):
     max_attendees: Optional[int] = None
     is_mandatory: bool
     allow_guests: bool
+    attendee_visibility: Optional[str] = None
     check_in_window_type: Optional[str] = None
     check_in_minutes_before: Optional[int] = None
     check_in_minutes_after: Optional[int] = None

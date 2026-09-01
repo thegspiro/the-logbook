@@ -41,10 +41,32 @@ export const useRSVPForm = ({ eventId, event, onSuccess }: UseRSVPFormOptions) =
     setSubmitError(null);
   }, []);
 
+  /**
+   * Seed the form from the member's existing RSVP, falling back to defaults
+   * when they have not responded yet.
+   *
+   * This is not a convenience. The form previously reset on every open, so
+   * "Update RSVP" came up blank and submitting it discarded whatever the
+   * member had entered. That was quiet data loss for notes; once guests began
+   * consuming event capacity it became a capacity bug, because a member with
+   * two guests who opened the modal to fix a typo would submit guest_count: 0
+   * and silently release two seats to somebody else.
+   */
   const openModal = useCallback(() => {
-    resetForm();
+    const existing = event?.user_rsvp;
+    if (existing) {
+      setRsvpStatus(existing.status);
+      setGuestCount(existing.guest_count ?? 0);
+      setRsvpNotes(existing.notes ?? '');
+      setRsvpDietaryRestrictions(existing.dietary_restrictions ?? '');
+      setRsvpAccessibilityNeeds(existing.accessibility_needs ?? '');
+      setRsvpApplyToSeries(false);
+      setSubmitError(null);
+    } else {
+      resetForm();
+    }
     setShowRSVPModal(true);
-  }, [resetForm]);
+  }, [event, resetForm]);
 
   const closeModal = useCallback(() => {
     setShowRSVPModal(false);

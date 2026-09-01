@@ -35,6 +35,7 @@ const {
   mockAcknowledge,
   mockGetMyTraining,
   mockGetEvents,
+  mockCreateOrUpdateRSVP,
   mockCheckPermission,
   mockGetAdminSummary,
   mockGetSetupChecklist,
@@ -52,6 +53,7 @@ const {
   mockAcknowledge: vi.fn(),
   mockGetMyTraining: vi.fn(),
   mockGetEvents: vi.fn(),
+  mockCreateOrUpdateRSVP: vi.fn(),
   mockCheckPermission: vi.fn(),
   mockGetAdminSummary: vi.fn(),
   mockGetSetupChecklist: vi.fn(),
@@ -105,6 +107,7 @@ vi.mock('../services/api', () => ({
   },
   eventService: {
     getEvents: mockGetEvents,
+    createOrUpdateRSVP: mockCreateOrUpdateRSVP,
   },
   medicalScreeningService: {
     getMyCompliance: mockGetMyCompliance,
@@ -414,6 +417,77 @@ describe('Dashboard', () => {
         expect(mockGetMyShifts).toHaveBeenCalledTimes(1);
         expect(mockGetOpenShifts).toHaveBeenCalledTimes(1);
       });
+    });
+  });
+
+  describe('Inline event RSVP', () => {
+    // Pitfall #28: this block states the mocks it depends on rather than
+    // inheriting whatever the block above configured.
+    beforeEach(() => {
+      mockCreateOrUpdateRSVP.mockReset();
+      mockCreateOrUpdateRSVP.mockResolvedValue({ status: 'going' });
+      mockGetEvents.mockReset();
+      mockGetEvents.mockResolvedValue([
+        {
+          id: 'evt-1',
+          title: 'Ladder Ops Drill',
+          event_type: 'training',
+          start_datetime: `${inWindow(3)}T14:00:00Z`,
+          end_datetime: `${inWindow(3)}T17:00:00Z`,
+          requires_rsvp: false,
+          is_mandatory: false,
+          is_cancelled: false,
+        },
+      ]);
+    });
+
+    it('responds from the timeline without leaving the page', async () => {
+      const user = userEvent.setup();
+      renderWithRouter(<Dashboard />);
+
+      await user.click(await screen.findByRole('button', { name: /going/i }));
+
+      expect(mockCreateOrUpdateRSVP).toHaveBeenCalledWith('evt-1', {
+        status: 'going',
+        guest_count: 0,
+      });
+      expect(mockNavigate).not.toHaveBeenCalled();
+    });
+
+    it('offers the controls even when the event requires no RSVP', async () => {
+      // The whole point: requires_rsvp is false on the fixture above, and the
+      // row previously offered only an "Open" link that navigated away.
+      renderWithRouter(<Dashboard />);
+
+      expect(await screen.findByRole('button', { name: /going/i })).toBeInTheDocument();
+      expect(await screen.findByRole('button', { name: /can.t/i })).toBeInTheDocument();
+    });
+
+    it("shows the server's status, not the one that was asked for", async () => {
+      // A full event answers a "going" request with "waitlisted". Echoing the
+      // request back would tell the member they have a seat they did not get.
+      const user = userEvent.setup();
+      mockCreateOrUpdateRSVP.mockResolvedValue({ status: 'waitlisted' });
+
+      renderWithRouter(<Dashboard />);
+
+      await user.click(await screen.findByRole('button', { name: /going/i }));
+
+      expect(await screen.findByText(/waitlisted/i)).toBeInTheDocument();
+    });
+
+    it('leaves the row alone when the response is refused', async () => {
+      const user = userEvent.setup();
+      mockCreateOrUpdateRSVP.mockRejectedValue(new Error('nope'));
+
+      renderWithRouter(<Dashboard />);
+
+      await user.click(await screen.findByRole('button', { name: /going/i }));
+
+      await waitFor(() => {
+        expect(mockCreateOrUpdateRSVP).toHaveBeenCalled();
+      });
+      expect(await screen.findByRole('button', { name: /going/i })).toBeInTheDocument();
     });
   });
 

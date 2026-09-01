@@ -187,9 +187,14 @@ describe('EventListCard', () => {
       expect(screen.queryByRole('button', { name: /change rsvp/i })).not.toBeInTheDocument();
     });
 
-    it('offers no RSVP controls on an event that takes none', () => {
+    it('still offers RSVP controls when a response is not required', () => {
+      // requires_rsvp means a response is *expected* — it drives the deadline
+      // and the Needs You band. It does not mean responses are accepted, and
+      // gating the controls on it left a member with nothing to do on the
+      // majority of events, which never set the flag.
       renderCard(makeEvent({ requires_rsvp: false }));
-      expect(screen.queryByRole('button', { name: /^going$/i })).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /^going$/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /not going/i })).toBeInTheDocument();
     });
 
     it('disables both RSVP buttons while a response is in flight', () => {

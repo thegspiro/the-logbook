@@ -295,7 +295,22 @@ class EventService:
             .label("going_count")
         )
 
-        columns = [Event, rsvp_count_sq, going_count_sq]
+        # How many members are waiting, for the "N waiting" line on a
+        # waitlisted card. A third correlated subquery on a query that already
+        # runs two — still one round trip, no N+1. The member's *position* is
+        # deliberately not here: ranking per row needs a window function, and
+        # the card already knows the member is waitlisted from
+        # user_rsvp_status. Position belongs on the detail page.
+        waitlist_count_sq = (
+            select(func.count(EventRSVP.id))
+            .where(EventRSVP.event_id == Event.id)
+            .where(EventRSVP.status == RSVPStatus.WAITLISTED)
+            .correlate(Event)
+            .scalar_subquery()
+            .label("waitlist_count")
+        )
+
+        columns = [Event, rsvp_count_sq, going_count_sq, waitlist_count_sq]
 
         # Optionally include current user's RSVP status and attendance
         if user_id:
@@ -380,20 +395,24 @@ class EventService:
         items: List[Dict[str, Any]] = []
         for row in rows:
             event = row[0]
+            # Positional, matching the `columns` list built above. The
+            # user-scoped columns are appended only when user_id is set, so
+            # their indices follow the three unconditional aggregates.
             item: Dict[str, Any] = {
                 "event": event,
                 "rsvp_count": row[1] or 0,
                 "going_count": row[2] or 0,
+                "waitlist_count": row[3] or 0,
                 "user_rsvp_status": None,
                 "user_attended": False,
             }
             if user_id:
-                raw_status = row[3]
+                raw_status = row[4]
                 if raw_status is not None:
                     item["user_rsvp_status"] = (
                         raw_status.value if hasattr(raw_status, "value") else raw_status
                     )
-                item["user_attended"] = bool(row[4])
+                item["user_attended"] = bool(row[5])
             items.append(item)
 
         await self._annotate_list_items(items, organization_id)

@@ -2,11 +2,13 @@
  * eventServices — extracted from services/api.ts
  */
 
+import type { AxiosError } from 'axios';
 import api from './apiClient';
 import type {
   CheckInMonitoringStats,
   CheckInRequest,
   Event,
+  EventAttendee,
   EventCancel,
   EventCreate,
   EventListItem,
@@ -186,6 +188,26 @@ export const eventService = {
     const params = status_filter ? { status_filter } : undefined;
     const response = await api.get<RSVP[]>(`/events/${eventId}/rsvps`, { params });
     return asArray(response.data);
+  },
+
+  /**
+   * The going-only attendee list an ordinary member is allowed to see.
+   *
+   * Distinct from `getEventRSVPs`, which needs `events.manage` and returns
+   * contact details and accommodation notes. Whether a member may see this at
+   * all is decided per event, falling back to an organization default, so a
+   * 403 is an ordinary answer rather than an error: it resolves to an empty
+   * list and the caller simply renders nothing.
+   */
+  async getEventAttendees(eventId: string): Promise<EventAttendee[]> {
+    try {
+      const response = await api.get<EventAttendee[]>(`/events/${eventId}/attendees`);
+      return asArray(response.data);
+    } catch (err: unknown) {
+      const status = (err as AxiosError).response?.status;
+      if (status === 403 || status === 404) return [];
+      throw err;
+    }
   },
 
   /**

@@ -21,6 +21,7 @@ vi.mock('../services/api', () => ({
   eventService: {
     getEvent: vi.fn(),
     getEventRSVPs: vi.fn(),
+    getEventAttendees: vi.fn(),
     getEventStats: vi.fn(),
     getEligibleMembers: vi.fn(),
     createOrUpdateRSVP: vi.fn(),
@@ -139,6 +140,10 @@ describe('EventDetailPage', () => {
     mockCheckPermission.mockReturnValue(false);
     mockAuthState.checkPermission = mockCheckPermission;
     mockAuthState.user = null;
+    // A sane default for every block. vi.clearAllMocks() drops
+    // implementations but not the mock itself, so without this the member
+    // roster fetch resolves undefined in blocks that never mention it.
+    vi.mocked(eventService.getEventAttendees).mockResolvedValue([]);
   });
 
   describe('Loading State', () => {
@@ -1084,6 +1089,170 @@ describe('EventDetailPage', () => {
         expect(screen.getByText('Monthly Business Meeting')).toBeInTheDocument();
       });
       expect(screen.queryByText('Training Session Details')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('Member-visible attendee list', () => {
+    // Pitfall #28: vi.clearAllMocks() does not reset implementations, so this
+    // block states every mock it depends on rather than inheriting whatever
+    // the manager blocks above left configured.
+    beforeEach(() => {
+      vi.mocked(eventService.getEvent).mockReset();
+      vi.mocked(eventService.getEvent).mockResolvedValue({ ...mockEvent, going_count: 2 });
+      vi.mocked(eventService.getEventAttendees).mockReset();
+      vi.mocked(eventService.getEventAttendees).mockResolvedValue([
+        { user_id: 'user-1', user_name: 'John Doe', status: 'going' },
+        { user_id: 'user-2', user_name: 'Jane Smith', status: 'going' },
+      ]);
+      mockCheckPermission.mockReturnValue(false);
+    });
+
+    it('shows the going list to a member when the event shares it', async () => {
+      renderWithRouter(<EventDetailPage />);
+
+      expect(await screen.findByText('John Doe')).toBeInTheDocument();
+      expect(screen.getByText('Jane Smith')).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: /who's going/i })).toBeInTheDocument();
+    });
+
+    it('renders nothing when the roster is not shared with members', async () => {
+      // A 403 resolves to an empty list in the service, so the card is simply
+      // absent — a member who may not see the list is not told there is one.
+      vi.mocked(eventService.getEventAttendees).mockResolvedValue([]);
+
+      renderWithRouter(<EventDetailPage />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Monthly Business Meeting')).toBeInTheDocument();
+      });
+      expect(screen.queryByRole('heading', { name: /who's going/i })).not.toBeInTheDocument();
+    });
+
+    it('never renders contact details even if the payload carries them', async () => {
+      // The API allowlists three fields and the type allows three, but the
+      // component is the last line of that defence: a widened payload must
+      // still not put an email address on a member's screen.
+      vi.mocked(eventService.getEventAttendees).mockResolvedValue([
+        {
+          user_id: 'user-1',
+          user_name: 'John Doe',
+          status: 'going',
+          user_email: 'john@example.com',
+          notes: 'Peanut allergy',
+        } as never,
+      ]);
+
+      renderWithRouter(<EventDetailPage />);
+
+      expect(await screen.findByText('John Doe')).toBeInTheDocument();
+      expect(screen.queryByText('john@example.com')).not.toBeInTheDocument();
+      expect(screen.queryByText('Peanut allergy')).not.toBeInTheDocument();
+    });
+
+    it('does not fetch the member roster for a manager', async () => {
+      // Managers get EventRSVPSection, which is strictly richer. Two rosters
+      // on one page reads as a bug.
+      mockCheckPermission.mockReturnValue(true);
+      vi.mocked(eventService.getEventRSVPs).mockResolvedValue([]);
+      vi.mocked(eventService.getEventStats).mockResolvedValue(mockStats);
+
+      renderWithRouter(<EventDetailPage />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Monthly Business Meeting')).toBeInTheDocument();
+      });
+      expect(eventService.getEventAttendees).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('Optional RSVP and waitlist standing', () => {
+    beforeEach(() => {
+      vi.mocked(eventService.getEvent).mockReset();
+      vi.mocked(eventService.getEventAttendees).mockReset();
+      vi.mocked(eventService.getEventAttendees).mockResolvedValue([]);
+      mockCheckPermission.mockReturnValue(false);
+    });
+
+    it('offers an RSVP on an event that does not require one', async () => {
+      // requires_rsvp means a response is expected, not that responses are
+      // accepted. Gating the button on it left members with nothing to do on
+      // the majority of events.
+      vi.mocked(eventService.getEvent).mockResolvedValue({
+        ...mockEvent,
+        requires_rsvp: false,
+        rsvp_deadline: undefined,
+      });
+
+      renderWithRouter(<EventDetailPage />);
+
+      expect(await screen.findByRole('button', { name: /i'm coming/i })).toBeInTheDocument();
+    });
+
+    it('still refuses an RSVP on a cancelled event', async () => {
+      vi.mocked(eventService.getEvent).mockResolvedValue({
+        ...mockEvent,
+        requires_rsvp: false,
+        is_cancelled: true,
+      });
+
+      renderWithRouter(<EventDetailPage />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Monthly Business Meeting')).toBeInTheDocument();
+      });
+      expect(screen.queryByRole('button', { name: /i'm coming|rsvp now/i })).not.toBeInTheDocument();
+    });
+
+    it('tells a waitlisted member exactly where they stand', async () => {
+      vi.mocked(eventService.getEvent).mockResolvedValue({
+        ...mockEvent,
+        user_rsvp_status: 'waitlisted',
+        user_waitlist_position: 2,
+        waitlist_count: 5,
+      });
+
+      renderWithRouter(<EventDetailPage />);
+
+      expect(await screen.findByText(/#2 of 5 on the waitlist/i)).toBeInTheDocument();
+    });
+
+    it('falls back to the vaguer sentence when no position came back', async () => {
+      vi.mocked(eventService.getEvent).mockResolvedValue({
+        ...mockEvent,
+        user_rsvp_status: 'waitlisted',
+      });
+
+      renderWithRouter(<EventDetailPage />);
+
+      await waitFor(() => {
+        expect(screen.getByText(/on the waitlist/i)).toBeInTheDocument();
+      });
+      expect(screen.queryByText(/#\d+ of/)).not.toBeInTheDocument();
+    });
+
+    it('opens the RSVP modal prefilled from the existing response', async () => {
+      // Before this the form reset on every open, so "Update RSVP" came up
+      // blank and submitting discarded the member's notes — and, once guests
+      // consumed capacity, silently released the seats they were holding.
+      const user = userEvent.setup();
+      vi.mocked(eventService.getEvent).mockResolvedValue({
+        ...mockEvent,
+        user_rsvp_status: 'going',
+        user_rsvp: {
+          status: 'going',
+          guest_count: 2,
+          notes: 'Bringing the projector',
+          dietary_restrictions: null,
+          accessibility_needs: null,
+        },
+      });
+
+      renderWithRouter(<EventDetailPage />);
+
+      await user.click(await screen.findByRole('button', { name: /update rsvp/i }));
+
+      expect(await screen.findByDisplayValue('Bringing the projector')).toBeInTheDocument();
+      expect(screen.getByLabelText(/number of guests/i)).toHaveValue(2);
     });
   });
 });

@@ -331,21 +331,28 @@ export const EventsPage: React.FC = () => {
     try {
       setRsvpLoading((prev) => ({ ...prev, [eventId]: true }));
       const rsvpData: RSVPCreate = { status, guest_count: 0 };
-      await eventService.createOrUpdateRSVP(eventId, rsvpData);
+      const saved = await eventService.createOrUpdateRSVP(eventId, rsvpData);
+      // The server's status, not the requested one. Asking to go to a full
+      // event returns `waitlisted`, and echoing the request back would show
+      // the member a confident "Going" for a seat they did not get.
+      const savedStatus = saved.status ?? status;
       setEvents((prev) =>
         prev.map((e) =>
           e.id === eventId
             ? {
                 ...e,
-                user_rsvp_status: status,
+                user_rsvp_status: savedStatus,
                 going_count:
-                  status === 'going'
+                  savedStatus === 'going'
                     ? (e.going_count ?? 0) + (e.user_rsvp_status === 'going' ? 0 : 1)
                     : (e.going_count ?? 0) - (e.user_rsvp_status === 'going' ? 1 : 0),
               }
             : e
         )
       );
+      if (savedStatus === 'waitlisted') {
+        toast('This event is full — you have been added to the waitlist.', { icon: '⏳' });
+      }
       setRsvpChanging((prev) => ({ ...prev, [eventId]: false }));
     } catch (err: unknown) {
       // The card is only updated on success, so without this the tap looks
