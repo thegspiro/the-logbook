@@ -1,6 +1,50 @@
 # Security Review — Storefront & Payments
 
-**Prefix:** `SF` · **Iteration:** 04 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2) · **PR:** #1807 (pass 1)
+**Prefix:** `SF` · **Iteration:** 04 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-01 (pass 3) · **PR:** #1807 (pass 1)
+
+---
+
+## Pass 3 (2026-09-01) — re-verified, no new findings
+
+**Scope, using `git diff` between tree states rather than `git log` commit
+enumeration.** Pass 2 documented that this repo's history for this path was
+squashed/rewritten at some point, so `git log --since`/ancestry traversal
+can silently miss real commits — the exact mechanism that caused pass 2's
+own first draft to under-scope and then need a correction. `git diff`
+between two known commits doesn't have that failure mode: it compares tree
+content directly, independent of how the commit graph between them is
+shaped. Diffed pass 2's own closing merge (`d8c5e39e`) against current
+`HEAD` across the full domain pass 2 established — not the narrower list
+pass 1's header literally named, which is what caused pass 2's own
+under-scoping — all ten backend files (`storefront.py`,
+`storefront_service.py`, `storefront_notification_service.py`,
+`email_templates_storefront.py`, `storefront_preview_service.py`,
+`storefront_payments.py`, `paypal_webhook.py`, `models/storefront.py`,
+`schemas/storefront.py`, `utils/size_order.py`), the entire
+`frontend/src/modules/storefront/` tree, and `alembic/versions/` filtered
+for any storefront/embroidery/personalization/thread-named migration.
+**Zero changes across the entire domain** — `git diff --stat` returns
+nothing for any of it. SF-5 and SF-6's fixes, and every pass-1/2 "Verified
+good" item, stand unmodified and unre-derived.
+
+**Order export remains unbounded — carried forward again, still not
+fixed.** `GET /orders/export` (`storefront_service.py:2916-2953,2980-3015`
+per pass 2's line numbers, unchanged since the file is byte-identical)
+still pages through every matching order into one in-memory list before
+building the CSV, with no row cap or required date window. This was first
+recorded in `docs/app-review/storefront.md`, carried into SF-04 pass 2
+explicitly so the item wouldn't silently drop out of the record, and is
+carried forward again here for the same reason — it needs a product
+decision (a cap or a mandatory date window), not a drive-by fix in a
+re-verification pass with zero other code changes in scope.
+
+**No new findings.**
+
+**Completion gate:** no backend or frontend source file was modified by
+this pass — the `git diff` above is definitive, not merely a `flake8`/
+`validate_migrations.py` spot-check standing in for one. Both re-run
+directly anyway, alongside this pass's own PR's CI run for the frontend
+gates and full test suite.
 
 ---
 

@@ -16,13 +16,24 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**Feature 03 (Public surface & webhooks), pass 3** —
-[#2137](https://github.com/thegspiro/the-logbook/pull/2137), branch
-`claude/security-review-pub-pass3`. Diff since pass 2's merge
-(`36ce7595..HEAD`, correct merge-commit ancestry) touches only
-`display.py`, via a fix already made and reviewed under feature 32's own
-rotation pass; no new findings. See the log entry below and
-`PUB-03-public-surface-webhooks.md`'s Pass 3 section.
+**Feature 04 (Storefront & payments), pass 3** — branch
+`claude/security-review-sf-pass3`, PR link recorded in the next log entry
+once opened. `git diff` (not `git log` — this feature's history is
+squashed/rewritten, per pass 2's own correction) between pass 2's merge and
+`HEAD` across the full declared domain shows zero changes; no new findings.
+Order export's unbounded-export item carried forward again, still unfixed.
+See the log entry below and `SF-04-storefront-payments.md`'s Pass 3
+section.
+
+---
+
+### 2026-09-01 — Feature 03 (Public surface & webhooks, pass 3) ✅ merged — PR #2137
+
+Codex round 1's scope-command gap (missed `app/core/public_portal_security.py`,
+outside the searched directory) fixed and resolved; CI green on the final
+head, no merge conflict. No code-level security finding — the one commit in
+scope was already fixed and guard-tested under feature 32's own pass.
+Rotation row 03 → ✅. Next: 04 Storefront & payments.
 
 ---
 
@@ -64,6 +75,31 @@ own PR's CI run as the authority for the full gate.
 Full write-up: `docs/security-review/PUB-03-public-surface-webhooks.md`
 (Pass 3 section). Rotation row 03 → ⏳ (awaiting PR merge). Next: 04
 Storefront & payments, once this PR merges.
+
+---
+
+### 2026-09-01 — Feature 04 (Storefront & payments, pass 3) — no new findings
+
+`git diff` (not `git log`) between pass 2's closing merge (`d8c5e39e`) and
+current `HEAD`, across the full domain pass 2 established after its own
+under-scoping correction (10 backend files, the whole
+`frontend/src/modules/storefront/` tree, and any storefront-named
+migration) — chosen over `git log` because pass 2 documented this repo's
+history for this path as squashed/rewritten, which is exactly what caused
+pass 2's own first draft to under-scope and need a correction; `git diff`
+between two known tree states doesn't have that failure mode. Result: zero
+changes across the entire domain. SF-5/SF-6's fixes and every pass-1/2
+"Verified good" item stand unmodified. `GET /orders/export`'s unbounded
+export (no row cap or date window) is carried forward again, unfixed — a
+product decision, not a drive-by fix, and explicitly re-flagged so it
+doesn't silently drop out of the record the way it briefly did before pass
+2 caught it. No backend/frontend source touched by this pass; `flake8` and
+`validate_migrations.py --strict` re-run directly, with this pass's own
+PR's CI run as the authority for the full gate.
+
+Full write-up: `docs/security-review/SF-04-storefront-payments.md` (Pass 3
+section). Rotation row 04 → ⏳ (awaiting PR merge). Next: 05 Finance &
+approvals, once this PR merges.
 
 ---
 
@@ -5655,8 +5691,8 @@ pass 3 — each row's prior PR is recorded in the Log, not repeated here.
 | 00  | Cross-cutting baseline    | SEC    | whole-codebase sweeps; see `SEC-00-cross-cutting-baseline.md`                                                                                   | ✅     |
 | 01  | Auth & session lifecycle  | AUTH   | `endpoints/auth.py`, `auth_service.py`, `mfa_service.py`, `oauth_service.py`                                                                    | ✅     |
 | 02  | Permissions & roles       | PERM   | `dependencies.py`, `core/permissions.py`, `roles.py`, `operational_ranks.py`, `officers.py`, `org_chart.py`                                     | ✅     |
-| 03  | Public surface & webhooks | PUB    | `api/public/*` (20 unauth routes), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`                                      | ⏳     |
-| 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                              | ⬜     |
+| 03  | Public surface & webhooks | PUB    | `api/public/*` (20 unauth routes), `paypal_webhook.py`, `integrations_webhook.py`, `salesforce_webhook.py`                                      | ✅     |
+| 04  | Storefront & payments     | SF     | `endpoints/storefront.py`, `storefront_service.py`, `utils/storefront_payments.py`                                                              | ⏳     |
 | 05  | Finance & approvals       | FIN    | `endpoints/finance.py`, `finance_service.py`, `public/finance_approvals.py`                                                                     | ⬜     |
 | 06  | Elections & ballots       | ELEC   | `endpoints/elections.py` (token-scoped voting)                                                                                                  | ⬜     |
 | 07  | Users & organizations     | USR    | `users.py`, `organizations.py`, `member_status.py`, `member_leaves.py`                                                                          | ⬜     |
