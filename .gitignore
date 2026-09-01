@@ -67,7 +67,12 @@ logs/
 docker-compose.override.yml
 
 # Node.js / Frontend
-node_modules/
+# No trailing slash: that form matches directories only, and a *symlink* named
+# node_modules slips past it. One reached a commit on 2026-09-01 from an agent
+# worktree, where the link is normal — and checking that commit out replaces a
+# real node_modules with a link pointing at itself, so the next npm command
+# has nothing to run against.
+node_modules
 *.tsbuildinfo
 npm-debug.log*
 yarn-debug.log*
