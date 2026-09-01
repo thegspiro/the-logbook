@@ -154,6 +154,40 @@ describe('StorageAreasPage', () => {
     expect(mockGetStorageAreas).toHaveBeenCalledWith({ flat: true });
   });
 
+  it('makes the whole name the drill-in target on a phone', async () => {
+    // The chevron is 24px and sits at the row's left edge; a fingertip aimed
+    // at the name — which is what looks tappable — did nothing, and a
+    // near-miss to the right hit the item-count button instead.
+    setViewportWidth(375);
+    mockGetStorageAreas.mockResolvedValue([
+      makeArea({ id: 'cab', name: 'Cab', item_count: 4 }),
+      makeArea({ id: 'medical', name: 'Medical bag', parent_id: 'cab', item_count: 12 }),
+    ]);
+    renderWithRouter(<StorageAreasPage />);
+    await screen.findByText('Cab');
+
+    const opener = screen.getByRole('button', { name: 'Open Cab' });
+
+    // One control per row, not two with the same name, and it carries the
+    // name rather than sitting beside it.
+    expect(screen.getAllByRole('button', { name: 'Open Cab' })).toHaveLength(1);
+    expect(opener).toHaveTextContent('Cab');
+    expect(opener.className).toContain('min-h-11');
+  });
+
+  it('leaves the chevron as the control on a laptop, where rows expand', async () => {
+    setViewportWidth(1024);
+    mockGetStorageAreas.mockResolvedValue([
+      makeArea({ id: 'cab', name: 'Cab', item_count: 4 }),
+      makeArea({ id: 'medical', name: 'Medical bag', parent_id: 'cab', item_count: 12 }),
+    ]);
+    renderWithRouter(<StorageAreasPage />);
+    await screen.findByText('Cab');
+
+    expect(screen.getByRole('button', { name: 'Expand' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Open Cab' })).not.toBeInTheDocument();
+  });
+
   it('says so plainly when the organization has no storage areas at all', async () => {
     renderWithRouter(<StorageAreasPage />);
     expect(await screen.findByText('No storage areas yet.')).toBeInTheDocument();

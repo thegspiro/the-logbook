@@ -1953,6 +1953,45 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
     }
   }, [templateId]);
 
+  /**
+   * Discard every compartment on the template and put `next` in its place.
+   *
+   * The three bulk-replacement paths — vehicle preset, JSON import, CSV
+   * import — all promise "discards every compartment and item currently on
+   * this template", and all three used to deliver that promise to *local
+   * state only*. `handleSave` creates the new compartments (they have no id)
+   * and updates the ones still in `compartments`; nothing deletes the rows
+   * that are no longer mentioned. On a saved template the result was A, B, X
+   * and Y persisted together — a doubled checklist handed to the next crew,
+   * visible in the builder only after a reload.
+   *
+   * Deleted before the swap, so a failure leaves the template exactly as it
+   * was rather than half-replaced. `parent_compartment_id` is ON DELETE SET
+   * NULL, so a parent's children are orphaned rather than cascaded — every
+   * persisted id has to be named, and the order does not matter.
+   *
+   * Returns false when the caller should stop.
+   */
+  const replaceAllCompartments = async (next: CompartmentFormState[]): Promise<boolean> => {
+    const persisted = compartments.map((comp) => comp.id).filter((id): id is string => Boolean(id));
+    if (persisted.length > 0) {
+      try {
+        await ensureDraftBeforeStructureEdit();
+        for (const id of persisted) {
+          await schedulingService.deleteCompartment(id);
+        }
+      } catch (err: unknown) {
+        toast.error(getErrorMessage(err, 'Failed to replace the template contents'));
+        return false;
+      }
+    }
+    setCompartments(next);
+    const expanded = new Set<string>();
+    next.forEach((_, i) => expanded.add(`comp-${i}`));
+    setExpandedCompartments(expanded);
+    return true;
+  };
+
   const loadVehiclePreset = async (presetKey: string) => {
     const preset = VEHICLE_PRESETS[presetKey];
     if (!preset) return;
@@ -1989,12 +2028,8 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
         return;
     }
 
-    setCompartments(newCompartments);
+    if (!(await replaceAllCompartments(newCompartments))) return;
     setShowPresetPicker(false);
-    // Expand all new compartments
-    const expanded = new Set<string>();
-    newCompartments.forEach((_, i) => expanded.add(`comp-${i}`));
-    setExpandedCompartments(expanded);
     toast.success(`Loaded ${preset.label} vehicle check preset`);
   };
 
@@ -2144,10 +2179,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
           })),
         }));
 
-        setCompartments(imported);
-        const expanded = new Set<string>();
-        imported.forEach((_, i) => expanded.add(`comp-${i}`));
-        setExpandedCompartments(expanded);
+        if (!(await replaceAllCompartments(imported))) return;
         markDirty();
         toast.success(`Imported ${imported.length} compartment(s)`);
       } catch {
@@ -2277,10 +2309,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
       items,
     }));
 
-    setCompartments(imported);
-    const expanded = new Set<string>();
-    imported.forEach((_, i) => expanded.add(`comp-${i}`));
-    setExpandedCompartments(expanded);
+    if (!(await replaceAllCompartments(imported))) return;
     setCsvPreview(null);
     setIsDirty(true);
     toast.success(`Imported ${imported.length} compartment(s) with ${csvPreview.length} item(s) from CSV`);
@@ -3889,10 +3918,15 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
             )}
 
             {selectedCount > 0 && (
+              // Controls sized for the finger on a phone and for density on a
+              // laptop. This bar renders at both widths (the fixed phone
+              // action bar below carries the same selection but not the
+              // required/optional toggle), and `min-h-8` on its own put every
+              // control here under the 44px floor the rest of the app keeps.
               <div className="my-2 flex flex-wrap items-center gap-2 rounded-md border border-blue-500/30 bg-blue-500/5 px-2.5 py-1.5">
                 <span className="text-xs font-medium text-blue-700 dark:text-blue-400">{selectedCount} selected</span>
                 <select
-                  className="form-input min-h-8 w-auto py-1 text-xs"
+                  className="form-input min-h-11 w-auto py-1 text-xs sm:min-h-8"
                   aria-label="Set type for selected items"
                   value=""
                   onChange={(e) => {
@@ -3915,7 +3949,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                     const allRequired = selected && [...selected].every((i) => comp.items[i]?.isRequired);
                     bulkToggleRequired(idx, !allRequired);
                   }}
-                  className="rounded-md border border-blue-300 px-2 py-1 text-xs font-medium text-blue-600 dark:border-blue-700 dark:text-blue-400"
+                  className="min-h-11 rounded-md border border-blue-300 px-3 text-xs font-medium text-blue-600 sm:min-h-0 sm:px-2 sm:py-1 dark:border-blue-700 dark:text-blue-400"
                 >
                   {(() => {
                     const selected = selectedItems[key];
@@ -3926,7 +3960,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => void deleteSelectedItems(idx)}
-                  className="flex items-center gap-1 rounded-md border border-red-300 px-2 py-1 text-xs font-medium text-red-600 dark:border-red-700 dark:text-red-400"
+                  className="flex min-h-11 items-center gap-1 rounded-md border border-red-300 px-3 text-xs font-medium text-red-600 sm:min-h-0 sm:px-2 sm:py-1 dark:border-red-700 dark:text-red-400"
                   aria-label="Delete selected items"
                 >
                   <Trash2 className="h-3 w-3" aria-hidden="true" /> Delete
@@ -3934,7 +3968,7 @@ const EquipmentCheckTemplateBuilder: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => deselectAllItems(idx)}
-                  className="text-theme-text-muted hover:text-theme-text-primary rounded-md px-2 py-1 text-xs"
+                  className="text-theme-text-muted hover:text-theme-text-primary min-h-11 rounded-md px-3 text-xs sm:min-h-0 sm:px-2 sm:py-1"
                 >
                   Clear
                 </button>

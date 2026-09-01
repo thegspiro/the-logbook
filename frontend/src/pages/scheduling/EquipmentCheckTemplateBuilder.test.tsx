@@ -15,6 +15,7 @@ const {
   addCheckItemsBulk,
   deleteCheckItemsBulk,
   deleteCheckItem,
+  deleteCompartment,
   createEquipmentCheckTemplate,
   updateEquipmentCheckTemplate,
   toastSuccess,
@@ -29,6 +30,7 @@ const {
   addCheckItemsBulk: vi.fn(),
   deleteCheckItemsBulk: vi.fn(),
   deleteCheckItem: vi.fn(),
+  deleteCompartment: vi.fn(),
   createEquipmentCheckTemplate: vi.fn(),
   updateEquipmentCheckTemplate: vi.fn(),
   toastSuccess: vi.fn(),
@@ -50,6 +52,7 @@ vi.mock('@/modules/scheduling', () => ({
     getCsvSampleUrl: vi.fn().mockReturnValue('/sample.csv'),
     deleteCheckItemsBulk: (...args: unknown[]) => deleteCheckItemsBulk(...args),
     deleteCheckItem: (...args: unknown[]) => deleteCheckItem(...args),
+    deleteCompartment: (...args: unknown[]) => deleteCompartment(...args),
     createEquipmentCheckTemplate: (...args: unknown[]) => createEquipmentCheckTemplate(...args),
     updateEquipmentCheckTemplate: (...args: unknown[]) => updateEquipmentCheckTemplate(...args),
   },
@@ -1326,5 +1329,62 @@ describe('EquipmentCheckTemplateBuilder tablet keeps the preview reachable', () 
 
     expect(await screen.findByRole('button', { name: 'Before publishing' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /preview/i })).not.toBeInTheDocument();
+  });
+});
+
+describe('EquipmentCheckTemplateBuilder replacing a saved template’s contents', () => {
+  // All three bulk-replacement paths — vehicle preset, JSON import, CSV
+  // import — promise "discards every compartment and item currently on this
+  // template", and all three delivered that to local state only. handleSave
+  // creates the new compartments and updates the ones still listed; nothing
+  // deleted the rows no longer mentioned, so a saved template ended up
+  // holding both sets and the next crew got a doubled checklist.
+  const vehicleTemplate = { ...template, templateType: 'vehicle' };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    getTemplate.mockResolvedValue(structuredClone(vehicleTemplate));
+    deleteCompartment.mockResolvedValue(undefined);
+    updateEquipmentCheckTemplate.mockResolvedValue(vehicleTemplate);
+    vi.mocked(window.matchMedia).mockImplementation((query: string) => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    }));
+  });
+
+  const loadEnginePreset = async (user: ReturnType<typeof userEvent.setup>) => {
+    await screen.findByRole('button', { name: 'Edit Radio' });
+    await user.click(screen.getByRole('button', { name: /Vehicle preset/ }));
+    await user.click(await screen.findByRole('button', { name: /Engine \/ Pumper/ }));
+    await user.click(await screen.findByRole('button', { name: 'Load preset' }));
+  };
+
+  it('deletes the compartments it says it discards', async () => {
+    const user = userEvent.setup();
+    renderBuilder();
+
+    await loadEnginePreset(user);
+
+    await waitFor(() => expect(deleteCompartment).toHaveBeenCalledWith('cab'));
+  });
+
+  it('keeps the template intact when the discard fails', async () => {
+    // Deleted before the swap, so a failure leaves the template as it was
+    // rather than half-replaced with no way back.
+    deleteCompartment.mockRejectedValue({ response: { data: { detail: 'Compartment is in use' } } });
+    const user = userEvent.setup();
+    renderBuilder();
+
+    await loadEnginePreset(user);
+
+    await waitFor(() => expect(toastError).toHaveBeenCalled());
+    expect(String(toastError.mock.calls[0]?.[0])).toContain('Compartment is in use');
+    expect(await screen.findByRole('button', { name: 'Edit Radio' })).toBeInTheDocument();
   });
 });
