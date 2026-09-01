@@ -424,11 +424,13 @@ class TestAcknowledgmentReport:
         message = _msg("m1", "all", requires_acknowledgment=True)
         users = [self._user("u1", "Ann"), self._user("u2", "Ben")]
         now = datetime.now(timezone.utc)
-        read_u1 = SimpleNamespace(user_id="u1", read_at=now, acknowledged_at=now)
+        read_u1 = SimpleNamespace(
+            user_id="u1", read_at=now, acknowledged_at=now, revoked_at=None
+        )
 
         db = MagicMock()
         msg_res = MagicMock(scalar_one_or_none=MagicMock(return_value=message))
-        pending = SimpleNamespace(read_at=None, acknowledged_at=None)
+        pending = SimpleNamespace(read_at=None, acknowledged_at=None, revoked_at=None)
         recipients_res = MagicMock(
             all=MagicMock(return_value=[(users[0], read_u1), (users[1], pending)])
         )
@@ -880,6 +882,103 @@ class TestGetInboxMessage:
         assert entry["author_name"] == "Unknown"
         author_query = db.execute.await_args_list[2].args[0]
         assert "users.organization_id = :organization_id_1" in str(author_query)
+
+
+class TestRevokedRowsAreOutOfTheLiveFigures:
+    """A receipt kept as evidence is not an outstanding obligation.
+
+    A member who read but never acknowledged an acknowledgment-required
+    message keeps their row when the author narrows the audience — and the
+    read/acknowledge gate then refuses them. Counting that row in
+    `total_targeted` reports somebody as owing an acknowledgment they can no
+    longer give, and `total_targeted` stops describing the live audience.
+    """
+
+    @staticmethod
+    def _rows(*records):
+        result = MagicMock()
+        result.all.return_value = [
+            (
+                SimpleNamespace(
+                    id=f"u{i}",
+                    first_name="Pat",
+                    last_name=f"R{i}",
+                    username=f"pat{i}",
+                    status="active",
+                ),
+                rec,
+            )
+            for i, rec in enumerate(records)
+        ]
+        return result
+
+    @staticmethod
+    def _record(read=False, acked=False, revoked=False):
+        stamp = datetime(2026, 8, 1, tzinfo=timezone.utc)
+        return SimpleNamespace(
+            read_at=stamp if read or acked else None,
+            acknowledged_at=stamp if acked else None,
+            revoked_at=stamp if revoked else None,
+        )
+
+    async def test_a_revoked_row_is_not_an_outstanding_acknowledgment(self):
+        svc = _svc()
+        message = SimpleNamespace(id="m1", requires_acknowledgment=True)
+        svc.get_message_by_id = AsyncMock(return_value=message)
+        svc._attach_author_names = AsyncMock()
+        svc.db.execute = AsyncMock(
+            return_value=self._rows(
+                self._record(acked=True),
+                self._record(read=True, revoked=True),
+            )
+        )
+
+        report = await svc.get_acknowledgment_report("m1", "org-1")
+
+        # One live member, who acknowledged. The removed one is neither in the
+        # denominator nor owing anything.
+        assert report["total_targeted"] == 1
+        assert report["total_acknowledged"] == 1
+        assert report["total_read"] == 1
+
+    async def test_the_receipt_is_still_listed_and_marked(self):
+        """Kept, because it is the only record that they read it — and sorted
+        last, since an unacknowledged revoked row is not an obligation."""
+        svc = _svc()
+        svc.get_message_by_id = AsyncMock(
+            return_value=SimpleNamespace(id="m1", requires_acknowledgment=True)
+        )
+        svc._attach_author_names = AsyncMock()
+        svc.db.execute = AsyncMock(
+            return_value=self._rows(
+                self._record(read=True, revoked=True),
+                self._record(),
+            )
+        )
+
+        report = await svc.get_acknowledgment_report("m1", "org-1")
+
+        assert len(report["recipients"]) == 2
+        assert report["recipients"][0]["removed_from_audience"] is False
+        assert report["recipients"][-1]["removed_from_audience"] is True
+        assert report["recipients"][-1]["is_read"] is True
+
+    async def test_the_stats_denominator_is_the_live_audience(self):
+        svc = _svc()
+        svc.get_message_by_id = AsyncMock(return_value=SimpleNamespace(id="m1"))
+        captured = []
+
+        async def _execute(query, *a, **k):
+            captured.append(str(query))
+            result = MagicMock()
+            result.scalar.return_value = 0
+            return result
+
+        svc.db.execute = _execute
+        await svc.get_message_stats("m1", "org-1")
+
+        assert captured, "no counts were issued"
+        assert all("revoked_at IS NULL" in q for q in captured), captured
 
 
 class TestRevokedRowsGrantNothing:

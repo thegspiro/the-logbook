@@ -979,10 +979,16 @@ class MessagingService:
         if not message:
             return {"error": "Message not found"}
 
+        # All three describe the *live* audience, so a revoked row is out of
+        # every one of them. A member removed from the audience cannot
+        # acknowledge — the read/acknowledge gate refuses them — so counting
+        # them in the denominator reports an obligation nobody can discharge,
+        # and the ratio stops describing who the message is actually for.
         read_count = await self.db.execute(
             select(func.count(DepartmentMessageRecipient.id)).where(
                 DepartmentMessageRecipient.message_id == message_id,
                 DepartmentMessageRecipient.organization_id == organization_id,
+                DepartmentMessageRecipient.revoked_at.is_(None),
                 DepartmentMessageRecipient.read_at.isnot(None),
             )
         )
@@ -990,6 +996,7 @@ class MessagingService:
             select(func.count(DepartmentMessageRecipient.id)).where(
                 DepartmentMessageRecipient.message_id == message_id,
                 DepartmentMessageRecipient.organization_id == organization_id,
+                DepartmentMessageRecipient.revoked_at.is_(None),
                 DepartmentMessageRecipient.acknowledged_at.isnot(None),
             )
         )
@@ -997,6 +1004,7 @@ class MessagingService:
             select(func.count(DepartmentMessageRecipient.id)).where(
                 DepartmentMessageRecipient.message_id == message_id,
                 DepartmentMessageRecipient.organization_id == organization_id,
+                DepartmentMessageRecipient.revoked_at.is_(None),
             )
         )
 
@@ -1036,15 +1044,25 @@ class MessagingService:
         recipients = []
         total_read = 0
         total_acknowledged = 0
+        total_targeted = 0
         for u, record in targeted_rows:
+            # Kept in the list and out of the totals. The row is the only
+            # record that this member read — and possibly acknowledged — the
+            # notice, which is exactly what a department has to produce later;
+            # but they are no longer in the audience and can no longer act, so
+            # counting them would report an obligation nobody can discharge.
+            removed = record.revoked_at is not None
             is_read = record.read_at is not None
             is_acknowledged = bool(record and record.acknowledged_at is not None)
-            if is_read:
-                total_read += 1
-            if is_acknowledged:
-                total_acknowledged += 1
+            if not removed:
+                total_targeted += 1
+                if is_read:
+                    total_read += 1
+                if is_acknowledged:
+                    total_acknowledged += 1
             recipients.append(
                 {
+                    "removed_from_audience": removed,
                     "user_id": str(u.id),
                     "name": f"{u.first_name or ''} {u.last_name or ''}".strip()
                     or (u.username or "Unknown"),
@@ -1066,13 +1084,23 @@ class MessagingService:
                 }
             )
 
-        # Surface the members who still owe an acknowledgment/read first.
-        recipients.sort(key=lambda r: (r["is_acknowledged"], r["is_read"], r["name"]))
+        # Surface the members who still owe an acknowledgment/read first, and
+        # the ones no longer in the audience last: an unacknowledged revoked
+        # row is not an outstanding obligation, and sorting it to the top
+        # reads as one.
+        recipients.sort(
+            key=lambda r: (
+                r["removed_from_audience"],
+                r["is_acknowledged"],
+                r["is_read"],
+                r["name"],
+            )
+        )
 
         return {
             "message_id": message_id,
             "requires_acknowledgment": message.requires_acknowledgment,
-            "total_targeted": len(targeted_rows),
+            "total_targeted": total_targeted,
             "total_read": total_read,
             "total_acknowledged": total_acknowledged,
             "recipients": recipients,

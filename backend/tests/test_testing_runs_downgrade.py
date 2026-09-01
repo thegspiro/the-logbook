@@ -95,3 +95,28 @@ class TestForeignKeyDiscovery:
             )(),
         )
         assert module._foreign_keys_on("testing_checklist_entries", "run_id") == []
+
+
+class TestTheCollapseKeepsOrphanedTesters:
+    """`user_id` is ON DELETE SET NULL, so every mark left behind by a
+    hard-deleted tester carries NULL. Keying the collapse on it treats all of
+    them as one person and deletes every observation but one — and for
+    nothing: MySQL's unique index counts NULLs as distinct, so those rows do
+    not collide with each other and the index this downgrade restores accepts
+    them all.
+
+    Asserted on the source because the collapse is a data step inside a
+    downgrade; the surrounding DDL needs a real database, this rule does not.
+    """
+
+    def test_null_user_rows_are_skipped(self):
+        source = _MIGRATION.read_text()
+        collapse = source.split("def _collapse_to_one_mark_per_page")[1].split(
+            "\ndef "
+        )[0]
+
+        assert "if user_id is None:" in collapse, (
+            "the collapse keys on user_id, so a NULL one has to be skipped or "
+            "every orphaned tester's marks are treated as the same person's"
+        )
+        assert "continue" in collapse

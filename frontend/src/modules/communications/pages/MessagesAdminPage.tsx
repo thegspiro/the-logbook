@@ -346,19 +346,31 @@ const MessagesAdminPage: React.FC = () => {
                         ) : (
                           <ul className="divide-theme-surface-border max-h-60 divide-y overflow-y-auto">
                             {report.recipients.map((r) => {
-                              const state = r.is_acknowledged
+                              // A removed member is outside the counts above
+                              // and can no longer acknowledge, so their row
+                              // must not read as an outstanding one — it is
+                              // kept only as the record that they saw it.
+                              const state = r.removed_from_audience
                                 ? {
-                                    icon: Check,
-                                    label: 'Acknowledged',
-                                    cls: 'text-theme-alert-success-text',
+                                    icon: Clock,
+                                    label: r.is_acknowledged
+                                      ? 'Acknowledged · removed from audience'
+                                      : 'Removed from audience',
+                                    cls: 'text-theme-text-muted',
                                   }
-                                : r.is_read
-                                  ? { icon: Eye, label: 'Read', cls: 'text-theme-text-muted' }
-                                  : {
-                                      icon: Clock,
-                                      label: report.requires_acknowledgment ? 'Not acknowledged' : 'Unread',
-                                      cls: 'text-amber-600 dark:text-amber-400',
-                                    };
+                                : r.is_acknowledged
+                                  ? {
+                                      icon: Check,
+                                      label: 'Acknowledged',
+                                      cls: 'text-theme-alert-success-text',
+                                    }
+                                  : r.is_read
+                                    ? { icon: Eye, label: 'Read', cls: 'text-theme-text-muted' }
+                                    : {
+                                        icon: Clock,
+                                        label: report.requires_acknowledgment ? 'Not acknowledged' : 'Unread',
+                                        cls: 'text-amber-600 dark:text-amber-400',
+                                      };
                               const StateIcon = state.icon;
                               return (
                                 <li key={r.user_id} className="flex items-center justify-between gap-3 py-1.5">

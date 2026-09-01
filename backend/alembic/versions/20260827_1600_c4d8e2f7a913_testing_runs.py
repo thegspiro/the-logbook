@@ -251,6 +251,14 @@ def _collapse_to_one_mark_per_page() -> None:
     seen: set = set()
     doomed: list = []
     for row_id, organization_id, user_id, route_path in rows:
+        # A NULL user_id is not an identity. `user_id` is ON DELETE SET NULL,
+        # so every mark left behind by a hard-deleted tester carries one, and
+        # keying on it treats all of them as the same person — deleting every
+        # observation but one. MySQL's unique index counts NULLs as distinct,
+        # so those rows do not collide with each other and there is nothing to
+        # collapse: the index this downgrade restores accepts them all.
+        if user_id is None:
+            continue
         key = (organization_id, user_id, route_path)
         if key in seen:
             doomed.append(row_id)
