@@ -680,6 +680,116 @@ hardest for one more angle rather than accept "audited all five, all
 correct" at face value — round 4 wrote almost that exact sentence and was
 still short one fix.
 
+**Round 6 (Codex review): round 5's write-after-evict fix wrote the
+_attacker's_ IP back as the trusted baseline on the alert path itself,
+silencing every repeat of the same attack after its first (correctly fired)
+alert.** This is a distinct bug from the eviction-ordering class fixed in
+rounds 3–5 above — it is not about a key being evicted at the wrong moment,
+it fires on every call regardless of eviction — but it lives in the exact
+same few lines round 5 just rewrote, so it belongs in this file's ongoing
+account of that code rather than as an unrelated footnote.
+
+**Origin, verified against git history rather than assumed: this is new in
+round 5, not a pre-existing gap the eviction-fix rounds' scrutiny happened to
+surface.** Every version of `detect_session_hijack` before commit `90e373cc`
+— the original pre-PR-#2128 implementation, and every round-1-through-4
+revision — `return`s immediately inside the "IP changed within 5 minutes"
+branch, before the method ever reaches the line that writes `current_ip` into
+the tracker:
+
+```python
+# every version before 90e373cc (round 5)
+if time_diff < 300:
+    alert = SecurityAlert(...)
+    await self._add_alert(db, alert)
+    return alert                              # <- exits BEFORE the write below
+self._session_ips[key].append((current_ip, now))
+```
+
+So on every call that fired an alert, in every version of this method before
+round 5, the attacker's IP was never written back at all — the tracker kept
+whatever pre-hijack entry it already had, which is why a genuine attack
+already alerted correctly on repeat use _before_ round 5 touched this code
+(confirmed by reading `95db016b`, the round-4 revision, directly: same early
+return, same effect). Round 5's fix (documented above) removed that early
+return specifically to close the write-after-evict gap — the tracker must
+always end a call holding a live entry, alert or not, so a key evicted at the
+exact moment its alert fires does not lose its baseline. That part of the fix
+was correct and necessary. But the replacement write used `current_ip`
+unconditionally:
+
+```python
+# 90e373cc (round 5) — detect_session_hijack, unconditional write
+self._session_ips[key] = (session_data + [(current_ip, now)])[-10:]
+```
+
+which on the alert path writes the _attacker's_ IP as the newest (and, since
+the comparison only ever looked at `session_data[-1]`, the _only_ IP that
+matters for the next comparison) entry. The next request from that same
+attacker IP then compared its own IP against itself, found no change, and
+returned `None` — an ongoing hijack detected exactly once, then silent, for
+as long as the attacker kept reusing the one IP. Round 5's own regression
+test (`test_session_hijack_detects_a_second_and_third_ip_change_in_a_row`)
+did not catch this because it drives three _distinct_ attacker IPs
+(`9.9.9.9` → `8.8.8.8` → `7.7.7.7`), each different from the one before, so
+every comparison still finds a mismatch regardless of the promotion bug — the
+repeat-IP case Codex's review flagged was simply never exercised.
+
+**Fix: split "the full observed-IP log" from "the IP a hijack decision is
+compared against."** A new tracker, `_session_trusted_ip` (declared beside
+`_session_ips` in `__init__`, capped and swept the same way, read before
+`_enforce_key_caps()` and written after it for the same reason as every other
+tracker in this file), holds only the single IP/timestamp pair the next call's
+comparison is made against. `_session_ips` keeps its existing role unchanged
+— a full per-call audit log, including attacker IPs, retained for forensics —
+but is no longer what the hijack decision reads. The trusted tracker is
+advanced to `current_ip` whenever this call does _not_ fire an alert (first-
+ever observation, a matching IP refreshing its timestamp, or an IP change
+slow enough — ≥ 5 minutes — to not be flagged as suspicious, which was already
+this method's own definition of "not suspicious"); when an alert _does_ fire,
+the trusted tracker is deliberately left at its pre-alert value instead, so
+the alerting IP is never promoted. This is the minimal fix that satisfies
+Codex's framing directly: distinguish the trusted baseline from the most
+recently observed IP, without inventing a new "confirmed hijack" state
+machine — the existing 5-minute suspicion window already does the work of
+deciding when a changed IP is legitimate enough to become the new normal;
+the only change is that an alert-firing IP no longer qualifies by default.
+
+**Verified by hand-tracing the full method, not just the reported
+repro, for all four steps of a realistic sequence** (trusted IP `A`, attacker
+IP `B` fires an alert, `B` repeats, then legitimate `A` returns):
+step 1 (`A`, first-ever observation) sets the trusted baseline to `A`, no
+alert; step 2 (`B`, within 5 minutes) compares against `A`, mismatches, fires
+the alert, and leaves the trusted baseline at `A` (not promoted to `B`); step
+3 (`B` again) compares against the still-unchanged `A`, mismatches again, and
+fires a **second** alert for the same repeat attacker IP — the exact
+behavior Codex's review asked for; step 4 (`A` again) compares against the
+still-unchanged `A`, matches, and does **not** alert — `A`'s return is not
+mistaken for a hijack just because `B` was observed in between, since `B`
+was never written into the comparison baseline at any point in the sequence.
+
+**Verification, round 6:** `TestSessionHijackTrustedBaseline`, 2 new tests —
+`test_repeated_attacker_ip_keeps_alerting` (the exact 3-call sequence from
+Codex's review comment: trusted IP, attacker IP alerts, same attacker IP
+alerts again) and `test_legitimate_ip_returning_after_attacker_ip_does_not_
+alert` (the 4-step trace above, asserting the legitimate IP's return does not
+false-positive). Both verified to **fail** against commit `90e373cc` (the
+third/fourth call returns `None` where an alert/no-alert was expected) and
+**pass** after the fix. The existing round-5 regression test
+(`test_session_hijack_detects_a_second_and_third_ip_change_in_a_row`) had its
+assertions updated: it drives three _distinct_ IPs, none of which are ever
+promoted under the fix, so every one of the three alerts now correctly
+reports `previous_ip` as the original pre-hijack IP (`"1.1.1.1"`) rather than
+the immediately preceding call's IP as it did against `90e373cc` — the old
+assertions encoded exactly the promotion behavior this round removes, so
+updating them (not merely re-running them) was necessary; both the two
+`TestReadBeforeEvictOrdering`/`TestWriteAfterEvictOrdering` session-hijack
+tests were also updated to seed the new `_session_trusted_ip` tracker
+alongside `_session_ips`, since that tracker — not the tail of `_session_ips`
+— is what the comparison now reads. Full file **24/24**. The session-hijack
+coverage in `test_security_middleware.py` is unaffected — it mocks
+`detect_session_hijack` at the service boundary, not the tracker internals.
+
 **Sweep 9 correction, round 2 (Codex review):** Codex re-checked round 2's
 own correction to this sweep (immediately below) and found the "132 distinct
 JSON/`MutableDict`-typed model attributes" figure was itself produced by a

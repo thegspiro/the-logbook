@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### A session-hijack alert silenced itself after firing once, because its own fix trusted the attacker's IP (2026-09-01)
+
+**Fixed**
+
+- **The write-after-evict fix below (`detect_session_hijack`) closed a real
+  gap but introduced a new one: on the path where a hijack alert fired, it
+  wrote the _attacker's_ IP back as the tracker's newest entry, and the next
+  comparison read only that newest entry.** So the very next request from
+  the same attacker IP compared its own IP against itself, found no change,
+  and returned no alert — an ongoing hijack was detected exactly once, then
+  went silent for as long as the attacker kept reusing the one IP. This bug
+  did not exist in any version of the method before that fix: every prior
+  revision returned immediately on the alert path, before ever reaching the
+  line that wrote the current IP back, so the tracker kept the pre-hijack IP
+  as the comparison baseline and a repeat attacker IP correctly re-alerted.
+  Fixed by splitting the full observed-IP audit log (unchanged — every
+  request is still recorded, attacker IPs included, for forensics) from a
+  new, separate tracker holding only the IP a hijack decision is actually
+  compared against. That trusted tracker advances to the current IP after a
+  call that does not fire an alert (a first observation, a matching IP, or
+  an IP change slow enough not to be flagged as suspicious) but is
+  deliberately left unchanged after a call that does — so an IP that just
+  triggered an alert is never promoted to "known good," and the same
+  attacker IP keeps triggering the alert on every subsequent request, while
+  a legitimate IP returning after an attacker IP was seen in between is
+  still correctly recognized and not flagged. 2 new regression tests
+  reproduce the exact silencing behavior (including the legitimate-IP-
+  returns case) and are verified to fail before this fix and pass after.
+
 ### An evicted session lost its hijack baseline right after correctly firing its first alert (2026-09-01)
 
 **Fixed**

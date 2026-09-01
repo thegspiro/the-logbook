@@ -246,12 +246,19 @@ class TestReadBeforeEvictOrdering:
         # Victim's last activity is a few seconds old -- recent enough to
         # still be "within 5 minutes" for the hijack check, but older than
         # every filler entry below, so it is the batch-eviction target.
+        # Comparison reads from _session_trusted_ip (the dedicated baseline
+        # tracker -- see its docstring in __init__), not from the tail of
+        # _session_ips, so both must be seeded and filled past the cap for
+        # this to actually exercise the read-before-evict protection.
         svc._session_ips[victim_key] = [("1.1.1.1", now - timedelta(seconds=10))]
+        svc._session_trusted_ip[victim_key] = [("1.1.1.1", now - timedelta(seconds=10))]
 
         for i in range(20):
             svc._session_ips[f"session:filler-{i}"] = [("2.2.2.2", now)]
+            svc._session_trusted_ip[f"session:filler-{i}"] = [("2.2.2.2", now)]
 
         assert len(svc._session_ips) > svc._MAX_TRACKING_KEYS
+        assert len(svc._session_trusted_ip) > svc._MAX_TRACKING_KEYS
 
         alert = await svc.detect_session_hijack(
             _db(),
@@ -430,6 +437,20 @@ class TestWriteAfterEvictOrdering:
         not just patch the exact two-call reproduction Codex gave. Each call
         changes IP again, simulating an attacker continuing to use the
         hijacked session after the first alert fired.
+
+        `previous_ip` stays "1.1.1.1" on every call, not the previous call's
+        (attacker-controlled) `current_ip`. Round 5 (95db016b/90e373cc)
+        promoted whatever IP a call arrived with -- including an alerting
+        one -- to the comparison baseline for the *next* call; round 6
+        (Codex, PR #2132) found that this let a hijack alert fire once and
+        then go silent the moment the same attacker IP repeated (never
+        exercised by this test, since 9.9.9.9/8.8.8.8/7.7.7.7 are all
+        distinct -- see
+        TestSessionHijackTrustedBaseline.test_repeated_attacker_ip_keeps_alerting
+        below for that exact case). The fix keeps the baseline pinned at the
+        pre-hijack IP until a non-alerting observation earns the promotion,
+        so every one of these three distinct attacker IPs is compared
+        against the same original "1.1.1.1", not against each other.
         """
         svc = _svc()
         svc._MAX_TRACKING_KEYS = 10
@@ -437,12 +458,19 @@ class TestWriteAfterEvictOrdering:
         victim_session = "victim-session"
         victim_key = f"session:{victim_session}"
         now = datetime.now(timezone.utc)
+        # Comparison reads from _session_trusted_ip, not the tail of
+        # _session_ips -- both are seeded and filled past the cap so the
+        # write-after-evict protection is exercised on the tracker that
+        # actually drives the decision.
         svc._session_ips[victim_key] = [("1.1.1.1", now - timedelta(seconds=10))]
+        svc._session_trusted_ip[victim_key] = [("1.1.1.1", now - timedelta(seconds=10))]
 
         for i in range(20):
             svc._session_ips[f"session:filler-{i}"] = [("2.2.2.2", now)]
+            svc._session_trusted_ip[f"session:filler-{i}"] = [("2.2.2.2", now)]
 
         assert len(svc._session_ips) > svc._MAX_TRACKING_KEYS
+        assert len(svc._session_trusted_ip) > svc._MAX_TRACKING_KEYS
 
         # Call 1: victim_session is the batch-eviction target. The alert
         # fires correctly (round-4 fix already covers this), but round-4
@@ -462,6 +490,7 @@ class TestWriteAfterEvictOrdering:
         # happens below -- these two calls isolate the write-after-evict gap
         # itself, not a second batch eviction.
         assert len(svc._session_ips) <= svc._MAX_TRACKING_KEYS
+        assert len(svc._session_trusted_ip) <= svc._MAX_TRACKING_KEYS
 
         # Call 2: same session, IP changes again. Against 95db016b this
         # finds no entry for victim_key at all (round-4 fixed the read, but
@@ -481,7 +510,7 @@ class TestWriteAfterEvictOrdering:
             "call's alert, even though the first call correctly detected "
             "the hijack"
         )
-        assert alert2.details["previous_ip"] == "9.9.9.9"
+        assert alert2.details["previous_ip"] == "1.1.1.1"
         assert alert2.details["current_ip"] == "8.8.8.8"
 
         # Call 3: continue the chain one step further to prove the fix does
@@ -498,7 +527,7 @@ class TestWriteAfterEvictOrdering:
             "fix must keep restoring a live baseline on every call, not "
             "just the one immediately after an eviction"
         )
-        assert alert3.details["previous_ip"] == "8.8.8.8"
+        assert alert3.details["previous_ip"] == "1.1.1.1"
         assert alert3.details["current_ip"] == "7.7.7.7"
 
     async def test_brute_force_second_attempt_after_batch_eviction_still_counts(
@@ -646,6 +675,147 @@ class TestWriteAfterEvictOrdering:
         )
         assert alert2.details["calls_per_minute"] == 4
         assert alert2.details["threshold"] == 2
+
+
+class TestSessionHijackTrustedBaseline:
+    """PR #2132 round 6 (Codex): round 5 (commit 90e373cc) made
+    detect_session_hijack's tracker write unconditional -- including on the
+    alert path -- to fix a real write-after-evict bug (see
+    TestWriteAfterEvictOrdering above). But it wrote `current_ip` itself
+    back as the new comparison baseline on *every* call, alert or not. That
+    silently promoted the attacker's own IP into the session's "known IPs"
+    history: the very next request from that same attacker IP then matched
+    an IP already on file for the session and fired no alert at all, so an
+    ongoing hijack was detected exactly once and then went silent.
+
+    Confirmed absent from every version of this method before round 5: the
+    original implementation (pre PR #2128) and every round-1-through-4
+    revision `return alert` immediately inside the "IP changed within 5
+    minutes" branch, *before* ever reaching the tracker-append line -- so
+    the attacker's IP was never written back on the alert path at all, and
+    the pre-hijack IP stayed the comparison baseline by construction. This
+    is not a pre-existing gap the eviction-fix rounds' scrutiny happened to
+    surface; it is new in round 5, introduced by the specific mechanics of
+    that fix (removing the early return to guarantee the tracker is always
+    rewritten, without distinguishing "rewrite the audit log" from
+    "promote this call's IP to trusted").
+
+    The fix separates the two: `_session_ips` remains a full observed-IP
+    log (every call, including alerting ones, for audit/forensics) and a
+    new `_session_trusted_ip` tracker holds only the IP a hijack decision is
+    actually compared against, which is deliberately *not* advanced to an
+    IP that itself just triggered an alert.
+    """
+
+    async def test_repeated_attacker_ip_keeps_alerting(self):
+        """The exact sequence Codex's review comment describes: a trusted
+        IP, an attacker IP that fires the first alert, then the SAME
+        attacker IP again. Against 90e373cc, the second attacker call finds
+        its own IP already recorded as "last seen" (written back by the
+        first call) and returns None -- no second alert for an ongoing
+        hijack.
+        """
+        svc = _svc()
+
+        session_id = "victim-session"
+        db = _db()
+
+        # Call 1: establishes the trusted baseline, no alert (first-ever
+        # observation for this session).
+        alert1 = await svc.detect_session_hijack(
+            db,
+            session_id=session_id,
+            current_ip="1.1.1.1",
+            user_agent="ua",
+            user_id="u1",
+        )
+        assert alert1 is None
+
+        # Call 2: a different (attacker) IP, well within the 5-minute
+        # window -- fires the hijack alert.
+        alert2 = await svc.detect_session_hijack(
+            db,
+            session_id=session_id,
+            current_ip="6.6.6.6",
+            user_agent="ua",
+            user_id="u1",
+        )
+        assert alert2 is not None
+        assert alert2.details["previous_ip"] == "1.1.1.1"
+        assert alert2.details["current_ip"] == "6.6.6.6"
+
+        # Call 3: the SAME attacker IP as call 2. Must also alert -- this is
+        # the exact silencing behavior Codex found: 90e373cc returns None
+        # here because call 2 wrote "6.6.6.6" back as the trusted IP, so
+        # call 3 sees no change.
+        alert3 = await svc.detect_session_hijack(
+            db,
+            session_id=session_id,
+            current_ip="6.6.6.6",
+            user_agent="ua",
+            user_id="u1",
+        )
+        assert alert3 is not None, (
+            "session-hijack alert did not fire on the third call, even "
+            "though it is the same attacker IP from the second (alerting) "
+            "call -- the attacker's IP was silently promoted to the "
+            "session's trusted baseline after the first alert"
+        )
+        assert alert3.details["previous_ip"] == "1.1.1.1"
+        assert alert3.details["current_ip"] == "6.6.6.6"
+
+    async def test_legitimate_ip_returning_after_attacker_ip_does_not_alert(self):
+        """Full four-step trace: trusted IP A, attacker IP B (alerts),
+        attacker IP B again (must still alert, per the test above), then
+        legitimate IP A again -- must NOT alert. A's return must not look
+        like a hijack just because B was interleaved, which it would if B
+        had been promoted to the baseline at any point in the sequence.
+        """
+        svc = _svc()
+        session_id = "victim-session"
+        db = _db()
+
+        alert1 = await svc.detect_session_hijack(
+            db,
+            session_id=session_id,
+            current_ip="1.1.1.1",
+            user_agent="ua",
+            user_id="u1",
+        )
+        assert alert1 is None
+
+        alert2 = await svc.detect_session_hijack(
+            db,
+            session_id=session_id,
+            current_ip="6.6.6.6",
+            user_agent="ua",
+            user_id="u1",
+        )
+        assert alert2 is not None
+
+        alert3 = await svc.detect_session_hijack(
+            db,
+            session_id=session_id,
+            current_ip="6.6.6.6",
+            user_agent="ua",
+            user_id="u1",
+        )
+        assert alert3 is not None
+
+        # Call 4: the original, legitimate IP returns.
+        alert4 = await svc.detect_session_hijack(
+            db,
+            session_id=session_id,
+            current_ip="1.1.1.1",
+            user_agent="ua",
+            user_id="u1",
+        )
+        assert alert4 is None, (
+            "the legitimate IP's return was flagged as a hijack -- the "
+            "trusted baseline must have stayed pinned at '1.1.1.1' "
+            "throughout, not drifted to the attacker IP '6.6.6.6' seen in "
+            "between"
+        )
 
 
 class TestReportPrivilegeEscalation:

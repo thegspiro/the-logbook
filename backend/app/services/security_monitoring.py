@@ -117,6 +117,16 @@ class SecurityMonitoringService:
         self.alerts: List[SecurityAlert] = []
         self._login_attempts: Dict[str, List[datetime]] = defaultdict(list)
         self._session_ips: Dict[str, List[Tuple[str, datetime]]] = defaultdict(list)
+        # The trusted comparison baseline for detect_session_hijack, kept
+        # separate from _session_ips (below). _session_ips is the full
+        # observed-IP log (audit/forensics, every request incl. attacker
+        # ones); this dict holds only the single IP/timestamp a hijack
+        # decision is actually made against, and it is deliberately NOT
+        # updated to an IP that itself just triggered an alert (Codex, PR
+        # #2132, round 6 — see the comment in detect_session_hijack).
+        self._session_trusted_ip: Dict[str, List[Tuple[str, datetime]]] = defaultdict(
+            list
+        )
         self._data_transfers: Dict[str, List[Tuple[int, datetime]]] = defaultdict(list)
         self._api_calls: Dict[str, List[datetime]] = defaultdict(list)
         self._external_endpoints: set = set()
@@ -189,6 +199,7 @@ class SecurityMonitoringService:
             self._api_calls,
             self._login_attempts,
             self._session_ips,
+            self._session_trusted_ip,
             self._data_transfers,
         ):
             if len(tracker) > self._MAX_TRACKING_KEYS:
@@ -251,6 +262,12 @@ class SecurityMonitoringService:
             entries = self._session_ips[key]
             if not entries or entries[-1][1] < cutoff:
                 del self._session_ips[key]
+
+        # Evict _session_trusted_ip keys with no recent entries
+        for key in list(self._session_trusted_ip):
+            entries = self._session_trusted_ip[key]
+            if not entries or entries[-1][1] < cutoff:
+                del self._session_trusted_ip[key]
 
         # Evict _data_transfers keys with no recent entries
         day_cutoff = datetime.now(timezone.utc) - timedelta(days=2)
@@ -613,6 +630,13 @@ class SecurityMonitoringService:
         # introduced by the round-2 fix that added the call below).
         session_data = self._session_ips.get(key, [])
 
+        # The trusted comparison baseline (see _session_trusted_ip's
+        # declaration in __init__) is a *separate* tracker from the full
+        # observed-IP log above, and is read before eviction for the same
+        # reason: it is capped and swept by the same _enforce_key_caps()
+        # call below.
+        trusted_data = self._session_trusted_ip.get(key, [])
+
         # Called on requests, not logins — detect_brute_force's cap-enforcement
         # never fires for SSO/OAuth-only orgs, where nothing else bounds this
         # dict's growth. Hard cap only (cheap), matching detect_brute_force.
@@ -621,9 +645,17 @@ class SecurityMonitoringService:
         self._enforce_key_caps()
 
         alert: Optional[SecurityAlert] = None
+        # Defaults to promoting this call's own IP as the new trusted
+        # baseline -- correct for a first-ever observation, for an IP that
+        # matches the existing baseline (refreshes its timestamp), and for
+        # an IP change slow enough (>= 5 minutes) not to be flagged as
+        # suspicious. The one case that overrides this default, below, is a
+        # hijack alert actually firing.
+        new_trusted_ip = current_ip
+        new_trusted_time = now
 
-        if session_data:
-            last_ip, last_time = session_data[-1]
+        if trusted_data:
+            last_ip, last_time = trusted_data[-1]
 
             # Check if IP changed within a short time (potential hijack)
             if last_ip != current_ip:
@@ -660,6 +692,31 @@ class SecurityMonitoringService:
 
                     await self._add_alert(db, alert)
 
+                    # Do NOT promote the alerting IP to "trusted". Round 5
+                    # (commit 90e373cc) made the tracker write unconditional
+                    # -- including on the alert path -- to fix a real bug
+                    # (see the comment below), but it wrote `current_ip`
+                    # itself back as the new baseline. That silently
+                    # laundered the attacker's IP into the session's known-
+                    # good history: the very next request from that same
+                    # attacker IP then matched "an IP already seen for this
+                    # session" and fired no alert at all, so an ongoing
+                    # hijack was detected exactly once. Keeping the baseline
+                    # at the pre-alert IP (instead of the default set above)
+                    # means the same attacker IP keeps tripping the alert on
+                    # every subsequent request, until a genuinely different,
+                    # non-suspicious observation (a slow IP change, or the
+                    # legitimate IP returning) actually earns the promotion
+                    # (Codex, PR #2132, round 6).
+                    new_trusted_ip = last_ip
+                    new_trusted_time = last_time
+
+        # Write the trusted baseline back after cap enforcement (read-before
+        # /write-after-evict, same shape as _session_ips below): a single
+        # entry is enough since only the most recent trusted IP is ever
+        # compared against.
+        self._session_trusted_ip[key] = [(new_trusted_ip, new_trusted_time)]
+
         # Track this request unconditionally -- including when an alert just
         # fired above -- built from `session_data` (captured before eviction)
         # plus this call's own entry, rather than appending to
@@ -675,14 +732,11 @@ class SecurityMonitoringService:
         # entry for the session, so the *next* call has a real baseline to
         # compare against.
         #
-        # This closes the round-5 gap Codex found in the round-4 fix: reading
-        # the old value before eviction (above) protects only *this* call's
-        # decision. Without also writing the new value back after eviction,
-        # a session whose key got evicted the moment its hijack alert fired
-        # lost its baseline outright -- the very next request from the same
-        # hijacked session found no prior IP, was scored as a first-ever
-        # observation, and the alert stream for an ongoing hijack went silent
-        # after its correctly-fired first alert (Codex, PR #2132).
+        # This tracker (the full audit log, unlike _session_trusted_ip above)
+        # always records `current_ip` -- including an attacker's -- because
+        # it exists for forensics: an investigator reviewing a hijacked
+        # session needs to see every IP that touched it, not just the ones
+        # that were never flagged.
         self._session_ips[key] = (session_data + [(current_ip, now)])[-10:]
 
         return alert

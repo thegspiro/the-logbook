@@ -16,28 +16,34 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-**Feature 00 (Cross-cutting baseline), pass 3, round 3+4+5 follow-up** —
+**Feature 00 (Cross-cutting baseline), pass 3, round 3+4+5+6 follow-up** —
 [#2132](https://github.com/thegspiro/the-logbook/pull/2132), branch
 `claude/security-review-sec00-pass3-round3-fix`.
 [#2128](https://github.com/thegspiro/the-logbook/pull/2128) (rounds 1–2)
 **merged to `main` at commit `2b3231a3`** before Codex's round-3 review
-landed, so round 3 (and this PR's own rounds 4 and 5) are pushed to a
+landed, so round 3 (and this PR's own rounds 4, 5 and 6) are pushed to a
 **separate PR**, not a further push to `claude/security-review-sec00-pass3`
 — per Pitfall #24 ("Do Not Reuse a Branch Name After Its Pull Request
 Merges"), that branch's remote ref is gone and its PR is closed. See the
-round-3 through round-5 log entries below for what Codex found each time,
+round-3 through round-6 log entries below for what Codex found each time,
 including a real regression (not just a gap) in round 1's own ordering that
 shipped to `main` unfixed for a window, round 4's discovery of the **same
 regression shape found a fourth time** in a method round 3's "checked every
-method" pass missed, and round 5's finding that round 3/4's own fix — read
-the current key before eviction — was still incomplete on the write side:
+method" pass missed, round 5's finding that round 3/4's own fix — read the
+current key before eviction — was still incomplete on the write side:
 nothing restored the current key's entry into the tracker _after_ eviction
 ran, so a key correctly alerted on and then evicted lost its baseline for
-every call after. **Five rounds on this exact tracker-cap logic now; see the
-round-5 entry's closing note for why that streak, not any one round's fix,
-is the fact worth weighting on a future "0 gaps" claim against this same
-code.** The timeline matters here, not just the diff, so read those entries
-rather than only the summary.
+every call after, and **round 6's finding that round 5's own fix wrote the
+attacker's IP back as the trusted baseline on the alert path itself** —
+distinct from the eviction-ordering bug class in rounds 3–5, and new to
+round 5 specifically (verified against every prior version of the method,
+which returned before that write ever ran on the alert path), not a
+pre-existing gap the eviction scrutiny happened to expose. **Six rounds on
+this file's session-hijack tracking now; see the round-6 entry's closing
+note for why that streak, not any one round's fix, is the fact worth
+weighting on a future "0 gaps" claim against this same code.** The timeline
+matters here, not just the diff, so read those entries rather than only the
+summary.
 
 **Prior rounds on #2128 (now merged), for reference:** re-verified pass 1/2's
 five standing sweeps against current code (399 Alembic revisions, 1536
@@ -64,13 +70,148 @@ each call's own decision, not the _next_ call's baseline — fixed by writing
 the current call's contribution back into the tracker after eviction runs,
 on all five methods, though only `detect_session_hijack` was empirically
 exploitable this way (the other four already wrote before evicting, which
-incidentally protected them). See `SEC-00-cross-cutting-baseline.md`'s Pass 3
-section for the full write-up of every correction across all five rounds.
+incidentally protected them). **Round 6** found that round 5's fix for
+`detect_session_hijack` — writing the current call's IP back unconditionally,
+including on the alert path — promoted the attacker's own IP to the
+comparison baseline the moment it fired an alert, silencing every repeat of
+the same attack from the same IP; fixed by splitting the full observed-IP
+audit log (`_session_ips`, unchanged) from a new, separate trusted-comparison
+tracker (`_session_trusted_ip`) that is never advanced to an IP that itself
+just triggered an alert. See `SEC-00-cross-cutting-baseline.md`'s Pass 3
+section for the full write-up of every correction across all six rounds.
 
 A duplicate close-out PR, [#2119](https://github.com/thegspiro/the-logbook/pull/2119),
 was opened against round 1's now-stale base (before round 2/3 landed) and
 closed without merging — merging it would have overwritten this section
 with round-1-only text and dropped the round 2/3 record.
+
+---
+
+### 2026-09-01 — Feature 00 (Cross-cutting baseline, pass 3) — Codex round 6: round 5's own fix laundered the attacker's IP into the trusted baseline
+
+**Six rounds of Codex review on this same file's session-hijack tracking
+now, across two PRs (#2128, #2132) — but this is the first of the six that
+is not another instance of the eviction-ordering bug class from rounds 3–5.**
+Round 5's fix made `detect_session_hijack`'s tracker write unconditional,
+including on the path where a hijack alert just fired, to guarantee the
+tracker always ends a call holding a live baseline (closing a real gap: a
+key evicted at the exact moment its alert fired otherwise lost its history
+outright). Codex found that the replacement write used `current_ip`
+unconditionally — so on the alert path specifically, it wrote the
+_attacker's_ IP back as the newest tracked entry:
+
+```python
+# 90e373cc (round 5) — detect_session_hijack, unconditional write
+self._session_ips[key] = (session_data + [(current_ip, now)])[-10:]
+```
+
+Since the comparison logic only ever read `session_data[-1]` (the single
+most recent entry), the very next request from that same attacker IP then
+compared its own IP against itself, found no change, and returned `None` —
+an ongoing hijack detected exactly once, then silent for as long as the
+attacker kept reusing the one IP. Round 5's own regression test
+(`test_session_hijack_detects_a_second_and_third_ip_change_in_a_row`) never
+exercised this: it drives three _distinct_ attacker IPs in sequence, each
+different from the one before, so every comparison still finds a mismatch
+regardless of whether the prior IP got promoted.
+
+**Origin, verified against git history, not assumed: new in round 5, not a
+pre-existing gap the eviction-fix rounds' scrutiny happened to expose.**
+Every version of this method before commit `90e373cc` — the original
+pre-PR-#2128 implementation and every round-1-through-4 revision alike —
+`return`s immediately inside the "IP changed within 5 minutes" branch,
+_before_ the line that writes `current_ip` into the tracker is ever reached:
+
+```python
+# every version before 90e373cc (checked directly against 95db016b, the
+# round-4 revision, and against the pre-PR-#2128 original)
+if time_diff < 300:
+    alert = SecurityAlert(...)
+    await self._add_alert(db, alert)
+    return alert                              # <- exits BEFORE the write below
+self._session_ips[key].append((current_ip, now))
+```
+
+So in every version before round 5, the attacker's IP was never written back
+on the alert path at all — the tracker kept whatever pre-hijack entry it
+already had, and a repeat request from the same attacker IP correctly
+re-compared against that unchanged pre-hijack IP and alerted again. Round 5
+removed the early return specifically to fix the write-after-evict gap (a
+real, necessary fix), but the unconditional replacement write is what
+introduced this new failure mode as a side effect. It is fair to call this
+newly introduced by round 5, precisely: the eviction-fix rounds' scrutiny is
+what put fresh eyes on these lines, but the bug itself did not exist in any
+form before round 5's specific rewrite.
+
+**Fix: split "the full observed-IP log" from "the IP the hijack decision is
+compared against."** A new tracker, `_session_trusted_ip` — capped, swept,
+and read-before/write-after-evict protected the same way as every other
+tracker in this file — holds only the single IP/timestamp pair a comparison
+is made against. `_session_ips` is unchanged in role: a full per-call
+observation log (including attacker IPs) kept for audit/forensics, no longer
+what the decision reads. The trusted tracker advances to `current_ip`
+whenever a call does _not_ fire an alert (first observation, a matching IP
+refreshing its timestamp, or an IP change slow enough — ≥ 5 minutes, this
+method's own existing definition of "not suspicious" — to not be flagged);
+when an alert _does_ fire, the trusted tracker is left at its pre-alert value
+instead of being advanced. This directly satisfies the review's framing —
+distinguish the trusted baseline from the most recently observed IP — without
+adding a new "confirmed hijack" state machine: the existing 5-minute window
+already decides when a changed IP has earned promotion to the new normal, and
+the only change is that an IP which just triggered an alert no longer
+qualifies by that route.
+
+**Verified by hand-tracing the full method for a four-step sequence, not
+just the three-call repro Codex gave:** trusted IP `A`, attacker IP `B`
+(alerts, `A` stays the baseline), `B` again (compares against the still-`A`
+baseline, alerts a second time), then legitimate `A` returns (compares
+against the still-`A` baseline, matches, no alert — `A`'s return is not
+mistaken for a hijack just because `B` was interleaved, since `B` was never
+promoted at any point).
+
+**Verification, round 6:** new `TestSessionHijackTrustedBaseline` class, 2
+tests — `test_repeated_attacker_ip_keeps_alerting` (Codex's exact 3-call
+repro) and `test_legitimate_ip_returning_after_attacker_ip_does_not_alert`
+(the 4-step trace above). Both verified to **fail** against commit
+`90e373cc` and **pass** after the fix. The existing round-5 regression test
+had its assertions corrected rather than left standing: it happened to pass
+against `90e373cc` and continues to pass now, but its old `previous_ip`
+assertions (each call's `previous_ip` equal to the _prior_ call's IP) encoded
+the exact promotion behavior this round removes — under the fix, all three
+calls compare against the same original IP, so `previous_ip` is now
+`"1.1.1.1"` on every one of the three, not a moving target. Two other
+existing tests (`TestReadBeforeEvictOrdering`'s and `TestWriteAfterEvictOrdering`'s
+session-hijack cases) were updated to seed the new `_session_trusted_ip`
+tracker alongside `_session_ips`, since eviction-ordering protection now has
+to hold for the tracker the decision actually reads. Full
+`test_security_monitoring.py` **24/24**.
+
+**Completion gate (round 6 — full re-run):** `flake8`/`black --check`/
+`isort --check-only` clean on `app/ tests/ alembic/ scripts/`;
+`validate_migrations.py --strict` unchanged (399 revisions, single head, no
+migration touched); `pytest tests/ -m "not integration and not slow and not
+docker" --cov=app --cov-fail-under=51` (CI's exact Backend Unit Tests
+invocation) — **8103 passed, 2 skipped** (same two pre-existing, unrelated
+skips as round 5), coverage 58.66% (floor 51%); `cd frontend && npm run
+typecheck` (aliased 7.0.2 compiler) 0 errors; `cd frontend && npm run lint`
+0 errors (no frontend files touched this round). Files changed this round:
+`app/services/security_monitoring.py` (new `_session_trusted_ip` tracker,
+`detect_session_hijack` rewritten to compare against and advance it instead
+of `_session_ips`) and its test file (`TestSessionHijackTrustedBaseline`, 2
+new tests; 3 existing session-hijack tests updated); `docs/security-review/
+SEC-00-cross-cutting-baseline.md` and this file (round-6 write-up + this log
+entry); `CHANGELOG.md`. Same branch, same PR #2132.
+
+**Six review rounds on this file's session-hijack tracking now — the fifth
+straight round to find something, each a genuinely different shape (missing
+eviction, one-key-at-a-time eviction, read-after-evict, a fourth method with
+the same read-after-evict shape, write-after-evict, and now a semantic bug in
+what write-after-evict actually wrote) — worth carrying forward as the same
+caution rounds 4 and 5 each stated and were each subsequently proven right to
+have stated:** a clean result from a future pass over this exact code is
+worth substantially less evidentiary weight than the same result elsewhere,
+and remains the place to look hardest for one more angle before accepting
+"all fixed" at face value.
 
 ---
 
