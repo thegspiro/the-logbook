@@ -1102,6 +1102,7 @@ class TestSessionHijackConcurrentInterleaving:
         )
 
 
+@pytest.mark.integration
 @pytest.mark.asyncio
 class TestAddAlertSavepointIsolation:
     """PR #2133 round 2 (Codex): a failure persisting a `SecurityAlertRecord`

@@ -402,6 +402,7 @@ class TestLoginBruteForceResetGating:
         assert tally >= threshold
 
 
+@pytest.mark.integration
 @pytest.mark.asyncio
 class TestVerifyAndConsumeTotpConcurrency:
     """PR #2133 round 2 (Codex): a real concurrency race in the round-1 fix
@@ -557,6 +558,7 @@ class TestVerifyAndConsumeTotpConcurrency:
                     )
 
 
+@pytest.mark.integration
 @pytest.mark.asyncio
 class TestVerifyAndConsumeRecoveryCodeConcurrency:
     """Found during the adversarial re-read for round 2 of this PR, the same
