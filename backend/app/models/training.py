@@ -2912,6 +2912,25 @@ class Shift(Base):
     # Assignment
     apparatus_id = Column(String(36))  # Link to apparatus (future)
     station_id = Column(String(36))  # Link to station (future)
+
+    # The ShiftTemplate this shift was created from, when it came from one.
+    #
+    # Shifts have always *copied* a template's fields (color, positions,
+    # min_staffing, apparatus_id) and kept no reference back, which was fine
+    # while nothing needed to ask the question later. Equipment checklists do:
+    # a shift template names the checklists its shifts carry, and resolving
+    # those at check time means knowing which template a shift came from.
+    #
+    # SET NULL and nullable (pitfall #2 — SET NULL requires nullable): a
+    # template may be retired long after the shifts it generated, and losing
+    # the link must not take the shift with it. Shifts created before this
+    # column existed carry NULL and fall back to apparatus-based checklist
+    # resolution, which is the behaviour they have today.
+    template_id = Column(
+        String(36),
+        ForeignKey("shift_templates.id", ondelete="SET NULL"),
+        nullable=True,
+    )
     # Duty platoon this shift belongs to (A/B/C…) when generated from a platoon
     # rotation. Lets the UI label the shift and show the platoon roster.
     platoon = Column(String(20), nullable=True)
@@ -3230,8 +3249,88 @@ class ShiftTemplate(Base):
 
     __table_args__ = (Index("idx_shift_template_org", "organization_id"),)
 
+    # Which equipment checklists the shifts from this template carry.
+    #
+    # selectin, not lazy: ShiftTemplateResponse is a from_attributes model, and
+    # a lazy load during serialization raises MissingGreenlet under async
+    # SQLAlchemy.
+    equipment_check_links = relationship(
+        "ShiftTemplateEquipmentCheck",
+        cascade="all, delete-orphan",
+        lazy="selectin",
+        order_by="ShiftTemplateEquipmentCheck.sort_order",
+    )
+
+    @property
+    def equipment_check_template_ids(self) -> list:
+        """The linked checklist ids, in the order an officer arranged them."""
+        return [
+            str(link.equipment_check_template_id) for link in self.equipment_check_links
+        ]
+
     def __repr__(self):
         return f"<ShiftTemplate(name={self.name}, duration={self.duration_hours}h)>"
+
+
+class ShiftTemplateEquipmentCheck(Base):
+    """One equipment checklist a shift template puts on the shifts it creates.
+
+    Deliberately thin: the two sides, the org, and an order. Timing
+    (start/end of shift) and position eligibility stay on
+    ``EquipmentCheckTemplate``, which is where they are edited and where every
+    other reader already looks — duplicating either here is how the two come to
+    disagree with no way to tell which is right.
+
+    Presence is meaningful. A template with **no** links falls back to
+    apparatus-based resolution, which is how every shift worked before this
+    table existed. A template **with** links carries exactly those, so an
+    officer can also deliberately give a shift a checklist its apparatus would
+    not have suggested.
+
+    Both foreign keys CASCADE rather than SET NULL, so pitfall #2 does not
+    apply: a link row with either side missing describes nothing.
+    """
+
+    __tablename__ = "shift_template_equipment_checks"
+
+    id = Column(String(36), primary_key=True, default=generate_uuid)
+    organization_id = Column(
+        String(36),
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    shift_template_id = Column(
+        String(36),
+        ForeignKey("shift_templates.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    equipment_check_template_id = Column(
+        String(36),
+        ForeignKey("equipment_check_templates.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    sort_order = Column(Integer, default=0, nullable=False, server_default="0")
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    __table_args__ = (
+        Index("idx_stec_org_template", "organization_id", "shift_template_id"),
+        UniqueConstraint(
+            "shift_template_id",
+            "equipment_check_template_id",
+            name="uq_stec_template_pair",
+        ),
+    )
+
+    def __repr__(self):
+        return (
+            "<ShiftTemplateEquipmentCheck("
+            f"template={self.shift_template_id}, "
+            f"check={self.equipment_check_template_id})>"
+        )
 
 
 # ============================================

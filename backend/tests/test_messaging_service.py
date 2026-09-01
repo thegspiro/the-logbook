@@ -456,6 +456,33 @@ class TestAcknowledgmentReport:
         assert report is None
 
 
+class TestGetMessageStats:
+    """get_message_stats's three count queries must all be org-scoped, not just
+    filtered by message_id — message_id alone happens to be safe today because
+    the caller resolves it through get_message_by_id first, but a stats query
+    that silently drops the org filter is the shape of bug that stops being
+    safe the moment a caller changes."""
+
+    async def test_read_and_ack_counts_are_org_scoped(self):
+        message = _msg("m1")
+        db = MagicMock()
+        msg_res = MagicMock(scalar_one_or_none=MagicMock(return_value=message))
+        count_res = MagicMock(scalar=MagicMock(return_value=1))
+        db.execute = AsyncMock(side_effect=[msg_res, count_res, count_res, count_res])
+
+        stats = await MessagingService(db).get_message_stats("m1", "org-1")
+
+        assert stats["total_reads"] == 1
+        assert stats["total_acknowledged"] == 1
+        assert stats["total_targeted"] == 1
+        # get_message_by_id + 3 count queries.
+        assert db.execute.await_count == 4
+        for call in db.execute.await_args_list[1:]:
+            query = call.args[0]
+            where_sql = str(query.whereclause)
+            assert "organization_id" in where_sql
+
+
 class TestGetMessages:
     async def test_returns_page_and_total_with_search_and_priority(self):
         db = MagicMock()

@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import require_permission, user_has_permission
@@ -34,9 +34,28 @@ router = APIRouter()
 # additionally requires the read permission for the underlying record type
 # (RPT-3, owner decision 2026-08-09). Report types absent from this map carry only
 # aggregate/operational data and stay at `reports.view`.
+#
+# training_summary/training_progress/annual_training/certification_expiration/
+# compliance_status all return per-member name + training/compliance detail
+# (course names, certification numbers, compliance %) sourced from
+# TrainingRecord/TrainingRequirement — org-wide access to that same data is
+# gated behind training.manage at its source (training.py's /records,
+# /compliance-matrix). admin_hours returns per-member name + hours + status
+# from AdminHoursEntry, gated behind admin_hours.manage at its source. None of
+# the five was in this map, so `reports.view` alone bypassed the source gate.
+# GET /saved has no pagination and returns the org's full active set on every
+# load; a cap on writes here is what keeps that read bounded (RPT-29).
+MAX_ACTIVE_SAVED_REPORTS_PER_ORG = 200
+
 PII_REPORT_PERMISSIONS: dict[str, str] = {
     "member_roster": "members.view",
     "pipeline_overview": "prospective_members.view",
+    "training_summary": "training.manage",
+    "training_progress": "training.manage",
+    "annual_training": "training.manage",
+    "certification_expiration": "training.manage",
+    "compliance_status": "training.manage",
+    "admin_hours": "admin_hours.manage",
 }
 
 
@@ -156,6 +175,21 @@ async def create_saved_report(
     current_user: User = Depends(require_permission("reports.manage")),
 ):
     """Create a new saved report configuration"""
+    count_result = await db.execute(
+        select(func.count()).where(
+            SavedReport.organization_id == str(current_user.organization_id),
+            SavedReport.is_active.is_(True),
+        )
+    )
+    if (count_result.scalar() or 0) >= MAX_ACTIVE_SAVED_REPORTS_PER_ORG:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "This organization has reached the maximum of "
+                f"{MAX_ACTIVE_SAVED_REPORTS_PER_ORG} saved reports. "
+                "Deactivate or delete an existing one before creating another."
+            ),
+        )
     report = SavedReport(
         organization_id=str(current_user.organization_id),
         name=request.name,

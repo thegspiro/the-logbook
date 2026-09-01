@@ -149,7 +149,7 @@ function getCtaActions(notification: NotificationLogRecord): CtaAction[] {
       actions.push({
         label: 'Start Checklist',
         icon: <ClipboardCheck className="h-3.5 w-3.5" />,
-        url: '/scheduling?tab=equipment-checks',
+        url: '/inventory/checklists/my',
       });
     }
     return actions;
@@ -166,7 +166,7 @@ function getCtaActions(notification: NotificationLogRecord): CtaAction[] {
       actions.push({
         label: 'Start Checklist',
         icon: <ClipboardCheck className="h-3.5 w-3.5" />,
-        url: '/scheduling?tab=equipment-checks',
+        url: '/inventory/checklists/my',
       });
     }
     const shiftId = typeof metadata?.shift_id === 'string' ? metadata.shift_id : '';

@@ -114,10 +114,6 @@ class _InMemoryFailureTracker:
             return True
         return False
 
-    def clear(self, ip: str) -> None:
-        self.failures.pop(ip, None)
-        self.blocks.pop(ip, None)
-
 
 _memory_tracker = _InMemoryFailureTracker()
 

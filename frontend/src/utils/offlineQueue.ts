@@ -7,7 +7,7 @@
  * online the queue drains automatically.
  */
 
-import type { ShiftEquipmentCheckCreate } from '@/modules/scheduling/types/equipmentCheck';
+import type { ShiftEquipmentCheckCreate } from '@/modules/inventory/types/equipmentCheck';
 import { openOfflineDb, STORE_PENDING_CHECKS } from './offlineDb';
 
 // ---------------------------------------------------------------------------

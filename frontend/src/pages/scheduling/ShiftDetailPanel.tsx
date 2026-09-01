@@ -44,11 +44,12 @@ import {
 import { QRCodeSVG } from 'qrcode.react';
 import toast from 'react-hot-toast';
 import { schedulingService } from '../../modules/scheduling/services/api';
+import { equipmentCheckService } from '@/modules/inventory/services/equipmentCheckApi';
 import { trainingProgramService } from '../../services/trainingServices';
 import type { ShiftRecord, PlatoonRosterEntry } from '../../modules/scheduling/services/api';
 import { useSchedulingStore } from '../../modules/scheduling/store/schedulingStore';
 import type { Assignment } from '../../types/scheduling';
-import { isShiftCheckCompleted, type ShiftCheckSummary } from '../../modules/scheduling/types/equipmentCheck';
+import { isShiftCheckCompleted, type ShiftCheckSummary } from '../../modules/inventory/types/equipmentCheck';
 import { useAuthStore } from '../../stores/authStore';
 import { useTimezone } from '../../hooks/useTimezone';
 import {
@@ -64,6 +65,7 @@ import { formatHours } from '../../utils/hoursFormatting';
 import { DriverBlockedDialog } from './DriverBlockedDialog';
 import { DRIVER_NOT_QUALIFIED_CODE } from '../../constants/enums';
 import { POSITION_LABELS, ASSIGNMENT_STATUS_COLORS, AssignmentStatus } from '../../constants/enums';
+import { positionLabel } from '../../modules/scheduling/utils/positionLabels';
 import { NfcTagWriter } from '../../components/nfc/NfcTagWriter';
 import { PrintDocumentButton } from '../../components/PrintDocumentButton';
 import { StationDocument } from '../../services/stationDocumentService';
@@ -257,7 +259,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
     () =>
       hasApparatusPositions
         ? apparatusPositions.map(({ position: name }) => {
-            return [name, POSITION_LABELS[name] || name.charAt(0).toUpperCase() + name.slice(1)] as [string, string];
+            return [name, positionLabel(name)] as [string, string];
           })
         : Object.entries(POSITION_LABELS),
     [hasApparatusPositions, apparatusPositions]
@@ -303,7 +305,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
       try {
         const [assignData, checkData, attendanceData, allAttData, detail, handoffData] = await Promise.all([
           schedulingService.getShiftAssignments(shift.id),
-          schedulingService.getShiftChecklists(shift.id).catch(() => [] as ShiftCheckSummary[]),
+          equipmentCheckService.getShiftChecklists(shift.id).catch(() => [] as ShiftCheckSummary[]),
           schedulingService.getMyAttendance(shift.id),
           schedulingService.getShiftAttendance(shift.id).catch(() => []),
           schedulingService.getShift(shift.id).catch(() => null),
@@ -599,7 +601,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
         });
         successCount++;
       } catch (err) {
-        toast.error(`Failed to assign ${position}: ${getErrorMessage(err, 'Unknown error')}`);
+        toast.error(`Failed to assign ${positionLabel(position)}: ${getErrorMessage(err, 'Unknown error')}`);
       }
     }
     if (successCount > 0) {
@@ -2158,7 +2160,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
                   <p className="text-theme-text-muted text-xs">Select a member for each open position.</p>
                   <div className="space-y-2">
                     {openPositions.map((pos) => {
-                      const label = POSITION_LABELS[pos] ?? pos;
+                      const label = positionLabel(pos);
                       return (
                         <div key={pos} className="flex items-center gap-2">
                           <span className="text-theme-text-secondary w-24 shrink-0 text-xs font-medium capitalize">
@@ -2498,7 +2500,7 @@ export const ShiftDetailPanel: React.FC<ShiftDetailPanelProps> = ({ shift: initi
                   <button
                     onClick={() => {
                       onClose();
-                      void navigate(`/scheduling?tab=equipment-checks&shift=${shift.id}`);
+                      void navigate(`/inventory/checklists/my?shift=${shift.id}`);
                     }}
                     className="inline-flex items-center gap-1.5 rounded-lg border border-violet-500/30 bg-violet-500/10 px-3 py-1.5 text-xs font-medium text-violet-700 transition-colors hover:bg-violet-500/20 dark:text-violet-400"
                   >

@@ -80,19 +80,19 @@ The Equipment Check system provides structured vehicle and equipment inspections
 - **Reports** — Compliance dashboard, failure log, and item trend history with CSV and PDF export
 - **Catalog Linking** — _(2026-08-10)_ The quick-add bar searches the inventory catalog as you type, so adding a position and linking it are one act; picking a result inherits the catalog's name, counted-vs-serialized setting and dated-stock flag. A reviewed bulk pass proposes a link for every unlinked position on an existing template, and the toolbar shows a linked/unlinked count. Everything below hangs off `inventory_item_id`
 - **Live On-Truck Counts** — _(2026-08-10)_ A position records `quantity_on_truck` against its target. **NULL means never counted**, and the target stands in
-- **Restock Reports** — _(2026-08-10)_ A crew reports an item used or pulled _at the time they use it_, rather than leaving the gap for the next morning's check. Behind `equipment_check.submit`, the default member position. _(2026-08-11)_ Withdrawing a restock report and swapping lots are corrections of record and require `equipment_check.manage` / `inventory.manage`
+- **Restock Reports** — _(2026-08-10)_ A crew reports an item used or pulled _at the time they use it_, rather than leaving the gap for the next morning's check. Behind `inventory.check_submit`, the default member position. _(2026-08-11)_ Withdrawing a restock report and swapping lots are corrections of record and require `inventory.check_manage` / `inventory.manage`
 - **Deployed Lots** — _(2026-08-10)_ `check_item_deployed_lots` records each lot aboard a position separately, so a four-slot bracket holding three lots with three dates reports its **soonest** date rather than whichever was restocked last
-- **Standing Apparatus View** — _(2026-08-10)_ `/scheduling/apparatus-inventory` shows what a truck is carrying outside any check, with the ready stock behind each position
+- **Standing Apparatus View** — _(2026-08-10)_ `/inventory/checklists/apparatus-inventory` shows what a truck is carrying outside any check, with the ready stock behind each position
 
 ### Pages
 
 | URL                                                 | Page                                    | Permission                                                                |
 | --------------------------------------------------- | --------------------------------------- | ------------------------------------------------------------------------- |
-| `/scheduling/equipment-check-templates/new`         | Template Builder                        | `equipment_check.manage`                                                  |
-| `/scheduling/equipment-check-templates/:templateId` | Edit Template                           | `equipment_check.manage`                                                  |
-| `/scheduling/equipment-check-reports`               | Reports Dashboard                       | `scheduling.manage`                                                       |
-| `/scheduling/supply/expiring`                       | Expiring on Apparatus (supply worklist) | any of `scheduling.manage`, `equipment_check.view`, `inventory.view`      |
-| `/scheduling/apparatus-inventory`                   | Apparatus Inventory _(2026-08-10)_      | any of `equipment_check.submit`, `equipment_check.view`, `inventory.view` |
+| `/inventory/admin/checklists/templates/new`         | Template Builder                        | `inventory.check_manage`                                                  |
+| `/inventory/admin/checklists/templates/:templateId` | Edit Template                           | `inventory.check_manage`                                                  |
+| `/inventory/admin/checklists/reports`               | Reports Dashboard                       | `scheduling.manage`                                                       |
+| `/inventory/admin/checklists/supply`                | Expiring on Apparatus (supply worklist) | any of `scheduling.manage`, `inventory.check_view`, `inventory.view`      |
+| `/inventory/checklists/apparatus-inventory`         | Apparatus Inventory _(2026-08-10)_      | any of `inventory.check_submit`, `inventory.check_view`, `inventory.view` |
 
 ### API Endpoints — Equipment Checks
 

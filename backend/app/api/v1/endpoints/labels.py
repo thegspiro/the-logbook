@@ -17,12 +17,12 @@ printers). The renderer, the stock sizes on offer, and the status query all
 branch on it.
 """
 
-from typing import List, Optional
+from typing import Annotated, List, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Response
 from loguru import logger
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, StringConstraints
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.dependencies import (
@@ -46,6 +46,12 @@ from app.utils.label_renderer import SYMBOLOGY_CODE128
 from app.utils.printer_transport import PrinterUnreachableError
 
 router = APIRouter()
+
+# Each entry is a field key ("location", "category", "condition") or a
+# "custom:<text>" annotation the caller supplies verbatim — bound the text
+# half too, or `custom:` lets a caller join up to 20 unbounded strings per
+# label spec across up to 2000 ids (LBL-29-3).
+ExtraLine = Annotated[str, StringConstraints(max_length=100)]
 
 # Modules whose labels carry PII/credential-adjacent data worth an audit
 # trail: a prospect label embeds the applicant's public status-check token
@@ -83,7 +89,7 @@ class LabelGenerateBody(BaseModel):
     custom_width: Optional[float] = Field(None, ge=0.5, le=8)
     custom_height: Optional[float] = Field(None, ge=0.5, le=11)
     auto_rotate: Optional[bool] = None
-    extra_lines: Optional[List[str]] = Field(None, max_length=20)
+    extra_lines: Optional[List[ExtraLine]] = Field(None, max_length=20)
     symbology: str = Field(SYMBOLOGY_CODE128, max_length=20)
 
 
@@ -275,7 +281,7 @@ class LabelPrintBody(BaseModel):
     custom_width: Optional[float] = Field(None, ge=0.5, le=8)
     custom_height: Optional[float] = Field(None, ge=0.5, le=11)
     copies: int = Field(1, ge=1, le=50)
-    extra_lines: Optional[List[str]] = Field(None, max_length=20)
+    extra_lines: Optional[List[ExtraLine]] = Field(None, max_length=20)
     symbology: str = Field(SYMBOLOGY_CODE128, max_length=20)
 
 

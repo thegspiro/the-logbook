@@ -10,10 +10,11 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Link } from 'react-router';
 import toast from 'react-hot-toast';
-import { ClipboardCheck, Truck, Users } from 'lucide-react';
+import { Truck, Users } from 'lucide-react';
 import type { ShiftTemplateRecord, SchedulingFeatureSettings, PositionSlot } from '../services/api';
 import { schedulingService } from '../services/api';
 import { useSchedulingStore } from '../store/schedulingStore';
+import { useAuthStore } from '../../../stores/authStore';
 import type { ShiftSettings } from '../types/shiftSettings';
 import { BUILTIN_POSITIONS } from '../types/shiftSettings';
 import { getCachedShiftSettings, loadShiftSettings, shiftSettingsService } from '../services/shiftSettingsApi';
@@ -25,7 +26,6 @@ import { ApparatusTypeDefaultsCard } from './ApparatusTypeDefaultsCard';
 import { ResourceTypeDefaultsCard } from './ResourceTypeDefaultsCard';
 import { DepartmentDefaultsCard } from './DepartmentDefaultsCard';
 import { PositionNamesCard } from './PositionNamesCard';
-import { EquipmentCheckTemplateList } from './EquipmentCheckTemplateList';
 import { EligibilitySettingsCard } from './EligibilitySettingsCard';
 import { ShiftReportsSettingsPanel } from './ShiftReportsSettingsPanel';
 import { PlatoonRosterPanel } from './PlatoonRosterPanel';
@@ -127,6 +127,13 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
   const [settings, setSettings] = useState<ShiftSettings>(() => getCachedShiftSettings());
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
+
+  const { checkPermission } = useAuthStore();
+  const canEditOrgSettings = checkPermission('settings.manage') || checkPermission('organization.update_settings');
+  // Matches the gate on /inventory/admin/checklists. Authoring a checklist and
+  // editing the department settings that govern one are separate grants, so
+  // each signpost link below is shown only to whoever its destination admits.
+  const canManageChecklists = checkPermission('inventory.check_manage');
 
   useEffect(() => {
     let cancelled = false;
@@ -550,99 +557,42 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
       )}
 
       {/* ─── Equipment Tab ─── */}
+      {/* Nothing on this section is edited here any more. Checklists are
+          Inventory's, and so are the settings that govern them; what is left is
+          a signpost, which is why the section is no longer in
+          LOCALLY_SAVED_SECTIONS and shows no Save footer. */}
       {activeTab === 'equipment' && (
         <div className="space-y-6">
-          <div className="card-secondary p-5">
-            <h3 className="text-theme-text-primary mb-3 flex items-center gap-2 text-base font-semibold">
-              <ClipboardCheck className="h-4 w-4" /> Equipment Checks
-            </h3>
-            <p className="text-theme-text-muted mb-4 text-sm">
-              Configure equipment check requirements for shift start and end.
+          <div className="card p-4">
+            <h3 className="text-theme-text-primary text-sm font-semibold">Equipment checklists</h3>
+            <p className="text-theme-text-muted mt-1 text-xs">
+              Checklists are managed in Inventory, along with the settings for when crews are prompted to run them. A
+              shift template can name which of them its shifts carry — edit that on the template itself, under the
+              vehicle picker.
             </p>
-            <div className="space-y-4">
-              <label className="flex cursor-pointer items-center gap-3">
-                <input
-                  type="checkbox"
-                  checked={settings.equipmentCheckSettings?.enabled ?? false}
-                  onChange={(e) =>
-                    setSettings((s) => ({
-                      ...s,
-                      equipmentCheckSettings: {
-                        ...s.equipmentCheckSettings,
-                        enabled: e.target.checked,
-                      },
-                    }))
-                  }
-                  className="form-checkbox"
-                />
-                <span className="text-theme-text-primary text-sm">Enable equipment checks for shifts</span>
-              </label>
-
-              {settings.equipmentCheckSettings?.enabled && (
-                <>
-                  <label className="flex cursor-pointer items-center gap-3">
-                    <input
-                      type="checkbox"
-                      checked={settings.equipmentCheckSettings?.requireSignature ?? false}
-                      onChange={(e) =>
-                        setSettings((s) => ({
-                          ...s,
-                          equipmentCheckSettings: {
-                            ...s.equipmentCheckSettings,
-                            requireSignature: e.target.checked,
-                          },
-                        }))
-                      }
-                      className="form-checkbox"
-                    />
-                    <span className="text-theme-text-primary text-sm">Require signature on completion</span>
-                  </label>
-
-                  <label className="flex cursor-pointer items-center gap-3">
-                    <input
-                      type="checkbox"
-                      checked={settings.equipmentCheckSettings?.blockShiftStartOnFail ?? false}
-                      onChange={(e) =>
-                        setSettings((s) => ({
-                          ...s,
-                          equipmentCheckSettings: {
-                            ...s.equipmentCheckSettings,
-                            blockShiftStartOnFail: e.target.checked,
-                          },
-                        }))
-                      }
-                      className="form-checkbox"
-                    />
-                    <span className="text-theme-text-primary text-sm">Block shift start when required items fail</span>
-                  </label>
-
-                  <div>
-                    <label className="text-theme-text-primary mb-1 block text-sm">
-                      Default expiration warning (days)
-                    </label>
-                    <input
-                      type="number"
-                      min={1}
-                      max={365}
-                      value={settings.equipmentCheckSettings?.defaultExpirationWarningDays ?? 30}
-                      onChange={(e) =>
-                        setSettings((s) => ({
-                          ...s,
-                          equipmentCheckSettings: {
-                            ...s.equipmentCheckSettings,
-                            defaultExpirationWarningDays: parseInt(e.target.value, 10) || 30,
-                          },
-                        }))
-                      }
-                      className="form-input w-24"
-                    />
-                  </div>
-                </>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {/* Same reasoning as the settings link below, and the same grant
+                  the route itself requires: a scheduling officer who cannot
+                  author checklists would otherwise be pointed at a page that
+                  turns them away. */}
+              {canManageChecklists && (
+                <Link to="/inventory/admin/checklists" className="btn-secondary inline-flex text-sm font-semibold">
+                  Manage equipment checklists
+                </Link>
+              )}
+              {/* Those settings are stored in org.settings, so they need the
+                  department-settings grant. A scheduling officer without it
+                  would otherwise be pointed at a page that turns them away. */}
+              {canEditOrgSettings && (
+                <Link
+                  to="/inventory/admin/checklists/settings"
+                  className="btn-secondary inline-flex text-sm font-semibold"
+                >
+                  Checklist settings
+                </Link>
               )}
             </div>
           </div>
-
-          <EquipmentCheckTemplateList />
         </div>
       )}
 

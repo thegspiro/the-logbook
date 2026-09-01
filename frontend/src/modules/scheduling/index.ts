@@ -23,7 +23,6 @@ export type {
   ShiftComplianceResponse,
   MemberComplianceRecord,
   RequirementComplianceSummary,
-  ActiveChecklistRecord,
   ShiftRosterSeat,
 } from './services/api';
 
@@ -68,29 +67,6 @@ export type {
 
 // Standing shift enums (value objects, not types)
 export { StandingShiftPattern, StandingShiftPeriod } from './types';
-
-// Equipment Check Types
-export type {
-  EquipmentCheckTemplate,
-  EquipmentCheckTemplateCreate,
-  EquipmentCheckTemplateUpdate,
-  CheckTemplateCompartment,
-  CheckTemplateCompartmentCreate,
-  CheckTemplateItem,
-  CheckTemplateItemCreate,
-  CheckItemResultSubmit,
-  ShiftEquipmentCheckCreate,
-  ShiftEquipmentCheckRecord,
-  ShiftCheckSummary,
-  CheckItemHistory,
-  ComplianceReport,
-  ApparatusComplianceRecord,
-  MemberComplianceReportRecord,
-  FailureLogResponse,
-  FailureLogRecord,
-  ItemTrendResponse,
-  ItemTrendEntry,
-} from './types/equipmentCheck';
 
 // Settings Types
 export type { ShiftReportSettings } from './types/shiftSettings';

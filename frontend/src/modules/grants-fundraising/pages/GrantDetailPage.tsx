@@ -52,6 +52,7 @@ import { formatDate } from '../../../utils/dateFormatting';
 import { formatCurrency, formatCurrencyWhole } from '@/utils/currencyFormatting';
 import { Breadcrumbs } from '@/components/ux/Breadcrumbs';
 import { useTimezone } from '../../../hooks/useTimezone';
+import { useAuthStore } from '../../../stores/authStore';
 
 // =============================================================================
 // Constants
@@ -203,6 +204,12 @@ export const GrantDetailPage: React.FC = () => {
   const { busy: expenditureBusy, run: runExpenditure } = useSubmitGuard();
   const { busy: complianceBusy, run: runCompliance } = useSubmitGuard();
   const tz = useTimezone();
+  // Every mutation this page can trigger (edit, budget/expenditure/task
+  // creation, task status changes, notes) requires fundraising.manage on the
+  // backend — the route itself is gated only at fundraising.view so a viewer
+  // can reach the page. Hide the controls that would 403 rather than let a
+  // view-only user discover the gap by clicking.
+  const canManage = useAuthStore((s) => s.checkPermission)('fundraising.manage');
 
   const {
     currentApplication,
@@ -498,14 +505,16 @@ export const GrantDetailPage: React.FC = () => {
               <p className="text-theme-text-secondary mt-1 text-sm">{application.grantAgency}</p>
             </div>
 
-            <button
-              type="button"
-              onClick={() => void navigate(`/grants/applications/${application.id}/edit`)}
-              className="inline-flex items-center gap-2 rounded-lg bg-red-800 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-900"
-            >
-              <Edit className="h-4 w-4" />
-              Edit
-            </button>
+            {canManage && (
+              <button
+                type="button"
+                onClick={() => void navigate(`/grants/applications/${application.id}/edit`)}
+                className="inline-flex items-center gap-2 rounded-lg bg-red-800 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-900"
+              >
+                <Edit className="h-4 w-4" />
+                Edit
+              </button>
+            )}
           </div>
 
           {/* Key stats */}
@@ -700,16 +709,18 @@ export const GrantDetailPage: React.FC = () => {
             </div>
 
             {/* Add button */}
-            <div className="flex justify-end">
-              <button
-                type="button"
-                onClick={() => setShowBudgetModal(true)}
-                className="inline-flex items-center gap-2 rounded-lg bg-red-800 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-900"
-              >
-                <Plus className="h-4 w-4" />
-                Add Item
-              </button>
-            </div>
+            {canManage && (
+              <div className="flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => setShowBudgetModal(true)}
+                  className="inline-flex items-center gap-2 rounded-lg bg-red-800 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-900"
+                >
+                  <Plus className="h-4 w-4" />
+                  Add Item
+                </button>
+              </div>
+            )}
 
             {/* Budget table */}
             <div className="card overflow-hidden">
@@ -830,14 +841,16 @@ export const GrantDetailPage: React.FC = () => {
           <div className="space-y-6">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <h3 className="text-theme-text-primary text-lg font-semibold">Expenditures</h3>
-              <button
-                type="button"
-                onClick={() => setShowExpenditureModal(true)}
-                className="inline-flex items-center gap-2 rounded-lg bg-red-800 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-900"
-              >
-                <Plus className="h-4 w-4" />
-                Record Expenditure
-              </button>
+              {canManage && (
+                <button
+                  type="button"
+                  onClick={() => setShowExpenditureModal(true)}
+                  className="inline-flex items-center gap-2 rounded-lg bg-red-800 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-900"
+                >
+                  <Plus className="h-4 w-4" />
+                  Record Expenditure
+                </button>
+              )}
             </div>
 
             <div className="card overflow-hidden">
@@ -940,14 +953,16 @@ export const GrantDetailPage: React.FC = () => {
           <div className="space-y-6">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <h3 className="text-theme-text-primary text-lg font-semibold">Compliance & Follow-Up Tasks</h3>
-              <button
-                type="button"
-                onClick={() => setShowComplianceModal(true)}
-                className="inline-flex items-center gap-2 rounded-lg bg-red-800 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-900"
-              >
-                <Plus className="h-4 w-4" />
-                Add Task
-              </button>
+              {canManage && (
+                <button
+                  type="button"
+                  onClick={() => setShowComplianceModal(true)}
+                  className="inline-flex items-center gap-2 rounded-lg bg-red-800 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-900"
+                >
+                  <Plus className="h-4 w-4" />
+                  Add Task
+                </button>
+              )}
             </div>
 
             {complianceTasks.length === 0 ? (
@@ -993,29 +1008,43 @@ export const GrantDetailPage: React.FC = () => {
                         </div>
                       </div>
 
-                      {/* Status dropdown + mark complete */}
+                      {/* Status dropdown + mark complete (manage only — a
+                          viewer sees the same badge everyone else on the app
+                          gets for a status they can't change) */}
                       <div className="flex flex-shrink-0 items-center gap-2">
-                        <select
-                          value={task.status}
-                          onChange={(e) => void handleChangeTaskStatus(task.id, e.target.value as ComplianceTaskStatus)}
-                          className={`rounded-full border-0 px-2.5 py-0.5 text-xs font-medium focus:ring-2 focus:ring-red-500 focus:outline-none ${COMPLIANCE_STATUS_COLORS[task.status] ?? 'bg-theme-surface-secondary text-theme-text-secondary'}`}
-                        >
-                          {Object.entries(COMPLIANCE_STATUS_LABELS).map(([value, label]) => (
-                            <option key={value} value={value}>
-                              {label}
-                            </option>
-                          ))}
-                        </select>
+                        {canManage ? (
+                          <>
+                            <select
+                              value={task.status}
+                              onChange={(e) =>
+                                void handleChangeTaskStatus(task.id, e.target.value as ComplianceTaskStatus)
+                              }
+                              className={`rounded-full border-0 px-2.5 py-0.5 text-xs font-medium focus:ring-2 focus:ring-red-500 focus:outline-none ${COMPLIANCE_STATUS_COLORS[task.status] ?? 'bg-theme-surface-secondary text-theme-text-secondary'}`}
+                            >
+                              {Object.entries(COMPLIANCE_STATUS_LABELS).map(([value, label]) => (
+                                <option key={value} value={value}>
+                                  {label}
+                                </option>
+                              ))}
+                            </select>
 
-                        {task.status !== ComplianceTaskStatusEnum.COMPLETED && (
-                          <button
-                            type="button"
-                            onClick={() => void handleMarkTaskComplete(task.id)}
-                            className="inline-flex items-center gap-1 rounded-lg border border-green-500/30 bg-green-500/10 px-3 py-1.5 text-xs font-medium text-green-700 transition-colors hover:bg-green-500/20"
+                            {task.status !== ComplianceTaskStatusEnum.COMPLETED && (
+                              <button
+                                type="button"
+                                onClick={() => void handleMarkTaskComplete(task.id)}
+                                className="inline-flex items-center gap-1 rounded-lg border border-green-500/30 bg-green-500/10 px-3 py-1.5 text-xs font-medium text-green-700 transition-colors hover:bg-green-500/20"
+                              >
+                                <CheckCircle2 className="h-3.5 w-3.5" />
+                                Mark Complete
+                              </button>
+                            )}
+                          </>
+                        ) : (
+                          <span
+                            className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${COMPLIANCE_STATUS_COLORS[task.status] ?? 'bg-theme-surface-secondary text-theme-text-secondary'}`}
                           >
-                            <CheckCircle2 className="h-3.5 w-3.5" />
-                            Mark Complete
-                          </button>
+                            {COMPLIANCE_STATUS_LABELS[task.status] ?? task.status}
+                          </span>
                         )}
                       </div>
                     </div>
@@ -1067,31 +1096,33 @@ export const GrantDetailPage: React.FC = () => {
               </div>
             )}
 
-            {/* Add note */}
-            <div className="card p-4">
-              <label htmlFor="new-note" className={labelClass}>
-                Add Note
-              </label>
-              <textarea
-                id="new-note"
-                rows={3}
-                value={newNoteContent}
-                onChange={(e) => setNewNoteContent(e.target.value)}
-                placeholder="Type your note here..."
-                className={`${inputClass} resize-none`}
-              />
-              <div className="mt-3 flex justify-end">
-                <button
-                  type="button"
-                  disabled={!newNoteContent.trim() || isSubmittingNote}
-                  onClick={() => void handleAddNote()}
-                  className="inline-flex items-center gap-2 rounded-lg bg-red-800 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-900 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  {isSubmittingNote ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+            {/* Add note (manage only — create_note requires fundraising.manage) */}
+            {canManage && (
+              <div className="card p-4">
+                <label htmlFor="new-note" className={labelClass}>
                   Add Note
-                </button>
+                </label>
+                <textarea
+                  id="new-note"
+                  rows={3}
+                  value={newNoteContent}
+                  onChange={(e) => setNewNoteContent(e.target.value)}
+                  placeholder="Type your note here..."
+                  className={`${inputClass} resize-none`}
+                />
+                <div className="mt-3 flex justify-end">
+                  <button
+                    type="button"
+                    disabled={!newNoteContent.trim() || isSubmittingNote}
+                    onClick={() => void handleAddNote()}
+                    className="inline-flex items-center gap-2 rounded-lg bg-red-800 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-900 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {isSubmittingNote ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+                    Add Note
+                  </button>
+                </div>
               </div>
-            </div>
+            )}
           </div>
         )}
       </main>

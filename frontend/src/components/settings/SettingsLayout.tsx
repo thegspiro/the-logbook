@@ -157,7 +157,17 @@ export function SettingsLayout<K extends string, S extends string = string>({
           </div>
         </header>
 
-        <nav className="segmented-group hscroll flex gap-1 md:flex-wrap md:overflow-x-visible" aria-label={navLabel}>
+        {/* Both navs scroll sideways below md rather than wrapping, so both
+            declare themselves as intentional scroll regions: the attribute is
+            what exempts their off-screen items from the mobile overflow check,
+            and tabIndex is what lets a keyboard reach the items it hides.
+            Without the pair, a seventh section pill is simply unreachable. */}
+        <nav
+          className="segmented-group hscroll flex gap-1 md:flex-wrap md:overflow-x-visible"
+          aria-label={navLabel}
+          data-mobile-scroll-region
+          tabIndex={0}
+        >
           {sections.map(({ key, label, icon: Icon }) => {
             const isActive = activeSection === key;
             return (
@@ -180,6 +190,8 @@ export function SettingsLayout<K extends string, S extends string = string>({
             <nav
               className="border-theme-surface-border hscroll flex shrink-0 gap-1 border-b pb-2 md:w-52 md:flex-col md:gap-0 md:border-b-0 md:border-l md:pb-0"
               aria-label={`${current?.label ?? ''} pages`.trim()}
+              data-mobile-scroll-region
+              tabIndex={0}
             >
               {subPages.map(({ key, label, hint }) => {
                 const isActive = activeSubPage === key;

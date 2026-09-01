@@ -355,8 +355,8 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
   },
   {
     id: 'scheduling',
-    label: 'Scheduling & equipment checks',
-    description: 'Shifts, platoons, seat qualifications and the apparatus check workflow.',
+    label: 'Scheduling',
+    description: 'Shifts, platoons and seat qualifications.',
     checklistSection: '7. Scheduling Module',
     pages: [
       { path: '/scheduling', label: 'Schedule', module: 'scheduling' },
@@ -389,54 +389,6 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
         anyPermission: ['scheduling.manage', 'training.view_all', 'training.manage'],
         module: 'scheduling',
       },
-      {
-        path: '/scheduling/equipment',
-        label: 'Fleet board',
-        anyPermission: ['equipment_check.view', 'scheduling.manage'],
-        module: 'scheduling',
-      },
-      {
-        path: '/scheduling/equipment/:apparatusId',
-        label: 'Apparatus check detail',
-        anyPermission: ['equipment_check.view', 'scheduling.manage'],
-        module: 'scheduling',
-      },
-      {
-        path: '/scheduling/equipment/checks',
-        label: 'Check log',
-        anyPermission: ['equipment_check.submit', 'equipment_check.view', 'scheduling.manage'],
-        module: 'scheduling',
-      },
-      {
-        path: '/scheduling/apparatus-inventory',
-        label: 'Apparatus inventory',
-        anyPermission: ['equipment_check.submit', 'equipment_check.view', 'inventory.view'],
-        module: 'scheduling',
-      },
-      {
-        path: '/scheduling/supply/expiring',
-        label: 'Expiring supplies',
-        anyPermission: ['scheduling.manage', 'equipment_check.view', 'inventory.manage'],
-        module: 'scheduling',
-      },
-      {
-        path: '/scheduling/equipment-check-templates/new',
-        label: 'New equipment check template',
-        permission: 'scheduling.manage',
-        module: 'scheduling',
-      },
-      {
-        path: '/scheduling/equipment-check-templates/:templateId',
-        label: 'Equipment check template',
-        permission: 'scheduling.manage',
-        module: 'scheduling',
-      },
-      {
-        path: '/scheduling/equipment-check-reports',
-        label: 'Equipment check reports',
-        permission: 'scheduling.manage',
-        module: 'scheduling',
-      },
     ],
   },
   {
@@ -446,6 +398,74 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
     checklistSection: '6. Inventory Module',
     pages: [
       { path: '/inventory/my-equipment', label: 'My equipment', module: 'inventory' },
+      {
+        path: '/inventory/checklists/my',
+        label: 'My equipment checklists',
+        module: 'inventory',
+      },
+      {
+        path: '/inventory/admin/checklists',
+        label: 'Equipment checklists admin',
+        permission: 'inventory.check_manage',
+        module: 'inventory',
+      },
+      {
+        path: '/inventory/admin/checklists/settings',
+        label: 'Checklist settings',
+        // The department-settings grant, not the checklist one: these values
+        // are stored in org.settings and written through the organization
+        // settings endpoint.
+        anyPermission: ['settings.manage', 'organization.update_settings'],
+        module: 'inventory',
+      },
+      {
+        path: '/inventory/checklists',
+        label: 'Fleet board',
+        anyPermission: ['inventory.check_view', 'scheduling.manage'],
+        module: 'inventory',
+      },
+      {
+        path: '/inventory/checklists/apparatus/:apparatusId',
+        label: 'Apparatus check detail',
+        anyPermission: ['inventory.check_view', 'scheduling.manage'],
+        module: 'inventory',
+      },
+      {
+        path: '/inventory/checklists/log',
+        label: 'Check log',
+        anyPermission: ['inventory.check_submit', 'inventory.check_view', 'scheduling.manage'],
+        module: 'inventory',
+      },
+      {
+        path: '/inventory/checklists/apparatus-inventory',
+        label: 'Apparatus inventory',
+        anyPermission: ['inventory.check_submit', 'inventory.check_view', 'inventory.view'],
+        module: 'inventory',
+      },
+      {
+        path: '/inventory/admin/checklists/supply',
+        label: 'Expiring supplies',
+        anyPermission: ['scheduling.manage', 'inventory.check_view', 'inventory.manage'],
+        module: 'inventory',
+      },
+      {
+        path: '/inventory/admin/checklists/templates/new',
+        label: 'New equipment check template',
+        permission: 'inventory.check_manage',
+        module: 'inventory',
+      },
+      {
+        path: '/inventory/admin/checklists/templates/:templateId',
+        label: 'Equipment check template',
+        permission: 'inventory.check_manage',
+        module: 'inventory',
+      },
+      {
+        path: '/inventory/admin/checklists/reports',
+        label: 'Equipment check reports',
+        permission: 'inventory.check_view',
+        module: 'inventory',
+      },
       { path: '/inventory/items/:id', label: 'Item detail', module: 'inventory' },
       { path: '/inventory', label: 'Gear catalogue', permission: 'inventory.manage', module: 'inventory' },
       { path: '/inventory/items', label: 'Items', permission: 'inventory.manage', module: 'inventory' },
@@ -857,7 +877,11 @@ export const TESTING_GROUPS: readonly TestGroupEntry[] = [
       },
       { path: '/admin/audit-log', label: 'Audit log', permission: 'audit.view' },
       { path: '/admin/errors', label: 'Error monitoring', permission: 'settings.manage' },
-      { path: '/ip-security', label: 'IP security', permission: 'security.manage' },
+      {
+        path: '/ip-security',
+        label: 'IP security',
+        anyPermission: ['security.manage', 'settings.manage'],
+      },
       { path: '/ip-security/my-requests', label: 'My IP exception requests' },
     ],
   },

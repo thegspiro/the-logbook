@@ -34,7 +34,7 @@ The Inventory module tracks department equipment, supplies, and gear. It support
 12. [Item Detail Page](#item-detail-page)
 13. [Item Assignments](#item-assignments)
 14. [Checkout and Return](#checkout-and-return)
-15. [Batch Operations](#batch-operations)
+15. [Item Distribution and Batch Return](#item-distribution-and-batch-return)
 16. [Barcode and QR Scanning](#barcode-and-qr-scanning)
 17. [Label Printing](#label-printing)
 18. [Maintenance Tracking](#maintenance-tracking)
@@ -623,16 +623,36 @@ For items that are temporarily loaned (not permanently assigned), use the checko
 
 ---
 
-## Batch Operations
+## Item Distribution and Batch Return
 
-For events or training sessions where multiple items need to be processed at once, use batch operations.
+For events or training sessions where multiple items need to be processed at
+once, use these two screens.
 
-Both batch screens start from a **member**, not from a list of items — you pick
-the person on **Gear Admin > Members Equipment** and the screen then works
-on their gear. There is no separate "Batch Checkout" or "Batch Return" entry in
-the admin menu.
+Both start from a **member**, not from a list of items — you pick the person on
+**Gear Admin > Members Equipment** and the screen then works on their gear.
+There is no separate entry in the admin menu for either.
 
-### Batch Checkout
+> **"Batch Checkout" is now "Item Distribution"** _(renamed 2026-08-26)_. The
+> module had several names for the same operations. The canonical set now lives
+> in one place, as a glossary and a request-type helper:
+>
+> | Term               | Means                                                                      |
+> | ------------------ | -------------------------------------------------------------------------- |
+> | **Assignment**     | Serialized gear held on an ongoing basis                                   |
+> | **Temporary loan** | Serialized gear expected back by a date                                    |
+> | **Issuance**       | Quantity-tracked stock given to a member                                   |
+> | **Return**         | Physically receiving assigned or issued gear                               |
+> | **Check-in**       | Closing a temporary loan when the gear is received                         |
+> | **Transfer**       | Moving serialized gear between holders                                     |
+> | **Distribution**   | One mixed batch that may create assignments, temporary loans and issuances |
+>
+> **The distribution rename has landed; the rest of the vocabulary is a target,
+> not a description of every screen.** You will still see **Active Checkouts**
+> on the expanded member-equipment view and **Checkout — returnable individual
+> item** in the equipment-request fulfilment selector. Nothing about your data
+> changed either way — these are labels.
+
+### Item Distribution
 
 1. Go to **Gear Admin > Members Equipment**.
 2. Click **Assign** on the member's row.
@@ -2367,3 +2387,89 @@ Its built-in three metrics are **Items tracked**, **Issued to members** and
 it cannot be configured away. Access is `inventory.manage` plus the Inventory
 module enabled. See the
 [shared frame section of the release lesson](./19-august-2026-release-changes.md#every-administration-page-opens-the-same-way).
+
+---
+
+## Receiving, Returns and Condition _(2026-08-28)_
+
+### Stock you received could not be issued
+
+**Receiving stock through the reorder workflow created a purchase record and
+never updated the item's on-hand count.** Newly received units could not be
+checked out or issued to anybody, so the shelf and the paperwork disagreed with
+no indication why.
+
+Fixed. If you have been quietly re-counting after every delivery, stop.
+
+### Damaged gear can no longer be returned to service
+
+Completing maintenance work and recording the item's condition as **poor,
+damaged or out of service** no longer allows that item to be returned to
+service. It stays out until a later inspection records a safe condition.
+
+### Two quartermasters, one return request
+
+One person denying a member's return request while another physically received
+it could overwrite each other's decision — whichever wrote last won, silently.
+Reviewing a return request is serialized now, so only one outcome is ever
+recorded.
+
+### The review screen no longer carries a choice forward
+
+A safety follow-up selected on one reviewed request — "send to write-off
+review", say — was applying itself to the **next** request reviewed, even when
+that item was in perfectly good condition. Each review starts clean.
+
+### The "Transfer is immediate" checkbox is gone
+
+Custody transfers have always taken effect immediately. The checkbox implied a
+deferred option that did not exist. **Custody-transfer audit entries now also
+record who performed the transfer.**
+
+> **[SCREENSHOT — REPLACE the item detail, return-request review and transfer
+> captures.** The vocabulary changed and the transfer screen lost a
+> checkbox.**]**
+
+## Checklist Settings Moved Here _(2026-08-31)_
+
+Equipment checklists are Inventory's now, and so are the settings that govern
+them. Go to **Gear Admin > Equipment Checklists > Checklist settings**
+(`/inventory/admin/checklists/settings`). It needs the same permission as
+editing a checklist — if you can build one, you can set these.
+
+There are four, in two groups.
+
+### When crews are prompted
+
+| Setting                   | Default | What it does                                                     |
+| ------------------------- | ------- | ---------------------------------------------------------------- |
+| Start-of-shift checklists | On      | Members are prompted to run their checks when their shift begins |
+| End-of-shift checklists   | On      | Members are reminded to run their checks before their shift ends |
+
+Turning one off stops the prompt and its reminders. It deletes nothing —
+completed checks stay, and the checklists themselves remain available to anyone
+who opens them directly.
+
+### When members can check in
+
+| Setting                | Default  | Range | What it does                                |
+| ---------------------- | -------- | ----- | ------------------------------------------- |
+| Opens before the start | 2 hours  | 0–24  | How early a member may check in for a shift |
+| Closes after the end   | 12 hours | 0–72  | How late a member may still check in        |
+
+Outside this window the Check In button is switched off and says why. Widen it
+if your crews are held over on long call-backs. A shift that has been closed
+out is always shut regardless of this setting.
+
+Every control here saves on its own, straight away — the toggles when you click
+them, the two number boxes when you click away or press Enter. There is no Save
+button to forget. Clearing a number box and leaving it empty restores the
+saved value rather than storing zero, and a number past the range is folded back
+to the nearest allowed value instead of being rejected.
+
+**Where these used to be.** They were at Scheduling > Settings > Shift Reports >
+Checklist Timing. The values carried over automatically; nothing needs
+re-entering. Four _other_ settings that used to sit at Scheduling > Settings >
+Equipment — a signature requirement, a shift-start block, an expiration warning
+default and an "enable equipment checks" switch — were removed rather than
+moved, because none of them was ever wired to anything.

@@ -69,6 +69,41 @@ def canonical_position(name: str) -> str:
     return cleaned
 
 
+# What each canonical seat is called on screen and in print. Mirrors
+# POSITION_LABELS in frontend/src/constants/enums.ts: the "ems" seat is the one
+# that matters here, because the department calls it EMT everywhere it is
+# chosen and a printed roster or a reminder email that says "EMS" reads as a
+# different seat rather than the same one spelled another way.
+POSITION_LABELS = {
+    "officer": "Officer",
+    "driver": "Driver/Operator",
+    "firefighter": "Firefighter",
+    "ems": "EMT",
+    "paramedic": "Paramedic",
+    "captain": "Captain",
+    "lieutenant": "Lieutenant",
+    "probationary": "Probationary",
+    "volunteer": "Volunteer",
+    "other": "Other",
+}
+
+
+def position_label(name: Any) -> str:
+    """The display name for one seat token.
+
+    A department's own custom seat is not in the label map — its value is
+    chosen by an admin — so it is returned title-cased rather than blank.
+    """
+    token = str(getattr(name, "value", name) or "").strip()
+    if not token:
+        return ""
+    canonical = canonical_position(token)
+    label = POSITION_LABELS.get(canonical)
+    if label:
+        return label
+    return canonical.replace("_", " ").title()
+
+
 def normalize_stored_positions(positions: Any) -> Any:
     """Return a seat list in the canonical structured form.
 

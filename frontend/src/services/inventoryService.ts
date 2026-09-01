@@ -214,6 +214,22 @@ export const inventoryService = {
     return response.data;
   },
 
+  /**
+   * Create a catalog item, or get back the one already carrying the name.
+   *
+   * One call rather than a check followed by a create: `getItems` cannot prove
+   * absence (it excludes medical types and returns one page), and a check made
+   * here leaves seconds before the write in which somebody else can file the
+   * same name. `created` says which happened.
+   */
+  async createItemIfAbsent(data: InventoryItemCreate): Promise<{ item: InventoryItem; created: boolean }> {
+    const response = await api.post<{ item: InventoryItem; created: boolean }>(
+      '/inventory/items/create-if-absent',
+      data
+    );
+    return response.data;
+  },
+
   async createItem(data: InventoryItemCreate): Promise<InventoryItem> {
     const response = await api.post<InventoryItem>('/inventory/items', data);
     return response.data;

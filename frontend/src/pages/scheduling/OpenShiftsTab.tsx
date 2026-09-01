@@ -15,7 +15,7 @@ import { useAuthStore } from '../../stores/authStore';
 import { useTimezone } from '../../hooks/useTimezone';
 import { formatTime, getTodayLocalDate, toLocalDateString, formatDateCustom } from '../../utils/dateFormatting';
 import { getErrorMessage, toAppError } from '../../utils/errorHandling';
-import { POSITION_LABELS } from '../../constants/enums';
+import { positionLabel } from '../../modules/scheduling/utils/positionLabels';
 import { useEligiblePositions } from '../../hooks/useEligiblePositions';
 
 interface OpenShiftsTabProps {
@@ -367,7 +367,7 @@ export const OpenShiftsTab: React.FC<OpenShiftsTabProps> = ({ onViewShift }) => 
                       >
                         {eligiblePositions.map((pos) => (
                           <option key={pos} value={pos}>
-                            {POSITION_LABELS[pos] ?? pos}
+                            {positionLabel(pos)}
                           </option>
                         ))}
                       </select>

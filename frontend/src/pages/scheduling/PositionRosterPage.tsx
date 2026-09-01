@@ -34,7 +34,7 @@ import {
 } from 'lucide-react';
 import { schedulingService } from '../../modules/scheduling/services/api';
 import type { PositionRosterMember, PositionRosterResponse } from '../../modules/scheduling/types';
-import { POSITION_LABELS } from '../../constants/enums';
+import { positionLabel } from '../../modules/scheduling/utils/positionLabels';
 import { calendarDaysFromToday, formatCalendarDate, formatDate } from '../../utils/dateFormatting';
 import { useTimezone } from '../../hooks/useTimezone';
 import { getErrorMessage } from '../../utils/errorHandling';
@@ -124,7 +124,7 @@ const PositionRosterPage: React.FC = () => {
     [roster]
   );
 
-  const positionLabel = POSITION_LABELS[loadedPosition] ?? loadedPosition;
+  const loadedPositionLabel = positionLabel(loadedPosition);
 
   const renderSources = (member: PositionRosterMember) => (
     <div className="mt-1 flex flex-wrap gap-1">
@@ -200,7 +200,7 @@ const PositionRosterPage: React.FC = () => {
                 >
                   {POSITIONS.map((value) => (
                     <option key={value} value={value}>
-                      {POSITION_LABELS[value] ?? value}
+                      {positionLabel(value)}
                     </option>
                   ))}
                 </select>
@@ -229,8 +229,8 @@ const PositionRosterPage: React.FC = () => {
             {roster?.is_open_position && (
               <p className="text-theme-text-muted mt-3 inline-flex items-center gap-1.5 text-xs">
                 <Unlock className="h-3.5 w-3.5" aria-hidden="true" />
-                {positionLabel} is on the department&apos;s open-position list, so every member who is not an excluded
-                membership type may sign up for it.
+                {loadedPositionLabel} is on the department&apos;s open-position list, so every member who is not an
+                excluded membership type may sign up for it.
               </p>
             )}
           </div>
@@ -242,7 +242,7 @@ const PositionRosterPage: React.FC = () => {
           ) : !roster ? null : roster.members.length === 0 ? (
             <EmptyState
               icon={Users}
-              title={`Nobody is cleared as ${positionLabel}`}
+              title={`Nobody is cleared as ${loadedPositionLabel}`}
               description={
                 'Grant the position to a rank under Settings → Ranks, set a training program’s target ' +
                 'position, or add it to the open-position list in scheduling settings.'
@@ -253,7 +253,7 @@ const PositionRosterPage: React.FC = () => {
               <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                 <p className="text-theme-text-secondary text-sm">
                   <span className="font-semibold">{roster.members.length}</span> member
-                  {roster.members.length === 1 ? '' : 's'} cleared as {positionLabel}
+                  {roster.members.length === 1 ? '' : 's'} cleared as {loadedPositionLabel}
                   {search.trim() && members.length !== roster.members.length && (
                     <span className="text-theme-text-muted"> · {members.length} shown</span>
                   )}

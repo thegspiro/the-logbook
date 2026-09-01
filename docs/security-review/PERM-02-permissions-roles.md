@@ -1,6 +1,163 @@
 # Security Review — Permissions & Roles
 
-**Prefix:** `PERM` · **Iteration:** 02 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2) · **PR:** #1805 (pass 1)
+**Prefix:** `PERM` · **Iteration:** 02 · **Reviewed:** 2026-08-25 (pass 1), 2026-08-27 (pass 2), 2026-09-01 (pass 3) · **PR:** #1805 (pass 1)
+
+---
+
+## Pass 3 (2026-09-01) — re-verified, no new findings
+
+**Scope of this pass — corrected mid-review by Codex.** The first cut of this
+pass used `git log --since=2026-08-27` (a date, not the actual merge commit)
+against the six feature files and found three commits. That query is wrong in
+general: a date-only cutoff can both include commits that were already part
+of the reviewed merge and exclude commits that land later the same day, and it
+did the latter here. Codex's review of this PR caught that `7ac83395` (merged
+~45 minutes after pass 2's own closing merge `e601a95d`, confirmed with
+`git merge-base --is-ancestor e601a95d 7ac83395`) carries a fourth relevant
+commit, `4e40f96b`, touching `core/permissions.py` — present in the
+`--since=2026-08-27` output as the boundary commit but not actually opened and
+read. Re-run with the correct ancestry range
+(`git log e601a95d..HEAD -- <six files>`) confirms exactly four commits, not
+three: `cf033864` (permission rename), `9f6e7a7a` (member display-name
+update), `a518957e` (module-gate exception handling), and `4e40f96b` +
+`2959d2aa` (both merged via `7ac83395`, reviewed below). `officers.py`,
+`officer_service.py`, `org_chart.py`, `org_chart_service.py`,
+`operational_ranks.py`, and `operational_rank_service.py` are still
+**byte-identical to pass 2** under the corrected range — zero commits,
+confirmed via git log — so pass 2's "Verified good" write-up for those four
+files stands without re-derivation, per this rotation's own rule not to
+re-read what a prior pass already settled. Future passes on any feature
+should use `git log <prior-pass-merge-sha>..HEAD`, never a date, for exactly
+this reason.
+
+All four changed commits (well, three original plus the two behind
+`7ac83395`) reviewed in full against the checklist:
+
+- **`cf033864` — rename `equipment_check.*` → `inventory.check_*`.**
+  Authority-preserving: `LEGACY_PERMISSION_ALIASES` is additive (old string
+  stays in the granted set, so a raw-grants report still shows what's
+  actually stored) and is expanded at the one choke point every permission
+  check funnels through (`_collect_user_permissions` in `dependencies.py`,
+  which `permission_matches` also expands defensively — redundant but
+  harmless, since expansion is idempotent). The accompanying migration
+  (`ff8076f4987a`) rewrites **every** `positions.permissions` row, system and
+  custom alike — correctly not scoped to `is_system=1`, since a _rename_
+  (unlike a grant removal) would otherwise silently drop a grant a
+  department deliberately gave itself (Pitfall #23's removal-scoping rule
+  doesn't apply to a pure rename). Guarded on `positions` existing per
+  Pitfall #26, and confirmed as a defensive-only guard since `positions` is
+  created by the migration chain (rename ancestor `20260805_0008`), matching
+  the corrected understanding in Pitfall #26 itself. No permission gained or
+  lost by any **seeded** rank or position — verified by diffing every
+  `OPERATIONAL_RANKS` / `DEFAULT_POSITIONS` entry touched: each
+  `EQUIPMENT_CHECK_*` reference was replaced 1:1 (or the wildcard 1:3) with
+  its `INVENTORY_CHECK_*` equivalent, nothing added or dropped there.
+  **Correction (Codex review on this PR):** that seeded-only check does not
+  cover every position. A **custom** position holding the `inventory.*`
+  module wildcard genuinely gains authority it did not have before this
+  rename: pre-rename, `inventory.*` could not satisfy `equipment_check.*`
+  (different module segment, so `permission_matches`'s wildcard rule never
+  matched across them), but post-rename `inventory.check_view` /
+  `check_manage` / `check_submit` live inside the `inventory.*` namespace and
+  are satisfied by it. This is real and not hypothetical — but it is also not
+  a new finding, because the original commit's own message names it plainly
+  as "one deliberate consequence" and gives the reason it's accepted: no
+  seeded rank or position uses the `inventory.*` wildcard (confirmed again
+  here by grep), so it only reaches a position a department configured for
+  itself, and it is a widening in the same namespace the position already
+  declared broad trust in. What was wrong was this write-up's own **blanket**
+  "no permission gained or lost by any rank or position" claim, which
+  overstated a seeded-only check into a universal one. Narrowed above.
+- **`9f6e7a7a` — allow the `member` position's display name to be edited.**
+  Scoped correctly: `role_service.update_role` raises `ValueError` for any
+  system position other than the `member` slug (`role.slug != "member"`),
+  the slug itself is never written, and the existing permission-ceiling
+  checks (`_enforce_permission_grant_ceiling` / `_enforce_role_edit_ceiling`)
+  are untouched by this diff and still run unconditionally on a permissions
+  change. A name-only update does not touch permissions at all, so the
+  ceiling functions are irrelevant to this diff and correctly not invoked
+  for that case. Org-scoped via the existing `get_role(role_id,
+organization_id)` lookup. Guard tests
+  (`test_member_system_position_display_name_can_change`,
+  `test_other_system_position_name_update_is_rejected`) cover both the
+  allowed and rejected paths.
+- **`a518957e` — `get_request_enabled_modules` catches an invalid-credential
+  `HTTPException` instead of letting it propagate.** Re-verified this
+  doesn't weaken authentication: the function only resolves whether a
+  _module_ is enabled for gating purposes, never whether the caller is
+  authenticated — any endpoint requiring a real session still declares its
+  own independent `Depends(get_current_user)`, unaffected by this catch.
+  Confirmed by grep that `get_request_enabled_modules` is never itself used
+  as an auth dependency anywhere (`require_module` only reads the resolved
+  module set, not identity). The one behavior change — a caller with a
+  stale/invalid session cookie who hits a token-authorized public route
+  (e.g. an emailed ballot link) is now treated as anonymous for the
+  module-gate check instead of getting an unrelated 401 — matches the
+  scenario the commit documents (already reviewed once as a Codex follow-up
+  on PR #1948; re-confirmed here since it touches a PERM-02 file).
+- **`4e40f96b` + `2959d2aa` (merged via `7ac83395`) — restrict baseline
+  `facilities.view` grants.** A revocation, not a grant: removes
+  `FACILITIES_VIEW` from `_LEADERSHIP_VIEW_PERMISSIONS`,
+  `_LINE_MEMBER_PERMISSIONS`, the relevant `OPERATIONAL_RANKS` entries, and
+  `DEFAULT_POSITIONS['member']`, so operational roles stop inheriting
+  organization-wide facility reads by default. A revocation can only narrow
+  authority, so this dimension-2 (authorization fit) direction is safe by
+  construction — the finding worth checking is whether it was applied
+  completely, not whether it over-grants. It wasn't, on the first commit:
+  `4e40f96b` only edited the registry, and `DEFAULT_POSITIONS` is
+  materialized into `positions` rows once, at onboarding (Pitfall #23) — so
+  every already-running department's stored Captain/Lieutenant/etc. rows
+  kept the grant the registry no longer issues. `2959d2aa`, merged 3.5 hours
+  later in the same PR, is exactly the Pitfall #23 correction: migration
+  `c7e2b9a41f83` strips `facilities.view` from the five affected system
+  slugs' stored rows, scoped to `is_system=True` so a department's own
+  customized Captain is untouched, verified by its author against a real
+  MySQL table (system rows lose the grant, a custom Captain and a
+  still-granted secretary don't, re-run is a no-op). Confirmed both
+  migrations (`e4f5a6b7c8d9`, `c7e2b9a41f83`) are present in the current
+  chain and the chain still validates to a single head. No residual gap:
+  current `grep FACILITIES_VIEW app/core/permissions.py` shows it only in
+  `FACILITIES_VIEW_SENSITIVE`-adjacent leadership/management contexts, not
+  back in any baseline default.
+
+**Re-verified still present:** the ceiling machinery
+(`_enforce_permission_grant_ceiling`, `_enforce_role_edit_ceiling` in
+`roles.py`; `_enforce_rank_grant_ceiling` in `users.py`, wired at
+`create_member`, `update_user_profile`'s rank-change branch, and — per
+PERM-3/PERM-4 above — `transfer_prospect` and `update_rank`), PERM-1's
+`settings.manage` gate on `GET /operational-ranks/validate`, and PERM-2's
+savepoint-based `seed_defaults` race fix. All four `roles.py` route additions
+since pass 1 (`/permissions`, `/permissions/by-category`, admin-access/check,
+etc.) re-enumerated: 13 routes total, every by-id fetch org-scoped via
+`get_role(role_id, organization_id)`, and the two routes that call
+`role_service.get_user_roles`/`get_user_permissions` with a _different_
+user's id (`GET /user/{user_id}/permissions`) resolve that id through an
+explicit org-scoped existence check first — the two service methods
+themselves take no `organization_id` parameter, which is correct only
+because every call site already validated the id in-org (confirmed via grep
+of every call site: the other five call `get_user_roles`/`get_user_permissions`
+with `current_user.id`, which is trivially self-scoped).
+
+**No new findings.** Nothing in this pass's checklist coverage — the four
+changed commits, plus the six unchanged files' pass-2 conclusions — surfaced
+an authentication, authorization, tenant-isolation, injection, exposure, or
+schema/migration defect. The one accuracy issue this pass's own first draft
+introduced (the blanket wildcard-authority claim, corrected above) was in
+this write-up, not in application code.
+
+**Completion gate:** no backend or frontend source file was modified this
+pass (documentation only). **Correction (Codex review on this PR):** the
+first draft of this section cited PR #2133 as "the baseline already
+confirmed green," which was wrong — PR #2134 (7 frontend files, 372 added
+lines) merged into `main` after #2133 and is this branch's actual parent
+commit, and #2133's own checks say nothing about it. The commits this pass
+adds are documentation-only, so this PR's own CI run — which runs against
+the real current tree, #2134 included — is the correct evidence rather than
+citing any prior PR: `Frontend Lint, Typecheck & Build`, `Frontend Tests`,
+`Frontend E2E`, and every backend job on this PR (#2136) all completed
+green. `python3 scripts/validate_migrations.py --strict` re-run directly for
+the schema dimension: single head, 399 revisions, no changes. `flake8 app/
+tests/ alembic/` re-run directly: 0 violations.
 
 ---
 

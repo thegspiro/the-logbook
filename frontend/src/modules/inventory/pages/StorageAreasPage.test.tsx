@@ -20,14 +20,21 @@ const setViewportWidth = (width: number) => {
 
 const hierarchySnapshot = () => {
   const tree = screen.getByTestId('storage-area-tree');
+  // Scoped testing-library queries, not raw DOM traversal: the "Back" button
+  // is matched by its accessible name, rows/path text by data-testid (row
+  // order/nesting is siblings-in-tree, so `within(row)` never picks up a
+  // different row's path span).
+  const backButton = within(tree).queryByRole('button', { name: /^Back from/ });
   return {
-    backLabel: tree.querySelector(':scope > button')?.getAttribute('aria-label') ?? null,
-    rows: [...tree.querySelectorAll<HTMLElement>('[data-storage-area-row]')].map((row) => ({
-      id: row.dataset.storageAreaRow,
-      path: row.querySelector('[title]')?.getAttribute('title'),
-      paddingLeft: row.style.paddingLeft,
-      hasMobileIndicator: row.classList.contains('border-l-2'),
-    })),
+    backLabel: backButton?.getAttribute('aria-label') ?? null,
+    rows: within(tree)
+      .getAllByTestId('storage-area-row')
+      .map((row) => ({
+        id: row.dataset.storageAreaRow,
+        path: within(row).getByTestId('storage-area-row-path').getAttribute('title'),
+        paddingLeft: row.style.paddingLeft,
+        hasMobileIndicator: row.classList.contains('border-l-2'),
+      })),
   };
 };
 

@@ -159,6 +159,24 @@ describe('SettingsLayout', () => {
     });
   });
 
+  // Both navs scroll sideways below md, so both must satisfy the contract
+  // mobile-presentation.spec.ts enforces on [data-mobile-scroll-region]: the
+  // attribute exempts their off-screen items from the overflow check, and
+  // tabIndex is what lets a keyboard scroll to the items it hides. Asserted
+  // here as well as in the e2e pass because only two of the seven screens that
+  // render this shell are in that pass — a shell regression would otherwise be
+  // caught on /settings and /account and nowhere else.
+  it.each([
+    ['section strip', 'Test settings sections'],
+    ['sub-page rail', 'General pages'],
+  ])('declares the %s as a keyboard-reachable scroll region', (_name, label) => {
+    renderLayout();
+
+    const nav = screen.getByRole('navigation', { name: label });
+    expect(nav).toHaveAttribute('data-mobile-scroll-region');
+    expect(nav).toHaveAttribute('tabindex', '0');
+  });
+
   it('omits the rail for a section with no sub-pages', () => {
     renderLayout({ activeSection: 'alerts', activeSubPage: null });
 

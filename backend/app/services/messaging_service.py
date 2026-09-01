@@ -339,9 +339,9 @@ class MessagingService:
         """Soft-delete a message.
 
         Sets deleted_at and deactivates the message instead of issuing a hard
-        DELETE. A hard delete would cascade-remove the DepartmentMessageRead
-        rows, destroying the record of who acknowledged the message — which is
-        treated as compliance evidence. Soft delete keeps that history intact.
+        DELETE. A hard delete would cascade-remove the DepartmentMessageRecipient
+        rows, destroying the record of who read/acknowledged the message — which
+        is treated as compliance evidence. Soft delete keeps that history intact.
         """
         try:
             message = await self.get_message_by_id(message_id, organization_id)
@@ -964,12 +964,14 @@ class MessagingService:
         read_count = await self.db.execute(
             select(func.count(DepartmentMessageRecipient.id)).where(
                 DepartmentMessageRecipient.message_id == message_id,
+                DepartmentMessageRecipient.organization_id == organization_id,
                 DepartmentMessageRecipient.read_at.isnot(None),
             )
         )
         ack_count = await self.db.execute(
             select(func.count(DepartmentMessageRecipient.id)).where(
                 DepartmentMessageRecipient.message_id == message_id,
+                DepartmentMessageRecipient.organization_id == organization_id,
                 DepartmentMessageRecipient.acknowledged_at.isnot(None),
             )
         )

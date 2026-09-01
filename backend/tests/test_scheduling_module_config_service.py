@@ -38,12 +38,6 @@ def _make_payload(**overrides) -> ShiftSettingsSchema:
         "resourceTypeDefaults": {
             "first_aid_station": {"positions": ["ems"], "label": "First Aid"}
         },
-        "equipmentCheckSettings": {
-            "enabled": True,
-            "requireSignature": True,
-            "defaultExpirationWarningDays": 14,
-            "blockShiftStartOnFail": True,
-        },
     }
     base.update(overrides)
     return ShiftSettingsSchema(**base)
@@ -90,7 +84,7 @@ class TestDefaults:
         assert wire["stored"] is False
         assert wire["settings"]["defaultDurationHours"] == 12
         assert wire["settings"]["apparatusTypeDefaults"]["engine"]["minStaffing"] == 4
-        assert wire["settings"]["equipmentCheckSettings"]["enabled"] is False
+        assert "equipmentCheckSettings" not in wire["settings"]
 
 
 @pytest.mark.integration
@@ -132,12 +126,7 @@ class TestUpdate:
         assert settings["apparatus_type_defaults"] == {
             "engine": {"positions": ["officer", "driver"], "minStaffing": 2}
         }
-        assert settings["equipment_check_settings"] == {
-            "enabled": True,
-            "requireSignature": True,
-            "defaultExpirationWarningDays": 14,
-            "blockShiftStartOnFail": True,
-        }
+        assert "equipment_check_settings" not in settings
         # user_id is only stamped when passed
         assert row.updated_by is None
         await service.update_settings(org.id, _make_payload(), updated_by=user_id)
@@ -233,14 +222,7 @@ class TestSchemaValidation:
         with pytest.raises(ValidationError):
             _make_payload(defaultMinStaffing=-1)
         with pytest.raises(ValidationError):
-            _make_payload(
-                equipmentCheckSettings={
-                    "enabled": True,
-                    "requireSignature": False,
-                    "defaultExpirationWarningDays": 0,
-                    "blockShiftStartOnFail": False,
-                }
-            )
+            _make_payload(overtimeThresholdHoursPerWeek=400)
 
     def test_accepts_snake_case_too(self):
         # populate_by_name lets backend code build the schema from the
@@ -254,13 +236,27 @@ class TestSchemaValidation:
             custom_positions=[],
             apparatus_type_defaults={},
             resource_type_defaults={},
-            equipment_check_settings={
-                "enabled": False,
-                "requireSignature": False,
-                "defaultExpirationWarningDays": 30,
-                "blockShiftStartOnFail": False,
-            },
         )
         wire = schema.model_dump(by_alias=True)
         assert wire["defaultDurationHours"] == 12
         assert "default_duration_hours" not in wire
+
+    def test_ignores_the_retired_equipment_check_settings_key(self):
+        """A browser left open across the deploy still PUTs the old key.
+
+        The four equipment-check switches were stored and read by nothing, so
+        they were removed outright. The panel sends the whole settings object on
+        every save, which means a stale tab's payload carries a field the schema
+        no longer declares — that has to be dropped, not 422'd, or the first
+        save after a deploy fails for anyone who did not hard-refresh.
+        """
+        schema = _make_payload(
+            equipmentCheckSettings={
+                "enabled": True,
+                "requireSignature": True,
+                "defaultExpirationWarningDays": 14,
+                "blockShiftStartOnFail": True,
+            }
+        )
+        assert not hasattr(schema, "equipment_check_settings")
+        assert "equipmentCheckSettings" not in schema.model_dump(by_alias=True)

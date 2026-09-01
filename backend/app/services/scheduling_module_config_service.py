@@ -83,19 +83,13 @@ DEFAULT_SHIFT_SETTINGS: Dict[str, Any] = {
     "custom_positions": [],
     "apparatus_type_defaults": DEFAULT_APPARATUS_TYPE_DEFAULTS,
     "resource_type_defaults": DEFAULT_RESOURCE_TYPE_DEFAULTS,
-    "equipment_check_settings": {
-        "enabled": False,
-        "requireSignature": False,
-        "defaultExpirationWarningDays": 30,
-        "blockShiftStartOnFail": False,
-    },
 }
 
 # Columns that carry one settings field each; used to fold row values over the
 # defaults and to write a full payload back.
 #
 # Derived from the full (fire) shape on purpose: every agency stores the same
-# nine fields, only their *values* differ, so narrowing the defaults must never
+# eight fields, only their *values* differ, so narrowing the defaults must never
 # narrow this.
 _SETTINGS_COLUMNS = tuple(DEFAULT_SHIFT_SETTINGS.keys())
 

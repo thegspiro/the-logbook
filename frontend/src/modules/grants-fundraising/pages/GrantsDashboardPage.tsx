@@ -29,6 +29,7 @@ import { Skeleton, SkeletonRow } from '../../../components/ux/Skeleton';
 import { formatDate, daysUntil } from '../../../utils/dateFormatting';
 import { formatCurrencyWhole } from '@/utils/currencyFormatting';
 import { useTimezone } from '../../../hooks/useTimezone';
+import { useAuthStore } from '../../../stores/authStore';
 
 // =============================================================================
 // Payment Method Labels
@@ -451,10 +452,12 @@ const RecentDonationsTable: React.FC<RecentDonationsProps> = ({ donations, timez
                 </td>
                 <td className="text-theme-text-secondary px-4 py-3 text-sm">
                   {donation.campaignId ? (
-                    <Link
-                      to={`/grants/campaigns/${donation.campaignId}`}
-                      className="text-red-600 hover:text-red-700 hover:underline"
-                    >
+                    // No per-campaign detail route exists in this module
+                    // (`routes.tsx` registers only the `/grants/campaigns`
+                    // list) — link there rather than to a route that
+                    // doesn't exist, which previously matched the app's
+                    // catch-all and silently redirected to `/`.
+                    <Link to="/grants/campaigns" className="text-red-600 hover:text-red-700 hover:underline">
                       View Campaign
                     </Link>
                   ) : (
@@ -479,6 +482,9 @@ const RecentDonationsTable: React.FC<RecentDonationsProps> = ({ donations, timez
 
 const GrantsDashboardPage: React.FC = () => {
   const tz = useTimezone();
+  // create_application requires fundraising.manage; the /grants route itself
+  // is gated only at fundraising.view, so a viewer can reach this dashboard.
+  const canManage = useAuthStore((s) => s.checkPermission)('fundraising.manage');
   const { dashboard, isLoading, error, fetchDashboard, clearError } = useGrantsStore();
 
   useEffect(() => {
@@ -520,15 +526,17 @@ const GrantsDashboardPage: React.FC = () => {
             Overview of grants, campaigns, and fundraising activity
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <Link
-            to="/grants/applications/new"
-            className="inline-flex items-center gap-2 rounded-lg bg-red-800 px-4 py-2 text-sm font-medium text-white hover:bg-red-900"
-          >
-            <FileText className="h-4 w-4" />
-            New Application
-          </Link>
-        </div>
+        {canManage && (
+          <div className="flex items-center gap-2">
+            <Link
+              to="/grants/applications/new"
+              className="inline-flex items-center gap-2 rounded-lg bg-red-800 px-4 py-2 text-sm font-medium text-white hover:bg-red-900"
+            >
+              <FileText className="h-4 w-4" />
+              New Application
+            </Link>
+          </div>
+        )}
       </div>
 
       {/* Error Banner */}

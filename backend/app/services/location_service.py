@@ -16,6 +16,7 @@ from app.core.utils import generate_display_code
 from app.models.event import Event
 from app.models.facilities import Facility, FacilityRoom
 from app.models.location import Location
+from app.models.user import Organization
 from app.schemas.location import LocationCreate, LocationUpdate
 from app.utils.org_scoping import assert_in_org
 
@@ -119,29 +120,36 @@ class LocationService:
         if not location:
             return None
 
-        # Check if name is being changed and already exists within the same
-        # building/station scope
-        if location_data.name and location_data.name != location.name:
-            building = (
-                location_data.building
-                if location_data.building is not None
-                else location.building
-            )
+        # The uniqueness scope is (name, building) together, so a PATCH that
+        # changes only building must re-check it too — otherwise two
+        # same-named locations that were valid in separate buildings can be
+        # moved into the same one undetected. `building` is nullable, so an
+        # explicit `PATCH {"building": null}` (clearing it) and an omitted
+        # `building` both read as `location_data.building is None` — only
+        # `model_fields_set` tells them apart. `name` cannot be explicitly
+        # null (LocationUpdate rejects it), so the same check is safe for it
+        # too and keeps both fields on one rule.
+        provided = location_data.model_fields_set
+        effective_name = location_data.name if "name" in provided else location.name
+        effective_building = (
+            location_data.building if "building" in provided else location.building
+        )
+        if effective_name != location.name or effective_building != location.building:
             dup_query = (
                 select(Location)
                 .where(Location.organization_id == str(organization_id))
-                .where(Location.name == location_data.name)
+                .where(Location.name == effective_name)
                 .where(Location.id != str(location_id))
             )
-            if building:
-                dup_query = dup_query.where(Location.building == building)
+            if effective_building:
+                dup_query = dup_query.where(Location.building == effective_building)
             else:
                 dup_query = dup_query.where(Location.building.is_(None))
             result = await self.db.execute(dup_query)
             existing = result.scalar_one_or_none()
             if existing:
                 raise ValueError(
-                    f"Location with name '{location_data.name}' already exists"
+                    f"Location with name '{effective_name}' already exists"
                 )
 
         # Update fields
@@ -343,11 +351,21 @@ class LocationService:
     async def get_location_by_display_code(
         self, display_code: str
     ) -> Optional[Location]:
-        """Look up a location by its public display code (for kiosk URLs)"""
+        """Look up a location by its public display code (for kiosk URLs)
+
+        Also requires the owning organization to be active — a deactivated
+        department's location rows are not touched, so an old kiosk URL or
+        printed QR code would otherwise keep serving event data and accepting
+        guest sign-ins indefinitely. Other public intake surfaces
+        (``event_requests.py``, ``auth.py``) enforce the same
+        ``Organization.active`` gate; this closes the one that didn't.
+        """
         result = await self.db.execute(
             select(Location)
+            .join(Organization, Organization.id == Location.organization_id)
             .where(Location.display_code == display_code)
             .where(Location.is_active == True)  # noqa: E712
+            .where(Organization.active == True)  # noqa: E712
         )
         return result.scalar_one_or_none()
 

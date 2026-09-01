@@ -301,6 +301,8 @@ export interface ShiftTemplate {
   category?: string;
   apparatus_type?: string;
   apparatus_id?: string;
+  /** Equipment checklists the shifts from this template carry. */
+  equipment_check_template_ids?: string[];
   is_default: boolean;
   is_active: boolean;
   open_to_all_members?: boolean;
@@ -368,6 +370,12 @@ export interface TemplateFormData {
   category: TemplateCategory;
   apparatus_type: string;
   apparatus_id: string;
+  /**
+   * Equipment checklists this template's shifts carry. Empty is meaningful:
+   * it means fall back to the apparatus's own checklists, which is what every
+   * shift did before this field existed.
+   */
+  equipment_check_template_ids: string[];
   event_type: EventType | '';
   resources: ResourceUnit[];
 }
@@ -413,6 +421,7 @@ export const emptyTemplateForm: TemplateFormData = {
   category: 'standard',
   apparatus_type: '',
   apparatus_id: '',
+  equipment_check_template_ids: [],
   event_type: '',
   resources: [],
 };

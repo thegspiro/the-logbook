@@ -1,10 +1,18 @@
 """A migration must tolerate a table that only ``create_all`` builds.
 
-39 of this schema's 254 tables are never created by any migration —
-``event_requests``, ``prospects``, ``positions``, the whole finance-approval
-set and more. They come into being when ``main.py``'s ``_fast_path_init()``
-calls ``create_all()`` and stamps Alembic at head, which is the deployment
-model ``app/utils/enum_normalization`` documents.
+40 of this schema's 254 tables are never created by any migration —
+``event_requests``, ``prospects``, the whole finance-approval set and more.
+They come into being when ``main.py``'s ``_fast_path_init()`` calls
+``create_all()`` and stamps Alembic at head, which is the deployment model
+``app/utils/enum_normalization`` documents.
+
+A table a migration *renames* into existence (``op.rename_table``) does not
+belong on that list even if nothing ``create_table``s it under its current
+name — ``positions``/``user_positions`` looked like textbook examples until
+CLAUDE.md Pitfall #26 was corrected on 2026-08-31 after a false positive
+(``docs/security-review/MSG-25-messaging-notifications.md``, MSG-11).
+``_tables_created_by_migrations`` below credits ``op.rename_table``
+destinations for exactly this reason.
 
 That is a deliberate design, and it is also a trap, because CI's integration
 and contract jobs run ``alembic upgrade head`` against an **empty** database
@@ -30,7 +38,9 @@ later is built from the models, which already declare the new column.
 This test is a ratchet — it passed with zero offenders when it was written.
 """
 
+import io
 import re
+import tokenize
 from pathlib import Path
 
 import app.models  # noqa: F401 - importing registers every model on the metadata
@@ -61,10 +71,143 @@ def _migration_sources() -> dict[str, str]:
     }
 
 
+def _function_body(text: str, name: str) -> str:
+    """The text of one module-level ``def name(...):``, up to the next
+    module-level ``def``."""
+    match = re.search(
+        rf"^def {re.escape(name)}\([^)]*\)[^:]*:\n(.*?)(?=\ndef \w|\Z)",
+        text,
+        re.DOTALL | re.MULTILINE,
+    )
+    return match.group(1) if match else ""
+
+
+def _helper_functions(text: str) -> dict[str, str]:
+    """Every module-level function in a migration file except
+    ``upgrade``/``downgrade``, name -> body text."""
+    return {
+        m.group(1): _function_body(text, m.group(1))
+        for m in re.finditer(r"^def (\w+)\([^)]*\)[^:]*:\n", text, re.MULTILINE)
+        if m.group(1) not in ("upgrade", "downgrade")
+    }
+
+
+def _strip_comments_and_strings(text: str) -> str:
+    """``text`` with every comment and string-literal token dropped.
+
+    Used only to decide whether a helper's name is a real reference, not to
+    produce text fed to the ``op.*``/``sa.Table`` regexes elsewhere in this
+    file — those need the original formatting. Uses the stdlib tokenizer
+    rather than a regex: a regex cannot reliably tell a triple-quoted
+    docstring, an escaped quote, or an f-string from real code. Falls back
+    to the unstripped text if tokenization fails (e.g. a synthetic snippet
+    in a test that isn't valid standalone Python) — the same, already-
+    accepted behavior as before this existed, not a new risk.
+    """
+    try:
+        kept = [
+            tok.string
+            for tok in tokenize.generate_tokens(io.StringIO(text).readline)
+            if tok.type not in (tokenize.COMMENT, tokenize.STRING)
+        ]
+    except Exception:
+        return text
+    return " ".join(kept)
+
+
+def _upgrade_body(text: str) -> str:
+    """The *reachable* text of a migration's ``upgrade()``: its own body,
+    plus the body of any locally-defined helper function upgrade() invokes
+    by name — directly, or indirectly (a lambda, a dispatch dict) — since
+    this is a text scan, not an evaluator, and a helper's name appearing
+    literally in upgrade()'s text is what "invokes" means here. Excludes a
+    helper reachable only from ``downgrade()``.
+
+    Two real shapes in this codebase need this: ``upgrade()`` calling a
+    later-defined ``_create_organization_officers()`` directly
+    (``20260807_0002_add_push_subscriptions.py``), and ``upgrade()``
+    dispatching through a ``{name: lambda: helper()}`` table
+    (``20260206_0301_add_missing_training_tables.py``). Scanning
+    ``upgrade()``'s own text only would miss the ``op.create_table`` calls
+    both delegate to, misclassifying their tables as create_all-only and
+    making the ratchet reject the migration's own valid, already-guarded
+    touches of them elsewhere.
+
+    A ``rename_table`` destination that appears only in ``downgrade()`` —
+    e.g. renaming back to a table dropped in ``upgrade()`` — does not exist
+    on the fresh-upgrade path, so treating it as migration-created the same
+    as an ``upgrade()``-side rename would be wrong in the dangerous
+    direction: it would remove a genuinely create_all-only table from that
+    set, letting an unguarded reflection of it slip past the ratchet.
+    ``20260312_0200_rename_meeting_action_items_table.py``'s ``downgrade()``
+    renames ``minutes_action_items`` back to ``meeting_action_items`` for
+    exactly this shape (harmless today only because that table is also
+    genuinely migration-created elsewhere). A helper reachable only from
+    ``downgrade()`` is excluded the same way: it is never in ``included``
+    unless its name is found inside something already in ``included``,
+    and ``downgrade()`` itself never seeds that set.
+
+    The signature match tolerates a return-type annotation
+    (``def upgrade() -> None:``, used throughout this codebase) — an earlier,
+    unannotated-only version of this pattern matched nothing at all and was
+    caught before it shipped by comparing its output against the unscoped
+    scan on the real migration chain.
+
+    The reachability decision (does a helper's name appear in text already
+    known reachable?) runs against ``_strip_comments_and_strings``'s output,
+    not the raw text: a helper named only in a comment or docstring — dead,
+    never actually called — would otherwise count as reachable and hide a
+    real create_all-only table behind it, in the same dangerous direction
+    every other guard in this function exists to prevent. This still is not
+    full soundness (a name could in principle appear as an f-string
+    expression segment, which the tokenizer treats as executable and does
+    not strip) — closing that gap needs AST-level call-graph analysis, out
+    of scope for what remains a text-based ratchet.
+    """
+    body = _function_body(text, "upgrade")
+    helpers = _helper_functions(text)
+    included = [body]
+    pending = set(helpers)
+    changed = True
+    while changed:
+        changed = False
+        haystack = _strip_comments_and_strings("\n".join(included))
+        for name in list(pending):
+            if re.search(rf"\b{re.escape(name)}\b", haystack):
+                included.append(helpers[name])
+                pending.discard(name)
+                changed = True
+    return "\n".join(included)
+
+
 def _tables_created_by_migrations(sources: dict[str, str]) -> set[str]:
+    """Tables an ``upgrade()`` brings into existence, by their current name.
+
+    ``op.create_table`` is the obvious case. ``op.rename_table(old, new)`` also
+    counts, and for the *destination* name: ``20260805_0008`` renames
+    ``roles``/``user_roles`` to ``positions``/``user_positions`` on the
+    fresh-chain path (an earlier migration created ``roles`` outright), so a
+    later migration reflecting ``positions`` is safe without its own guard —
+    a fresh database always has it by then, since ``20260805_0008`` is a
+    required upgrade-path ancestor of anything that reflects it. Missing this
+    made ``positions``/``user_positions`` look create_all-only when they are
+    not, which is what led a review to add an unnecessary (and, worse, a
+    silently-data-lossy) existence guard to
+    ``20260826_1700_d4e5f6a7b8c9_message_recipients.py`` — see that
+    migration's own comment and MSG-11 in
+    ``docs/security-review/MSG-25-messaging-notifications.md`` for the full
+    account. Both are scoped to ``upgrade()`` — see ``_upgrade_body``.
+    """
     created: set[str] = set()
     for text in sources.values():
-        created.update(re.findall(r"op\.create_table\(\s*[\"']([a-z0-9_]+)[\"']", text))
+        body = _upgrade_body(text)
+        created.update(re.findall(r"op\.create_table\(\s*[\"']([a-z0-9_]+)[\"']", body))
+        created.update(
+            re.findall(
+                r"op\.rename_table\(\s*[\"'][a-z0-9_]+[\"']\s*,\s*[\"']([a-z0-9_]+)[\"']",
+                body,
+            )
+        )
     return created
 
 
@@ -184,6 +327,53 @@ def _find_offenders(sources: dict[str, str], create_all_only: set[str]) -> list[
     return offenders
 
 
+# A data-backfill migration can reflect a table with raw SQLAlchemy Core
+# instead of an `op.*` operation — `sa.Table("t", meta, autoload_with=bind)` —
+# which _TABLE_FIRST/_TABLE_SECOND never match (those only recognize `op.*`
+# calls). An unguarded reflection of a genuinely create_all-only table raises
+# the same NoSuchTableError on a fresh database as an unguarded
+# `op.add_column` would, so this is a second, narrower detector for that
+# specific shape rather than an extension of the `op.*` one.
+#
+# (`20260826_1700_d4e5f6a7b8c9_message_recipients.py`'s reflection of
+# `positions`/`user_positions` was the motivating example for adding this
+# detector, but turned out to be a false positive once
+# `_tables_created_by_migrations` above was taught to recognize
+# `op.rename_table` destinations — see that function's docstring. The
+# detector itself is still worth keeping as a ratchet against a real future
+# instance of this shape.)
+# Tolerates the call shapes the exact-spelling version above missed: a bare
+# (directly-imported) `Table(`, extra/reordered positional args before
+# `autoload_with` (e.g. `extend_existing=True`), and one level of nested
+# parens in an argument (`sa.MetaData()`) — but not more than one level,
+# which every real usage in this repo stays within.
+_AUTOLOAD_TABLE = re.compile(
+    r"\b(?:\w+\.)?Table\(\s*[\"']([a-z0-9_]+)[\"']"
+    r"(?:[^()]|\([^()]*\))*?"
+    r"autoload_with\s*="
+)
+
+
+def _find_autoload_offenders(
+    sources: dict[str, str], create_all_only: set[str]
+) -> list[str]:
+    """Scans ``_upgrade_body(text)``, not the whole file — a reflection that
+    exists only in ``downgrade()`` (e.g. to rebuild legacy data on a
+    downgrade) never runs on a fresh ``alembic upgrade head`` and must not
+    be flagged as an offender. ``_tables_created_by_migrations`` above
+    already scopes the same way for the same reason."""
+    offenders = []
+    for name, text in sorted(sources.items()):
+        body = _upgrade_body(text)
+        touched = set(_AUTOLOAD_TABLE.findall(body)) & create_all_only
+        if _returns_early_when_a_model_only_table_is_absent(body, create_all_only):
+            continue
+        unguarded = touched - _guarded_tables(body)
+        if unguarded:
+            offenders.append(f"  {name} -> {', '.join(sorted(unguarded))}")
+    return offenders
+
+
 def test_migrations_touching_a_create_all_table_guard_on_its_existence():
     sources = _migration_sources()
     create_all_only = set(Base.metadata.tables) - _tables_created_by_migrations(sources)
@@ -198,6 +388,25 @@ def test_migrations_touching_a_create_all_table_guard_on_its_existence():
         + "\n\nGuard the step:\n"
         "    def _has_table(table):\n"
         "        return table in sa.inspect(op.get_bind()).get_table_names()\n"
+    )
+
+
+def test_migrations_reflecting_a_create_all_table_guard_on_its_existence():
+    sources = _migration_sources()
+    create_all_only = set(Base.metadata.tables) - _tables_created_by_migrations(sources)
+
+    offenders = _find_autoload_offenders(sources, create_all_only)
+
+    assert offenders == [], (
+        "Migration(s) reflecting (`sa.Table(..., autoload_with=...)`) a table "
+        "that no migration creates, without checking the table exists first. "
+        "`alembic upgrade head` on a fresh database raises NoSuchTableError "
+        "here and the whole upgrade fails:\n"
+        + "\n".join(offenders)
+        + "\n\nGuard the reflection:\n"
+        "    existing_tables = set(sa.inspect(bind).get_table_names())\n"
+        '    if "positions" not in existing_tables:\n'
+        "        return\n"
     )
 
 
@@ -329,6 +538,212 @@ class TestTheDetectionItself:
         }
 
         assert _find_offenders(sources, self.CREATE_ALL_ONLY) == []
+
+    def test_a_downgrade_only_rename_does_not_count_as_created(self):
+        """A rename destination that exists only in `downgrade()` — undoing
+        an `upgrade()`-side rename away from that name — is not present on
+        the fresh-upgrade path, so it must not be credited as
+        migration-created. Crediting it would remove a genuinely
+        create_all-only table from that set and let an unguarded upgrade-
+        time reflection of it slip past this ratchet."""
+        sources = {
+            "0001_rename.py": (
+                "def upgrade():\n"
+                '    op.rename_table("event_requests", "renamed_requests")\n'
+                "\n"
+                "def downgrade():\n"
+                '    op.rename_table("renamed_requests", "event_requests")\n'
+            )
+        }
+
+        assert "event_requests" not in _tables_created_by_migrations(sources)
+        assert "renamed_requests" in _tables_created_by_migrations(sources)
+
+    def test_a_table_created_by_a_directly_called_helper_counts(self):
+        """`upgrade()` calling a helper defined later in the same file —
+        `20260807_0002_add_push_subscriptions.py`'s real shape — must not
+        hide that helper's `op.create_table` from the created set."""
+        sources = {
+            "0001_delegates.py": (
+                "def upgrade() -> None:\n"
+                "    op.create_table('push_subscriptions', ...)\n"
+                "    _create_organization_officers()\n"
+                "\n"
+                "def _create_organization_officers() -> None:\n"
+                "    op.create_table('organization_officers', ...)\n"
+                "\n"
+                "def downgrade() -> None:\n"
+                "    pass\n"
+            )
+        }
+
+        created = _tables_created_by_migrations(sources)
+
+        assert "organization_officers" in created
+        assert "push_subscriptions" in created
+
+    def test_a_table_created_by_a_dispatch_table_helper_counts(self):
+        """`upgrade()` referencing a helper only inside a lambda stored in a
+        dispatch dict — `20260206_0301_add_missing_training_tables.py`'s
+        real shape — must still count; the helper's name appears as literal
+        text in `upgrade()` even though it is never called directly."""
+        sources = {
+            "0001_dispatch.py": (
+                "def upgrade() -> None:\n"
+                "    table_name = 'skill_evaluations'\n"
+                "    creators = {table_name: lambda: create_skill_evaluations_table()}\n"
+                "    creators[table_name]()\n"
+                "\n"
+                "def create_skill_evaluations_table() -> None:\n"
+                "    op.create_table('skill_evaluations', ...)\n"
+                "\n"
+                "def downgrade() -> None:\n"
+                "    pass\n"
+            )
+        }
+
+        assert "skill_evaluations" in _tables_created_by_migrations(sources)
+
+    def test_a_helper_reachable_only_from_downgrade_does_not_count(self):
+        """The mirror image of the two tests above: a helper `downgrade()`
+        calls but `upgrade()` never mentions must not be credited — that
+        table does not exist on the fresh-upgrade path."""
+        sources = {
+            "0001_downgrade_only_helper.py": (
+                "def upgrade() -> None:\n"
+                "    pass\n"
+                "\n"
+                "def _recreate_legacy_table() -> None:\n"
+                "    op.create_table('legacy_table', ...)\n"
+                "\n"
+                "def downgrade() -> None:\n"
+                "    _recreate_legacy_table()\n"
+            )
+        }
+
+        assert "legacy_table" not in _tables_created_by_migrations(sources)
+
+    def test_a_helper_named_only_in_a_comment_does_not_count(self):
+        """A helper `upgrade()` never actually calls, merely mentioned in a
+        comment or docstring, must not be credited — a dead reference is
+        not a real one. Reproduces the pre-fix bug directly: without
+        comment/string stripping, this table wrongly disappears from the
+        created set."""
+        sources = {
+            "0001_dead_reference.py": (
+                "def upgrade() -> None:\n"
+                "    # NOTE: unlike _dead_helper(), this migration does its\n"
+                "    # own work inline and never calls that helper.\n"
+                "    pass\n"
+                "\n"
+                "def _dead_helper() -> None:\n"
+                "    op.create_table('never_actually_created', ...)\n"
+                "\n"
+                "def downgrade() -> None:\n"
+                "    pass\n"
+            )
+        }
+
+        assert "never_actually_created" not in _tables_created_by_migrations(sources)
+
+    def test_an_unguarded_reflection_is_flagged(self):
+        """A raw `sa.Table(..., autoload_with=bind)` on a genuinely
+        create_all-only table, which `_TABLE_FIRST`/`_TABLE_SECOND` (built
+        for `op.*` calls) never see."""
+        sources = {
+            "0001_backfill.py": (
+                "def upgrade():\n"
+                "    bind = op.get_bind()\n"
+                "    meta = sa.MetaData()\n"
+                '    positions = sa.Table("positions", meta, autoload_with=bind)\n'
+            )
+        }
+
+        offenders = _find_autoload_offenders(sources, {"positions"})
+
+        assert len(offenders) == 1
+        assert "positions" in offenders[0]
+
+    def test_a_guarded_reflection_is_not_flagged(self):
+        sources = {
+            "0001_backfill.py": (
+                "def upgrade():\n"
+                "    bind = op.get_bind()\n"
+                '    if "positions" not in sa.inspect(bind).get_table_names():\n'
+                "        return\n"
+                "    meta = sa.MetaData()\n"
+                '    positions = sa.Table("positions", meta, autoload_with=bind)\n'
+            )
+        }
+
+        assert _find_autoload_offenders(sources, {"positions"}) == []
+
+    def test_a_downgrade_only_reflection_is_not_flagged(self):
+        """A reflection that exists only in `downgrade()` — e.g. to rebuild
+        legacy data on a downgrade — never runs on a fresh `alembic upgrade
+        head` and must not be treated as an offender."""
+        sources = {
+            "0001_backfill.py": (
+                "def upgrade():\n"
+                "    pass\n"
+                "\n"
+                "def downgrade():\n"
+                "    bind = op.get_bind()\n"
+                "    meta = sa.MetaData()\n"
+                '    positions = sa.Table("positions", meta, autoload_with=bind)\n'
+            )
+        }
+
+        assert _find_autoload_offenders(sources, {"positions"}) == []
+
+    def test_an_unguarded_bare_table_import_is_flagged(self):
+        """`from sqlalchemy import Table` then `Table(...)`, no `sa.` prefix —
+        the exact-spelling version of this detector missed this."""
+        sources = {
+            "0001_backfill.py": (
+                "def upgrade():\n"
+                "    bind = op.get_bind()\n"
+                "    meta = MetaData()\n"
+                '    positions = Table("positions", meta, autoload_with=bind)\n'
+            )
+        }
+
+        offenders = _find_autoload_offenders(sources, {"positions"})
+
+        assert len(offenders) == 1
+        assert "positions" in offenders[0]
+
+    def test_an_unguarded_reflection_with_reordered_and_nested_args_is_flagged(self):
+        """`autoload_with` need not be the third positional argument, and an
+        argument can itself contain a call (`sa.MetaData()`)."""
+        sources = {
+            "0001_backfill.py": (
+                "def upgrade():\n"
+                "    bind = op.get_bind()\n"
+                "    positions = sa.Table(\n"
+                '        "positions", sa.MetaData(), extend_existing=True,\n'
+                "        autoload_with=bind,\n"
+                "    )\n"
+            )
+        }
+
+        offenders = _find_autoload_offenders(sources, {"positions"})
+
+        assert len(offenders) == 1
+        assert "positions" in offenders[0]
+
+    def test_a_table_name_embedded_in_a_longer_identifier_is_not_matched(self):
+        """`MyTable(...)` is not `Table(...)` — the word boundary must hold
+        even though the wider regex no longer requires an `sa.` prefix."""
+        sources = {
+            "0001_backfill.py": (
+                "def upgrade():\n"
+                "    bind = op.get_bind()\n"
+                '    x = MyTable("positions", meta, autoload_with=bind)\n'
+            )
+        }
+
+        assert _find_autoload_offenders(sources, {"positions"}) == []
 
     def test_a_column_named_like_a_table_is_not_mistaken_for_one(self):
         """`op.add_column("shifts", sa.Column("positions", ...))` touches

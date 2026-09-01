@@ -6,6 +6,7 @@
  */
 
 import React, { useEffect, useState, useMemo, useCallback } from 'react';
+import { useSearchParams } from 'react-router';
 import { Megaphone, Plus, Search, X, DollarSign, Calendar, Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { fundraisingService } from '../services/api';
@@ -14,6 +15,7 @@ import { CAMPAIGN_STATUS_COLORS } from '../types';
 import { formatDate } from '../../../utils/dateFormatting';
 import { formatCurrencyWhole } from '@/utils/currencyFormatting';
 import { useTimezone } from '../../../hooks/useTimezone';
+import { useAuthStore } from '../../../stores/authStore';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -85,10 +87,24 @@ const selectClass = 'form-input px-3 text-sm focus:border-red-500 focus:ring-red
 
 const CampaignsPage: React.FC = () => {
   const tz = useTimezone();
+  // Route is gated at fundraising.view; create_campaign requires
+  // fundraising.manage. Hide the create affordance for view-only viewers
+  // rather than let the submit 403.
+  const canManage = useAuthStore((s) => s.checkPermission)('fundraising.manage');
+  const [searchParams] = useSearchParams();
   const [campaigns, setCampaigns] = useState<FundraisingCampaign[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState('');
+  // The dashboard's "Active Campaigns" card links here with `?status=active`
+  // — honor it as the initial filter so the link actually filters, instead
+  // of silently landing on the unfiltered list. A bookmarked/shared URL can
+  // carry a stale or mistyped value — falling back to unfiltered beats
+  // silently applying a filter that matches nothing (an unexplained empty
+  // list, with no visible indication in STATUS_OPTIONS of why).
+  const [statusFilter, setStatusFilter] = useState(() => {
+    const fromUrl = searchParams.get('status');
+    return fromUrl && (STATUS_OPTIONS as readonly string[]).includes(fromUrl) ? fromUrl : '';
+  });
   const [typeFilter, setTypeFilter] = useState('');
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [formData, setFormData] = useState<CreateFormData>(INITIAL_FORM);
@@ -181,26 +197,28 @@ const CampaignsPage: React.FC = () => {
             Manage fundraising campaigns and track progress toward goals
           </p>
         </div>
-        <button
-          onClick={() => setShowCreateForm((prev) => !prev)}
-          className="inline-flex items-center gap-2 rounded-lg bg-red-800 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-900"
-        >
-          {showCreateForm ? (
-            <>
-              <X className="h-4 w-4" />
-              Cancel
-            </>
-          ) : (
-            <>
-              <Plus className="h-4 w-4" />
-              New Campaign
-            </>
-          )}
-        </button>
+        {canManage && (
+          <button
+            onClick={() => setShowCreateForm((prev) => !prev)}
+            className="inline-flex items-center gap-2 rounded-lg bg-red-800 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-900"
+          >
+            {showCreateForm ? (
+              <>
+                <X className="h-4 w-4" />
+                Cancel
+              </>
+            ) : (
+              <>
+                <Plus className="h-4 w-4" />
+                New Campaign
+              </>
+            )}
+          </button>
+        )}
       </div>
 
       {/* Inline Create Form */}
-      {showCreateForm && (
+      {canManage && showCreateForm && (
         <form onSubmit={(e) => void handleCreateSubmit(e)} className="card space-y-4 p-5">
           <h2 className="text-theme-text-primary text-lg font-semibold">Create New Campaign</h2>
 

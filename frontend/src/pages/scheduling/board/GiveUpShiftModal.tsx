@@ -15,6 +15,7 @@ import { Modal } from '../../../components/Modal';
 import { schedulingService } from '../../../modules/scheduling';
 import type { ShiftRecord, StandingShiftClaim, TradeCandidate } from '../../../modules/scheduling';
 import { memberInitials, shiftCrewName, shiftStatusInfo } from '../../../modules/scheduling/utils/shiftBoard';
+import { positionLabel } from '../../../modules/scheduling/utils/positionLabels';
 import { calendarDaysFromToday, formatCalendarDate, formatTime } from '../../../utils/dateFormatting';
 import { getErrorMessage } from '../../../utils/errorHandling';
 
@@ -301,7 +302,7 @@ export const GiveUpShiftModal: React.FC<GiveUpShiftModalProps> = ({
                       </span>
                       <span className="text-theme-text-muted block text-xs">
                         {[
-                          candidate.rank_display_name ?? candidate.position,
+                          candidate.rank_display_name ?? positionLabel(candidate.position),
                           `${candidate.shifts_this_month} shift${candidate.shifts_this_month === 1 ? '' : 's'} this month`,
                         ]
                           .filter(Boolean)

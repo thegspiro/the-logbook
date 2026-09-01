@@ -16,8 +16,8 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Plus, Trash2, AlertTriangle, Clock, Loader2, PackagePlus, Truck } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { inventoryService } from '@/services/inventoryService';
-import { schedulingService } from '@/modules/scheduling/services/api';
-import type { ItemDeployment } from '@/modules/scheduling/types/equipmentCheck';
+import { equipmentCheckService } from '../services/equipmentCheckApi';
+import type { ItemDeployment } from '@/modules/inventory/types/equipmentCheck';
 import type { InventoryLot, InventoryLotCreate } from '@/services/eventServices';
 import { getErrorMessage } from '@/utils/errorHandling';
 import { formatCalendarDate, getTodayLocalDate } from '@/utils/dateFormatting';
@@ -77,7 +77,7 @@ const StockLotsPanel: React.FC<StockLotsPanelProps> = ({ itemId, canManage }) =>
     let cancelled = false;
     void (async () => {
       try {
-        const rows = await schedulingService.getItemDeployments(itemId);
+        const rows = await equipmentCheckService.getItemDeployments(itemId);
         if (!cancelled) setDeployments(rows);
       } catch {
         if (!cancelled) setDeployments([]);

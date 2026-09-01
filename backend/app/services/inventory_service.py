@@ -351,6 +351,22 @@ def _build_extra_lines(item, extra_lines: Optional[List[str]]) -> str:
     return " | ".join(parts)
 
 
+def is_pool_without_stock(item_data: Dict[str, Any]) -> bool:
+    """Whether this row is pool-tracked and carries no usable count.
+
+    The rule the *list-oriented* create paths keep and the single-item create
+    deliberately does not. Pasting or importing a stock list is an act of
+    entering counts, so a pool line reading zero is a mis-parsed spreadsheet
+    column; creating one catalog row by hand — from a checklist position, say —
+    knows the item exists and nothing about what is on the shelf.
+
+    One definition, because ``create_items_bulk`` and the CSV import are two
+    callers of the same rule and drifting them apart is how the CSV path
+    silently lost it once already.
+    """
+    return item_data.get("tracking_type") == "pool" and item_data.get("quantity", 1) < 1
+
+
 class InventoryService:
     """Service for inventory management"""
 
@@ -1459,10 +1475,16 @@ class InventoryService:
             # INV-4 (XC-1): location/storage/variant-group/assignee must be in-org.
             await self._assert_item_fks_in_org(item_data, organization_id)
 
-            # Validate pool items have quantity >= 1
+            # Pool stock can legitimately sit at zero. A catalog row created
+            # from a checklist position is a definition — "this truck carries
+            # 4x4 gauze" — and says nothing about what is in the stock room
+            # yet; update_item has always allowed the same value (only a
+            # negative is refused). Only ``create_items_bulk`` still requires a
+            # count, and deliberately: that path is somebody pasting a stock
+            # list, where the number is the point.
             tracking = item_data.get("tracking_type", "individual")
-            if tracking == "pool" and item_data.get("quantity", 1) < 1:
-                return None, "Pool items must have a quantity of at least 1"
+            if tracking == "pool" and item_data.get("quantity", 1) < 0:
+                return None, "Pool item quantity cannot be negative"
 
             # Validate serial number uniqueness within the organization
             sn_err = await self._check_serial_number_unique(
@@ -5655,6 +5677,7 @@ class InventoryService:
     async def get_low_stock_items_for_alerts(
         self,
         organization_id: UUID,
+        item_types: Optional[Iterable[ItemType]] = None,
     ) -> List[Tuple[InventoryItem, int, bool]]:
         """Items at or below their reorder point, as (item, on_hand, from_lots).
 
@@ -5672,14 +5695,28 @@ class InventoryService:
         ``from_lots`` tells the caller which ledger the number came from, so an
         alert can say so rather than appear to contradict the item's own
         quantity field.
+
+        ``item_types`` narrows to one domain (e.g. the medical-supplies
+        summary) — omitted, this scans the whole org, which is what the
+        low-stock alert email needs. Filtering on ``reorder_point IS NOT
+        NULL`` first keeps the candidate set to only the items that can ever
+        be "low," so this has no need for — and no risk of — a page-size cap
+        the way a plain items listing would.
         """
-        result = await self.db.execute(
+        query = (
             select(InventoryItem)
             .where(InventoryItem.organization_id == str(organization_id))
             .where(InventoryItem.active.is_(True))
             .where(InventoryItem.reorder_point.isnot(None))
             .options(selectinload(InventoryItem.category))
         )
+        if item_types:
+            query = query.where(
+                InventoryItem.category_id.in_(
+                    self._category_ids_of_type(organization_id, set(item_types))
+                )
+            )
+        result = await self.db.execute(query)
         candidates = list(result.scalars().all())
         if not candidates:
             return []
@@ -5757,6 +5794,37 @@ class InventoryService:
             )
         )
         return found is not None
+
+    async def items_in_domain(
+        self,
+        item_ids: Iterable[str],
+        organization_id: str,
+        item_types: Iterable[ItemType],
+    ) -> Set[str]:
+        """Which of these item ids are filed under a category in ``item_types``?
+
+        Bulk counterpart of ``item_in_domain`` — validating a whole delivery
+        one line at a time cost one query per line; this resolves every id in
+        a single query, so a request near the schema's 200-entry cap is one
+        round trip instead of two hundred.
+        """
+        ids = {str(i) for i in item_ids}
+        if not ids:
+            return set()
+        result = await self.db.execute(
+            select(InventoryItem.id)
+            .join(
+                InventoryCategory,
+                InventoryCategory.id == InventoryItem.category_id,
+            )
+            .where(
+                InventoryItem.id.in_(ids),
+                InventoryItem.organization_id == organization_id,
+                InventoryCategory.organization_id == organization_id,
+                InventoryCategory.item_type.in_(list(item_types)),
+            )
+        )
+        return set(result.scalars().all())
 
     async def lot_in_domain(
         self,
@@ -5937,7 +6005,7 @@ class InventoryService:
             # client on every row of the paste, not just the first.
             await self._assert_item_fks_in_org(data, organization_id)
 
-            if data.get("tracking_type") == "pool" and data.get("quantity", 1) < 1:
+            if is_pool_without_stock(data):
                 raise ValueError(
                     f"{name}: pool items must have a quantity of 1 or more"
                 )
@@ -5955,6 +6023,89 @@ class InventoryService:
         for item in items:
             await self.db.refresh(item)
         return items, skipped
+
+    async def _item_id_by_name(self, organization_id: str, name: str) -> Optional[str]:
+        """The id of the org's item carrying this name, if any.
+
+        Deliberately spans the **whole** catalog, medical stock included. The
+        gear list (`GET /inventory/items`) excludes medical types by design, so
+        a caller that only searched there cannot answer this — and a caller that
+        assumes it can is how one item becomes two rows with its checklist links
+        and replacement lots split between them.
+
+        Matched on `normalize_name` rather than raw equality, for the same
+        reason `create_items_bulk` does: "Gauze Pads, 4x4" and "gauze pads 4x4"
+        are the same box.
+        """
+        key = normalize_name(name)
+        if not key:
+            return None
+        result = await self.db.execute(
+            select(InventoryItem.id, InventoryItem.name).where(
+                InventoryItem.organization_id == organization_id,
+                # Active rows only. A retired item is hidden from every catalog
+                # search (they all pass active_only), so handing one back would
+                # report a link to a row the crew cannot find, in retired
+                # condition — and where a name has both a retired and an active
+                # row, an unordered query could return the wrong one of the two.
+                InventoryItem.active.is_(True),
+            )
+        )
+        return next(
+            (iid for iid, n in result.all() if n and normalize_name(n) == key),
+            None,
+        )
+
+    async def create_item_if_absent(
+        self, organization_id: str, item_data: Dict[str, Any], created_by: str
+    ) -> Tuple[Optional[InventoryItem], bool, Optional[str]]:
+        """Create a catalog row, or hand back the one already carrying the name.
+
+        Returns ``(item, created, error)``.
+
+        One operation rather than a check the caller makes and then acts on.
+        A create-and-link screen that asks from the browser leaves seconds
+        between the question and the write, and a second editor filing the same
+        name inside that window gets a duplicate — one item as two rows, with
+        its checklist links and replacement lots split between them and nothing
+        in the UI afterwards saying so.
+
+        Returning the existing row rather than an error is the point: the caller
+        wanted a link, and an item it could not see (medical stock is absent
+        from the gear list it searched) is still the right thing to link to.
+
+        Applies to pool rows only — see the comment on the check below.
+
+        This narrows the window to a single transaction; it does not close it.
+        ``inventory_items`` carries no unique constraint on (organization,
+        name) — `create_items_bulk` has the same property — so two creates
+        landing in the same instant can still both find nothing. Closing that
+        needs the constraint and a backfill for the duplicate names already on
+        file, which is a schema change rather than a caller fix.
+        """
+        name = (item_data.get("name") or "").strip()
+        if not name:
+            return None, False, "Every item needs a name"
+
+        # Only a pool row is one-per-name. A pool row is a *definition* — "the
+        # department stocks 4x4 gauze" — and a second one splits the same
+        # supply's lots and checklist links across two records. An individual
+        # row is a *physical asset*, told apart by serial number or asset tag,
+        # and a department owning two thermal imagers has two rows that share a
+        # product name. Deduping those would alias two apparatus positions onto
+        # one device, and quietly report the second truck as carrying the first
+        # truck's imager.
+        if item_data.get("tracking_type") == "pool":
+            existing_id = await self._item_id_by_name(organization_id, name)
+            if existing_id:
+                return (
+                    await self.get_item_by_id(existing_id, organization_id),
+                    False,
+                    None,
+                )
+
+        item, error = await self.create_item(organization_id, item_data, created_by)
+        return item, item is not None, error
 
     async def update_lot(
         self,

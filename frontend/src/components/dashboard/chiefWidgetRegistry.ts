@@ -26,7 +26,7 @@ export const CHIEF_WIDGET_REGISTRY: readonly ChiefWidgetDefinition[] = [
       'meetings.manage',
       'minutes.manage',
       'scheduling.manage',
-      'equipment_check.manage',
+      'inventory.check_manage',
       'notifications.manage',
     ],
   },

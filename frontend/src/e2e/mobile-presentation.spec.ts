@@ -47,7 +47,24 @@ interface RouteCheck {
    * arbitrary values and are deliberately exempt there.
    */
   maxTinyText: number;
+  /**
+   * Permissions this route needs on top of the base grant, when it is gated
+   * behind something the base set does not carry.
+   *
+   * Per-route rather than one wider grant for everyone, because widening the
+   * base set changes what *other* routes render: a route that had been quietly
+   * measuring the dashboard starts measuring its real body, and any debt that
+   * body carries turns this pass red for reasons unrelated to the route being
+   * added. Scoping the grant keeps each addition to its own page.
+   *
+   * The cost is a re-sign-in when the set changes, so keep routes needing the
+   * same extras adjacent in the list below.
+   */
+  permissions?: string[];
 }
+
+/** Granted for every route; see the per-route `permissions` note above. */
+const BASE_PERMISSIONS = ['inventory.manage', 'facilities.manage'];
 
 const ALL_ROUTES: RouteCheck[] = [
   { path: '/dashboard', maxSmallTargets: 0, maxTinyText: 0 },
@@ -56,10 +73,10 @@ const ALL_ROUTES: RouteCheck[] = [
   { path: '/members/admin', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/members/check-in-station', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/documents', maxSmallTargets: 0, maxTinyText: 0 },
-  { path: '/members/1/training', maxSmallTargets: 0, maxTinyText: 0, chromeOnly: true },
-  { path: '/admin/audit-log', maxSmallTargets: 0, maxTinyText: 0, chromeOnly: true },
-  { path: '/training/admin?page=dashboard&tab=compliance', maxSmallTargets: 0, maxTinyText: 0, chromeOnly: true },
-  { path: '/events/1/monitoring', maxSmallTargets: 0, maxTinyText: 0, chromeOnly: true },
+  { path: '/members/1/training', maxSmallTargets: 0, maxTinyText: 0 },
+  { path: '/admin/audit-log', maxSmallTargets: 0, maxTinyText: 0 },
+  { path: '/training/admin?page=dashboard&tab=compliance', maxSmallTargets: 0, maxTinyText: 0 },
+  { path: '/events/1/monitoring', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/training/my-training', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/training/submit', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/training/courses', maxSmallTargets: 0, maxTinyText: 0 },
@@ -70,6 +87,23 @@ const ALL_ROUTES: RouteCheck[] = [
   { path: '/notifications?tab=inbox', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/inventory', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/inventory/my-equipment', maxSmallTargets: 0, maxTinyText: 0 },
+  // inventory.check_manage is a distinct grant from inventory.manage, and
+  // checkPermission compares literally — without it this hub renders Access
+  // Denied, which passes both budgets while measuring an error page.
+  {
+    path: '/inventory/admin/checklists',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['inventory.check_manage'],
+  },
+  // Also needs settings.manage: its four values are written through the
+  // organization-settings endpoint, so the checklist grant is not enough.
+  {
+    path: '/inventory/admin/checklists/settings',
+    maxSmallTargets: 0,
+    maxTinyText: 0,
+    permissions: ['inventory.check_manage', 'settings.manage'],
+  },
   { path: '/apparatus', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/apparatus-basic', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/locations', maxSmallTargets: 0, maxTinyText: 0 },
@@ -83,11 +117,30 @@ const ALL_ROUTES: RouteCheck[] = [
   { path: '/forms', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/store', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/prospective-members', maxSmallTargets: 0, maxTinyText: 0 },
-  { path: '/analytics', maxSmallTargets: 0, maxTinyText: 0 },
+  // /analytics and /profile were listed here from the day this file was written
+  // and match no <Route>: both fell through the catch-all to the dashboard,
+  // which is why the three of them reported an identical 24 targets and 1249
+  // characters. The real analytics dashboard is /admin/analytics behind
+  // analytics.view; the real account screen is /account, below.
+  { path: '/admin/analytics', maxSmallTargets: 0, maxTinyText: 0, permissions: ['analytics.view'] },
   { path: '/messages', maxSmallTargets: 0, maxTinyText: 0 },
-  { path: '/settings', maxSmallTargets: 0, maxTinyText: 0 },
+  // Without settings.manage this route redirects and the pass measures the
+  // dashboard under the name "/settings" — a green line for a page that never
+  // rendered. Granting it is what makes the entry mean anything.
+  { path: '/settings', maxSmallTargets: 0, maxTinyText: 0, permissions: ['settings.manage'] },
+  // The second of the seven SettingsLayout screens, and the only other one that
+  // needs no grant. Two screens is what keeps the shared shell honest: a fix to
+  // the section strip that only suits one screen's section list fails here.
+  //
+  // The remaining five are not listed, and each has a reason: /scheduling/settings,
+  // /elections/settings and /communications/email-templates carry non-shell debt
+  // of their own (17, 2 and 4 controls under 44px — mostly `toggle-track`, which
+  // is 44x24 at every one of its call sites app-wide), and the events and
+  // department-setup panels render inside a hub route rather than at a path of
+  // their own. Adding any of them means fixing that debt first, not raising a
+  // budget.
+  { path: '/account', maxSmallTargets: 0, maxTinyText: 0 },
   { path: '/testing', maxSmallTargets: 0, maxTinyText: 0 },
-  { path: '/profile', maxSmallTargets: 0, maxTinyText: 0 },
 ];
 
 // Useful when diagnosing one newly exposed permission-gated body locally;
@@ -128,7 +181,8 @@ test.describe('mobile presentation', () => {
     // is granted for the same reason: /facilities/settings requires it, and
     // without it that route (and /facilities itself, which only needs
     // facilities.view) would silently measure the dashboard instead.
-    await signIn(page, { permissions: ['inventory.manage', 'facilities.manage'] });
+    let granted = BASE_PERMISSIONS;
+    await signIn(page, { permissions: granted });
 
     const crashed: string[] = [];
     const overflowed: string[] = [];
@@ -139,6 +193,14 @@ test.describe('mobile presentation', () => {
     const table: string[] = [];
 
     for (const route of ROUTES) {
+      // Re-sign-in only when the needed set actually changes, so the common
+      // case stays one sign-in for the whole pass.
+      const needed = route.permissions ? [...BASE_PERMISSIONS, ...route.permissions] : BASE_PERMISSIONS;
+      if (needed.join() !== granted.join()) {
+        granted = needed;
+        await signIn(page, { permissions: granted });
+      }
+
       await page.goto(route.path);
       await page.waitForLoadState('networkidle', { timeout: 2_000 }).catch(() => {});
       await page.waitForTimeout(400);

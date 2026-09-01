@@ -413,31 +413,31 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         isLoading: false,
       });
     } catch (err: unknown) {
+      // 401/403 are expected when the session has expired or user is not
+      // authenticated. Any other error (offline browser, timeout, backend
+      // 5xx) is unexpected and does NOT mean the session is actually
+      // invalid — purging local member data (offline drafts, equipment-check
+      // queues) on a transient failure would silently destroy queued work
+      // the member never got a chance to sync, with no loss notice shown.
       const appError = toAppError(err);
-      // Only a 401/403 is proof the session is actually gone. A transport
-      // failure proves nothing — the app was opened in a dead spot, or the
-      // backend was restarting — and purging on it destroys the offline queue
-      // that exists for exactly that situation: unsent equipment checks with
-      // their photo blobs, shift reports, training submissions, drafts. A
-      // member who opens the app out of coverage would lose a tour's work and
-      // never learn why, which is the opposite of what the purge is for.
-      const sessionRejected = appError.status === 401 || appError.status === 403;
-      if (sessionRejected) {
-        localStorage.removeItem('has_session');
-        localStorage.removeItem('access_token');
-        localStorage.removeItem('refresh_token');
+      const isConfirmedAuthFailure = appError.status === 401 || appError.status === 403;
+
+      // Clear session state regardless of error type
+      localStorage.removeItem('has_session');
+      localStorage.removeItem('access_token');
+      localStorage.removeItem('refresh_token');
+      if (isConfirmedAuthFailure) {
         await purgeLocalMemberData();
-      } else {
-        // has_session is deliberately left in place: the session is not known
-        // to be gone, so the next load should try again rather than treat an
-        // outage as a logout.
-        console.error('loadUser failed with unexpected error:', appError.message);
       }
       set({
         user: null,
         isAuthenticated: false,
         isLoading: false,
       });
+
+      if (!isConfirmedAuthFailure) {
+        console.error('loadUser failed with unexpected error:', appError.message);
+      }
     }
   },
 

@@ -677,6 +677,13 @@
   /* One section pill. Colour, hover and focus come from settings-nav-item;
      this contributes only the box, so the two levels cannot drift apart. */
   @apply settings-nav-item inline-flex shrink-0 items-center gap-2 rounded-lg px-3.5 py-2 text-sm font-medium whitespace-nowrap duration-150 ease-out;
+
+  /* Touch minimum, as on settings-subnav-item below. py-2 renders 36px, which
+     is the size a finger misses — and every settings screen in the product
+     navigates through this pill, so the shortfall was on all seven at once. */
+  @media (max-width: 767px) {
+    min-height: 44px;
+  }
 }
 
 @utility settings-subnav-item {
@@ -1045,6 +1052,24 @@
   @apply border-theme-surface-border my-4 border-t;
 }
 
+@utility numeric-compact {
+  /* A narrow numeric field for an inline row control.
+
+     `type="number"` reserves room for the stepper arrows even while they are
+     hidden, which is invisible until the box is small: at 48px it ate the
+     placeholder and rendered "min" as "mir". These rows are typed into, not
+     stepped, and the label they lost to save width is exactly that
+     placeholder — so the reservation has to go. */
+  appearance: textfield;
+  -moz-appearance: textfield;
+
+  &::-webkit-outer-spin-button,
+  &::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+}
+
 @utility mobile-touch-target {
   /* #21 Guaranteed mobile touch target size */
   @apply inline-flex min-h-[44px] min-w-[44px] items-center justify-center;
@@ -1268,6 +1293,23 @@
 @media (min-width: 768px) {
   .has-bottom-nav {
     --bottom-nav-height: 0px;
+  }
+}
+
+/* Set on the AppLayout root in the LEFT-navigation layout only, so a page-level
+ * fixed element can start where the content column starts instead of spanning
+ * the side navigation. That layout offsets its content with a matching
+ * `md:ml-64` while the nav is `fixed left-0 z-40`, so a viewport-anchored bar
+ * at the same z-index paints over the nav's bottom. The top-navigation layout
+ * renders content full width and never sets this, so the same element stays
+ * edge to edge there. Must stay in step with SideNavigation's own `w-64` and
+ * AppLayout's `md:ml-64`. */
+.has-side-nav {
+  --side-nav-width: 0px;
+}
+@media (min-width: 768px) {
+  .has-side-nav {
+    --side-nav-width: 16rem;
   }
 }
 

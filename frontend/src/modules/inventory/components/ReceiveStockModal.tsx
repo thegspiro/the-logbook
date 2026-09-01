@@ -15,7 +15,7 @@ import React, { useState } from 'react';
 import { Plus, Trash2, PackagePlus } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { Modal } from '@/components/Modal';
-import InventoryItemPicker from '@/modules/scheduling/components/InventoryItemPicker';
+import InventoryItemPicker from '@/modules/inventory/components/InventoryItemPicker';
 import { inventoryService } from '@/services/inventoryService';
 import type { InventoryLotBulkEntry } from '@/services/eventServices';
 import { getErrorMessage } from '@/utils/errorHandling';
