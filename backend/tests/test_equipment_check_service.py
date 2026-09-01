@@ -1566,6 +1566,49 @@ class TestSnapshottedTargetQuantity:
         EquipmentCheckService._snapshot_from_template(item, self.template_item())
         assert item["required_quantity"] is None
 
+    def test_an_absent_minimum_falls_through_to_the_expected_count(self):
+        # The common configuration, not an edge case: the template builder
+        # sends `required_quantity` only when its field is filled, and the
+        # field starts blank — so a count item whose author set an expected
+        # quantity and nothing else arrives here with NULL.
+        item = {}
+        EquipmentCheckService._snapshot_from_template(
+            item, self.template_item(required_quantity=None, expected_quantity=4)
+        )
+        assert item["required_quantity"] == 4
+
+    def test_an_absent_minimum_brings_the_shortfall_check_into_play(self):
+        # The sharper half of the change. A snapshot of None did not merely
+        # compare loosely — `_compute_check_status` skips the branch entirely
+        # when `req_qty is None`, so no shortfall was ever detected on the
+        # configuration most count items actually have.
+        template = self.template_item(required_quantity=None, expected_quantity=4)
+        item = {"template_item_id": "ti-1", "status": "pass", "quantity_found": 1}
+        EquipmentCheckService._snapshot_from_template(item, template)
+
+        _, _, failed, overall = EquipmentCheckService._compute_check_status([item])
+
+        assert item["status"] == "fail"
+        assert failed == 1
+        assert overall == "fail"
+
+    def test_a_status_the_crew_already_failed_is_unaffected(self):
+        # Why the practical blast radius is small. The app computes the
+        # shortfall against the resolved target itself and submits `fail`, and
+        # `_compute_check_status` only ever upgrades a status — so on the
+        # normal path this change alters nothing. It bites a payload claiming
+        # `pass` on a short count: a stale offline-queue entry, an older
+        # client, a direct API caller.
+        template = self.template_item(required_quantity=None, expected_quantity=4)
+        item = {"template_item_id": "ti-1", "status": "fail", "quantity_found": 1}
+        EquipmentCheckService._snapshot_from_template(item, template)
+
+        _, _, failed, overall = EquipmentCheckService._compute_check_status([item])
+
+        assert item["status"] == "fail"
+        assert failed == 1
+        assert overall == "fail"
+
     def test_the_shortfall_verdict_now_agrees_with_is_short(self):
         # The point of the change. Counting 1 against a position whose real
         # target is 4 is a shortfall by `_is_short`, and the filed record has
