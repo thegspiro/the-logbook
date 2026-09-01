@@ -1,5 +1,29 @@
 # Screenshot currency
 
+## The dashboard timeline went from seven days to thirty (2026-09-01)
+
+`03-60-dashboard-my-shifts.png` now contradicts the section it illustrates.
+The card's heading is **Next 30 Days**, its control reads **All Shifts** and
+opens `/scheduling?view=month`, and the footer ends "in the following month".
+The image still shows "Next 7 Days", "Full Schedule" and "later this month" —
+so a member following the guide looks for a control that no longer exists, and
+the prose and the picture teach two different screens.
+
+Recorded rather than re-shot: the capture tool needs a bootstrapped and seeded
+demo stack with both servers up, which is not available in the session that
+made the change. The prose and alt text in `03-scheduling.md` were updated
+with the change; only the PNG is outstanding.
+
+### Replace
+
+| Image area | Why |
+| --- | --- |
+| **Dashboard** "Next 7 Days" timeline (`03-60-dashboard-my-shifts.png`) | Heading is now Next 30 Days; the control is All Shifts, not Full Schedule; footer reads "in the following month" |
+
+Any other capture showing the dashboard's personal tab carries the same
+heading and control, so check the shot before trusting it — this is the only
+one referenced from a guide by that name.
+
 ## Eight unreferenced images, triaged rather than swept (2026-08-31)
 
 Eight PNGs in `images/` were reachable from no guide. "Unreferenced" turned out
