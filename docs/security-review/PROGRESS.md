@@ -78,6 +78,33 @@ Storefront & payments, once this PR merges.
 
 ---
 
+### 2026-09-01 — Feature 04 (Storefront & payments, pass 3) — Codex round 4: `dependencies.py`'s permission-aggregation change reaches every storefront request too, proven a no-op
+
+Codex reviewed round 3's own fix and found one more real gap:
+`cf033864` (the `equipment_check.*` → `inventory.check_*` rename, already
+reviewed in `PERM-02-permissions-roles.md`'s pass 3) didn't only touch
+`core/permissions.py` — it also added an `expand_legacy_permissions` call
+inside `_collect_user_permissions` in `app/api/dependencies.py`, and that
+function backs both `require_permission` (47 of storefront's 48 routes) and
+`user_has_permission` (the `GET /permissions` self-probe). So it runs on
+every storefront request, not zero of them, contrary to what earlier rounds
+implied by only reviewing the registry side of the same commit.
+
+Verified what it actually does to a storefront decision rather than
+stopping at "it's called": every key in `LEGACY_PERMISSION_ALIASES` is
+`equipment_check.*`-shaped, a namespace with no `storefront.*` entry on
+either side. Expanding a caller's granted set can only ever add
+`inventory.check_*` names to it — it cannot touch
+`storefront.view`/`storefront.order`/`storefront.manage` — so
+`permission_matches` sees an identical answer for every storefront
+permission check before and after this change, for every caller. Exercised
+on every request, provably a no-op.
+
+Fixed in `docs/security-review/SF-04-storefront-payments.md`'s Pass 3
+section.
+
+---
+
 ### 2026-09-01 — Feature 04 (Storefront & payments, pass 3) — Codex round 3: two more shared dependencies changed, both reviewed and confirmed safe
 
 Codex reviewed round 2's own fix commit and found two more shared
