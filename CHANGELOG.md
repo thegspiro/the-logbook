@@ -21,6 +21,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   bound for the life of the process. `detect_session_hijack` and
   `detect_data_exfiltration` — the methods that actually write to them — now
   enforce the cap themselves on entry, matching the existing pattern.
+- **Codex caught two more real problems in that same fix, same day.**
+  First: the cap-enforcement above runs unthrottled on a genuine hot path —
+  `detect_session_hijack` fires on every authenticated response — and the
+  eviction it added evicted exactly one key at a time. Once a tracker
+  reached its 5,000-key cap, every subsequent distinct session/IP/user
+  re-triggered a full `O(n log n)` sort of the entire tracker just to evict
+  the one key that had pushed it over, immediately putting it right back at
+  the cap for the next call. Sustained session churn turned a lightweight
+  memory safeguard into a persistent per-request CPU cost. Eviction now
+  drops a tracker to 90% of its cap in one batch, buying headroom (500
+  entries) before the sort has to run again — amortized instead of
+  per-call. Second: `_external_endpoints` — a fifth tracker, a `set()` that
+  `detect_data_exfiltration` grows with every distinct external destination
+  seen — was never actually capped by the fix above at all. The
+  cap-enforcement helper only iterated the four _dict_ trackers; the
+  200-entry cap that existed for the set lived in a different method whose
+  own application path turned out to be dead code (nothing on the set's
+  real growth path ever called it), so the set could grow unbounded exactly
+  like the bug this same fix was supposed to have closed. Both are now
+  fixed in the same cap-enforcement helper, on the same code path that
+  grows every tracker. `tests/test_security_monitoring.py` gained 4 tests
+  proving both fixes (bounded growth under simulated churn, batched
+  eviction, and the external-endpoint set staying capped through its real
+  call path); all 14 tests pass, and all 4 fail against the pre-fix code.
 
 ### Adding a checklist item to the inventory catalog (2026-08-31)
 

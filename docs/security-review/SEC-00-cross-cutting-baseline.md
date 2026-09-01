@@ -6,15 +6,27 @@
 
 ## Pass 3 (2026-09-01) — re-sweep, plus four sweep classes new to this file
 
-**Revised same-day after Codex review on PR #2128:** four P2 findings against
-this pass's methodology — a too-narrow tracker sweep that missed a real gap,
-a too-narrow JSON shallow-copy sweep, a route-auth method description that
-dropped a scan root, and a completion-gate command that ran the wrong
-TypeScript compiler. All four verified against real code and corrected below
-(one produced an actual source fix, `app/services/security_monitoring.py`;
-the rest were methodology/doc corrections with the same zero-finding
-conclusion holding once properly re-checked). See each numbered sweep and the
-completion-gate section for what changed.
+**Revised same-day after Codex review on PR #2128, round 1:** four P2
+findings against this pass's methodology — a too-narrow tracker sweep that
+missed a real gap, a too-narrow JSON shallow-copy sweep, a route-auth method
+description that dropped a scan root, and a completion-gate command that ran
+the wrong TypeScript compiler. All four verified against real code and
+corrected below (one produced an actual source fix,
+`app/services/security_monitoring.py`; the rest were methodology/doc
+corrections with the same zero-finding conclusion holding once properly
+re-checked). See each numbered sweep and the completion-gate section for what
+changed.
+
+**Revised again, same day, after Codex review round 2 — on the round-1
+source fix itself:** Codex reviewed commit `3b6b65e4` (round 1's fix) and
+found it was, itself, incomplete in two ways: the eviction it added ran
+unthrottled on a real hot path but evicted one key at a time (so a saturated
+tracker re-sorted itself on every single subsequent call), and a fifth
+tracker (`_external_endpoints`, a `set()`) that the same fix's own
+cap-enforcement helper never actually touched. This is the **second round**
+of Codex catching a real gap in the same tracker-cap sweep in the same PR —
+said plainly rather than undersold. Both fixed; see sweep 7's write-up below
+for the full account of both rounds.
 
 Re-verified pass 1/2's five standing sweeps against current code (backend grew
 to 399 Alembic revisions, 1536 routes across 80 `app/api/` files, from pass
@@ -111,7 +123,7 @@ those features**, and the one route the wider method newly surfaced
 | #   | Class swept                                               | Method                                                                                                                                                                               | Result                                                                                                    |
 | --- | --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------- |
 | 6   | `BaseHTTPMiddleware` usage (Pitfall #4)                   | `grep -rn "BaseHTTPMiddleware" app/`                                                                                                                                                 | **clean** — 0 imports/usages; the 7 hits are all comments in `security_middleware.py` documenting the ban |
-| 7   | Unbounded in-memory trackers (Pitfall #9)                 | broadened on Codex review (see below) — module-level _and_ `self.<name> = {}`/`= set()` instance trackers, whole `app/` tree                                                         | **1 gap found and fixed** — see below                                                                     |
+| 7   | Unbounded in-memory trackers (Pitfall #9)                 | broadened on Codex review (see below) — module-level _and_ `self.<name> = {}`/`= set()` instance trackers, whole `app/` tree                                                         | **3 gaps found and fixed across two Codex rounds** — see below                                            |
 | 8   | `window.confirm`/`alert`/`prompt` (Pitfall #16)           | `grep` for `window.confirm(`/`window.alert(`/`window.prompt(` in `frontend/src/`; confirmed `no-restricted-syntax`'s `noBlockingBrowserDialogs` is still wired in `eslint.config.js` | **clean** — 0 raw calls in source (tests excluded); the ESLint rule is present and active                 |
 | 9   | JSON-column shallow-copy-then-nested-mutate (Pitfall #12) | broadened on Codex review (see below) — every JSON/`MutableDict`-typed model attribute (132 names), whole `app/` tree                                                                | **clean** — see below for the corrected method and count                                                  |
 
@@ -156,6 +168,85 @@ the hard cap on all four trackers is enforced from the same code path that
 grows the two previously-uncovered ones, independent of login volume or auth
 provider. `tests/test_security_monitoring.py` (10/10) still passes unchanged.
 
+**Round 2 (Codex review on the round-1 fix commit `3b6b65e4` itself):**
+Codex reviewed the fix above and found it was, itself, incomplete in two
+ways — the second time in this same PR that Codex caught a real gap in this
+sweep, worth saying plainly.
+
+1. [**The new hot-path call sorted the entire tracker on every request once
+   saturated, not just when the cap was first hit**](https://github.com/thegspiro/the-logbook/pull/2128#discussion_r3900232886).
+   `detect_session_hijack` — now calling `_enforce_key_caps()` per the round-1
+   fix — runs on every authenticated response through
+   `SecurityMonitoringMiddleware.__call__`. The eviction logic computed
+   `overflow = len(tracker) - _MAX_TRACKING_KEYS`, sorted the whole tracker by
+   last-active timestamp, and evicted exactly `overflow` keys. Once a tracker
+   first reached the 5,000-key cap, `overflow` on every later call was 1 (the
+   caller's own new key pushed it there again after the previous call's
+   single-key eviction), so the full `O(n log n)` sort over ~5,000 entries ran
+   on **every** subsequent distinct session — turning a lightweight memory
+   safeguard into sustained request-time CPU overhead under exactly the
+   sustained distinct-session churn it existed to survive.
+
+   **Fixed:** eviction is now batched. A new class constant,
+   `_EVICTION_TARGET_RATIO = 0.9`, means that once a tracker exceeds its cap,
+   it is trimmed down to 90% of the cap in one pass (evicting `len - target`
+   keys, not just `len - cap`), buying 500 entries of headroom before the sort
+   needs to run again — the sort still runs, but roughly once per ~500
+   additions instead of once per addition. This is the smaller, safer diff
+   consistent with the existing sort-and-evict structure (an alternative —
+   `collections.OrderedDict` with `move_to_end`/`popitem(last=False)` for O(1)
+   eviction — was considered and rejected as a larger structural change than
+   this hot-path fix warrants; the existing dicts are plain `defaultdict`s
+   used throughout the file's other logic, and batching gets the same
+   amortized-cost outcome without touching that).
+
+2. [**`_external_endpoints` — a fifth tracker, entirely missed by round
+   1**](https://github.com/thegspiro/the-logbook/pull/2128#discussion_r3900232889).
+   It is a `set()`, not a dict — grown by `detect_data_exfiltration` adding
+   every distinct external `destination` seen. Round 1's fix made
+   `detect_data_exfiltration` call `_enforce_key_caps()`, but that helper's
+   loop only ever iterated the four **dict** trackers
+   (`_api_calls`/`_login_attempts`/`_session_ips`/`_data_transfers`); it never
+   touched the set. A 200-entry cap for it (`_MAX_EXTERNAL_ENDPOINTS`) did
+   exist — in `_evict_stale_tracking_keys()` — but that method's own caller
+   (`_check_rate_limit`, reachable only through `analyze_request`) is **never
+   invoked anywhere in the running application** (confirmed by grep: the only
+   callers of `analyze_request`/`_check_rate_limit` outside the service itself
+   are in `tests/test_security_monitoring.py`) — dead code. So the fifth
+   tracker could grow unbounded on the exact call path
+   (`detect_data_exfiltration`) round 1 had just fixed, for the same
+   underlying reason: the broadened sweep pattern documented above
+   (`self.<name> = {}`/`= set()`) explicitly includes `set()`, but the fix
+   that followed from it was not checked all the way through to "does _this_
+   set specifically have an effective, reachable cap" — it has a cap
+   constant, which is not the same thing.
+
+   **Fixed:** `_enforce_key_caps()` now caps `_external_endpoints` too, in a
+   separate branch (a set has no per-entry activity timestamp to sort
+   eviction by, unlike the four dicts — trimmed arbitrarily instead, which is
+   sufficient for a coarse memory safeguard), called from the same
+   `detect_data_exfiltration()` entry point that already calls
+   `_enforce_key_caps()`. The now-redundant capping block inside
+   `_evict_stale_tracking_keys()` — dead in practice, per the paragraph above
+   — was removed rather than left as unreachable code sitting behind a real
+   one.
+
+**Verification, round 2:** every tracker in the file was re-checked against
+its actual growth path, not just the two Codex named — `_login_attempts`,
+`_session_ips`, `_data_transfers`, and `_api_calls` all resolved correctly to
+the batched `_enforce_key_caps()` on their respective hot paths;
+`_external_endpoints` was the only additional gap. 4 new tests added to
+`tests/test_security_monitoring.py` (`TestTrackerCaps`): batched eviction
+drops a saturated dict tracker to the 90% target in one pass (not left
+sitting at the cap); sustained one-key-per-call churn past the cap stays
+bounded and the sort call count is asserted amortized (not once per
+addition); `_external_endpoints` is capped directly via
+`_enforce_key_caps()`; and the same is proven end-to-end by calling
+`detect_data_exfiltration()` itself repeatedly with distinct destinations —
+its actual production growth path, not just the internal helper. All 4
+verified to **fail** against the pre-round-2 code (commit `3b6b65e4`,
+checked out standalone) and **pass** after the fix; full file 14/14.
+
 **Sweep 9 correction (Codex review):** the original method
 ([flagged here](https://github.com/thegspiro/the-logbook/pull/2128#discussion_r3900139055))
 grepped only `.settings =` / `.positions =` / `.config =` across two
@@ -198,29 +289,36 @@ correct by design, not a gap. **Clean** — 0 bugs found, ~40+ sites checked
 across the whole tree and all 132 attribute names, up from 16 sites / 3 names
 / 2 directories.
 
-One finding this pass, fixed: the tracker-cap gap in `SecurityMonitoringService`
-(sweep 7, above). All nine invariants otherwise hold — five re-verified
-against 399 revisions / 1536 routes, four checked for the first time as an
-explicit whole-codebase sweep in this file (two of the four — sweeps 6 and
-8 — were already correct; sweep 7 needed a fix and sweep 9 needed its method
-broadened before it could be trusted, both corrected in this revision after
-Codex review on PR #2128 — see each sweep's write-up above for what changed
-and why).
+Three findings this pass, all in `SecurityMonitoringService`, all fixed across
+two Codex rounds on the same sweep (sweep 7, above — the round-2 write-up
+gives the full account, including why round 1's own fix needed a second
+correction). All nine invariants otherwise hold — five re-verified against
+399 revisions / 1536 routes, four checked for the first time as an explicit
+whole-codebase sweep in this file (two of the four — sweeps 6 and 8 — were
+already correct; sweep 7 needed two rounds of fixes and sweep 9 needed its
+method broadened before it could be trusted, all corrected in this revision
+after Codex review on PR #2128 — see each sweep's write-up above for what
+changed and why).
 
-**Completion gate (pass 3, revised):** `flake8`/`black --check`/
+**Completion gate (pass 3, revised — round 2):** `flake8`/`black --check`/
 `isort --check-only` clean across `app/ tests/ alembic/` (including the one
-touched file, `app/services/security_monitoring.py`); `validate_migrations.py
---strict` passed (399 revisions, single head `4e7e125cb00f`);
+touched file, `app/services/security_monitoring.py`, and its test file);
+`validate_migrations.py --strict` passed (399 revisions, single head
+`4e7e125cb00f` — unchanged by this round, no migration touched);
 `test_like_escaping.py` (2/2), `test_database_schema.py::test_set_null_fks_
 are_nullable` (1/1), `test_capacity_locking.py` (17/17), `test_migration_
-create_all_tables.py` (clean), and `test_security_monitoring.py` (10/10,
-unchanged by the fix) all pass; **`cd frontend && npm run typecheck`** (not
-bare `tsc`/`npx tsc` — see the completion-gate correction below) **0
-errors**; `eslint .` 0 errors, 8 pre-existing warnings (all `testing-
+create_all_tables.py` (clean), and `test_security_monitoring.py` (**14/14**,
+up from 10 — the 4 new `TestTrackerCaps` tests proving both round-2 fixes,
+each verified to fail against the pre-round-2 commit `3b6b65e4` and pass
+after) all pass; **`cd frontend && npm run typecheck`** (not bare
+`tsc`/`npx tsc` — see the completion-gate correction below) **0 errors**;
+`eslint .` 0 errors, 8 pre-existing warnings (all `testing-
 library/no-node-access` / `react-refresh/only-export-components`, unrelated
-to this pass — well under the `max-warnings 10` gate). One source file
-changed this pass: `app/services/security_monitoring.py` (2-line fix, sweep
-7 above); everything else is documentation.
+to this pass — well under the `max-warnings 10` gate, same set as round 1: no
+frontend file changed in either round). One source file changed this pass:
+`app/services/security_monitoring.py` (round 1: 2-line fix; round 2: batched
+eviction + `_external_endpoints` capping, sweep 7 above); everything else is
+documentation and the one test file.
 
 **Completion-gate command correction (Codex review):** this section
 originally reported `tsc --noEmit`

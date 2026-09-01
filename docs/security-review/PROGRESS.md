@@ -22,14 +22,21 @@ feature. The rotation cannot outrun its own review queue.
 sweeps against current code (399 Alembic revisions, 1536 routes) and added
 four new sweep classes (`BaseHTTPMiddleware`, unbounded in-memory caches,
 `window.confirm`/`alert`/`prompt`, JSON shallow-copy-then-mutate). **Revised
-after Codex review:** the unbounded-tracker sweep had missed a real gap
-(`SecurityMonitoringService`'s instance-attribute trackers, two of four
-uncapped on the SSO-only path — now fixed, one small source change) and the
-JSON shallow-copy sweep's method was too narrow (broadened, still clean);
+after Codex review (round 1):** the unbounded-tracker sweep had missed a real
+gap (`SecurityMonitoringService`'s instance-attribute trackers, two of four
+uncapped on the SSO-only path — fixed, one small source change) and the JSON
+shallow-copy sweep's method was too narrow (broadened, still clean);
 route-auth-coverage's method description and the completion gate's
-TypeScript command were also corrected (doc-only, same conclusions). See
+TypeScript command were also corrected (doc-only, same conclusions). **Revised
+again after Codex review (round 2), on the round-1 fix itself:** the
+tracker-cap fix just landed was, itself, incomplete in two ways —
+unthrottled one-key-at-a-time eviction on a genuine hot path (a full
+`O(n log n)` sort of the tracker on every call once saturated, not just when
+the cap was first hit) and a fifth tracker (`_external_endpoints`, a `set()`)
+that the fix's own cap-enforcement helper never touched at all, left capped
+only by a dead code path. Both fixed; see below and
 `SEC-00-cross-cutting-baseline.md`'s Pass 3 section for the full write-up of
-each correction.
+every correction across both rounds.
 
 A duplicate close-out PR, [#2119](https://github.com/thegspiro/the-logbook/pull/2119),
 was opened against round 1's now-stale base (before round 2/3 landed) and
@@ -89,6 +96,66 @@ scoped test files (`test_like_escaping.py`, `test_database_schema.py`,
 `test_capacity_locking.py`, `test_migration_create_all_tables.py`,
 `test_security_monitoring.py`) all pass; `npm run typecheck` 0 errors;
 `eslint .` 0 errors / 8 pre-existing warnings. Same branch, same PR #2128.
+
+---
+
+### 2026-09-01 — Feature 00 (Cross-cutting baseline, pass 3) — Codex round 2: the round-1 fix itself had two more gaps
+
+Same day, same PR, same file. Codex reviewed the round-1 fix commit
+(`3b6b65e4`) itself and left 2 more P2 comments — this is the second time in
+one PR that Codex caught a real gap in this pass's own tracker-cap sweep, so
+it is recorded plainly rather than folded quietly into the round-1 writeup:
+
+- **The round-1 fix made `_enforce_key_caps()` run on a hot path, and the
+  eviction it did was one-key-at-a-time.** `detect_session_hijack` — which
+  now calls `_enforce_key_caps()` — fires on every authenticated response
+  through `security_middleware.py`. Once a tracker reached its 5,000-key
+  cap, the old eviction logic computed `overflow = len - cap` (which is 1,
+  the very next call after the cap is first hit), sorted the _entire_
+  ~5,000-entry tracker to find that one key, evicted it, then immediately
+  the caller added its own new entry — leaving the tracker back at exactly
+  the cap. Every subsequent distinct session under sustained churn repeated
+  the full `O(n log n)` sort. A memory safeguard had become a per-request
+  CPU cost on the hot path it was added to. **Fixed:** eviction is now
+  batched — once a tracker exceeds the cap, it is trimmed down to 90% of the
+  cap (`_EVICTION_TARGET_RATIO`) in one pass, buying ~500 entries of
+  headroom before the sort has to run again, instead of re-sorting on every
+  single call once saturated.
+- **`_external_endpoints` — a fifth tracker, missed entirely by round 1.**
+  It's a `set()`, not a dict, grown by `detect_data_exfiltration` adding
+  every distinct external `destination` seen. Round 1's fix made
+  `detect_data_exfiltration` call `_enforce_key_caps()`, but that helper's
+  loop only ever iterated the four _dict_ trackers — it never touched the
+  set. A 200-entry cap for it did exist, in `_evict_stale_tracking_keys()`,
+  but that method's own caller (`_check_rate_limit`, reachable only through
+  `analyze_request`) is never invoked anywhere in the running app —
+  dead code. So the fifth tracker could grow unbounded, on the exact same
+  growth path (`detect_data_exfiltration`) round 1 had just "fixed," for the
+  same underlying reason: a broadened sweep pattern that should have caught
+  a `set()` tracker did not get followed through to checking whether _this_
+  set specifically had an effective, reachable cap. **Fixed:**
+  `_enforce_key_caps()` now caps `_external_endpoints` too (arbitrary
+  eviction, since a set has no per-entry activity timestamp to sort by), on
+  the same call already made from `detect_data_exfiltration`'s entry. The
+  now-redundant (and, per the finding, unreachable) capping block inside
+  `_evict_stale_tracking_keys()` was removed rather than left as dead code
+  behind a real one.
+
+Both fixes are the smaller, safer diff consistent with the existing
+sort-and-evict structure — not a redesign (e.g. no switch to
+`collections.OrderedDict`). 4 new tests added to
+`test_security_monitoring.py`: batched-eviction-not-one-at-a-time, bounded
+growth under simulated sustained churn with the sort call count asserted
+amortized (not once per call), the external-endpoint set capped directly via
+`_enforce_key_caps()`, and the same proven end-to-end through
+`detect_data_exfiltration()` itself (its actual production growth path).
+All 4 verified to fail against the pre-round-2 code (`3b6b65e4`) and pass
+after; full suite 14/14. Full completion gate re-run clean (same commands as
+round 1, see above): `flake8`/`black --check`/`isort --check-only` clean on
+`app/ tests/ alembic/`; `validate_migrations.py --strict` still 399
+revisions, single head; the five scoped test files all pass; `npm run
+typecheck` 0 errors; `eslint .` 0 errors / 8 pre-existing warnings (same set
+as round 1, unrelated to this change).
 
 ---
 
