@@ -117,6 +117,62 @@ export function soonestExpiration(item: CheckTemplateItem): string | undefined {
   return item.hasExpiration ? item.expirationDate : undefined;
 }
 
+/**
+ * What this position is supposed to hold, as `_target_quantity` resolves it.
+ *
+ * `required_quantity or expected_quantity` on the server — Python's `or`, so a
+ * `required_quantity` of **0** falls through to the expected count rather than
+ * standing as the target. `??` does not: it only filters null and undefined,
+ * so it would hand back a target of zero and report a position holding four of
+ * an expected four as having no target at all. The same distinction CLAUDE.md
+ * pitfall #1 draws for form values, on a number rather than a string.
+ */
+export function targetQuantity(item: CheckTemplateItem): number | null {
+  // `||` between the two operands and `??` after it. A third truthiness step
+  // would discard a target deliberately configured at 0 — `0 or 0` is 0 in
+  // Python, not None — and report a counted position as having no target.
+  const target = item.requiredQuantity || item.expectedQuantity;
+  return target ?? null;
+}
+
+/**
+ * Whether a member below manage may draw stock for this position.
+ *
+ * `EquipmentCheckService.swap_item_lot` sets `enforce_submitter_limits` for
+ * anyone without manage, then splits on whether a disposition came with the
+ * request:
+ *
+ * - **With one** (the crew is retiring an expired unit) the ceiling is the
+ *   expired units aboard, so a swap on an expired position is always allowed.
+ * - **Without one** (a top-up) the ceiling is
+ *   `max(_target_quantity(item) - _on_truck(item), 0)`, and both halves have
+ *   fallbacks worth copying exactly: the target is `required_quantity or
+ *   expected_quantity`, and on-truck is the lots aboard, else the scalar
+ *   count, else *the target itself* — a position nobody has counted since it
+ *   was defined is not an empty bracket.
+ *
+ * So a position with no counted target, or one believed full, yields a zero
+ * ceiling and refuses every quantity with a 403.
+ *
+ * One owner rather than a copy per screen: the sweep and the accordion both
+ * offer this action, and two hand-rolled versions of the same server rule is
+ * how the frontend ends up disagreeing with the backend on one screen only.
+ * Pass `onTruck` as null where a screen genuinely does not know it — the
+ * target fallback then applies, which is the server's own reading.
+ */
+export function submitterMaySwap(expired: boolean, target: number | null, onTruck: number | null): boolean {
+  if (expired) return true;
+  if (target === null) return false;
+  return (onTruck ?? target) < target;
+}
+
+/** The units aboard a position, as `_on_truck` counts them before its fallback. */
+export function countedOnTruck(item: CheckTemplateItem): number | null {
+  const lots = item.lotsAboard ?? [];
+  if (lots.length > 0) return lots.reduce((total, lot) => total + lot.quantity, 0);
+  return item.quantityOnTruck ?? null;
+}
+
 /** True when the row is an actual check rather than layout. */
 export function isCheckType(value?: string | null): boolean {
   const normalized = normalizeCheckType(value);

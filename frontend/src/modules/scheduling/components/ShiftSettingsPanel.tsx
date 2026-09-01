@@ -130,6 +130,10 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
 
   const { checkPermission } = useAuthStore();
   const canEditOrgSettings = checkPermission('settings.manage') || checkPermission('organization.update_settings');
+  // Matches the gate on /inventory/admin/checklists. Authoring a checklist and
+  // editing the department settings that govern one are separate grants, so
+  // each signpost link below is shown only to whoever its destination admits.
+  const canManageChecklists = checkPermission('inventory.check_manage');
 
   useEffect(() => {
     let cancelled = false;
@@ -567,9 +571,15 @@ export const ShiftSettingsPanel: React.FC<ShiftSettingsPanelProps> = ({
               vehicle picker.
             </p>
             <div className="mt-3 flex flex-wrap gap-2">
-              <Link to="/inventory/admin/checklists" className="btn-secondary inline-flex text-sm font-semibold">
-                Manage equipment checklists
-              </Link>
+              {/* Same reasoning as the settings link below, and the same grant
+                  the route itself requires: a scheduling officer who cannot
+                  author checklists would otherwise be pointed at a page that
+                  turns them away. */}
+              {canManageChecklists && (
+                <Link to="/inventory/admin/checklists" className="btn-secondary inline-flex text-sm font-semibold">
+                  Manage equipment checklists
+                </Link>
+              )}
               {/* Those settings are stored in org.settings, so they need the
                   department-settings grant. A scheduling officer without it
                   would otherwise be pointed at a page that turns them away. */}

@@ -34,6 +34,7 @@ import {
   CheckType,
   normalizeCheckType,
   soonestExpiration,
+  targetQuantity,
   type CheckTemplateCompartment,
   type CheckTemplateItem,
   type LastCheckItemResult,
@@ -57,11 +58,14 @@ export interface SweepSource {
 /**
  * Par: what the truck is supposed to hold.
  *
- * `requiredQuantity` wins where both are set, matching `acceptShownCounts` on
- * main — `expectedQuantity` is the older column and some templates carry both.
+ * `requiredQuantity` wins where both are set — `expectedQuantity` is the older
+ * column and some templates carry both. Through `targetQuantity`, so a
+ * `requiredQuantity` of 0 falls through to the expected count the way
+ * `_target_quantity` does: this par is what the sweep's swap gate measures a
+ * shortfall against, and a zero par there refuses a top-up the server allows.
  */
 function par(item: CheckTemplateItem): number | undefined {
-  return item.requiredQuantity ?? item.expectedQuantity;
+  return targetQuantity(item) ?? undefined;
 }
 
 /**
