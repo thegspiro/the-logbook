@@ -1,11 +1,16 @@
-"""Merge heads: recipient revoked_at and event attendee visibility.
+"""Merge heads: issuance lot allocations and event attendee visibility.
 
 Revision ID: a1d7f3c05e64
-Revises: b2c9d4e6f813, c3a71e5d9b48
+Revises: c3d0e5f7a924, c3a71e5d9b48
+
+This branch's messaging/inventory line (through c3d0e5f7a924, which descends
+from the recipient revoked_at revision) and main's event attendee visibility
+revision are independent heads. Joining them here keeps `alembic upgrade head`
+single-headed without repointing either side's already-pushed revisions.
 """
 
 revision = "a1d7f3c05e64"
-down_revision = ("b2c9d4e6f813", "c3a71e5d9b48")
+down_revision = ("c3d0e5f7a924", "c3a71e5d9b48")
 branch_labels = None
 depends_on = None
 
