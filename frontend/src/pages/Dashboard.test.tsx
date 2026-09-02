@@ -989,6 +989,13 @@ describe('Dashboard', () => {
       renderWithRouter(<Dashboard />);
 
       await screen.findByRole('region', { name: 'Next 30 Days' });
+      // Wait for the config to have actually landed. The region renders on the
+      // timeline's loading flag, which says nothing about modulesLoading -- so
+      // this used to be able to run the whole assertion inside the permissive
+      // window, where a zero count means "not settled yet", not "gated". It
+      // failed on CI for exactly that reason and passed everywhere else.
+      // Scheduling is enabled here, so its loader running is the signal.
+      await waitFor(() => expect(mockGetMyShifts).toHaveBeenCalled());
       const screeningCallsBefore = mockGetMyCompliance.mock.calls.length;
 
       await act(async () => {
@@ -997,6 +1004,43 @@ describe('Dashboard', () => {
 
       // Medical screening is disabled, so the refresh must not call it.
       expect(mockGetMyCompliance.mock.calls.length).toBe(screeningCallsBefore);
+    });
+
+    it('does not fire gated endpoints when refreshed before the module config lands', async () => {
+      // isModuleOn answers permissively until the configuration arrives, so a
+      // refresh inside that window calls every gated endpoint and takes a 403
+      // per disabled module -- exactly what the mount effect's modulesLoading
+      // guard exists to prevent. Making the refresh closure *current* rather
+      // than frozen was necessary and not sufficient: current here is still
+      // permissive.
+      // Every call, not just the first: the hook's effect can run more than
+      // once, and a single mockImplementationOnce leaves the next call falling
+      // through to the resolved default -- which settles the config and defeats
+      // the window this test is about.
+      type ModuleConfig = { configured: boolean; enabled_modules: string[] };
+      const releaseModules: Array<(value: ModuleConfig) => void> = [];
+      mockGetEnabledModules.mockImplementation(
+        () => new Promise<ModuleConfig>((resolve) => releaseModules.push(resolve))
+      );
+
+      renderWithRouter(<Dashboard />);
+      await waitFor(() => expect(releaseModules.length).toBeGreaterThan(0), { timeout: 5000 });
+
+      // The config has not landed, so no module-owned loader may run.
+      await act(async () => {
+        await registeredPullToRefresh?.();
+      });
+      expect(mockGetMyCompliance).not.toHaveBeenCalled();
+      expect(mockGetMyShifts).not.toHaveBeenCalled();
+
+      // Once it lands with medical screening off, the mount effect runs the
+      // module-owned loaders and still honours the gate.
+      await act(async () => {
+        releaseModules.forEach((resolve) => resolve({ configured: true, enabled_modules: ['scheduling'] }));
+        await Promise.resolve();
+      });
+      await waitFor(() => expect(mockGetMyShifts).toHaveBeenCalled());
+      expect(mockGetMyCompliance).not.toHaveBeenCalled();
     });
 
     it('refreshes the unread count even when an inbox retry is already running', async () => {

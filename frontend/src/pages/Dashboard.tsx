@@ -1368,15 +1368,32 @@ const Dashboard: React.FC = () => {
       // leaving the badge stale.
       runRetry('messages:inbox', () => loadDeptMessages('inbox')),
       runRetry('messages:unread', () => loadDeptMessages('unread')),
-      runRetry('hours', () => loadHours(true)),
       runRetry('events', () => loadUpcomingEvents(true)),
-      runRetry('notifications', () => loadNotifications(true)),
-      runRetry('myShifts', () => loadMyShifts(true)),
-      runRetry('openShifts', () => loadOpenShifts(true)),
-      runRetry('seats', () => loadMySeats(true)),
-      runRetry('screenings', () => loadMyScreenings(true)),
-      runRetry('training', () => loadTrainingProgress(true)),
-      runRetry('equipment', () => loadMyEquipment(true)),
+      // Module-owned loaders, held until the module config lands -- the same
+      // condition the mount effect applies, for the same reason: isModuleOn
+      // answers permissively while the configuration is unknown, so a refresh
+      // inside that window fires every gated endpoint and takes a 403 per
+      // disabled module, raising errors the module-aware first load avoids.
+      //
+      // Making this closure current rather than frozen was necessary and not
+      // sufficient: *current* during that window is still permissive. The
+      // window is short enough to miss locally and wide enough to hit on a
+      // loaded CI runner, which is where it was caught.
+      //
+      // Skipping loses nothing: the mount effect runs exactly these the moment
+      // modulesLoading flips.
+      ...(modulesLoading
+        ? []
+        : [
+            runRetry('hours', () => loadHours(true)),
+            runRetry('notifications', () => loadNotifications(true)),
+            runRetry('myShifts', () => loadMyShifts(true)),
+            runRetry('openShifts', () => loadOpenShifts(true)),
+            runRetry('seats', () => loadMySeats(true)),
+            runRetry('screenings', () => loadMyScreenings(true)),
+            runRetry('training', () => loadTrainingProgress(true)),
+            runRetry('equipment', () => loadMyEquipment(true)),
+          ]),
       ...(activeTab === 'department' && canViewLegacyAdmin ? [loadAdminSummary(), loadSetupProgress()] : []),
       ...(activeTab === 'department' && canViewChiefOperations ? [loadOperations()] : []),
       ...(activeTab === 'department' && canViewAssets ? [loadAssetWidgets()] : []),
