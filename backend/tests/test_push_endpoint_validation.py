@@ -18,7 +18,7 @@ class TestValidatePushEndpoint:
             "https://fcm.googleapis.com/fcm/send/abc123",
             "https://updates.push.services.mozilla.com/wpush/v2/xyz",
             "https://web.push.apple.com/Q/abc",
-            "https://push.example/token",
+            "https://updates-autopush.stage.mozaws.net/wpush/v2/xyz",
         ],
     )
     def test_legitimate_https_endpoints_pass(self, endpoint):
@@ -37,6 +37,13 @@ class TestValidatePushEndpoint:
             "https://cache.internal/push",  # internal suffix
             "https://printer.local/push",  # mDNS/local suffix
             "https://203.0.113.7/push",  # bare public IP literal (never a real endpoint)
+            "https://[::ffff:127.0.0.1]/push",  # encoded IPv4-in-IPv6
+            "https://%31%32%37.0.0.1/push",  # encoded host
+            "https://user@fcm.googleapis.com/push",  # URL credentials
+            "https://fcm.googleapis.com:444/push",  # unexpected port
+            "https://fcm.googleapis.com.evil.example/push",  # misleading suffix
+            "https://evilgoogleapis.com/push",  # misleading registrable domain
+            "https://fcm.googleapis.com./push",  # ambiguous trailing dot
             "ftp://push.example/x",  # non-http scheme
             "not-a-url",  # no scheme/host
             "https://",  # no host
