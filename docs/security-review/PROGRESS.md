@@ -16,11 +16,13 @@ feature. The rotation cannot outrun its own review queue.
 
 ## Open PR
 
-None.
+[#2162](https://github.com/thegspiro/the-logbook/pull/2162) (Feature 06,
+Elections & ballots, pass 3) — 0 fixes, 1 re-verified open (ELEC-12). See
+the Log below for detail.
 
 ---
 
-### 2026-09-02 — Feature 06 (Elections & ballots, pass 3) — 0 fixes, 1 re-verified open (ELEC-12) — PR pending
+### 2026-09-02 — Feature 06 (Elections & ballots, pass 3) — 0 fixes, 1 re-verified open (ELEC-12) — PR #2162
 
 Unshallowed the clone (it started shallow at 803 commits) to trace history
 past a rewritten-history boundary, the same obstacle FIN-05 pass 3 named.
