@@ -1,6 +1,281 @@
 # Security Review 11 — Inventory
 
-**Prefix:** `INV` · **Iteration:** 11 · **Reviewed:** 2026-08-28 (pass 2) · **PR:** [#1957](https://github.com/thegspiro/the-logbook/pull/1957)
+**Prefix:** `INV` · **Iteration:** 11 · **Reviewed:** 2026-08-28 (pass 2), 2026-09-02 (pass 3) · **PR:** [#1957](https://github.com/thegspiro/the-logbook/pull/1957) (pass 2), [#2188](https://github.com/thegspiro/the-logbook/pull/2188) (pass 3)
+
+---
+
+## Pass 3 (2026-09-02)
+
+**Backend:** `api/v1/endpoints/inventory.py` (137 routes, 1 WebSocket, up
+from 136 at pass 2's merge), `services/inventory_service.py` (~8,850 L, up
+from ~7,450), `api/v1/endpoints/labels.py`, `services/label_service.py`,
+`services/label_printer_service.py`
+**Frontend:** `modules/inventory/*` (pages, routes, service), shared
+`components/InventoryScanModal.tsx`
+**Migrations:** `e1f2a3b4c5d6` (normalize AVAILABLE+unsafe-condition rows to
+IN_MAINTENANCE/RETIRED), `c3d0e5f7a924` (`item_issuances.lot_allocations`) —
+both landed since pass 2; both correctly guarded on table existence
+(Pitfall #26)
+
+### Correction to pass 2's own baseline count
+
+Pass 2's doc states "132+26" as the unchanged inventory.py/labels.py route
+baseline. Re-counted at pass 2's own merge commit (`656755cf`) via the same
+AST-style enumeration this pass used: **136**, not 132 — already stale by
+the time pass 2's own doc was written, the identical pattern this rotation
+has now hit twice on this module (`module-audit/inventory.md`'s
+"116 vs 132" correction in pass 1's own doc). Not a sign of undocumented
+growth between pass 2 finishing and merging; a snapshot recorded before the
+file's own final state. Corrected here so pass 4's baseline is accurate; not
+worth going back to edit pass 2's already-merged section.
+
+### Scope
+
+Re-verified every still-open finding from pass 1/2 against current code
+(INV-8, INV-9, INV-16, INV-17 — all four confirmed still open and
+unchanged, see below). Then reviewed everything that changed since pass 2's
+merge (`656755cf`): the full backend diff (`inventory.py` 88 lines,
+`inventory_service.py` 971 lines, `labels.py` 34 lines, `label_service.py`
+26 lines — 1,119 lines total) was read in full, not sampled. This period's
+real feature work is a **dual-ledger stock model**: `InventoryItem.quantity`
+(the legacy column) and `InventoryLot` rows (FEFO-ordered, expiry-aware) are
+now two mutually-exclusive ledgers for the same item — once an item has any
+lot, every reader (issuance, low-stock alerts, the equipment-check swap)
+switches to reading lots and stops consulting `quantity` — plus a new
+`create-if-absent` catalog route, a member-profile-visibility fix on the
+impact planner (an org's `contact_visibility` setting is now AND-gated with
+the member's own `resolve_profile_visibility` choice, closing a way around a
+preference the directory/profile already honoured), and an
+AVAILABLE-requires-safe-condition invariant closed at the row level
+(`_enforce_state_invariant`, backed by the `e1f2a3b4c5d6` backfill) after
+pass 2's INV-12 closed it only as a write-time validator.
+
+Given this pass's specific brief — every stock-quantity mutation checked for
+Pitfall #27's two-part shape (parent locked **and** the count/guard itself a
+locking read) — every `.with_for_update()` call site in the diff was traced
+to its transaction (23 total in the file) and, separately, every
+`select(ItemIssuance | CheckOutRecord | ItemAssignment | WriteOffRequest |
+ReturnRequest | EquipmentRequest)` in the whole file (30 call sites) was
+checked for whether it guards a status-transition write and, if so, whether
+that specific read is the locking one. This is a full-file structural sweep
+of the locking pattern, not limited to the diff — the two findings below
+were both introduced before pass 2 (pre-existing, not new regressions from
+this period's feature work) and were only found by widening the sweep past
+the diff.
+
+**Frontend:** the diff against pass 2 touches the whole `modules/inventory/`
+tree at a scale (91 files, ~31,500 lines) that turns out to be almost
+entirely a directory-nesting artifact, not inventory feature work — the
+equipment-check checklist/scan module (`checkLapModel`, `checkSweepAdapter`,
+`checkAnswers`, `equipmentCheckPresets`, `MyChecklistsPage`, etc.) lives
+under `modules/inventory/` but is feature 14's own principal surface
+(`equipment_check.py`), reviewed on its own rotation slot — reviewing it
+here would be scope creep past what this feature's Rotation-table row
+claims, and duplicate feature 14's own pass. **This pass's frontend scope is
+explicitly narrowed** to the files pass 2 itself named plus what the
+diff-stat shows actually changed on them:
+`components/InventoryScanModal.tsx` (29 lines — read in full: a stale-form-
+state fix on the custody-transfer confirmation dialog, the same class INV-13
+closed on the return-review panel, already correctly fixed with a shared
+`resetTransferFields` called from both the open and close paths — no action
+needed), `InventoryAdminHub.tsx` (22 lines — two new nav cards plus a
+`noUncheckedIndexedAccess`-safe rewrite of a `sources[index]!` non-null
+assertion into a checked `source` lookup, matching CLAUDE.md's ban on `!` as
+a workaround — already correct), `MyEquipmentPage.tsx` and
+`EquipmentRequestsPage.tsx` (17 and 3 lines — both switch a hardcoded
+`item.quantity` read to the new `onHandQuantity()` helper so the "available"
+figure shown to a member requesting equipment reflects lot-backed stock too;
+`ReturnRequestsPanel.tsx` has no diff since pass 2, so INV-13's fix stands
+unread-but-unchanged). `onHand.ts` (new file, read in full) is a two-line
+helper (`is_lot_stocked ? lot_stock : quantity`) matching the backend
+schema's own `InventoryItemResponse.lot_stock`/`is_lot_stocked` fields
+exactly. **`modules/inventory/routes.tsx`, `types/equipmentCheck.ts`, and
+the rest of the equipment-check-shaped files under this directory were not
+reviewed this pass** — noted explicitly rather than silently claiming full
+frontend coverage; they are feature 14's scope.
+
+### Findings
+
+#### INV-18 — HIGH — `return_to_pool` can double-credit stock on a concurrent return — ✅ FIXED
+
+**What:** `return_to_pool` read `ItemIssuance` with a plain `SELECT` (no
+`.with_for_update()`), checked `issuance.is_returned`, and only _then_
+locked the associated `InventoryItem` row via `_get_item_locked` — the
+reverse of the order Pitfall #27 requires (lock the contended row before
+reading the state that guards the write).
+
+**Where:** `backend/app/services/inventory_service.py:return_to_pool` (the
+`ItemIssuance` lookup at the top of the method).
+
+**Failure scenario:** two callers submit `POST
+/issuances/{issuance_id}/return` for the same issuance at nearly the same
+time — a double-tap on a slow connection, or two officers processing the
+same physical return. Both read `is_returned == False` before either
+commits. The first proceeds, locks the item, credits `item.quantity` (or
+the item's stock lots, via `_return_units_to_stock`), sets
+`issuance.is_returned = True`, and commits. The second was blocked only on
+the _item_ lock (acquired later in the method), not on the issuance row
+itself; once it unblocks, it operates on its own **stale, already-loaded**
+Python `issuance` object — never re-read under a lock — so it still sees
+`is_returned == False` in memory, proceeds, and calls
+`_return_units_to_stock` a second time: `item.quantity` (or a stock lot) is
+credited **twice** for units that were only physically returned once.
+`item.quantity_issued` is independently decremented a second time too
+(clamped to 0, understating the item's true outstanding-issuance count).
+
+**Impact:** phantom restocking — the department's recorded on-hand quantity
+for a pool item can be inflated above what is actually on the shelf, purely
+from a race on the return endpoint, with no attacker or malicious intent
+required. For consumable/PPE stock this means `issue_from_pool` later
+"issues" units that do not exist. Not a tenant-isolation or auth defect;
+the same class of correctness/data-integrity bug INV-10 fixed on
+`review_return_request`'s sibling `ReturnRequest` row two commits after
+this method was written, and evidently missed on this one.
+
+**Fix:** added `.with_for_update()` to the `ItemIssuance` lookup, mirroring
+`review_return_request`'s own INV-10 fix exactly. This is the first and
+only read of the row in the method (no earlier plain read to reorder), so
+the fix is the lock itself, not a reordering. The second caller now blocks
+until the first commits, then its locking read returns the fresh,
+already-`is_returned=True` row, and it bails out with "These units have
+already been returned" instead of double-crediting.
+
+#### INV-19 — MED — `checkin_item` can silently re-record an already-closed check-in — ✅ FIXED
+
+**What:** identical shape to INV-18, one severity notch down because
+individual-tracked checkouts have no quantity ledger to double-credit:
+`checkin_item` read `CheckOutRecord` with a plain `SELECT`, checked
+`checkout.is_returned`, and only afterward locked the item.
+
+**Where:** `backend/app/services/inventory_service.py:checkin_item` (the
+`CheckOutRecord` lookup at the top of the method).
+
+**Failure scenario:** two concurrent check-ins of the same `checkout_id`
+(same double-tap/two-officers shape as INV-18). The second caller's stale
+in-memory `checkout` object still reads `is_returned == False`, so instead
+of being rejected with "Item already checked in," it silently succeeds a
+second time — overwriting `checked_in_at`/`checked_in_by` and, more
+significantly, `return_condition`/`damage_notes` with whatever the second
+caller submitted, even if it disagrees with the first (already-committed)
+check-in's recorded condition. `item.condition`/`item.status` are
+recomputed a second time too (idempotent when the two calls agree, silently
+overwritten when they don't).
+
+**Impact:** a data-integrity race, not a life-safety defect on its own
+(unlike INV-12, nothing here can put a genuinely unsafe item back in
+service — `_status_from_condition`/`_enforce_state_invariant` still apply
+to whichever condition value wins the race) — but which condition value
+"wins" depends on commit order between two racing requests, which is
+exactly the kind of silent disagreement Pitfall #27 exists to prevent, and
+a false "success" is reported to the caller that should have been told the
+item was already checked in.
+
+**Fix:** added `.with_for_update()` to the `CheckOutRecord` lookup, same
+pattern as INV-18/INV-10. The one existing caller that already locks the
+`CheckOutRecord` itself before delegating to `checkin_item`
+(`_scan_batch_action`'s per-code dispatch, line ~4290) re-acquires the same
+row lock within the same transaction — a no-op, not a deadlock risk, since
+InnoDB row locks are reentrant per transaction.
+
+**Both verified**, together, via `git stash` of the pre-fix
+`inventory_service.py`: `tests/test_inventory_return_locking.py`'s two new
+source-inspection guard tests (matching
+`test_inventory_return_receipt.py::test_review_return_request_locks_the_request_row`'s
+established shape) both fail against the stashed pre-fix code and pass
+after — see [Guard tests added](#guard-tests-added) below.
+
+### Re-verified still open, not re-flagged
+
+- **INV-8 / INV-9** (`GET /allowances/check/{user_id}/{category_id}` and
+  `GET/PUT /members/{user_id}/size-preferences` gated on the baseline
+  `inventory.view` rather than `.manage`) — both routes' `Depends()` are
+  unchanged since pass 2's flag. Still mirrored in `KNOWN_LIMITATIONS.md`;
+  still an owner decision (no established sibling precedent for the
+  intended gate, per pass 2's own reasoning, re-confirmed).
+- **INV-16** (`update_reorder_request` neither locks the row nor increments
+  `version`, unlike `/transition`/`/correct-status`/`/receipts`) —
+  `update_reorder_request` re-read in full; still a plain
+  `get_reorder_request` fetch, still no `.with_for_update()`, still no
+  version bump. Unchanged.
+- **INV-17** (equipment-maintenance "Complete work" always creates a new
+  record rather than closing the open one) — `InventoryMaintenancePage.tsx`
+  re-checked; still a single unconditional `createMaintenanceRecord` call.
+  Unchanged.
+
+### Verified good ✅ (new this pass)
+
+- **The dual-ledger stock model is Pitfall #27-correct throughout.**
+  `_consume_from_lots`, `_restore_to_lots`, and the new
+  `_carry_forward_column_stock` (the read-then-write most exposed to a
+  double-carry race, since it turns a plain column value into a brand-new
+  lot row) all lock their contended rows **and** make the read that decides
+  the write a locking read — `_carry_forward_column_stock`'s own comments
+  cite Pitfall #27 by name and explain why the item rows (not the
+  not-yet-existing lots) are what must be locked. `issue_from_pool`'s
+  actual capacity decision runs through `_consume_from_lots`'s locking
+  `SELECT ... FOR UPDATE` on `InventoryLot`, not through the earlier plain
+  `_in_date_lot_totals` call (used only to route lot-stocked vs.
+  column-stocked, not to decide the quantity) — so no overcommit is
+  possible even though that routing read is not itself locking.
+- **`fulfill_equipment_request` closes the release-lock-between-steps gap
+  its own comment names**: `.with_for_update()` alone would leave a window
+  between the locked read and the (separately-committing) issue/checkout/
+  assign call, so it additionally does an atomic single-statement
+  `UPDATE ... WHERE status = 'approved'` claim before creating any
+  fulfillment record — `rowcount == 0` means another caller already claimed
+  it. Genuinely double-checked, not merely assumed correct from the lock's
+  presence.
+- **The new `create-if-absent` route and its FK/audit handling.** `POST
+/items/create-if-absent` (new since pass 2) is gated `inventory.manage`,
+  matching every sibling create route; it delegates to `create_item`, which
+  still runs `_assert_item_fks_in_org` (XC-1, unchanged); the endpoint logs
+  `inventory_item_created` only when it actually created a row (not on the
+  found-existing branch), matching the audit pattern on every other create
+  route in the file.
+- **The member-profile-visibility fix on the impact planner** (new
+  `resolve_profile_visibility` AND-gate) is a data-exposure _improvement_ —
+  a member's own visibility choice now overrides the org's
+  `contact_visibility` setting rather than being bypassable through this
+  one report — not a regression to flag.
+- **No new injection surface, no new CSV export, no `window.confirm`/
+  `alert`/`prompt`** anywhere in the diff (Pitfalls 15/16) — `inventory.py`'s
+  two CSV exports still route through `SafeCsvWriter`, unchanged.
+- **Both new migrations correctly guard on table existence** (Pitfall #26):
+  `e1f2a3b4c5d6` checks `"inventory_items" in ...get_table_names()` before
+  its backfill `UPDATE`s (and is honestly documented as irreversible —
+  `downgrade()` is a no-op, since AVAILABLE+poor is indistinguishable after
+  the fact from a legitimately-quarantined row); `c3d0e5f7a924` checks both
+  table and column presence before `add_column`.
+
+### Guard tests added
+
+- `tests/test_inventory_return_locking.py::test_return_to_pool_locks_the_issuance_row`
+  and `::test_checkin_item_locks_the_checkout_row` — source-inspection,
+  same shape as `test_inventory_return_receipt.py`'s existing INV-10 guard
+  test. Both confirmed to **fail** against the pre-fix code (`git stash` of
+  `inventory_service.py`) and **pass** after.
+
+### Completion gate
+
+| Check                                             | Result                                         |
+| ------------------------------------------------- | ---------------------------------------------- |
+| `flake8 app/ tests/ alembic/`                     | ✅ 0 violations                                |
+| `black --check app/ tests/ alembic/`              | ✅ clean (1402 files unchanged)                |
+| `isort --check-only app/ tests/ alembic/`         | ✅ clean                                       |
+| `python3 scripts/validate_migrations.py --strict` | ✅ single head (`a8c4d1e2f3b5`), 411 revisions |
+| `pytest tests/ -k "inventory or label"`           | ✅ 786 passed, 1 pre-existing skip             |
+| `pytest tests/` (full backend suite)              | ✅ 9977 passed, 21 pre-existing skips          |
+| `tsc --noEmit` / `eslint .` (frontend)            | not run — no frontend files touched this pass  |
+
+No `tsc`/`eslint` run this pass: every frontend finding this pass reviewed
+(`InventoryScanModal.tsx`, `InventoryAdminHub.tsx`, `MyEquipmentPage.tsx`,
+`EquipmentRequestsPage.tsx`, `onHand.ts`) was already correct in the diff,
+so no frontend edit was made. Stated explicitly per this rotation's "never
+report a gate you did not run" rule rather than implying a clean run.
+
+---
+
+## Pass 2 (2026-08-28)
 
 **Backend:** `api/v1/endpoints/inventory.py`, `services/inventory_service.py`,
 `api/v1/endpoints/labels.py`, `services/label_service.py`,
@@ -10,8 +285,6 @@
 **Migrations:** `8fb3757b80ec` (equipment-request duration),
 `a8f3c1d7e902` (reorder receiving workflow), `f4a9c2d81e70` (physical return
 receipt) — all landed since pass 1
-
----
 
 ## Correction
 
