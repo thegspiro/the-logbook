@@ -43,6 +43,16 @@ describe('documentsService', () => {
 
       expect(mockGet).toHaveBeenCalledWith('/documents/folders', { params: { parent_id: 'parent-1' } });
     });
+
+    it('forwards an opaque nested folder id without changing it', async () => {
+      mockGet.mockResolvedValueOnce({ data: { folders: [], total: 0 } });
+
+      await documentsService.getFolders('8b653a70-665f-4fd4-9077-a23bc13f3984');
+
+      expect(mockGet).toHaveBeenCalledWith('/documents/folders', {
+        params: { parent_id: '8b653a70-665f-4fd4-9077-a23bc13f3984' },
+      });
+    });
   });
 
   // --- createFolder ---
@@ -95,7 +105,7 @@ describe('documentsService', () => {
     it('should GET /documents with params', async () => {
       const data = { documents: [{ id: 'd1' }], total: 1, skip: 0, limit: 20 };
       mockGet.mockResolvedValueOnce({ data });
-      const params = { folder_id: 'f1', search: 'report' };
+      const params = { folder_id: 'f1', skip: 25, limit: 50, search: 'report', status: 'archived' };
 
       const result = await documentsService.getDocuments(params);
 

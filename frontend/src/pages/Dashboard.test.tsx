@@ -46,6 +46,7 @@ const {
   mockGetSchedulingSummary,
   mockGetTrainingEnrollments,
   mockGetAdminHoursSummary,
+  mockGetEnabledModules,
 } = vi.hoisted(() => ({
   mockGetMyShifts: vi.fn(),
   mockGetOpenShifts: vi.fn(),
@@ -67,6 +68,7 @@ const {
   mockGetSchedulingSummary: vi.fn(),
   mockGetTrainingEnrollments: vi.fn(),
   mockGetAdminHoursSummary: vi.fn(),
+  mockGetEnabledModules: vi.fn(),
 }));
 
 vi.mock('../modules/scheduling/services/api', () => ({
@@ -102,7 +104,7 @@ vi.mock('../services/api', () => ({
     getSetupChecklist: mockGetSetupChecklist,
     // Reached via DashboardOrientation -> useEnabledModules, which decides
     // which learning lessons count toward the orientation prompt.
-    getEnabledModules: vi.fn().mockResolvedValue({ enabled_modules: [] }),
+    getEnabledModules: mockGetEnabledModules,
   },
   inventoryService: {
     getUserInventory: mockGetUserInventory,
@@ -217,15 +219,16 @@ describe('Dashboard', () => {
       is_fully_compliant: true,
       days_until_next_expiration: null,
     });
-    mockGetSchedulingSummary.mockResolvedValue({
-      total_shifts: 0,
-      shifts_this_week: 0,
-      shifts_this_month: 0,
-      total_hours_this_month: 0,
+    mockCheckPermission.mockImplementation((permission: string) =>
+      ['scheduling.view', 'training.view', 'admin_hours.view'].includes(permission)
+    );
+    mockGetEnabledModules.mockResolvedValue({
+      configured: true,
+      enabled_modules: ['inventory', 'medical_screening', 'notifications', 'scheduling', 'training'],
     });
+    mockGetSchedulingSummary.mockResolvedValue({ hours_worked_this_month: 0 });
     mockGetTrainingEnrollments.mockResolvedValue([]);
     mockGetAdminHoursSummary.mockResolvedValue({ totalHours: 0 });
-    mockCheckPermission.mockReturnValue(false);
     mockGetAdminSummary.mockResolvedValue({});
     mockGetSetupChecklist.mockResolvedValue({ completed_count: 0, total_count: 0 });
     mockGetUserInventory.mockResolvedValue({ permanent_assignments: [], active_checkouts: [], issued_items: [] });
@@ -313,6 +316,77 @@ describe('Dashboard', () => {
       await waitFor(() => expect(within(timeline).queryByRole('alert')).not.toBeInTheDocument());
       expect(within(timeline).getByText('Shift · Engine 7')).toBeInTheDocument();
       expect(within(timeline).getByText('Live Fire Drill')).toBeInTheDocument();
+    });
+  });
+
+  describe('hours summary gates', () => {
+    it('does not call summary endpoints owned by disabled modules', async () => {
+      mockGetEnabledModules.mockResolvedValue({ configured: true, enabled_modules: [] });
+
+      renderWithRouter(<Dashboard />);
+
+      const card = await screen.findByRole('region', { name: /My hours,/ });
+      await waitFor(() => {
+        expect(mockGetAdminHoursSummary).toHaveBeenCalledTimes(1);
+      });
+      expect(mockGetSchedulingSummary).not.toHaveBeenCalled();
+      expect(mockGetMyTraining).not.toHaveBeenCalled();
+      expect(within(card).getAllByText('Unavailable')).toHaveLength(2);
+      expect(within(card).getAllByText('0')).toHaveLength(2);
+    });
+
+    it('loads authorized sources independently when another source fails', async () => {
+      mockGetSchedulingSummary.mockResolvedValue({ hours_worked_this_month: 3 });
+      mockGetMyTraining.mockRejectedValue(new Error('training unavailable'));
+      mockGetAdminHoursSummary.mockResolvedValue({ totalHours: 2 });
+
+      renderWithRouter(<Dashboard />);
+
+      const card = await screen.findByRole('region', { name: /My hours,/ });
+      await waitFor(() => {
+        expect(within(card).getByText('5')).toBeInTheDocument();
+      });
+      expect(within(card).getByText('3')).toBeInTheDocument();
+      expect(within(card).getByText('2')).toBeInTheDocument();
+      expect(within(card).getByText('Unavailable')).toBeInTheDocument();
+    });
+
+    it('does not report an error for a source it never attempted', async () => {
+      // A member without training.view is not looking at a broken card. If a
+      // gated-off source counted as a failure the banner would be permanent
+      // and its Retry would re-run the same gate, so this pins the direction:
+      // only an attempted-and-rejected source raises the error.
+      mockCheckPermission.mockImplementation((permission: string) => permission === 'admin_hours.view');
+      mockGetEnabledModules.mockResolvedValue({ configured: true, enabled_modules: [] });
+      mockGetAdminHoursSummary.mockResolvedValue({ totalHours: 2 });
+
+      renderWithRouter(<Dashboard />);
+
+      const card = await screen.findByRole('region', { name: /My hours,/ });
+      // Administrative hours is the only source that loads, so it is both the
+      // row figure and the headline total.
+      await waitFor(() => {
+        expect(within(card).getAllByText('2')).toHaveLength(2);
+      });
+      expect(mockGetSchedulingSummary).not.toHaveBeenCalled();
+      expect(mockGetMyTraining).not.toHaveBeenCalled();
+      expect(screen.queryByText('Hours could not be fully verified.')).not.toBeInTheDocument();
+    });
+
+    it('does not call enabled sources without their view permissions', async () => {
+      mockCheckPermission.mockImplementation((permission: string) => permission === 'scheduling.view');
+      mockGetSchedulingSummary.mockResolvedValue({ hours_worked_this_month: 4 });
+
+      renderWithRouter(<Dashboard />);
+
+      const card = await screen.findByRole('region', { name: /My hours,/ });
+      await waitFor(() => {
+        expect(within(card).getAllByText('4')).toHaveLength(2);
+      });
+      expect(mockGetSchedulingSummary).toHaveBeenCalledTimes(1);
+      expect(mockGetMyTraining).not.toHaveBeenCalled();
+      expect(mockGetAdminHoursSummary).not.toHaveBeenCalled();
+      expect(mockCheckPermission).toHaveBeenCalledWith('admin_hours.view');
     });
   });
 

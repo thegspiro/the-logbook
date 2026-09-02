@@ -263,10 +263,14 @@ const Dashboard: React.FC = () => {
   const [loadingEligibility, setLoadingEligibility] = useState(false);
 
   // Hours
-  const [hours, setHours] = useState({
-    training: 0,
-    standby: 0,
-    administrative: 0,
+  const [hours, setHours] = useState<{
+    training: number | null;
+    standby: number | null;
+    administrative: number | null;
+  }>({
+    training: null,
+    standby: null,
+    administrative: null,
   });
   const [loadingHours, setLoadingHours] = useState(true);
   const [hoursError, setHoursError] = useState(false);
@@ -767,24 +771,41 @@ const Dashboard: React.FC = () => {
       const monthStart = `${today.slice(0, 7)}-01`;
       const monthEnd = today;
 
+      const canLoadScheduling = isModuleOn('scheduling') && checkPermission('scheduling.view');
+      const canLoadTraining = isModuleOn('training') && checkPermission('training.view');
+      // Admin Hours currently has no ModuleSettings flag. Its established
+      // member-facing gate is admin_hours.view; manage is only for reviewing
+      // the whole department's entries.
+      const canLoadAdminHours = checkPermission('admin_hours.view');
+
+      // Only a source that was actually attempted can fail. A member without
+      // training.view is not looking at a broken card, so a gated-off source
+      // must leave this false -- flipping it would pin an error banner and a
+      // Retry that re-runs the same gate and changes nothing.
       let sourceFailed = false;
       const [schedulingSummary, trainingSummary, adminHoursSummary] = await Promise.all([
-        schedulingService.getSummary().catch((err) => {
-          console.error('Failed to load scheduling summary:', err);
-          sourceFailed = true;
-          return null;
-        }),
-        trainingModuleConfigService.getMyTraining().catch((err) => {
-          console.error('Failed to load training summary:', err);
-          sourceFailed = true;
-          setCertificationsError(true);
-          return null;
-        }),
-        adminHoursEntryService.getSummary({ startDate: monthStart, endDate: monthEnd }).catch((err) => {
-          console.error('Failed to load admin hours summary:', err);
-          sourceFailed = true;
-          return null;
-        }),
+        canLoadScheduling
+          ? schedulingService.getSummary().catch((err) => {
+              console.error('Failed to load scheduling summary:', err);
+              sourceFailed = true;
+              return null;
+            })
+          : Promise.resolve(null),
+        canLoadTraining
+          ? trainingModuleConfigService.getMyTraining().catch((err) => {
+              console.error('Failed to load training summary:', err);
+              sourceFailed = true;
+              setCertificationsError(true);
+              return null;
+            })
+          : Promise.resolve(null),
+        canLoadAdminHours
+          ? adminHoursEntryService.getSummary({ startDate: monthStart, endDate: monthEnd }).catch((err) => {
+              console.error('Failed to load admin hours summary:', err);
+              sourceFailed = true;
+              return null;
+            })
+          : Promise.resolve(null),
       ]);
       setHoursError(sourceFailed);
       // All three are month-to-date, because the card says "My Hours, August"
@@ -792,9 +813,9 @@ const Dashboard: React.FC = () => {
       // were previously lifetime figures — so the headline total summed two
       // lifetime numbers with one monthly one and meant nothing.
       setHours({
-        training: trainingSummary?.hours_summary?.hours_this_month ?? 0,
-        standby: schedulingSummary?.hours_worked_this_month || 0,
-        administrative: adminHoursSummary?.totalHours ?? 0,
+        training: trainingSummary?.hours_summary?.hours_this_month ?? null,
+        standby: schedulingSummary?.hours_worked_this_month ?? null,
+        administrative: adminHoursSummary?.totalHours ?? null,
       });
       setMyCerts(trainingSummary?.certifications ?? []);
     } catch {

@@ -309,7 +309,12 @@ def _fake_email_service_cls():
 
 
 def _send_service(election, monkeypatch):
-    organization = SimpleNamespace(name="FCVFD", email="hq@example.org")
+    # `settings=None` mirrors a real Organization row with no configured
+    # membership tiers — `_member_voting_gates` (Codex round 7, ELEC-35)
+    # now runs whenever `election.positions` is set, independent of
+    # whether `position_eligibility` is configured, so this mock needs a
+    # `.settings` attribute even though this fixture's election has none.
+    organization = SimpleNamespace(name="FCVFD", email="hq@example.org", settings=None)
     db = _db(
         [
             _result(scalar_one_or_none=election),

@@ -12,6 +12,8 @@ import { ChevronRight, Home } from 'lucide-react';
 export interface BreadcrumbItem {
   label: string;
   path?: string | undefined;
+  onClick?: (() => void) | undefined;
+  ariaLabel?: string | undefined;
 }
 
 interface BreadcrumbsProps {
@@ -198,7 +200,16 @@ export const Breadcrumbs: React.FC<BreadcrumbsProps> = ({ items, className = '' 
         {crumbs.map((crumb, index) => (
           <li key={index} className="flex items-center">
             <ChevronRight className="text-theme-text-muted mx-1 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-            {crumb.path ? (
+            {crumb.onClick ? (
+              <button
+                type="button"
+                onClick={crumb.onClick}
+                aria-label={crumb.ariaLabel}
+                className="text-theme-text-muted hover:text-theme-text-primary inline-flex items-center justify-center underline-offset-2 transition-colors duration-150 hover:underline max-md:min-h-[44px] max-md:min-w-[44px]"
+              >
+                {crumb.label}
+              </button>
+            ) : crumb.path ? (
               <Link
                 to={crumb.path}
                 className="text-theme-text-muted hover:text-theme-text-primary inline-flex items-center justify-center underline-offset-2 transition-colors duration-150 hover:underline max-md:min-h-[44px] max-md:min-w-[44px]"
