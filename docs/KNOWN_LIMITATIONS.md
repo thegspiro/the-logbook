@@ -1661,6 +1661,26 @@ position model to the ballot-item model the public page already uses, including
 its submission shape. Needs an owner decision on whether to converge the two
 ballots or retire one of them. This loop does not make that call.
 
+**Update (2026-09-02, security review ELEC-28):** the backend-side half of
+this gap is now closed for eligibility purposes — `send_ballot_emails`
+correctly snapshots `eligible_positions` on the token for a mixed election
+(ELEC-23, ELEC-26 in `docs/security-review/ELEC-06-elections-ballots.md`),
+and `/ballot/lookup` correctly returns the eligible positions and their
+candidates to that token. But this UI gap means it doesn't matter: a member
+eligible **only** for a plain position in a mixed election (ineligible for
+every structured ballot item) now correctly receives a live token, opens
+`BallotVotingPage`, and sees an **empty ballot** — no positions render, so
+there is nothing to vote on. A member eligible for both a position and an
+item sees only the item, and submitting it spends the single-use token with
+no way back to the position vote. Confirmed the backend's single-vote token
+route (`POST /elections/ballot/vote`, `cast_vote_with_token`) that could in
+principle carry a positional vote is not called from any current frontend
+code — there is no wiring to repurpose, only a route to design a UI and
+submission contract around. Through the product today, a plain-position
+contest inside a mixed election cannot be voted on by an emailed-token
+recipient at all. Not fixed for the same reason as the original finding: it
+is a UI/submission-contract design decision, not a mechanical fix.
+
 ## Training — The Student View of a Cohort Has No Frontend (2026-08-12)
 
 The API implements it. `GET /training/cohorts/{id}` served to a member on the
@@ -1732,6 +1752,47 @@ change for the Ballot Builder's template list); a creation cap needs an
 actual number picked by a human, the same kind of open-ended limit left to
 an owner decision elsewhere (FIN-7's export cap, the various CS-config
 thresholds). (Security review ELEC-12,
+`docs/security-review/ELEC-06-elections-ballots.md`.)
+
+## Elections — Vote Receipt Verification Takes Its Credential as a GET Query Parameter (2026-09-02)
+
+`GET /elections/{id}/verify-receipt?receipt=...` (`verify_vote_receipt`)
+binds `receipt` as a bare scalar parameter on a `GET` route, so it travels
+in the URL query string rather than a request body — unlike the other three
+public token routes (`/ballot/lookup`, `/ballot/vote`, `/ballot/vote/bulk`),
+which all carry their credential in a POST body specifically so it never
+lands in server/proxy access logs or browser network history (R-D3). A
+receipt hash cannot cast, change, or reveal the content of a vote — it only
+confirms a matching vote was recorded, plus its timestamp and position — but
+it is still a value tied to one specific voter's one specific ballot, and a
+query-string value is more exposed than a body value to logging
+infrastructure the application doesn't control.
+
+Not fixed: converting this endpoint to `POST` with the receipt in the body
+would be a public API **shape** change, not a mechanical one. This exact
+`GET .../verify-receipt?receipt=` contract is documented as a stable,
+external-facing endpoint in `wiki/API-Reference.md`, `ARCHITECTURE.md`,
+`BALLOT_FORENSICS_GUIDE.md`, and the training materials — any of which may
+already have a caller depending on the GET shape — so changing it needs an
+owner decision about that external contract, not a guess made during a
+security-review pass. (Security review ELEC-14,
+`docs/security-review/ELEC-06-elections-ballots.md`.)
+
+## Elections — Manual Ballot Batch Listing Has No Bound (2026-09-02)
+
+`list_manual_ballot_batches` (`GET .../manual-ballots`) returns every
+paper-tally batch recorded for an election with `scalars().all()`, eagerly
+loads every batch's attestations, and aggregates every associated vote —
+with no pagination or per-election cap. Access control is sound
+(`elections.manage`-gated, org- and election-scoped, the same trust boundary
+as `SavedBallotTemplate` below), so this is a scaling concern rather than a
+leak: an election that accumulates many paper-tally sessions over a long
+voting window pays a growing, uncapped cost on every load of this listing.
+
+Not fixed for the same reason as the saved-ballot-templates item below:
+pagination changes the response envelope (a frontend-affecting contract
+change for the manual-ballots admin screen), and a per-election batch cap
+needs an actual number picked by a human. (Security review ELEC-16,
 `docs/security-review/ELEC-06-elections-ballots.md`.)
 
 ## Users: Roster/Archive/Leave Lists Are Unbounded, Not Just Un-Paginated (2026-08-25)

@@ -66,6 +66,29 @@ def _runoff_base_title(election) -> str:
     return _RUNOFF_SUFFIX.sub("", election.title or "").strip()
 
 
+def ballot_item_candidate_positions(item: Dict) -> Set[str]:
+    """The ``Candidate.position`` values that belong to this ballot item.
+
+    An item with its own "position" field claims exactly that value — this
+    is also what new votes are stored/deduped under (see
+    ``ElectionService.submit_ballot_with_token``). Items persisted without
+    an explicit position (created before ballot items carried one, or via
+    the admin candidate endpoint with no ``election.positions`` configured)
+    are matched by their title *or* id instead — the same fallback the
+    voting UI (``BallotVotingPage.tsx::getCandidatesForItem``) and
+    ``ElectionService.check_voter_eligibility`` already rely on. Dropping
+    this fallback here (matching only the item id) would silently empty
+    the candidate list of every legacy candidate-selection ballot item on
+    deploy — those ballots would render with no choices and be
+    unsubmittable, even though the candidates and the item are otherwise
+    unchanged.
+    """
+    item_position = item.get("position")
+    if item_position:
+        return {item_position}
+    return {value for value in (item.get("title"), item.get("id")) if value}
+
+
 class ElectionService:
     """Service for election management"""
 
@@ -280,12 +303,27 @@ class ElectionService:
 
         member_class = getattr(user, "member_class", None)
         member_status = getattr(user, "member_status", None)
-        if not member_class or not member_status:
+        membership_type = getattr(user, "membership_type", None)
+        live_class, live_status = split_membership_type(membership_type)
+
+        # A live membership_type that is an org-configured custom tier
+        # ("senior") splits to (None, None) — that is the important case,
+        # not the fallback one. `_reconcile_membership` (models/user.py)
+        # deliberately *preserves* member_class/member_status from before a
+        # switch onto such a tier, because shift eligibility needs to keep
+        # recognizing a member who still rides. That carryover must not
+        # leak into election eligibility: a member moved onto a custom tier
+        # is meant to match no built-in voter category (see
+        # split_membership_type's docstring — "would widen the electorate
+        # of any ballot restricted to either"), so the stale class/status
+        # cached on the row is discarded here regardless of what shift
+        # eligibility keeps it for.
+        if membership_type and live_class is None and live_status is None:
+            member_class, member_status = None, None
+        elif not member_class or not member_status:
             # A row written before the split, or a caller passing a stub. The
             # legacy field still carries both facts, just fused.
-            member_class, member_status = split_membership_type(
-                getattr(user, "membership_type", None)
-            )
+            member_class, member_status = live_class, live_status
         # Deliberately not defaulted. Both stay None when the member's
         # membership_type is an org-configured tier id ("senior") rather than
         # one of the seven known values, and None matches no class and no
@@ -382,6 +420,58 @@ class ElectionService:
         html_parts.append("</ul>")
         return "\n".join(html_parts), "\n".join(text_parts)
 
+    async def _member_voting_gates(
+        self,
+        user: "User",
+        election: Election,
+        organization_id: str,
+        organization: Optional["Organization"] = None,
+    ) -> Tuple[bool, bool]:
+        """The two universal eligibility gates a voter must clear before ANY
+        scope-specific rule (per-item ``eligible_voter_types``, per-position
+        ``voter_types``) is even considered.
+
+        Returns ``(tier_voting_eligible, has_override)``:
+
+        - ``tier_voting_eligible``: False when the member's membership tier
+          has ``benefits.voting_eligible == False`` (e.g. the shipped
+          "probationary" tier) — a global ban that applies regardless of
+          which scope (ballot item or plain position) is being evaluated.
+        - ``has_override``: True when this election's ``voter_overrides``
+          names this user — grants blanket eligibility for every scope,
+          bypassing per-item/per-position voter-type rules entirely.
+
+        Both ``annotate_ballot_items_for_user`` (item eligibility) and the
+        plain-position eligibility snapshot in ``send_ballot_emails`` apply
+        these identically. Before this helper existed, the item path
+        computed both gates inline and the newer positional path (ELEC-26)
+        computed neither — a globally banned member could still receive a
+        live positional credential, and an overridden member's override
+        didn't reach their positional votes (Codex round 6, ELEC-30/31).
+        """
+        if organization:
+            org = organization
+        else:
+            org_result = await self.db.execute(
+                select(Organization).where(Organization.id == organization_id)
+            )
+            org = org_result.scalar_one_or_none()
+        tier_config = (org.settings or {}).get("membership_tiers", {}) if org else {}
+        tiers = tier_config.get("tiers", [])
+        member_tier_id = getattr(user, "membership_type", None) or "active"
+        tier_def = next((t for t in tiers if t.get("id") == member_tier_id), None)
+        tier_voting_eligible = True
+        if tier_def:
+            tier_voting_eligible = tier_def.get("benefits", {}).get(
+                "voting_eligible", True
+            )
+
+        has_override = bool(
+            election.voter_overrides
+            and any(o.get("user_id") == str(user.id) for o in election.voter_overrides)
+        )
+        return tier_voting_eligible, has_override
+
     async def annotate_ballot_items_for_user(
         self,
         user: "User",
@@ -417,20 +507,15 @@ class ElectionService:
         member_tier_id = getattr(user, "membership_type", None) or "active"
         tier_def = next((t for t in tiers if t.get("id") == member_tier_id), None)
 
-        # Check if tier is voting-eligible at all
-        tier_voting_eligible = True
+        # Human-readable tier name for the ineligibility reason below. The
+        # voting_eligible/override booleans themselves come from the shared
+        # gate helper so this path can never drift from the positional one.
         tier_name = member_tier_id
         if tier_def:
-            benefits = tier_def.get("benefits", {})
-            tier_voting_eligible = benefits.get("voting_eligible", True)
             tier_name = tier_def.get("name", member_tier_id)
-
-        # Secretary override check
-        has_override = False
-        if election.voter_overrides:
-            has_override = any(
-                o.get("user_id") == str(user.id) for o in election.voter_overrides
-            )
+        tier_voting_eligible, has_override = await self._member_voting_gates(
+            user, election, organization_id, org
+        )
 
         annotated_items: List[Dict] = []
         for item in ballot_items:
@@ -3517,6 +3602,43 @@ class ElectionService:
 
         Returns: ({attestations, required, status}, error)
         """
+        # Lock the election FIRST, before the batch. Election deletion locks
+        # parent-then-child: the DELETE on `elections` takes the election
+        # row's lock, and the ON DELETE CASCADE that removes its
+        # manual_ballot_batches rows locks each batch only after that.
+        # Attesting the batch-then-election (the original order here) is
+        # the reverse — child-then-parent — so a concurrent attest and
+        # delete can each hold one row and wait on the other, an InnoDB
+        # deadlock neither this call nor delete_election retries. Matching
+        # the parent-to-child order removes the cycle while keeping both
+        # locks held before either check proceeds (ELEC-15's serialization
+        # property is unchanged).
+        #
+        # FOR UPDATE also serializes with close_election, which locks and
+        # commits the election independently of any batch: a plain read
+        # here could still observe a stale OPEN status past a concurrent
+        # close, because the two locks would otherwise never block each
+        # other and REPEATABLE READ's snapshot for a plain read would not
+        # reflect a commit made after this transaction began. A locking
+        # read forces this transaction to wait for any in-flight close to
+        # finish and then see its committed CLOSED status, so a batch
+        # attested "just in time" is consistently rejected rather than
+        # sometimes slipping past the close.
+        election_result = await self.db.execute(
+            select(Election)
+            .where(Election.id == str(election_id))
+            .where(Election.organization_id == str(organization_id))
+            .with_for_update()
+        )
+        election = election_result.scalar_one_or_none()
+        if not election:
+            return None, "Election not found"
+        if election.status != ElectionStatus.OPEN:
+            return (
+                None,
+                "Attestations can only be added while voting is open",
+            )
+
         # FOR UPDATE serializes concurrent attesters so the confirm
         # transition happens exactly once.
         result = await self.db.execute(
@@ -3533,20 +3655,6 @@ class ElectionService:
             return None, "This batch has been voided and cannot be attested"
         if batch.status == "confirmed":
             return None, "This batch is already fully attested"
-
-        election_result = await self.db.execute(
-            select(Election)
-            .where(Election.id == str(election_id))
-            .where(Election.organization_id == str(organization_id))
-        )
-        election = election_result.scalar_one_or_none()
-        if not election:
-            return None, "Election not found"
-        if election.status != ElectionStatus.OPEN:
-            return (
-                None,
-                "Attestations can only be added while voting is open",
-            )
 
         if batch.recorded_by and str(attested_by) == str(batch.recorded_by):
             return (
@@ -3717,14 +3825,59 @@ class ElectionService:
         the single-vote endpoint — rows are retained with deleted_at/by and
         the reason, and appear in the forensics report.
         """
+        # Lock the election FIRST, before the batch and votes, matching
+        # delete_election's parent-to-child order: the DELETE on `elections`
+        # takes the election row's lock, and the ON DELETE CASCADE that
+        # removes its manual_ballot_batches (and their votes) locks each
+        # child row only after that. Locking the batch (and, via the old
+        # join, the election) before that would be child-then-parent — a
+        # concurrent void and delete can each hold one row and wait on the
+        # other, an InnoDB deadlock neither endpoint retries. Unlike
+        # attest_manual_ballot_batch (ELEC-15/24), voiding never gates on the
+        # election's OPEN/CLOSED status and results are always computed live
+        # from current vote/batch state rather than snapshotted at close, so
+        # this lock exists only to fix the ordering — it adds no new
+        # serialization with close_election.
+        election_result = await self.db.execute(
+            select(Election)
+            .where(Election.id == str(election_id))
+            .where(Election.organization_id == str(organization_id))
+            .with_for_update()
+        )
+        if election_result.scalar_one_or_none() is None:
+            return 0, "Election not found"
+
+        # Lock the batch next — it's the row every void of this batch
+        # contends on. Without this, two concurrent voids can both load the
+        # same not-yet-voided votes before either commits, both report
+        # success, and the later ORM flush overwrites the first officer's
+        # deleted_by/reason/timestamp, corrupting the forensic attribution
+        # this operation exists to preserve. Locking also lets the
+        # already-voided check below see a concurrent void's committed
+        # result instead of a stale pre-lock snapshot (CLAUDE.md #27:
+        # lock the parent row *and* read its state through the lock).
+        # Absent for batches recorded before the attestation feature
+        # existed — those have no row to lock or flag, so this stays a
+        # best-effort guard for them, not a correctness gap introduced here.
+        batch_result = await self.db.execute(
+            select(ManualBallotBatch)
+            .where(ManualBallotBatch.id == batch_id)
+            .where(ManualBallotBatch.organization_id == str(organization_id))
+            .with_for_update()
+        )
+        batch = batch_result.scalar_one_or_none()
+        if batch is not None and batch.status == "voided":
+            return 0, "This batch has already been voided"
+
+        # The election is already locked and org-scoped above, so the votes
+        # query no longer needs to join Election just to filter by org.
         result = await self.db.execute(
             select(Vote)
-            .join(Election, Vote.election_id == Election.id)
-            .where(Election.organization_id == str(organization_id))
             .where(Vote.election_id == str(election_id))
             .where(Vote.manual_batch_id == batch_id)
             .where(Vote.is_manual.is_(True))
             .where(Vote.deleted_at.is_(None))
+            .with_for_update()
         )
         votes = list(result.scalars().all())
         if not votes:
@@ -3736,14 +3889,6 @@ class ElectionService:
             vote.deleted_by = str(deleted_by)
             vote.deletion_reason = reason
 
-        # Mirror the void on the batch row (absent for batches recorded
-        # before the attestation feature existed).
-        batch_result = await self.db.execute(
-            select(ManualBallotBatch)
-            .where(ManualBallotBatch.id == batch_id)
-            .where(ManualBallotBatch.organization_id == str(organization_id))
-        )
-        batch = batch_result.scalar_one_or_none()
         if batch is not None:
             batch.status = "voided"
         await self.db.commit()
@@ -5940,8 +6085,13 @@ Best regards,
                 )
                 continue
 
-            # Empty ballot prevention: skip members who have zero eligible
-            # ballot items so they don't receive a confusing empty ballot.
+            # Empty ballot prevention: compute eligible ballot items, but do
+            # NOT decide to skip yet — a mixed election may still owe this
+            # recipient a ballot for a plain position even when they are
+            # ineligible for every structured item (see the positions block
+            # below). Deciding on items alone here excluded a voter who was
+            # eligible only for a plain position: eligible_positions had not
+            # even been computed yet.
             eligible_items: List[Dict] = []
             if election.ballot_items:
                 eligible_items = await self._get_eligible_ballot_items_for_user(
@@ -5950,8 +6100,106 @@ Best regards,
                     organization_id=str(organization_id),
                     organization=organization,
                 )
-                if not eligible_items:
-                    skipped_count += 1
+
+            # Positions: snapshot which of this election's plain positions
+            # this recipient may vote for, mirroring the per-item snapshot
+            # below — the token carries no user identity, so
+            # position_eligibility (R-D4) can only be enforced at vote time
+            # from a send-time snapshot. None = no position rules on this
+            # election (unrestricted, and the used-token computation stays
+            # on election.positions).
+            #
+            # Deliberately NOT gated on "no ballot items": the schema
+            # allows an election to configure both `positions` and
+            # `ballot_items` at once, and a candidate can be nominated for
+            # a plain position that isn't tied to any ballot item. Skipping
+            # this snapshot whenever ballot_items exist left such a
+            # candidate's eligibility unchecked at every layer —
+            # eligible_positions stayed None regardless of position_eligibility
+            # rules, and the per-item check in cast_vote_with_token only
+            # ever fires for a candidate that resolves to an item — so a
+            # token eligible for one item could vote for *any* plain
+            # position with no eligibility check at all.
+            eligible_positions: Optional[List[str]] = None
+            if election.positions and election.position_eligibility:
+                # Apply the same two universal gates the item snapshot above
+                # goes through (_member_voting_gates): a globally
+                # voting-ineligible tier fails every position outright — an
+                # unrestricted position ("no rules for this position ->
+                # everyone may vote", below) is not an exemption from a
+                # global ban any more than an unrestricted ballot item is —
+                # and an election override grants every position
+                # unconditionally, the positional mirror of the override
+                # already bypassing every ballot item's voter-type rules
+                # (Codex round 6, ELEC-30/ELEC-31).
+                tier_voting_eligible, has_override = await self._member_voting_gates(
+                    recipient, election, str(organization_id), organization
+                )
+                if tier_voting_eligible or has_override:
+                    eligible_positions = []
+                    for pos in election.positions:
+                        if has_override:
+                            eligible_positions.append(pos)
+                            continue
+                        pos_rules = election.position_eligibility.get(pos)
+                        if not pos_rules:
+                            # No rules for this position → everyone may vote
+                            # (mirrors check_voter_eligibility).
+                            eligible_positions.append(pos)
+                            continue
+                        voter_types = pos_rules.get("voter_types", ["all"])
+                        if await self._user_has_role_type(recipient, voter_types):
+                            eligible_positions.append(pos)
+                else:
+                    # Globally voting-ineligible tier and no override: zero
+                    # eligible positions — the positional mirror of
+                    # annotate_ballot_items_for_user failing every item for
+                    # the same member. Empty (not None) so downstream code
+                    # correctly reads this as "evaluated, ineligible for
+                    # all", not "unrestricted".
+                    eligible_positions = []
+
+            # Empty ballot prevention: decide now that BOTH eligibility sets
+            # above are known. A mixed election defines ballot items and/or
+            # plain positions independently, so a recipient is skipped only
+            # when they qualify for neither structure the election actually
+            # defines — being eligible for one plain position is enough to
+            # warrant a ballot even if every structured item excludes them,
+            # and vice versa. Positions with no position_eligibility rules
+            # are unrestricted (everyone qualifies), so they never trigger a
+            # skip on their own.
+            items_defined = bool(election.ballot_items)
+            positions_restricted = bool(election.positions) and bool(
+                election.position_eligibility
+            )
+            positions_unrestricted = bool(election.positions) and not (
+                election.position_eligibility
+            )
+
+            qualifies = positions_unrestricted
+            if items_defined:
+                qualifies = qualifies or bool(eligible_items)
+            if positions_restricted:
+                qualifies = qualifies or bool(eligible_positions)
+
+            if (
+                items_defined or positions_restricted or positions_unrestricted
+            ) and not qualifies:
+                skipped_count += 1
+                if items_defined and positions_restricted:
+                    reason = (
+                        "Not eligible for any ballot item or position in "
+                        "this election — role type, attendance, and "
+                        "membership did not match any item or position "
+                        "requirements"
+                    )
+                elif positions_restricted:
+                    reason = (
+                        "Not eligible for any position in this election — "
+                        "membership type does not match any position's "
+                        "voter-type rules"
+                    )
+                else:
                     reason = await self._get_ineligibility_reason_for_user(
                         user=recipient,
                         election=election,
@@ -5961,61 +6209,18 @@ Best regards,
                         "No eligible ballot items — role type and "
                         "attendance did not match any item requirements"
                     )
-                    skipped_details.append(
-                        {
-                            "user_id": str(recipient.id),
-                            "name": recipient.full_name or recipient.username,
-                            "reason": reason,
-                        }
-                    )
-                    logger.info(
-                        f"Skipping ballot email for user={recipient.id} "
-                        f"({reason}) | election={election_id}"
-                    )
-                    continue
-
-            # Positional elections: snapshot which positions this recipient
-            # may vote for, mirroring the per-item snapshot below — the token
-            # carries no user identity, so position_eligibility (R-D4) can
-            # only be enforced at vote time from a send-time snapshot. None =
-            # no position rules on this election (unrestricted, and the
-            # used-token computation stays on election.positions).
-            eligible_positions: Optional[List[str]] = None
-            if (
-                not election.ballot_items
-                and election.positions
-                and election.position_eligibility
-            ):
-                eligible_positions = []
-                for pos in election.positions:
-                    pos_rules = election.position_eligibility.get(pos)
-                    if not pos_rules:
-                        # No rules for this position → everyone may vote
-                        # (mirrors check_voter_eligibility).
-                        eligible_positions.append(pos)
-                        continue
-                    voter_types = pos_rules.get("voter_types", ["all"])
-                    if await self._user_has_role_type(recipient, voter_types):
-                        eligible_positions.append(pos)
-                if not eligible_positions:
-                    skipped_count += 1
-                    reason = (
-                        "Not eligible for any position in this election — "
-                        "membership type does not match any position's "
-                        "voter-type rules"
-                    )
-                    skipped_details.append(
-                        {
-                            "user_id": str(recipient.id),
-                            "name": recipient.full_name or recipient.username,
-                            "reason": reason,
-                        }
-                    )
-                    logger.info(
-                        f"Skipping ballot email for user={recipient.id} "
-                        f"({reason}) | election={election_id}"
-                    )
-                    continue
+                skipped_details.append(
+                    {
+                        "user_id": str(recipient.id),
+                        "name": recipient.full_name or recipient.username,
+                        "reason": reason,
+                    }
+                )
+                logger.info(
+                    f"Skipping ballot email for user={recipient.id} "
+                    f"({reason}) | election={election_id}"
+                )
+                continue
 
             # Build ballot items lists for the email
             items_html, items_text = self._build_ballot_items_lists(eligible_items)
@@ -7113,9 +7318,22 @@ Best regards,
         rest of the voting lifecycle, then re-check mutable state. Besides closing
         the token replay race, the election lock serializes updates to
         ``last_chain_hash`` so concurrent ballots cannot fork the vote audit chain.
+
+        Both re-selects need ``populate_existing=True``, not just
+        ``with_for_update()``. ``get_ballot_by_token`` already loaded this same
+        ``election``/``voting_token`` pair into the session's identity map (and
+        ``expire_on_commit=False`` means its commit does not expire them), so a
+        re-SELECT for a primary key already in the identity map returns the
+        cached Python object without copying the new row's columns onto it —
+        the lock is acquired at the SQL level, but ``locked_token.used`` /
+        ``locked_election.status`` would still read the pre-lock value. Same
+        requirement as ``quorum_service.py``'s ``calculate_quorum`` fix.
         """
         election_result = await self.db.execute(
-            select(Election).where(Election.id == election.id).with_for_update()
+            select(Election)
+            .where(Election.id == election.id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
         )
         locked_election = election_result.scalar_one_or_none()
         if not locked_election:
@@ -7126,6 +7344,7 @@ Best regards,
             .where(VotingToken.id == voting_token.id)
             .where(VotingToken.election_id == locked_election.id)
             .with_for_update()
+            .execution_options(populate_existing=True)
         )
         locked_token = token_result.scalar_one_or_none()
         if not locked_token:
@@ -7198,21 +7417,84 @@ Best regards,
         if position and candidate.position != position:
             return None, "Candidate is not running for this position"
 
-        # Enforce the send-time position-eligibility snapshot (R-D4). Fall
-        # back to candidate.position so omitting the position field can't
-        # bypass the check. NULL snapshot = legacy token or election without
-        # position rules — unrestricted (documented fail-open, time-bounded
-        # by token expiry).
+        # Fall back to candidate.position so omitting the position field
+        # can't bypass either eligibility check below.
         effective_position = position or candidate.position
-        if (
-            voting_token.eligible_positions is not None
-            and effective_position not in voting_token.eligible_positions
-        ):
-            return None, (
-                f"You are not eligible to vote for {effective_position}"
-                if effective_position
-                else "You are not eligible to vote in this election"
+
+        # A candidate is either scoped to a ballot item or a plain position
+        # (`election.positions`) — an election can configure both at once,
+        # so which eligibility snapshot governs this vote has to be decided
+        # per-candidate, not per-election. Candidates are matched to their
+        # ballot item the same way the voting UI and check_voter_eligibility
+        # already do: by the item's own "position" field when set, or by
+        # the item's title/id for legacy items created without one (see
+        # ballot_item_candidate_positions).
+        matching_item = (
+            next(
+                (
+                    item
+                    for item in election.ballot_items
+                    if effective_position is not None
+                    and effective_position in ballot_item_candidate_positions(item)
+                ),
+                None,
             )
+            if election.ballot_items
+            else None
+        )
+
+        # Nothing in schema validation stops a plain `election.positions`
+        # entry from equaling a ballot item's position/title/id (ELEC-29) —
+        # so `effective_position` can legitimately belong to *both*
+        # namespaces at once. Detecting that directly (rather than trusting
+        # which one `matching_item` above happened to resolve first) is what
+        # lets a colliding candidate be held to both applicable checks below
+        # instead of silently skipping whichever one lost the race.
+        is_plain_position = bool(
+            effective_position is not None
+            and election.positions
+            and effective_position in election.positions
+        )
+
+        if matching_item is not None:
+            # Enforce the token's per-item eligibility snapshot for
+            # ballot-item elections (R-1). Without this a token scoped to
+            # one ballot item could vote on any other item's candidate via
+            # this single-vote route, even though `submit_ballot_with_token`
+            # (the bulk route) already enforces `eligible_item_ids`.
+            if voting_token.eligible_item_ids is not None and matching_item.get(
+                "id"
+            ) not in set(voting_token.eligible_item_ids):
+                return None, (
+                    f"You are not eligible to vote for {effective_position}"
+                    if effective_position
+                    else "You are not eligible to vote in this election"
+                )
+
+        if matching_item is None or is_plain_position:
+            # Either not scoped to any ballot item at all (a plain
+            # positional candidate, or this election has no ballot items),
+            # or scoped to both a ballot item AND a colliding plain position
+            # (ELEC-29) — in which case the item check above is necessary
+            # but not sufficient, and this candidate must also clear the
+            # send-time position-eligibility snapshot (R-D4). NULL snapshot
+            # = legacy token, or an election/position with no eligibility
+            # rules configured — unrestricted (documented fail-open,
+            # time-bounded by token expiry). This is deliberately *not*
+            # checked for an item-scoped candidate with no collision:
+            # `eligible_positions` is drawn from `election.positions` only,
+            # so applying it to a ballot-item candidate whose position never
+            # appears in that list would reject legitimate item votes
+            # outright.
+            if (
+                voting_token.eligible_positions is not None
+                and effective_position not in voting_token.eligible_positions
+            ):
+                return None, (
+                    f"You are not eligible to vote for {effective_position}"
+                    if effective_position
+                    else "You are not eligible to vote in this election"
+                )
 
         # Method-aware duplicate and limit checks — the token-path mirror of
         # cast_vote's rules (R-D5): approval records one vote per approved
@@ -7352,14 +7634,36 @@ Best regards,
             if voting_token.eligible_positions is not None
             else (election.positions or [])
         )
+        # A mixed election's token can owe votes in BOTH scopes at once —
+        # plain positions AND ballot items — since this single-vote route
+        # also accepts item-scoped candidates (see `matching_item` above).
+        # Folding each eligible item's candidate-position label(s) into the
+        # same completion set `election_positions` already uses means
+        # "covered every position in eligible_positions" can no longer be
+        # mistaken for "ballot fully cast" while an eligible item is still
+        # unvoted — completion has to cover whichever scopes this token is
+        # actually eligible for (Codex round 6, ELEC-32). None
+        # eligible_item_ids = unrestricted (every ballot item), mirroring
+        # the None handling for eligible_positions above.
+        eligible_item_ids = (
+            set(voting_token.eligible_item_ids)
+            if voting_token.eligible_item_ids is not None
+            else None
+        )
+        item_position_labels: set = set()
+        for item in election.ballot_items or []:
+            if eligible_item_ids is None or item.get("id") in eligible_item_ids:
+                item_position_labels |= ballot_item_candidate_positions(item)
+        required_labels = set(election_positions) | item_position_labels
         if not multi_vote_method:
-            if not election_positions:
-                # Single-position election — token used after first vote
+            if not required_labels:
+                # Nothing owed in either scope — token used after first vote.
                 voting_token.used = True
                 voting_token.used_at = datetime.now(timezone.utc)
             else:
-                # Multi-position — check if all positions are now covered
-                remaining = set(election_positions) - set(positions_voted)
+                # Multi-scope — check if every owed position AND item has
+                # now been covered.
+                remaining = required_labels - set(positions_voted)
                 if not remaining:
                     voting_token.used = True
                     voting_token.used_at = datetime.now(timezone.utc)
@@ -7552,14 +7856,30 @@ Best regards,
             # Determine the position for this vote (use ballot item id as position)
             position = ballot_item.get("position") or ballot_item_id
 
+            # The set of candidate.position values that legitimately belong
+            # to this item — broader than `position` above, which is only
+            # the *storage* value for new votes. A legacy item persisted
+            # without its own "position" field has candidates keyed to its
+            # title instead of its id (see ballot_item_candidate_positions);
+            # comparing against `position` alone would reject every one of
+            # those candidates here even though they are exactly who this
+            # item's ballot is for.
+            item_candidate_positions = ballot_item_candidate_positions(ballot_item)
+
             # Check if already voted for this position (prevents double-voting
             # within the ballot). Match is_test so a test ballot never blocks
             # the same member's real ballot — mirroring the dedup-hash
             # namespace (`test:` prefix). Votes stored before position
             # normalization have position IS NULL, so a same-position filter
             # alone would let a token that voted pre-deploy vote again —
-            # treat a NULL-position vote for a candidate of this position as
-            # a vote on this item (read-time handling, no migration).
+            # treat a NULL-position vote for a candidate whose position is
+            # in item_candidate_positions (not just `position` itself) as a
+            # vote on this item: a legacy item's candidates may be keyed by
+            # title instead of the item id (read-time handling, no
+            # migration). Using `position` alone here would miss a NULL-
+            # position vote cast against a title-keyed legacy candidate,
+            # letting the same voter cast a second, differently-keyed vote
+            # for the same contest.
             existing_check = await self.db.execute(
                 select(Vote)
                 .where(Vote.election_id == election.id)
@@ -7573,7 +7893,7 @@ Best regards,
                             Vote.candidate_id.in_(
                                 select(Candidate.id)
                                 .where(Candidate.election_id == election.id)
-                                .where(Candidate.position == position)
+                                .where(Candidate.position.in_(item_candidate_positions))
                             ),
                         ),
                     )
@@ -7603,7 +7923,10 @@ Best regards,
                     )
                 for idx, cid in enumerate(rankings):
                     ranked_candidate = candidate_map.get(cid)
-                    if not ranked_candidate or ranked_candidate.position != position:
+                    if (
+                        not ranked_candidate
+                        or ranked_candidate.position not in item_candidate_positions
+                    ):
                         return (
                             None,
                             f"Invalid candidate selection for: {item_title}",
@@ -7626,7 +7949,10 @@ Best regards,
                     )
                 for cid in candidate_ids:
                     multi_candidate = candidate_map.get(cid)
-                    if not multi_candidate or multi_candidate.position != position:
+                    if (
+                        not multi_candidate
+                        or multi_candidate.position not in item_candidate_positions
+                    ):
                         return (
                             None,
                             f"Invalid candidate selection for: {item_title}",
@@ -7713,8 +8039,17 @@ Best regards,
                 candidate_id = deny_candidate.id
 
             else:
-                # Choice is a candidate UUID
-                if choice not in candidate_map:
+                # Choice is a candidate UUID. Must belong to *this* ballot
+                # item's position — same check the rankings/candidate_ids
+                # branches above already make — or a crafted submission
+                # could select a candidate from ballot item A while naming
+                # item B, binding an otherwise-uneligible candidate onto B's
+                # position (_create_token_vote below stores it there).
+                choice_candidate = candidate_map.get(choice)
+                if (
+                    choice_candidate is None
+                    or choice_candidate.position not in item_candidate_positions
+                ):
                     return (
                         None,
                         f"Invalid candidate selection for: {ballot_item.get('title', ballot_item_id)}",
