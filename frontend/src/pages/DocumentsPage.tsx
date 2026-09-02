@@ -54,6 +54,7 @@ const DocumentsPage: React.FC = () => {
   const [moreDocumentsLoading, setMoreDocumentsLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [summaryError, setSummaryError] = useState(false);
 
   // UI state
   const [searchQuery, setSearchQuery] = useState('');
@@ -96,8 +97,9 @@ const DocumentsPage: React.FC = () => {
     try {
       const data = await documentsService.getSummary();
       setSummary(data);
+      setSummaryError(false);
     } catch {
-      // Summary is non-critical, silently ignore
+      setSummaryError(true);
     }
   }, []);
 
@@ -367,6 +369,21 @@ const DocumentsPage: React.FC = () => {
         )}
 
         {/* Summary Stats */}
+        {summaryError && (
+          <div
+            className="mb-8 flex items-center justify-between gap-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3"
+            role="status"
+          >
+            <p className="text-theme-text-secondary text-sm">Document statistics could not be loaded.</p>
+            <button
+              type="button"
+              onClick={() => void fetchSummary()}
+              className="shrink-0 rounded-md px-3 py-1.5 text-sm font-medium text-amber-800 transition-colors hover:bg-amber-500/10 dark:text-amber-300"
+            >
+              Retry
+            </button>
+          </div>
+        )}
         {summary && (
           <div className="mb-8 grid grid-cols-2 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-4">
             <div className="card p-4">
